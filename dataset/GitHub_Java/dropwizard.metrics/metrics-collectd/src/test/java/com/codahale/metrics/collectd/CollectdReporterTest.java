@@ -1,9 +1,9 @@
 package com.codahale.metrics.collectd;
 
 import com.codahale.metrics.Counter;
+import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricAttribute;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Snapshot;
 import com.codahale.metrics.Timer;
@@ -12,15 +12,12 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import java.util.Collections;
-import java.util.EnumSet;
-import java.util.List;
-import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -71,40 +68,43 @@ public class CollectdReporterTest {
 
     private <T extends Number> void reportsGauges(T value) throws Exception {
         reporter.report(
-                map("gauge", () -> value),
+                map("gauge", (Gauge) () -> value),
                 map(),
                 map(),
                 map(),
                 map());
 
-        assertThat(nextValues(receiver)).containsExactly(value.doubleValue());
+        ValueList data = receiver.next();
+        assertThat(data.getValues()).containsExactly(value.doubleValue());
     }
 
     @Test
     public void reportsBooleanGauges() throws Exception {
         reporter.report(
-                map("gauge", () -> true),
+                map("gauge", (Gauge) () -> true),
                 map(),
                 map(),
                 map(),
                 map());
 
-        assertThat(nextValues(receiver)).containsExactly(1d);
+        ValueList data = receiver.next();
+        assertThat(data.getValues()).containsExactly(1d);
 
         reporter.report(
-                map("gauge", () -> false),
+                map("gauge", (Gauge) () -> false),
                 map(),
                 map(),
                 map(),
                 map());
 
-        assertThat(nextValues(receiver)).containsExactly(0d);
+        data = receiver.next();
+        assertThat(data.getValues()).containsExactly(0d);
     }
 
     @Test
     public void doesNotReportStringGauges() throws Exception {
         reporter.report(
-                map("unsupported", () -> "value"),
+                map("unsupported", (Gauge) () -> "value"),
                 map(),
                 map(),
                 map(),
@@ -125,7 +125,8 @@ public class CollectdReporterTest {
                 map(),
                 map());
 
-        assertThat(nextValues(receiver)).containsExactly(42d);
+        ValueList data = receiver.next();
+        assertThat(data.getValues()).containsExactly(42d);
     }
 
     @Test
@@ -144,11 +145,11 @@ public class CollectdReporterTest {
                 map("api.rest.requests", meter),
                 map());
 
-        assertThat(nextValues(receiver)).containsExactly(1d);
-        assertThat(nextValues(receiver)).containsExactly(2d);
-        assertThat(nextValues(receiver)).containsExactly(3d);
-        assertThat(nextValues(receiver)).containsExactly(4d);
-        assertThat(nextValues(receiver)).containsExactly(5d);
+        assertThat(receiver.next().getValues()).containsExactly(1d);
+        assertThat(receiver.next().getValues()).containsExactly(2d);
+        assertThat(receiver.next().getValues()).containsExactly(3d);
+        assertThat(receiver.next().getValues()).containsExactly(4d);
+        assertThat(receiver.next().getValues()).containsExactly(5d);
     }
 
     @Test
@@ -176,7 +177,7 @@ public class CollectdReporterTest {
                 map());
 
         for (int i = 1; i <= 11; i++) {
-            assertThat(nextValues(receiver)).containsExactly((double) i);
+            assertThat(receiver.next().getValues()).containsExactly(new Double(i));
         }
     }
 
@@ -209,51 +210,21 @@ public class CollectdReporterTest {
                 map(),
                 map("timer", timer));
 
-        assertThat(nextValues(receiver)).containsExactly(1d);
-        assertThat(nextValues(receiver)).containsExactly(100d);
-        assertThat(nextValues(receiver)).containsExactly(200d);
-        assertThat(nextValues(receiver)).containsExactly(300d);
-        assertThat(nextValues(receiver)).containsExactly(400d);
-        assertThat(nextValues(receiver)).containsExactly(500d);
-        assertThat(nextValues(receiver)).containsExactly(600d);
-        assertThat(nextValues(receiver)).containsExactly(700d);
-        assertThat(nextValues(receiver)).containsExactly(800d);
-        assertThat(nextValues(receiver)).containsExactly(900d);
-        assertThat(nextValues(receiver)).containsExactly(1000d);
-        assertThat(nextValues(receiver)).containsExactly(11d);
-        assertThat(nextValues(receiver)).containsExactly(12d);
-        assertThat(nextValues(receiver)).containsExactly(13d);
-        assertThat(nextValues(receiver)).containsExactly(14d);
-    }
-
-    @Test
-    public void doesNotReportDisabledMetricAttributes() throws Exception {
-        final Meter meter = mock(Meter.class);
-        when(meter.getCount()).thenReturn(1L);
-        when(meter.getOneMinuteRate()).thenReturn(2.0);
-        when(meter.getFiveMinuteRate()).thenReturn(3.0);
-        when(meter.getFifteenMinuteRate()).thenReturn(4.0);
-        when(meter.getMeanRate()).thenReturn(5.0);
-
-        final Counter counter = mock(Counter.class);
-        when(counter.getCount()).thenReturn(11L);
-
-        CollectdReporter reporter = CollectdReporter.forRegistry(registry)
-                .withHostName("eddie")
-                .disabledMetricAttributes(EnumSet.of(MetricAttribute.M5_RATE, MetricAttribute.M15_RATE))
-                .build(new Sender("localhost", 25826));
-
-        reporter.report(
-                map(),
-                map("counter", counter),
-                map(),
-                map("meter", meter),
-                map());
-
-        assertThat(nextValues(receiver)).containsExactly(11d);
-        assertThat(nextValues(receiver)).containsExactly(1d);
-        assertThat(nextValues(receiver)).containsExactly(2d);
-        assertThat(nextValues(receiver)).containsExactly(5d);
+        assertThat(receiver.next().getValues()).containsExactly(1d);
+        assertThat(receiver.next().getValues()).containsExactly(100d);
+        assertThat(receiver.next().getValues()).containsExactly(200d);
+        assertThat(receiver.next().getValues()).containsExactly(300d);
+        assertThat(receiver.next().getValues()).containsExactly(400d);
+        assertThat(receiver.next().getValues()).containsExactly(500d);
+        assertThat(receiver.next().getValues()).containsExactly(600d);
+        assertThat(receiver.next().getValues()).containsExactly(700d);
+        assertThat(receiver.next().getValues()).containsExactly(800d);
+        assertThat(receiver.next().getValues()).containsExactly(900d);
+        assertThat(receiver.next().getValues()).containsExactly(1000d);
+        assertThat(receiver.next().getValues()).containsExactly(11d);
+        assertThat(receiver.next().getValues()).containsExactly(12d);
+        assertThat(receiver.next().getValues()).containsExactly(13d);
+        assertThat(receiver.next().getValues()).containsExactly(14d);
     }
 
     @Test
@@ -268,34 +239,37 @@ public class CollectdReporterTest {
     }
 
     @Test
-    public void sanitizesMetricNameWithCustomMaxLength() throws Exception {
-        CollectdReporter customReporter = CollectdReporter.forRegistry(registry)
-                .withHostName("eddie")
-                .withMaxLength(20)
-                .build(new Sender("localhost", 25826));
+    public void testUnableSetSecurityLevelToSignWithoutUsername() {
+        assertThatIllegalArgumentException().isThrownBy(()->
+                CollectdReporter.forRegistry(registry)
+                        .withHostName("eddie")
+                        .withSecurityLevel(SecurityLevel.SIGN)
+                        .withPassword("t1_g3r")
+                        .build(new Sender("localhost", 25826)))
+                .withMessage("username is required for securityLevel: SIGN");
+    }
 
-        Counter counter = registry.counter("dash-illegal.slash/illegal");
-        counter.inc();
-
-        customReporter.report();
-
-        ValueList values = receiver.next();
-        assertThat(values.getPlugin()).isEqualTo("dash_illegal.slash_i");
+    @Test
+    public void testUnableSetSecurityLevelToSignWithoutPassword() {
+        assertThatIllegalArgumentException().isThrownBy(()->
+                CollectdReporter.forRegistry(registry)
+                        .withHostName("eddie")
+                        .withSecurityLevel(SecurityLevel.SIGN)
+                        .withUsername("scott")
+                        .build(new Sender("localhost", 25826)))
+                .withMessage("password is required for securityLevel: SIGN");
     }
 
     private <T> SortedMap<String, T> map() {
-        return Collections.emptySortedMap();
+        return new TreeMap<>();
     }
 
     private <T> SortedMap<String, T> map(String name, T metric) {
-        final Map<String, T> map = Collections.singletonMap(name, metric);
-        return new TreeMap<>(map);
+        final SortedMap<String, T> map = map();
+        map.put(name, metric);
+        return map;
     }
 
-    private List<Number> nextValues(Receiver receiver) throws Exception {
-        final ValueList valueList = receiver.next();
-        return valueList == null ? Collections.emptyList() : valueList.getValues();
-    }
 }
 
 

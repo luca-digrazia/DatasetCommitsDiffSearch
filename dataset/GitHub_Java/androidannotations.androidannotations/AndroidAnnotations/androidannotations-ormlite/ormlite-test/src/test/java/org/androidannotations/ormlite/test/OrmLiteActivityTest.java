@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,7 +25,7 @@ import org.robolectric.RobolectricTestRunner;
 
 @RunWith(RobolectricTestRunner.class)
 public class OrmLiteActivityTest {
-
+	
 	private MyActivity activity;
 
 	@Before
@@ -52,15 +51,5 @@ public class OrmLiteActivityTest {
 	@Test
 	public void daoInBeanIsInjected() {
 		assertThat((Object) activity.ormLiteBean.userDao).isNotNull();
-	}
-
-	@Test
-	public void methodInjectedOrmLiteDao() {
-		assertThat((Object) activity.ormLiteBean.methodInjectedOrmLiteDao).isNotNull();
-	}
-
-	@Test
-	public void multiInjectedOrmLiteDao() {
-		assertThat((Object) activity.ormLiteBean.multiInjectedOrmLiteDao).isNotNull();
 	}
 }

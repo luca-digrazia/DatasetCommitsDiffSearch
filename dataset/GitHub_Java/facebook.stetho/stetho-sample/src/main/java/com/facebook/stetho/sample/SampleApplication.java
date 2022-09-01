@@ -1,19 +1,42 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
 package com.facebook.stetho.sample;
 
+import java.util.ArrayList;
+
 import android.app.Application;
+import android.content.Context;
+
+import com.facebook.stetho.DumperPluginsProvider;
+import com.facebook.stetho.Stetho;
+import com.facebook.stetho.dumpapp.DumperPlugin;
 
 public class SampleApplication extends Application {
   @Override
   public void onCreate() {
     super.onCreate();
 
-    // Your normal application code here.  See SampleDebugApplication for Stetho initialization.
+    final Context context = this;
+    Stetho.initialize(
+        Stetho.newInitializerBuilder(context)
+            .enableDumpapp(new SampleDumperPluginsProvider(context))
+            .enableWebKitInspector(Stetho.defaultInspectorModulesProvider(context))
+            .build());
+  }
+
+  private static class SampleDumperPluginsProvider implements DumperPluginsProvider {
+    private final Context mContext;
+
+    public SampleDumperPluginsProvider(Context context) {
+      mContext = context;
+    }
+
+    @Override
+    public Iterable<DumperPlugin> get() {
+      ArrayList<DumperPlugin> plugins = new ArrayList<DumperPlugin>();
+      for (DumperPlugin defaultPlugin : Stetho.defaultDumperPluginsProvider(mContext).get()) {
+        plugins.add(defaultPlugin);
+      }
+      plugins.add(new HelloWorldDumperPlugin());
+      return plugins;
+    }
   }
 }

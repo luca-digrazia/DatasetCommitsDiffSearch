@@ -7,13 +7,6 @@ public class DefaultSettableGauge<T> implements SettableGauge<T> {
     private volatile T value;
 
     /**
-     * Create an instance with no default value.
-     */
-    public DefaultSettableGauge() {
-        this(null);
-    }
-
-    /**
      * Create an instance with a default value.
      *
      * @param defaultValue default value

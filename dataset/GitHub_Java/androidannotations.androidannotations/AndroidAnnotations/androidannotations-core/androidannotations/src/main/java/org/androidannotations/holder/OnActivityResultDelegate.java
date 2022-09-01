@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,18 +15,18 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._super;
+import static com.sun.codemodel.JExpr._super;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JCase;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JMod;
-import com.helger.jcodemodel.JSwitch;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCase;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JSwitch;
+import com.sun.codemodel.JVar;
 
 public class OnActivityResultDelegate extends GeneratedClassHolderDelegate<EComponentHolder> {
 
@@ -82,7 +81,7 @@ public class OnActivityResultDelegate extends GeneratedClassHolderDelegate<EComp
 
 	private JBlock createCaseBlock(int requestCode) {
 		JCase onActivityResultCase = getSwitch()._case(JExpr.lit(requestCode));
-		JBlock onActivityResultCaseBlock = onActivityResultCase.body().blockSimple();
+		JBlock onActivityResultCaseBlock = onActivityResultCase.body().block();
 		onActivityResultCase.body()._break();
 		return onActivityResultCaseBlock;
 	}
@@ -110,9 +109,9 @@ public class OnActivityResultDelegate extends GeneratedClassHolderDelegate<EComp
 		method.annotate(Override.class);
 		requestCodeParam = method.param(codeModel().INT, "requestCode");
 		resultCodeParam = method.param(codeModel().INT, "resultCode");
-		dataParam = method.param(getClasses().INTENT, "data");
+		dataParam = method.param(classes().INTENT, "data");
 		JBlock body = method.body();
 		body.invoke(_super(), method).arg(requestCodeParam).arg(resultCodeParam).arg(dataParam);
-		afterSuperBlock = body.blockSimple();
+		afterSuperBlock = body.block();
 	}
 }

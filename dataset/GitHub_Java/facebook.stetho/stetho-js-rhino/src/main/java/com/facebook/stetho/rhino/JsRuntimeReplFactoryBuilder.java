@@ -1,33 +1,30 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.rhino;
 
+import android.support.annotation.NonNull;
 import android.util.Log;
-
 import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.inspector.console.CLog;
 import com.facebook.stetho.inspector.console.RuntimeRepl;
 import com.facebook.stetho.inspector.console.RuntimeReplFactory;
 import com.facebook.stetho.inspector.protocol.module.Console;
-
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.Function;
 import org.mozilla.javascript.ImporterTopLevel;
-import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
-import org.mozilla.javascript.Undefined;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
-import androidx.annotation.NonNull;
 
 /**
  * <p>Builder used to setup the javascript runtime to be used by stetho.</p>
@@ -86,9 +83,6 @@ public class JsRuntimeReplFactoryBuilder {
 
     // We import the app's package name by default
     mPackages.add(context.getPackageName());
-
-    // Predefine $_ which holds the value of the last expression evaluated
-    mVariables.put("$_", Context.getUndefinedValue());
   }
 
   /**
@@ -190,17 +184,10 @@ public class JsRuntimeReplFactoryBuilder {
     for (Class<?> aClass : mClasses) {
       String className = aClass.getName();
       try {
-        // import from default classes
         String expression = String.format("importClass(%s)", className);
         jsContext.evaluateString(scope, expression, SOURCE_NAME, 1, null);
       } catch (Exception e) {
-        try {
-          // import from application classes
-          String expression = String.format("importClass(Packages.%s)", className);
-          jsContext.evaluateString(scope, expression, SOURCE_NAME, 1, null);
-        } catch (Exception e1) {
-          throw new StethoJsException(e1, "Failed to import class: %s", className);
-        }
+        throw new StethoJsException(e, "Failed to import class: %s", className);
       }
     }
   }
@@ -209,17 +196,10 @@ public class JsRuntimeReplFactoryBuilder {
     // Import the packages that the caller requested
     for (String packageName : mPackages) {
       try {
-        // import from default packages
         String expression = String.format("importPackage(%s)", packageName);
         jsContext.evaluateString(scope, expression, SOURCE_NAME, 1, null);
       } catch (Exception e) {
-        try {
-          // import from application packages
-          String expression = String.format("importPackage(Packages.%s)", packageName);
-          jsContext.evaluateString(scope, expression, SOURCE_NAME, 1, null);
-        } catch (Exception e1) {
-          throw new StethoJsException(e, "Failed to import package: %s", packageName);
-        }
+        throw new StethoJsException(e, "Failed to import package: %s", packageName);
       }
     }
   }
@@ -241,12 +221,7 @@ public class JsRuntimeReplFactoryBuilder {
       String varName = entrySet.getKey();
       Object varValue = entrySet.getValue();
       try {
-        Object jsValue;
-        if (varValue instanceof Scriptable || varValue instanceof Undefined) {
-          jsValue = varValue;
-        } else {
-          jsValue = Context.javaToJS(varValue, scope);
-        }
+        Object jsValue = Context.javaToJS(varValue, scope);
         ScriptableObject.putProperty(scope, varName, jsValue);
       } catch (Exception e) {
         throw new StethoJsException(e, "Failed to setup variable: %s", varName);

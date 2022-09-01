@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -52,9 +51,9 @@ import java.lang.annotation.Target;
  * </p>
  * <blockquote>
  * 
- * <b>Example :</b> The following RestClient will use
- * <a href="http://jackson.codehaus.org/">Jackson</a> to deserialize received
- * data as Java objects.
+ * <b>Example :</b> The following RestClient will use <a
+ * href="http://jackson.codehaus.org/">Jackson</a> to deserialize received data
+ * as Java objects.
  * 
  * <pre>
  * &#064;Rest(<b>converters</b> = MappingJackson2HttpMessageConverter.class)
@@ -174,15 +173,15 @@ import java.lang.annotation.Target;
  *
  * <h1>ResponseErrorHandler</h1>
  * <p>
- * You can use your own error handler to customize how errors are handled. The
- * {@link #responseErrorHandler()} parameter lets you define the
+ * You can use your own error handler to customize how errors
+ * are handled. The {@link #responseErrorHandler()} parameter lets you define the
  * {@link org.springframework.web.client.ResponseErrorHandler
  * ResponseErrorHandler}.
  * </p>
  *
  * <p>
- * You can inject an {@link org.androidannotations.annotations.EBean EBean}
- * response errork handler just like as a request factory.
+ * You can inject an {@link org.androidannotations.annotations.EBean EBean} response errork
+ * handler just like as a request factory.
  * </p>
  * <blockquote>
  *
@@ -260,9 +259,9 @@ import java.lang.annotation.Target;
  * 
  * <h2>Bundle interfaces</h2>
  * <p>
- * Since 3.0, we provide some bundle interfaces, which declare the magic methods
- * listed above. You can extend from these interfaces, so you do not have to
- * write them directly in your {@link Rest} annotated interface.
+ * Since 3.0, we're also providing some bundle interface your RestClient can
+ * extends of. Each of them provide handled methods subset and let you clean
+ * your code by using extends composition instead of writing methods.
  * </p>
  * <p>
  * Available bundle interfaces :
@@ -295,16 +294,16 @@ public @interface Rest {
 	String rootUrl() default "";
 
 	/**
-	 * The classes of the converters which should be used to convert received data
-	 * into Java objects.
+	 * The classes of the converters which should be used to convert received
+	 * data into Java objects.
 	 * 
 	 * @return the converter classes
 	 */
 	Class<?>[] converters();
 
 	/**
-	 * The classes of interceptors which are used to do extra processing before or
-	 * after requests.
+	 * The classes of interceptors which are used to do extra processing before
+	 * or after requests.
 	 * 
 	 * @return the interceptor classes
 	 */

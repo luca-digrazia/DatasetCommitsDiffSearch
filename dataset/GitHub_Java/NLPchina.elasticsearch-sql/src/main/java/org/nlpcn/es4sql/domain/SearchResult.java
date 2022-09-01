@@ -8,18 +8,19 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.common.document.DocumentField;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHitField;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.filter.InternalFilter;
 import org.elasticsearch.search.aggregations.bucket.terms.InternalTerms;
 import org.elasticsearch.search.aggregations.bucket.terms.LongTerms;
+import org.elasticsearch.search.aggregations.bucket.terms.StringTerms;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms.Bucket;
 import org.elasticsearch.search.aggregations.metrics.InternalNumericMetricsAggregation;
-import org.elasticsearch.search.aggregations.metrics.InternalTopHits;
-import org.elasticsearch.search.aggregations.metrics.InternalValueCount;
+import org.elasticsearch.search.aggregations.metrics.tophits.InternalTopHits;
+import org.elasticsearch.search.aggregations.metrics.valuecount.InternalValueCount;
 import org.nlpcn.es4sql.exception.SqlParseException;
 
 public class SearchResult {
@@ -34,13 +35,13 @@ public class SearchResult {
 
 	public SearchResult(SearchResponse resp) {
 		SearchHits hits = resp.getHits();
-		this.total = hits.getTotalHits().value;
+		this.total = hits.getTotalHits();
 		results = new ArrayList<>(hits.getHits().length);
 		for (SearchHit searchHit : hits.getHits()) {
-			if (searchHit.getSourceAsMap() != null) {
-				results.add(searchHit.getSourceAsMap());
+			if (searchHit.getSource() != null) {
+				results.add(searchHit.getSource());
 			} else if (searchHit.getFields() != null) {
-				Map<String, DocumentField> fields = searchHit.getFields();
+				Map<String, SearchHitField> fields = searchHit.getFields();
 				results.add(toFieldsMap(fields));
 			}
 
@@ -59,8 +60,8 @@ public class SearchResult {
 			this.total = buckets.size();
 			results = new ArrayList<>(buckets.size());
 			for (Bucket bucket : buckets) {
-				Map<String, Object> aggsMap = toAggsMap(bucket.getAggregations().getAsMap());
-				aggsMap.put("docCount", bucket.getDocCount());
+				Map<String, Object> aggsMap = toAggsMap(bucket.getAggregations().getAsMap()); 
+				aggsMap.put("docCount", bucket.getDocCount()) ;
 				results.add(aggsMap);
 			}
 		} else {
@@ -81,13 +82,13 @@ public class SearchResult {
 	 * @param fields
 	 * @return
 	 */
-	private Map<String, Object> toFieldsMap(Map<String, DocumentField> fields) {
+	private Map<String, Object> toFieldsMap(Map<String, SearchHitField> fields) {
 		Map<String, Object> result = new HashMap<>();
-		for (Entry<String, DocumentField> entry : fields.entrySet()) {
-			if (entry.getValue().getValues().size() > 1) {
-				result.put(entry.getKey(), entry.getValue().getValues());
+		for (Entry<String, SearchHitField> entry : fields.entrySet()) {
+			if (entry.getValue().values().size() > 1) {
+				result.put(entry.getKey(), entry.getValue().values());
 			} else {
-				result.put(entry.getKey(), entry.getValue().getValue());
+				result.put(entry.getKey(), entry.getValue().value());
 			}
 
 		}
@@ -103,6 +104,7 @@ public class SearchResult {
 	 */
 	private Map<String, Object> toAggsMap(Map<String, Aggregation> fields) throws SqlParseException {
 		Map<String, Object> result = new HashMap<>();
+		Aggregation value = null;
 		for (Entry<String, Aggregation> entry : fields.entrySet()) {
 			result.put(entry.getKey(), covenValue(entry.getValue()));
 		}
@@ -112,13 +114,13 @@ public class SearchResult {
 	private Object covenValue(Aggregation value) throws SqlParseException {
 		if (value instanceof InternalNumericMetricsAggregation.SingleValue) {
 			return ((InternalNumericMetricsAggregation.SingleValue) value).value();
-		} else if (value instanceof InternalValueCount) {
-			return ((InternalValueCount) value).getValue();
-		} else if (value instanceof InternalTopHits) {
-			return (value);
-		} else if (value instanceof LongTerms) {
-			return value;
-		} else {
+		} else if(value instanceof InternalValueCount){
+			return ((InternalValueCount) value).getValue()  ;
+		}else if (value instanceof InternalTopHits) {
+			return ((InternalTopHits) value);
+		} else if (value instanceof LongTerms){
+			return value ;
+		}else {
 			throw new SqlParseException("unknow this agg type " + value.getClass());
 		}
 	}

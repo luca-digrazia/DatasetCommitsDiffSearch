@@ -41,7 +41,6 @@
 package com.oracle.truffle.nfi;
 
 import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -56,11 +55,11 @@ final class NFIType {
 
     final Object runtimeData;
 
-    NFIType(TypeCachedState cachedState, Object backendType) {
+    public NFIType(TypeCachedState cachedState, Object backendType) {
         this(cachedState, backendType, null);
     }
 
-    NFIType(TypeCachedState cachedState, Object backendType, Object runtimeData) {
+    public NFIType(TypeCachedState cachedState, Object backendType, Object runtimeData) {
         this.cachedState = cachedState;
         this.backendType = backendType;
         this.runtimeData = runtimeData;
@@ -79,7 +78,7 @@ final class NFIType {
     static final TypeCachedState CLOSURE = new ClosureTypeCachedState();
     static final TypeCachedState INJECTED = new InjectedTypeCachedState();
 
-    @ExportLibrary(value = NFITypeLibrary.class, useForAOT = true, useForAOTPriority = 0)
+    @ExportLibrary(NFITypeLibrary.class)
     static final class SimpleTypeCachedState extends TypeCachedState {
 
         private SimpleTypeCachedState() {
@@ -100,7 +99,7 @@ final class NFIType {
         }
     }
 
-    @ExportLibrary(value = NFITypeLibrary.class, useForAOT = true, useForAOTPriority = 0)
+    @ExportLibrary(NFITypeLibrary.class)
     static final class ClosureTypeCachedState extends TypeCachedState {
 
         private ClosureTypeCachedState() {
@@ -112,7 +111,6 @@ final class NFIType {
         static class ConvertToNative {
 
             @Specialization(limit = "3", guards = "interop.isExecutable(value)")
-            @GenerateAOT.Exclude
             static Object convertToNative(ClosureTypeCachedState state, NFIType type, Object value,
                             @SuppressWarnings("unused") @CachedLibrary("value") InteropLibrary interop,
                             @CachedLibrary("type.runtimeData") SignatureLibrary library) {
@@ -132,7 +130,6 @@ final class NFIType {
         static class ConvertFromNative {
 
             @Specialization(limit = "3", guards = "interop.isNull(nullValue)")
-            @GenerateAOT.Exclude
             static Object doNull(ClosureTypeCachedState state, NFIType type, Object nullValue,
                             @SuppressWarnings("unused") @CachedLibrary("nullValue") InteropLibrary interop) {
                 assert type.cachedState == state;
@@ -140,7 +137,6 @@ final class NFIType {
             }
 
             @Specialization(limit = "3", guards = "!interop.isNull(value)")
-            @GenerateAOT.Exclude
             static Object doBind(ClosureTypeCachedState state, NFIType type, Object value,
                             @SuppressWarnings("unused") @CachedLibrary("value") InteropLibrary interop,
                             @CachedLibrary("type.runtimeData") SignatureLibrary library) {
@@ -150,7 +146,7 @@ final class NFIType {
         }
     }
 
-    @ExportLibrary(value = NFITypeLibrary.class, useForAOT = true, useForAOTPriority = 0)
+    @ExportLibrary(NFITypeLibrary.class)
     static final class InjectedTypeCachedState extends TypeCachedState {
 
         private InjectedTypeCachedState() {

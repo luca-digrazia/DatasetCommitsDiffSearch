@@ -17,7 +17,7 @@ package com.google.devtools.build.lib.bazel.bzlmod;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.bazel.bzlmod.Version.ParseException;
+import com.google.devtools.build.lib.bazel.bzlmod.ModuleFileFunction.ModuleFileFunctionException;
 import com.google.devtools.build.lib.starlarkbuildapi.repository.ModuleFileGlobalsApi;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -27,7 +27,7 @@ import net.starlark.java.eval.Starlark;
 import net.starlark.java.eval.StarlarkInt;
 
 /** Implementation of the global functions available to a module file. */
-public class ModuleFileGlobals implements ModuleFileGlobalsApi {
+public class ModuleFileGlobals implements ModuleFileGlobalsApi<ModuleFileFunctionException> {
 
   private boolean moduleCalled = false;
   private final Module.Builder module = Module.builder();
@@ -37,23 +37,15 @@ public class ModuleFileGlobals implements ModuleFileGlobalsApi {
   public ModuleFileGlobals() {}
 
   @Override
-  public void module(String name, String version, StarlarkInt compatibilityLevel)
-      throws EvalException {
+  public void module(String name, String version, String compatibilityLevel) throws EvalException {
     if (moduleCalled) {
       throw Starlark.errorf("the module() directive can only be called once");
     }
     moduleCalled = true;
-    // TODO(wyv): add validation logic for name (alphanumerical) & others in the future
-    Version parsedVersion;
-    try {
-      parsedVersion = Version.parse(version);
-    } catch (ParseException e) {
-      throw new EvalException("Invalid version in module()", e);
-    }
-    module
-        .setName(name)
-        .setVersion(parsedVersion)
-        .setCompatibilityLevel(compatibilityLevel.toInt("compatibility_level"));
+    // TODO(wyv): add validation logic for name (alphanumerical) and version (use ParsedVersion) &
+    //   others in the future
+    module.setName(name).setVersion(version);
+    // TODO(wyv): compatibility level
   }
 
   @Override
@@ -61,14 +53,9 @@ public class ModuleFileGlobals implements ModuleFileGlobalsApi {
     if (repoName.isEmpty()) {
       repoName = name;
     }
-    // TODO(wyv): add validation logic for name (alphanumerical) and repoName (RepositoryName?)
-    Version parsedVersion;
-    try {
-      parsedVersion = Version.parse(version);
-    } catch (ParseException e) {
-      throw new EvalException("Invalid version in bazel_dep()", e);
-    }
-    if (deps.putIfAbsent(repoName, ModuleKey.create(name, parsedVersion)) != null) {
+    // TODO(wyv): add validation logic for name (alphanumerical), version (use ParsedVersion),
+    //   and repoName (RepositoryName?)
+    if (deps.putIfAbsent(repoName, ModuleKey.create(name, version)) != null) {
       throw Starlark.errorf("a bazel_dep with the repo name %s already exists", repoName);
     }
   }
@@ -104,37 +91,13 @@ public class ModuleFileGlobals implements ModuleFileGlobalsApi {
       Iterable<?> patches,
       StarlarkInt patchStrip)
       throws EvalException {
-    Version parsedVersion;
-    try {
-      parsedVersion = Version.parse(version);
-    } catch (ParseException e) {
-      throw new EvalException("Invalid version in single_version_override()", e);
-    }
     addOverride(
         moduleName,
         SingleVersionOverride.create(
-            parsedVersion,
+            version,
             registry,
             checkAllStrings(patches, "patches"),
             patchStrip.toInt("single_version_override.patch_strip")));
-  }
-
-  @Override
-  public void multipleVersionOverride(String moduleName, Iterable<?> versions, String registry)
-      throws EvalException {
-    ImmutableList.Builder<Version> parsedVersionsBuilder = new ImmutableList.Builder<>();
-    try {
-      for (String version : checkAllStrings(versions, "versions")) {
-        parsedVersionsBuilder.add(Version.parse(version));
-      }
-    } catch (ParseException e) {
-      throw new EvalException("Invalid version in multiple_version_override()", e);
-    }
-    ImmutableList<Version> parsedVersions = parsedVersionsBuilder.build();
-    if (parsedVersions.size() < 2) {
-      throw new EvalException("multiple_version_override() must specify at least 2 versions");
-    }
-    addOverride(moduleName, MultipleVersionOverride.create(parsedVersions, registry));
   }
 
   @Override

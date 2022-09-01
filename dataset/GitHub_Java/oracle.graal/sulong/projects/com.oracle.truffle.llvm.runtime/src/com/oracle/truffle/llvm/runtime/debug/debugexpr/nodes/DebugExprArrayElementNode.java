@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,34 +29,25 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.dsl.GenerateAOT;
-import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.nodes.NodeInfo;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
+import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeInfo(shortName = "[]")
-@NodeChild(value = "base", type = LLVMExpressionNode.class)
-@NodeChild(value = "index", type = LLVMExpressionNode.class)
-public abstract class DebugExprArrayElementNode extends LLVMExpressionNode {
+public class DebugExprArrayElementNode extends LLVMExpressionNode {
 
-    final DebugExprType type;
+    private LLVMExpressionNode indexNode;
+    private DebugExprType type;
+    private Object member;
+    private Object baseMember;
 
-    public static DebugExprArrayElementNode create(DebugExpressionPair basePair, LLVMExpressionNode indexNode) {
-        DebugExprType type = basePair.getType() == null ? DebugExprType.getVoidType() : basePair.getType().getInnerType();
-        return DebugExprArrayElementNodeGen.create(type, basePair.getNode(), indexNode);
-    }
-
-    DebugExprArrayElementNode(DebugExprType type) {
+    public DebugExprArrayElementNode(Object baseMember, LLVMExpressionNode indexNode, DebugExprType type) {
+        this.indexNode = indexNode;
+        this.baseMember = baseMember;
         this.type = type;
     }
 
@@ -64,48 +55,41 @@ public abstract class DebugExprArrayElementNode extends LLVMExpressionNode {
         return type;
     }
 
-    @Specialization
-    @GenerateAOT.Exclude
-    public Object doIntIndex(Object baseMember, int idx,
-                    @CachedLibrary(limit = "3") InteropLibrary library) {
+    public Object getMember() {
+        return member;
+    }
+
+    @Override
+    public Object executeGeneric(VirtualFrame frame) {
+        int idx;
+        try {
+            idx = indexNode.executeI32(frame);
+        } catch (UnexpectedResultException e) {
+            System.out.println("array index produced unexpected result " + e.getResult());
+            return DebugExprNodeFactory.errorObjNode.executeGeneric(frame);
+        }
+        InteropLibrary library = InteropLibrary.getFactory().getUncached();
         if (library.hasMembers(baseMember)) {
             Object getmembers;
             try {
                 getmembers = library.getMembers(baseMember);
                 if (library.isArrayElementReadable(getmembers, idx)) {
                     Object arrayElement = library.readArrayElement(getmembers, idx);
-                    String identifier = library.asString(arrayElement);
-                    if (library.isMemberReadable(baseMember, identifier)) {
-                        Object member = library.readMember(baseMember, identifier);
-                        return type.parse(member);
+                    if (library.isMemberReadable(baseMember, arrayElement.toString())) {
+                        return library.readMember(baseMember, arrayElement.toString());
                     }
                 }
             } catch (UnsupportedMessageException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw DebugExprException.create(this, "Array access of %s not possible", baseMember);
+                // TODO Auto-generated catch block
+                e.printStackTrace();
             } catch (InvalidArrayIndexException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw DebugExprException.create(this, "Invalid array index: %d", e.getInvalidIndex());
+                // TODO Auto-generated catch block
+                e.printStackTrace();
             } catch (UnknownIdentifierException e) {
-                CompilerDirectives.transferToInterpreter();
-                throw DebugExprException.symbolNotFound(this, e.getUnknownIdentifier(), baseMember);
+                // TODO Auto-generated catch block
+                e.printStackTrace();
             }
         }
-        CompilerDirectives.transferToInterpreter();
-        throw DebugExprException.create(this, "Array access of " + baseMember + " not possible");
-    }
-
-    @TruffleBoundary
-    private static int toIntIndex(Object index) {
-        return Integer.parseInt(index.toString());
-    }
-
-    @Specialization
-    @GenerateAOT.Exclude
-    public Object doGeneric(Object baseMember, Object index,
-                    @CachedLibrary(limit = "3") InteropLibrary library) {
-        // in case of a complex expression as index (e.g. outerArray[innerArray[2]]), the
-        // index is no Integer but a LLVMDebugObject$Primitive instead
-        return doIntIndex(baseMember, toIntIndex(index), library);
+        return DebugExprNodeFactory.errorObjNode.executeGeneric(frame);
     }
 }

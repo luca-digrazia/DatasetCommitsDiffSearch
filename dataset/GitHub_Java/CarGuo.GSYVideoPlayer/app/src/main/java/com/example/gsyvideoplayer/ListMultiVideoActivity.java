@@ -2,32 +2,27 @@ package com.example.gsyvideoplayer;
 
 import android.os.Build;
 import android.os.Bundle;
-
-import androidx.appcompat.app.AppCompatActivity;
-
+import android.support.v7.app.AppCompatActivity;
 import android.transition.Explode;
-import android.view.View;
 import android.view.Window;
 import android.widget.AbsListView;
 import android.widget.ListView;
 
 import com.example.gsyvideoplayer.adapter.ListMultiNormalAdapter;
-import com.example.gsyvideoplayer.databinding.ActivityListVideoBinding;
 import com.example.gsyvideoplayer.video.manager.CustomManager;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
+import butterknife.BindView;
+import butterknife.ButterKnife;
 
 /**
  * 多个同时播放的demo
  */
 public class ListMultiVideoActivity extends AppCompatActivity {
 
+    @BindView(R.id.video_list)
+    ListView videoList;
 
     ListMultiNormalAdapter listMultiNormalAdapter;
-    ActivityListVideoBinding binding;
 
     private boolean isPause;
 
@@ -40,16 +35,13 @@ public class ListMultiVideoActivity extends AppCompatActivity {
             getWindow().setExitTransition(new Explode());
         }
         super.onCreate(savedInstanceState);
-        binding = ActivityListVideoBinding.inflate(getLayoutInflater());
-
-        View rootView = binding.getRoot();
-        setContentView(rootView);
-
+        setContentView(R.layout.activity_list_video);
+        ButterKnife.bind(this);
 
         listMultiNormalAdapter = new ListMultiNormalAdapter(this);
-        binding.videoList.setAdapter(listMultiNormalAdapter);
+        videoList.setAdapter(listMultiNormalAdapter);
 
-        binding.videoList.setOnScrollListener(new AbsListView.OnScrollListener() {
+        videoList.setOnScrollListener(new AbsListView.OnScrollListener() {
             @Override
             public void onScrollStateChanged(AbsListView view, int scrollState) {
             }
@@ -58,29 +50,18 @@ public class ListMultiVideoActivity extends AppCompatActivity {
             public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
                 int lastVisibleItem = firstVisibleItem + visibleItemCount;
                 //大于0说明有播放
-                if (CustomManager.instance().size() >= 0) {
-                    Map<String, CustomManager> map = CustomManager.instance();
-                    List<String> removeKey = new ArrayList<>();
-                    for (Map.Entry<String, CustomManager> customManagerEntry : map.entrySet()) {
-                        CustomManager customManager = customManagerEntry.getValue();
-                        //当前播放的位置
-                        int position = customManager.getPlayPosition();
-                        //对应的播放列表TAG
-                        if (customManager.getPlayTag().equals(ListMultiNormalAdapter.TAG)
+                /*if (GSYVideoManager.instance().getPlayPosition() >= 0) {
+                    //当前播放的位置
+                    int position = GSYVideoManager.instance().getPlayPosition();
+                    //对应的播放列表TAG
+                    if (GSYVideoManager.instance().getPlayTag().equals(ListMultiNormalAdapter.TAG)
                             && (position < firstVisibleItem || position > lastVisibleItem)) {
-                            CustomManager.releaseAllVideos(customManagerEntry.getKey());
-                            removeKey.add(customManagerEntry.getKey());
-                        }
-                    }
-                    if (removeKey.size() > 0) {
-                        for (String key : removeKey) {
-                            map.remove(key);
-                        }
+                        //如果滑出去了上面和下面就是否，和今日头条一样
+                        GSYVideoManager.releaseAllVideos();
                         listMultiNormalAdapter.notifyDataSetChanged();
                     }
-                }
+                }*/
             }
-
         });
 
     }

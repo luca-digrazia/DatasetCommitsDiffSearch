@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime.nodes.control;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -58,6 +57,8 @@ public abstract class LLVMSwitchNode extends LLVMControlFlowNode {
 
     public abstract Object executeCondition(VirtualFrame frame);
 
+    public abstract int[] getSuccessors();
+
     public abstract boolean checkCase(VirtualFrame frame, int i, Object value);
 
     @NodeChild(value = "cond", type = LLVMExpressionNode.class)
@@ -66,6 +67,8 @@ public abstract class LLVMSwitchNode extends LLVMControlFlowNode {
         @Children protected final LLVMExpressionNode[] cases;
         @Children protected final LLVMEqNode[] caseEquals;
         @CompilationFinal(dimensions = 1) private final int[] successors;
+
+        private final ValueProfile conditionValueClass = ValueProfile.createClassProfile();
 
         public LLVMSwitchNodeImpl(int[] successors, LLVMStatementNode[] phiNodes, LLVMExpressionNode[] cases) {
             assert successors.length == cases.length + 1 : "the last entry of the successors array must be the default case";
@@ -79,7 +82,7 @@ public abstract class LLVMSwitchNode extends LLVMControlFlowNode {
         }
 
         @Specialization
-        public Object doCondition(Object cond, @Cached("createClassProfile()") ValueProfile conditionValueClass) {
+        public Object doCondition(Object cond) {
             return conditionValueClass.profile(cond);
         }
 

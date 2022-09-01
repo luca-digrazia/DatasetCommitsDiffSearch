@@ -15,37 +15,33 @@ package com.google.devtools.build.lib.pkgcache;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
-import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.PackageFactory;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
-import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
-import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
+import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
+import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
+import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.ManualClock;
-import com.google.devtools.build.lib.testutil.SkyframeExecutorTestHelper;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.common.options.OptionsParser;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -60,82 +56,73 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class BuildFileModificationTest extends FoundationTestCase {
 
-  private final ManualClock clock = new ManualClock();
+  private ManualClock clock = new ManualClock();
+  private AnalysisMock analysisMock;
+  private ConfiguredRuleClassProvider ruleClassProvider;
   private SkyframeExecutor skyframeExecutor;
-  private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   @Before
-  public final void disableLogging() {
+  public final void disableLogging() throws Exception {
     Logger.getLogger("com.google.devtools").setLevel(Level.SEVERE);
   }
 
   @Before
-  public final void initializeSkyframeExecutor() {
-    AnalysisMock analysisMock = AnalysisMock.get();
-    ConfiguredRuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
+  public final void initializeSkyframeExecutor() throws Exception {
+    analysisMock = AnalysisMock.get();
+    ruleClassProvider = analysisMock.createRuleClassProvider();
     BlazeDirectories directories =
-        new BlazeDirectories(
-            new ServerDirectories(outputBase, outputBase, outputBase),
-            rootDirectory,
-            /* defaultSystemJavabase= */ null,
-            analysisMock.getProductName());
-    PackageFactory pkgFactory =
-        analysisMock
-            .getPackageFactoryBuilderForTesting(directories)
-            .build(ruleClassProvider, fileSystem);
+        new BlazeDirectories(outputBase, outputBase, rootDirectory, analysisMock.getProductName());
     skyframeExecutor =
-        BazelSkyframeExecutorConstants.newBazelSkyframeExecutorBuilder()
-            .setPkgFactory(pkgFactory)
-            .setFileSystem(fileSystem)
-            .setDirectories(directories)
-            .setActionKeyContext(actionKeyContext)
-            .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
-            .build();
-    skyframeExecutor.injectExtraPrecomputedValues(
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
-            PrecomputedValue.injected(RepositoryDelegatorFunction.ENABLE_BZLMOD, false)));
-    SkyframeExecutorTestHelper.process(skyframeExecutor);
-    OptionsParser parser =
-        OptionsParser.builder()
-            .optionsClasses(PackageOptions.class, BuildLanguageOptions.class)
-            .build();
+        SequencedSkyframeExecutor.createForTesting(
+            analysisMock
+                .getPackageFactoryBuilderForTesting()
+                .build(ruleClassProvider, scratch.getFileSystem()),
+            directories,
+            null, /* BinTools */
+            null, /* workspaceStatusActionFactory */
+            ruleClassProvider.getBuildInfoFactories(),
+            ImmutableList.<DiffAwareness.Factory>of(),
+            Predicates.<PathFragment>alwaysFalse(),
+            AnalysisMock.get().getSkyFunctions(),
+            ImmutableList.<PrecomputedValue.Injected>of(),
+            ImmutableList.<SkyValueDirtinessChecker>of(),
+            analysisMock.getProductName());
+    OptionsParser parser = OptionsParser.newOptionsParser(
+        PackageCacheOptions.class, SkylarkSemanticsOptions.class);
+    analysisMock.getInvocationPolicyEnforcer().enforce(parser);
     setUpSkyframe(
-        parser.getOptions(PackageOptions.class), parser.getOptions(BuildLanguageOptions.class));
+        parser.getOptions(PackageCacheOptions.class),
+        parser.getOptions(SkylarkSemanticsOptions.class));
   }
 
   private void setUpSkyframe(
-      PackageOptions packageOptions, BuildLanguageOptions buildLanguageOptions) {
-    PathPackageLocator pkgLocator =
-        PathPackageLocator.create(
-            null,
-            packageOptions.packagePath,
-            reporter,
-            rootDirectory.asFragment(),
-            rootDirectory,
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
-    packageOptions.showLoadingProgress = true;
-    packageOptions.globbingThreads = 7;
+      PackageCacheOptions packageCacheOptions,
+      SkylarkSemanticsOptions skylarkSemanticsOptions) {
+    PathPackageLocator pkgLocator = PathPackageLocator.create(
+        null, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
+    packageCacheOptions.showLoadingProgress = true;
+    packageCacheOptions.globbingThreads = 7;
     skyframeExecutor.preparePackageLoading(
         pkgLocator,
-        packageOptions,
-        buildLanguageOptions,
+        packageCacheOptions,
+        skylarkSemanticsOptions,
+        analysisMock.getDefaultsPackageContent(),
         UUID.randomUUID(),
-        ImmutableMap.of(),
+        ImmutableMap.<String, String>of(),
+        ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(clock));
-    skyframeExecutor.setActionEnv(ImmutableMap.of());
-    skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageOptions.getDeletedPackages()));
+    skyframeExecutor.setDeletedPackages(
+        ImmutableSet.copyOf(packageCacheOptions.getDeletedPackages()));
   }
 
   @Override
   protected FileSystem createFileSystem() {
-    return new InMemoryFileSystem(clock, DigestHashFunction.SHA256);
+    return new InMemoryFileSystem(clock);
   }
 
   private void invalidatePackages() throws InterruptedException {
     skyframeExecutor.invalidateFilesUnderPathForTesting(
-        reporter, ModifiedFileSet.EVERYTHING_MODIFIED, Root.fromPath(rootDirectory));
+        reporter, ModifiedFileSet.EVERYTHING_MODIFIED, rootDirectory);
   }
 
   private Package getPackage(String packageName)
@@ -160,7 +147,7 @@ public class BuildFileModificationTest extends FoundationTestCase {
 
     invalidatePackages();
     Package a2 = getPackage("a");
-    assertThat(a2).isNotSameInstanceAs(a1);
+    assertThat(a2).isNotSameAs(a1);
     assertThat(a2.containsErrors()).isFalse();
     assertNoEvents();
   }
@@ -176,12 +163,12 @@ public class BuildFileModificationTest extends FoundationTestCase {
     FileSystemUtils.writeContent(
         path, "cc_library(name = 'bar')\n".getBytes(StandardCharsets.ISO_8859_1));
     assertThat(getPackage("pkg"))
-        .isSameInstanceAs(oldPkg); // Change only becomes visible after invalidatePackages.
+        .isSameAs(oldPkg); // Change only becomes visible after invalidatePackages.
 
     invalidatePackages();
 
     Package newPkg = getPackage("pkg");
-    assertThat(newPkg).isNotSameInstanceAs(oldPkg);
+    assertThat(newPkg).isNotSameAs(oldPkg);
     assertThat(newPkg.getTarget("bar")).isNotNull();
   }
 
@@ -199,7 +186,7 @@ public class BuildFileModificationTest extends FoundationTestCase {
 
     invalidatePackages();
     Package a2 = getPackage("a");
-    assertThat(a2).isNotSameInstanceAs(a1);
+    assertThat(a2).isNotSameAs(a1);
     assertNoEvents();
   }
 
@@ -212,11 +199,11 @@ public class BuildFileModificationTest extends FoundationTestCase {
     // Change ctime to 1.
     clock.advanceMillis(1);
     path.setLastModifiedTime(1001);
-    assertThat(getPackage("pkg")).isSameInstanceAs(oldPkg); // change not yet visible
+    assertThat(getPackage("pkg")).isSameAs(oldPkg); // change not yet visible
 
     invalidatePackages();
 
     Package newPkg = getPackage("pkg");
-    assertThat(newPkg).isNotSameInstanceAs(oldPkg);
+    assertThat(newPkg).isNotSameAs(oldPkg);
   }
 }

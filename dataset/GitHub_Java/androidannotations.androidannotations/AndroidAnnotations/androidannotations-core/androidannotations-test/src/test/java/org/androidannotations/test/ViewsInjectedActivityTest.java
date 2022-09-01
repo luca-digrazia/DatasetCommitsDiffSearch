@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -72,32 +71,4 @@ public class ViewsInjectedActivityTest {
 		assertThat(activity.textViews).hasSize(2);
 	}
 
-	@Test
-	public void methodInjectedViewNotNull() {
-		assertThat(activity.methodInjectedView).isNotNull();
-	}
-
-	@Test
-	public void multiInjectedViewNotNull() {
-		assertThat(activity.multiInjectedView).isNotNull();
-	}
-
-	@Test
-	public void methodInjectedViewsNotNullAndHasTwoElements() {
-		assertThat(activity.methodInjectedViews).isNotNull();
-		assertThat(activity.methodInjectedViews).hasSize(2);
-	}
-
-	@Test
-	public void methodInjectedViewsNotNullAndHasTwoElements2() {
-		ViewsInjectionOrderActivity_ inOrderActivity = Robolectric.buildActivity(ViewsInjectionOrderActivity_.class).create().get();
-		assertThat(inOrderActivity.methodInjectedViews).isNotNull();
-		assertThat(inOrderActivity.methodInjectedViews).hasSize(2);
-	}
-
-	@Test
-	public void multiInjectedViewsNotNullAndHasTwoElements() {
-		assertThat(activity.multiInjectedViews).isNotNull();
-		assertThat(activity.multiInjectedViews).hasSize(2);
-	}
 }

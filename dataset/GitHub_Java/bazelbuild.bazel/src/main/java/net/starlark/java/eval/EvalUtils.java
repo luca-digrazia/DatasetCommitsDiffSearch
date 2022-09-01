@@ -15,6 +15,7 @@ package net.starlark.java.eval;
 
 import com.google.common.base.Strings;
 import java.util.IllegalFormatException;
+import net.starlark.java.syntax.Location;
 import net.starlark.java.syntax.TokenKind;
 
 /** Internal declarations used by the evaluator. */
@@ -73,10 +74,9 @@ final class EvalUtils {
   }
 
   /** Evaluates an eager binary operation, {@code x op y}. (Excludes AND and OR.) */
-  static Object binaryOp(TokenKind op, Object x, Object y, StarlarkThread starlarkThread)
+  static Object binaryOp(
+      TokenKind op, Object x, Object y, StarlarkSemantics semantics, Mutability mu)
       throws EvalException {
-    StarlarkSemantics semantics = starlarkThread.getSemantics();
-    Mutability mu = starlarkThread.mutability();
     switch (op) {
       case PLUS:
         if (x instanceof StarlarkInt) {
@@ -98,7 +98,7 @@ final class EvalUtils {
         } else if (x instanceof Tuple) {
           if (y instanceof Tuple) {
             // tuple + tuple
-            return Tuple.concat((Tuple) x, (Tuple) y);
+            return Tuple.concat((Tuple<?>) x, (Tuple<?>) y);
           }
 
         } else if (x instanceof StarlarkList) {
@@ -194,7 +194,7 @@ final class EvalUtils {
             return repeatString((String) y, xi);
           } else if (y instanceof Tuple) {
             //  int * tuple
-            return ((Tuple) y).repeat(xi);
+            return ((Tuple<?>) y).repeat(xi);
           } else if (y instanceof StarlarkList) {
             // int * list
             return ((StarlarkList<?>) y).repeat(xi, mu);
@@ -213,7 +213,7 @@ final class EvalUtils {
         } else if (x instanceof Tuple) {
           if (y instanceof StarlarkInt) {
             // tuple * int
-            return ((Tuple) x).repeat((StarlarkInt) y);
+            return ((Tuple<?>) x).repeat((StarlarkInt) y);
           }
 
         } else if (x instanceof StarlarkList) {
@@ -340,8 +340,6 @@ final class EvalUtils {
       case IN:
         if (y instanceof StarlarkIndexable) {
           return ((StarlarkIndexable) y).containsKey(semantics, x);
-        } else if (y instanceof StarlarkIndexable.Threaded) {
-          return ((StarlarkIndexable.Threaded) y).containsKey(starlarkThread, semantics, x);
         } else if (y instanceof String) {
           if (!(x instanceof String)) {
             throw Starlark.errorf(
@@ -352,7 +350,7 @@ final class EvalUtils {
         break;
 
       case NOT_IN:
-        Object z = binaryOp(TokenKind.IN, x, y, starlarkThread);
+        Object z = binaryOp(TokenKind.IN, x, y, semantics, mu);
         if (z != null) {
           return !Starlark.truth(z);
         }
@@ -391,15 +389,8 @@ final class EvalUtils {
 
   private static String repeatString(String s, StarlarkInt in) throws EvalException {
     int n = in.toInt("repeat");
-    if (n <= 0) {
-      return "";
-    } else if ((long) s.length() * (long) n > Integer.MAX_VALUE) {
-      // Would exceed max length of a java String (and would cause an undocumented
-      // ArrayIndexOutOfBoundsException to be thrown in Strings.repeat()).
-      throw Starlark.errorf("excessive repeat (%d * %d characters)", s.length(), n);
-    } else {
-      return Strings.repeat(s, n);
-    }
+    // TODO(adonovan): reject unreasonably large n.
+    return n <= 0 ? "" : Strings.repeat(s, n);
   }
 
   /** Evaluates a unary operation. */
@@ -441,14 +432,9 @@ final class EvalUtils {
    *
    * @throws EvalException if {@code object} is not a sequence or mapping.
    */
-  static Object index(StarlarkThread starlarkThread, Object object, Object key)
+  static Object index(Mutability mu, StarlarkSemantics semantics, Object object, Object key)
       throws EvalException {
-    Mutability mu = starlarkThread.mutability();
-    StarlarkSemantics semantics = starlarkThread.getSemantics();
-
-    if (object instanceof StarlarkIndexable.Threaded) {
-      return ((StarlarkIndexable.Threaded) object).getIndex(starlarkThread, semantics, key);
-    } else if (object instanceof StarlarkIndexable) {
+    if (object instanceof StarlarkIndexable) {
       Object result = ((StarlarkIndexable) object).getIndex(semantics, key);
       // TODO(bazel-team): We shouldn't have this fromJava call here. If it's needed at all,
       // it should go in the implementations of StarlarkIndexable#getIndex that produce non-Starlark
@@ -458,7 +444,7 @@ final class EvalUtils {
       String string = (String) object;
       int index = Starlark.toInt(key, "string index");
       index = getSequenceIndex(index, string.length());
-      return StringModule.memoizedCharToString(string.charAt(index));
+      return string.substring(index, index + 1);
     } else {
       throw Starlark.errorf(
           "type '%s' has no operator [](%s)", Starlark.type(object), Starlark.type(key));
@@ -474,14 +460,14 @@ final class EvalUtils {
     if (object instanceof Dict) {
       @SuppressWarnings("unchecked")
       Dict<Object, Object> dict = (Dict<Object, Object>) object;
-      dict.putEntry(key, value);
+      dict.put(key, value, (Location) null);
 
     } else if (object instanceof StarlarkList) {
       @SuppressWarnings("unchecked")
       StarlarkList<Object> list = (StarlarkList<Object>) object;
       int index = Starlark.toInt(key, "list index");
       index = EvalUtils.getSequenceIndex(index, list.size());
-      list.setElementAt(index, value);
+      list.set(index, value, (Location) null);
 
     } else {
       throw Starlark.errorf(
@@ -492,8 +478,8 @@ final class EvalUtils {
 
   /** Updates the named field of x as if by the Starlark statement {@code x.field = value}. */
   static void setField(Object x, String field, Object value) throws EvalException {
-    if (x instanceof Structure) {
-      ((Structure) x).setField(field, value);
+    if (x instanceof ClassObject) {
+      ((ClassObject) x).setField(field, value);
     } else {
       throw Starlark.errorf("cannot set .%s field of %s value", field, Starlark.type(x));
     }

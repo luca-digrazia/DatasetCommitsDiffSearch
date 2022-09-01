@@ -18,9 +18,8 @@ package me.jessyan.autosize;
 import android.app.Activity;
 import android.app.Application;
 import android.os.Bundle;
-
-import static me.jessyan.autosize.AutoSizeConfig.DEPENDENCY_ANDROIDX;
-import static me.jessyan.autosize.AutoSizeConfig.DEPENDENCY_SUPPORT;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentActivity;
 
 /**
  * ================================================
@@ -38,27 +37,20 @@ public class ActivityLifecycleCallbacksImpl implements Application.ActivityLifec
      */
     private AutoAdaptStrategy mAutoAdaptStrategy;
     /**
-     * 让 Fragment 支持自定义适配参数
+     * 让 {@link Fragment} 支持自定义适配参数
      */
     private FragmentLifecycleCallbacksImpl mFragmentLifecycleCallbacks;
-    private FragmentLifecycleCallbacksImplToAndroidx mFragmentLifecycleCallbacksToAndroidx;
 
     public ActivityLifecycleCallbacksImpl(AutoAdaptStrategy autoAdaptStrategy) {
-        if (DEPENDENCY_ANDROIDX) {
-            mFragmentLifecycleCallbacksToAndroidx = new FragmentLifecycleCallbacksImplToAndroidx(autoAdaptStrategy);
-        } else if (DEPENDENCY_SUPPORT){
-            mFragmentLifecycleCallbacks = new FragmentLifecycleCallbacksImpl(autoAdaptStrategy);
-        }
+        mFragmentLifecycleCallbacks = new FragmentLifecycleCallbacksImpl(autoAdaptStrategy);
         mAutoAdaptStrategy = autoAdaptStrategy;
     }
 
     @Override
     public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
         if (AutoSizeConfig.getInstance().isCustomFragment()) {
-            if (mFragmentLifecycleCallbacksToAndroidx != null && activity instanceof androidx.fragment.app.FragmentActivity) {
-                ((androidx.fragment.app.FragmentActivity) activity).getSupportFragmentManager().registerFragmentLifecycleCallbacks(mFragmentLifecycleCallbacksToAndroidx, true);
-            } else if (mFragmentLifecycleCallbacks != null && activity instanceof android.support.v4.app.FragmentActivity) {
-                ((android.support.v4.app.FragmentActivity) activity).getSupportFragmentManager().registerFragmentLifecycleCallbacks(mFragmentLifecycleCallbacks, true);
+            if (activity instanceof FragmentActivity) {
+                ((FragmentActivity) activity).getSupportFragmentManager().registerFragmentLifecycleCallbacks(mFragmentLifecycleCallbacks, true);
             }
         }
 
@@ -70,9 +62,7 @@ public class ActivityLifecycleCallbacksImpl implements Application.ActivityLifec
 
     @Override
     public void onActivityStarted(Activity activity) {
-        if (mAutoAdaptStrategy != null) {
-            mAutoAdaptStrategy.applyAdapt(activity, activity);
-        }
+
     }
 
     @Override
@@ -107,10 +97,6 @@ public class ActivityLifecycleCallbacksImpl implements Application.ActivityLifec
      */
     public void setAutoAdaptStrategy(AutoAdaptStrategy autoAdaptStrategy) {
         mAutoAdaptStrategy = autoAdaptStrategy;
-        if (mFragmentLifecycleCallbacksToAndroidx != null) {
-            mFragmentLifecycleCallbacksToAndroidx.setAutoAdaptStrategy(autoAdaptStrategy);
-        } else if (mFragmentLifecycleCallbacks != null) {
-            mFragmentLifecycleCallbacks.setAutoAdaptStrategy(autoAdaptStrategy);
-        }
+        mFragmentLifecycleCallbacks.setAutoAdaptStrategy(autoAdaptStrategy);
     }
 }

@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.inspector.elements.android;
@@ -19,7 +21,7 @@ import android.view.ViewGroup.MarginLayoutParams;
 
 abstract class ViewHighlightOverlays {
 
-  abstract void highlightView(View view, Rect bounds, int mainColor);
+  abstract void highlightView(View view, int mainColor);
 
   abstract void removeHighlight(View view);
 
@@ -35,7 +37,7 @@ abstract class ViewHighlightOverlays {
   private static class NoOpViewHighlightOverlays extends ViewHighlightOverlays {
 
     @Override
-    void highlightView(View view, Rect bounds, int mainColor) {
+    void highlightView(View view, int mainColor) {
     }
 
     @Override
@@ -64,14 +66,8 @@ abstract class ViewHighlightOverlays {
     }
 
     @Override
-    void highlightView(View view, Rect bounds, int mainColor) {
+    void highlightView(View view, int mainColor) {
       mMainHighlightDrawable.setColor(mainColor);
-
-      if (bounds.isEmpty()) {
-        mMainHighlightDrawable.setBounds(0, 0, view.getWidth(), view.getHeight());
-      } else {
-        mMainHighlightDrawable.setBounds(bounds);
-      }
 
       int total = mHighlightDrawables.length;
       for (int i = 0; i < total; i++) {
@@ -126,6 +122,7 @@ abstract class ViewHighlightOverlays {
       @Override
       void highlightView(View view) {
         super.highlightView(view);
+        setBounds(0, 0, view.getWidth(), view.getHeight());
       }
 
       @Override
@@ -136,12 +133,7 @@ abstract class ViewHighlightOverlays {
         Rect newRect = canvas.getClipBounds();
         // Make the Canvas Rect bigger according to the View margins.
         newRect.inset(-(mMargins.right + mMargins.left), -(mMargins.top + mMargins.bottom));
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-          canvas.clipRect(newRect, Region.Op.REPLACE);
-        } else {
-          canvas.clipOutRect(newRect);
-        }
+        canvas.clipRect(newRect, Region.Op.REPLACE);
         super.draw(canvas);
       }
     }

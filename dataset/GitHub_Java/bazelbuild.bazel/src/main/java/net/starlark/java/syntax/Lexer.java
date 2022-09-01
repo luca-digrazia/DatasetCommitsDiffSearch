@@ -15,10 +15,8 @@
 package net.starlark.java.syntax;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Interner;
-import com.google.common.collect.Interners;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,24 +25,19 @@ import java.util.Stack;
 /** A scanner for Starlark. */
 final class Lexer {
 
-  // We intern identifiers and keywords to avoid retaining redundant String objects via the AST.
-  //
-  // The parser handles interning of string literal values. Benchmarking did not show significant
-  // benefit to any further internment. See discussion on Google-internal cl/385193833 for details.
-  private static final Interner<String> identInterner = Interners.newWeakInterner();
-
   // --- These fields are accessed directly by the parser: ---
 
   // Mapping from file offsets to Locations.
   final FileLocations locs;
 
   // Information about current token. Updated by nextToken.
-  // raw and value are defined only for STRING, INT, FLOAT, IDENTIFIER, and COMMENT.
+  // raw and value are defined only for STRING, INT, IDENTIFIER, and COMMENT.
   // TODO(adonovan): rename s/xyz/tokenXyz/
   TokenKind kind;
   int start; // start offset
   int end; // end offset
-  Object value; // String, Integer/Long/BigInteger, or Double value of token
+  String raw; // source text of token
+  Object value; // String or Integer/Long/BigInteger value of token
 
   // --- end of parser-visible fields ---
 
@@ -60,7 +53,7 @@ final class Lexer {
   // The first (outermost) element is always zero.
   private final Stack<Integer> indentStack = new Stack<>();
 
-  private final ImmutableList.Builder<Comment> comments = ImmutableList.builder();
+  private final List<Comment> comments;
 
   // The number of unclosed open-parens ("(", '{', '[') at the current point in
   // the stream. Whitespace is handled differently when this is nonzero.
@@ -100,13 +93,14 @@ final class Lexer {
     this.pos = 0;
     this.errors = errors;
     this.checkIndentation = true;
+    this.comments = new ArrayList<>();
     this.dents = 0;
 
     indentStack.push(0);
   }
 
-  ImmutableList<Comment> getComments() {
-    return comments.build();
+  List<Comment> getComments() {
+    return comments;
   }
 
   /**
@@ -142,17 +136,14 @@ final class Lexer {
     this.start = start;
     this.end = end;
     this.value = null;
+    this.raw = null;
   }
 
   // setValue sets the value associated with a STRING, FLOAT, INT,
   // IDENTIFIER, or COMMENT token, and records the raw text of the token.
   private void setValue(Object value) {
     this.value = value;
-  }
-
-  /** Returns the raw input text associated with the current token. */
-  String getRaw() {
-    return bufferSlice(start, end);
+    this.raw = bufferSlice(start, end);
   }
 
   /**
@@ -238,7 +229,7 @@ final class Lexer {
    * delimiter (3 x quot), and advances 'pos' by two if so.
    */
   private boolean skipTripleQuote(char quot) {
-    if (peek(0) == quot && peek(1) == quot) {
+    if (lookaheadIs(0, quot) && lookaheadIs(1, quot)) {
       pos += 2;
       return true;
     } else {
@@ -266,14 +257,14 @@ final class Lexer {
             literal.append(c);
             break;
           } else {
-            error("unclosed string literal", literalStartPos);
+            error("unterminated string literal at eol", literalStartPos);
             setToken(TokenKind.STRING, literalStartPos, pos);
             setValue(literal.toString());
             return;
           }
         case '\\':
           if (pos == buffer.length) {
-            error("unclosed string literal", literalStartPos);
+            error("unterminated string literal at eof", literalStartPos);
             setToken(TokenKind.STRING, literalStartPos, pos);
             setValue(literal.toString());
             return;
@@ -282,7 +273,7 @@ final class Lexer {
             // Insert \ and the following character.
             // As in Python, it means that a raw string can never end with a single \.
             literal.append('\\');
-            if (peek(0) == '\r' && peek(1) == '\n') {
+            if (lookaheadIs(0, '\r') && lookaheadIs(1, '\n')) {
               literal.append("\n");
               pos += 2;
             } else if (buffer[pos] == '\r' || buffer[pos] == '\n') {
@@ -298,7 +289,7 @@ final class Lexer {
           pos++;
           switch (c) {
             case '\r':
-              if (peek(0) == '\n') {
+              if (lookaheadIs(0, '\n')) {
                 pos += 1;
                 break;
               } else {
@@ -398,7 +389,7 @@ final class Lexer {
           break;
       }
     }
-    error("unclosed string literal", literalStartPos);
+    error("unterminated string literal at eof", literalStartPos);
     setToken(TokenKind.STRING, literalStartPos, pos);
     setValue(literal.toString());
   }
@@ -429,13 +420,13 @@ final class Lexer {
       char c = buffer[pos++];
       switch (c) {
         case '\n':
-          error("unclosed string literal", literalStartPos);
+          error("unterminated string literal at eol", literalStartPos);
           setToken(TokenKind.STRING, literalStartPos, pos);
           setValue(bufferSlice(contentStartPos, pos - 1));
           return;
         case '\\':
           if (isRaw) {
-            if (peek(0) == '\r' && peek(1) == '\n') {
+            if (lookaheadIs(0, '\r') && lookaheadIs(1, '\n')) {
               // There was a CRLF after the newline. No shortcut possible, since it needs to be
               // transformed into a single LF.
               pos = contentStartPos;
@@ -464,12 +455,12 @@ final class Lexer {
     }
 
     // If the current position is beyond the end of the file, need to move it backwards
-    // Possible if the file ends with `r"\` (unclosed raw string literal with a backslash)
+    // Possible if the file ends with `r"\` (unterminated raw string literal with a backslash)
     if (pos > buffer.length) {
       pos = buffer.length;
     }
 
-    error("unclosed string literal", literalStartPos);
+    error("unterminated string literal at eof", literalStartPos);
     setToken(TokenKind.STRING, literalStartPos, pos);
     setValue(bufferSlice(contentStartPos, pos));
   }
@@ -518,12 +509,10 @@ final class Lexer {
    */
   private void identifierOrKeyword() {
     int oldPos = pos - 1;
-    String id = identInterner.intern(scanIdentifier());
+    String id = scanIdentifier();
     TokenKind kind = keywordMap.get(id);
     if (kind == null) {
       setToken(TokenKind.IDENTIFIER, oldPos, pos);
-      // setValue allocates a new String for the raw text, but it's not retained so we don't bother
-      // interning it.
       setValue(id);
     } else {
       setToken(kind, oldPos, pos);
@@ -558,6 +547,62 @@ final class Lexer {
     return bufferSlice(oldPos, pos);
   }
 
+  private String scanInteger() {
+    int oldPos = pos - 1;
+    loop:
+    while (pos < buffer.length) {
+      char c = buffer[pos];
+      switch (c) {
+        case 'X': case 'x': // for hexadecimal prefix
+        case 'O': case 'o': // for octal prefix
+        case 'a': case 'A':
+        case 'b': case 'B':
+        case 'c': case 'C':
+        case 'd': case 'D':
+        case 'e': case 'E':
+        case 'f': case 'F':
+          if (buffer[oldPos] != '0') {
+            // A number not starting with zero must be decimal and can only contain decimal digits.
+            break loop;
+          }
+          pos++;
+          break;
+        case '0': case '1':
+        case '2': case '3':
+        case '4': case '5':
+        case '6': case '7':
+        case '8': case '9':
+          pos++;
+          break;
+        default:
+          break loop;
+      }
+    }
+    return bufferSlice(oldPos, pos);
+  }
+
+  /**
+   * Scans an integer literal.
+   *
+   * <p>ON ENTRY: 'pos' is 1 + the index of the first char in the literal.
+   * ON EXIT: 'pos' is 1 + the index of the last char in the literal.
+   */
+  private void integer() {
+    int oldPos = pos - 1;
+    String literal = scanInteger();
+
+    Number value;
+    try {
+      value = IntLiteral.scan(literal);
+    } catch (NumberFormatException ex) {
+      error(ex.getMessage(), oldPos);
+      value = 0;
+    }
+
+    setToken(TokenKind.INT, oldPos, pos);
+    setValue(value);
+  }
+
   /**
    * Tokenizes a two-char operator.
    * @return true if it tokenized an operator
@@ -582,15 +627,9 @@ final class Lexer {
     }
   }
 
-  // Returns the ith unconsumed char, or -1 for EOF.
-  private int peek(int i) {
-    return pos + i < buffer.length ? buffer[pos + i] : -1;
-  }
-
-  // Consumes a char and returns the next unconsumed char, or -1 for EOF.
-  private int next() {
-    pos++;
-    return peek(0);
+  /** Test if the character at pos+p is c. */
+  private boolean lookaheadIs(int p, char c) {
+    return pos + p < buffer.length && buffer[pos + p] == c;
   }
 
   /**
@@ -651,10 +690,10 @@ final class Lexer {
           popParen();
           break;
         case '>':
-          if (peek(0) == '>' && peek(1) == '=') {
+          if (lookaheadIs(0, '>') && lookaheadIs(1, '=')) {
             setToken(TokenKind.GREATER_GREATER_EQUALS, pos - 1, pos + 2);
             pos += 2;
-          } else if (peek(0) == '>') {
+          } else if (lookaheadIs(0, '>')) {
             setToken(TokenKind.GREATER_GREATER, pos - 1, pos + 1);
             pos += 1;
           } else {
@@ -662,10 +701,10 @@ final class Lexer {
           }
           break;
         case '<':
-          if (peek(0) == '<' && peek(1) == '=') {
+          if (lookaheadIs(0, '<') && lookaheadIs(1, '=')) {
             setToken(TokenKind.LESS_LESS_EQUALS, pos - 1, pos + 2);
             pos += 2;
-          } else if (peek(0) == '<') {
+          } else if (lookaheadIs(0, '<')) {
             setToken(TokenKind.LESS_LESS, pos - 1, pos + 1);
             pos += 1;
           } else {
@@ -703,10 +742,10 @@ final class Lexer {
           setToken(TokenKind.CARET, pos - 1, pos);
           break;
         case '/':
-          if (peek(0) == '/' && peek(1) == '=') {
+          if (lookaheadIs(0, '/') && lookaheadIs(1, '=')) {
             setToken(TokenKind.SLASH_SLASH_EQUALS, pos - 1, pos + 2);
             pos += 2;
-          } else if (peek(0) == '/') {
+          } else if (lookaheadIs(0, '/')) {
             setToken(TokenKind.SLASH_SLASH, pos - 1, pos + 1);
             pos += 1;
           } else {
@@ -716,6 +755,9 @@ final class Lexer {
           break;
         case ';':
           setToken(TokenKind.SEMI, pos - 1, pos);
+          break;
+        case '.':
+          setToken(TokenKind.DOT, pos - 1, pos);
           break;
         case '*':
           setToken(TokenKind.STAR, pos - 1, pos);
@@ -727,9 +769,9 @@ final class Lexer {
           break;
         case '\\':
           // Backslash character is valid only at the end of a line (or in a string)
-          if (peek(0) == '\n') {
+          if (lookaheadIs(0, '\n')) {
             pos += 1; // skip the end of line character
-          } else if (peek(0) == '\r' && peek(1) == '\n') {
+          } else if (lookaheadIs(0, '\r') && lookaheadIs(1, '\n')) {
             pos += 2; // skip the CRLF at the end of line
           } else {
             setToken(TokenKind.ILLEGAL, pos - 1, pos);
@@ -757,23 +799,16 @@ final class Lexer {
           break;
         default:
           // detect raw strings, e.g. r"str"
-          if (c == 'r') {
-            int c0 = peek(0);
-            if (c0 == '\'' || c0 == '\"') {
-              pos++;
-              stringLiteral((char) c0, true);
-              break;
-            }
-          }
-
-          // int or float literal, or dot
-          if (c == '.' || isdigit(c)) {
-            pos--; // unconsume
-            scanNumberOrDot(c);
+          if (c == 'r' && pos < buffer.length && (buffer[pos] == '\'' || buffer[pos] == '\"')) {
+            c = buffer[pos];
+            pos++;
+            stringLiteral(c, true);
             break;
           }
 
-          if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
+          if (c >= '0' && c <= '9') {
+            integer();
+          } else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_') {
             identifierOrKeyword();
           } else {
             error("invalid character: '" + c + "'", pos - 1);
@@ -797,147 +832,12 @@ final class Lexer {
     setToken(TokenKind.EOF, pos, pos);
   }
 
-  // Scans a number (INT or FLOAT) or DOT.
-  // Precondition: c == peek(0) (a dot or digit)
-  //
-  // TODO(adonovan): make this the precondition for all scan functions;
-  // currenly most assume their argument c has been consumed already.
-  private void scanNumberOrDot(int c) {
-    int start = this.pos;
-    boolean fraction = false;
-    boolean exponent = false;
-
-    if (c == '.') {
-      // dot or start of fraction
-      if (!isdigit(peek(1))) {
-        pos++; // consume '.'
-        setToken(TokenKind.DOT, start, pos);
-        return;
-      }
-      fraction = true;
-
-    } else if (c == '0') {
-      // hex, octal, binary or float
-      c = next();
-      if (c == '.') {
-        fraction = true;
-
-      } else if (c == 'x' || c == 'X') {
-        // hex
-        c = next();
-        if (!isxdigit(c)) {
-          error("invalid hex literal", start);
-        }
-        while (isxdigit(c)) {
-          c = next();
-        }
-
-      } else if (c == 'o' || c == 'O') {
-        // octal
-        c = next();
-        while (isdigit(c)) {
-          c = next();
-        }
-
-      } else if (c == 'b' || c == 'B') {
-        // binary
-        c = next();
-        if (!isbdigit(c)) {
-          error("invalid binary literal", start);
-        }
-        while (isbdigit(c)) {
-          c = next();
-        }
-
-      } else {
-        // "0" or float or obsolete octal "0755"
-        while (isdigit(c)) {
-          c = next();
-        }
-        if (c == '.') {
-          fraction = true;
-        } else if (c == 'e' || c == 'E') {
-          exponent = true;
-        }
-      }
-
-    } else {
-      // decimal
-      while (isdigit(c)) {
-        c = next();
-      }
-      if (c == '.') {
-        fraction = true;
-      } else if (c == 'e' || c == 'E') {
-        exponent = true;
-      }
-    }
-
-    if (fraction) {
-      c = next(); // consume '.'
-      while (isdigit(c)) {
-        c = next();
-      }
-
-      if (c == 'e' || c == 'E') {
-        exponent = true;
-      }
-    }
-
-    if (exponent) {
-      c = next(); // consume [eE]
-      if (c == '+' || c == '-') {
-        c = next();
-      }
-      while (isdigit(c)) {
-        c = next();
-      }
-    }
-
-    // float?
-    if (fraction || exponent) {
-      setToken(TokenKind.FLOAT, start, pos);
-      double value = 0.0;
-      try {
-        value = Double.parseDouble(bufferSlice(start, pos));
-        if (!Double.isFinite(value)) {
-          error("floating-point literal too large", start);
-        }
-      } catch (NumberFormatException ex) {
-        error("invalid float literal", start);
-      }
-      setValue(value);
-      return;
-    }
-
-    // int
-    setToken(TokenKind.INT, start, pos);
-    String literal = bufferSlice(start, pos);
-    Number value = 0;
-    try {
-      value = IntLiteral.scan(literal);
-    } catch (NumberFormatException ex) {
-      error(ex.getMessage(), start);
-    }
-    setValue(value);
-  }
-
-  private static boolean isdigit(int c) {
-    return '0' <= c && c <= '9';
-  }
-
-  private static boolean isxdigit(int c) {
-    return isdigit(c) || ('A' <= c && c <= 'F') || ('a' <= c && c <= 'f');
-  }
-
-  private static boolean isbdigit(int c) {
-    return c == '0' || c == '1';
-  }
-
-  /*
-   * Returns a string containing the part of the source buffer beginning at offset {@code start} and
-   * ending immediately before offset {@code end} (so the length of the resulting string is {@code
-   * end - start}).
+  /**
+   * Returns parts of the source buffer based on offsets
+   *
+   * @param start the beginning offset for the slice
+   * @param end the offset immediately following the slice
+   * @return the text at offset start with length end - start
    */
   String bufferSlice(int start, int end) {
     return new String(this.buffer, start, end - start);

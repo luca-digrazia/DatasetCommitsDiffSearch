@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -24,19 +23,20 @@ import javax.lang.model.element.VariableElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.ElementValidation;
+import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.IdValidatorHelper;
 import org.androidannotations.holder.EComponentWithViewSupportHolder;
 import org.androidannotations.holder.OnSeekBarChangeListenerHolder;
 import org.androidannotations.rclass.IRClass;
 
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JVar;
 
-public abstract class AbstractSeekBarTouchHandler extends CoreBaseAnnotationHandler<EComponentWithViewSupportHolder> {
+public abstract class AbstractSeekBarTouchHandler extends BaseAnnotationHandler<EComponentWithViewSupportHolder> {
 
 	public AbstractSeekBarTouchHandler(Class<?> targetClass, AndroidAnnotationsEnvironment environment) {
 		super(targetClass, environment);
@@ -54,7 +54,7 @@ public abstract class AbstractSeekBarTouchHandler extends CoreBaseAnnotationHand
 
 		validatorHelper.returnTypeIsVoid((ExecutableElement) element, validation);
 
-		coreValidatorHelper.hasSeekBarTouchTrackingMethodParameters((ExecutableElement) element, validation);
+		validatorHelper.hasSeekBarTouchTrackingMethodParameters((ExecutableElement) element, validation);
 
 		validatorHelper.param.type(CanonicalNameConstants.SEEKBAR).optional().validate((ExecutableElement) element, validation);
 	}
@@ -69,7 +69,7 @@ public abstract class AbstractSeekBarTouchHandler extends CoreBaseAnnotationHand
 			OnSeekBarChangeListenerHolder onSeekBarChangeListenerHolder = holder.getOnSeekBarChangeListenerHolder(idRef);
 			JBlock methodBody = getMethodBodyToCall(onSeekBarChangeListenerHolder);
 
-			IJExpression activityRef = holder.getGeneratedClass().staticRef("this");
+			JExpression activityRef = holder.getGeneratedClass().staticRef("this");
 			JInvocation textChangeCall = methodBody.invoke(activityRef, methodName);
 
 			ExecutableElement executableElement = (ExecutableElement) element;

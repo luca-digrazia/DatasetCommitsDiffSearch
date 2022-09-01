@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -101,8 +100,8 @@ public @interface ReceiverAction {
 	String[] actions();
 
 	/**
-	 * Define a set of data schemes to filter the Intent. If this field isn't all
-	 * schemes are allowed
+	 * Define a set of data schemes to filter the Intent. If this field isn't
+	 * all schemes are allowed
 	 *
 	 * @return the data schemes to filter
 	 */
@@ -113,12 +112,9 @@ public @interface ReceiverAction {
 	 * Should be used on any native, {@link android.os.Parcelable} or
 	 * {@link java.io.Serializable} parameter of a method annotated with
 	 * {@link ReceiverAction} to inject the extra put in the intent parameter of
-	 * {@code void onReceive(Context context, Intent intent)}. The key of this extra
-	 * is the value of the annotation {@link ReceiverAction.Extra} if it is set or
-	 * the name of the parameter. If <a href="http://parceler.org">Parceler</a> is
-	 * on the classpath, extras annotated with &#064;Parcel, or collections
-	 * supported by Parceler will be automatically marshaled using a
-	 * {@link android.os.Parcelable Parcelable} through the Parcels utility class.
+	 * {@code void onReceive(Context context, Intent intent)}. The key of this
+	 * extra is the value of the annotation {@link ReceiverAction.Extra} if it
+	 * is set or the name of the parameter.
 	 * </p>
 	 */
 	@Retention(RetentionPolicy.CLASS)
@@ -126,8 +122,8 @@ public @interface ReceiverAction {
 	public @interface Extra {
 
 		/**
-		 * Define the extra's name. If this parameter isn't set the annotated parameter
-		 * name will be used.
+		 * Define the extra's name. If this parameter isn't set the annotated
+		 * parameter name will be used.
 		 *
 		 * @return the extra's name
 		 */

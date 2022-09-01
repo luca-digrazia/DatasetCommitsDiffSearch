@@ -14,13 +14,8 @@ import android.graphics.Point;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
-import androidx.annotation.Keep;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import android.text.TextUtils;
 import android.util.Log;
-
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
 
 import java.io.File;
 import java.io.FileFilter;
@@ -74,24 +69,18 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
     private Uri uri;
 
     private long fileLength = Long.MAX_VALUE;
-    private final Point imageDimensions = new Point(0, 0);
+    private Point imageDimensions = new Point(0, 0);
     private final AtomicBoolean lazyInited = new AtomicBoolean(false);
 
-    @Keep
-    @SuppressWarnings("unused")
     public SkiaPooledImageRegionDecoder() {
         this(null);
     }
 
-    @SuppressWarnings({"WeakerAccess", "SameParameterValue"})
-    public SkiaPooledImageRegionDecoder(@Nullable Bitmap.Config bitmapConfig) {
-        Bitmap.Config globalBitmapConfig = SubsamplingScaleImageView.getPreferredBitmapConfig();
-        if (bitmapConfig != null) {
-            this.bitmapConfig = bitmapConfig;
-        } else if (globalBitmapConfig != null) {
-            this.bitmapConfig = globalBitmapConfig;
-        } else {
+    public SkiaPooledImageRegionDecoder(Bitmap.Config bitmapConfig) {
+        if (bitmapConfig == null) {
             this.bitmapConfig = Bitmap.Config.RGB_565;
+        } else {
+            this.bitmapConfig = bitmapConfig;
         }
     }
 
@@ -99,8 +88,6 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
      * Controls logging of debug messages. All instances are affected.
      * @param debug true to enable debug logging, false to disable.
      */
-    @Keep
-    @SuppressWarnings("unused")
     public static void setDebug(boolean debug) {
         SkiaPooledImageRegionDecoder.debug = debug;
     }
@@ -111,8 +98,7 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
      * additional three decoders. The thread will abort if {@link #recycle()} is called.
      */
     @Override
-    @NonNull
-    public Point init(final Context context, @NonNull final Uri uri) throws Exception {
+    public Point init(final Context context, final Uri uri) throws Exception {
         this.context = context;
         this.uri = uri;
         initialiseDecoder();
@@ -223,7 +209,7 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
                 }
             } finally {
                 if (inputStream != null) {
-                    try { inputStream.close(); } catch (Exception e) { /* Ignore */ }
+                    try { inputStream.close(); } catch (Exception e) { }
                 }
             }
         }
@@ -248,8 +234,7 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
      * method until after {@link #init(Context, Uri)}, so there will be no blocking on an empty pool.
      */
     @Override
-    @NonNull
-    public Bitmap decodeRegion(@NonNull Rect sRect, int sampleSize) {
+    public Bitmap decodeRegion(Rect sRect, int sampleSize) {
         debug("Decode region " + sRect + " on thread " + Thread.currentThread().getName());
         if (sRect.width() < imageDimensions.x || sRect.height() < imageDimensions.y) {
             lazyInit();
@@ -287,8 +272,13 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
      * true if the pool has at least one decoder available.
      */
     @Override
-    public synchronized boolean isReady() {
-        return decoderPool != null && !decoderPool.isEmpty();
+    public boolean isReady() {
+        decoderLock.readLock().lock();
+        try {
+            return decoderPool != null && !decoderPool.isEmpty();
+        } finally {
+            decoderLock.readLock().unlock();
+        }
     }
 
     /**
@@ -296,7 +286,7 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
      * and destroy the pool. Elsewhere, when a read lock is acquired, we must check the pool is not null.
      */
     @Override
-    public synchronized void recycle() {
+    public void recycle() {
         decoderLock.writeLock().lock();
         try {
             if (decoderPool != null) {
@@ -318,7 +308,6 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
      * @param fileLength the size of the image file in bytes. Creating another decoder will use approximately this much native memory.
      * @return true if another decoder can be created.
      */
-    @SuppressWarnings("WeakerAccess")
     protected boolean allowAdditionalDecoder(int numberOfDecoders, long fileLength) {
         if (numberOfDecoders >= 4) {
             debug("No additional decoders allowed, reached hard limit (4)");
@@ -343,7 +332,7 @@ public class SkiaPooledImageRegionDecoder implements ImageRegionDecoder {
      */
     private static class DecoderPool {
         private final Semaphore available = new Semaphore(0, true);
-        private final Map<BitmapRegionDecoder, Boolean> decoders = new ConcurrentHashMap<>();
+        private Map<BitmapRegionDecoder, Boolean> decoders = new ConcurrentHashMap<>();
 
         /**
          * Returns false if there is at least one decoder in the pool.

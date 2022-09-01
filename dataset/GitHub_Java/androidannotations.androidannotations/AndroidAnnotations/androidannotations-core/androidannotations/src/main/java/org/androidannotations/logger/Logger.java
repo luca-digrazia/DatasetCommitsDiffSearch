@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -30,46 +29,66 @@ public class Logger {
 	}
 
 	public void trace(String message, Object... args) {
-		log(Level.TRACE, message, null, null, null, args);
+		trace(message, null, args);
+	}
+
+	public void trace(String message, Element element, Object... args) {
+		log(Level.TRACE, message, element, null, null, args);
 	}
 
 	public void debug(String message, Object... args) {
-		log(Level.DEBUG, message, null, null, null, args);
+		debug(message, null, args);
+	}
+
+	public void debug(String message, Element element, Object... args) {
+		log(Level.DEBUG, message, element, null, null, args);
 	}
 
 	public void info(String message, Object... args) {
-		log(Level.INFO, message, null, null, null, args);
+		info(message, null, args);
+	}
+
+	public void info(String message, Element element, Object... args) {
+		log(Level.INFO, message, element, null, null, args);
 	}
 
 	public void warn(String message, Object... args) {
-		warn(null, message, args);
+		warn(message, null, null, args);
 	}
 
-	public void warn(Element element, String message, Object... args) {
-		log(Level.WARN, message, element, null, null, args);
+	public void warn(String message, Throwable thr, Object... args) {
+		warn(message, null, thr, args);
 	}
 
-	public void warn(Element element, AnnotationMirror annotationMirror, String message) {
+	public void warn(String message, Element element, Object... args) {
+		warn(message, element, null, args);
+	}
+
+	public void warn(String message, Element element, Throwable thr, Object... args) {
+		log(Level.WARN, message, element, null, thr, args);
+	}
+
+	public void warn(String message, Element element, AnnotationMirror annotationMirror) {
 		log(Level.WARN, message, element, annotationMirror, null);
 	}
 
 	public void error(String message, Object... args) {
-		error(null, null, message, args);
+		error(message, null, null, args);
 	}
 
-	public void error(Element element, String message, Object... args) {
-		error(element, null, message, args);
+	public void error(String message, Element element, Object... args) {
+		error(message, element, null, args);
 	}
 
-	public void error(Throwable thr, String message, Object... args) {
-		error(null, thr, message, args);
+	public void error(String message, Throwable thr, Object... args) {
+		error(message, null, thr, args);
 	}
 
-	public void error(Element element, Throwable thr, String message, Object... args) {
+	public void error(String message, Element element, Throwable thr, Object... args) {
 		log(Level.ERROR, message, element, null, thr, args);
 	}
 
-	public void error(Element element, AnnotationMirror annotationMirror, String message) {
+	public void error(String message, Element element, AnnotationMirror annotationMirror) {
 		log(Level.ERROR, message, element, annotationMirror, null);
 	}
 
@@ -77,7 +96,7 @@ public class Logger {
 		return level.isGreaterOrEquals(loggerContext.getCurrentLevel());
 	}
 
-	private void log(Level level, String message, Element element, AnnotationMirror annotationMirror, Throwable thr, Object... args) {
+	public void log(Level level, String message, Element element, AnnotationMirror annotationMirror, Throwable thr, Object... args) {
 		if (!isLoggable(level)) {
 			return;
 		}

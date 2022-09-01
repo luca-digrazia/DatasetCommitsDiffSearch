@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -45,13 +44,13 @@ public final class PostActivityStarter {
 	 * {@link Activity}.
 	 * 
 	 * @param enterAnim
-	 *            A resource ID of the animation resource to use for the incoming
-	 *            activity. Use 0 for no animation.
+	 *            A resource ID of the animation resource to use for the
+	 *            incoming activity. Use 0 for no animation.
 	 * @param exitAnim
-	 *            A resource ID of the animation resource to use for the outgoing
-	 *            activity. Use 0 for no animation.
+	 *            A resource ID of the animation resource to use for the
+	 *            outgoing activity. Use 0 for no animation.
 	 */
-	public void withAnimation(int enterAnim, int exitAnim) {
+	void withAnimation(int enterAnim, int exitAnim) {
 		if (context instanceof Activity) {
 			((Activity) context).overridePendingTransition(enterAnim, exitAnim);
 		}

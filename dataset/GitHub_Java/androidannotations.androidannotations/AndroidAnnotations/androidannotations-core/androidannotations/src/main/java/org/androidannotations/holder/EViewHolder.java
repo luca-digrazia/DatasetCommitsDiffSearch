@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,11 +15,10 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._super;
-import static com.helger.jcodemodel.JExpr.invoke;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
-import static com.helger.jcodemodel.JMod.STATIC;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.STATIC;
 import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
@@ -34,23 +32,22 @@ import javax.lang.model.element.VariableElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JMod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
 
-public class EViewHolder extends EComponentWithViewSupportHolder implements HasInstanceState, HasReceiverRegistration {
+public class EViewHolder extends EComponentWithViewSupportHolder {
 
 	protected static final String ALREADY_INFLATED_COMMENT = "" // +
 			+ "The alreadyInflated_ hack is needed because of an Android bug\n" // +
 			+ "which leads to infinite calls of onFinishInflate()\n" //
 			+ "when inflating a layout with a parent and using\n" //
-			+ "the <code>&lt;merge /&gt;</code> tag.";
+			+ "the <merge /> tag.";
 
 	private static final String SUPPRESS_WARNING_COMMENT = "" //
 			+ "We use @SuppressWarning here because our java code\n" //
@@ -58,12 +55,6 @@ public class EViewHolder extends EComponentWithViewSupportHolder implements HasI
 			+ "to import OnXXXListeners from View as we already\n" //
 			+ "are in a View.";
 
-	private JMethod onAttachedToWindowMethod;
-	private JBlock onAttachedToWindowAfterSuperBlock;
-	private JMethod onDetachedFromWindowMethod;
-	private JBlock onDetachedFromWindowBeforeSuperBlock;
-	private ReceiverRegistrationDelegate<EViewHolder> receiverRegistrationDelegate;
-	private ViewInstanceStateDelegate instanceStateDelegate;
 	protected JBlock initBody;
 	protected JMethod onFinishInflate;
 	protected JFieldVar alreadyInflated;
@@ -72,8 +63,6 @@ public class EViewHolder extends EComponentWithViewSupportHolder implements HasI
 		super(environment, annotatedElement);
 		addSuppressWarning();
 		createConstructorAndBuilder();
-		receiverRegistrationDelegate = new ReceiverRegistrationDelegate<>(this);
-		instanceStateDelegate = new ViewInstanceStateDelegate(this);
 	}
 
 	private void addSuppressWarning() {
@@ -94,16 +83,16 @@ public class EViewHolder extends EComponentWithViewSupportHolder implements HasI
 			JMethod copyConstructor = generatedClass.constructor(PUBLIC);
 			JMethod staticHelper = generatedClass.method(PUBLIC | STATIC, generatedClass._extends(), "build");
 
-			codeModelHelper.generify(staticHelper, getAnnotatedElement());
+			codeModelHelper.generifyStaticHelper(staticHelper, getAnnotatedElement());
 
 			JBlock body = copyConstructor.body();
 			JInvocation superCall = body.invoke("super");
-			AbstractJClass narrowedGeneratedClass = narrow(generatedClass);
+			JClass narrowedGeneratedClass = narrow(generatedClass);
 
 			JInvocation newInvocation = JExpr._new(narrowedGeneratedClass);
 			for (VariableElement param : userConstructor.getParameters()) {
 				String paramName = param.getSimpleName().toString();
-				AbstractJClass paramType = codeModelHelper.typeMirrorToJClass(param.asType());
+				JClass paramType = codeModelHelper.typeMirrorToJClass(param.asType());
 				copyConstructor.param(paramType, paramName);
 				staticHelper.param(paramType, paramName);
 				superCall.arg(JExpr.ref(paramName));
@@ -124,7 +113,7 @@ public class EViewHolder extends EComponentWithViewSupportHolder implements HasI
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, getCodeModel().VOID, "init" + generationSuffix());
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
 		viewNotifierHelper.wrapInitWithNotifier();
 	}
 
@@ -148,7 +137,7 @@ public class EViewHolder extends EComponentWithViewSupportHolder implements HasI
 	}
 
 	protected void setOnFinishInflate() {
-		onFinishInflate = generatedClass.method(PUBLIC, getCodeModel().VOID, "onFinishInflate");
+		onFinishInflate = generatedClass.method(PUBLIC, codeModel().VOID, "onFinishInflate");
 		onFinishInflate.annotate(Override.class);
 		onFinishInflate.javadoc().append(ALREADY_INFLATED_COMMENT.replaceAll("alreadyInflated_", "alreadyInflated" + generationSuffix()));
 
@@ -168,87 +157,7 @@ public class EViewHolder extends EComponentWithViewSupportHolder implements HasI
 		return alreadyInflated;
 	}
 
-	@Override
-	public JBlock getStartLifecycleAfterSuperBlock() {
-		return getOnAttachedToWindowAfterSuperBlock();
-	}
-
-	@Override
-	public JBlock getEndLifecycleBeforeSuperBlock() {
-		return getOnDetachedToWindowBeforeSuperBlock();
-	}
-
-	@Override
-	public IJExpression getFindViewByIdExpression(JVar idParam) {
-		return JExpr._this().invoke("findViewById").arg(idParam);
-	}
-
-	@Override
-	public JFieldVar getIntentFilterField(ReceiverRegistrationDelegate.IntentFilterData intentFilterData) {
-		return receiverRegistrationDelegate.getIntentFilterField(intentFilterData);
-	}
-
-	@Override
-	public JBlock getIntentFilterInitializationBlock(ReceiverRegistrationDelegate.IntentFilterData intentFilterData) {
-		return getInitBodyInjectionBlock();
-	}
-
-	protected JBlock getOnAttachedToWindowAfterSuperBlock() {
-		if (onAttachedToWindowAfterSuperBlock == null) {
-			setOnAttachedToWindow();
-		}
-		return onAttachedToWindowAfterSuperBlock;
-	}
-
-	protected JBlock getOnDetachedToWindowBeforeSuperBlock() {
-		if (onDetachedFromWindowBeforeSuperBlock == null) {
-			setOnDetachedFromWindow();
-		}
-		return onDetachedFromWindowBeforeSuperBlock;
-	}
-
 	private void setAlreadyInflated() {
-		alreadyInflated = generatedClass.field(PRIVATE, getCodeModel().BOOLEAN, "alreadyInflated" + generationSuffix(), JExpr.FALSE);
-	}
-
-	private void setOnAttachedToWindow() {
-		onAttachedToWindowMethod = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onAttachedToWindow");
-		onAttachedToWindowMethod.annotate(Override.class);
-		JBlock body = onAttachedToWindowMethod.body();
-		body.invoke(_super(), onAttachedToWindowMethod);
-		onAttachedToWindowAfterSuperBlock = body.blockSimple();
-	}
-
-	private void setOnDetachedFromWindow() {
-		onDetachedFromWindowMethod = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onDetachedFromWindow");
-		onDetachedFromWindowMethod.annotate(Override.class);
-		JBlock body = onDetachedFromWindowMethod.body();
-		onDetachedFromWindowBeforeSuperBlock = body.blockSimple();
-		body.invoke(_super(), onDetachedFromWindowMethod);
-	}
-
-	@Override
-	public JBlock getSaveStateMethodBody() {
-		return instanceStateDelegate.getSaveStateMethodBody();
-	}
-
-	@Override
-	public JVar getSaveStateBundleParam() {
-		return instanceStateDelegate.getSaveStateBundleParam();
-	}
-
-	@Override
-	public JMethod getRestoreStateMethod() {
-		return instanceStateDelegate.getRestoreStateMethod();
-	}
-
-	@Override
-	public JBlock getRestoreStateMethodBody() {
-		return instanceStateDelegate.getRestoreStateMethodBody();
-	}
-
-	@Override
-	public JVar getRestoreStateBundleParam() {
-		return instanceStateDelegate.getRestoreStateBundleParam();
+		alreadyInflated = generatedClass.field(PRIVATE, JType.parse(codeModel(), "boolean"), "alreadyInflated" + generationSuffix(), JExpr.FALSE);
 	}
 }

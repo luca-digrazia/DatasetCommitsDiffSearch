@@ -1,55 +1,158 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.elements;
 
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.AbsListView;
-import android.widget.ListView;
-import com.facebook.stetho.common.Accumulator;
+import com.facebook.stetho.common.Util;
 
-/**
- * This interface marks a {@link Descriptor} in a way that is specially understood by
- * {@link DescriptorMap}. When registered for a particular class 'E', a {@link Descriptor} that
- * implements this interface will be chained (via {@link ChainedDescriptor#setSuper(Descriptor)}) to
- * the {@link Descriptor} that is registered for the super class of E. If the super class of E
- * doesn't have a registration, then the super-super class will be used (and so on). This allows you
- * to implement {@link Descriptor} for any class in an inheritance hierarchy without having to
- * couple it (via direct inheritance) to the super-class' {@link Descriptor}.<p/>
- *
- * To understand why this is useful, let's say you wanted to write a {@link Descriptor} for
- * {@link ListView}. You have three options:<p/>
- *
- * The first option is to derive directly from {@link Descriptor} and write code to describe
- * everything about instances of {@link ListView}, including details that are exposed by super
- * classes such as {@link ViewGroup}, {@link View}, and even {@link Object}. This isn't generally
- * a very good choice because it would require a lot of duplicated code amongst many descriptor
- * implementations.<p/>
- *
- * The second option is to derive your 'ListViewDescriptor' from
- * {@link com.facebook.stetho.inspector.elements.android.ViewGroupDescriptor} and only implement
- * code to describe how {@link ListView} differs from {@link ViewGroup}. This will result in a class
- * hierarchy that is parallel to the one that you are describing, but is also not a good choice for
- * two reasons (let's assume for the moment that
- * {@link com.facebook.stetho.inspector.elements.android.ViewGroupDescriptor} is deriving from
- * {@link com.facebook.stetho.inspector.elements.android.ViewDescriptor}). The first problem is that
- * you will need to write code for aggregating results from the super-class in methods such as
- * {@link Descriptor#getChildren(Object, Accumulator)} and
- * {@link Descriptor#getAttributes(Object, AttributeAccumulator)}. The second problem is that you'd
- * end up with a log of fragility if you ever want to implement a descriptor for classes that are
- * in-between {@link ViewGroup} and {@link ListView}, e.g. {@link AbsListView}. Any descriptor that
- * derived from {@link com.facebook.stetho.inspector.elements.android.ViewGroupDescriptor} and
- * described a class deriving from {@link AbsListView} would have to be modified to now derive from
- * 'AbsListViewDescriptor'.<p/>
- *
- * The third option is to implement {@link ChainedDescriptor} (e.g. by deriving from
- * {@link AbstractChainedDescriptor}) which solves all of these issues for you.<p/>
- */
-public interface ChainedDescriptor<E> {
-  void setSuper(Descriptor<? super E> superDescriptor);
+import javax.annotation.Nullable;
+
+public abstract class ChainedDescriptor<E> extends Descriptor {
+  private Descriptor mSuper;
+
+  // This is used by DescriptorMap to hook us up to whatever handles E's super class
+  final void setSuper(Descriptor superDescriptor) {
+    Util.throwIfNull(superDescriptor);
+    Util.throwIfNotNull(mSuper);
+    mSuper = superDescriptor;
+  }
+
+  protected final Descriptor getSuper() {
+    return mSuper;
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final void hook(Object element) {
+    mSuper.hook(element);
+    onHook((E)element);
+  }
+
+  protected void onHook(E element) {
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final void unhook(Object element) {
+    onUnhook((E)element);
+    mSuper.unhook(element);
+  }
+
+  protected void onUnhook(E element) {
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final NodeType getNodeType(Object element) {
+    return onGetNodeType((E)element);
+  }
+
+  protected NodeType onGetNodeType(E element) {
+    return mSuper.getNodeType(element);
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final String getNodeName(Object element) {
+    return onGetNodeName((E)element);
+  }
+
+  protected String onGetNodeName(E element) {
+    return mSuper.getNodeName(element);
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final String getLocalName(Object element) {
+    return onGetLocalName((E)element);
+  }
+
+  protected String onGetLocalName(E element) {
+    return mSuper.getLocalName(element);
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final String getNodeValue(Object element) {
+    return onGetNodeValue((E)element);
+  }
+
+  @Nullable
+  public String onGetNodeValue(E element) {
+    return mSuper.getNodeValue(element);
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final int getChildCount(Object element) {
+    int superCount = mSuper.getChildCount(element);
+    int derivedCount = onGetChildCount((E) element);
+    return superCount + derivedCount;
+  }
+
+  protected int onGetChildCount(E element) {
+    return 0;
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final Object getChildAt(Object element, int index) {
+    if (index < 0) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    int superCount = mSuper.getChildCount(element);
+    if (index < superCount) {
+      return mSuper.getChildAt(element, index);
+    }
+
+    int thisCount = onGetChildCount((E)element);
+    int thisIndex = index - superCount;
+    if (thisIndex < 0 || thisIndex >= thisCount) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    return onGetChildAt((E)element, thisIndex);
+  }
+
+  protected Object onGetChildAt(E element, int index) {
+    throw new IndexOutOfBoundsException();
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final int getAttributeCount(Object element) {
+    int superCount = mSuper.getAttributeCount(element);
+    int thisCount = onGetAttributeCount((E)element);
+    return superCount + thisCount;
+  }
+
+  protected int onGetAttributeCount(E element) {
+    return 0;
+  }
+
+  @Override
+  @SuppressWarnings("unchecked")
+  public final void copyAttributeAt(Object element, int index, NodeAttribute outAttribute) {
+    if (index < 0) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    int superCount = mSuper.getChildCount(element);
+    if (index < superCount) {
+      mSuper.copyAttributeAt(element, index, outAttribute);
+      return;
+    }
+
+    int thisCount = onGetAttributeCount((E)element);
+    int thisIndex = index - superCount;
+    if (thisIndex < 0 || thisIndex >= thisCount) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    onCopyAttributeAt((E)element, thisIndex, outAttribute);
+  }
+
+  protected void onCopyAttributeAt(E element, int index, NodeAttribute outAttribute) {
+    throw new IndexOutOfBoundsException();
+  }
 }

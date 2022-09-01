@@ -5,7 +5,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 
-public class Sender {
+public final class Sender {
 
     private final String host;
     private final int port;
@@ -33,6 +33,7 @@ public class Sender {
     }
 
     public void send(ByteBuffer buffer) throws IOException {
+        buffer.flip();
         channel.send(buffer, address);
     }
 

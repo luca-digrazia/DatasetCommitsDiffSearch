@@ -8,7 +8,7 @@ public class SlidingWindowReservoirTest {
     private final SlidingWindowReservoir reservoir = new SlidingWindowReservoir(3);
 
     @Test
-    public void handlesSmallDataStreams() {
+    public void handlesSmallDataStreams() throws Exception {
         reservoir.update(1);
         reservoir.update(2);
 
@@ -17,7 +17,7 @@ public class SlidingWindowReservoirTest {
     }
 
     @Test
-    public void onlyKeepsTheMostRecentFromBigDataStreams() {
+    public void onlyKeepsTheMostRecentFromBigDataStreams() throws Exception {
         reservoir.update(1);
         reservoir.update(2);
         reservoir.update(3);

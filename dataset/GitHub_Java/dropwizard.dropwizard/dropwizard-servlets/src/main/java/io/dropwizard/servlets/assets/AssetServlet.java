@@ -1,8 +1,13 @@
 package io.dropwizard.servlets.assets;
 
-import io.dropwizard.util.Resources;
-
-import javax.annotation.Nullable;
+import com.google.common.base.CharMatcher;
+import com.google.common.base.Joiner;
+import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableList;
+import com.google.common.hash.Hashing;
+import com.google.common.io.Resources;
+import com.google.common.net.HttpHeaders;
+import com.google.common.net.MediaType;
 import javax.servlet.ServletException;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServlet;
@@ -12,27 +17,12 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.zip.CRC32;
+import static com.google.common.base.Preconditions.checkArgument;
 
 public class AssetServlet extends HttpServlet {
     private static final long serialVersionUID = 6393345594784987908L;
-
-    // HTTP header names
-    private static final String IF_MODIFIED_SINCE = "If-Modified-Since";
-    private static final String IF_NONE_MATCH = "If-None-Match";
-    private static final String IF_RANGE = "If-Range";
-    private static final String RANGE = "Range";
-    private static final String ACCEPT_RANGES = "Accept-Ranges";
-    private static final String CONTENT_RANGE = "Content-Range";
-    private static final String ETAG = "ETag";
-    private static final String LAST_MODIFIED = "Last-Modified";
+    private static final CharMatcher SLASHES = CharMatcher.is('/');
 
     private static class CachedAsset {
         private final byte[] resource;
@@ -41,14 +31,8 @@ public class AssetServlet extends HttpServlet {
 
         private CachedAsset(byte[] resource, long lastModifiedTime) {
             this.resource = resource;
-            this.eTag = '"' + hash(resource) + '"';
+            this.eTag = '"' + Hashing.murmur3_128().hashBytes(resource).toString() + '"';
             this.lastModifiedTime = lastModifiedTime;
-        }
-
-        private static String hash(byte[] resource) {
-            final CRC32 crc32 = new CRC32();
-            crc32.update(resource);
-            return Long.toHexString(crc32.getValue());
         }
 
         public byte[] getResource() {
@@ -64,17 +48,11 @@ public class AssetServlet extends HttpServlet {
         }
     }
 
-    private static final String DEFAULT_MEDIA_TYPE = "text/html";
+    private static final MediaType DEFAULT_MEDIA_TYPE = MediaType.HTML_UTF_8;
 
     private final String resourcePath;
     private final String uriPath;
-
-    @Nullable
     private final String indexFile;
-
-    private final String defaultMediaType;
-
-    @Nullable
     private final Charset defaultCharset;
 
     /**
@@ -95,59 +73,14 @@ public class AssetServlet extends HttpServlet {
      */
     public AssetServlet(String resourcePath,
                         String uriPath,
-                        @Nullable String indexFile,
-                        @Nullable Charset defaultCharset) {
-        this(resourcePath, uriPath, indexFile, DEFAULT_MEDIA_TYPE, defaultCharset);
-    }
-
-    /**
-     * Creates a new {@code AssetServlet} that serves static assets loaded from {@code resourceURL}
-     * (typically a file: or jar: URL). The assets are served at URIs rooted at {@code uriPath}. For
-     * example, given a {@code resourceURL} of {@code "file:/data/assets"} and a {@code uriPath} of
-     * {@code "/js"}, an {@code AssetServlet} would serve the contents of {@code
-     * /data/assets/example.js} in response to a request for {@code /js/example.js}. If a directory
-     * is requested and {@code indexFile} is defined, then {@code AssetServlet} will attempt to
-     * serve a file with that name in that directory. If a directory is requested and {@code
-     * indexFile} is null, it will serve a 404.
-     *
-     * @param resourcePath     the base URL from which assets are loaded
-     * @param uriPath          the URI path fragment in which all requests are rooted
-     * @param indexFile        the filename to use when directories are requested, or null to serve no
-     *                         indexes
-     * @param defaultMediaType the default media type
-     * @param defaultCharset   the default character set
-     * @since 2.0
-     */
-    public AssetServlet(String resourcePath,
-                        String uriPath,
-                        @Nullable String indexFile,
-                        @Nullable String defaultMediaType,
-                        @Nullable Charset defaultCharset) {
-        final String trimmedPath = trimSlashes(resourcePath);
+                        String indexFile,
+                        Charset defaultCharset) {
+        final String trimmedPath = SLASHES.trimFrom(resourcePath);
         this.resourcePath = trimmedPath.isEmpty() ? trimmedPath : trimmedPath + '/';
-        final String trimmedUri = trimTrailingSlashes(uriPath);
+        final String trimmedUri = SLASHES.trimTrailingFrom(uriPath);
         this.uriPath = trimmedUri.isEmpty() ? "/" : trimmedUri;
         this.indexFile = indexFile;
-        this.defaultMediaType = defaultMediaType == null ? DEFAULT_MEDIA_TYPE : defaultMediaType;
         this.defaultCharset = defaultCharset;
-    }
-
-    private static String trimSlashes(String s) {
-        final Matcher matcher = Pattern.compile("^/*(.*?)/*$").matcher(s);
-        if (matcher.find()) {
-            return matcher.group(1);
-        } else {
-            return s;
-        }
-    }
-
-    private static String trimTrailingSlashes(String s) {
-        final Matcher matcher = Pattern.compile("(.*?)/*$").matcher(s);
-        if (matcher.find()) {
-            return matcher.group(1);
-        } else {
-            return s;
-        }
     }
 
     public URL getResourceURL() {
@@ -158,25 +91,8 @@ public class AssetServlet extends HttpServlet {
         return uriPath;
     }
 
-    @Nullable
     public String getIndexFile() {
         return indexFile;
-    }
-
-    /**
-     * @since 2.0
-     */
-    public String getDefaultMediaType() {
-        return defaultMediaType;
-    }
-
-
-    /**
-     * @since 2.0
-     */
-    @Nullable
-    public Charset getDefaultCharset() {
-        return defaultCharset;
     }
 
     @Override
@@ -198,17 +114,17 @@ public class AssetServlet extends HttpServlet {
                 return;
             }
 
-            final String rangeHeader = req.getHeader(RANGE);
+            final String rangeHeader = req.getHeader(HttpHeaders.RANGE);
 
             final int resourceLength = cachedAsset.getResource().length;
-            List<ByteRange> ranges = Collections.emptyList();
+            ImmutableList<ByteRange> ranges = ImmutableList.of();
 
             boolean usingRanges = false;
             // Support for HTTP Byte Ranges
             // http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html
             if (rangeHeader != null) {
 
-                final String ifRange = req.getHeader(IF_RANGE);
+                final String ifRange = req.getHeader(HttpHeaders.IF_RANGE);
 
                 if (ifRange == null || cachedAsset.getETag().equals(ifRange)) {
 
@@ -227,36 +143,46 @@ public class AssetServlet extends HttpServlet {
                     resp.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
                     usingRanges = true;
 
-                    final String byteRanges = ranges.stream()
-                            .map(ByteRange::toString)
-                            .collect(Collectors.joining(","));
-                    resp.addHeader(CONTENT_RANGE, "bytes " + byteRanges + "/" + resourceLength);
+                    resp.addHeader(HttpHeaders.CONTENT_RANGE, "bytes "
+                            + Joiner.on(",").join(ranges) + "/" + resourceLength);
                 }
             }
 
-            resp.setDateHeader(LAST_MODIFIED, cachedAsset.getLastModifiedTime());
-            resp.setHeader(ETAG, cachedAsset.getETag());
+            resp.setDateHeader(HttpHeaders.LAST_MODIFIED, cachedAsset.getLastModifiedTime());
+            resp.setHeader(HttpHeaders.ETAG, cachedAsset.getETag());
 
-            final String requestUri = req.getRequestURI();
-            final String mediaType = Optional.ofNullable(req.getServletContext().getMimeType(
-                    indexFile != null && requestUri.endsWith("/") ? requestUri + indexFile : requestUri))
-                    .orElse(defaultMediaType);
-            if (mediaType.startsWith("video") || mediaType.startsWith("audio") || usingRanges) {
-                resp.addHeader(ACCEPT_RANGES, "bytes");
+            final String mimeTypeOfExtension = req.getServletContext()
+                                                  .getMimeType(req.getRequestURI());
+            MediaType mediaType = DEFAULT_MEDIA_TYPE;
+
+            if (mimeTypeOfExtension != null) {
+                try {
+                    mediaType = MediaType.parse(mimeTypeOfExtension);
+                    if (defaultCharset != null && mediaType.is(MediaType.ANY_TEXT_TYPE)) {
+                        mediaType = mediaType.withCharset(defaultCharset);
+                    }
+                } catch (IllegalArgumentException ignore) {}
             }
 
-            resp.setContentType(mediaType);
-            if (defaultCharset != null) {
-                resp.setCharacterEncoding(defaultCharset.toString());
+            if (mediaType.is(MediaType.ANY_VIDEO_TYPE)
+                    || mediaType.is(MediaType.ANY_AUDIO_TYPE) || usingRanges) {
+                resp.addHeader(HttpHeaders.ACCEPT_RANGES, "bytes");
+            }
+
+            resp.setContentType(mediaType.type() + '/' + mediaType.subtype());
+
+            if (mediaType.charset().isPresent()) {
+                resp.setCharacterEncoding(mediaType.charset().get().toString());
             }
 
             try (ServletOutputStream output = resp.getOutputStream()) {
-                if (usingRanges) {
-                    for (ByteRange range : ranges) {
+                 if (usingRanges) {
+                    for (final ByteRange range : ranges) {
                         output.write(cachedAsset.getResource(), range.getStart(),
                                 range.getEnd() - range.getStart() + 1);
                     }
-                } else {
+                }
+                else {
                     output.write(cachedAsset.getResource());
                 }
             }
@@ -265,19 +191,15 @@ public class AssetServlet extends HttpServlet {
         }
     }
 
-    @Nullable
     private CachedAsset loadAsset(String key) throws URISyntaxException, IOException {
-        if (!key.startsWith(uriPath)) {
-            throw new IllegalArgumentException("Cache key must start with " + uriPath);
-        }
+        checkArgument(key.startsWith(uriPath));
+        final String requestedResourcePath = SLASHES.trimFrom(key.substring(uriPath.length()));
+        final String absoluteRequestedResourcePath = SLASHES.trimFrom(this.resourcePath + requestedResourcePath);
 
-        final String requestedResourcePath = trimSlashes(key.substring(uriPath.length()));
-        final String absoluteRequestedResourcePath = trimSlashes(this.resourcePath + requestedResourcePath);
-
-        URL requestedResourceURL = getResourceUrl(absoluteRequestedResourcePath);
+        URL requestedResourceURL = Resources.getResource(absoluteRequestedResourcePath);
         if (ResourceURL.isDirectory(requestedResourceURL)) {
             if (indexFile != null) {
-                requestedResourceURL = getResourceUrl(absoluteRequestedResourcePath + '/' + indexFile);
+                requestedResourceURL = Resources.getResource(absoluteRequestedResourcePath + '/' + indexFile);
             } else {
                 // directory requested but no index file defined
                 return null;
@@ -292,50 +214,48 @@ public class AssetServlet extends HttpServlet {
 
         // zero out the millis since the date we get back from If-Modified-Since will not have them
         lastModified = (lastModified / 1000) * 1000;
-        return new CachedAsset(readResource(requestedResourceURL), lastModified);
-    }
-
-    protected URL getResourceUrl(String absoluteRequestedResourcePath) {
-        return Resources.getResource(absoluteRequestedResourcePath);
-    }
-
-    protected byte[] readResource(URL requestedResourceURL) throws IOException {
-        return Resources.toByteArray(requestedResourceURL);
+        return new CachedAsset(Resources.toByteArray(requestedResourceURL), lastModified);
     }
 
     private boolean isCachedClientSide(HttpServletRequest req, CachedAsset cachedAsset) {
-        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/If-Modified-Since 
-        // Indicates that with the presense of If-None-Match If-Modified-Since should be ignored.
-        String ifNoneMatchHeader = req.getHeader(IF_NONE_MATCH);
-        if (ifNoneMatchHeader != null) {
-            return cachedAsset.getETag().equals(ifNoneMatchHeader);
-        } else {
-            return req.getDateHeader(IF_MODIFIED_SINCE) >= cachedAsset.getLastModifiedTime();
-        }
+        return cachedAsset.getETag().equals(req.getHeader(HttpHeaders.IF_NONE_MATCH)) ||
+                (req.getDateHeader(HttpHeaders.IF_MODIFIED_SINCE) >= cachedAsset.getLastModifiedTime());
     }
 
     /**
      * Parses a given Range header for one or more byte ranges.
      *
-     * @param rangeHeader    Range header to parse
+     * @param rangeHeader Range header to parse
      * @param resourceLength Length of the resource in bytes
      * @return List of parsed ranges
      */
-    private List<ByteRange> parseRangeHeader(final String rangeHeader, final int resourceLength) {
-        final List<ByteRange> byteRanges;
-        if (rangeHeader.contains("=")) {
-            final String[] parts = rangeHeader.split("=", -1);
+    private ImmutableList<ByteRange> parseRangeHeader(final String rangeHeader,
+            final int resourceLength) {
+        final ImmutableList.Builder<ByteRange> builder = ImmutableList.builder();
+
+        if (rangeHeader.indexOf("=") != -1) {
+            final String[] parts = rangeHeader.split("=");
             if (parts.length > 1) {
-                byteRanges = Arrays.stream(parts[1].split(",", -1))
-                        .map(String::trim)
-                        .map(s -> ByteRange.parse(s, resourceLength))
-                        .collect(Collectors.toList());
-            } else {
-                byteRanges = Collections.emptyList();
+                final List<String> ranges = Splitter.on(",").trimResults().splitToList(parts[1]);
+
+                for (final String range : ranges) {
+                    final ByteRange byteRange = ByteRange.parse(range);
+                    if (!byteRange.hasEnd()) {
+                        if (byteRange.getStart() < 0) {
+                            builder.add(new ByteRange(resourceLength+byteRange.getStart(),
+                                    resourceLength-1));
+                        }
+                        else {
+                            builder.add(new ByteRange(byteRange.getStart(),
+                                    resourceLength-1));
+                        }
+                    }
+                    else {
+                        builder.add(byteRange);
+                    }
+                }
             }
-        } else {
-            byteRanges = Collections.emptyList();
         }
-        return byteRanges;
+        return builder.build();
     }
 }

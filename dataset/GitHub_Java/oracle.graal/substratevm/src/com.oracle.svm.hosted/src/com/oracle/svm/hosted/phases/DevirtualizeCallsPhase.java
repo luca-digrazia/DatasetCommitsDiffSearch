@@ -24,9 +24,6 @@
  */
 package com.oracle.svm.hosted.phases;
 
-import static com.oracle.svm.core.graal.snippets.DeoptHostedSnippets.AnalysisSpeculation;
-import static com.oracle.svm.core.graal.snippets.DeoptHostedSnippets.AnalysisSpeculationReason;
-
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.TypeReference;
@@ -42,10 +39,8 @@ import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 
-import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.nodes.SubstrateMethodCallTargetNode;
 import com.oracle.svm.hosted.meta.HostedMethod;
-import com.oracle.svm.util.ImageBuildStatistics;
+import com.oracle.svm.hosted.nodes.SubstrateMethodCallTargetNode;
 
 import jdk.vm.ci.meta.DeoptimizationAction;
 import jdk.vm.ci.meta.DeoptimizationReason;
@@ -67,19 +62,6 @@ public class DevirtualizeCallsPhase extends Phase {
         for (Invoke invoke : graph.getInvokes()) {
             if (invoke.callTarget() instanceof SubstrateMethodCallTargetNode) {
                 SubstrateMethodCallTargetNode callTarget = (SubstrateMethodCallTargetNode) invoke.callTarget();
-
-                if (callTarget.invokeKind().isDirect() && !((HostedMethod) callTarget.targetMethod()).getWrapped().isSimplyImplementationInvoked()) {
-                    /*
-                     * This is a direct call to a method that the static analysis did not see as
-                     * invoked. This can happen when the receiver is always null. In most cases, the
-                     * method profile also has a length of 0 and the below code to kill the invoke
-                     * would trigger. But not all methods have profiles, for example methods with
-                     * manually constructed graphs.
-                     */
-                    unreachableInvoke(graph, invoke, callTarget);
-                    continue;
-                }
-
                 JavaMethodProfile methodProfile = callTarget.getMethodProfile();
                 if (methodProfile != null) {
                     if (methodProfile.getMethods().length == 0) {
@@ -94,11 +76,7 @@ public class DevirtualizeCallsPhase extends Phase {
         }
     }
 
-    private final boolean parseOnce = SubstrateOptions.parseOnce();
-
-    private void unreachableInvoke(StructuredGraph graph, Invoke invoke, SubstrateMethodCallTargetNode callTarget) {
-        assert !parseOnce : "Must be done by StrengthenGraphs";
-
+    private static void unreachableInvoke(StructuredGraph graph, Invoke invoke, SubstrateMethodCallTargetNode callTarget) {
         /*
          * The invoke has no callee, i.e., it is unreachable. We just insert a always-failing guard
          * before the invoke and let dead code elimination remove the invoke and everything after
@@ -107,22 +85,12 @@ public class DevirtualizeCallsPhase extends Phase {
         if (!callTarget.isStatic()) {
             InliningUtil.nonNullReceiver(invoke);
         }
-        HostedMethod targetMethod = (HostedMethod) callTarget.targetMethod();
-        String message = String.format("The call to %s is not reachable when called from %s.%n", targetMethod.format("%H.%n(%P)"), graph.method().format("%H.%n(%P)"));
-        AnalysisSpeculation speculation = new AnalysisSpeculation(new AnalysisSpeculationReason(message));
-        FixedGuardNode node = new FixedGuardNode(LogicConstantNode.forBoolean(true, graph), DeoptimizationReason.UnreachedCode, DeoptimizationAction.None, speculation, true);
-        graph.addBeforeFixed(invoke.asNode(), graph.add(node));
+        graph.addBeforeFixed(invoke.asNode(), graph.add(new FixedGuardNode(LogicConstantNode.forBoolean(true, graph), DeoptimizationReason.UnreachedCode, DeoptimizationAction.None, true)));
+
         graph.getDebug().dump(DebugContext.VERY_DETAILED_LEVEL, graph, "After dead invoke %s", invoke);
     }
 
-    private void singleCallee(HostedMethod singleCallee, StructuredGraph graph, Invoke invoke, SubstrateMethodCallTargetNode callTarget) {
-        assert !parseOnce : "Must be done by StrengthenGraphs";
-
-        if (ImageBuildStatistics.Options.CollectImageBuildStatistics.getValue(graph.getOptions())) {
-            /* Detect devirtualization of the invoke. */
-            ImageBuildStatistics.counters().incDevirtualizedInvokeCounter();
-        }
-
+    private static void singleCallee(HostedMethod singleCallee, StructuredGraph graph, Invoke invoke, SubstrateMethodCallTargetNode callTarget) {
         /*
          * The invoke has only one callee, i.e., the call can be devirtualized to this callee. This
          * allows later inlining of the callee.

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,12 +15,11 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JExpr._null;
-import static com.helger.jcodemodel.JExpr.cast;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
-import static com.helger.jcodemodel.JMod.STATIC;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.STATIC;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.List;
@@ -31,35 +29,28 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.annotations.EBean;
-import org.androidannotations.api.bean.BeanHolder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
 public class EBeanHolder extends EComponentWithViewSupportHolder {
 
 	public static final String GET_INSTANCE_METHOD_NAME = "getInstance" + generationSuffix();
 
-	private JFieldVar rootFragmentField;
 	private JFieldVar contextField;
-
 	private JMethod constructor;
-	private JMethod overloadedConstructor;
 
 	public EBeanHolder(AndroidAnnotationsEnvironment environment, TypeElement annotatedElement) throws Exception {
 		super(environment, annotatedElement);
-		setConstructors();
+		setConstructor();
 	}
 
-	private void setConstructors() {
+	private void setConstructor() {
 		constructor = generatedClass.constructor(PRIVATE);
-		JVar constructorContextParam = constructor.param(getClasses().CONTEXT, "context");
+		JVar constructorContextParam = constructor.param(classes().CONTEXT, "context");
 		JBlock constructorBody = constructor.body();
 		List<ExecutableElement> constructors = ElementFilter.constructorsIn(annotatedElement.getEnclosedElements());
 		ExecutableElement superConstructor = constructors.get(0);
@@ -67,30 +58,13 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 			constructorBody.invoke("super").arg(constructorContextParam);
 		}
 		constructorBody.assign(getContextField(), constructorContextParam);
-
-		overloadedConstructor = generatedClass.constructor(PRIVATE);
-		JVar overloadedConstructorContextParam = overloadedConstructor.param(getClasses().CONTEXT, "context");
-		JVar overloadedConstructorRootFragmentParam = overloadedConstructor.param(getClasses().OBJECT, "rootFragment");
-		JBlock overloadedConstructorBody = overloadedConstructor.body();
-		if (superConstructor.getParameters().size() == 1) {
-			overloadedConstructorBody.invokeSuper().arg(constructorContextParam);
-		}
-		overloadedConstructorBody.assign(getContextField(), overloadedConstructorContextParam);
-		overloadedConstructorBody.assign(getRootFragmentField(), overloadedConstructorRootFragmentParam);
 	}
 
 	public JFieldVar getContextField() {
 		if (contextField == null) {
-			contextField = generatedClass.field(PRIVATE, getClasses().CONTEXT, "context" + generationSuffix());
+			contextField = generatedClass.field(PRIVATE, classes().CONTEXT, "context" + generationSuffix());
 		}
 		return contextField;
-	}
-
-	public JFieldVar getRootFragmentField() {
-		if (rootFragmentField == null) {
-			rootFragmentField = generatedClass.field(PRIVATE, getClasses().OBJECT, "rootFragment" + generationSuffix());
-		}
-		return rootFragmentField;
 	}
 
 	@Override
@@ -99,110 +73,51 @@ public class EBeanHolder extends EComponentWithViewSupportHolder {
 	}
 
 	@Override
-	protected void setRootFragmentRef() {
-		rootFragmentRef = getRootFragmentField();
-	}
-
-	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, getCodeModel().VOID, "init" + generationSuffix());
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
 	}
 
-	public void invokeInitInConstructors() {
+	public void invokeInitInConstructor() {
 		JBlock constructorBody = constructor.body();
 		constructorBody.invoke(getInit());
-
-		JBlock overloadedConstructorBody = overloadedConstructor.body();
-		overloadedConstructorBody.invoke(getInit());
 	}
 
-	public void createFactoryMethod(EBean.Scope scope) {
+	public void createFactoryMethod(boolean hasSingletonScope) {
 
-		AbstractJClass narrowedGeneratedClass = codeModelHelper.narrowGeneratedClass(generatedClass, annotatedElement.asType());
+		JClass narrowedGeneratedClass = codeModelHelper.narrowGeneratedClass(generatedClass, annotatedElement.asType());
 
 		JMethod factoryMethod = generatedClass.method(PUBLIC | STATIC, narrowedGeneratedClass, GET_INSTANCE_METHOD_NAME);
-		codeModelHelper.generify(factoryMethod, annotatedElement);
 
-		JVar factoryMethodContextParam = factoryMethod.param(getClasses().CONTEXT, "context");
+		codeModelHelper.generifyStaticHelper(factoryMethod, annotatedElement);
+
+		JVar factoryMethodContextParam = factoryMethod.param(classes().CONTEXT, "context");
 
 		JBlock factoryMethodBody = factoryMethod.body();
 
-		switch (scope) {
-		case Default:
-			factoryMethodBody._return(_new(narrowedGeneratedClass).arg(factoryMethodContextParam));
-			createOverloadedFactoryMethod(scope);
-			break;
+		/*
+		 * Singletons are bound to the application context
+		 */
+		if (hasSingletonScope) {
 
-		case Fragment:
-			JVar beanVar = factoryMethodBody.decl(getGeneratedClass(), "bean", _new(narrowedGeneratedClass).arg(factoryMethodContextParam));
-			factoryMethodBody.invoke(beanVar, getInit());
-			factoryMethodBody._return(beanVar);
-
-			createOverloadedFactoryMethod(scope);
-			break;
-
-		case Activity:
-			requestInstanceFromBeanHolder(factoryMethodContextParam, factoryMethodContextParam, factoryMethodBody);
-
-			beanVar = factoryMethodBody.decl(getGeneratedClass(), "bean", _new(narrowedGeneratedClass).arg(factoryMethodContextParam));
-			factoryMethodBody.invoke(beanVar, getInit());
-			factoryMethodBody._return(beanVar);
-			break;
-
-		case Singleton:
 			JFieldVar instanceField = generatedClass.field(PRIVATE | STATIC, generatedClass, "instance" + generationSuffix());
 
-			JBlock creationBlock = factoryMethodBody._if(instanceField.eq(_null()))._then();
+			JBlock creationBlock = factoryMethodBody //
+					._if(instanceField.eq(_null())) //
+					._then();
 			JVar previousNotifier = viewNotifierHelper.replacePreviousNotifierWithNull(creationBlock);
 			creationBlock.assign(instanceField, _new(narrowedGeneratedClass).arg(factoryMethodContextParam.invoke("getApplicationContext")));
 			creationBlock.invoke(instanceField, getInit());
 			viewNotifierHelper.resetPreviousNotifier(creationBlock, previousNotifier);
 
 			factoryMethodBody._return(instanceField);
-			break;
+		} else {
+			factoryMethodBody._return(_new(narrowedGeneratedClass).arg(factoryMethodContextParam));
 		}
-	}
-
-	private void createOverloadedFactoryMethod(EBean.Scope scope) {
-		AbstractJClass narrowedGeneratedClass = codeModelHelper.narrowGeneratedClass(generatedClass, annotatedElement.asType());
-		JMethod factoryMethod = generatedClass.method(PUBLIC | STATIC, narrowedGeneratedClass, GET_INSTANCE_METHOD_NAME);
-		codeModelHelper.generify(factoryMethod, annotatedElement);
-
-		JVar factoryMethodContextParam = factoryMethod.param(getClasses().CONTEXT, "context");
-		JVar factoryMethodRootFragmentParam = factoryMethod.param(getClasses().OBJECT, "rootFragment");
-
-		JBlock factoryMethodBody = factoryMethod.body();
-
-		if (scope == EBean.Scope.Fragment) {
-			requestInstanceFromBeanHolder(factoryMethodRootFragmentParam, factoryMethodContextParam, factoryMethodBody);
-		}
-
-		factoryMethodBody._return(_new(narrowedGeneratedClass).arg(factoryMethodContextParam).arg(factoryMethodRootFragmentParam));
-	}
-
-	private void requestInstanceFromBeanHolder(IJExpression fieldRef, IJExpression contextRef, JBlock block) {
-		AbstractJClass beanHolderClass = getJClass(BeanHolder.class);
-
-		JBlock ifBlock = block._if(fieldRef._instanceof(beanHolderClass))._then();
-		JVar beanHolderVar = ifBlock.decl(beanHolderClass, "beanHolder", cast(beanHolderClass, fieldRef));
-		JVar beanVar = ifBlock.decl(getGeneratedClass(), "bean", beanHolderVar.invoke("getBean").arg(getGeneratedClass().dotclass()));
-
-		JInvocation newBeanExpression = _new(getGeneratedClass()).arg(contextRef);
-		if (fieldRef != contextRef) {
-			newBeanExpression = newBeanExpression.arg(fieldRef);
-		}
-
-		JBlock ifBeanNullBlock = ifBlock._if(beanVar.eq(_null()))._then();
-		ifBeanNullBlock.assign(beanVar, newBeanExpression);
-		ifBeanNullBlock.add(beanHolderVar.invoke("putBean").arg(getGeneratedClass().dotclass()).arg(beanVar));
-		ifBeanNullBlock.invoke(beanVar, getInit());
-
-		ifBlock._return(beanVar);
 	}
 
 	public void createRebindMethod() {
-		JMethod rebindMethod = generatedClass.method(PUBLIC, getCodeModel().VOID, "rebind");
-		JVar contextParam = rebindMethod.param(getClasses().CONTEXT, "context");
+		JMethod rebindMethod = generatedClass.method(PUBLIC, codeModel().VOID, "rebind");
+		JVar contextParam = rebindMethod.param(classes().CONTEXT, "context");
 		JBlock body = rebindMethod.body();
 		body.assign(getContextField(), contextParam);
 		body.invoke(getInit());

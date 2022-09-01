@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -25,7 +24,9 @@ import javax.lang.model.element.Element;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.Option;
+import org.androidannotations.Options;
 import org.androidannotations.handler.AnnotationHandler;
+import org.androidannotations.handler.AnnotationHandlers;
 import org.androidannotations.handler.GeneratingAnnotationHandler;
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.holder.GeneratedClassHolder;
@@ -34,9 +35,9 @@ import org.androidannotations.internal.process.ProcessHolder;
 import org.androidannotations.plugin.AndroidAnnotationsPlugin;
 import org.androidannotations.rclass.IRClass;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.JCodeModel;
-import com.helger.jcodemodel.JDefinedClass;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
 
 public class InternalAndroidAnnotationsEnvironment implements AndroidAnnotationsEnvironment {
 
@@ -48,8 +49,6 @@ public class InternalAndroidAnnotationsEnvironment implements AndroidAnnotations
 
 	private IRClass rClass;
 	private AndroidManifest androidManifest;
-
-	private AnnotationElements extractedElements;
 
 	private AnnotationElements validatedElements;
 
@@ -65,19 +64,13 @@ public class InternalAndroidAnnotationsEnvironment implements AndroidAnnotations
 		this.plugins = plugins;
 		for (AndroidAnnotationsPlugin plugin : plugins) {
 			options.addAllSupportedOptions(plugin.getSupportedOptions());
-			for (AnnotationHandler<?> annotationHandler : plugin.getHandlers(this)) {
-				annotationHandlers.add(annotationHandler);
-			}
+			plugin.addHandlers(annotationHandlers, this);
 		}
 	}
 
 	public void setAndroidEnvironment(IRClass rClass, AndroidManifest androidManifest) {
 		this.rClass = rClass;
 		this.androidManifest = androidManifest;
-	}
-
-	public void setExtractedElements(AnnotationElements extractedElements) {
-		this.extractedElements = extractedElements;
 	}
 
 	public void setValidatedElements(AnnotationElements validatedElements) {
@@ -124,17 +117,17 @@ public class InternalAndroidAnnotationsEnvironment implements AndroidAnnotations
 	}
 
 	@Override
-	public List<AnnotationHandler<?>> getHandlers() {
+	public List<AnnotationHandler<? extends GeneratedClassHolder>> getHandlers() {
 		return annotationHandlers.get();
 	}
 
 	@Override
-	public List<AnnotationHandler<?>> getDecoratingHandlers() {
+	public List<AnnotationHandler<? extends GeneratedClassHolder>> getDecoratingHandlers() {
 		return annotationHandlers.getDecorating();
 	}
 
 	@Override
-	public List<GeneratingAnnotationHandler<?>> getGeneratingHandlers() {
+	public List<GeneratingAnnotationHandler<? extends GeneratedClassHolder>> getGeneratingHandlers() {
 		return annotationHandlers.getGenerating();
 	}
 
@@ -149,11 +142,6 @@ public class InternalAndroidAnnotationsEnvironment implements AndroidAnnotations
 	}
 
 	@Override
-	public AnnotationElements getExtractedElements() {
-		return extractedElements;
-	}
-
-	@Override
 	public AnnotationElements getValidatedElements() {
 		return validatedElements;
 	}
@@ -164,12 +152,12 @@ public class InternalAndroidAnnotationsEnvironment implements AndroidAnnotations
 	}
 
 	@Override
-	public AbstractJClass getJClass(String fullyQualifiedName) {
+	public JClass getJClass(String fullyQualifiedName) {
 		return processHolder.refClass(fullyQualifiedName);
 	}
 
 	@Override
-	public AbstractJClass getJClass(Class<?> clazz) {
+	public JClass getJClass(Class<?> clazz) {
 		return processHolder.refClass(clazz);
 	}
 

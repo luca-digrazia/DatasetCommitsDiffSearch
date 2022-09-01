@@ -22,7 +22,7 @@ public class InstrumentedCacheDecoratorFactoryTest {
     private Ehcache cache;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         this.cache = MANAGER.getEhcache("test-config");
         assumeThat(cache, is(CoreMatchers.notNullValue()));
 
@@ -30,7 +30,7 @@ public class InstrumentedCacheDecoratorFactoryTest {
     }
 
     @Test
-    public void measuresGets() {
+    public void measuresGets() throws Exception {
         cache.get("woo");
 
         assertThat(registry.timer(name(Cache.class, "test-config", "gets")).getCount())
@@ -39,7 +39,7 @@ public class InstrumentedCacheDecoratorFactoryTest {
     }
 
     @Test
-    public void measuresPuts() {
+    public void measuresPuts() throws Exception {
         cache.put(new Element("woo", "whee"));
 
         assertThat(registry.timer(name(Cache.class, "test-config", "puts")).getCount())

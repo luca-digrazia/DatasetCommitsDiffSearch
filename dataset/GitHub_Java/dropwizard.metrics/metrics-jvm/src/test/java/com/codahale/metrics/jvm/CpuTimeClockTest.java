@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.offset;
 public class CpuTimeClockTest {
 
     @Test
-    public void cpuTimeClock() {
+    public void cpuTimeClock() throws Exception {
         final CpuTimeClock clock = new CpuTimeClock();
 
         assertThat((double) clock.getTime())

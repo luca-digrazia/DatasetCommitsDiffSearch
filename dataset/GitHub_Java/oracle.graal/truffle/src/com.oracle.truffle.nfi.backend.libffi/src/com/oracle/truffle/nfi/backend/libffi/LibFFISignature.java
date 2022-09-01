@@ -58,21 +58,20 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.profiles.BranchProfile;
-import com.oracle.truffle.nfi.backend.libffi.FunctionExecuteNode.SignatureExecuteNode;
-import com.oracle.truffle.nfi.backend.libffi.LibFFIClosure.MonomorphicClosureInfo;
-import com.oracle.truffle.nfi.backend.libffi.LibFFIClosure.PolymorphicClosureInfo;
-import com.oracle.truffle.nfi.backend.libffi.LibFFIType.ArrayType;
-import com.oracle.truffle.nfi.backend.libffi.LibFFIType.CachedTypeInfo;
-import com.oracle.truffle.nfi.backend.libffi.LibFFIType.Direction;
-import com.oracle.truffle.nfi.backend.libffi.NativeAllocation.FreeDestructor;
 import com.oracle.truffle.nfi.backend.spi.NFIBackendSignatureBuilderLibrary;
 import com.oracle.truffle.nfi.backend.spi.NFIBackendSignatureLibrary;
 import com.oracle.truffle.nfi.backend.spi.types.NativeSimpleType;
 import com.oracle.truffle.nfi.backend.spi.util.ProfiledArrayBuilder;
 import com.oracle.truffle.nfi.backend.spi.util.ProfiledArrayBuilder.ArrayBuilderFactory;
 import com.oracle.truffle.nfi.backend.spi.util.ProfiledArrayBuilder.ArrayFactory;
-
+import com.oracle.truffle.nfi.backend.libffi.FunctionExecuteNode.SignatureExecuteNode;
+import com.oracle.truffle.nfi.backend.libffi.LibFFIClosure.MonomorphicClosureInfo;
+import com.oracle.truffle.nfi.backend.libffi.LibFFIClosure.PolymorphicClosureInfo;
 import static com.oracle.truffle.nfi.backend.libffi.LibFFISignature.SignatureBuilder.NOT_VARARGS;
+import com.oracle.truffle.nfi.backend.libffi.LibFFIType.ArrayType;
+import com.oracle.truffle.nfi.backend.libffi.LibFFIType.CachedTypeInfo;
+import com.oracle.truffle.nfi.backend.libffi.LibFFIType.Direction;
+import com.oracle.truffle.nfi.backend.libffi.NativeAllocation.FreeDestructor;
 
 /**
  * Runtime object representing native signatures. Instances of this class can not be cached in
@@ -82,7 +81,7 @@ import static com.oracle.truffle.nfi.backend.libffi.LibFFISignature.SignatureBui
  * {@link CachedSignatureInfo}. Two {@link LibFFISignature} objects that have the same
  * {@link CachedSignatureInfo} are guaranteed to behave the same semantically.
  */
-@ExportLibrary(value = NFIBackendSignatureLibrary.class, useForAOT = true, useForAOTPriority = 1)
+@ExportLibrary(value = NFIBackendSignatureLibrary.class, useForAOT = true, useForAOTPriority = 0)
 final class LibFFISignature {
 
     @TruffleBoundary
@@ -107,32 +106,40 @@ final class LibFFISignature {
         return ret;
     }
 
-    @ExportMessage(limit = "3")
-    @GenerateAOT.Exclude
-    static Object call(LibFFISignature self, Object functionPointer, Object[] args,
+    // Turned into a class message export due to a DSL processor issue
+    @ExportMessage
+    static class Call {
+
+        @Specialization(limit = "3")
+        @GenerateAOT.Exclude
+        static Object call(LibFFISignature self, Object functionPointer, Object[] args,
                     @CachedLibrary("functionPointer") InteropLibrary interop,
                     @Cached BranchProfile toNative,
                     @Cached BranchProfile error,
                     @Cached FunctionExecuteNode functionExecute) throws ArityException, UnsupportedTypeException {
-        if (!interop.isPointer(functionPointer)) {
-            toNative.enter();
-            interop.toNative(functionPointer);
+            if (!interop.isPointer(functionPointer)) {
+                toNative.enter();
+                interop.toNative(functionPointer);
+            }
+            long pointer;
+            try {
+                pointer = interop.asPointer(functionPointer);
+            } catch (UnsupportedMessageException e) {
+                error.enter();
+                throw UnsupportedTypeException.create(new Object[]{functionPointer}, "functionPointer", e);
+            }
+            return functionExecute.execute(pointer, self, args);
         }
-        long pointer;
-        try {
-            pointer = interop.asPointer(functionPointer);
-        } catch (UnsupportedMessageException e) {
-            error.enter();
-            throw UnsupportedTypeException.create(new Object[]{functionPointer}, "functionPointer", e);
-        }
-        return functionExecute.execute(pointer, self, args);
+
     }
+
 
     @ExportMessage
     @ImportStatic(LibFFILanguage.class)
     static class CreateClosure {
 
         @Specialization(guards = {"signature.signatureInfo == cachedSignatureInfo", "executable == cachedExecutable"}, assumptions = "getSingleContextAssumption()")
+        @GenerateAOT.Exclude
         static LibFFIClosure doCachedExecutable(LibFFISignature signature, Object executable,
                         @Cached("signature.signatureInfo") CachedSignatureInfo cachedSignatureInfo,
                         @Cached("executable") Object cachedExecutable,
@@ -146,6 +153,7 @@ final class LibFFISignature {
         }
 
         @Specialization(replaces = "doCachedExecutable", guards = "signature.signatureInfo == cachedSignatureInfo")
+        @GenerateAOT.Exclude
         static LibFFIClosure doCachedSignature(LibFFISignature signature, Object executable,
                         @Cached("signature.signatureInfo") CachedSignatureInfo cachedSignatureInfo,
                         @CachedContext(LibFFILanguage.class) LibFFIContext ctx,

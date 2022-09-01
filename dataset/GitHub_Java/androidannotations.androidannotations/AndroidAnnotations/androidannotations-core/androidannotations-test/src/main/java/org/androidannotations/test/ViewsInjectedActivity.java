@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -44,38 +43,15 @@ public class ViewsInjectedActivity extends Activity {
 	@ViewById
 	TextView myTextView;
 
-	@ViewsById({ R.id.my_text_view, R.id.myButton })
+	@ViewsById({R.id.my_text_view, R.id.myButton})
 	List<View> views;
 
-	@ViewsById({ R.id.my_text_view, R.id.someView })
+	@ViewsById({R.id.my_text_view, R.id.someView})
 	List<TextView> textViews;
-
-	TextView methodInjectedView;
-	TextView multiInjectedView;
-	List<TextView> methodInjectedViews;
-	List<View> multiInjectedViews;
 
 	@AfterViews
 	void incrementCounter() {
 		counter++;
-	}
-
-	@ViewById(R.id.my_text_view)
-	void methodInjectedView(TextView someView) {
-		methodInjectedView = someView;
-	}
-
-	void multiInjectedView(@ViewById TextView someView, @ViewById(R.id.my_text_view) TextView activityPrefs) {
-		multiInjectedView = someView;
-	}
-
-	@ViewsById({ R.id.my_text_view, R.id.someView })
-	void methodInjectedViews(List<TextView> someView) {
-		methodInjectedViews = someView;
-	}
-
-	void multiInjectedViews(@ViewsById({ R.id.someView, R.id.myButton }) List<View> someView, @ViewsById(R.id.my_text_view) List<TextView> activityPrefs) {
-		multiInjectedViews = someView;
 	}
 
 }

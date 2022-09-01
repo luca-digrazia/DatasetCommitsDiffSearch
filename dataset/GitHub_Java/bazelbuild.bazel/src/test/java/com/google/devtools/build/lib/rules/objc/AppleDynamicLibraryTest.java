@@ -15,9 +15,7 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.testutil.Scratch;
 import java.io.IOException;
@@ -34,8 +32,7 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
     Iterable<String> requiredAttributes(Scratch scratch, String packageDir,
         Set<String> alreadyAdded) throws IOException {
       return Iterables.concat(ImmutableList.of("binary_type = 'dylib'"),
-          AppleBinaryTest.RULE_TYPE.requiredAttributes(scratch, packageDir,
-          Sets.union(alreadyAdded, ImmutableSet.of("binary_type"))));
+          AppleBinaryTest.RULE_TYPE.requiredAttributes(scratch, packageDir, alreadyAdded));
     }
   };
 
@@ -45,18 +42,24 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testObjcLibraryLinkoptsArePropagatedToLinkAction() throws Exception {
-    checkObjcLibraryLinkoptsArePropagatedToLinkAction(RULE_TYPE);
-  }
-
-  @Test
   public void testUnknownPlatformType() throws Exception {
     checkError(
         "package",
         "test",
         String.format(MultiArchSplitTransitionProvider.UNSUPPORTED_PLATFORM_TYPE_ERROR_FORMAT,
             "meow_meow_os"),
-        "apple_binary(name = 'test', binary_type = 'dylib', platform_type = 'meow_meow_os')");
+        "apple_binary(name = 'test', binary_type = 'dylib', srcs = [ 'a.m' ], "
+            + "platform_type = 'meow_meow_os')");
+  }
+
+  @Test
+  public void testProtoBundlingAndLinking() throws Exception {
+    checkProtoBundlingAndLinking(RULE_TYPE);
+  }
+
+  @Test
+  public void testProtoBundlingWithTargetsWithNoDeps() throws Exception {
+    checkProtoBundlingWithTargetsWithNoDeps(RULE_TYPE);
   }
 
   @Test
@@ -85,12 +88,6 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testObjcProviderLinkInputsInLinkAction() throws Exception {
-    checkObjcProviderLinkInputsInLinkAction(RULE_TYPE);
-  }
-
-
-  @Test
   public void testAppleSdkVersionEnv() throws Exception {
     checkAppleSdkVersionEnv(RULE_TYPE);
   }
@@ -111,6 +108,11 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
   }
 
   @Test
+  public void testNoSrcs() throws Exception {
+    checkNoSrcs(RULE_TYPE);
+  }
+
+  @Test
   public void testLipoBinaryAction() throws Exception {
     checkLipoBinaryAction(RULE_TYPE);
   }
@@ -128,6 +130,12 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
   @Test
   public void testWatchSimulatorLipoAction() throws Exception {
     checkWatchSimulatorLipoAction(RULE_TYPE);
+  }
+
+  @Test
+  public void testLinkActionsWithSrcs() throws Exception {
+    checkLinkActionsWithSrcs(RULE_TYPE,
+        new ExtraLinkArgs("-dynamiclib"));
   }
 
   @Test
@@ -183,15 +191,5 @@ public class AppleDynamicLibraryTest extends ObjcRuleTestCase {
   @Test
   public void testAvoidDepsObjects() throws Exception {
     checkAvoidDepsObjects(RULE_TYPE);
-  }
-
-  @Test
-  public void testMinimumOsDifferentTargets() throws Exception {
-    checkMinimumOsDifferentTargets(RULE_TYPE, "_lipobin", "_bin");
-  }
-
-  @Test
-  public void testDrops32BitArchitecture() throws Exception {
-    verifyDrops32BitArchitecture(RULE_TYPE);
   }
 }

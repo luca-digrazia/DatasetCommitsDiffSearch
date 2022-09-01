@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -56,18 +55,6 @@ public class ExtraInjectedActivity extends Activity {
 	@Extra
 	ParcelableSerializableData parcelableSerializableData;
 
-	String methodInjectedExtra;
-	String multiInjectedExtra;
-
-	@Extra
-	void methodInjectedExtra(String methodInjectedExtra) {
-		this.methodInjectedExtra = methodInjectedExtra;
-	}
-
-	void multiInjectedExtra(@Extra String multiInjectedExtra, @Extra String multiInjectedExtra2) {
-		this.multiInjectedExtra = multiInjectedExtra;
-	}
-
 	@Override
 	protected void onNewIntent(Intent intent) {
 		setIntent(intent);
@@ -76,11 +63,16 @@ public class ExtraInjectedActivity extends Activity {
 	void intentWithExtras() {
 		ExtraInjectedActivity_.intent(this).arrayExtra(null).start();
 		ExtraInjectedActivity_.intent(this).intExtra(42).get();
-		ExtraInjectedActivity_.intent(this).stringExtra("hello").startForResult(42);
-		ExtraInjectedActivity_.intent(this).parcelerExample(new ParcelerBean("Andy", 42));
+		ExtraInjectedActivity_.intent(this).stringExtra("hello")
+				.startForResult(42);
+		ExtraInjectedActivity_.intent(this)
+				.parcelerExample(new ParcelerBean("Andy", 42));
 		List<ParcelerBean> parcelerBeans = new ArrayList<ParcelerBean>();
 		parcelerBeans.add(new ParcelerBean("Duke", 1337));
-		ExtraInjectedActivity_.intent(this).parcelerExampleCollection(parcelerBeans);
-		ExtraInjectedActivity_.intent(this).parcelableSerializableData(new ParcelableSerializableData()).get();
+		ExtraInjectedActivity_.intent(this)
+				.parcelerExampleCollection(parcelerBeans);
+		ExtraInjectedActivity_.intent(this)
+				.parcelableSerializableData(new ParcelableSerializableData())
+				.get();
 	}
 }

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,13 +15,12 @@
  */
 package org.androidannotations.internal.core;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.Option;
-import org.androidannotations.handler.AnnotationHandler;
+import org.androidannotations.handler.AnnotationHandlers;
 import org.androidannotations.internal.core.handler.AfterExtrasHandler;
 import org.androidannotations.internal.core.handler.AfterInjectHandler;
 import org.androidannotations.internal.core.handler.AfterPreferencesHandler;
@@ -33,13 +31,9 @@ import org.androidannotations.internal.core.handler.AppHandler;
 import org.androidannotations.internal.core.handler.BackgroundHandler;
 import org.androidannotations.internal.core.handler.BeanHandler;
 import org.androidannotations.internal.core.handler.BeforeTextChangeHandler;
-import org.androidannotations.internal.core.handler.BindingObjectHandler;
 import org.androidannotations.internal.core.handler.CheckedChangeHandler;
 import org.androidannotations.internal.core.handler.ClickHandler;
-import org.androidannotations.internal.core.handler.ColorResHandler;
-import org.androidannotations.internal.core.handler.ColorStateListResHandler;
 import org.androidannotations.internal.core.handler.CustomTitleHandler;
-import org.androidannotations.internal.core.handler.DataBoundHandler;
 import org.androidannotations.internal.core.handler.DefaultResHandler;
 import org.androidannotations.internal.core.handler.DrawableResHandler;
 import org.androidannotations.internal.core.handler.EActivityHandler;
@@ -63,25 +57,18 @@ import org.androidannotations.internal.core.handler.FullscreenHandler;
 import org.androidannotations.internal.core.handler.HierarchyViewerSupportHandler;
 import org.androidannotations.internal.core.handler.HtmlResHandler;
 import org.androidannotations.internal.core.handler.HttpsClientHandler;
-import org.androidannotations.internal.core.handler.IgnoreWhenHandler;
+import org.androidannotations.internal.core.handler.IgnoredWhenDetachedHandler;
 import org.androidannotations.internal.core.handler.InjectMenuHandler;
 import org.androidannotations.internal.core.handler.InstanceStateHandler;
 import org.androidannotations.internal.core.handler.ItemClickHandler;
 import org.androidannotations.internal.core.handler.ItemLongClickHandler;
 import org.androidannotations.internal.core.handler.ItemSelectHandler;
-import org.androidannotations.internal.core.handler.KeyDownHandler;
-import org.androidannotations.internal.core.handler.KeyLongPressHandler;
-import org.androidannotations.internal.core.handler.KeyMultipleHandler;
-import org.androidannotations.internal.core.handler.KeyUpHandler;
 import org.androidannotations.internal.core.handler.LongClickHandler;
 import org.androidannotations.internal.core.handler.NonConfigurationInstanceHandler;
 import org.androidannotations.internal.core.handler.OnActivityResultHandler;
 import org.androidannotations.internal.core.handler.OptionsItemHandler;
 import org.androidannotations.internal.core.handler.OptionsMenuHandler;
 import org.androidannotations.internal.core.handler.OptionsMenuItemHandler;
-import org.androidannotations.internal.core.handler.PageScrollStateChangedHandler;
-import org.androidannotations.internal.core.handler.PageScrolledHandler;
-import org.androidannotations.internal.core.handler.PageSelectedHandler;
 import org.androidannotations.internal.core.handler.PrefHandler;
 import org.androidannotations.internal.core.handler.PreferenceByKeyHandler;
 import org.androidannotations.internal.core.handler.PreferenceChangeHandler;
@@ -91,14 +78,12 @@ import org.androidannotations.internal.core.handler.PreferenceScreenHandler;
 import org.androidannotations.internal.core.handler.ReceiverActionHandler;
 import org.androidannotations.internal.core.handler.ReceiverHandler;
 import org.androidannotations.internal.core.handler.RootContextHandler;
-import org.androidannotations.internal.core.handler.RootFragmentHandler;
 import org.androidannotations.internal.core.handler.SeekBarProgressChangeHandler;
 import org.androidannotations.internal.core.handler.SeekBarTouchStartHandler;
 import org.androidannotations.internal.core.handler.SeekBarTouchStopHandler;
 import org.androidannotations.internal.core.handler.ServiceActionHandler;
 import org.androidannotations.internal.core.handler.SharedPrefHandler;
 import org.androidannotations.internal.core.handler.SupposeBackgroundHandler;
-import org.androidannotations.internal.core.handler.SupposeThreadHandler;
 import org.androidannotations.internal.core.handler.SupposeUiThreadHandler;
 import org.androidannotations.internal.core.handler.SystemServiceHandler;
 import org.androidannotations.internal.core.handler.TextChangeHandler;
@@ -117,6 +102,9 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 
 	private static final String NAME = "AndroidAnnotations";
 
+	private static final Option OPTION_TRACE = new Option("trace", "false");
+	private static final Option OPTION_THREAD_CONTROL = new Option("threadControl", "true");
+
 	@Override
 	public String getName() {
 		return NAME;
@@ -124,12 +112,11 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 
 	@Override
 	public List<Option> getSupportedOptions() {
-		return Arrays.asList(TraceHandler.OPTION_TRACE, SupposeThreadHandler.OPTION_THREAD_CONTROL);
+		return Arrays.asList(OPTION_TRACE, OPTION_THREAD_CONTROL);
 	}
 
 	@Override
-	public List<AnnotationHandler<?>> getHandlers(AndroidAnnotationsEnvironment androidAnnotationEnv) {
-		List<AnnotationHandler<?>> annotationHandlers = new ArrayList<>();
+	public void addHandlers(AnnotationHandlers annotationHandlers, AndroidAnnotationsEnvironment androidAnnotationEnv) {
 		annotationHandlers.add(new EApplicationHandler(androidAnnotationEnv));
 		annotationHandlers.add(new EActivityHandler(androidAnnotationEnv));
 		annotationHandlers.add(new EProviderHandler(androidAnnotationEnv));
@@ -159,10 +146,6 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 		for (AndroidRes androidRes : AndroidRes.values()) {
 			if (androidRes == AndroidRes.ANIMATION) {
 				annotationHandlers.add(new AnimationResHandler(androidAnnotationEnv));
-			} else if (androidRes == AndroidRes.COLOR) {
-				annotationHandlers.add(new ColorResHandler(androidAnnotationEnv));
-			} else if (androidRes == AndroidRes.COLOR_STATE_LIST) {
-				annotationHandlers.add(new ColorStateListResHandler(androidAnnotationEnv));
 			} else if (androidRes == AndroidRes.DRAWABLE) {
 				annotationHandlers.add(new DrawableResHandler(androidAnnotationEnv));
 			} else if (androidRes == AndroidRes.HTML) {
@@ -175,7 +158,6 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 		annotationHandlers.add(new FragmentArgHandler(androidAnnotationEnv));
 		annotationHandlers.add(new SystemServiceHandler(androidAnnotationEnv));
 
-		annotationHandlers.add(new NonConfigurationInstanceHandler(androidAnnotationEnv));
 		annotationHandlers.add(new AppHandler(androidAnnotationEnv));
 		annotationHandlers.add(new BeanHandler(androidAnnotationEnv));
 		annotationHandlers.add(new InjectMenuHandler(androidAnnotationEnv));
@@ -185,19 +167,14 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 		annotationHandlers.add(new CustomTitleHandler(androidAnnotationEnv));
 		annotationHandlers.add(new FullscreenHandler(androidAnnotationEnv));
 		annotationHandlers.add(new RootContextHandler(androidAnnotationEnv));
-		annotationHandlers.add(new RootFragmentHandler(androidAnnotationEnv));
+		annotationHandlers.add(new NonConfigurationInstanceHandler(androidAnnotationEnv));
 		annotationHandlers.add(new ExtraHandler(androidAnnotationEnv));
-		annotationHandlers.add(new BindingObjectHandler(androidAnnotationEnv));
 		annotationHandlers.add(new BeforeTextChangeHandler(androidAnnotationEnv));
 		annotationHandlers.add(new TextChangeHandler(androidAnnotationEnv));
 		annotationHandlers.add(new AfterTextChangeHandler(androidAnnotationEnv));
 		annotationHandlers.add(new SeekBarProgressChangeHandler(androidAnnotationEnv));
 		annotationHandlers.add(new SeekBarTouchStartHandler(androidAnnotationEnv));
 		annotationHandlers.add(new SeekBarTouchStopHandler(androidAnnotationEnv));
-		annotationHandlers.add(new KeyDownHandler(androidAnnotationEnv));
-		annotationHandlers.add(new KeyLongPressHandler(androidAnnotationEnv));
-		annotationHandlers.add(new KeyMultipleHandler(androidAnnotationEnv));
-		annotationHandlers.add(new KeyUpHandler(androidAnnotationEnv));
 		annotationHandlers.add(new ServiceActionHandler(androidAnnotationEnv));
 		annotationHandlers.add(new InstanceStateHandler(androidAnnotationEnv));
 		annotationHandlers.add(new HttpsClientHandler(androidAnnotationEnv));
@@ -206,36 +183,36 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 		annotationHandlers.add(new ReceiverHandler(androidAnnotationEnv));
 		annotationHandlers.add(new ReceiverActionHandler(androidAnnotationEnv));
 		annotationHandlers.add(new OnActivityResultHandler(androidAnnotationEnv));
-		annotationHandlers.add(new PageScrolledHandler(androidAnnotationEnv));
-		annotationHandlers.add(new PageScrollStateChangedHandler(androidAnnotationEnv));
-		annotationHandlers.add(new PageSelectedHandler(androidAnnotationEnv));
 
-		annotationHandlers.add(new IgnoreWhenHandler(androidAnnotationEnv));
-
+		annotationHandlers.add(new IgnoredWhenDetachedHandler(androidAnnotationEnv));
+		/* After injection methods must be after injections */
 		annotationHandlers.add(new AfterInjectHandler(androidAnnotationEnv));
 		annotationHandlers.add(new AfterExtrasHandler(androidAnnotationEnv));
 		annotationHandlers.add(new AfterViewsHandler(androidAnnotationEnv));
 
+		/* preference screen handler must be after injections */
 		annotationHandlers.add(new PreferenceScreenHandler(androidAnnotationEnv));
 		annotationHandlers.add(new PreferenceHeadersHandler(androidAnnotationEnv));
+		/* Preference injections must be after preference screen handler */
 		annotationHandlers.add(new PreferenceByKeyHandler(androidAnnotationEnv));
 		annotationHandlers.add(new PreferenceChangeHandler(androidAnnotationEnv));
 		annotationHandlers.add(new PreferenceClickHandler(androidAnnotationEnv));
+		/* After preference injection methods must be after preference injections */
 		annotationHandlers.add(new AfterPreferencesHandler(androidAnnotationEnv));
 
-		annotationHandlers.add(new DataBoundHandler(androidAnnotationEnv));
-
-		annotationHandlers.add(new TraceHandler(androidAnnotationEnv));
+		if (androidAnnotationEnv.getOptionBooleanValue(OPTION_TRACE)) {
+			annotationHandlers.add(new TraceHandler(androidAnnotationEnv));
+		}
 
 		/*
-		 * WakeLockHandler must be after TraceHandler but before UiThreadHandler and
-		 * BackgroundHandler
+		 * WakeLockHandler must be after TraceHandler but before UiThreadHandler
+		 * and BackgroundHandler
 		 */
 		annotationHandlers.add(new WakeLockHandler(androidAnnotationEnv));
 
 		/*
 		 * UIThreadHandler and BackgroundHandler must be after TraceHandler and
-		 * IgnoreWhen
+		 * IgnoredWhenDetached
 		 */
 		annotationHandlers.add(new UiThreadHandler(androidAnnotationEnv));
 		annotationHandlers.add(new BackgroundHandler(androidAnnotationEnv));
@@ -244,9 +221,9 @@ public class CorePlugin extends AndroidAnnotationsPlugin {
 		 * SupposeUiThreadHandler and SupposeBackgroundHandler must be after all
 		 * handlers that modifies generated method body
 		 */
-		annotationHandlers.add(new SupposeUiThreadHandler(androidAnnotationEnv));
-		annotationHandlers.add(new SupposeBackgroundHandler(androidAnnotationEnv));
-
-		return annotationHandlers;
+		if (androidAnnotationEnv.getOptionBooleanValue(OPTION_THREAD_CONTROL)) {
+			annotationHandlers.add(new SupposeUiThreadHandler(androidAnnotationEnv));
+			annotationHandlers.add(new SupposeBackgroundHandler(androidAnnotationEnv));
+		}
 	}
 }

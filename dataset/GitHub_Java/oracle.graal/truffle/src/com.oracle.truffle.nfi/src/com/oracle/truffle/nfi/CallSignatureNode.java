@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,8 @@
  */
 package com.oracle.truffle.nfi;
 
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -50,6 +50,7 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
@@ -61,11 +62,9 @@ import com.oracle.truffle.nfi.ConvertTypeNode.ConvertFromNativeNode;
 import com.oracle.truffle.nfi.ConvertTypeNode.ConvertToNativeNode;
 import com.oracle.truffle.nfi.ConvertTypeNode.OptimizedConvertTypeNode;
 import com.oracle.truffle.nfi.NFISignature.ArgsCachedState;
-import com.oracle.truffle.nfi.NFISignature.SignatureCachedState;
 import com.oracle.truffle.nfi.NFIType.TypeCachedState;
-import com.oracle.truffle.nfi.backend.spi.NFIBackendSignatureLibrary;
+import com.oracle.truffle.nfi.spi.NFIBackendSignatureLibrary;
 
-@GenerateAOT
 abstract class CallSignatureNode extends Node {
 
     abstract Object execute(NFISignature signature, Object function, Object[] args) throws ArityException, UnsupportedTypeException, UnsupportedMessageException;
@@ -73,39 +72,41 @@ abstract class CallSignatureNode extends Node {
     @GenerateUncached
     abstract static class CachedCallSignatureNode extends CallSignatureNode {
 
-        @Specialization(guards = {"cachedState != null", "signature.cachedState == cachedState"})
-        Object doOptimizedDirect(NFISignature signature, Object function, Object[] args,
-                        @Cached("signature.cachedState") SignatureCachedState cachedState,
-                        @Cached("cachedState.createOptimizedSignatureCall()") CallSignatureNode call) throws ArityException, UnsupportedTypeException, UnsupportedMessageException {
-            assert cachedState == signature.cachedState;
-            return call.execute(signature, function, args);
+        static DirectCallNode createCall(CallTarget target) {
+            DirectCallNode ret = DirectCallNode.create(target);
+            ret.forceInlining();
+            return ret;
         }
 
-        @Specialization(replaces = "doOptimizedDirect", guards = "signature.cachedState != null")
+        @Specialization(guards = {"signature.optimizedSignatureCall != null", "signature.optimizedSignatureCall == call.getCallTarget()"})
+        Object doOptimizedDirect(NFISignature signature, Object function, Object[] args,
+                        @Cached("createCall(signature.optimizedSignatureCall)") DirectCallNode call) {
+            return call.call(signature, function, args);
+        }
+
+        @Specialization(replaces = "doOptimizedDirect", guards = "signature.optimizedSignatureCall != null")
         Object doOptimizedIndirect(NFISignature signature, Object function, Object[] args,
                         @Cached IndirectCallNode call) {
-            return call.call(signature.cachedState.getPolymorphicSignatureCall(), signature, function, args);
+            return call.call(signature.optimizedSignatureCall, signature, function, args);
         }
 
-        @Specialization(guards = "signature.cachedState == null")
+        @Specialization(limit = "3", guards = "signature.optimizedSignatureCall == null")
         Object doSlowPath(NFISignature signature, Object function, Object[] args,
                         @Cached BranchProfile exception,
                         @Cached ConvertToNativeNode convertArg,
                         @Cached ConvertFromNativeNode convertRet,
-                        @CachedLibrary(limit = "3") NFIBackendSignatureLibrary nativeLibrary) throws ArityException, UnsupportedTypeException, UnsupportedMessageException {
-            if (args.length != signature.managedArgCount) {
+                        @CachedLibrary("signature.nativeSignature") NFIBackendSignatureLibrary nativeLibrary) throws ArityException, UnsupportedTypeException, UnsupportedMessageException {
+            int expectedArgsLength = signature.managedArgCount;
+            if (args.length != expectedArgsLength) {
                 exception.enter();
-                throw ArityException.create(signature.managedArgCount, signature.managedArgCount, args.length);
+                throw ArityException.create(expectedArgsLength, args.length);
             }
 
-            Object[] preparedArgs = new Object[signature.nativeArgCount];
+            Object[] preparedArgs = new Object[expectedArgsLength];
             int argIdx = 0;
             for (int i = 0; i < preparedArgs.length; i++) {
-                Object input = null;
-                if (signature.argTypes[i].cachedState.managedArgCount == 1) {
-                    input = args[argIdx++];
-                }
-                preparedArgs[i] = convertArg.execute(signature.argTypes[i], input);
+                preparedArgs[i] = convertArg.execute(signature.argTypes[i], args[argIdx]);
+                argIdx += signature.argTypes[i].cachedState.managedArgCount;
             }
 
             Object ret = nativeLibrary.call(signature.nativeSignature, function, preparedArgs);
@@ -121,7 +122,7 @@ abstract class CallSignatureNode extends Node {
         return OptimizedCallClosureNodeGen.create(retType, argsState);
     }
 
-    abstract static class OptimizedCallSignatureNode extends CallSignatureNode {
+    static abstract class OptimizedCallSignatureNode extends CallSignatureNode {
 
         @Child OptimizedConvertTypeNode convertRet;
         @Children final OptimizedConvertTypeNode[] convertArgs;
@@ -156,13 +157,13 @@ abstract class CallSignatureNode extends Node {
             return preparedArgs;
         }
 
-        @Specialization
+        @Specialization(limit = "1")
         Object doCall(NFISignature signature, Object function, Object[] args,
                         @Cached BranchProfile exception,
-                        @CachedLibrary(limit = "1") NFIBackendSignatureLibrary backendLibrary) throws ArityException, UnsupportedTypeException, UnsupportedMessageException {
+                        @CachedLibrary("signature.nativeSignature") NFIBackendSignatureLibrary backendLibrary) throws ArityException, UnsupportedTypeException, UnsupportedMessageException {
             if (args.length != managedArgCount) {
                 exception.enter();
-                throw ArityException.create(managedArgCount, managedArgCount, args.length);
+                throw ArityException.create(managedArgCount, args.length);
             }
             Object[] preparedArgs = prepareArgs(signature, args);
             Object ret = backendLibrary.call(signature.nativeSignature, function, preparedArgs);
@@ -170,7 +171,7 @@ abstract class CallSignatureNode extends Node {
         }
     }
 
-    abstract static class OptimizedCallClosureNode extends CallSignatureNode {
+    static abstract class OptimizedCallClosureNode extends CallSignatureNode {
 
         @Child OptimizedConvertTypeNode convertRet;
         @Children final OptimizedConvertTypeNode[] convertArgs;
@@ -204,13 +205,12 @@ abstract class CallSignatureNode extends Node {
         }
 
         @Specialization(limit = "1")
-        @GenerateAOT.Exclude
         Object doCall(NFISignature signature, Object function, Object[] args,
                         @Cached BranchProfile exception,
                         @CachedLibrary("function") InteropLibrary interop) throws ArityException, UnsupportedTypeException, UnsupportedMessageException {
             if (args.length != convertArgs.length) {
                 exception.enter();
-                throw ArityException.create(convertArgs.length, convertArgs.length, args.length);
+                throw ArityException.create(convertArgs.length, args.length);
             }
             Object[] preparedArgs = prepareArgs(signature, args);
             Object ret = interop.execute(function, preparedArgs);

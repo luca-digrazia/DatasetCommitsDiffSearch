@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,7 +16,6 @@
 package org.androidannotations.rest.spring;
 
 import org.androidannotations.rest.spring.annotations.Field;
-import org.androidannotations.rest.spring.annotations.Path;
 import org.androidannotations.rest.spring.annotations.Post;
 import org.androidannotations.rest.spring.annotations.Rest;
 import org.springframework.core.io.ClassPathResource;
@@ -48,8 +46,9 @@ public interface ClientWithPostParameters {
 	void twoFieldssOneWithName(@Field String a, @Field("c") String b);
 
 	@Post("/{url}")
-	void fieldAndUrlVariable(@Field String a, @Path String url);
+	void fieldAndUrlVariable(@Field String a, String url);
 
 	@Post("/")
 	void fieldClassPathResource(@Field ClassPathResource res);
 }
+

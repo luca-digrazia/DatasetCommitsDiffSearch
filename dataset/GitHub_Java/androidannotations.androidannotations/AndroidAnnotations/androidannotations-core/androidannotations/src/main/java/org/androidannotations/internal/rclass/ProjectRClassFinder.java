@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -30,7 +29,6 @@ import org.androidannotations.rclass.IRClass;
 public class ProjectRClassFinder {
 
 	public static final Option OPTION_RESOURCE_PACKAGE_NAME = new Option("resourcePackageName", null);
-	public static final Option OPTION_USE_R2 = new Option("useR2", "false");
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProjectRClassFinder.class);
 
@@ -42,7 +40,7 @@ public class ProjectRClassFinder {
 
 	public IRClass find(AndroidManifest manifest) throws RClassNotFoundException {
 		Elements elementUtils = environment.getProcessingEnvironment().getElementUtils();
-		String rClass = getRClassPackageName(manifest) + "." + getRClassSimpleName();
+		String rClass = getRClassPackageName(manifest) + ".R";
 		TypeElement rType = elementUtils.getTypeElement(rClass);
 
 		if (rType == null) {
@@ -61,11 +59,5 @@ public class ProjectRClassFinder {
 		} else {
 			return manifest.getApplicationPackage();
 		}
-	}
-
-	private String getRClassSimpleName() {
-		boolean useR2 = environment.getOptionBooleanValue(OPTION_USE_R2);
-
-		return useR2 ? "R2" : "R";
 	}
 }

@@ -13,10 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
-import static java.util.Arrays.stream;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -34,11 +32,10 @@ import com.google.devtools.build.lib.packages.util.Crosstool.CcToolchainConfig;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
-import com.google.devtools.build.lib.skyframe.RuleConfiguredTargetValue;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.List;
-import java.util.stream.Stream;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,37 +45,14 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
-  private String targetName = "bin";
-
-  private ConfiguredTarget getCurrentTarget() throws Exception {
-    return getConfiguredTarget("//pkg:" + targetName);
-  }
-
-  private CppLinkAction getLinkAction() throws Exception {
-    ConfiguredTarget pkg = getCurrentTarget();
-    Artifact pkgArtifact = getFilesToBuild(pkg).getSingleton();
-    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(pkgArtifact);
-    assertThat(linkAction.getOutputs()).containsExactly(pkgArtifact);
-    return linkAction;
-  }
-
-  private LtoBackendAction getBackendAction(String path) throws Exception {
-    return (LtoBackendAction) getPredecessorByInputName(getLinkAction(), path);
-  }
-
-  private CppLinkAction getIndexAction(LtoBackendAction backendAction) throws Exception {
-    return (CppLinkAction)
-        getPredecessorByInputName(
-            backendAction, backendAction.getPrimaryOutput().getExecPathString() + ".thinlto.bc");
-  }
-
   @Before
   public void createBasePkg() throws IOException {
     scratch.overwriteFile(
         "base/BUILD", "cc_library(name = 'system_malloc', visibility = ['//visibility:public'])");
   }
 
-  public void createBuildFiles(String... extraCcBinaryParameters) throws Exception {
+  public void createBuildFiles(String targetName, String... extraCcBinaryParameters)
+      throws Exception {
     scratch.file(
         "pkg/BUILD",
         "package(features = ['thin_lto'])",
@@ -136,8 +110,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testActionGraph() throws Exception {
-    createBuildFiles();
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC);
+    createBuildFiles("bin");
+
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration("--noincompatible_make_thinlto_command_lines_standalone");
 
     /*
@@ -148,8 +132,12 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
     {.o.thinlto.bc,.o.imports} <=[LTOIndexing]=
     .o <= [CppCompile] .cc
     */
-    ConfiguredTarget pkg = getCurrentTarget();
-    CppLinkAction linkAction = getLinkAction();
+    ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin");
+
+    Artifact pkgArtifact = getFilesToBuild(pkg).getSingleton();
+
+    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(pkgArtifact);
+    assertThat(linkAction.getOutputs()).containsExactly(pkgArtifact);
     assertThat(ActionsTestUtil.getFirstArtifactEndingWith(linkAction.getInputs(), "linkstamp.o"))
         .isNotNull();
 
@@ -176,7 +164,9 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
             "bin pkg/bin-2.params",
             "bin pkg/bin-lto-final.params");
 
-    LtoBackendAction backendAction = getBackendAction("pkg/bin.lto/pkg/_objs/bin/binfile.pic.o");
+    LtoBackendAction backendAction =
+        (LtoBackendAction)
+            getPredecessorByInputName(linkAction, "pkg/bin.lto/pkg/_objs/bin/binfile.pic.o");
     assertThat(backendAction.getMnemonic()).isEqualTo("CcLtoBackendCompile");
 
     assertThat(artifactsToStrings(backendAction.getInputs()))
@@ -190,26 +180,28 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
             "thinlto_output_object_file=" + prefix + "/bin/pkg/bin.lto/pkg/_objs/bin/binfile.pic.o",
             "thinlto_input_bitcode_file=" + prefix + "/bin/pkg/_objs/bin/binfile.pic.o");
 
-    CppLinkAction indexAction = getIndexAction(backendAction);
+    CppLinkAction indexAction =
+        (CppLinkAction)
+            getPredecessorByInputName(
+                backendAction, "pkg/bin.lto/pkg/_objs/bin/binfile.pic.o.thinlto.bc");
 
-    RuleConfiguredTargetValue configuredTargetValue =
-        (RuleConfiguredTargetValue)
+    ConfiguredTargetValue configuredTargetValue =
+        (ConfiguredTargetValue)
             getSkyframeExecutor()
                 .getEvaluatorForTesting()
-                .getExistingEntryAtCurrentlyEvaluatingVersion(
-                    ConfiguredTargetKey.builder()
-                        .setLabel(pkg.getLabel())
-                        .setConfiguration(getConfiguration(pkg))
-                        .build())
+                .getExistingEntryAtLatestVersion(
+                    ConfiguredTargetKey.of(pkg.getLabel(), getConfiguration(pkg)))
                 .getValue();
     ImmutableList<ActionAnalysisMetadata> linkstampCompileActions =
-        configuredTargetValue.getActions().stream()
+        configuredTargetValue
+            .getActions()
+            .stream()
             .filter(a -> a.getMnemonic().equals("CppLinkstampCompile"))
-            .collect(toImmutableList());
+            .collect(ImmutableList.toImmutableList());
     assertThat(linkstampCompileActions).hasSize(1);
     ActionAnalysisMetadata linkstampCompileAction = linkstampCompileActions.get(0);
     assertThat(indexAction.getInputs().toList())
-        .containsNoneIn(linkstampCompileAction.getOutputs());
+        .doesNotContain(linkstampCompileAction.getOutputs());
 
     assertThat(indexAction.getArguments())
         .containsAtLeast(
@@ -244,12 +236,26 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testLinkshared() throws Exception {
-    targetName = "bin.so";
-    createBuildFiles("linkshared = 1,");
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC);
+    createBuildFiles("bin.so", "linkshared = 1,");
+
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration();
 
-    CppLinkAction linkAction = getLinkAction();
+    ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin.so");
+
+    Artifact pkgArtifact = getFilesToBuild(pkg).getSingleton();
+
+    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(pkgArtifact);
+    assertThat(linkAction.getOutputs()).containsExactly(pkgArtifact);
 
     Action backendAction =
         getPredecessorByInputName(linkAction, "pkg/bin.so.lto/pkg/_objs/bin.so/binfile.pic.o");
@@ -258,11 +264,20 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testNoLinkstatic() throws Exception {
-    createBuildFiles("linkstatic = 0,");
-    setupThinLTOCrosstool(
-        CppRuleClasses.SUPPORTS_DYNAMIC_LINKER,
-        CppRuleClasses.SUPPORTS_PIC,
-        CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES);
+    createBuildFiles("bin", "linkstatic = 0,");
+
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_DYNAMIC_LINKER,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES));
     useConfiguration("--noincompatible_make_thinlto_command_lines_standalone");
 
     /*
@@ -276,7 +291,12 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
     {.o.thinlto.bc,.o.imports} <=[LTOIndexing]=
     .o <= [CppCompile] .cc
     */
-    CppLinkAction linkAction = getLinkAction();
+    ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin");
+
+    Artifact pkgArtifact = getFilesToBuild(pkg).getSingleton();
+
+    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(pkgArtifact);
+    assertThat(linkAction.getOutputs()).containsExactly(pkgArtifact);
 
     List<String> commandLine = linkAction.getLinkCommandLine().getRawLinkArgv();
     String prefix = getTargetConfiguration().getOutputDirectory(RepositoryName.MAIN)
@@ -388,11 +408,28 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testFission() throws Exception {
-    createBuildFiles();
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC, CppRuleClasses.PER_OBJECT_DEBUG_INFO);
+    createBuildFiles("bin");
+
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.PER_OBJECT_DEBUG_INFO));
     useConfiguration("--fission=yes", "--copt=-g0");
 
-    LtoBackendAction backendAction = getBackendAction("pkg/bin.lto/pkg/_objs/bin/binfile.pic.o");
+    ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin");
+    Artifact pkgArtifact = getFilesToBuild(pkg).getSingleton();
+    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(pkgArtifact);
+
+    LtoBackendAction backendAction =
+        (LtoBackendAction)
+            getPredecessorByInputName(linkAction, "pkg/bin.lto/pkg/_objs/bin/binfile.pic.o");
     assertThat(backendAction.getMnemonic()).isEqualTo("CcLtoBackendCompile");
     assertThat(artifactsToStrings(backendAction.getOutputs()))
         .containsExactly(
@@ -401,7 +438,9 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
     assertThat(backendAction.getArguments()).containsAtLeast("-g0", "per_object_debug_info_option");
 
-    backendAction = getBackendAction("pkg/bin.lto/pkg/_objs/lib/libfile.pic.o");
+    backendAction =
+        (LtoBackendAction)
+            getPredecessorByInputName(linkAction, "pkg/bin.lto/pkg/_objs/lib/libfile.pic.o");
     assertThat(backendAction.getMnemonic()).isEqualTo("CcLtoBackendCompile");
     assertThat(artifactsToStrings(backendAction.getOutputs()))
         .containsExactly(
@@ -411,7 +450,6 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
     assertThat(backendAction.getArguments()).contains("per_object_debug_info_option");
 
     // Now check the dwp action.
-    ConfiguredTarget pkg = getCurrentTarget();
     Artifact dwpFile = getFileConfiguredTarget(pkg.getLabel() + ".dwp").getArtifact();
     PathFragment rootPrefix = dwpRootPrefix(dwpFile);
     RuleContext ruleContext = getRuleContext(pkg);
@@ -428,12 +466,21 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testNoLinkstaticFission() throws Exception {
-    createBuildFiles("linkstatic = 0,");
-    setupThinLTOCrosstool(
-        CppRuleClasses.SUPPORTS_PIC,
-        CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES,
-        CppRuleClasses.SUPPORTS_DYNAMIC_LINKER,
-        CppRuleClasses.PER_OBJECT_DEBUG_INFO);
+    createBuildFiles("bin", "linkstatic = 0,");
+
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES,
+                    CppRuleClasses.SUPPORTS_DYNAMIC_LINKER,
+                    CppRuleClasses.PER_OBJECT_DEBUG_INFO));
     useConfiguration("--fission=yes");
 
     ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin");
@@ -477,10 +524,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
   public void testLinkstaticCcTestFission() throws Exception {
     createTestFiles("linkstatic = 1,", "");
 
-    setupThinLTOCrosstool(
-        CppRuleClasses.SUPPORTS_PIC,
-        CppRuleClasses.THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS,
-        CppRuleClasses.PER_OBJECT_DEBUG_INFO);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.PER_OBJECT_DEBUG_INFO));
     useConfiguration(
         "--fission=yes", "--features=thin_lto_linkstatic_tests_use_shared_nonlto_backends");
 
@@ -532,10 +587,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
   public void testLinkstaticCcTest() throws Exception {
     createTestFiles("linkstatic = 1,", "");
 
-    setupThinLTOCrosstool(
-        CppRuleClasses.SUPPORTS_PIC,
-        CppRuleClasses.THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS,
-        CppRuleClasses.PER_OBJECT_DEBUG_INFO);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.PER_OBJECT_DEBUG_INFO));
     useConfiguration("--features=thin_lto_linkstatic_tests_use_shared_nonlto_backends");
 
     ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin_test");
@@ -569,11 +632,19 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testTestOnlyTarget() throws Exception {
-    createBuildFiles("testonly = 1,");
+    createBuildFiles("bin", "testonly = 1,");
 
-    setupThinLTOCrosstool(
-        CppRuleClasses.SUPPORTS_PIC,
-        CppRuleClasses.THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.THIN_LTO_LINKSTATIC_TESTS_USE_SHARED_NONLTO_BACKENDS,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES));
     useConfiguration("--features=thin_lto_linkstatic_tests_use_shared_nonlto_backends");
 
     ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin");
@@ -588,11 +659,19 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testUseSharedAllLinkstatic() throws Exception {
-    createBuildFiles();
+    createBuildFiles("bin");
 
-    setupThinLTOCrosstool(
-        CppRuleClasses.THIN_LTO_ALL_LINKSTATIC_USE_SHARED_NONLTO_BACKENDS,
-        CppRuleClasses.SUPPORTS_PIC);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.THIN_LTO_ALL_LINKSTATIC_USE_SHARED_NONLTO_BACKENDS,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES));
     useConfiguration("--features=thin_lto_all_linkstatic_use_shared_nonlto_backends");
 
     ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin");
@@ -632,7 +711,15 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
     scratch.file("pkg/tracing.cc", "// hello");
     scratch.file("pkg/tracing_x86-64.S", "NOP");
 
-    setupThinLTOCrosstool();
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration();
 
     ConfiguredTarget bin = getConfiguredTarget("//pkg:bin");
@@ -664,7 +751,15 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
     scratch.file("pkg/binfile.cc", "int main() { return 1; }");
     scratch.file("pkg/static.a", "xyz");
-    setupThinLTOCrosstool();
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration();
 
     getConfiguredTarget("//pkg:bin");
@@ -682,7 +777,17 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
     scratch.file("pkg/binfile.cc", "int main() {}");
 
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC, CppRuleClasses.FDO_INSTRUMENT);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.FDO_INSTRUMENT));
     useConfiguration("--fdo_instrument=profiles");
 
     ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin");
@@ -704,9 +809,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testLtoIndexOpt() throws Exception {
-    createBuildFiles();
+    createBuildFiles("bin");
 
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration(
         "--ltoindexopt=anltoindexopt", "--noincompatible_make_thinlto_command_lines_standalone");
 
@@ -740,9 +854,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testLtoStandaloneCommandLines() throws Exception {
-    createBuildFiles();
+    createBuildFiles("bin");
 
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration(
         "--ltoindexopt=anltoindexopt",
         "--incompatible_make_thinlto_command_lines_standalone",
@@ -779,9 +902,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testCopt() throws Exception {
-    createBuildFiles();
+    createBuildFiles("bin");
 
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.SUPPORTS_PIC));
     useConfiguration("--copt=acopt");
 
     /*
@@ -806,8 +938,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testPerFileCopt() throws Exception {
-    createBuildFiles();
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC);
+    createBuildFiles("bin");
+
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration(
         "--per_file_copt=binfile\\.cc@copt1",
         "--per_file_copt=libfile\\.cc@copt2",
@@ -840,9 +982,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testCoptNoCoptAttributes() throws Exception {
-    createBuildFiles("copts = ['acopt', 'nocopt1'], nocopts = 'nocopt1|nocopt2',");
+    createBuildFiles("bin", "copts = ['acopt', 'nocopt1'], nocopts = 'nocopt1|nocopt2',");
 
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration("--copt=nocopt2", "--noincompatible_disable_nocopts");
 
     /*
@@ -870,9 +1021,19 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testLtoBackendOpt() throws Exception {
-    createBuildFiles();
+    createBuildFiles("bin");
 
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC, MockCcSupport.USER_COMPILE_FLAGS);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    MockCcSupport.USER_COMPILE_FLAGS));
     useConfiguration("--ltobackendopt=anltobackendopt");
 
     /*
@@ -898,9 +1059,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testPerFileLtoBackendOpt() throws Exception {
-    createBuildFiles();
+    createBuildFiles("bin");
 
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration(
         "--per_file_ltobackendopt=binfile\\.pic\\.o@ltobackendopt1",
         "--per_file_ltobackendopt=.*\\.o,-binfile\\.pic\\.o@ltobackendopt2");
@@ -932,10 +1102,19 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testNoUseLtoIndexingBitcodeFile() throws Exception {
-    createBuildFiles();
+    createBuildFiles("bin");
 
-    setupThinLTOCrosstool(
-        CppRuleClasses.NO_USE_LTO_INDEXING_BITCODE_FILE, CppRuleClasses.SUPPORTS_PIC);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.NO_USE_LTO_INDEXING_BITCODE_FILE,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration("--features=no_use_lto_indexing_bitcode_file");
 
     /*
@@ -946,8 +1125,20 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
     {.o.thinlto.bc,.o.imports} <=[LTOIndexing]=
     .o <= [CppCompile] .cc
     */
+    ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin");
+
+    Artifact pkgArtifact = getFilesToBuild(pkg).getSingleton();
+
+    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(pkgArtifact);
+
+    LtoBackendAction backendAction =
+        (LtoBackendAction)
+            getPredecessorByInputName(linkAction, "pkg/bin.lto/pkg/_objs/bin/binfile.pic.o");
+
     CppLinkAction indexAction =
-        getIndexAction(getBackendAction("pkg/bin.lto/pkg/_objs/bin/binfile.pic.o"));
+        (CppLinkAction)
+            getPredecessorByInputName(
+                backendAction, "pkg/bin.lto/pkg/_objs/bin/binfile.pic.o.thinlto.bc");
 
     assertThat(indexAction.getArguments()).doesNotContain("object_suffix_replace");
 
@@ -972,7 +1163,16 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
     scratch.file("pkg/binfile.cc", "int main() {}");
     scratch.file("pkg/profile.afdo", "");
 
-    setupThinLTOCrosstool(CppRuleClasses.AUTOFDO);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.AUTOFDO));
     useConfiguration("--fdo_optimize=pkg/profile.afdo", "--compilation_mode=opt");
 
     Artifact binArtifact = getFilesToBuild(getConfiguredTarget("//pkg:bin")).getSingleton();
@@ -991,26 +1191,19 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
         "profile.afdo");
   }
 
-  private void setupThinLTOCrosstool(String... extraFeatures) throws Exception {
-    String[] allFeatures =
-        Stream.concat(
-                Stream.of(
-                    CppRuleClasses.THIN_LTO,
-                    CppRuleClasses.SUPPORTS_START_END_LIB,
-                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES),
-                stream(extraFeatures))
-            .toArray(String[]::new);
+  private void setupAutoFdoThinLtoCrosstool() throws Exception {
     AnalysisMock.get()
         .ccSupport()
         .setupCcToolchainConfig(
-            mockToolsConfig, CcToolchainConfig.builder().withFeatures(allFeatures));
-  }
-
-  private void setupAutoFdoThinLtoCrosstool() throws Exception {
-    setupThinLTOCrosstool(
-        CppRuleClasses.AUTOFDO,
-        CppRuleClasses.ENABLE_AFDO_THINLTO,
-        CppRuleClasses.AUTOFDO_IMPLICIT_THINLTO);
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.AUTOFDO,
+                    CppRuleClasses.ENABLE_AFDO_THINLTO,
+                    CppRuleClasses.AUTOFDO_IMPLICIT_THINLTO));
   }
 
   /**
@@ -1181,10 +1374,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
   }
 
   private void setupFdoThinLtoCrosstool() throws Exception {
-    setupThinLTOCrosstool(
-        CppRuleClasses.FDO_OPTIMIZE,
-        CppRuleClasses.ENABLE_FDO_THINLTO,
-        MockCcSupport.FDO_IMPLICIT_THINLTO);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.FDO_OPTIMIZE,
+                    CppRuleClasses.ENABLE_FDO_THINLTO,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    MockCcSupport.FDO_IMPLICIT_THINLTO));
   }
 
   /**
@@ -1192,6 +1393,12 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
    */
   @Test
   public void testFdoNoImplicitThinLto() throws Exception {
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(CppRuleClasses.THIN_LTO, CppRuleClasses.SUPPORTS_START_END_LIB));
     scratch.file(
         "pkg/BUILD",
         "",
@@ -1324,7 +1531,12 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
    */
   @Test
   public void testFdoImplicitThinLtoDisabledPackage() throws Exception {
-    setupThinLTOCrosstool();
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(CppRuleClasses.THIN_LTO, CppRuleClasses.SUPPORTS_START_END_LIB));
     scratch.file(
         "pkg/BUILD",
         "package(features = ['-thin_lto'])",
@@ -1355,10 +1567,18 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
   }
 
   private void setupXBinaryFdoThinLtoCrosstool() throws Exception {
-    setupThinLTOCrosstool(
-        CppRuleClasses.XBINARYFDO,
-        CppRuleClasses.ENABLE_XFDO_THINLTO,
-        MockCcSupport.XFDO_IMPLICIT_THINLTO);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.XBINARYFDO,
+                    CppRuleClasses.ENABLE_XFDO_THINLTO,
+                    MockCcSupport.XFDO_IMPLICIT_THINLTO));
   }
 
   /**
@@ -1536,7 +1756,16 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
     scratch.file("pkg/binfile.cc", "int main() {}");
 
-    setupThinLTOCrosstool(CppRuleClasses.XBINARYFDO);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.XBINARYFDO));
     useConfiguration("--xbinary_fdo=//pkg:out.xfdo", "--compilation_mode=opt");
 
     Artifact binArtifact = getFilesToBuild(getConfiguredTarget("//pkg:bin")).getSingleton();
@@ -1571,12 +1800,20 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
     scratch.file("pkg/binfile.cc", "int main() {}");
 
-    setupThinLTOCrosstool(
-        CppRuleClasses.ENABLE_FDO_THINLTO,
-        MockCcSupport.FDO_IMPLICIT_THINLTO,
-        CppRuleClasses.ENABLE_AFDO_THINLTO,
-        MockCcSupport.AUTOFDO_IMPLICIT_THINLTO,
-        CppRuleClasses.XBINARYFDO);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.ENABLE_FDO_THINLTO,
+                    MockCcSupport.FDO_IMPLICIT_THINLTO,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.ENABLE_AFDO_THINLTO,
+                    MockCcSupport.AUTOFDO_IMPLICIT_THINLTO,
+                    CppRuleClasses.XBINARYFDO));
     useConfiguration(
         "--xbinary_fdo=//pkg:out.xfdo",
         "--compilation_mode=opt",
@@ -1597,121 +1834,72 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testPICBackendOrder() throws Exception {
-    createBuildFiles();
+    createBuildFiles("bin");
 
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC);
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    CppRuleClasses.SUPPORTS_START_END_LIB));
     useConfiguration("--copt=-fno-PIE");
 
-    LtoBackendAction backendAction = getBackendAction("pkg/bin.lto/pkg/_objs/bin/binfile.pic.o");
+    ConfiguredTarget pkg = getConfiguredTarget("//pkg:bin");
+    LtoBackendAction backendAction =
+        (LtoBackendAction)
+        getGeneratingAction(artifactByPath(getFilesToBuild(pkg), "bin", "binfile.pic.o"));
     assertThat(backendAction.getMnemonic()).isEqualTo("CcLtoBackendCompile");
     assertThat(backendAction.getArguments()).containsAtLeast("-fno-PIE", "-fPIC").inOrder();
   }
 
-  @Test
-  public void testPropellerOptimizeAbsoluteOptions() throws Exception {
-    createBuildFiles();
-
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC, CppRuleClasses.AUTOFDO);
-
-    useConfiguration(
-        "--propeller_optimize_absolute_cc_profile=/tmp/cc_profile.txt",
-        "--propeller_optimize_absolute_ld_profile=/tmp/ld_profile.txt",
-        "--compilation_mode=opt");
-    Artifact binArtifact = getFilesToBuild(getCurrentTarget()).getSingleton();
-
-    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(binArtifact);
-    assertThat(linkAction.getOutputs()).containsExactly(binArtifact);
-
-    List<String> commandLine = linkAction.getLinkCommandLine().getRawLinkArgv();
-    assertThat(commandLine.toString())
-        .containsMatch("-Wl,--symbol-ordering-file=.*/ld_profile.txt");
-
-    LtoBackendAction backendAction =
-        (LtoBackendAction)
-            getPredecessorByInputName(linkAction, "pkg/bin.lto/pkg/_objs/bin/binfile.o");
-
-    String expectedCompilerFlag = "-fbasic-block-sections=list=.*/cc_profile.txt";
-    assertThat(Joiner.on(" ").join(backendAction.getArguments()))
-        .containsMatch(expectedCompilerFlag);
-    String expectedBuildTypeFlag = "-DBUILD_PROPELLER_TYPE=\"full\"";
-    assertThat(Joiner.on(" ").join(backendAction.getArguments()))
-        .containsMatch(expectedBuildTypeFlag);
-    assertThat(ActionsTestUtil.baseArtifactNames(backendAction.getInputs()))
-        .contains("cc_profile.txt");
-  }
-
-  private void testPropellerOptimizeOption(boolean label) throws Exception {
-    createBuildFiles();
-
-    if (label) {
-      scratch.file(
-          "fdo/BUILD",
-          "propeller_optimize(name='test_propeller_optimize', cc_profile=':cc_profile.txt',"
-              + " ld_profile=':ld_profile.txt')");
-    } else {
-      scratch.file(
-          "fdo/BUILD",
-          "propeller_optimize(name='test_propeller_optimize',"
-              + "absolute_cc_profile='/tmp/cc_profile.txt',"
-              + "absolute_ld_profile='/tmp/ld_profile.txt')");
-    }
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC, CppRuleClasses.AUTOFDO);
-
-    useConfiguration(
-        "--propeller_optimize=//fdo:test_propeller_optimize", "--compilation_mode=opt");
-
-    Artifact binArtifact = getFilesToBuild(getCurrentTarget()).getSingleton();
-
-    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(binArtifact);
-    assertThat(linkAction.getOutputs()).containsExactly(binArtifact);
-
-    List<String> commandLine = linkAction.getLinkCommandLine().getRawLinkArgv();
-    assertThat(commandLine.toString())
-        .containsMatch("-Wl,--symbol-ordering-file=.*/ld_profile.txt");
-
-    LtoBackendAction backendAction =
-        (LtoBackendAction)
-            getPredecessorByInputName(linkAction, "pkg/bin.lto/pkg/_objs/bin/binfile.o");
-
-    String expectedCompilerFlag = "-fbasic-block-sections=list=.*/cc_profile.txt";
-    assertThat(Joiner.on(" ").join(backendAction.getArguments()))
-        .containsMatch(expectedCompilerFlag);
-    String expectedBuildTypeFlag = "-DBUILD_PROPELLER_TYPE=\"full\"";
-    assertThat(Joiner.on(" ").join(backendAction.getArguments()))
-        .containsMatch(expectedBuildTypeFlag);
-    assertThat(ActionsTestUtil.baseArtifactNames(backendAction.getInputs()))
-        .contains("cc_profile.txt");
-  }
-
-  @Test
-  public void testPropellerOptimizeOptionFromAbsolutePath() throws Exception {
-    testPropellerOptimizeOption(false);
-  }
-
-  @Test
-  public void testPropellerOptimizeOptionFromLabel() throws Exception {
-    testPropellerOptimizeOption(true);
-  }
-
   private void testLLVMCachePrefetchBackendOption(String extraOption, boolean asLabel)
       throws Exception {
-    createBuildFiles();
-    if (asLabel) {
+    scratch.file(
+        "pkg/BUILD",
+        "package(features = ['thin_lto'])",
+        "",
+        "cc_binary(name = 'bin',",
+        "          srcs = ['binfile.cc', ])");
+     if (asLabel) {
       scratch.file(
-          "fdo/BUILD", "fdo_prefetch_hints(name='test_profile', profile=':prefetch.afdo')");
+          "fdo/BUILD",
+          "fdo_prefetch_hints(name='test_profile', profile=':prefetch.afdo')");
     } else {
       scratch.file(
           "fdo/BUILD",
           "fdo_prefetch_hints(name='test_profile', absolute_path_profile='/tmp/prefetch.afdo')");
     }
 
-    setupThinLTOCrosstool(CppRuleClasses.SUPPORTS_PIC, CppRuleClasses.AUTOFDO);
+    scratch.file("pkg/binfile.cc", "int main() {}");
+
+    AnalysisMock.get()
+        .ccSupport()
+        .setupCcToolchainConfig(
+            mockToolsConfig,
+            CcToolchainConfig.builder()
+                .withFeatures(
+                    CppRuleClasses.THIN_LTO,
+                    CppRuleClasses.SUPPORTS_START_END_LIB,
+                    CppRuleClasses.SUPPORTS_PIC,
+                    MockCcSupport.HOST_AND_NONHOST_CONFIGURATION_FEATURES,
+                    CppRuleClasses.AUTOFDO));
     useConfiguration(
         "--fdo_prefetch_hints=//fdo:test_profile",
         "--compilation_mode=opt",
         extraOption);
 
-    LtoBackendAction backendAction = getBackendAction("pkg/bin.lto/pkg/_objs/bin/binfile.o");
+    Artifact binArtifact = getFilesToBuild(getConfiguredTarget("//pkg:bin")).getSingleton();
+
+    CppLinkAction linkAction = (CppLinkAction) getGeneratingAction(binArtifact);
+    assertThat(linkAction.getOutputs()).containsExactly(binArtifact);
+
+    LtoBackendAction backendAction =
+        (LtoBackendAction)
+            getPredecessorByInputName(linkAction, "pkg/bin.lto/pkg/_objs/bin/binfile.o");
 
     String expectedCompilerFlag =
         "-prefetch-hints-file="
@@ -1745,7 +1933,7 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
 
   @Test
   public void testThinLtoWithoutSupportsStartEndLibError() throws Exception {
-    createBuildFiles("testonly = 1,");
+    createBuildFiles("bin", "testonly = 1,");
     AnalysisMock.get()
         .ccSupport()
         .setupCcToolchainConfig(

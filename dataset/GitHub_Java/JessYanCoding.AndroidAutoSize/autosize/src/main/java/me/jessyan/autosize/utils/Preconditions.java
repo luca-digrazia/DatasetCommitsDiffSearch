@@ -15,8 +15,6 @@
  */
 package me.jessyan.autosize.utils;
 
-import android.os.Looper;
-
 /**
  * ================================================
  * Created by JessYan on 26/09/2016 13:59
@@ -99,18 +97,6 @@ public final class Preconditions {
             return index;
         } else {
             throw new IndexOutOfBoundsException(badElementIndex(index, size, desc));
-        }
-    }
-
-    /**
-     * Throws {@link IllegalStateException} if the calling thread is not the application's main
-     * thread.
-     *
-     * @throws IllegalStateException If the calling thread is not the application's main thread.
-     */
-    public static void checkMainThread() {
-        if (Looper.myLooper() != Looper.getMainLooper()) {
-            throw new IllegalStateException("Not in applications main thread");
         }
     }
 

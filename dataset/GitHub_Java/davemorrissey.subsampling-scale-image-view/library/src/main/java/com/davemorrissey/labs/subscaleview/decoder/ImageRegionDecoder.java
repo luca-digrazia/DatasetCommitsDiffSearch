@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.net.Uri;
-import androidx.annotation.NonNull;
 
 /**
  * Interface for image decoding classes, allowing the default {@link android.graphics.BitmapRegionDecoder}
@@ -27,7 +26,7 @@ public interface ImageRegionDecoder {
      * @return Dimensions of the image.
      * @throws Exception if initialisation fails.
      */
-    @NonNull Point init(Context context, @NonNull Uri uri) throws Exception;
+    Point init(Context context, Uri uri) throws Exception;
 
     /**
      * <p>
@@ -45,7 +44,7 @@ public interface ImageRegionDecoder {
      * @param sampleSize Sample size.
      * @return The decoded region. It is safe to return null if decoding fails.
      */
-    @NonNull Bitmap decodeRegion(@NonNull Rect sRect, int sampleSize);
+    Bitmap decodeRegion(Rect sRect, int sampleSize);
 
     /**
      * Status check. Should return false before initialisation and after recycle.

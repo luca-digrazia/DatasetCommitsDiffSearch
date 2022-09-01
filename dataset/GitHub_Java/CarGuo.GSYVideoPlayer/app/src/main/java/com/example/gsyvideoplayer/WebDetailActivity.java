@@ -1,172 +1,228 @@
 package com.example.gsyvideoplayer;
 
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.graphics.Point;
 import android.os.Bundle;
-
-import androidx.core.widget.NestedScrollView;
-
+import android.support.v4.widget.NestedScrollView;
+import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.webkit.WebSettings;
 import android.widget.ImageView;
+import android.widget.RelativeLayout;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.request.RequestOptions;
-import com.example.gsyvideoplayer.databinding.ActivityWebDetailBinding;
-import com.shuyu.gsyvideoplayer.GSYBaseActivityDetail;
-import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
-import com.shuyu.gsyvideoplayer.utils.GSYVideoType;
-import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
+import com.example.gsyvideoplayer.listener.SampleListener;
+import com.example.gsyvideoplayer.view.ScrollWebView;
+import com.shuyu.gsyvideoplayer.GSYPreViewManager;
+import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
+import com.shuyu.gsyvideoplayer.utils.Debuger;
+import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
+import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
+
+import butterknife.BindView;
+import butterknife.ButterKnife;
 
 /**
  * Created by shuyu on 2016/12/26.
  */
 
-public class WebDetailActivity extends GSYBaseActivityDetail<StandardGSYVideoPlayer> {
+public class WebDetailActivity extends AppCompatActivity {
 
+    @BindView(R.id.scroll_webView)
+    ScrollWebView webView;
+    @BindView(R.id.web_player)
+    StandardGSYVideoPlayer webPlayer;
+    @BindView(R.id.web_top_layout)
+    NestedScrollView webTopLayout;
+    @BindView(R.id.web_top_layout_video)
+    RelativeLayout webTopLayoutVideo;
 
-    private boolean isSmall;
+    private boolean isPlay;
+    private boolean isPause;
+    private boolean isSamll;
 
-    private int backupRendType;
-    private ActivityWebDetailBinding binding;
+    private OrientationUtils orientationUtils;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_web_detail);
+        ButterKnife.bind(this);
 
-        binding = ActivityWebDetailBinding.inflate(getLayoutInflater());
-        View rootView = binding.getRoot();
-        setContentView(rootView);
+        String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
+        //String url = "https://d131x7vzzf85jg.cloudfront.net/upload/documents/paper/b2/61/00/00/20160420_115018_b544.mp4";
+        webPlayer.setUp(url, true, null, "测试视频");
 
-        backupRendType = GSYVideoType.getRenderType();
-
-        //设置为Surface播放模式，注意此设置是全局的
-        GSYVideoType.setRenderType(GSYVideoType.SUFRACE);
+        //增加封面
+        ImageView imageView = new ImageView(this);
+        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        imageView.setImageResource(R.mipmap.xxx1);
+        webPlayer.setThumbImageView(imageView);
 
         resolveNormalVideoUI();
 
-        initVideoBuilderMode();
+        //外部辅助的旋转，帮助全屏
+        orientationUtils = new OrientationUtils(this, webPlayer);
+        //初始化不打开外部的旋转
+        orientationUtils.setEnable(false);
 
+        webPlayer.setIsTouchWiget(true);
+        //关闭自动旋转
+        webPlayer.setRotateViewAuto(false);
+        webPlayer.setLockLand(false);
+        webPlayer.setShowFullAnimation(false);
+        webPlayer.setNeedLockFull(true);
+        //detailPlayer.setOpenPreView(true);
+        webPlayer.getFullscreenButton().setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //直接横屏
+                orientationUtils.resolveByClick();
 
-        binding.webPlayer.setLockClickListener(new LockClickListener() {
+                //第一个true是否需要隐藏actionbar，第二个true是否需要隐藏statusbar
+                webPlayer.startWindowFullscreen(WebDetailActivity.this, true, true);
+            }
+        });
+
+        webPlayer.setStandardVideoAllCallBack(new SampleListener() {
+            @Override
+            public void onPrepared(String url, Object... objects) {
+                super.onPrepared(url, objects);
+                //开始播放了才能旋转和全屏
+                orientationUtils.setEnable(true);
+                isPlay = true;
+            }
+
+            @Override
+            public void onAutoComplete(String url, Object... objects) {
+                super.onAutoComplete(url, objects);
+            }
+
+            @Override
+            public void onClickStartError(String url, Object... objects) {
+                super.onClickStartError(url, objects);
+            }
+
+            @Override
+            public void onQuitFullscreen(String url, Object... objects) {
+                super.onQuitFullscreen(url, objects);
+                if (orientationUtils != null) {
+                    orientationUtils.backToProtVideo();
+                }
+            }
+        });
+
+        webPlayer.setLockClickListener(new LockClickListener() {
             @Override
             public void onClick(View view, boolean lock) {
                 if (orientationUtils != null) {
                     //配合下方的onConfigurationChanged
                     orientationUtils.setEnable(!lock);
-                    binding.webPlayer.getCurrentPlayer().setRotateViewAuto(!lock);
                 }
             }
         });
 
 
-        WebSettings settings = binding.scrollWebView.getSettings();
+        WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
-        binding.scrollWebView.loadUrl("https://www.baidu.com");
+        webView.loadUrl("https://www.baidu.com");
 
-
-        orientationUtils.setRotateWithSystem(false);
-
-        binding.webTopLayout.setOnScrollChangeListener(new NestedScrollView.OnScrollChangeListener() {
+        webTopLayout.setOnScrollChangeListener(new NestedScrollView.OnScrollChangeListener() {
             @Override
             public void onScrollChange(NestedScrollView v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
-                if (!binding.webPlayer.isIfCurrentIsFullscreen() && scrollY >= 0 && isPlay) {
-                    if (scrollY > binding.webPlayer.getHeight()) {
+                if (!webPlayer.isIfCurrentIsFullscreen() && scrollY >= 0 && isPlay) {
+                    Debuger.printfError("ffffffffffffff " + webPlayer.getHeight());
+                    if (scrollY > webPlayer.getHeight()) {
                         //如果是小窗口就不需要处理
-                        if (!isSmall) {
-                            isSmall = true;
+                        if (!isSamll) {
+                            isSamll = true;
                             int size = CommonUtil.dip2px(WebDetailActivity.this, 150);
-                            binding.webPlayer.showSmallVideo(new Point(size, size), true, true);
+                            webPlayer.showSmallVideo(new Point(size, size), true, true);
                             orientationUtils.setEnable(false);
                         }
                     } else {
-                        if (isSmall) {
-                            isSmall = false;
+                        if (isSamll) {
+                            isSamll = false;
                             orientationUtils.setEnable(true);
                             //必须
-                            binding.webTopLayoutVideo.postDelayed(new Runnable() {
+                            webTopLayoutVideo.postDelayed(new Runnable() {
                                 @Override
                                 public void run() {
-                                    binding.webPlayer.hideSmallVideo();
+                                    webPlayer.hideSmallVideo();
                                 }
                             }, 50);
                         }
                     }
-                    binding.webTopLayoutVideo.setTranslationY((scrollY <= binding.webTopLayoutVideo.getHeight()) ? -scrollY : -binding.webTopLayoutVideo.getHeight());
+                    webTopLayoutVideo.setTranslationY((scrollY <= webTopLayoutVideo.getHeight()) ? -scrollY : -webTopLayoutVideo.getHeight());
                 }
             }
         });
 
+    }
+
+    @Override
+    public void onBackPressed() {
+
+        if (orientationUtils != null) {
+            orientationUtils.backToProtVideo();
+        }
+
+        if (StandardGSYVideoPlayer.backFromWindowFull(this)) {
+            return;
+        }
+        super.onBackPressed();
+    }
+
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        isPause = true;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        isPause = false;
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        //设置为GL播放模式，才能支持滤镜，注意此设置是全局的
-        GSYVideoType.setRenderType(backupRendType);
+        GSYVideoPlayer.releaseAllVideos();
+        GSYPreViewManager.instance().releaseMediaPlayer();
+        if (orientationUtils != null)
+            orientationUtils.releaseListener();
     }
 
     @Override
-    public StandardGSYVideoPlayer getGSYVideoPlayer() {
-        return binding.webPlayer;
-    }
-
-    @Override
-    public GSYVideoOptionBuilder getGSYVideoOptionBuilder() {
-        String url = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
-        //String url = "https://d131x7vzzf85jg.cloudfront.net/upload/documents/paper/b2/61/00/00/20160420_115018_b544.mp4";
-        //增加封面。内置封面可参考SampleCoverVideo
-        ImageView imageView = new ImageView(this);
-        loadCover(imageView, url);
-        return new GSYVideoOptionBuilder()
-            .setThumbImageView(imageView)
-            .setUrl(url)
-            .setCacheWithPlay(false)
-            .setRotateWithSystem(false)
-            .setVideoTitle("测试视频")
-            .setIsTouchWiget(true)
-            .setRotateViewAuto(false)
-            .setLockLand(false)
-            .setShowFullAnimation(false)
-            .setNeedLockFull(true);
-    }
-
-    @Override
-    public void clickForFullScreen() {
-
-    }
-
-    /**
-     * 是否启动旋转横屏，true表示启动
-     *
-     * @return true
-     */
-    @Override
-    public boolean getDetailOrientationRotateAuto() {
-        return true;
-    }
-
-    private void loadCover(ImageView imageView, String url) {
-
-        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        imageView.setImageResource(R.mipmap.xxx1);
-
-        Glide.with(this.getApplicationContext())
-            .setDefaultRequestOptions(
-                new RequestOptions()
-                    .frame(3000000)
-                    .centerCrop()
-                    .error(R.mipmap.xxx2)
-                    .placeholder(R.mipmap.xxx1))
-            .load(url)
-            .into(imageView);
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        //如果旋转了就全屏
+        if (isPlay && !isPause && !isSamll) {
+            if (newConfig.orientation == ActivityInfo.SCREEN_ORIENTATION_USER) {
+                if (!webPlayer.isIfCurrentIsFullscreen()) {
+                    webPlayer.startWindowFullscreen(WebDetailActivity.this, true, true);
+                }
+            } else {
+                //新版本isIfCurrentIsFullscreen的标志位内部提前设置了，所以不会和手动点击冲突
+                if (webPlayer.isIfCurrentIsFullscreen()) {
+                    StandardGSYVideoPlayer.backFromWindowFull(this);
+                }
+                if (orientationUtils != null) {
+                    orientationUtils.setEnable(true);
+                }
+            }
+        }
     }
 
 
     private void resolveNormalVideoUI() {
         //增加title
-        binding.webPlayer.getTitleTextView().setVisibility(View.GONE);
-        binding.webPlayer.getBackButton().setVisibility(View.GONE);
+        webPlayer.getTitleTextView().setVisibility(View.GONE);
+        webPlayer.getTitleTextView().setText("测试视频");
+        webPlayer.getBackButton().setVisibility(View.GONE);
     }
 }

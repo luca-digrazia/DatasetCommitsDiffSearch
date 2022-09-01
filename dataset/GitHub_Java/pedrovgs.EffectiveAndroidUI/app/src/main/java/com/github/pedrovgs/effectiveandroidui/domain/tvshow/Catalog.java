@@ -1,18 +1,3 @@
-/*
- * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.github.pedrovgs.effectiveandroidui.domain.tvshow;
 
 import com.github.pedrovgs.effectiveandroidui.domain.exception.TvShowNotFoundException;
@@ -21,20 +6,18 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Contains all the available TvShows for this sample. All this hard coded data simulates some
- * information obtained from an external service.
+ * Contains all the available TvShows.
  *
  * @author Pedro Vicente Gómez Sánchez
  */
 public class Catalog {
 
-  private final Set<TvShow> tvShows;
+  private final LinkedHashSet<TvShow> tvShows;
 
   /**
    * Default constructor. All this hardcoded information is going to be used as mocked information
    * for the demo application.
    */
-  @SuppressWarnings("PMD.AvoidDuplicateLiterals")
   public Catalog() {
     this.tvShows = new LinkedHashSet<TvShow>();
     TvShow tvShow =
@@ -377,23 +360,18 @@ public class Catalog {
   }
 
   /**
-   * We should return a full clone of TvShow objects inside catalog because all this data is in
-   * memory and anyone can change it if we don't return only copies, but this is just a sample!
-   *
    * @return all available TvShow in the catalog.
    */
   public Collection<TvShow> getTvShows() {
-    return (Set<TvShow>) ((LinkedHashSet<TvShow>) tvShows).clone();
+    return (Set<TvShow>) tvShows.clone();
   }
 
   /**
    * Search a TvShow using a tv show identifier.
    *
-   * We should return a clone of TvShow objects inside catalog because all this data is in
-   * memory and anyone can change it. But, this is just a sample!
-   *
    * @param tvShowId used to search inside the catalog.
    * @return a TvShow that matches with the parameter passed as identifier.
+   * @throws TvShowNotFoundException if there is no TvShow associated to the id passed as
    * parameter.
    */
   public TvShow getTvShowById(String tvShowId) throws TvShowNotFoundException {

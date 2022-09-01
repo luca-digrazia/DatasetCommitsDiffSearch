@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,8 +19,6 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-
-import org.androidannotations.api.KotlinOpen;
 
 /**
  * <p>
@@ -77,6 +74,5 @@ import org.androidannotations.api.KotlinOpen;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
-@KotlinOpen
 public @interface EApplication {
 }

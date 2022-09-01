@@ -13,7 +13,6 @@ import android.widget.AbsListView;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 
-import com.example.gsyvideoplayer.databinding.ActivityListVideoBinding;
 import com.example.gsyvideoplayer.model.VideoModel;
 import com.example.gsyvideoplayer.video.RequestListADVideoPlayer;
 import com.example.gsyvideoplayer.video.SampleCoverVideo;
@@ -26,15 +25,18 @@ import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 import java.util.ArrayList;
 import java.util.List;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
+
 /**
  * 带广告播放列表，支持中间插入广告模式
  */
 public class ListADVideoActivity2 extends AppCompatActivity {
 
+    @BindView(R.id.video_list)
+    ListView videoList;
 
     ListADNormalAdapter listADNormalAdapter;
-
-    ActivityListVideoBinding binding;
 
 
     @Override
@@ -46,17 +48,13 @@ public class ListADVideoActivity2 extends AppCompatActivity {
             getWindow().setExitTransition(new Explode());
         }
         super.onCreate(savedInstanceState);
-
-        binding = ActivityListVideoBinding.inflate(getLayoutInflater());
-
-        View rootView = binding.getRoot();
-        setContentView(rootView);
-
+        setContentView(R.layout.activity_list_video);
+        ButterKnife.bind(this);
 
         listADNormalAdapter = new ListADNormalAdapter(this);
-        binding.videoList.setAdapter(listADNormalAdapter);
+        videoList.setAdapter(listADNormalAdapter);
 
-        binding.videoList.setOnScrollListener(new AbsListView.OnScrollListener() {
+        videoList.setOnScrollListener(new AbsListView.OnScrollListener() {
             @Override
             public void onScrollStateChanged(AbsListView view, int scrollState) {
             }
@@ -167,7 +165,7 @@ public class ListADVideoActivity2 extends AppCompatActivity {
 
 
             final String url = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
-            final String urlAD = "http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4";
+            final String urlAD = "http://video.7k.cn/app_video/20171202/6c8cf3ea/v.m3u8.mp4";
 
             //多个播放时必须在setUpLazy、setUp和getGSYVideoManager()等前面设置
             holder.gsyVideoPlayer.setPlayTag(TAG);

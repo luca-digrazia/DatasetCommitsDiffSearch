@@ -15,27 +15,23 @@
 package com.google.devtools.build.lib.util;
 
 import com.google.common.base.Objects;
-import com.google.errorprone.annotations.Immutable;
+
 import java.util.Collection;
 import java.util.HashMap;
-import javax.annotation.Nullable;
 
 /**
- * Anything marked FAILURE is generally from a problem with the source code under consideration. In
- * these cases, a re-run in an identical client should produce an identical return code all things
- * being constant.
+ *  <p>Anything marked FAILURE is generally from a problem with the source code
+ *  under consideration.  In these cases, a re-run in an identical client should
+ *  produce an identical return code all things being constant.
  *
- * <p>Anything marked as an ERROR is generally a problem unrelated to the source code itself. It is
- * either something wrong with the user's command line or the user's machine or environment.
+ *  <p>Anything marked as an ERROR is generally a problem unrelated to the
+ *  source code itself.  It is either something wrong with the user's command
+ *  line or the user's machine or environment.
  *
- * <p>Note that these exit codes should be kept consistent with the codes returned by Blaze's
- * launcher in //devtools/blaze/main:blaze.cc Blaze exit codes should be consistently classified as
- * permanent vs. transient (i.e. retriable) vs. unknown transient/permanent because users, in
- * particular infrastructure users, will use the exit code to decide whether the request should be
- * retried or not.
+ *  <p>Note that these exit codes should be kept consistent with the codes
+ *  returned by Blaze's launcher in //devtools/blaze/main:blaze.cc
  */
-@Immutable
-public final class ExitCode {
+public class ExitCode {
   // Tracks all exit codes defined here and elsewhere in Bazel.
   private static final HashMap<Integer, ExitCode> exitCodeRegistry = new HashMap<>();
 
@@ -50,24 +46,15 @@ public final class ExitCode {
   public static final ExitCode RUN_FAILURE = ExitCode.create(6, "RUN_FAILURE");
   public static final ExitCode ANALYSIS_FAILURE = ExitCode.create(7, "ANALYSIS_FAILURE");
   public static final ExitCode INTERRUPTED = ExitCode.create(8, "INTERRUPTED");
-  public static final ExitCode LOCK_HELD_NOBLOCK_FOR_LOCK =
-      ExitCode.create(9, "LOCK_HELD_NOBLOCK_FOR_LOCK");
-
-  public static final ExitCode REMOTE_ENVIRONMENTAL_ERROR =
-      ExitCode.createInfrastructureFailure(32, "REMOTE_ENVIRONMENTAL_ERROR");
   public static final ExitCode OOM_ERROR = ExitCode.createInfrastructureFailure(33, "OOM_ERROR");
-
-  public static final ExitCode REMOTE_ERROR =
-      ExitCode.createInfrastructureFailure(34, "REMOTE_ERROR");
   public static final ExitCode LOCAL_ENVIRONMENTAL_ERROR =
       ExitCode.createInfrastructureFailure(36, "LOCAL_ENVIRONMENTAL_ERROR");
   public static final ExitCode BLAZE_INTERNAL_ERROR =
       ExitCode.createInfrastructureFailure(37, "BLAZE_INTERNAL_ERROR");
-  public static final ExitCode TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR =
-      ExitCode.createInfrastructureFailure(38, "PUBLISH_ERROR");
-  public static final ExitCode PERSISTENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR =
-      ExitCode.create(45, "PERSISTENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR");
-  public static final ExitCode EXTERNAL_DEPS_ERROR = ExitCode.create(48, "EXTERNAL_DEPS_ERROR");
+  public static final ExitCode RESERVED = ExitCode.createInfrastructureFailure(40, "RESERVED");
+  /*
+    exit codes [50..60] and 253 are reserved for site specific wrappers to Bazel.
+   */
 
   /**
    * Creates and returns an ExitCode.  Requires a unique exit code number.
@@ -124,18 +111,6 @@ public final class ExitCode {
   public static Collection<ExitCode> values() {
     synchronized (exitCodeRegistry) {
       return exitCodeRegistry.values();
-    }
-  }
-
-  /**
-   * Returns a registered {@link ExitCode} with the given {@code code}.
-   *
-   * <p>Note that there *are* unregistered ExitCodes. This will never return them.
-   */
-  @Nullable
-  static ExitCode forCode(int code) {
-    synchronized (exitCodeRegistry) {
-      return exitCodeRegistry.get(code);
     }
   }
 

@@ -1,16 +1,11 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.network;
 
 import javax.annotation.Nullable;
 
 import android.content.Context;
-import com.facebook.stetho.common.Util;
+
 import com.facebook.stetho.inspector.helper.ChromePeerManager;
 import com.facebook.stetho.inspector.helper.PeersRegisteredListener;
 
@@ -18,8 +13,6 @@ public class NetworkPeerManager extends ChromePeerManager {
   private static NetworkPeerManager sInstance;
 
   private final ResponseBodyFileManager mResponseBodyFileManager;
-  private AsyncPrettyPrinterInitializer mPrettyPrinterInitializer;
-  private AsyncPrettyPrinterRegistry mAsyncPrettyPrinterRegistry;
 
   @Nullable
   public static synchronized NetworkPeerManager getInstanceOrNull() {
@@ -35,8 +28,7 @@ public class NetworkPeerManager extends ChromePeerManager {
     return sInstance;
   }
 
-  public NetworkPeerManager(
-      ResponseBodyFileManager responseBodyFileManager) {
+  public NetworkPeerManager(ResponseBodyFileManager responseBodyFileManager) {
     mResponseBodyFileManager = responseBodyFileManager;
     setListener(mTempFileCleanup);
   }
@@ -45,31 +37,15 @@ public class NetworkPeerManager extends ChromePeerManager {
     return mResponseBodyFileManager;
   }
 
-  @Nullable
-  public AsyncPrettyPrinterRegistry getAsyncPrettyPrinterRegistry() {
-    return mAsyncPrettyPrinterRegistry;
-  }
-
-  public void setPrettyPrinterInitializer(AsyncPrettyPrinterInitializer initializer) {
-    Util.throwIfNotNull(mPrettyPrinterInitializer);
-    mPrettyPrinterInitializer = Util.throwIfNull(initializer);
-  }
-
   private final PeersRegisteredListener mTempFileCleanup = new PeersRegisteredListener() {
     @Override
     protected void onFirstPeerRegistered() {
-      AsyncPrettyPrinterExecutorHolder.ensureInitialized();
-      if (mAsyncPrettyPrinterRegistry == null && mPrettyPrinterInitializer != null) {
-        mAsyncPrettyPrinterRegistry = new AsyncPrettyPrinterRegistry();
-        mPrettyPrinterInitializer.populatePrettyPrinters(mAsyncPrettyPrinterRegistry);
-      }
       mResponseBodyFileManager.cleanupFiles();
     }
 
     @Override
     protected void onLastPeerUnregistered() {
       mResponseBodyFileManager.cleanupFiles();
-      AsyncPrettyPrinterExecutorHolder.shutdown();
     }
   };
 }

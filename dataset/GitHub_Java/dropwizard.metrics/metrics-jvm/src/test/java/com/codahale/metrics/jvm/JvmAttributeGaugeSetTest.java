@@ -16,7 +16,7 @@ public class JvmAttributeGaugeSetTest {
     private final JvmAttributeGaugeSet gauges = new JvmAttributeGaugeSet(runtime);
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         when(runtime.getName()).thenReturn("9928@example.com");
 
         when(runtime.getVmVendor()).thenReturn("Oracle Corporation");
@@ -27,13 +27,13 @@ public class JvmAttributeGaugeSetTest {
     }
 
     @Test
-    public void hasASetOfGauges() {
+    public void hasASetOfGauges() throws Exception {
         assertThat(gauges.getMetrics().keySet())
                 .containsOnly("vendor", "name", "uptime");
     }
 
     @Test
-    public void hasAGaugeForTheJVMName() {
+    public void hasAGaugeForTheJVMName() throws Exception {
         final Gauge<String> gauge = (Gauge<String>) gauges.getMetrics().get("name");
 
         assertThat(gauge.getValue())
@@ -41,7 +41,7 @@ public class JvmAttributeGaugeSetTest {
     }
 
     @Test
-    public void hasAGaugeForTheJVMVendor() {
+    public void hasAGaugeForTheJVMVendor() throws Exception {
         final Gauge<String> gauge = (Gauge<String>) gauges.getMetrics().get("vendor");
 
         assertThat(gauge.getValue())
@@ -49,7 +49,7 @@ public class JvmAttributeGaugeSetTest {
     }
 
     @Test
-    public void hasAGaugeForTheJVMUptime() {
+    public void hasAGaugeForTheJVMUptime() throws Exception {
         final Gauge<Long> gauge = (Gauge<Long>) gauges.getMetrics().get("uptime");
 
         assertThat(gauge.getValue())
@@ -57,7 +57,7 @@ public class JvmAttributeGaugeSetTest {
     }
 
     @Test
-    public void autoDiscoversTheRuntimeBean() {
+    public void autoDiscoversTheRuntimeBean() throws Exception {
         final Gauge<Long> gauge = (Gauge<Long>) new JvmAttributeGaugeSet().getMetrics().get("uptime");
 
         assertThat(gauge.getValue()).isPositive();

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -43,8 +42,7 @@ import java.lang.annotation.Target;
  * <li>Any native, {@link android.os.Parcelable Parcelable} or
  * {@link java.io.Serializable Serializable} parameter annotated with
  * {@link org.androidannotations.annotations.OnActivityResult.Extra
- * OnActivityResult.Extra} to get an object put in the extras of the
- * intent.</li>
+ * OnActivityResult.Extra} to get an object put in the extras of the intent.</li>
  * </ul>
  *
  * <blockquote>
@@ -91,11 +89,7 @@ public @interface OnActivityResult {
 	 * <p>
 	 * Use on any native, {@link android.os.Parcelable} or
 	 * {@link java.io.Serializable} parameter of an {@link OnActivityResult}
-	 * annotated method to bind it with the value from the Intent. If
-	 * <a href="http://parceler.org">Parceler</a> is on the classpath, extras
-	 * annotated with &#064;Parcel, or collections supported by Parceler will be
-	 * automatically marshaled using a {@link android.os.Parcelable Parcelable}
-	 * through the Parcels utility class.
+	 * annotated method to bind it with the value from the Intent.
 	 * </p>
 	 * <p>
 	 * The annotation value is the key used for the result data. If not set, the
@@ -108,21 +102,22 @@ public @interface OnActivityResult {
 	 *
 	 * <pre>
 	 * &#064;OnActivityResult(REQUEST_CODE)
-	 * void onResult(int resultCode, Intent data, <b>@OnActivityResult.Extra String value</b>) {
+	 * void onResult(int resultCode, Intent data, <b>@Extra String value</b>) {
 	 * }
 	 * 
 	 * &#064;OnActivityResult(REQUEST_CODE)
-	 * void onResult(int resultCode, <b>@OnActivityResult.Extra(value = "key") String value</b>) {
+	 * void onResult(int resultCode, <b>@Extra(value = "key") String value</b>) {
 	 * }
 	 * 
 	 * &#064;OnActivityResult(REQUEST_CODE)
-	 * void onResult(<b>@OnActivityResult.Extra String strVal</b>, <b>@OnActivityResult.Extra int intVal</b>) {
+	 * void onResult(<b>@Extra String strVal</b>, <b>@Extra int intVal</b>) {
 	 * }
 	 * </pre>
 	 *
 	 * </blockquote>
 	 *
-	 * @see android.app.Activity#onActivityResult(int, int, android.content.Intent)
+	 * @see android.app.Activity#onActivityResult(int, int,
+	 *      android.content.Intent)
 	 * @see OnActivityResult
 	 */
 

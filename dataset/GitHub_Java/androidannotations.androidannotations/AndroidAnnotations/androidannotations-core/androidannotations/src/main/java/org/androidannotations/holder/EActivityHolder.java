@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,14 +15,14 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JExpr._null;
-import static com.helger.jcodemodel.JExpr._super;
-import static com.helger.jcodemodel.JExpr._this;
-import static com.helger.jcodemodel.JExpr.cast;
-import static com.helger.jcodemodel.JExpr.invoke;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr._super;
+import static com.sun.codemodel.JExpr._this;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.ArrayList;
@@ -32,30 +31,29 @@ import java.util.List;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
+import org.androidannotations.helper.ActivityIntentBuilder;
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.helper.IntentBuilder;
 import org.androidannotations.holder.ReceiverRegistrationDelegate.IntentFilterData;
-import org.androidannotations.internal.core.helper.ActivityIntentBuilder;
-import org.androidannotations.internal.core.helper.IntentBuilder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.AbstractJType;
-import com.helger.jcodemodel.IJAssignmentTarget;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JClassAlreadyExistsException;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JMod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
 
-public class EActivityHolder extends EComponentWithViewSupportHolder
-		implements HasIntentBuilder, HasExtras, HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasActivityLifecycleMethods, HasReceiverRegistration, HasPreferenceHeaders {
+public class EActivityHolder extends EComponentWithViewSupportHolder implements HasIntentBuilder, HasExtras, HasInstanceState, HasOptionsMenu, HasOnActivityResult, HasReceiverRegistration,
+		HasPreferenceHeaders {
 
 	private ActivityIntentBuilder intentBuilder;
 	private JMethod onCreate;
@@ -71,7 +69,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	private JBlock injectExtrasBlock;
 	private JVar injectExtras;
 	private JBlock onCreateOptionsMenuMethodBody;
-	private JBlock onCreateOptionsMenuMethodInflateBody;
 	private JVar onCreateOptionsMenuMenuInflaterVar;
 	private JVar onCreateOptionsMenuMenuParam;
 	private JVar onOptionsItemSelectedItem;
@@ -113,7 +110,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 		setSetContentView();
 		intentBuilder = new ActivityIntentBuilder(this, androidManifest);
 		intentBuilder.build();
-		implementBeanHolder();
 	}
 
 	@Override
@@ -123,8 +119,8 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, getCodeModel().VOID, "init" + generationSuffix());
-		AbstractJClass bundleClass = getClasses().BUNDLE;
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
+		JClass bundleClass = classes().BUNDLE;
 		initSavedInstanceParam = init.param(bundleClass, "savedInstanceState");
 		getOnCreate();
 	}
@@ -144,9 +140,9 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	private void setOnCreate() {
-		onCreate = generatedClass.method(PUBLIC, getCodeModel().VOID, "onCreate");
+		onCreate = generatedClass.method(PUBLIC, codeModel().VOID, "onCreate");
 		onCreate.annotate(Override.class);
-		AbstractJClass bundleClass = getClasses().BUNDLE;
+		JClass bundleClass = classes().BUNDLE;
 		JVar onCreateSavedInstanceState = onCreate.param(bundleClass, "savedInstanceState");
 		JBlock onCreateBody = onCreate.body();
 		JVar previousNotifier = viewNotifierHelper.replacePreviousNotifier(onCreateBody);
@@ -158,12 +154,12 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	// CHECKSTYLE:OFF
 
 	private void setOnStart() {
-		JMethod method = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onStart");
+		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onStart");
 		method.annotate(Override.class);
 		JBlock body = method.body();
-		onStartBeforeSuperBlock = body.blockSimple();
+		onStartBeforeSuperBlock = body.block();
 		body.invoke(_super(), method);
-		onStartAfterSuperBlock = body.blockSimple();
+		onStartAfterSuperBlock = body.block();
 	}
 
 	public JBlock getOnRestartAfterSuperBlock() {
@@ -174,45 +170,46 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	private void setOnRestart() {
-		JMethod method = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onRestart");
+		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onRestart");
 		method.annotate(Override.class);
 		JBlock body = method.body();
-		onRestartBeforeSuperBlock = body.blockSimple();
+		onRestartBeforeSuperBlock = body.block();
 		body.invoke(_super(), method);
-		onRestartAfterSuperBlock = body.blockSimple();
+		onRestartAfterSuperBlock = body.block();
 	}
 
 	private void setOnResume() {
-		JMethod method = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onResume");
+		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onResume");
 		method.annotate(Override.class);
 		JBlock body = method.body();
-		onResumeBeforeSuperBlock = body.blockSimple();
+		onResumeBeforeSuperBlock = body.block();
 		body.invoke(_super(), method);
-		onResumeAfterSuperBlock = body.blockSimple();
+		onResumeAfterSuperBlock = body.block();
 	}
 
 	private void setOnPause() {
-		JMethod method = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onPause");
+		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onPause");
 		method.annotate(Override.class);
 		JBlock body = method.body();
-		onPauseBeforeSuperBlock = body.blockSimple();
+		onPauseBeforeSuperBlock = body.block();
 		body.invoke(_super(), method);
-		onPauseAfterSuperBlock = body.blockSimple();
+		onPauseAfterSuperBlock = body.block();
 	}
 
 	private void setOnNewIntent() {
-		onNewIntentMethod = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onNewIntent");
+		onNewIntentMethod = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onNewIntent");
 		onNewIntentMethod.annotate(Override.class);
-		JVar intent = onNewIntentMethod.param(getClasses().INTENT, "intent");
+		JVar intent = onNewIntentMethod.param(classes().INTENT, "intent");
 		JBlock body = onNewIntentMethod.body();
 		body.invoke(_super(), onNewIntentMethod).arg(intent);
-		onNewIntentAfterSuperBlock = body.blockSimple();
+		body.invoke(getSetIntent()).arg(intent);
+		onNewIntentAfterSuperBlock = body.block();
 	}
 
 	private void setSetIntent() {
-		setIntent = generatedClass.method(PUBLIC, getCodeModel().VOID, "setIntent");
+		setIntent = generatedClass.method(PUBLIC, codeModel().VOID, "setIntent");
 		setIntent.annotate(Override.class);
-		JVar methodParam = setIntent.param(getClasses().INTENT, "newIntent");
+		JVar methodParam = setIntent.param(classes().INTENT, "newIntent");
 		JBlock setIntentBody = setIntent.body();
 		setIntentBody.invoke(_super(), setIntent).arg(methodParam);
 	}
@@ -225,10 +222,10 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	private void setOnStop() {
-		onStopMethod = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onStop");
+		onStopMethod = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onStop");
 		onStopMethod.annotate(Override.class);
 		JBlock body = onStopMethod.body();
-		onStopBeforeSuperBlock = body.blockSimple();
+		onStopBeforeSuperBlock = body.block();
 		body.invoke(_super(), onStopMethod);
 	}
 
@@ -240,12 +237,12 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	private void setOnDestroy() {
-		onDestroyMethod = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onDestroy");
+		onDestroyMethod = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onDestroy");
 		onDestroyMethod.annotate(Override.class);
 		JBlock body = onDestroyMethod.body();
-		onDestroyBeforeSuperBlock = body.blockSimple();
+		onDestroyBeforeSuperBlock = body.block();
 		body.invoke(_super(), onDestroyMethod);
-		onDestroyAfterSuperBlock = body.blockSimple();
+		onDestroyAfterSuperBlock = body.block();
 	}
 
 	public JBlock getOnConfigurationChangedBeforeSuperBlock() {
@@ -270,14 +267,14 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	private void setOnConfigurationChanged() {
-		JMethod method = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onConfigurationChanged");
+		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onConfigurationChanged");
 		method.annotate(Override.class);
-		AbstractJClass configurationClass = getClasses().CONFIGURATION;
+		JClass configurationClass = classes().CONFIGURATION;
 		onConfigurationChangedNewConfigParam = method.param(configurationClass, "newConfig");
 		JBlock body = method.body();
-		onConfigurationChangedBeforeSuperBlock = body.blockSimple();
+		onConfigurationChangedBeforeSuperBlock = body.block();
 		body.invoke(_super(), method).arg(onConfigurationChangedNewConfigParam);
-		onConfigurationChangedAfterSuperBlock = body.blockSimple();
+		onConfigurationChangedAfterSuperBlock = body.block();
 	}
 
 	public JMethod getOnContentChanged() {
@@ -295,39 +292,38 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	private void setOnContentChanged() {
-		onContentChanged = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "onContentChanged");
+		onContentChanged = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "onContentChanged");
 		onContentChanged.annotate(Override.class);
 		JBlock body = onContentChanged.body();
 		body.invoke(_super(), onContentChanged);
-		onContentChangedAfterSuperBlock = body.blockSimple();
+		onContentChangedAfterSuperBlock = body.block();
 	}
 
 	private void setOnCreateOptionsMenu() {
-		JMethod method = generatedClass.method(PUBLIC, getCodeModel().BOOLEAN, "onCreateOptionsMenu");
+		JMethod method = generatedClass.method(PUBLIC, codeModel().BOOLEAN, "onCreateOptionsMenu");
 		method.annotate(Override.class);
 		JBlock methodBody = method.body();
-		onCreateOptionsMenuMenuParam = method.param(getClasses().MENU, "menu");
-		onCreateOptionsMenuMenuInflaterVar = methodBody.decl(getClasses().MENU_INFLATER, "menuInflater", invoke("getMenuInflater"));
-		onCreateOptionsMenuMethodInflateBody = methodBody.blockSimple();
-		onCreateOptionsMenuMethodBody = methodBody.blockSimple();
+		onCreateOptionsMenuMenuParam = method.param(classes().MENU, "menu");
+		onCreateOptionsMenuMenuInflaterVar = methodBody.decl(classes().MENU_INFLATER, "menuInflater", invoke("getMenuInflater"));
+		onCreateOptionsMenuMethodBody = methodBody.block();
 		methodBody._return(_super().invoke(method).arg(onCreateOptionsMenuMenuParam));
 	}
 
 	private void setOnOptionsItemSelected() {
-		JMethod method = generatedClass.method(JMod.PUBLIC, getCodeModel().BOOLEAN, "onOptionsItemSelected");
+		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().BOOLEAN, "onOptionsItemSelected");
 		method.annotate(Override.class);
 		JBlock methodBody = method.body();
-		onOptionsItemSelectedItem = method.param(getClasses().MENU_ITEM, "item");
-		onOptionsItemSelectedItemId = methodBody.decl(getCodeModel().INT, "itemId_", onOptionsItemSelectedItem.invoke("getItemId"));
-		onOptionsItemSelectedMiddleBlock = methodBody.blockSimple();
+		onOptionsItemSelectedItem = method.param(classes().MENU_ITEM, "item");
+		onOptionsItemSelectedItemId = methodBody.decl(codeModel().INT, "itemId_", onOptionsItemSelectedItem.invoke("getItemId"));
+		onOptionsItemSelectedMiddleBlock = methodBody.block();
 
 		methodBody._return(invoke(_super(), method).arg(onOptionsItemSelectedItem));
 	}
 
 	@Override
 	protected void setFindNativeFragmentById() {
-		JMethod method = generatedClass.method(PRIVATE, getClasses().FRAGMENT, "findNativeFragmentById");
-		JVar idParam = method.param(getCodeModel().INT, "id");
+		JMethod method = generatedClass.method(PRIVATE, classes().FRAGMENT, "findNativeFragmentById");
+		JVar idParam = method.param(codeModel().INT, "id");
 		JBlock body = method.body();
 		body._return(invoke("getFragmentManager").invoke("findFragmentById").arg(idParam));
 		findNativeFragmentById = method;
@@ -335,13 +331,8 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 
 	@Override
 	protected void setFindSupportFragmentById() {
-		JMethod method;
-		if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT) == null) {
-			method = getGeneratedClass().method(PRIVATE, getClasses().SUPPORT_V4_FRAGMENT, "findSupportFragmentById");
-		} else {
-			method = getGeneratedClass().method(PRIVATE, getClasses().ANDROIDX_FRAGMENT, "findSupportFragmentById");
-		}
-		JVar idParam = method.param(getCodeModel().INT, "id");
+		JMethod method = generatedClass.method(PRIVATE, classes().SUPPORT_V4_FRAGMENT, "findSupportFragmentById");
+		JVar idParam = method.param(codeModel().INT, "id");
 		JBlock body = method.body();
 		body._return(invoke("getSupportFragmentManager").invoke("findFragmentById").arg(idParam));
 		findSupportFragmentById = method;
@@ -349,8 +340,8 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 
 	@Override
 	protected void setFindNativeFragmentByTag() {
-		JMethod method = generatedClass.method(PRIVATE, getClasses().FRAGMENT, "findNativeFragmentByTag");
-		JVar tagParam = method.param(getClasses().STRING, "tag");
+		JMethod method = generatedClass.method(PRIVATE, classes().FRAGMENT, "findNativeFragmentByTag");
+		JVar tagParam = method.param(classes().STRING, "tag");
 		JBlock body = method.body();
 		body._return(invoke("getFragmentManager").invoke("findFragmentByTag").arg(tagParam));
 		findNativeFragmentByTag = method;
@@ -358,13 +349,8 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 
 	@Override
 	protected void setFindSupportFragmentByTag() {
-		JMethod method;
-		if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT) == null) {
-			method = getGeneratedClass().method(PRIVATE, getClasses().SUPPORT_V4_FRAGMENT, "findSupportFragmentByTag");
-		} else {
-			method = getGeneratedClass().method(PRIVATE, getClasses().ANDROIDX_FRAGMENT, "findSupportFragmentByTag");
-		}
-		JVar tagParam = method.param(getClasses().STRING, "tag");
+		JMethod method = generatedClass.method(PRIVATE, classes().SUPPORT_V4_FRAGMENT, "findSupportFragmentByTag");
+		JVar tagParam = method.param(classes().STRING, "tag");
 		JBlock body = method.body();
 		body._return(invoke("getSupportFragmentManager").invoke("findFragmentByTag").arg(tagParam));
 		findSupportFragmentByTag = method;
@@ -380,15 +366,15 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	private void setSetContentView() {
 		getOnCreate();
 
-		AbstractJClass layoutParamsClass = getClasses().VIEW_GROUP_LAYOUT_PARAMS;
+		JClass layoutParamsClass = classes().VIEW_GROUP_LAYOUT_PARAMS;
 
-		setContentViewLayout = setContentViewMethod(new AbstractJType[] { getCodeModel().INT }, new String[] { "layoutResID" });
-		setContentViewMethod(new AbstractJType[] { getClasses().VIEW, layoutParamsClass }, new String[] { "view", "params" });
-		setContentViewMethod(new AbstractJType[] { getClasses().VIEW }, new String[] { "view" });
+		setContentViewLayout = setContentViewMethod(new JType[] { codeModel().INT }, new String[] { "layoutResID" });
+		setContentViewMethod(new JType[] { classes().VIEW, layoutParamsClass }, new String[] { "view", "params" });
+		setContentViewMethod(new JType[] { classes().VIEW }, new String[] { "view" });
 	}
 
-	private JMethod setContentViewMethod(AbstractJType[] paramTypes, String[] paramNames) {
-		JMethod method = generatedClass.method(JMod.PUBLIC, getCodeModel().VOID, "setContentView");
+	private JMethod setContentViewMethod(JType[] paramTypes, String[] paramNames) {
+		JMethod method = generatedClass.method(JMod.PUBLIC, codeModel().VOID, "setContentView");
 		method.annotate(Override.class);
 
 		List<JVar> params = new ArrayList<>();
@@ -403,11 +389,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 		}
 		viewNotifierHelper.invokeViewChanged(body);
 		return method;
-	}
-
-	@Override
-	public IJExpression getFindViewByIdExpression(JVar idParam) {
-		return JExpr._this().invoke("findViewById").arg(idParam);
 	}
 
 	public JVar getInitSavedInstanceParam() {
@@ -456,13 +437,20 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	private void setInjectExtras() {
-		injectExtrasMethod = generatedClass.method(PRIVATE, getCodeModel().VOID, "injectExtras" + generationSuffix());
+		injectExtrasMethod = generatedClass.method(PRIVATE, codeModel().VOID, "injectExtras" + generationSuffix());
 		JBlock injectExtrasBody = injectExtrasMethod.body();
-		injectExtras = injectExtrasBody.decl(getClasses().BUNDLE, "extras_", invoke("getIntent").invoke("getExtras"));
+		injectExtras = injectExtrasBody.decl(classes().BUNDLE, "extras_", invoke("getIntent").invoke("getExtras"));
 		injectExtrasBlock = injectExtrasBody._if(injectExtras.ne(_null()))._then();
 
 		getSetIntent().body().invoke(injectExtrasMethod);
-		getInitBodyInjectionBlock().invoke(injectExtrasMethod);
+		getInitBody().invoke(injectExtrasMethod);
+	}
+
+	public JMethod getOnNewIntent() {
+		if (onNewIntentMethod == null) {
+			setOnNewIntent();
+		}
+		return onNewIntentMethod;
 	}
 
 	public JBlock getOnNewIntentAfterSuperBlock() {
@@ -488,11 +476,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	@Override
-	public JBlock getRestoreStateMethodBody() {
-		return instanceStateDelegate.getRestoreStateMethodBody();
-	}
-
-	@Override
 	public JVar getRestoreStateBundleParam() {
 		return instanceStateDelegate.getRestoreStateBundleParam();
 	}
@@ -503,14 +486,6 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 			setOnCreateOptionsMenu();
 		}
 		return onCreateOptionsMenuMethodBody;
-	}
-
-	@Override
-	public JBlock getOnCreateOptionsMenuMethodInflateBody() {
-		if (onCreateOptionsMenuMethodInflateBody == null) {
-			setOnCreateOptionsMenu();
-		}
-		return onCreateOptionsMenuMethodInflateBody;
 	}
 
 	@Override
@@ -579,7 +554,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	private void setInitNonConfigurationInstance() throws JClassAlreadyExistsException {
-		JBlock initBody = getInitBodyInjectionBlock();
+		JBlock initBody = getInitBody();
 		JDefinedClass ncHolderClass = getNonConfigurationHolder().getGeneratedClass();
 		initNonConfigurationInstance = initBody.decl(ncHolderClass, "nonConfigurationInstance", cast(ncHolderClass, _super().invoke(getGetLastNonConfigurationInstance())));
 		initIfNonConfigurationNotNullBlock = initBody._if(initNonConfigurationInstance.ne(_null()))._then();
@@ -594,7 +569,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 
 	private void setGetLastNonConfigurationInstance() throws JClassAlreadyExistsException {
 		AnnotationHelper annotationHelper = new AnnotationHelper(getEnvironment());
-		TypeElement fragmentActivityTypeElement = getFragmentActivity(annotationHelper);
+		TypeElement fragmentActivityTypeElement = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT_ACTIVITY);
 		TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(generatedClass._extends().fullName());
 		String getLastNonConfigurationInstanceName = "getLastNonConfigurationInstance";
 		if (fragmentActivityTypeElement != null && annotationHelper.isSubtype(typeElement.asType(), fragmentActivityTypeElement.asType())) {
@@ -629,7 +604,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 
 	private void setOnRetainNonConfigurationInstance() throws JClassAlreadyExistsException {
 		AnnotationHelper annotationHelper = new AnnotationHelper(getEnvironment());
-		TypeElement fragmentActivityTypeElement = getFragmentActivity(annotationHelper);
+		TypeElement fragmentActivityTypeElement = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT_ACTIVITY);
 		TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(generatedClass._extends().fullName());
 
 		String onRetainNonConfigurationInstanceName = "onRetainNonConfigurationInstance";
@@ -644,18 +619,10 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 		onRetainNonConfigurationInstanceMethod.annotate(Override.class);
 		JBlock methodBody = onRetainNonConfigurationInstanceMethod.body();
 		onRetainNonConfigurationInstance = methodBody.decl(ncHolderClass, "nonConfigurationInstanceState_", _new(ncHolderClass));
-		IJExpression superCall = _super().invoke(onRetainNonConfigurationInstanceMethod);
+		JExpression superCall = _super().invoke(onRetainNonConfigurationInstanceMethod);
 		methodBody.assign(onRetainNonConfigurationInstance.ref(ncHolder.getSuperNonConfigurationInstanceField()), superCall);
-		onRetainNonConfigurationInstanceBindBlock = methodBody.blockSimple();
+		onRetainNonConfigurationInstanceBindBlock = methodBody.block();
 		methodBody._return(onRetainNonConfigurationInstance);
-	}
-
-	private TypeElement getFragmentActivity(AnnotationHelper annotationHelper) {
-		TypeElement supportFragmentActivity = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.FRAGMENT_ACTIVITY);
-		if (supportFragmentActivity == null) {
-			return annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.ANDROIDX_FRAGMENT_ACTIVITY);
-		}
-		return supportFragmentActivity;
 	}
 
 	@Override
@@ -745,14 +712,15 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 		return onPauseAfterSuperBlock;
 	}
 
+
 	@Override
-	public JBlock getStartLifecycleAfterSuperBlock() {
-		return getOnCreateAfterSuperBlock();
+	public JBlock getOnAttachAfterSuperBlock() {
+		return receiverRegistrationDelegate.getOnAttachAfterSuperBlock();
 	}
 
 	@Override
-	public JBlock getEndLifecycleBeforeSuperBlock() {
-		return getOnDestroyAfterSuperBlock();
+	public JBlock getOnDetachBeforeSuperBlock() {
+		return receiverRegistrationDelegate.getOnDetachBeforeSuperBlock();
 	}
 
 	@Override
@@ -762,7 +730,7 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 
 	@Override
 	public JBlock getIntentFilterInitializationBlock(IntentFilterData intentFilterData) {
-		return getInitBodyInjectionBlock();
+		return getInitBody();
 	}
 
 	@Override
@@ -771,38 +739,18 @@ public class EActivityHolder extends EComponentWithViewSupportHolder
 	}
 
 	@Override
-	public JBlock getAddPreferencesFromResourceInjectionBlock() {
-		return preferencesHolder.getAddPreferencesFromResourceInjectionBlock();
+	public JBlock getAddPreferencesFromResourceBlock() {
+		return preferencesHolder.getAddPreferencesFromResourceBlock();
 	}
 
 	@Override
-	public JBlock getAddPreferencesFromResourceAfterInjectionBlock() {
-		return preferencesHolder.getAddPreferencesFromResourceAfterInjectionBlock();
+	public void assignFindPreferenceByKey(JFieldRef idRef, JClass preferenceClass, JFieldRef fieldRef) {
+		preferencesHolder.assignFindPreferenceByKey(idRef, preferenceClass, fieldRef);
 	}
 
 	@Override
-	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass) {
+	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, JClass preferenceClass) {
 		return preferencesHolder.getFoundPreferenceHolder(idRef, preferenceClass);
-	}
-
-	@Override
-	public FoundPreferenceHolder getFoundPreferenceHolder(JFieldRef idRef, AbstractJClass preferenceClass, IJAssignmentTarget fieldRef) {
-		return preferencesHolder.getFoundPreferenceHolder(idRef, preferenceClass, fieldRef);
-	}
-
-	@Override
-	public boolean usingSupportV7Preference() {
-		return preferencesHolder.usingSupportV7Preference();
-	}
-
-	@Override
-	public boolean usingAndroidxPreference() {
-		return preferencesHolder.usingAndroidxPreference();
-	}
-
-	@Override
-	public AbstractJClass getBasePreferenceClass() {
-		return preferencesHolder.getBasePreferenceClass();
 	}
 
 	@Override

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,12 +15,12 @@
  */
 package org.androidannotations.menu;
 
-import java.io.IOException;
-
-import org.androidannotations.internal.AndroidAnnotationProcessor;
-import org.androidannotations.testutils.AAProcessorTestHelper;
+import org.androidannotations.AndroidAnnotationProcessor;
+import org.androidannotations.utils.AAProcessorTestHelper;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.io.IOException;
 
 public class OptionsMenuItemTest extends AAProcessorTestHelper {
 
@@ -37,22 +36,4 @@ public class OptionsMenuItemTest extends AAProcessorTestHelper {
 		assertCompilationSuccessful(result);
 	}
 
-	@Test
-	public void testDeeplyInheritedMenuNotBreakOrder() throws IOException {
-		CompileResult result = compileFiles(OptionsMenuItemSubSubSubActivity.class);
-		assertCompilationSuccessful(result);
-		// CHECKSTYLE:OFF
-		String[] codeFragment = { //
-				"    @Override", //
-				"    public boolean onCreateOptionsMenu(Menu menu) {", //
-				"        MenuInflater menuInflater = getMenuInflater();", //
-				"        this.menu = menu.findItem(R.id.menu);", //
-				"        this.menu1 = menu.findItem(R.id.menu1);", //
-				"        this.menu2 = menu.findItem(R.id.menu2);", //
-				"        this.menu3 = menu.findItem(R.id.menu3);", //
-				"        return super.onCreateOptionsMenu(menu);", //
-				"    }", };
-		// CHECKSTYLE:ON
-		assertGeneratedClassContains(toGeneratedFile(OptionsMenuItemSubSubSubActivity.class), codeFragment);
-	}
 }

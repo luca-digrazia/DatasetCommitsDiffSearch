@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,29 +15,27 @@
  */
 package org.androidannotations.ormlite.holder;
 
-import static com.helger.jcodemodel.JExpr._null;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-
-import java.util.HashMap;
-import java.util.Map;
-
-import javax.lang.model.type.TypeMirror;
-
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
 import org.androidannotations.helper.CaseHelper;
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.holder.EComponentHolder;
-import org.androidannotations.holder.HasSimpleLifecycleMethods;
+import org.androidannotations.holder.HasLifecycleMethods;
 import org.androidannotations.ormlite.helper.OrmLiteClasses;
 import org.androidannotations.plugin.PluginClassHolder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JFieldVar;
+import javax.lang.model.type.TypeMirror;
+import java.util.HashMap;
+import java.util.Map;
+
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JMod.PRIVATE;
 
 public class OrmLiteHolder extends PluginClassHolder<EComponentHolder> {
 
-	private Map<TypeMirror, JFieldVar> databaseHelperRefs = new HashMap<>();
+	private Map<TypeMirror, JFieldVar> databaseHelperRefs = new HashMap<TypeMirror, JFieldVar>();
 
 	public OrmLiteHolder(EComponentHolder holder) {
 		super(holder);
@@ -48,30 +45,30 @@ public class OrmLiteHolder extends PluginClassHolder<EComponentHolder> {
 		JFieldVar databaseHelperRef = databaseHelperRefs.get(databaseHelperTypeMirror);
 		if (databaseHelperRef == null) {
 			databaseHelperRef = setDatabaseHelperRef(databaseHelperTypeMirror);
-			injectReleaseAtEndLifecycle(databaseHelperRef);
+			injectReleaseInOnDestroy(databaseHelperRef);
 		}
 		return databaseHelperRef;
 	}
 
 	private JFieldVar setDatabaseHelperRef(TypeMirror databaseHelperTypeMirror) {
-		AbstractJClass databaseHelperClass = getJClass(databaseHelperTypeMirror.toString());
+		JClass databaseHelperClass = refClass(databaseHelperTypeMirror.toString());
 		String fieldName = CaseHelper.lowerCaseFirst(databaseHelperClass.name()) + ModelConstants.generationSuffix();
 		JFieldVar databaseHelperRef = getGeneratedClass().field(PRIVATE, databaseHelperClass, fieldName);
 		databaseHelperRefs.put(databaseHelperTypeMirror, databaseHelperRef);
 
-		IJExpression dbHelperClass = databaseHelperClass.dotclass();
-		holder().getInitBodyInjectionBlock().assign(databaseHelperRef, //
-				getJClass(OrmLiteClasses.OPEN_HELPER_MANAGER).staticInvoke("getHelper").arg(holder().getContextRef()).arg(dbHelperClass));
+		JExpression dbHelperClass = databaseHelperClass.dotclass();
+		holder().getInitBody().assign(databaseHelperRef, //
+				refClass(OrmLiteClasses.OPEN_HELPER_MANAGER).staticInvoke("getHelper").arg(holder().getContextRef()).arg(dbHelperClass));
 
 		return databaseHelperRef;
 	}
 
-	private void injectReleaseAtEndLifecycle(JFieldVar databaseHelperRef) {
-		if (holder() instanceof HasSimpleLifecycleMethods) {
-			JBlock endLifecycleBody = ((HasSimpleLifecycleMethods) holder()).getEndLifecycleBeforeSuperBlock();
+	private void injectReleaseInOnDestroy(JFieldVar databaseHelperRef) {
+		if (holder() instanceof HasLifecycleMethods) {
+			JBlock destroyBody = ((HasLifecycleMethods) holder()).getOnDestroyBeforeSuperBlock();
 
-			endLifecycleBody.staticInvoke(getJClass(OrmLiteClasses.OPEN_HELPER_MANAGER), "releaseHelper");
-			endLifecycleBody.assign(databaseHelperRef, _null());
+			destroyBody.staticInvoke(refClass(OrmLiteClasses.OPEN_HELPER_MANAGER), "releaseHelper");
+			destroyBody.assign(databaseHelperRef, _null());
 		}
 	}
 

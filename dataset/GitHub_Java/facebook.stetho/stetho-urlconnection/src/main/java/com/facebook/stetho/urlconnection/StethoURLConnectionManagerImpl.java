@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.urlconnection;
@@ -10,13 +12,13 @@ package com.facebook.stetho.urlconnection;
 import com.facebook.stetho.inspector.network.DefaultResponseHandler;
 import com.facebook.stetho.inspector.network.NetworkEventReporter;
 import com.facebook.stetho.inspector.network.NetworkEventReporterImpl;
-import com.facebook.stetho.inspector.network.RequestBodyHelper;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Isolated implementation class to allow us to escape the verifier if Stetho is not
@@ -25,17 +27,20 @@ import java.net.HttpURLConnection;
  * APK.
  */
 class StethoURLConnectionManagerImpl {
+  private static final AtomicInteger sSequenceNumberGenerator = new AtomicInteger(0);
+
   private final NetworkEventReporter mStethoHook = NetworkEventReporterImpl.get();
-  private final String mRequestId;
+  private final int mRequestId;
   @Nullable
   private final String mFriendlyName;
 
+  @Nullable private String mRequestIdString;
+
   private HttpURLConnection mConnection;
   @Nullable private URLConnectionInspectorRequest mInspectorRequest;
-  @Nullable private RequestBodyHelper mRequestBodyHelper;
 
   public StethoURLConnectionManagerImpl(@Nullable String friendlyName) {
-    mRequestId = mStethoHook.nextRequestId();
+    mRequestId = sSequenceNumberGenerator.getAndIncrement();
     mFriendlyName = friendlyName;
   }
 
@@ -52,13 +57,11 @@ class StethoURLConnectionManagerImpl {
     throwIfConnection();
     mConnection = connection;
     if (isStethoActive()) {
-      mRequestBodyHelper = new RequestBodyHelper(mStethoHook, getStethoRequestId());
       mInspectorRequest = new URLConnectionInspectorRequest(
           getStethoRequestId(),
           mFriendlyName,
           connection,
-          requestEntity,
-          mRequestBodyHelper);
+          requestEntity);
       mStethoHook.requestWillBeSent(mInspectorRequest);
     }
   }
@@ -69,8 +72,11 @@ class StethoURLConnectionManagerImpl {
   public void postConnect() throws IOException {
     throwIfNoConnection();
     if (isStethoActive()) {
-      if (mRequestBodyHelper != null && mRequestBodyHelper.hasBody()) {
-        mRequestBodyHelper.reportDataSent();
+      if (mInspectorRequest != null) {
+        byte[] body = mInspectorRequest.body();
+        if (body != null) {
+          mStethoHook.dataSent(getStethoRequestId(), body.length, body.length);
+        }
       }
       mStethoHook.responseHeadersReceived(
           new URLConnectionInspectorResponse(
@@ -134,6 +140,9 @@ class StethoURLConnectionManagerImpl {
    */
   @Nonnull
   public String getStethoRequestId() {
-    return mRequestId;
+    if (mRequestIdString == null) {
+      mRequestIdString = String.valueOf(mRequestId);
+    }
+    return mRequestIdString;
   }
 }

@@ -1,49 +1,30 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
 package com.facebook.stetho;
 
-import android.app.Application;
+import javax.annotation.Nullable;
+
+import java.io.IOException;
+import java.util.ArrayList;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
 
 import com.facebook.stetho.common.LogUtil;
+import com.facebook.stetho.common.Utf8Charset;
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.dumpapp.DumpappHttpSocketLikeHandler;
-import com.facebook.stetho.dumpapp.DumpappSocketLikeHandler;
 import com.facebook.stetho.dumpapp.Dumper;
 import com.facebook.stetho.dumpapp.DumperPlugin;
-import com.facebook.stetho.dumpapp.plugins.CrashDumperPlugin;
-import com.facebook.stetho.dumpapp.plugins.FilesDumperPlugin;
-import com.facebook.stetho.dumpapp.plugins.HprofDumperPlugin;
+import com.facebook.stetho.dumpapp.RawDumpappHandler;
+import com.facebook.stetho.dumpapp.StreamingDumpappHandler;
 import com.facebook.stetho.dumpapp.plugins.SharedPreferencesDumperPlugin;
-import com.facebook.stetho.inspector.DevtoolsSocketHandler;
-import com.facebook.stetho.inspector.console.RuntimeReplFactory;
-import com.facebook.stetho.inspector.database.ContentProviderDatabaseDriver;
-import com.facebook.stetho.inspector.database.DatabaseDriver2Adapter;
-import com.facebook.stetho.inspector.database.DatabaseFilesProvider;
-import com.facebook.stetho.inspector.database.DefaultDatabaseConnectionProvider;
-import com.facebook.stetho.inspector.database.DefaultDatabaseFilesProvider;
-import com.facebook.stetho.inspector.database.SqliteDatabaseDriver;
-import com.facebook.stetho.inspector.elements.DescriptorProvider;
-import com.facebook.stetho.inspector.elements.Document;
-import com.facebook.stetho.inspector.elements.DocumentProviderFactory;
-import com.facebook.stetho.inspector.elements.android.ActivityTracker;
-import com.facebook.stetho.inspector.elements.android.AndroidDocumentConstants;
-import com.facebook.stetho.inspector.elements.android.AndroidDocumentProviderFactory;
+import com.facebook.stetho.inspector.ChromeDevtoolsServer;
+import com.facebook.stetho.inspector.ChromeDiscoveryHandler;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsDomain;
 import com.facebook.stetho.inspector.protocol.module.CSS;
 import com.facebook.stetho.inspector.protocol.module.Console;
 import com.facebook.stetho.inspector.protocol.module.DOM;
 import com.facebook.stetho.inspector.protocol.module.DOMStorage;
 import com.facebook.stetho.inspector.protocol.module.Database;
-import com.facebook.stetho.inspector.protocol.module.DatabaseConstants;
-import com.facebook.stetho.inspector.protocol.module.DatabaseDriver2;
 import com.facebook.stetho.inspector.protocol.module.Debugger;
 import com.facebook.stetho.inspector.protocol.module.HeapProfiler;
 import com.facebook.stetho.inspector.protocol.module.Inspector;
@@ -52,45 +33,35 @@ import com.facebook.stetho.inspector.protocol.module.Page;
 import com.facebook.stetho.inspector.protocol.module.Profiler;
 import com.facebook.stetho.inspector.protocol.module.Runtime;
 import com.facebook.stetho.inspector.protocol.module.Worker;
-import com.facebook.stetho.inspector.runtime.RhinoDetectingRuntimeReplFactory;
-import com.facebook.stetho.server.AddressNameHelper;
-import com.facebook.stetho.server.LazySocketHandler;
-import com.facebook.stetho.server.LocalSocketServer;
-import com.facebook.stetho.server.ProtocolDetectingSocketHandler;
-import com.facebook.stetho.server.ServerManager;
-import com.facebook.stetho.server.SocketHandler;
-import com.facebook.stetho.server.SocketHandlerFactory;
+import com.facebook.stetho.server.LocalSocketHttpServer;
+import com.facebook.stetho.server.RegistryInitializer;
+import com.facebook.stetho.websocket.WebSocketHandler;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-import javax.annotation.Nullable;
+import org.apache.http.HttpException;
+import org.apache.http.HttpRequest;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.protocol.HttpContext;
+import org.apache.http.protocol.HttpRequestHandler;
+import org.apache.http.protocol.HttpRequestHandlerRegistry;
 
 /**
- * Initialization and configuration entry point for the Stetho debugging system.  Simple usage with
- * default plugins and features enabled:
- * <p />
+ * Initialization and configuration entry point for the Stetho debugging system.  Example usage:
+ * <p>
  * <pre>
- *   Stetho.initializeWithDefaults(context)
+ *   Stetho.initialize(Stetho.newInitializerBuilder(context)
+ *       .enableDumpapp(Stetho.defaultDumperPluginsProvider(context))
+ *       .enableWebKitInspector(Stetho.defaultInspectorModulesProvider(context))
+ *       .build());
  * </pre>
- * <p />
- * For more advanced configuration, see {@link #newInitializerBuilder(Context)} or
- * the {@code stetho-sample} for more information.
  */
 public class Stetho {
+  private static final String LISTENER_THREAD_NAME = "Stetho-Listener";
+
   private Stetho() {
   }
 
-  /**
-   * Construct a simple initializer helper which allows you to customize stetho behaviour
-   * with additional features, plugins, etc.  See {@link DefaultDumperPluginsBuilder} and
-   * {@link DefaultInspectorModulesBuilder} for more information.
-   * <p />
-   * For simple use cases, consider {@link #initializeWithDefaults(Context)}.
-   */
   public static InitializerBuilder newInitializerBuilder(Context context) {
     return new InitializerBuilder(context);
   }
@@ -100,44 +71,28 @@ public class Stetho {
    * first socket connection is received, allowing this to be safely used for debug builds on
    * even low-end hardware without noticeably affecting performance.
    */
-  public static void initializeWithDefaults(final Context context) {
-    initialize(new Initializer(context) {
-      @Override
-      protected Iterable<DumperPlugin> getDumperPlugins() {
-        return new DefaultDumperPluginsBuilder(context).finish();
-      }
-
-      @Override
-      protected Iterable<ChromeDevtoolsDomain> getInspectorModules() {
-        return new DefaultInspectorModulesBuilder(context).finish();
-      }
-    });
-  }
-
-  /**
-   * Start the listening service, providing a custom initializer as per
-   * {@link #newInitializerBuilder}.
-   *
-   * @see #initializeWithDefaults(Context)
-   */
   public static void initialize(final Initializer initializer) {
-    // Hook activity tracking so that after Stetho is attached we can figure out what
-    // activities are present.
-    boolean isTrackingActivities = ActivityTracker.get().beginTrackingIfPossible(
-        (Application)initializer.mContext.getApplicationContext());
-    if (!isTrackingActivities) {
-      LogUtil.w("Automatic activity tracking not available on this API level, caller must invoke " +
-          "ActivityTracker methods manually!");
-    }
-
-    initializer.start();
+    Thread listener = new Thread(LISTENER_THREAD_NAME) {
+      @Override
+      public void run() {
+        LocalSocketHttpServer server = new LocalSocketHttpServer(initializer);
+        try {
+          server.run();
+        } catch (IOException e) {
+          LogUtil.e(e, "Could not start Stetho");
+        }
+      }
+    };
+    listener.start();
   }
 
   public static DumperPluginsProvider defaultDumperPluginsProvider(final Context context) {
     return new DumperPluginsProvider() {
       @Override
       public Iterable<DumperPlugin> get() {
-        return new DefaultDumperPluginsBuilder(context).finish();
+        ArrayList<DumperPlugin> plugins = new ArrayList<DumperPlugin>();
+        plugins.add(new SharedPreferencesDumperPlugin(context));
+        return plugins;
       }
     };
   }
@@ -146,292 +101,67 @@ public class Stetho {
     return new InspectorModulesProvider() {
       @Override
       public Iterable<ChromeDevtoolsDomain> get() {
-        return new DefaultInspectorModulesBuilder(context).finish();
+        ArrayList<ChromeDevtoolsDomain> modules = new ArrayList<ChromeDevtoolsDomain>();
+        modules.add(new Console());
+        modules.add(new CSS());
+        modules.add(new Debugger());
+        modules.add(new DOM());
+        modules.add(new DOMStorage());
+        modules.add(new HeapProfiler());
+        modules.add(new Inspector());
+        modules.add(new Network(context));
+        modules.add(new Page());
+        modules.add(new Profiler());
+        modules.add(new Runtime());
+        modules.add(new Worker());
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+          modules.add(new Database(context));
+        }
+        return modules;
       }
     };
-  }
-
-  private static class PluginBuilder<T> {
-    private final Set<String> mProvidedNames = new HashSet<>();
-    private final Set<String> mRemovedNames = new HashSet<>();
-
-    private final ArrayList<T> mPlugins = new ArrayList<>();
-
-    private boolean mFinished;
-
-    public void provide(String name, T plugin) {
-      throwIfFinished();
-      mPlugins.add(plugin);
-      mProvidedNames.add(name);
-    }
-
-    public void provideIfDesired(String name, T plugin) {
-      throwIfFinished();
-      if (!mRemovedNames.contains(name)) {
-        if (mProvidedNames.add(name)) {
-          mPlugins.add(plugin);
-        }
-      }
-    }
-
-    public void remove(String pluginName) {
-      throwIfFinished();
-      mRemovedNames.add(pluginName);
-    }
-
-    private void throwIfFinished() {
-      if (mFinished) {
-        throw new IllegalStateException("Must not continue to build after finish()");
-      }
-    }
-
-    public Iterable<T> finish() {
-      mFinished = true;
-      return mPlugins;
-    }
-  }
-
-  /**
-   * Convenience mechanism to extend the default set of dumper plugins provided by Stetho.
-   *
-   * @see #initializeWithDefaults(Context)
-   */
-  public static final class DefaultDumperPluginsBuilder {
-    private final Context mContext;
-    private final PluginBuilder<DumperPlugin> mDelegate = new PluginBuilder<>();
-
-    public DefaultDumperPluginsBuilder(Context context) {
-      mContext = context;
-    }
-
-    public DefaultDumperPluginsBuilder provide(DumperPlugin plugin) {
-      mDelegate.provide(plugin.getName(), plugin);
-      return this;
-    }
-
-    private DefaultDumperPluginsBuilder provideIfDesired(DumperPlugin plugin) {
-      mDelegate.provideIfDesired(plugin.getName(), plugin);
-      return this;
-    }
-
-    public DefaultDumperPluginsBuilder remove(String pluginName) {
-      mDelegate.remove(pluginName);
-      return this;
-    }
-
-    public Iterable<DumperPlugin> finish() {
-      provideIfDesired(new HprofDumperPlugin(mContext));
-      provideIfDesired(new SharedPreferencesDumperPlugin(mContext));
-      provideIfDesired(new CrashDumperPlugin());
-      provideIfDesired(new FilesDumperPlugin(mContext));
-      return mDelegate.finish();
-    }
-  }
-
-  /**
-   * Configuration mechanism to customize the behaviour of the standard set of inspector
-   * modules satisfying the Chrome DevTools protocol.  Note that while it is still technically
-   * possible to manually control these modules, this API is strongly discouraged and will not
-   * necessarily be supported in future releases.
-   */
-  public static final class DefaultInspectorModulesBuilder {
-    private final Application mContext;
-    private final PluginBuilder<ChromeDevtoolsDomain> mDelegate = new PluginBuilder<>();
-
-    @Nullable private DocumentProviderFactory mDocumentProvider;
-    @Nullable private RuntimeReplFactory mRuntimeRepl;
-    @Nullable private DatabaseFilesProvider mDatabaseFilesProvider;
-    @Nullable private List<DatabaseDriver2> mDatabaseDrivers;
-    private boolean mExcludeSqliteDatabaseDriver;
-
-    public DefaultInspectorModulesBuilder(Context context) {
-      mContext = (Application)context.getApplicationContext();
-    }
-
-    /**
-     * Provide a custom document provider factory which can operate on the logical DOM exposed to
-     * Chrome in the Elements tab.  An Android View hierarchy instance is provided by
-     * default if this method is not called.
-     * <p />
-     * <i>Experimental.</i>  This API may be changed or removed in the future.
-     */
-    public DefaultInspectorModulesBuilder documentProvider(DocumentProviderFactory factory) {
-      mDocumentProvider = factory;
-      return this;
-    }
-
-    /**
-     * Provide a custom runtime REPL (read-eval-print loop) implementation for the Console tab.
-     * By default an implementation will be provided for you that automatically detects
-     * the existence of {@code stetho-js-rhino} (Mozilla's Rhino engine) and uses it if available.
-     * <p />
-     * To customize the Rhino implementation, see {@code stetho-js-rhino} documentation.
-     */
-    public DefaultInspectorModulesBuilder runtimeRepl(RuntimeReplFactory factory) {
-      mRuntimeRepl = factory;
-      return this;
-    }
-
-    /**
-     * Customize the location of database files that Stetho will propogate in the UI.  Android's
-     * {@link Context#getDatabasePath} method will be used by default if not overridden here.
-     *
-     * <p>This method is deprecated and instead it is recommended that you explicitly
-     * configure the {@link SqliteDatabaseDriver} as with:</p>
-     * <pre>
-     *   provideDatabaseDriver(
-     *     new SqliteDatabaseDriver(
-     *       context,
-     *       new MyDatabaseFilesProvider(...),
-     *       new DefaultDatabaseConnectionProvider(...)))
-     * </pre>
-     *
-     * @deprecated Use {@link #provideDatabaseDriver(DatabaseDriver2)} with
-     *     {@link SqliteDatabaseDriver} explicitly.
-     */
-    @Deprecated
-    public DefaultInspectorModulesBuilder databaseFiles(DatabaseFilesProvider provider) {
-      mDatabaseFilesProvider = provider;
-      return this;
-    }
-
-    /**
-     * @deprecated Convert your custom database driver to {@link DatabaseDriver2}.
-     */
-    @Deprecated
-    public DefaultInspectorModulesBuilder provideDatabaseDriver(Database.DatabaseDriver databaseDriver) {
-      provideDatabaseDriver(new DatabaseDriver2Adapter(databaseDriver));
-      return this;
-    }
-
-    /**
-     * Extend and provide additional database drivers.  Stetho provides two database
-     * drivers by default, with the option for developers to provide their own:
-     * <ol>
-     *   <li>{@link SqliteDatabaseDriver} - Presents SQLite databases.</li>
-     *   <li>{@link ContentProviderDatabaseDriver} - Configure and present content provider
-     *   data.</li>
-     * </ol>
-     *
-     * <p>Stetho assumes the {@link SqliteDatabaseDriver} should be installed if
-     * no driver of that type is provided and {@link #excludeSqliteDatabaseDriver} is not
-     * used.</p>
-     */
-    public DefaultInspectorModulesBuilder provideDatabaseDriver(DatabaseDriver2 databaseDriver) {
-      if (mDatabaseDrivers == null) {
-        mDatabaseDrivers = new ArrayList<>();
-      }
-      mDatabaseDrivers.add(databaseDriver);
-      return this;
-    }
-
-    /**
-     * Do not automatically provide the {@link SqliteDatabaseDriver} instance.  The instance
-     * is provided by default for backwards compatibility purposes and simplicity of API, with
-     * this API provided to disable that functionality if desired.
-     */
-    public DefaultInspectorModulesBuilder excludeSqliteDatabaseDriver(boolean exclude) {
-      mExcludeSqliteDatabaseDriver = exclude;
-      return this;
-    }
-
-    /**
-     * Provide either a new domain module or override an existing one.
-     *
-     * @deprecated This fine-grained control of the devtools modules is no longer supportable
-     *     given the lack of isolation of modules in the actual protocol (many cross dependencies
-     *     emerge when you implement more and more of the real protocol).
-     */
-    @Deprecated
-    public DefaultInspectorModulesBuilder provide(ChromeDevtoolsDomain module) {
-      mDelegate.provide(module.getClass().getName(), module);
-      return this;
-    }
-
-    private DefaultInspectorModulesBuilder provideIfDesired(ChromeDevtoolsDomain module) {
-      mDelegate.provideIfDesired(module.getClass().getName(), module);
-      return this;
-    }
-
-    /**
-     * Remove an existing domain module.
-     *
-     * @deprecated This fine-grained control of the devtools modules is no longer supportable
-     *     given the lack of isolation of modules in the actual protocol (many cross dependencies
-     *     emerge when you implement more and more of the real protocol).
-     */
-    @Deprecated
-    public DefaultInspectorModulesBuilder remove(String moduleName) {
-      mDelegate.remove(moduleName);
-      return this;
-    }
-
-    public Iterable<ChromeDevtoolsDomain> finish() {
-      provideIfDesired(new Console());
-      provideIfDesired(new Debugger());
-      DocumentProviderFactory documentModel = resolveDocumentProvider();
-      if (documentModel != null) {
-        Document document = new Document(documentModel);
-        provideIfDesired(new DOM(document));
-        provideIfDesired(new CSS(document));
-      }
-      provideIfDesired(new DOMStorage(mContext));
-      provideIfDesired(new HeapProfiler());
-      provideIfDesired(new Inspector());
-      provideIfDesired(new Network(mContext));
-      provideIfDesired(new Page(mContext));
-      provideIfDesired(new Profiler());
-      provideIfDesired(
-          new Runtime(
-              mRuntimeRepl != null ?
-              mRuntimeRepl :
-              new RhinoDetectingRuntimeReplFactory(mContext)));
-      provideIfDesired(new Worker());
-      if (Build.VERSION.SDK_INT >= DatabaseConstants.MIN_API_LEVEL) {
-        Database database = new Database();
-        boolean hasSqliteDatabaseDriver = false;
-        if (mDatabaseDrivers != null) {
-          for (DatabaseDriver2 databaseDriver : mDatabaseDrivers) {
-            database.add(databaseDriver);
-            if (databaseDriver instanceof SqliteDatabaseDriver) {
-              hasSqliteDatabaseDriver = true;
-            }
-          }
-        }
-        if (!hasSqliteDatabaseDriver && !mExcludeSqliteDatabaseDriver) {
-          database.add(
-              new SqliteDatabaseDriver(mContext,
-                  mDatabaseFilesProvider != null ?
-                      mDatabaseFilesProvider :
-                      new DefaultDatabaseFilesProvider(mContext),
-                  new DefaultDatabaseConnectionProvider()));
-        }
-        provideIfDesired(database);
-      }
-      return mDelegate.finish();
-    }
-
-    @Nullable
-    private DocumentProviderFactory resolveDocumentProvider() {
-      if (mDocumentProvider != null) {
-        return mDocumentProvider;
-      }
-      if (Build.VERSION.SDK_INT >= AndroidDocumentConstants.MIN_API_LEVEL) {
-        return new AndroidDocumentProviderFactory(mContext, Collections.<DescriptorProvider>emptyList());
-      }
-      return null;
-    }
   }
 
   /**
    * Callers can choose to subclass this directly to provide the initialization configuration
    * or they can construct a concrete instance using {@link #newInitializerBuilder(Context)}.
    */
-  public static abstract class Initializer {
+  public static abstract class Initializer implements RegistryInitializer {
     private final Context mContext;
 
     protected Initializer(Context context) {
       mContext = context.getApplicationContext();
+    }
+
+    @Override
+    public final HttpRequestHandlerRegistry getRegistry() {
+      HttpRequestHandlerRegistry registry = new HttpRequestHandlerRegistry();
+
+      Iterable<DumperPlugin> dumperPlugins = getDumperPlugins();
+      if (dumperPlugins != null) {
+        Dumper dumper = new Dumper(dumperPlugins);
+
+        registry.register("/dumpapp", new StreamingDumpappHandler(mContext, dumper));
+        registry.register("/dumpapp-raw", new RawDumpappHandler(mContext, dumper));
+      }
+
+      Iterable<ChromeDevtoolsDomain> inspectorModules = getInspectorModules();
+      if (inspectorModules != null) {
+        ChromeDiscoveryHandler discoveryHandler =
+            new ChromeDiscoveryHandler(
+                mContext,
+                ChromeDevtoolsServer.PATH);
+        discoveryHandler.register(registry);
+        registry.register(
+            ChromeDevtoolsServer.PATH,
+            new WebSocketHandler(mContext, new ChromeDevtoolsServer(inspectorModules)));
+      }
+
+      addCustomEntries(registry);
+
+      registry.register("/*", new LoggingCatchAllHandler());
+
+      return registry;
     }
 
     @Nullable
@@ -440,53 +170,21 @@ public class Stetho {
     @Nullable
     protected abstract Iterable<ChromeDevtoolsDomain> getInspectorModules();
 
-    final void start() {
-      // Note that _devtools_remote is a magic suffix understood by Chrome which causes
-      // the discovery process to begin.
-      LocalSocketServer server = new LocalSocketServer(
-          "main",
-          AddressNameHelper.createCustomAddress("_devtools_remote"),
-          new LazySocketHandler(new RealSocketHandlerFactory()));
-
-      ServerManager serverManager = new ServerManager(server);
-      serverManager.start();
+    protected void addCustomEntries(HttpRequestHandlerRegistry registry) {
+      // Override to add stuff...
     }
 
-    private class RealSocketHandlerFactory implements SocketHandlerFactory {
+    private static class LoggingCatchAllHandler implements HttpRequestHandler {
       @Override
-      public SocketHandler create() {
-        ProtocolDetectingSocketHandler socketHandler =
-            new ProtocolDetectingSocketHandler(mContext);
-
-        Iterable<DumperPlugin> dumperPlugins = getDumperPlugins();
-        if (dumperPlugins != null) {
-          Dumper dumper = new Dumper(dumperPlugins);
-
-          socketHandler.addHandler(
-              new ProtocolDetectingSocketHandler.ExactMagicMatcher(
-                  DumpappSocketLikeHandler.PROTOCOL_MAGIC),
-              new DumpappSocketLikeHandler(dumper));
-
-          // Support the old HTTP-based protocol since it's relatively straight forward to do.
-          DumpappHttpSocketLikeHandler legacyHandler = new DumpappHttpSocketLikeHandler(dumper);
-          socketHandler.addHandler(
-              new ProtocolDetectingSocketHandler.ExactMagicMatcher(
-                  "GET /dumpapp".getBytes()),
-              legacyHandler);
-          socketHandler.addHandler(
-              new ProtocolDetectingSocketHandler.ExactMagicMatcher(
-                  "POST /dumpapp".getBytes()),
-              legacyHandler);
-        }
-
-        Iterable<ChromeDevtoolsDomain> inspectorModules = getInspectorModules();
-        if (inspectorModules != null) {
-          socketHandler.addHandler(
-              new ProtocolDetectingSocketHandler.AlwaysMatchMatcher(),
-              new DevtoolsSocketHandler(mContext, inspectorModules));
-        }
-
-        return socketHandler;
+      public void handle(
+          HttpRequest request,
+          HttpResponse response,
+          HttpContext context)
+          throws HttpException, IOException {
+        LogUtil.w("Unsupported request received: " + request.getRequestLine());
+        response.setStatusCode(HttpStatus.SC_NOT_FOUND);
+        response.setReasonPhrase("Not Found");
+        response.setEntity(new StringEntity("Endpoint not implemented\n", Utf8Charset.NAME));
       }
     }
   }

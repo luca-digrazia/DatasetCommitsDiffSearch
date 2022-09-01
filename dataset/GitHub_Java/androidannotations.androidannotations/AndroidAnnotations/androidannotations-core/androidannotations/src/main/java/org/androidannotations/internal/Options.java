@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,14 +19,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 
 import javax.annotation.processing.ProcessingEnvironment;
 
 import org.androidannotations.Option;
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.holder.BaseGeneratedClassHolder;
-import org.androidannotations.internal.generation.CodeModelGenerator;
 import org.androidannotations.internal.helper.AndroidManifestFinder;
 import org.androidannotations.internal.rclass.ProjectRClassFinder;
 import org.androidannotations.logger.LoggerContext;
@@ -41,18 +38,13 @@ public class Options {
 	public Options(ProcessingEnvironment processingEnvironment) {
 		options = processingEnvironment.getOptions();
 		addSupportedOption(AndroidManifestFinder.OPTION_MANIFEST);
-		addSupportedOption(AndroidManifestFinder.OPTION_LIBRARY);
-		addSupportedOption(AndroidManifestFinder.OPTION_INSTANT_FEATURE);
 		addSupportedOption(ProjectRClassFinder.OPTION_RESOURCE_PACKAGE_NAME);
-		addSupportedOption(ProjectRClassFinder.OPTION_USE_R2);
 		addSupportedOption(ModelConstants.OPTION_CLASS_SUFFIX);
 		addSupportedOption(FileAppender.OPTION_LOG_FILE);
 		addSupportedOption(LoggerContext.OPTION_LOG_LEVEL);
 		addSupportedOption(LoggerContext.OPTION_LOG_APPENDER_CONSOLE);
 		addSupportedOption(LoggerContext.OPTION_LOG_APPENDER_FILE);
 		addSupportedOption(BaseGeneratedClassHolder.OPTION_GENERATE_FINAL_CLASSES);
-		addSupportedOption(CodeModelGenerator.OPTION_ENCODING);
-		addSupportedOption(AndroidAnnotationProcessor.OPTION_INCREMENTAL);
 	}
 
 	public void addAllSupportedOptions(List<Option> options) {
@@ -88,12 +80,6 @@ public class Options {
 	}
 
 	public Set<String> getSupportedOptions() {
-		if (getBoolean(AndroidAnnotationProcessor.OPTION_INCREMENTAL)) {
-			Set<String> withIncremental = new TreeSet<>(supportedOptions.keySet());
-			withIncremental.add("org.gradle.annotation.processing.isolating");
-			return withIncremental;
-		}
-
 		return supportedOptions.keySet();
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -44,7 +44,7 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 public abstract class LLVMInternalTruffleObject implements TruffleObject {
 
     @ExportMessage
-    @SuppressWarnings("static-method")
+    @SuppressWarnings({"unused", "static-method"})
     public final boolean hasLanguage() {
         return true;
     }

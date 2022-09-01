@@ -1,22 +1,12 @@
 package com.codahale.metrics.health;
 
-import com.codahale.metrics.Clock;
 import org.junit.Test;
 
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class HealthCheckTest {
-
-    private static final DateTimeFormatter DATE_TIME_FORMATTER =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-
     private static class ExampleHealthCheck extends HealthCheck {
         private final HealthCheck underlying;
 
@@ -25,7 +15,7 @@ public class HealthCheckTest {
         }
 
         @Override
-        protected Result check() {
+        protected Result check() throws Exception {
             return underlying.execute();
         }
     }
@@ -34,7 +24,7 @@ public class HealthCheckTest {
     private final HealthCheck healthCheck = new ExampleHealthCheck(underlying);
 
     @Test
-    public void canHaveHealthyResults() {
+    public void canHaveHealthyResults() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.healthy();
 
         assertThat(result.isHealthy())
@@ -48,7 +38,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveHealthyResultsWithMessages() {
+    public void canHaveHealthyResultsWithMessages() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.healthy("woo");
 
         assertThat(result.isHealthy())
@@ -62,7 +52,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveHealthyResultsWithFormattedMessages() {
+    public void canHaveHealthyResultsWithFormattedMessages() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.healthy("foo %s", "bar");
 
         assertThat(result.isHealthy())
@@ -76,7 +66,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveUnhealthyResults() {
+    public void canHaveUnhealthyResults() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.unhealthy("bad");
 
         assertThat(result.isHealthy())
@@ -90,7 +80,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveUnhealthyResultsWithFormattedMessages() {
+    public void canHaveUnhealthyResultsWithFormattedMessages() throws Exception {
         final HealthCheck.Result result = HealthCheck.Result.unhealthy("foo %s %d", "bar", 123);
 
         assertThat(result.isHealthy())
@@ -104,7 +94,7 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveUnhealthyResultsWithExceptions() {
+    public void canHaveUnhealthyResultsWithExceptions() throws Exception {
         final RuntimeException e = mock(RuntimeException.class);
         when(e.getMessage()).thenReturn("oh noes");
 
@@ -121,159 +111,22 @@ public class HealthCheckTest {
     }
 
     @Test
-    public void canHaveHealthyBuilderWithFormattedMessage() {
-        final HealthCheck.Result result = HealthCheck.Result.builder()
-                .healthy()
-                .withMessage("There are %d %s in the %s", 42, "foos", "bar")
-                .build();
-
-        assertThat(result.isHealthy())
-                .isTrue();
-
-        assertThat(result.getMessage())
-                .isEqualTo("There are 42 foos in the bar");
-    }
-
-    @Test
-    public void canHaveHealthyBuilderWithDetail() {
-        final HealthCheck.Result result = HealthCheck.Result.builder()
-                .healthy()
-                .withDetail("detail", "value")
-                .build();
-
-        assertThat(result.isHealthy())
-                .isTrue();
-
-        assertThat(result.getMessage())
-                .isNull();
-
-        assertThat(result.getError())
-                .isNull();
-
-        assertThat(result.getDetails())
-                .containsEntry("detail", "value");
-    }
-
-    @Test
-    public void canHaveUnHealthyBuilderWithDetail() {
-        final HealthCheck.Result result = HealthCheck.Result.builder()
-                .unhealthy()
-                .withDetail("detail", "value")
-                .build();
-
-        assertThat(result.isHealthy())
-                .isFalse();
-
-        assertThat(result.getMessage())
-                .isNull();
-
-        assertThat(result.getError())
-                .isNull();
-
-        assertThat(result.getDetails())
-                .containsEntry("detail", "value");
-    }
-
-    @Test
-    public void canHaveUnHealthyBuilderWithDetailAndError() {
-        final RuntimeException e = mock(RuntimeException.class);
-        when(e.getMessage()).thenReturn("oh noes");
-
-        final HealthCheck.Result result = HealthCheck.Result
-                .builder()
-                .unhealthy(e)
-                .withDetail("detail", "value")
-                .build();
-
-        assertThat(result.isHealthy())
-                .isFalse();
-
-        assertThat(result.getMessage())
-                .isEqualTo("oh noes");
-
-        assertThat(result.getError())
-                .isEqualTo(e);
-
-        assertThat(result.getDetails())
-                .containsEntry("detail", "value");
-    }
-
-    @Test
-    public void returnsResultsWhenExecuted() {
+    public void returnsResultsWhenExecuted() throws Exception {
         final HealthCheck.Result result = mock(HealthCheck.Result.class);
         when(underlying.execute()).thenReturn(result);
 
         assertThat(healthCheck.execute())
                 .isEqualTo(result);
-
-        verify(result).setDuration(anyLong());
     }
 
     @Test
-    public void wrapsExceptionsWhenExecuted() {
+    public void wrapsExceptionsWhenExecuted() throws Exception {
         final RuntimeException e = mock(RuntimeException.class);
         when(e.getMessage()).thenReturn("oh noes");
 
         when(underlying.execute()).thenThrow(e);
-        HealthCheck.Result actual = healthCheck.execute();
 
-        assertThat(actual.isHealthy())
-                .isFalse();
-        assertThat(actual.getMessage())
-                .isEqualTo("oh noes");
-        assertThat(actual.getError())
-                .isEqualTo(e);
-        assertThat(actual.getDetails())
-                .isNull();
-        assertThat(actual.getDuration())
-                .isGreaterThanOrEqualTo(0);
-    }
-
-    @Test
-    public void canHaveUserSuppliedClockForTimestamp() {
-        ZonedDateTime dateTime = ZonedDateTime.now().minusMinutes(10);
-        Clock clock = clockWithFixedTime(dateTime);
-
-        HealthCheck.Result result = HealthCheck.Result.builder()
-                .healthy()
-                .usingClock(clock)
-                .build();
-
-        assertThat(result.isHealthy()).isTrue();
-
-        assertThat(result.getTime()).isEqualTo(clock.getTime());
-
-        assertThat(result.getTimestamp())
-                .isEqualTo(DATE_TIME_FORMATTER.format(dateTime));
-    }
-
-    @Test
-    public void toStringWorksEvenForNullAttributes() {
-        ZonedDateTime dateTime = ZonedDateTime.now().minusMinutes(25);
-        Clock clock = clockWithFixedTime(dateTime);
-
-        final HealthCheck.Result resultWithNullDetailValue = HealthCheck.Result.builder()
-                .unhealthy()
-                .withDetail("aNullDetail", null)
-                .usingClock(clock)
-                .build();
-        assertThat(resultWithNullDetailValue.toString())
-                .contains(
-                        "Result{isHealthy=false, duration=0, timestamp=" + DATE_TIME_FORMATTER.format(dateTime),
-                        ", aNullDetail=null}");
-    }
-
-    private static Clock clockWithFixedTime(ZonedDateTime dateTime) {
-        return new Clock() {
-            @Override
-            public long getTick() {
-                return 0;
-            }
-
-            @Override
-            public long getTime() {
-                return dateTime.toInstant().toEpochMilli();
-            }
-        };
+        assertThat(healthCheck.execute())
+                .isEqualTo(HealthCheck.Result.unhealthy(e));
     }
 }

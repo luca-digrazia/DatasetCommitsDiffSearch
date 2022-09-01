@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,19 +15,19 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
 public class EReceiverHolder extends EComponentHolder {
 
@@ -52,17 +51,17 @@ public class EReceiverHolder extends EComponentHolder {
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, getCodeModel().VOID, "init" + generationSuffix());
-		contextRef = init.param(getClasses().CONTEXT, "context");
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
+		contextRef = init.param(classes().CONTEXT, "context");
 		if (onReceiveMethod == null) {
 			createOnReceive();
 		}
 	}
 
 	private void createOnReceive() {
-		onReceiveMethod = generatedClass.method(PUBLIC, getCodeModel().VOID, "onReceive");
-		onReceiveContext = onReceiveMethod.param(getClasses().CONTEXT, "context");
-		onReceiveIntent = onReceiveMethod.param(getClasses().INTENT, "intent");
+		onReceiveMethod = generatedClass.method(PUBLIC, codeModel().VOID, "onReceive");
+		onReceiveContext = onReceiveMethod.param(classes().CONTEXT, "context");
+		onReceiveIntent = onReceiveMethod.param(classes().INTENT, "intent");
 		onReceiveMethod.annotate(Override.class);
 		onReceiveBody = onReceiveMethod.body();
 		onReceiveBody.invoke(getInit()).arg(onReceiveContext);
@@ -71,12 +70,12 @@ public class EReceiverHolder extends EComponentHolder {
 
 	private void setOnReceiveIntentAction() {
 		JInvocation getActionInvocation = JExpr.invoke(getOnReceiveIntent(), "getAction");
-		onReceiveIntentAction = getOnReceiveBody().decl(getClasses().STRING, "action", getActionInvocation);
+		onReceiveIntentAction = getOnReceiveBody().decl(classes().STRING, "action", getActionInvocation);
 	}
 
 	private void setOnReceiveIntentDataScheme() {
 		JInvocation getDataSchemeInvocation = JExpr.invoke(getOnReceiveIntent(), "getScheme");
-		onReceiveIntentDataScheme = getOnReceiveBody().decl(getClasses().STRING, "dataScheme", getDataSchemeInvocation);
+		onReceiveIntentDataScheme = getOnReceiveBody().decl(classes().STRING, "dataScheme", getDataSchemeInvocation);
 	}
 
 	public JMethod getOnReceiveMethod() {

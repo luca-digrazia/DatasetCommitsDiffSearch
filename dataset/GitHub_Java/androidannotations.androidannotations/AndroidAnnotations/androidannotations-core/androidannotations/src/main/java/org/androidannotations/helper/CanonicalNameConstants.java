@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -49,10 +48,6 @@ public final class CanonicalNameConstants {
 	public static final String LONG = Long.class.getCanonicalName();
 	public static final String ARRAYLIST = ArrayList.class.getCanonicalName();
 	public static final String SERIALIZABLE = Serializable.class.getCanonicalName();
-	public static final String BYTE = Byte.class.getCanonicalName();
-	public static final String SHORT = Short.class.getCanonicalName();
-	public static final String CHAR = Character.class.getCanonicalName();
-	public static final String DOUBLE = Double.class.getCanonicalName();
 
 	/*
 	 * Android
@@ -63,9 +58,6 @@ public final class CanonicalNameConstants {
 	public static final String INTENT_FILTER = "android.content.IntentFilter";
 	public static final String COMPONENT_NAME = "android.content.ComponentName";
 	public static final String BUNDLE = "android.os.Bundle";
-	public static final String IBINDER = "android.os.IBinder";
-	public static final String SPARSE_ARRAY = "android.util.SparseArray";
-	public static final String SPARSE_BOOLEAN_ARRAY = "android.util.SparseBooleanArray";
 	public static final String APPLICATION = "android.app.Application";
 	public static final String ACTIVITY = "android.app.Activity";
 	public static final String EDITABLE = "android.text.Editable";
@@ -85,7 +77,6 @@ public final class CanonicalNameConstants {
 	public static final String VIEW_GROUP = "android.view.ViewGroup";
 	public static final String CONTEXT = "android.content.Context";
 	public static final String KEY_EVENT = "android.view.KeyEvent";
-	public static final String KEY_EVENT_CALLBACK = "android.view.KeyEvent.Callback";
 	public static final String LAYOUT_INFLATER = "android.view.LayoutInflater";
 	public static final String FRAGMENT_ACTIVITY = "android.support.v4.app.FragmentActivity";
 	public static final String FRAGMENT = "android.app.Fragment";
@@ -123,44 +114,14 @@ public final class CanonicalNameConstants {
 	public static final String PREFERENCE_ACTIVITY = "android.preference.PreferenceActivity";
 	public static final String PREFERENCE_FRAGMENT = "android.preference.PreferenceFragment";
 	public static final String SUPPORT_V4_PREFERENCE_FRAGMENT = "android.support.v4.preference.PreferenceFragment";
-	public static final String SUPPORT_V7_PREFERENCE_FRAGMENTCOMPAT = "android.support.v7.preference.PreferenceFragmentCompat";
-	public static final String SUPPORT_V14_PREFERENCE_FRAGMENT = "android.support.v14.preference.PreferenceFragment";
 	public static final String MACHINARIUS_V4_PREFERENCE_FRAGMENT = "com.github.machinarius.preferencefragment.PreferenceFragment";
 	public static final String ACTIVITY_COMPAT = "android.support.v4.app.ActivityCompat";
 	public static final String CONTEXT_COMPAT = "android.support.v4.content.ContextCompat";
 	public static final String PREFERENCE = "android.preference.Preference";
-	public static final String SUPPORT_V7_PREFERENCE = "android.support.v7.preference.Preference";
 	public static final String PREFERENCE_CHANGE_LISTENER = "android.preference.Preference.OnPreferenceChangeListener";
-	public static final String SUPPORT_V7_PREFERENCE_CHANGE_LISTENER = "android.support.v7.preference.Preference.OnPreferenceChangeListener";
 	public static final String PREFERENCE_CLICK_LISTENER = "android.preference.Preference.OnPreferenceClickListener";
-	public static final String SUPPORT_V7_PREFERENCE_CLICK_LISTENER = "android.support.v7.preference.Preference.OnPreferenceClickListener";
 	public static final String PREFERENCE_ACTIVITY_HEADER = "android.preference.PreferenceActivity.Header";
 	public static final String APP_WIDGET_MANAGER = "android.appwidget.AppWidgetManager";
-	public static final String WIFI_MANAGER = "android.net.wifi.WifiManager";
-	public static final String AUDIO_MANAGER = "android.media.AudioManager";
-	public static final String ACTIONBAR_ACTIVITY = "android.support.v7.app.ActionBarActivity";
-	public static final String APPCOMPAT_ACTIVITY = "android.support.v7.app.AppCompatActivity";
-	public static final String VIEW_PAGER = "android.support.v4.view.ViewPager";
-	public static final String PAGE_CHANGE_LISTENER = "android.support.v4.view.ViewPager.OnPageChangeListener";
-
-	/*
-	 * Android X
-	 */
-	public static final String ANDROIDX_ACTIVITY_COMPAT = "androidx.core.app.ActivityCompat";
-	public static final String ANDROIDX_FRAGMENT = "androidx.fragment.app.Fragment";
-	public static final String ANDROIDX_FRAGMENT_ACTIVITY = "androidx.fragment.app.FragmentActivity";
-	public static final String ANDROIDX_LOCAL_BROADCAST_MANAGER = "androidx.localbroadcastmanager.content.LocalBroadcastManager";
-	public static final String ANDROIDX_CONTEXT_COMPAT = "androidx.core.content.ContextCompat";
-	public static final String ANDROIDX_PREFERENCE = "androidx.preference.Preference";
-	public static final String ANDROIDX_PREFERENCE_FRAGMENT = "androidx.preference.PreferenceFragment";
-	public static final String ANDROIDX_PREFERENCE_FRAGMENTCOMPAT = "androidx.preference.PreferenceFragmentCompat";
-	public static final String ANDROIDX_PREFERENCE_CLICK_LISTENER = "androidx.preference.Preference.OnPreferenceClickListener";
-	public static final String ANDROIDX_PREFERENCE_CHANGE_LISTENER = "androidx.preference.Preference.OnPreferenceChangeListener";
-	public static final String ANDROIDX_APPCOMPAT_ACTIVITY = "androidx.appcompat.app.AppCompatActivity";
-	public static final String ANDROIDX_VIEW_PAGER = "androidx.viewpager.widget.ViewPager";
-	public static final String ANDROIDX_PAGE_CHANGE_LISTENER = "androidx.viewpager.widget.ViewPager.OnPageChangeListener";
-	public static final String ANDROIDX_DATA_BINDING_UTIL = "androidx.databinding.DataBindingUtil";
-	public static final String ANDROIDX_VIEW_DATA_BINDING = "androidx.databinding.ViewDataBinding";
 
 	/*
 	 * Android permission
@@ -180,13 +141,10 @@ public final class CanonicalNameConstants {
 	public static final String SINGLE_CLIENT_CONN_MANAGER = "org.apache.http.impl.conn.SingleClientConnManager";
 
 	/*
-	 * Parceler
+	 * Otto
 	 */
-	public static final String PARCEL_ANNOTATION = "org.parceler.Parcel";
-	public static final String PARCELS_UTILITY_CLASS = "org.parceler.Parcels";
-
-	public static final String DATA_BINDING_UTIL = "android.databinding.DataBindingUtil";
-	public static final String VIEW_DATA_BINDING = "android.databinding.ViewDataBinding";
+	public static final String SUBSCRIBE = "com.squareup.otto.Subscribe";
+	public static final String PRODUCE = "com.squareup.otto.Produce";
 
 	private CanonicalNameConstants() {
 	}

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,10 +25,8 @@ import java.lang.annotation.Target;
  * Should be used on {@link org.androidannotations.annotations.EActivity
  * EActivity} or {@link org.androidannotations.annotations.EFragment EFragment}
  * classes which are subclass of {@link android.preference.PreferenceActivity
- * PreferenceActivity} or <code>PreferenceFragment</code> or
- * <code>android.support.v7.preference.PreferenceFragmentCompat</code> or
- * <code>android.support.v14.PreferenceFragment</code>, to inject the preference
- * screen from resource.
+ * PreferenceActivity} or <code>PreferenceFragment</code>, to inject the
+ * preference screen from resource.
  * </p>
  * <p>
  * The annotation value should be one of R.xml.* fields.
@@ -65,17 +62,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface PreferenceScreen {
 
-	/**
-	 * The R.xml.* field which refers to the Preference Screen.
-	 * 
-	 * @return the identifier of the Preference Screen
-	 */
 	int value() default ResId.DEFAULT_VALUE;
 
-	/**
-	 * The resource name which refers to the Preference Screen.
-	 * 
-	 * @return the identifier of the Preference Screen
-	 */
 	String resName() default "";
 }

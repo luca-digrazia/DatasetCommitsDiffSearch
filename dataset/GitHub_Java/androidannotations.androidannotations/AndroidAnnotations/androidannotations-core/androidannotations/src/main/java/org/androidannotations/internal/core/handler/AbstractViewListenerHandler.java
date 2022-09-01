@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,7 +15,7 @@
  */
 package org.androidannotations.internal.core.handler;
 
-import static com.helger.jcodemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._new;
 
 import java.util.List;
 
@@ -28,9 +27,9 @@ import org.androidannotations.holder.EComponentWithViewSupportHolder;
 import org.androidannotations.holder.FoundViewHolder;
 import org.androidannotations.rclass.IRClass.Res;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JFieldRef;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JFieldRef;
 
 public abstract class AbstractViewListenerHandler extends AbstractListenerHandler<EComponentWithViewSupportHolder> {
 
@@ -51,14 +50,13 @@ public abstract class AbstractViewListenerHandler extends AbstractListenerHandle
 	@Override
 	protected final void assignListeners(EComponentWithViewSupportHolder holder, List<JFieldRef> idsRefs, JDefinedClass listenerAnonymousClass) {
 		for (JFieldRef idRef : idsRefs) {
-			AbstractJClass listenerTargetClass = getListenerTargetClass(holder);
-			FoundViewHolder foundViewHolder = holder.getFoundViewHolder(idRef, listenerTargetClass);
-			foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getOrCastRef(listenerTargetClass), getSetterName()).arg(_new(listenerAnonymousClass));
+			FoundViewHolder foundViewHolder = holder.getFoundViewHolder(idRef, getListenerTargetClass());
+			foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getRef(), getSetterName()).arg(_new(listenerAnonymousClass));
 		}
 	}
 
 	@Override
-	protected AbstractJClass getListenerTargetClass(EComponentWithViewSupportHolder holder) {
+	protected JClass getListenerTargetClass() {
 		return getClasses().VIEW;
 	}
 

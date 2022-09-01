@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,9 +15,9 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JMod.FINAL;
-import static com.helger.jcodemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JMod.FINAL;
+import static com.sun.codemodel.JMod.PRIVATE;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.Arrays;
@@ -29,13 +28,14 @@ import java.util.Set;
 
 import org.androidannotations.annotations.Receiver.RegisterAt;
 
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JFieldVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
 
 public class ReceiverRegistrationDelegate<T extends EComponentHolder & HasReceiverRegistration> extends GeneratedClassHolderDelegate<T> {
 
 	private Map<IntentFilterData, JFieldVar> intentFilterFields = new HashMap<>();
+	private IllegalStateException illegalStateException = new IllegalStateException("This shouldn't happen unless the validation is bad");
 
 	public ReceiverRegistrationDelegate(T holder) {
 		super(holder);
@@ -52,8 +52,8 @@ public class ReceiverRegistrationDelegate<T extends EComponentHolder & HasReceiv
 
 	private JFieldVar createIntentFilterField(IntentFilterData intentFilterData) {
 		String intentFilterName = "intentFilter" + (intentFilterFields.size() + 1) + generationSuffix();
-		IJExpression newIntentFilterExpr = _new(getClasses().INTENT_FILTER);
-		JFieldVar intentFilterField = getGeneratedClass().field(PRIVATE | FINAL, getClasses().INTENT_FILTER, intentFilterName, newIntentFilterExpr);
+		JExpression newIntentFilterExpr = _new(classes().INTENT_FILTER);
+		JFieldVar intentFilterField = getGeneratedClass().field(PRIVATE | FINAL, classes().INTENT_FILTER, intentFilterName, newIntentFilterExpr);
 
 		JBlock intentFilterTarget = holder.getIntentFilterInitializationBlock(intentFilterData);
 		for (String action : intentFilterData.getActionSet()) {
@@ -64,6 +64,26 @@ public class ReceiverRegistrationDelegate<T extends EComponentHolder & HasReceiv
 		}
 
 		return intentFilterField;
+	}
+
+	public JBlock getOnStartAfterSuperBlock() {
+		throw illegalStateException;
+	}
+
+	public JBlock getOnStopBeforeSuperBlock() {
+		throw illegalStateException;
+	}
+
+	public JBlock getOnPauseBeforeSuperBlock() {
+		throw illegalStateException;
+	}
+
+	public JBlock getOnAttachAfterSuperBlock() {
+		throw illegalStateException;
+	}
+
+	public JBlock getOnDetachBeforeSuperBlock() {
+		throw illegalStateException;
 	}
 
 	public static class IntentFilterData {

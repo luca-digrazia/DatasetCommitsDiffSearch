@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,8 +25,8 @@ import java.lang.annotation.Target;
  * Injects an {@link SharedPref} annotated class in any enhanced class.
  * </p>
  * <p>
- * The field or method parameter MUST be of a type that is generated using
- * {@link SharedPref} and therefore extends
+ * The field MUST be of a type that is generated using {@link SharedPref} and
+ * therefore extends
  * {@link org.androidannotations.api.sharedpreferences.SharedPreferencesHelper
  * SharedPreferencesHelper}.
  * </p>
@@ -45,11 +44,6 @@ import java.lang.annotation.Target;
  * 
  * 	&#064;Pref
  * 	<b>mypackage.MyPref_</b> myPref;
- * 
- * 	&#064;Pref
- * 	void methodInjection(<b>mypackage.MyPref_</b> myPref) {
- * 		// do stuff	
- * 	}	
  * }
  * 
  * 
@@ -66,6 +60,6 @@ import java.lang.annotation.Target;
  * @see SharedPref
  */
 @Retention(RetentionPolicy.CLASS)
-@Target({ ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER })
+@Target(ElementType.FIELD)
 public @interface Pref {
 }

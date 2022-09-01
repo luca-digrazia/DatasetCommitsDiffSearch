@@ -2,77 +2,37 @@ package org.hswebframework.web.authorization.token.redis;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.commons.collections.CollectionUtils;
 import org.hswebframework.web.authorization.exception.AccessDenyException;
 import org.hswebframework.web.authorization.token.AllopatricLoginMode;
 import org.hswebframework.web.authorization.token.TokenState;
 import org.hswebframework.web.authorization.token.UserToken;
 import org.hswebframework.web.authorization.token.UserTokenManager;
-import org.hswebframework.web.authorization.token.event.UserTokenChangedEvent;
-import org.hswebframework.web.authorization.token.event.UserTokenCreatedEvent;
-import org.hswebframework.web.authorization.token.event.UserTokenRemovedEvent;
-import org.hswebframework.web.bean.FastBeanCopier;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
-import org.springframework.data.redis.core.*;
-import org.springframework.data.redis.serializer.RedisSerializationContext;
-import org.springframework.data.redis.serializer.RedisSerializer;
+import org.springframework.data.redis.core.ReactiveHashOperations;
+import org.springframework.data.redis.core.ReactiveRedisOperations;
+import org.springframework.data.redis.core.ReactiveSetOperations;
+import org.springframework.data.redis.core.ScanOptions;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class RedisUserTokenManager implements UserTokenManager {
 
-    private final ReactiveRedisOperations<Object, Object> operations;
+    private ReactiveRedisOperations<Object, Object> operations;
 
-    private final ReactiveHashOperations<Object, String, Object> userTokenStore;
+    private ReactiveHashOperations<Object, String, Object> userTokenStore;
 
-    private final ReactiveSetOperations<Object, Object> userTokenMapping;
-
-    @Setter
-    private Map<String, SimpleUserToken> localCache = new ConcurrentHashMap<>();
-
-    private FluxSink<UserToken> touchSink;
+    private ReactiveSetOperations<Object, Object> userTokenMapping;
 
     public RedisUserTokenManager(ReactiveRedisOperations<Object, Object> operations) {
         this.operations = operations;
         this.userTokenStore = operations.opsForHash();
         this.userTokenMapping = operations.opsForSet();
-        this.operations
-                .listenToChannel("_user_token_removed")
-                .subscribe(msg -> localCache.remove(String.valueOf(msg.getMessage())));
-
-        Flux.<UserToken>create(sink -> this.touchSink = sink)
-                .buffer(Flux.interval(Duration.ofSeconds(10)), HashSet::new)
-                .flatMap(list -> Flux
-                        .fromIterable(list)
-                        .flatMap(token -> operations
-                                .expire(getTokenRedisKey(token.getToken()), Duration.ofMillis(token.getMaxInactiveInterval()))
-                                .then())
-                        .onErrorResume(err -> Mono.empty()))
-                .subscribe();
-
-    }
-
-    @SuppressWarnings("all")
-    public RedisUserTokenManager(ReactiveRedisConnectionFactory connectionFactory) {
-        this(new ReactiveRedisTemplate<>(connectionFactory,
-                                         RedisSerializationContext
-                                                 .newSerializationContext()
-                                                 .key((RedisSerializer) RedisSerializer.string())
-                                                 .value(RedisSerializer.java())
-                                                 .hashKey(RedisSerializer.string())
-                                                 .hashValue(RedisSerializer.java())
-                                                 .build()
-        ));
     }
 
     @Getter
@@ -84,9 +44,6 @@ public class RedisUserTokenManager implements UserTokenManager {
     //异地登录模式，默认允许异地登录
     private AllopatricLoginMode allopatricLoginMode = AllopatricLoginMode.allow;
 
-    @Setter
-    private ApplicationEventPublisher eventPublisher;
-
     private String getTokenRedisKey(String key) {
         return "user-token:".concat(key);
     }
@@ -97,17 +54,11 @@ public class RedisUserTokenManager implements UserTokenManager {
 
     @Override
     public Mono<UserToken> getByToken(String token) {
-        SimpleUserToken inCache = localCache.get(token);
-        if (inCache != null && inCache.isNormal()) {
-            return Mono.just(inCache);
-        }
         return userTokenStore
                 .entries(getTokenRedisKey(token))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
-                .filter(map -> !map.isEmpty())
-                .map(SimpleUserToken::of)
-                .doOnNext(userToken -> localCache.put(userToken.getToken(), userToken))
-                .cast(UserToken.class);
+                .filter(map->!map.isEmpty())
+                .map(SimpleUserToken::of);
     }
 
     @Override
@@ -118,7 +69,7 @@ public class RedisUserTokenManager implements UserTokenManager {
                 .map(String::valueOf)
                 .flatMap(token -> getByToken(token)
                         .switchIfEmpty(Mono.defer(() -> userTokenMapping
-                                .remove(redisKey, token)
+                                .remove(redisKey, userId)
                                 .then(Mono.empty()))));
     }
 
@@ -136,59 +87,47 @@ public class RedisUserTokenManager implements UserTokenManager {
     @Override
     public Mono<Integer> totalUser() {
 
-        return operations
-                .scan(ScanOptions
-                              .scanOptions()
-                              .match("*user-token-user:*")
-                              .build())
-                .count()
-                .map(Long::intValue);
+        return totalToken();
     }
 
     @Override
     public Mono<Integer> totalToken() {
-        return operations
-                .scan(ScanOptions
-                              .scanOptions()
-                              .match("*user-token:*")
-                              .build())
+        return operations.scan(ScanOptions
+                .scanOptions()
+                .match("user-token:*")
+                .build())
                 .count()
                 .map(Long::intValue);
     }
 
     @Override
     public Flux<UserToken> allLoggedUser() {
-        return operations
-                .scan(ScanOptions
-                              .scanOptions()
-                              .match("*user-token:*")
-                              .build())
-                .map(val -> String.valueOf(val).substring(11))
+        return operations.scan(ScanOptions
+                .scanOptions()
+                .match("user-token:*")
+                .build())
+                .map(String::valueOf)
                 .flatMap(this::getByToken);
     }
 
     @Override
     public Mono<Void> signOutByUserId(String userId) {
-        return this
-                .getByUserId(userId)
-                .flatMap(userToken -> operations
-                        .delete(getTokenRedisKey(userToken.getToken()))
-                        .then(onTokenRemoved(userToken)))
-                .then(operations.delete(getUserRedisKey(userId)))
+        String key = getUserRedisKey(userId);
+        return getByUserId(key)
+                .map(UserToken::getToken)
+                .map(this::getTokenRedisKey)
+                .concatWithValues(key)
+                .as(operations::delete)
                 .then();
     }
 
     @Override
     public Mono<Void> signOutByToken(String token) {
         //delete token
-        //srem user token
+        // srem user token
         return getByToken(token)
-                .flatMap(t -> operations
-                        .delete(getTokenRedisKey(t.getToken()))
-                        .then(userTokenMapping.remove(getUserRedisKey(t.getToken()), token))
-                        .then(onTokenRemoved(t))
-                )
-                .then();
+                .flatMap(t -> operations.delete(getTokenRedisKey(t.getToken()))
+                        .then(userTokenMapping.remove(getUserRedisKey(t.getToken())))).then();
     }
 
     @Override
@@ -201,86 +140,73 @@ public class RedisUserTokenManager implements UserTokenManager {
 
     @Override
     public Mono<Void> changeTokenState(String token, TokenState state) {
-
-        return getByToken(token)
-                .flatMap(old -> {
-                    SimpleUserToken newToken = FastBeanCopier.copy(old, new SimpleUserToken());
-                    newToken.setState(state);
-                    return userTokenStore
-                            .put(getTokenRedisKey(token), "state", state.getValue())
-                            .then(onTokenChanged(old, newToken));
-                });
+        return userTokenStore
+                .put(getTokenRedisKey(token), "state", state.getValue())
+                .then();
     }
 
     @Override
     public Mono<UserToken> signIn(String token, String type, String userId, long maxInactiveInterval) {
-        return Mono
-                .defer(() -> {
-                    Mono<SimpleUserToken> doSign = Mono.defer(() -> {
-                        Map<String, Object> map = new HashMap<>();
-                        map.put("token", token);
-                        map.put("type", type);
-                        map.put("userId", userId);
-                        map.put("maxInactiveInterval", maxInactiveInterval);
-                        map.put("state", TokenState.normal.getValue());
-                        map.put("signInTime", System.currentTimeMillis());
-                        map.put("lastRequestTime", System.currentTimeMillis());
+        return Mono.defer(() -> {
+            Mono<UserToken> doSign = Mono.defer(() -> {
+                Map<String, Object> map = new HashMap<>();
+                map.put("token", token);
+                map.put("type", type);
+                map.put("userId", userId);
+                map.put("maxInactiveInterval", maxInactiveInterval);
+                map.put("state", TokenState.normal.getValue());
+                map.put("signInTime", System.currentTimeMillis());
+                map.put("lastRequestTime", System.currentTimeMillis());
 
-                        String key = getTokenRedisKey(token);
-                        return userTokenStore
-                                .putAll(key, map)
-                                .then(Mono.defer(() -> {
-                                    if (maxInactiveInterval > 0) {
-                                        return operations.expire(key, Duration.ofMillis(maxInactiveInterval));
-                                    }
-                                    return Mono.empty();
-                                }))
-                                .then(userTokenMapping.add(getUserRedisKey(userId), token))
-                                .thenReturn(SimpleUserToken.of(map));
-                    });
+                String key = getTokenRedisKey(token);
+                return userTokenStore
+                        .putAll(key, map)
+                        .then(Mono.defer(() -> {
+                            if (maxInactiveInterval > 0) {
+                                return operations.expire(key, Duration.ofMillis(maxInactiveInterval));
+                            }
+                            return Mono.empty();
+                        }))
+                        .then(userTokenMapping.add(getUserRedisKey(userId),token))
+                        .thenReturn(SimpleUserToken.of(map));
+            });
 
-                    AllopatricLoginMode mode = allopatricLoginModes.getOrDefault(type, allopatricLoginMode);
-                    if (mode == AllopatricLoginMode.deny) {
-                        return userIsLoggedIn(userId)
-                                .flatMap(r -> {
-                                    if (r) {
-                                        return Mono.error(new AccessDenyException("error.logged_in_elsewhere", TokenState.deny.getValue()));
-                                    }
-                                    return doSign;
-                                });
+            AllopatricLoginMode mode = allopatricLoginModes.getOrDefault(type, allopatricLoginMode);
+            if (mode == AllopatricLoginMode.deny) {
+                return userIsLoggedIn(userId)
+                        .flatMap(r -> {
+                            if (r) {
+                                return Mono.error(new AccessDenyException("已在其他地方登录", TokenState.deny.getValue(), null));
+                            }
+                            return doSign;
+                        });
 
-                    } else if (mode == AllopatricLoginMode.offlineOther) {
-                        return getByUserId(userId)
-                                .flatMap(userToken -> {
-                                    if (type.equals(userToken.getType())) {
-                                        return this.changeTokenState(userToken.getToken(), TokenState.offline);
-                                    }
-                                    return Mono.empty();
-                                })
-                                .then(doSign);
-                    }
+            } else if (mode == AllopatricLoginMode.offlineOther) {
+                return getByUserId(userId)
+                        .flatMap(userToken -> {
+                            if (type.equals(userToken.getType())) {
+                                return this.changeTokenState(userToken.getToken(), TokenState.offline);
+                            }
+                            return Mono.empty();
+                        })
+                        .then(doSign);
+            }
 
-                    return doSign;
-                })
-                .flatMap(this::onUserTokenCreated);
+            return doSign;
+        });
     }
 
 
     @Override
     public Mono<Void> touch(String token) {
-        SimpleUserToken inCache = localCache.get(token);
-        if (inCache != null && inCache.isNormal()) {
-            inCache.setLastRequestTime(System.currentTimeMillis());
-            if (inCache.getMaxInactiveInterval() > 0) {
-                //异步touch
-                touchSink.next(inCache);
-            }
-            return Mono.empty();
-        }
         return getByToken(token)
                 .flatMap(userToken -> {
                     if (userToken.getMaxInactiveInterval() > 0) {
-                        touchSink.next(userToken);
+                        return userTokenStore
+                                .increment(getTokenRedisKey(token), token, 1L)
+                                .then(operations
+                                        .expire(getTokenRedisKey(token), Duration.ofMillis(userToken.getMaxInactiveInterval()))
+                                        .then());
                     }
                     return Mono.empty();
                 });
@@ -289,14 +215,13 @@ public class RedisUserTokenManager implements UserTokenManager {
     @Override
     public Mono<Void> checkExpiredToken() {
 
-        return operations
-                .scan(ScanOptions.scanOptions().match("*user-token-user:*").build())
+        return operations.scan(ScanOptions
+                .scanOptions()
+                .match("user-token-user:*").build())
                 .map(String::valueOf)
-                .flatMap(key -> userTokenMapping
-                        .members(key)
+                .flatMap(key -> userTokenMapping.members(key)
                         .map(String::valueOf)
-                        .flatMap(token -> operations
-                                .hasKey(getTokenRedisKey(token))
+                        .flatMap(token -> operations.hasKey(getTokenRedisKey(token))
                                 .flatMap(exists -> {
                                     if (!exists) {
                                         return userTokenMapping.remove(key, token);
@@ -305,39 +230,4 @@ public class RedisUserTokenManager implements UserTokenManager {
                                 })))
                 .then();
     }
-
-    private Mono<Void> notifyTokenRemoved(String token) {
-        return operations.convertAndSend("_user_token_removed", token).then();
-    }
-
-    private Mono<Void> onTokenRemoved(UserToken token) {
-        localCache.remove(token.getToken());
-
-        if (eventPublisher == null) {
-            return notifyTokenRemoved(token.getToken());
-        }
-        return Mono.fromRunnable(() -> eventPublisher.publishEvent(new UserTokenRemovedEvent(token)))
-                   .then(notifyTokenRemoved(token.getToken()));
-    }
-
-    private Mono<Void> onTokenChanged(UserToken old, SimpleUserToken newToken) {
-        localCache.put(newToken.getToken(), newToken);
-        if (eventPublisher == null) {
-            return notifyTokenRemoved(newToken.getToken());
-        }
-        return Mono.fromRunnable(() -> eventPublisher.publishEvent(new UserTokenChangedEvent(old, newToken)));
-    }
-
-    private Mono<UserToken> onUserTokenCreated(SimpleUserToken token) {
-        localCache.put(token.getToken(), token);
-        if (eventPublisher == null) {
-            return notifyTokenRemoved(token.getToken())
-                    .thenReturn(token);
-        }
-        return Mono
-                .fromRunnable(() -> eventPublisher.publishEvent(new UserTokenCreatedEvent(token)))
-                .then(notifyTokenRemoved(token.getToken()))
-                .thenReturn(token);
-    }
-
 }

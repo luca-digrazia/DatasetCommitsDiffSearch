@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,7 +15,7 @@
  */
 package org.androidannotations.internal.core.handler;
 
-import static com.helger.jcodemodel.JExpr.invoke;
+import static com.sun.codemodel.JExpr.invoke;
 
 import java.util.List;
 
@@ -33,18 +32,19 @@ import org.androidannotations.helper.IdValidatorHelper;
 import org.androidannotations.holder.GeneratedClassHolder;
 import org.androidannotations.rclass.IRClass;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
 public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> extends BaseAnnotationHandler<T> {
 
+	private T holder;
 	private String methodName;
 
 	public AbstractListenerHandler(Class<?> targetClass, AndroidAnnotationsEnvironment environment) {
@@ -70,6 +70,7 @@ public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> ex
 
 	@Override
 	public void process(Element element, T holder) {
+		this.holder = holder;
 		methodName = element.getSimpleName().toString();
 
 		ExecutableElement executableElement = (ExecutableElement) element;
@@ -78,13 +79,13 @@ public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> ex
 
 		List<JFieldRef> idsRefs = annotationHelper.extractAnnotationFieldRefs(element, getResourceType(), true);
 
-		JDefinedClass listenerAnonymousClass = getCodeModel().anonymousClass(getListenerClass(holder));
+		JDefinedClass listenerAnonymousClass = getCodeModel().anonymousClass(getListenerClass());
 		JMethod listenerMethod = createListenerMethod(listenerAnonymousClass);
 		listenerMethod.annotate(Override.class);
 
 		JBlock listenerMethodBody = listenerMethod.body();
 
-		IJExpression activityRef = holder.getGeneratedClass().staticRef("this");
+		JExpression activityRef = holder.getGeneratedClass().staticRef("this");
 		JInvocation call = invoke(activityRef, methodName);
 
 		makeCall(listenerMethodBody, call, returnType);
@@ -94,11 +95,11 @@ public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> ex
 		assignListeners(holder, idsRefs, listenerAnonymousClass);
 	}
 
-	protected final IJExpression castArgumentIfNecessary(T holder, String baseType, JVar param, Element element) {
-		IJExpression argument = param;
+	protected final JExpression castArgumentIfNecessary(T holder, String baseType, JVar param, Element element) {
+		JExpression argument = param;
 		TypeMirror typeMirror = element.asType();
 		if (!baseType.equals(typeMirror.toString())) {
-			AbstractJClass typeMirrorToJClass = codeModelHelper.typeMirrorToJClass(typeMirror);
+			JClass typeMirrorToJClass = codeModelHelper.typeMirrorToJClass(typeMirror);
 			argument = JExpr.cast(typeMirrorToJClass, param);
 		}
 		return argument;
@@ -107,8 +108,7 @@ public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> ex
 	protected final boolean isTypeOrSubclass(String baseType, Element element) {
 		TypeMirror typeMirror = element.asType();
 		TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(baseType);
-
-		return typeElement != null && annotationHelper.isSubtype(typeMirror, typeElement.asType());
+		return annotationHelper.isSubtype(typeMirror, typeElement.asType());
 	}
 
 	protected abstract void assignListeners(T holder, List<JFieldRef> idsRefs, JDefinedClass listenerAnonymousClass);
@@ -121,12 +121,16 @@ public abstract class AbstractListenerHandler<T extends GeneratedClassHolder> ex
 
 	protected abstract String getSetterName();
 
-	protected abstract AbstractJClass getListenerClass(T holder);
+	protected abstract JClass getListenerClass();
 
-	protected abstract AbstractJClass getListenerTargetClass(T holder);
+	protected abstract JClass getListenerTargetClass();
 
 	protected String getMethodName() {
 		return methodName;
+	}
+
+	protected final T getHolder() {
+		return holder;
 	}
 
 	protected abstract IRClass.Res getResourceType();

@@ -7,12 +7,7 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
-import androidx.annotation.Keep;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import android.text.TextUtils;
-
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
 
 import java.io.InputStream;
 import java.util.List;
@@ -31,27 +26,20 @@ public class SkiaImageDecoder implements ImageDecoder {
 
     private final Bitmap.Config bitmapConfig;
 
-    @Keep
-    @SuppressWarnings("unused")
     public SkiaImageDecoder() {
         this(null);
     }
 
-    @SuppressWarnings({"WeakerAccess", "SameParameterValue"})
-    public SkiaImageDecoder(@Nullable Bitmap.Config bitmapConfig) {
-        Bitmap.Config globalBitmapConfig = SubsamplingScaleImageView.getPreferredBitmapConfig();
-        if (bitmapConfig != null) {
-            this.bitmapConfig = bitmapConfig;
-        } else if (globalBitmapConfig != null) {
-            this.bitmapConfig = globalBitmapConfig;
-        } else {
+    public SkiaImageDecoder(Bitmap.Config bitmapConfig) {
+        if (bitmapConfig == null) {
             this.bitmapConfig = Bitmap.Config.RGB_565;
+        } else {
+            this.bitmapConfig = bitmapConfig;
         }
     }
 
     @Override
-    @NonNull
-    public Bitmap decode(Context context, @NonNull Uri uri) throws Exception {
+    public Bitmap decode(Context context, Uri uri) throws Exception {
         String uriString = uri.toString();
         BitmapFactory.Options options = new BitmapFactory.Options();
         Bitmap bitmap;
@@ -93,7 +81,7 @@ public class SkiaImageDecoder implements ImageDecoder {
                 bitmap = BitmapFactory.decodeStream(inputStream, null, options);
             } finally {
                 if (inputStream != null) {
-                    try { inputStream.close(); } catch (Exception e) { /* Ignore */ }
+                    try { inputStream.close(); } catch (Exception e) { }
                 }
             }
         }

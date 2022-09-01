@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.runtime;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -25,11 +26,9 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
-import com.google.devtools.build.lib.actions.ActionProgressEvent;
 import com.google.devtools.build.lib.actions.ActionScanningCompletedEvent;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.CachingActionEvent;
 import com.google.devtools.build.lib.actions.RunningActionEvent;
 import com.google.devtools.build.lib.actions.ScanningActionEvent;
 import com.google.devtools.build.lib.actions.SchedulingActionEvent;
@@ -40,6 +39,7 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransportClosedEvent;
 import com.google.devtools.build.lib.buildtool.ExecutionProgressReceiver;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
+import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionProgressReceiverAvailableEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteEvent;
 import com.google.devtools.build.lib.clock.Clock;
@@ -59,36 +59,32 @@ import java.util.ArrayDeque;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.ThreadSafe;
 
-/** Tracks state for the UI. */
-final class UiStateTracker {
-
+/** An experimental state tracker for the new experimental UI. */
+class UiStateTracker {
   enum ProgressMode {
     OLDEST_ACTIONS,
     MNEMONIC_HISTOGRAM
   }
 
-  private static final long SHOW_TIME_THRESHOLD_SECONDS = 3;
-  private static final String ELLIPSIS = "...";
-  private static final String FETCH_PREFIX = "    Fetching ";
-  private static final String AND_MORE = " ...";
-  private static final String NO_STATUS = "-----";
-  private static final int STATUS_LENGTH = 5;
+  static final long SHOW_TIME_THRESHOLD_SECONDS = 3;
+  static final String ELLIPSIS = "...";
+  static final String FETCH_PREFIX = "    Fetching ";
+  static final String AND_MORE = " ...";
+  static final String NO_STATUS = "-----";
+  static final int STATUS_LENGTH = 5;
 
-  private static final int NANOS_PER_SECOND = 1000000000;
-  private static final String URL_PROTOCOL_SEP = "://";
+  static final int NANOS_PER_SECOND = 1000000000;
+  static final String URL_PROTOCOL_SEP = "://";
 
   private ProgressMode progressMode = ProgressMode.OLDEST_ACTIONS;
   private int sampleSize = 3;
@@ -112,23 +108,23 @@ final class UiStateTracker {
    */
   @ThreadSafe
   @VisibleForTesting
-  static final class StrategyIds {
+  static class StrategyIds {
     /** Fallback name in case we exhaust our space for IDs. */
-    static final String FALLBACK_NAME = "unknown";
+    public static final String FALLBACK_NAME = "unknown";
 
     /** Counter of unique strategies seen so far. */
-    private final AtomicInteger counter = new AtomicInteger(0);
+    private AtomicInteger counter = new AtomicInteger(0);
 
     /** Mapping of strategy names to their unique IDs. */
-    private final Map<String, Integer> strategyIds = new ConcurrentHashMap<>();
+    private Map<String, Integer> strategyIds = new ConcurrentHashMap<>();
 
     /** Mapping of strategy unique IDs to their names. */
-    private final Map<Integer, String> strategyNames = new ConcurrentHashMap<>();
+    private Map<Integer, String> strategyNames = new ConcurrentHashMap<>();
 
-    final Integer fallbackId;
+    public final Integer fallbackId;
 
     /** Constructs a new collection of strategy IDs. */
-    StrategyIds() {
+    public StrategyIds() {
       fallbackId = getId(FALLBACK_NAME);
     }
 
@@ -150,13 +146,13 @@ final class UiStateTracker {
     }
 
     /** Flattens a bitmap of strategy IDs into a human-friendly string. */
-    String formatNames(int bitmap) {
+    public String formatNames(int bitmap) {
       StringBuilder builder = new StringBuilder();
       int mask = 0x1;
       while (bitmap != 0) {
         int id = bitmap & mask;
         if (id != 0) {
-          String name = checkNotNull(strategyNames.get(id), "Unknown strategy with id %s", id);
+          String name = checkNotNull(strategyNames.get(id), "Unknown strategy with id " + id);
           builder.append(name);
           bitmap &= ~mask;
           if (bitmap != 0) {
@@ -177,7 +173,7 @@ final class UiStateTracker {
    * <p>We cannot make assumptions on the order in which action state events come in, so this class
    * takes care of always "advancing" the state of an action.
    */
-  private static final class ActionState {
+  private static class ActionState {
     /**
      * The action this state belongs to.
      *
@@ -199,13 +195,6 @@ final class UiStateTracker {
     boolean scanning;
 
     /**
-     * Bitmap of strategies that are checking the cache of this action.
-     *
-     * <p>If non-zero, implies that {@link #scanning} is false.
-     */
-    int cachingStrategiesBitmap = 0;
-
-    /**
      * Bitmap of strategies that are scheduling this action.
      *
      * <p>If non-zero, implies that {@link #scanning} is false.
@@ -219,24 +208,19 @@ final class UiStateTracker {
      */
     int runningStrategiesBitmap = 0;
 
-    private static class ProgressState {
-      final String id;
-      final long nanoStartTime;
-      ActionProgressEvent latestEvent;
-
-      private ProgressState(String id, long nanoStartTime) {
-        this.id = id;
-        this.nanoStartTime = nanoStartTime;
-      }
-    }
-
-    @GuardedBy("this")
-    private final LinkedHashMap<String, ProgressState> runningProgresses = new LinkedHashMap<>();
-
     /** Starts tracking the state of an action. */
     ActionState(ActionExecutionMetadata action, long nanoStartTime) {
       this.action = action;
       this.nanoStartTime = nanoStartTime;
+    }
+
+    /** Creates a deep copy of this action state. */
+    synchronized ActionState deepCopy() {
+      ActionState other = new ActionState(action, nanoStartTime);
+      other.scanning = scanning;
+      other.schedulingStrategiesBitmap = schedulingStrategiesBitmap;
+      other.runningStrategiesBitmap = runningStrategiesBitmap;
+      return other;
     }
 
     /** Computes the weight of this action for the global active actions counter. */
@@ -253,9 +237,7 @@ final class UiStateTracker {
      * scheduled or running.
      */
     synchronized void setScanning(long nanoChangeTime) {
-      if (cachingStrategiesBitmap == 0
-          && schedulingStrategiesBitmap == 0
-          && runningStrategiesBitmap == 0) {
+      if (schedulingStrategiesBitmap == 0 && runningStrategiesBitmap == 0) {
         scanning = true;
         nanoStartTime = nanoChangeTime;
       }
@@ -268,25 +250,8 @@ final class UiStateTracker {
      * scheduled or running.
      */
     synchronized void setStopScanning(long nanoChangeTime) {
-      if (cachingStrategiesBitmap == 0
-          && schedulingStrategiesBitmap == 0
-          && runningStrategiesBitmap == 0) {
+      if (schedulingStrategiesBitmap == 0 && runningStrategiesBitmap == 0) {
         scanning = false;
-        nanoStartTime = nanoChangeTime;
-      }
-    }
-
-    /**
-     * Marks the action as caching with the given strategy.
-     *
-     * <p>Because we may receive events out of order, this does nothing if the action is already
-     * scheduled or running with this strategy.
-     */
-    synchronized void setCaching(String strategy, long nanoChangeTime) {
-      int id = strategyIds.getId(strategy);
-      if ((schedulingStrategiesBitmap & id) == 0 && (runningStrategiesBitmap & id) == 0) {
-        scanning = false;
-        cachingStrategiesBitmap |= id;
         nanoStartTime = nanoChangeTime;
       }
     }
@@ -301,7 +266,6 @@ final class UiStateTracker {
       int id = strategyIds.getId(strategy);
       if ((runningStrategiesBitmap & id) == 0) {
         scanning = false;
-        cachingStrategiesBitmap &= ~id;
         schedulingStrategiesBitmap |= id;
         nanoStartTime = nanoChangeTime;
       }
@@ -316,31 +280,9 @@ final class UiStateTracker {
     synchronized void setRunning(String strategy, long nanoChangeTime) {
       scanning = false;
       int id = strategyIds.getId(strategy);
-      cachingStrategiesBitmap &= ~id;
       schedulingStrategiesBitmap &= ~id;
       runningStrategiesBitmap |= id;
       nanoStartTime = nanoChangeTime;
-    }
-
-    /** Handles the progress event for the action. */
-    synchronized void onProgressEvent(ActionProgressEvent event, long nanoChangeTime) {
-      String id = event.progressId();
-      if (event.finished()) {
-        // a progress is finished, clean it up
-        runningProgresses.remove(id);
-        return;
-      }
-
-      ProgressState state =
-          runningProgresses.computeIfAbsent(id, key -> new ProgressState(key, nanoChangeTime));
-      state.latestEvent = event;
-    }
-
-    synchronized Optional<ProgressState> firstProgress() {
-      if (runningProgresses.isEmpty()) {
-        return Optional.empty();
-      }
-      return Optional.of(runningProgresses.entrySet().iterator().next().getValue());
     }
 
     /** Generates a human-readable description of this action's state. */
@@ -349,8 +291,6 @@ final class UiStateTracker {
         return "Running";
       } else if (schedulingStrategiesBitmap != 0) {
         return "Scheduling";
-      } else if (cachingStrategiesBitmap != 0) {
-        return "Caching";
       } else if (scanning) {
         return "Scanning";
       } else {
@@ -390,7 +330,7 @@ final class UiStateTracker {
   private ConfiguredTargetProgressReceiver configuredTargetProgressReceiver;
 
   // Set of build event protocol transports that need yet to be closed.
-  private final Set<BuildEventTransport> bepOpenTransports = new HashSet<>();
+  private Set<BuildEventTransport> bepOpenTransports = new HashSet<>();
   // The point in time when closing of BEP transports was started.
   private long bepTransportClosingStartTimeMillis;
 
@@ -417,7 +357,7 @@ final class UiStateTracker {
     this.sampleSize = Math.max(1, sampleSize);
   }
 
-  void buildStarted() {
+  void buildStarted(BuildStartingEvent event) {
     status = "Loading";
     additionalMessage = "";
   }
@@ -437,7 +377,7 @@ final class UiStateTracker {
     if (count == 1) {
       additionalMessage = "target " + Iterables.getOnlyElement(event.getLabels());
     } else {
-      additionalMessage = count + " targets";
+      additionalMessage = "" + count + " targets";
     }
   }
 
@@ -470,7 +410,7 @@ final class UiStateTracker {
     defaultActivity = "checking cached actions";
   }
 
-  void buildComplete(BuildCompleteEvent event) {
+  void buildComplete(BuildCompleteEvent event, String additionalInfo) {
     buildComplete = true;
     // Build event protocol transports are closed right after the build complete event.
     bepTransportClosingStartTimeMillis = clock.currentTimeMillis();
@@ -480,13 +420,15 @@ final class UiStateTracker {
       int actionsCompleted = this.actionsCompleted.get();
       if (failedTests == 0) {
         additionalMessage =
-            "Build completed successfully, "
+            additionalInfo
+                + "Build completed successfully, "
                 + actionsCompleted
                 + " total action"
                 + (actionsCompleted == 1 ? "" : "s");
       } else {
         additionalMessage =
-            "Build completed, "
+            additionalInfo
+                + "Build completed, "
                 + failedTests
                 + " test"
                 + (failedTests == 1 ? "" : "s")
@@ -498,8 +440,12 @@ final class UiStateTracker {
     } else {
       ok = false;
       status = "FAILED";
-      additionalMessage = "Build did NOT complete successfully";
+      additionalMessage = additionalInfo + "Build did NOT complete successfully";
     }
+  }
+
+  void buildComplete(BuildCompleteEvent event) {
+    buildComplete(event, "");
   }
 
   synchronized void downloadProgress(FetchProgress event) {
@@ -557,13 +503,6 @@ final class UiStateTracker {
     getActionState(action, actionId, now).setStopScanning(now);
   }
 
-  void cachingAction(CachingActionEvent event) {
-    ActionExecutionMetadata action = event.action();
-    Artifact actionId = action.getPrimaryOutput();
-    long now = clock.nanoTime();
-    getActionState(action, actionId, now).setCaching(event.strategy(), now);
-  }
-
   void schedulingAction(SchedulingActionEvent event) {
     ActionExecutionMetadata action = event.getActionMetadata();
     Artifact actionId = event.getActionMetadata().getPrimaryOutput();
@@ -578,17 +517,11 @@ final class UiStateTracker {
     getActionState(action, actionId, now).setRunning(event.getStrategy(), now);
   }
 
-  void actionProgress(ActionProgressEvent event) {
-    ActionExecutionMetadata action = event.action();
-    Artifact actionId = event.action().getPrimaryOutput();
-    long now = clock.nanoTime();
-    getActionState(action, actionId, now).onProgressEvent(event, now);
-  }
-
   void actionCompletion(ActionScanningCompletedEvent event) {
     Action action = event.getAction();
     Artifact actionId = action.getPrimaryOutput();
-    checkNotNull(activeActions.remove(actionId), "%s not active after %s", actionId, event);
+    checkState(activeActions.containsKey(actionId));
+    activeActions.remove(actionId);
 
     // As callers to the experimental state tracker assume we will fully report the new state once
     // informed of an action completion, we need to make sure the progress receiver is aware of the
@@ -603,7 +536,8 @@ final class UiStateTracker {
     Action action = event.getAction();
     Artifact actionId = action.getPrimaryOutput();
 
-    checkNotNull(activeActions.remove(actionId), "%s not active after %s", actionId, event);
+    checkState(activeActions.containsKey(actionId));
+    activeActions.remove(actionId);
 
     if (action.getOwner() != null) {
       Label owner = action.getOwner().getLabel();
@@ -639,7 +573,7 @@ final class UiStateTracker {
    * If possible come up with a human-readable description of the label that fits within the given
    * width; a non-positive width indicates not no restriction at all.
    */
-  private static String shortenedLabelString(Label label, int width) {
+  private String shortenedLabelString(Label label, int width) {
     if (width <= 0) {
       return label.toString();
     }
@@ -663,7 +597,7 @@ final class UiStateTracker {
     return label.toString();
   }
 
-  private static String shortenedString(String s, int maxWidth) {
+  private String shortenedString(String s, int maxWidth) {
     if (maxWidth <= 3 * ELLIPSIS.length() || s.length() <= maxWidth) {
       return s;
     }
@@ -679,8 +613,8 @@ final class UiStateTracker {
     // Leave enough room for at least 3 samples of run times, each 4 characters
     // (a digit, 's', comma, and space).
     int labelWidth = desiredWidth - prefix.length() - labelSep.length() - postfix.length() - 12;
-    StringBuilder message =
-        new StringBuilder(prefix).append(shortenedLabelString(owner, labelWidth)).append(labelSep);
+    StringBuffer message =
+        new StringBuffer(prefix).append(shortenedLabelString(owner, labelWidth)).append(labelSep);
 
     // Compute the remaining width for the sample times, but if the desired width is too small
     // anyway, then show at least one sample.
@@ -714,29 +648,6 @@ final class UiStateTracker {
     return message.append(allReported ? "]" : postfix).toString();
   }
 
-  private String describeActionProgress(ActionState action, int desiredWidth) {
-    Optional<ActionState.ProgressState> stateOpt = action.firstProgress();
-    if (!stateOpt.isPresent()) {
-      return "";
-    }
-
-    ActionState.ProgressState state = stateOpt.get();
-    ActionProgressEvent event = state.latestEvent;
-    String message = event.progress();
-    if (message.isEmpty()) {
-      message = state.id;
-    }
-
-    message = "; " + message;
-
-    if (desiredWidth <= 0 || message.length() <= desiredWidth) {
-      return message;
-    }
-
-    message = message.substring(0, desiredWidth - ELLIPSIS.length()) + ELLIPSIS;
-    return message;
-  }
-
   // Describe an action by a string of the desired length; if describing that action includes
   // describing other actions, add those to the to set of actions to skip in further samples of
   // actions.
@@ -763,8 +674,6 @@ final class UiStateTracker {
     String strategy = null;
     if (actionState.runningStrategiesBitmap != 0) {
       strategy = strategyIds.formatNames(actionState.runningStrategiesBitmap);
-    } else if (actionState.cachingStrategiesBitmap != 0) {
-      strategy = strategyIds.formatNames(actionState.cachingStrategiesBitmap);
     } else {
       String status = actionState.describe();
       if (status == null) {
@@ -790,24 +699,9 @@ final class UiStateTracker {
       message = action.prettyPrint();
     }
 
-    String progress = describeActionProgress(actionState, 0);
-
-    if (desiredWidth <= 0
-        || (prefix.length() + message.length() + progress.length() + postfix.length())
-            <= desiredWidth) {
-      return prefix + message + progress + postfix;
+    if (desiredWidth <= 0) {
+      return prefix + message + postfix;
     }
-
-    // We have to shorten the progress to fit into the line.
-    int remainingWidthForProgress =
-        desiredWidth - prefix.length() - message.length() - postfix.length();
-    int minWidthForProgress = 7; // "; " + at least two character + "..."
-    if (remainingWidthForProgress >= minWidthForProgress) {
-      progress = describeActionProgress(actionState, remainingWidthForProgress);
-      return prefix + message + progress + postfix;
-    }
-
-    // We have to skip the progress to fit into the line.
     if (prefix.length() + message.length() + postfix.length() <= desiredWidth) {
       return prefix + message + postfix;
     }
@@ -880,9 +774,9 @@ final class UiStateTracker {
     if (actionsCount == 1) {
       return " 1 action running";
     } else if (actionsCount == executingActionsCount) {
-      return actionsCount + " actions running";
+      return "" + actionsCount + " actions running";
     } else {
-      return actionsCount + " actions, " + executingActionsCount + " running";
+      return "" + actionsCount + " actions, " + executingActionsCount + " running";
     }
   }
 
@@ -905,8 +799,7 @@ final class UiStateTracker {
     List<Multiset.Entry<String>> sorted =
         mnemonicHistogram.entrySet().stream()
             .collect(
-                Comparators.greatest(
-                    sampleSize, Comparator.comparingLong(Multiset.Entry::getCount)));
+                Comparators.greatest(sampleSize, Comparator.comparingLong((e) -> e.getCount())));
     for (Multiset.Entry<String> entry : sorted) {
       terminalWriter.newline().append("    " + entry.getElement() + " " + entry.getCount());
     }
@@ -962,7 +855,7 @@ final class UiStateTracker {
     }
   }
 
-  synchronized void testFilteringComplete(TestFilteringCompleteEvent event) {
+  public synchronized void testFilteringComplete(TestFilteringCompleteEvent event) {
     if (event.getTestTargets() != null) {
       totalTests = event.getTestTargets().size();
       for (ConfiguredTarget target : event.getTestTargets()) {
@@ -976,8 +869,7 @@ final class UiStateTracker {
   public synchronized void testSummary(TestSummary summary) {
     completedTests++;
     mostRecentTest = summary;
-    if ((summary.getStatus() != BlazeTestStatus.PASSED)
-        && (summary.getStatus() != BlazeTestStatus.FLAKY)) {
+    if (summary.getStatus() != BlazeTestStatus.PASSED) {
       failedTests++;
     }
   }
@@ -1012,7 +904,10 @@ final class UiStateTracker {
     if (status != null) {
       return false;
     }
-    return !activeActions.isEmpty();
+    if (activeActions.size() >= 1) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -1044,17 +939,19 @@ final class UiStateTracker {
     }
   }
 
-  private static String shortenUrl(String url, int width) {
+  private String shortenUrl(String url, int width) {
+
     if (url.length() < width) {
       return url;
     }
 
     // Try to shorten to the form prot://host/.../rest/path/filename
+    String prefix = "";
     int protocolIndex = url.indexOf(URL_PROTOCOL_SEP);
     if (protocolIndex > 0) {
-      String prefix = url.substring(0, protocolIndex + URL_PROTOCOL_SEP.length() + 1);
+      prefix = url.substring(0, protocolIndex + URL_PROTOCOL_SEP.length() + 1);
       url = url.substring(protocolIndex + URL_PROTOCOL_SEP.length() + 1);
-      int hostIndex = url.indexOf('/');
+      int hostIndex = url.indexOf("/");
       if (hostIndex > 0) {
         prefix = prefix + url.substring(0, hostIndex + 1);
         url = url.substring(hostIndex + 1);
@@ -1063,7 +960,7 @@ final class UiStateTracker {
         // significantly longer (twice as long) as the ellipsis symbol introduced
         if (targetLength > 3 * ELLIPSIS.length()) {
           String shortPath = suffix(url, targetLength - ELLIPSIS.length());
-          int slashPos = shortPath.indexOf('/');
+          int slashPos = shortPath.indexOf("/");
           if (slashPos >= 0) {
             return prefix + ELLIPSIS + shortPath.substring(slashPos);
           } else {
@@ -1091,13 +988,13 @@ final class UiStateTracker {
     long downloadSeconds = nanoDownloadTime / NANOS_PER_SECOND;
 
     String progress = download.getProgress();
-    if (!progress.isEmpty()) {
+    if (progress.length() > 0) {
       postfix = postfix + " " + progress;
     }
     if (downloadSeconds > SHOW_TIME_THRESHOLD_SECONDS) {
       postfix = postfix + " " + downloadSeconds + "s";
     }
-    if (!postfix.isEmpty()) {
+    if (postfix.length() > 0) {
       postfix = ";" + postfix;
     }
     url = shortenUrl(url, Math.max(width - postfix.length(), 3 * ELLIPSIS.length()));
@@ -1191,7 +1088,7 @@ final class UiStateTracker {
           terminalWriter.append(", " + configuredTargetProgressReceiver.getProgressString());
         }
         terminalWriter.append(")");
-        if (!progress.getSecond().isEmpty() && !shortVersion) {
+        if (progress.getSecond().length() > 0 && !shortVersion) {
           terminalWriter.newline().append("    " + progress.getSecond());
         }
       }
@@ -1204,7 +1101,7 @@ final class UiStateTracker {
     if (packageProgressReceiver != null) {
       Pair<String, String> progress = packageProgressReceiver.progressState();
       terminalWriter.okStatus().append("Loading:").normal().append(" " + progress.getFirst());
-      if (!progress.getSecond().isEmpty()) {
+      if (progress.getSecond().length() > 0) {
         terminalWriter.newline().append("    " + progress.getSecond());
       }
       if (!shortVersion) {
@@ -1222,7 +1119,7 @@ final class UiStateTracker {
     if (completedTests > 0) {
       terminalWriter.normal().append(" " + completedTests + " / " + totalTests + " tests");
       if (failedTests > 0) {
-        terminalWriter.append(", ").failStatus().append(failedTests + " failed").normal();
+        terminalWriter.append(", ").failStatus().append("" + failedTests + " failed").normal();
       }
       terminalWriter.append(";");
     }

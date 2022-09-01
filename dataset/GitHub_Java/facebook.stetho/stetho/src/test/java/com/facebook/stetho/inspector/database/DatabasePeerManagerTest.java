@@ -1,9 +1,4 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.database;
 
@@ -30,7 +25,7 @@ public class DatabasePeerManagerTest {
         new File("baz.db"), new File("baz.db-somethingelse"),
         new File("dangling.db-journal")
     };
-    List<File> tidied = SqliteDatabaseDriver.tidyDatabaseList(Arrays.asList(databases));
+    List<File> tidied = DatabasePeerManager.tidyDatabaseList(Arrays.asList(databases));
     assertArrayEquals(expected, tidied.toArray());
   }
 }

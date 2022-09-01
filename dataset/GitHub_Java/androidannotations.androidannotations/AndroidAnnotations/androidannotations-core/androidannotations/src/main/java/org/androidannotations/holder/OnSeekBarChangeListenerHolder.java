@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,13 +15,13 @@
  */
 package org.androidannotations.holder;
 
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JMod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JVar;
 
-public class OnSeekBarChangeListenerHolder {
+public class OnSeekBarChangeListenerHolder  {
 
 	private EComponentWithViewSupportHolder holder;
 	private JDefinedClass listenerClass;
@@ -44,26 +43,26 @@ public class OnSeekBarChangeListenerHolder {
 	}
 
 	private void createOnProgressChanged() {
-		JMethod onProgressChangedMethod = listenerClass.method(JMod.PUBLIC, holder.getCodeModel().VOID, "onProgressChanged");
+		JMethod onProgressChangedMethod = listenerClass.method(JMod.PUBLIC, holder.codeModel().VOID, "onProgressChanged");
 		onProgressChangedMethod.annotate(Override.class);
 		onProgressChangedBody = onProgressChangedMethod.body();
-		onProgressChangedSeekBarParam = onProgressChangedMethod.param(holder.getClasses().SEEKBAR, "seekBar");
-		onProgressChangedProgressParam = onProgressChangedMethod.param(holder.getCodeModel().INT, "progress");
-		onProgressChangedFromUserParam = onProgressChangedMethod.param(holder.getCodeModel().BOOLEAN, "fromUser");
+		onProgressChangedSeekBarParam = onProgressChangedMethod.param(holder.classes().SEEKBAR, "seekBar");
+		onProgressChangedProgressParam = onProgressChangedMethod.param(holder.codeModel().INT, "progress");
+		onProgressChangedFromUserParam = onProgressChangedMethod.param(holder.codeModel().BOOLEAN, "fromUser");
 	}
 
 	private void createOnStartTrackingTouch() {
-		JMethod onStartTrackingTouchMethod = listenerClass.method(JMod.PUBLIC, holder.getCodeModel().VOID, "onStartTrackingTouch");
+		JMethod onStartTrackingTouchMethod = listenerClass.method(JMod.PUBLIC, holder.codeModel().VOID, "onStartTrackingTouch");
 		onStartTrackingTouchMethod.annotate(Override.class);
 		onStartTrackingTouchBody = onStartTrackingTouchMethod.body();
-		onStartTrackingTouchSeekBarParam = onStartTrackingTouchMethod.param(holder.getClasses().SEEKBAR, "seekBar");
+		onStartTrackingTouchSeekBarParam = onStartTrackingTouchMethod.param(holder.classes().SEEKBAR, "seekBar");
 	}
 
 	private void createOnStopTrackingTouch() {
-		JMethod onStopTrackingTouchMethod = listenerClass.method(JMod.PUBLIC, holder.getCodeModel().VOID, "onStopTrackingTouch");
+		JMethod onStopTrackingTouchMethod = listenerClass.method(JMod.PUBLIC, holder.codeModel().VOID, "onStopTrackingTouch");
 		onStopTrackingTouchMethod.annotate(Override.class);
 		onStopTrackingTouchBody = onStopTrackingTouchMethod.body();
-		onStopTrackingTouchSeekBarParam = onStopTrackingTouchMethod.param(holder.getClasses().SEEKBAR, "seekBar");
+		onStopTrackingTouchSeekBarParam = onStopTrackingTouchMethod.param(holder.classes().SEEKBAR, "seekBar");
 	}
 
 	public JBlock getOnProgressChangedBody() {

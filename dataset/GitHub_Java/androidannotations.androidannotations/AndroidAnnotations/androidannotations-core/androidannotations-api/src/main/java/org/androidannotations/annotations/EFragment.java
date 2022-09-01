@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,8 +19,6 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-
-import org.androidannotations.api.KotlinOpen;
 
 /**
  * <p>
@@ -109,7 +106,6 @@ import org.androidannotations.api.KotlinOpen;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
-@KotlinOpen
 public @interface EFragment {
 
 	/**
@@ -127,9 +123,9 @@ public @interface EFragment {
 	String resName() default "";
 
 	/**
-	 * We only set the layout if the <code>onCreateView()</code> method returns null
-	 * from the annotated class. If you want to set the layout regardless of that
-	 * return value, pass <b>true</b> to this annotation parameter.
+	 * We only set the layout if the <code>onCreateView()</code> method returns
+	 * null from the annotated class. If you want to set the layout regardless
+	 * of that return value, pass <b>true</b> to this annotation parameter.
 	 * 
 	 * @return <b>true</b>, if the layout must be set, <b>false</b> otherwise
 	 */

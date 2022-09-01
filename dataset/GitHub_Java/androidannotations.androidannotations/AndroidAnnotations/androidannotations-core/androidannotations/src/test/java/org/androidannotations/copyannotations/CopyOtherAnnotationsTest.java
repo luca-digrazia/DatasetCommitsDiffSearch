@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,8 +15,8 @@
  */
 package org.androidannotations.copyannotations;
 
-import org.androidannotations.internal.AndroidAnnotationProcessor;
-import org.androidannotations.testutils.AAProcessorTestHelper;
+import org.androidannotations.AndroidAnnotationProcessor;
+import org.androidannotations.utils.AAProcessorTestHelper;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -44,7 +43,7 @@ public class CopyOtherAnnotationsTest extends AAProcessorTestHelper {
 				"    @WebServiceRef(type = String.class)", //
 				"})", //
 				"public final class HasOtherAnnotations_", };
-
+		
 		// CHECKSTYLE:ON
 		compileFiles(HasOtherAnnotations.class);
 		assertGeneratedClassContains(toGeneratedFile(HasOtherAnnotations.class), classHeader);
@@ -54,7 +53,7 @@ public class CopyOtherAnnotationsTest extends AAProcessorTestHelper {
 	public void testOverridenMethodHasCopiedNonAAAnnotations() {
 		// CHECKSTYLE:OFF
 		String[] methodSignature = { //
-				"    @Addressing(responses = Responses.ALL)", //
+				"    @Addressing(responses = (javax.xml.ws.soap.AddressingFeature.Responses.ALL))", //
 				"    @Action(input = \"someString\")", //
 				"    @SuppressWarnings({", //
 				"        \"\",", //
@@ -65,7 +64,7 @@ public class CopyOtherAnnotationsTest extends AAProcessorTestHelper {
 				"        @Deprecated", //
 				"        final Event event) {", };
 		// CHECKSTYLE:ON
-
+		
 		compileFiles(HasOtherAnnotations.class);
 		assertGeneratedClassContains(toGeneratedFile(HasOtherAnnotations.class), methodSignature);
 	}
@@ -74,14 +73,14 @@ public class CopyOtherAnnotationsTest extends AAProcessorTestHelper {
 	public void testOverrideDoesNotAddedTwice() {
 		addProcessorParameter("trace", "true");
 		compileFiles(HasOtherAnnotations.class);
-
+		
 		// CHECKSTYLE:OFF
 		String[] methodSignature = { //
 				"    @java.lang.Override", //
 				"    @java.lang.Override", //
 				"    public String toString() {", };
 		// CHECKSTYLE:ON
-
+		
 		assertGeneratedClassDoesNotContain(toGeneratedFile(HasOtherAnnotations.class), methodSignature);
 	}
 

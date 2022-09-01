@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,8 +20,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import org.androidannotations.api.KotlinOpen;
-
 /**
  * <p>
  * Should be used on custom classes to enable usage of AndroidAnnotations.
@@ -41,9 +38,9 @@ import org.androidannotations.api.KotlinOpen;
  * create Abstract classes that handle common code.
  * </p>
  * <p>
- * {@link EBean} can only be used on classes and NOT on interfaces. If you want
- * to use an {@link EBean} with interface you must annotate the implementation
- * class and not the interface.
+ * {@link EBean} can  only be used on classes and NOT on interfaces.
+ * If you want to use an {@link EBean} with interface you must annotate
+ * the implementation class and not the interface.
  * </p>
  * <p>
  * Most annotations are supported in {@link EBean} classes, except the ones
@@ -97,7 +94,6 @@ import org.androidannotations.api.KotlinOpen;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
-@KotlinOpen
 public @interface EBean {
 
 	/**
@@ -111,24 +107,8 @@ public @interface EBean {
 		Default, //
 
 		/**
-		 * A new instance of the bean is created the first time it is needed in an
-		 * Activity scope, it is then retained and the same instance is always returned
-		 * from within the same Activity. Different Activities hold different copies of
-		 * the bean.
-		 */
-		Activity,
-
-		/**
-		 * A new instance of the bean is created the first time it is needed in a
-		 * Fragment scope, it is then retained and the same instance is always returned
-		 * from within the same Fragment. Different Fragments hold different copies of
-		 * the bean.
-		 */
-		Fragment,
-
-		/**
-		 * A new instance of the bean is created the first time it is needed, it is then
-		 * retained and the same instance is always returned.
+		 * A new instance of the bean is created the first time it is needed, it
+		 * is then retained and the same instance is always returned.
 		 */
 		Singleton, //
 	}

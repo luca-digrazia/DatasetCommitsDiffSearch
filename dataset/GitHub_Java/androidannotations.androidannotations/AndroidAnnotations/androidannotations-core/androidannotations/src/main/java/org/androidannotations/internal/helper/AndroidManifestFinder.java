@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,21 +15,16 @@
  */
 package org.androidannotations.internal.helper;
 
-import static org.androidannotations.helper.CaseHelper.upperCaseFirst;
 import static org.androidannotations.helper.ModelConstants.classSuffix;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -55,9 +49,6 @@ public class AndroidManifestFinder {
 
 	public static final Option OPTION_MANIFEST = new Option("androidManifestFile", null);
 
-	public static final Option OPTION_LIBRARY = new Option("library", "false");
-	public static final Option OPTION_INSTANT_FEATURE = new Option("instantAppFeature", "false");
-
 	private static final Logger LOGGER = LoggerFactory.getLogger(AndroidManifestFinder.class);
 
 	private final AndroidAnnotationsEnvironment environment;
@@ -71,12 +62,6 @@ public class AndroidManifestFinder {
 			File androidManifestFile = findManifestFile();
 			String projectDirectory = androidManifestFile.getParent();
 
-			boolean libraryOption = environment.getOptionBooleanValue(OPTION_LIBRARY);
-
-			if (libraryOption) {
-				return parse(androidManifestFile, true);
-			}
-
 			File projectProperties = new File(projectDirectory, "project.properties");
 
 			boolean libraryProject = false;
@@ -86,7 +71,7 @@ public class AndroidManifestFinder {
 					properties.load(new FileInputStream(projectProperties));
 					if (properties.containsKey("android.library")) {
 						String androidLibraryProperty = properties.getProperty("android.library");
-						libraryProject = "true".equals(androidLibraryProperty);
+						libraryProject = androidLibraryProperty.equals("true");
 
 						LOGGER.debug("Found android.library={} property in project.properties", libraryProject);
 					}
@@ -126,10 +111,9 @@ public class AndroidManifestFinder {
 		return findManifestInKnownPathsStartingFromGenFolder(holder.sourcesGenerationFolder.getAbsolutePath());
 	}
 
-	File findManifestInKnownPathsStartingFromGenFolder(String sourcesGenerationFolder) {
-		Iterable<AndroidManifestFinderStrategy> strategies = Arrays.asList(new GradleAndroidManifestFinderStrategy(environment, sourcesGenerationFolder),
-				new LegacyGradleAndroidManifestFinderStrategy(environment, sourcesGenerationFolder), new MavenAndroidManifestFinderStrategy(sourcesGenerationFolder),
-				new EclipseAndroidManifestFinderStrategy(sourcesGenerationFolder));
+	File findManifestInKnownPathsStartingFromGenFolder(String sourcesGenerationFolder) throws FileNotFoundException {
+		Iterable<AndroidManifestFinderStrategy> strategies = Arrays.asList(new GradleAndroidManifestFinderStrategy(sourcesGenerationFolder),
+				new MavenAndroidManifestFinderStrategy(sourcesGenerationFolder), new EclipseAndroidManifestFinderStrategy(sourcesGenerationFolder));
 
 		AndroidManifestFinderStrategy applyingStrategy = null;
 
@@ -176,203 +160,32 @@ public class AndroidManifestFinder {
 		}
 
 		boolean applies() {
-			return matcher.matches();
+			return  matcher.matches();
 		}
 
 		abstract Iterable<String> possibleLocations();
 	}
 
-	private static class GradleAndroidManifestFinderStrategy extends AbstractGradleAndroidManifestFinderStrategy {
+	private static class GradleAndroidManifestFinderStrategy extends AndroidManifestFinderStrategy {
 
-		private static final Pattern GRADLE_GEN_FOLDER = Pattern.compile("^(.*?)build[\\\\/]generated[\\\\/]ap_generated_sources[\\\\/](.*)[\\\\/]out(.*)$");
+		static final Pattern GRADLE_GEN_FOLDER = Pattern.compile("^(.*?)build[\\\\/]generated[\\\\/]source[\\\\/]apt(.*)$");
 
-		GradleAndroidManifestFinderStrategy(AndroidAnnotationsEnvironment environment, String sourceFolder) {
-			super(GRADLE_GEN_FOLDER, environment, sourceFolder);
+		GradleAndroidManifestFinderStrategy(String sourceFolder) {
+			super("Gradle", GRADLE_GEN_FOLDER, sourceFolder);
 		}
-
-		@Override
-		protected String getGradleVariant() {
-			return matcher.group(2);
-		}
-	}
-
-	private static class LegacyGradleAndroidManifestFinderStrategy extends AbstractGradleAndroidManifestFinderStrategy {
-
-		private static final Pattern GRADLE_GEN_FOLDER = Pattern.compile("^(.*?)build[\\\\/]generated[\\\\/]source[\\\\/](k?apt)(.*)$");
-
-		LegacyGradleAndroidManifestFinderStrategy(AndroidAnnotationsEnvironment environment, String sourceFolder) {
-			super(GRADLE_GEN_FOLDER, environment, sourceFolder);
-		}
-
-		@Override
-		protected String getGradleVariant() {
-			return matcher.group(3).substring(1);
-		}
-	}
-
-	private static abstract class AbstractGradleAndroidManifestFinderStrategy extends AndroidManifestFinderStrategy {
-
-		static final Pattern OUTPUT_JSON_PATTERN = Pattern.compile(".*,\"path\":\"(.*?)\",.*");
-
-		private static final List<String> SUPPORTED_ABI_SPLITS = Arrays.asList("arm64-v8a", "armeabi", "armeabi-v7a", "mips", "mips64", "x86", "x86_64");
-		private static final List<String> SUPPORTED_DENSITY_SPLITS = Arrays.asList("hdpi", "ldpi", "mdpi", "xhdpi", "xxhdpi", "xxxhdpi");
-
-		private static final String BUILD_TOOLS_V32_MANIFEST_PATH = "build/intermediates/merged_manifests";
-
-		private final AndroidAnnotationsEnvironment environment;
-
-		AbstractGradleAndroidManifestFinderStrategy(Pattern pattern, AndroidAnnotationsEnvironment environment, String sourceFolder) {
-			super("Gradle", pattern, sourceFolder);
-			this.environment = environment;
-		}
-
-		protected String getPath() {
-			return matcher.group(1);
-		}
-
-		protected abstract String getGradleVariant();
 
 		@Override
 		Iterable<String> possibleLocations() {
-			String path = getPath();
-			String gradleVariant = getGradleVariant();
+			String gradleVariant = matcher.group(2);
 
-			List<String> possibleLocations = new ArrayList<>();
-			findPossibleLocationsV32(path, gradleVariant, possibleLocations);
-			for (String directory : Arrays.asList("build/intermediates/manifests/full", "build/intermediates/bundles", "build/intermediates/manifests/aapt", "build/intermediates/library_manifest")) {
-				findPossibleLocations(path, directory, gradleVariant, possibleLocations);
-			}
-
-			return updateLocations(path, possibleLocations);
-		}
-
-		private List<String> updateLocations(String path, List<String> possibleLocations) {
-			List<String> knownLocations = new ArrayList<>();
-			for (String location : possibleLocations) {
-				String expectedLocation = path + "/" + location;
-				File file = new File(expectedLocation + "/output.json");
-				if (file.exists()) {
-					Matcher jsonMatcher = OUTPUT_JSON_PATTERN.matcher(readJsonFromFile(file));
-					if (jsonMatcher.matches()) {
-						String relativeManifestPath = jsonMatcher.group(1);
-						File manifestFile = new File(expectedLocation + "/" + relativeManifestPath);
-						String manifestDirectory = manifestFile.getParentFile().getAbsolutePath();
-						knownLocations.add(manifestDirectory.substring(path.length()));
-					}
-				}
-			}
-
-			if (knownLocations.isEmpty()) {
-				knownLocations.addAll(possibleLocations);
-			}
-
-			return knownLocations;
-		}
-
-		private String readJsonFromFile(File file) {
-			try (BufferedReader fileReader = new BufferedReader(new FileReader(file))) {
-				return fileReader.readLine();
-			} catch (IOException e) {
-				LOGGER.error(e, "unable to read json file: {}", file);
-				return "";
-			}
-		}
-
-		private void findPossibleLocationsV32(String basePath, String variantPart, List<String> possibleLocations) {
-			String[] directories = new File(basePath + BUILD_TOOLS_V32_MANIFEST_PATH).list();
-
-			if (directories == null) {
-				return;
-			}
-
-			if (variantPart.startsWith("/") || variantPart.startsWith("\\")) {
-				variantPart = variantPart.substring(1);
-			}
-
-			boolean isFeature = environment.getOptionBooleanValue(OPTION_INSTANT_FEATURE) && (variantPart.startsWith("feature/") || variantPart.startsWith("feature\\"));
-			if (isFeature) {
-				variantPart = variantPart.substring(8);
-			}
-
-			String[] variantParts = variantPart.split("[/\\\\]");
-			if (variantParts.length > 1) {
-				StringBuilder sb = new StringBuilder(variantParts[0]);
-				for (int i = 1; i < variantParts.length; i++) {
-					String part = variantParts[i];
-					sb.append(upperCaseFirst(part));
-				}
-				variantPart = sb.toString();
-			}
-
-			String possibleLocation = BUILD_TOOLS_V32_MANIFEST_PATH + "/" + variantPart;
-			if (isFeature) {
-				variantPart += "Feature";
-				possibleLocation += "Feature";
-			}
-
-			findPossibleLocations(basePath, possibleLocations, possibleLocation);
-			findPossibleLocations(basePath, possibleLocations, possibleLocation + "/process" + upperCaseFirst(variantPart) + "Manifest/merged");
-		}
-
-		private void findPossibleLocations(String basePath, List<String> possibleLocations, String possibleLocationWithProcessManifest) {
-			if (new File(basePath, possibleLocationWithProcessManifest).isDirectory()) {
-				possibleLocations.add(possibleLocationWithProcessManifest);
-				addPossibleSplitLocations(basePath, possibleLocationWithProcessManifest, possibleLocations);
-			}
-		}
-
-		private void findPossibleLocations(String basePath, String targetPath, String variantPart, List<String> possibleLocations) {
-			String[] directories = new File(basePath + targetPath).list();
-
-			if (directories == null) {
-				return;
-			}
-
-			if (variantPart.startsWith("/") || variantPart.startsWith("\\")) {
-				variantPart = variantPart.substring(1);
-			}
-
-			for (String directory : directories) {
-				String possibleLocation = targetPath + "/" + directory;
-				File variantDir = new File(basePath + possibleLocation);
-				if (variantDir.isDirectory() && variantPart.toLowerCase().startsWith(directory.toLowerCase())) {
-					String remainingPart = variantPart.substring(directory.length());
-					if (remainingPart.length() == 0) {
-						possibleLocations.add(possibleLocation);
-						addPossibleSplitLocations(basePath, possibleLocation, possibleLocations);
-					} else {
-						findPossibleLocations(basePath, possibleLocation, remainingPart, possibleLocations);
-					}
-				}
-			}
-		}
-
-		private void addPossibleSplitLocations(String basePath, String possibleLocation, List<String> possibleLocations) {
-			for (String abiSplit : SUPPORTED_ABI_SPLITS) {
-				File splitDir = new File(basePath + possibleLocation + "/" + abiSplit);
-				if (splitDir.isDirectory()) {
-					possibleLocations.add(possibleLocation + "/" + abiSplit);
-					for (String densitySplit : SUPPORTED_DENSITY_SPLITS) {
-						File splitSubDir = new File(basePath + possibleLocation + "/" + abiSplit + "/" + densitySplit);
-						if (splitSubDir.isDirectory()) {
-							possibleLocations.add(possibleLocation + "/" + abiSplit + "/" + densitySplit);
-						}
-					}
-				}
-			}
-			for (String densitySplit : SUPPORTED_DENSITY_SPLITS) {
-				File splitDir = new File(basePath + possibleLocation + "/" + densitySplit);
-				if (splitDir.isDirectory()) {
-					possibleLocations.add(possibleLocation + "/" + densitySplit);
-				}
-			}
+			return Arrays.asList("build/intermediates/manifests/full" + gradleVariant, "build/bundles" + gradleVariant);
 		}
 	}
 
 	private static class MavenAndroidManifestFinderStrategy extends AndroidManifestFinderStrategy {
 
 		static final Pattern MAVEN_GEN_FOLDER = Pattern.compile("^(.*?)target[\\\\/]generated-sources.*$");
-
+		
 		MavenAndroidManifestFinderStrategy(String sourceFolder) {
 			super("Maven", MAVEN_GEN_FOLDER, sourceFolder);
 		}
@@ -386,7 +199,7 @@ public class AndroidManifestFinder {
 	private static class EclipseAndroidManifestFinderStrategy extends AndroidManifestFinderStrategy {
 
 		static final Pattern ECLIPSE_GEN_FOLDER = Pattern.compile("^(.*?)\\.apt_generated.*$");
-
+		
 		EclipseAndroidManifestFinderStrategy(String sourceFolder) {
 			super("Eclipse", ECLIPSE_GEN_FOLDER, sourceFolder);
 		}
@@ -470,17 +283,14 @@ public class AndroidManifestFinder {
 		componentQualifiedNames.addAll(receiverQualifiedNames);
 		componentQualifiedNames.addAll(providerQualifiedNames);
 
-		NodeList metaDataNodes = documentElement.getElementsByTagName("meta-data");
-		Map<String, AndroidManifest.MetaDataInfo> metaDataQualifiedNames = extractMetaDataQualifiedNames(metaDataNodes);
-
 		NodeList usesPermissionNodes = documentElement.getElementsByTagName("uses-permission");
 		List<String> usesPermissionQualifiedNames = extractUsesPermissionNames(usesPermissionNodes);
 
 		List<String> permissionQualifiedNames = new ArrayList<>();
 		permissionQualifiedNames.addAll(usesPermissionQualifiedNames);
 
-		return AndroidManifest.createManifest(applicationPackage, applicationClassQualifiedName, componentQualifiedNames, metaDataQualifiedNames, permissionQualifiedNames, minSdkVersion,
-				maxSdkVersion, targetSdkVersion, applicationDebuggableMode);
+		return AndroidManifest.createManifest(applicationPackage, applicationClassQualifiedName, componentQualifiedNames, permissionQualifiedNames,
+				minSdkVersion, maxSdkVersion, targetSdkVersion, applicationDebuggableMode);
 	}
 
 	private int extractAttributeIntValue(Node node, String attribute, int defaultValue) {
@@ -518,32 +328,6 @@ public class AndroidManifestFinder {
 			}
 		}
 		return componentQualifiedNames;
-	}
-
-	private Map<String, AndroidManifest.MetaDataInfo> extractMetaDataQualifiedNames(NodeList metaDataNodes) {
-		Map<String, AndroidManifest.MetaDataInfo> metaDataQualifiedNames = new HashMap<String, AndroidManifest.MetaDataInfo>();
-
-		for (int i = 0; i < metaDataNodes.getLength(); i++) {
-			Node node = metaDataNodes.item(i);
-			Node nameAttribute = node.getAttributes().getNamedItem("android:name");
-			Node valueAttribute = node.getAttributes().getNamedItem("android:value");
-			Node resourceAttribute = node.getAttributes().getNamedItem("android:resource");
-
-			if (nameAttribute == null || (valueAttribute == null && resourceAttribute == null)) {
-				if (nameAttribute != null) {
-					LOGGER.warn("A malformed <meta-data> has been found in the manifest with name {}", nameAttribute.getNodeValue());
-				} else {
-					LOGGER.warn("A malformed <meta-data> has been found in the manifest");
-				}
-			} else {
-				String name = nameAttribute.getNodeValue();
-				String value = valueAttribute != null ? valueAttribute.getNodeValue() : null;
-				String resource = resourceAttribute != null ? resourceAttribute.getNodeValue() : null;
-				metaDataQualifiedNames.put(name, new AndroidManifest.MetaDataInfo(name, value, resource));
-			}
-		}
-
-		return metaDataQualifiedNames;
 	}
 
 	private String manifestNameToValidQualifiedName(String applicationPackage, Node nameAttribute) {

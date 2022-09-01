@@ -1,31 +1,29 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.common.android;
 
-import android.app.Dialog;
 import android.content.res.Resources;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentManager;
 import android.view.View;
 
 import javax.annotation.Nullable;
 
-import androidx.fragment.app.DialogFragment;
-import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentActivity;
-import androidx.fragment.app.FragmentManager;
-
 final class FragmentCompatSupportLib
-    extends FragmentCompat<Fragment, DialogFragment, FragmentManager, FragmentActivity> {
+    extends FragmentCompat<Fragment, FragmentManager, FragmentActivity> {
   private static final FragmentAccessorSupportLib sFragmentAccessor =
       new FragmentAccessorSupportLib();
-  private static final DialogFragmentAccessorSupportLib sDialogFragmentAccessor =
-      new DialogFragmentAccessorSupportLib();
   private static final FragmentManagerAccessorViaReflection<FragmentManager, Fragment>
-      sFragmentManagerAccessor = new FragmentManagerAccessorViaReflection<>();
+      sFragmentManagerAccessor =
+          new FragmentManagerAccessorViaReflection<>(FragmentManager.class);
   private static final FragmentActivityAccessorSupportLib sFragmentActivityAccessor =
       new FragmentActivityAccessorSupportLib();
 
@@ -35,23 +33,8 @@ final class FragmentCompatSupportLib
   }
 
   @Override
-  public Class<DialogFragment> getDialogFragmentClass() {
-    return DialogFragment.class;
-  }
-
-  @Override
-  public Class<FragmentActivity> getFragmentActivityClass() {
-    return FragmentActivity.class;
-  }
-
-  @Override
   public FragmentAccessorSupportLib forFragment() {
     return sFragmentAccessor;
-  }
-
-  @Override
-  public DialogFragmentAccessorSupportLib forDialogFragment() {
-    return sDialogFragmentAccessor;
   }
 
   @Override
@@ -98,15 +81,6 @@ final class FragmentCompatSupportLib
     @Override
     public FragmentManager getChildFragmentManager(Fragment fragment) {
       return fragment.getChildFragmentManager();
-    }
-  }
-
-  private static class DialogFragmentAccessorSupportLib
-      extends FragmentAccessorSupportLib
-      implements DialogFragmentAccessor<DialogFragment, Fragment, FragmentManager> {
-    @Override
-    public Dialog getDialog(DialogFragment dialogFragment) {
-      return dialogFragment.getDialog();
     }
   }
 

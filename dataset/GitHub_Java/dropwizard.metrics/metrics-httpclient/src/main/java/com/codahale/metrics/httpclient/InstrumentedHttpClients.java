@@ -28,7 +28,8 @@ public class InstrumentedHttpClients {
                                            HttpClientMetricNameStrategy metricNameStrategy) {
         return HttpClientBuilder.create()
                 .setRequestExecutor(new InstrumentedHttpRequestExecutor(metricRegistry, metricNameStrategy))
-                .setConnectionManager(InstrumentedHttpClientConnectionManager.builder(metricRegistry).build());
+                .setConnectionManager(new InstrumentedHttpClientConnectionManager(metricRegistry));
     }
+
 
 }

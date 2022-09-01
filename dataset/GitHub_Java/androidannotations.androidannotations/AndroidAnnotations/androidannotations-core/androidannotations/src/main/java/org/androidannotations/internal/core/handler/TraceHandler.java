@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,8 +20,6 @@ import static org.androidannotations.helper.AndroidConstants.LOG_ERROR;
 import static org.androidannotations.helper.AndroidConstants.LOG_INFO;
 import static org.androidannotations.helper.AndroidConstants.LOG_VERBOSE;
 import static org.androidannotations.helper.AndroidConstants.LOG_WARN;
-import static org.androidannotations.helper.LogHelper.trimLogTag;
-import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,7 +30,6 @@ import javax.lang.model.element.ExecutableElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.ElementValidation;
-import org.androidannotations.Option;
 import org.androidannotations.annotations.Trace;
 import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.holder.EComponentHolder;
@@ -52,15 +48,8 @@ import com.helger.jcodemodel.JVar;
 
 public class TraceHandler extends BaseAnnotationHandler<EComponentHolder> {
 
-	public static final Option OPTION_TRACE = new Option("trace", "false");
-
 	public TraceHandler(AndroidAnnotationsEnvironment environment) {
 		super(Trace.class, environment);
-	}
-
-	@Override
-	public boolean isEnabled() {
-		return getEnvironment().getOptionBooleanValue(OPTION_TRACE);
 	}
 
 	@Override
@@ -86,7 +75,7 @@ public class TraceHandler extends BaseAnnotationHandler<EComponentHolder> {
 		JBlock methodBody = method.body();
 
 		JInvocation isLoggableInvocation = getClasses().LOG.staticInvoke("isLoggable");
-		isLoggableInvocation.arg(tag).arg(logLevelFromInt(level, getClasses().LOG));
+		isLoggableInvocation.arg(JExpr.lit(tag)).arg(logLevelFromInt(level, getClasses().LOG));
 
 		JConditional ifStatement = methodBody._if(isLoggableInvocation);
 
@@ -100,7 +89,7 @@ public class TraceHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 		logEnterInvoke.arg(getEnterMessage(method, executableElement));
 		thenBody.add(logEnterInvoke);
-		JVar startDeclaration = thenBody.decl(getCodeModel().LONG, "traceStart" + generationSuffix(), currentTimeInvoke);
+		JVar startDeclaration = thenBody.decl(getCodeModel().LONG, "start", currentTimeInvoke);
 
 		JTryBlock tryBlock;
 
@@ -110,7 +99,7 @@ public class TraceHandler extends BaseAnnotationHandler<EComponentHolder> {
 			tryBlock.body().add(previousMethodBody);
 		} else {
 			JInvocation superCall = codeModelHelper.getSuperCall(holder, method);
-			result = thenBody.decl(getJClass(Object.class), "traceResult" + generationSuffix(), JExpr._null());
+			result = thenBody.decl(getJClass(Object.class), "result", JExpr._null());
 			tryBlock = thenBody._try();
 			tryBlock.body().assign(result, superCall);
 			tryBlock.body()._return(JExpr.cast(boxify(method.type()), result));
@@ -118,7 +107,7 @@ public class TraceHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 		JBlock finallyBlock = tryBlock._finally();
 
-		JVar durationDeclaration = finallyBlock.decl(getCodeModel().LONG, "traceDuration" + generationSuffix(), currentTimeInvoke.minus(startDeclaration));
+		JVar durationDeclaration = finallyBlock.decl(getCodeModel().LONG, "duration", currentTimeInvoke.minus(startDeclaration));
 
 		JInvocation logExitInvoke = getClasses().LOG.staticInvoke(logMethodName);
 		logExitInvoke.arg(tag);
@@ -246,6 +235,9 @@ public class TraceHandler extends BaseAnnotationHandler<EComponentHolder> {
 		if (Trace.DEFAULT_TAG.equals(tag)) {
 			tag = element.getEnclosingElement().getSimpleName().toString();
 		}
-		return trimLogTag(tag);
+		if (tag.length() > 23) {
+			tag = tag.substring(0, 23);
+		}
+		return tag;
 	}
 }

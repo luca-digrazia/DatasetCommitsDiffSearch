@@ -1,18 +1,3 @@
-/*
- * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.github.pedrovgs.effectiveandroidui.ui.presenter;
 
 import com.github.pedrovgs.effectiveandroidui.domain.GetTvShowById;
@@ -26,10 +11,9 @@ import javax.inject.Singleton;
  *
  * This is a sample of Model View Presenter pattern described in the talk Effective Android UI.
  *
- * This presenter is not attached to the fragment lifecycle because we don't have to show any
- * TvShow
- * until the TvShow be selected by the user or updated by the fragment lifecycle while the restore
- * instance state process.
+ * We have attached the presenter to the Fragment lifecycle using method like initialize() resume()
+ * and pause(). We are going to use this methods to connect our presenter with Android components
+ * lifecycle.
  *
  * @author Pedro Vicente Gómez Sánchez
  */
@@ -38,7 +22,6 @@ import javax.inject.Singleton;
 public class TvShowPresenter extends Presenter {
 
   private final GetTvShowById getTvShowById;
-  private TvShow currentTvShow;
 
   @Inject
   public TvShowPresenter(GetTvShowById getTvShowById) {
@@ -63,66 +46,38 @@ public class TvShowPresenter extends Presenter {
     this.view = view;
   }
 
-  public TvShow getCurrentTvShow() {
-    return currentTvShow;
-  }
-
-  public void tvShowClosed() {
-    currentTvShow = null;
-  }
-
-  public void loadTvShow(final TvShow tvShow) {
-    showTvShow(tvShow);
-  }
-
   public void loadTvShow(final String tvShowId) {
+    view.hideEmptyCase();
     view.showLoading();
     getTvShowById.execute(tvShowId, new GetTvShowById.Callback() {
       @Override public void onTvShowLoaded(TvShow tvShow) {
-        showTvShow(tvShow);
+        view.showFanArt(tvShow.getFanArt());
+        view.showTvShowTitle(tvShow.getTitle().toUpperCase());
+        view.showChapters(tvShow.getChapters());
+        view.hideLoading();
+        view.showTvShow();
       }
 
       @Override public void onTvShowNotFound() {
-        showTvShowNotFound();
+        view.hideLoading();
+        view.showEmptyCase();
+        view.showTvShowNotFoundMessage();
       }
 
       @Override public void onConnectionError() {
-        showConnectionError();
+        view.hideLoading();
+        view.showEmptyCase();
+        view.showConnectionErrorMessage();
       }
     });
   }
 
-  private void showConnectionError() {
-    if (view.isReady() && !view.isAlreadyLoaded()) {
-      currentTvShow = null;
-      view.hideLoading();
-      view.showConnectionErrorMessage();
-    }
-  }
-
-  private void showTvShowNotFound() {
-    if (view.isReady()) {
-      currentTvShow = null;
-      view.hideLoading();
-      view.showTvShowNotFoundMessage();
-    }
-  }
-
-  private void showTvShow(TvShow tvShow) {
-    if (view.isReady()) {
-      currentTvShow = tvShow;
-      view.showFanArt(tvShow.getFanArt());
-      view.showTvShowTitle(tvShow.getTitle().toUpperCase());
-      view.showChapters(tvShow.getChapters());
-      view.hideLoading();
-      view.showTvShow();
-    }
-  }
-
   /**
-   * View interface created to abstract the view implementation used in this presenter.
+   * View interface created to abstract the view implementation used in this sample.
    */
   public interface View {
+
+    void hideEmptyCase();
 
     void showLoading();
 
@@ -132,6 +87,8 @@ public class TvShowPresenter extends Presenter {
 
     void hideLoading();
 
+    void showEmptyCase();
+
     void showTvShowNotFoundMessage();
 
     void showConnectionErrorMessage();
@@ -139,9 +96,5 @@ public class TvShowPresenter extends Presenter {
     void showTvShow();
 
     void showTvShowTitle(String tvShowTitle);
-
-    boolean isReady();
-
-    boolean isAlreadyLoaded();
   }
 }

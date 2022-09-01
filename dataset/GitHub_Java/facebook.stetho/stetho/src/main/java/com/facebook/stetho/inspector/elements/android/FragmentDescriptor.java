@@ -1,29 +1,21 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.elements.android;
 
-import android.graphics.Rect;
 import android.view.View;
 
-import com.facebook.stetho.common.Accumulator;
 import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.common.android.FragmentAccessor;
 import com.facebook.stetho.common.android.FragmentCompat;
 import com.facebook.stetho.common.android.ResourcesUtil;
 import com.facebook.stetho.inspector.elements.AttributeAccumulator;
-import com.facebook.stetho.inspector.elements.AbstractChainedDescriptor;
-import com.facebook.stetho.inspector.elements.Descriptor;
+import com.facebook.stetho.inspector.elements.ChainedDescriptor;
 import com.facebook.stetho.inspector.elements.DescriptorMap;
 
 import javax.annotation.Nullable;
 
 final class FragmentDescriptor
-    extends AbstractChainedDescriptor<Object> implements HighlightableDescriptor<Object> {
+    extends ChainedDescriptor<Object> implements HighlightableDescriptor {
   private static final String ID_ATTRIBUTE_NAME = "id";
   private static final String TAG_ATTRIBUTE_NAME = "tag";
 
@@ -39,7 +31,7 @@ final class FragmentDescriptor
     if (compat != null) {
       Class<?> fragmentClass = compat.getFragmentClass();
       LogUtil.d("Adding support for %s", fragmentClass.getName());
-      map.registerDescriptor(fragmentClass, new FragmentDescriptor(compat));
+      map.register(fragmentClass, new FragmentDescriptor(compat));
     }
   }
 
@@ -48,50 +40,44 @@ final class FragmentDescriptor
   }
 
   @Override
-  protected void onGetAttributes(Object element, AttributeAccumulator attributes) {
+  protected void onCopyAttributes(Object element, AttributeAccumulator attributes) {
     int id = mAccessor.getId(element);
     if (id != FragmentAccessor.NO_ID) {
       String value = ResourcesUtil.getIdStringQuietly(
           element,
           mAccessor.getResources(element),
           id);
-      attributes.store(ID_ATTRIBUTE_NAME, value);
+      attributes.add(ID_ATTRIBUTE_NAME, value);
     }
 
     String tag = mAccessor.getTag(element);
     if (tag != null && tag.length() > 0) {
-      attributes.store(TAG_ATTRIBUTE_NAME, tag);
+      attributes.add(TAG_ATTRIBUTE_NAME, tag);
     }
   }
 
   @Override
-  protected void onGetChildren(Object element, Accumulator<Object> children) {
+  protected int onGetChildCount(Object element) {
     View view = mAccessor.getView(element);
-    if (view != null) {
-      children.store(view);
-    }
+    return (view == null) ? 0 : 1;
   }
 
   @Override
-  @Nullable
-  public View getViewAndBoundsForHighlighting(Object element, Rect bounds) {
+  protected Object onGetChildAt(Object element, int index) {
+    if (index != 0) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    View view = mAccessor.getView(element);
+    if (view == null) {
+      throw new IndexOutOfBoundsException();
+    }
+
+    return view;
+  }
+
+  @Override
+  public View getViewForHighlighting(Object element) {
     return mAccessor.getView(element);
-  }
-
-  @Nullable
-  @Override
-  public Object getElementToHighlightAtPosition(Object element, int x, int y, Rect bounds) {
-    final Descriptor.Host host = getHost();
-    View view = null;
-    HighlightableDescriptor descriptor = null;
-
-    if (host instanceof AndroidDescriptorHost) {
-      view = mAccessor.getView(element);
-      descriptor = ((AndroidDescriptorHost) host).getHighlightableDescriptor(view);
-    }
-
-    return descriptor == null
-        ? null
-        : descriptor.getElementToHighlightAtPosition(view, x, y, bounds);
   }
 }

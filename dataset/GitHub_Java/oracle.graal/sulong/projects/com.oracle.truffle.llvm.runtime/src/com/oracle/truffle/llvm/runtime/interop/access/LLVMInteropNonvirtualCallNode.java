@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -33,7 +33,6 @@ package com.oracle.truffle.llvm.runtime.interop.access;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
@@ -48,7 +47,7 @@ import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Clazz;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Method;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMDynAccessSymbolNode;
+import com.oracle.truffle.llvm.runtime.nodes.others.LLVMAccessSymbolNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 @GenerateUncached
@@ -60,40 +59,24 @@ public abstract class LLVMInteropNonvirtualCallNode extends LLVMNode {
         return LLVMInteropNonvirtualCallNodeGen.create();
     }
 
-    /**
-     * @param receiver
-     * @param type
-     * @param methodName
-     * @param method
-     * @param context
-     * @param argCount
-     * @param llvmFunction
-     */
+    @SuppressWarnings("unused")
     @Specialization(guards = {"argCount==arguments.length", "llvmFunction!=null", "methodName==method.getName()", "type==method.getObjectClass()", "type==asClazz(receiver)"})
-    @GenerateAOT.Exclude
-    Object doCached(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments,
-                    @CachedContext(LLVMLanguage.class) LLVMContext context,
+    Object doCached(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments, @CachedContext(LLVMLanguage.class) LLVMContext context,
                     @CachedLibrary(limit = "5") InteropLibrary interop, @Cached(value = "arguments.length", allowUncached = true) int argCount,
                     @Cached(value = "getLLVMFunction(context, method, type)", allowUncached = true) LLVMFunction llvmFunction,
-                    @Cached LLVMDynAccessSymbolNode accessSymbolNode)
+                    @Cached(value = "create(llvmFunction)", allowUncached = true) LLVMAccessSymbolNode accessSymbolNode)
                     throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
-        return interop.execute(accessSymbolNode.execute(llvmFunction), arguments);
+        return interop.execute(accessSymbolNode.execute(), arguments);
     }
 
-    /**
-     * @param receiver
-     * @param method
-     */
+    @SuppressWarnings("unused")
     @Specialization
-    @GenerateAOT.Exclude
-    Object doResolve(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments,
-                    @CachedContext(LLVMLanguage.class) LLVMContext context,
-                    @Cached LLVMDynAccessSymbolNode dynAccessSymbolNode,
-                    @CachedLibrary(limit = "5") InteropLibrary interop)
+    Object doResolve(LLVMPointer receiver, LLVMInteropType.Clazz type, String methodName, Method method, Object[] arguments, @CachedContext(LLVMLanguage.class) LLVMContext context,
+                    @CachedLibrary(limit = "5") InteropLibrary interop, @Cached(value = "arguments.length", allowUncached = true) int argCount)
                     throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
         Method newMethod = type.findMethodByArgumentsWithSelf(methodName, arguments);
         LLVMFunction newLLVMFunction = getLLVMFunction(context, newMethod, type);
-        Object newReceiver = dynAccessSymbolNode.execute(newLLVMFunction);
+        Object newReceiver = context.createFunctionDescriptor(newLLVMFunction);
         return interop.execute(newReceiver, arguments);
     }
 

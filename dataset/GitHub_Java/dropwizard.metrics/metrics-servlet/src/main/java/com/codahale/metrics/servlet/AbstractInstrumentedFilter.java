@@ -5,14 +5,7 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 
-import javax.servlet.AsyncEvent;
-import javax.servlet.AsyncListener;
-import javax.servlet.Filter;
-import javax.servlet.FilterChain;
-import javax.servlet.FilterConfig;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
+import javax.servlet.*;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
 import java.io.IOException;
@@ -28,8 +21,6 @@ import static com.codahale.metrics.MetricRegistry.name;
  * codes being returned.
  */
 public abstract class AbstractInstrumentedFilter implements Filter {
-    static final String METRIC_PREFIX = "name-prefix";
-
     private final String otherMetricName;
     private final Map<Integer, String> meterNamesByStatusCode;
     private final String registryAttribute;
@@ -37,8 +28,6 @@ public abstract class AbstractInstrumentedFilter implements Filter {
     // initialized after call of init method
     private ConcurrentMap<Integer, Meter> metersByStatusCode;
     private Meter otherMeter;
-    private Meter timeoutsMeter;
-    private Meter errorsMeter;
     private Counter activeRequests;
     private Timer requestTimer;
 
@@ -64,21 +53,18 @@ public abstract class AbstractInstrumentedFilter implements Filter {
     public void init(FilterConfig filterConfig) throws ServletException {
         final MetricRegistry metricsRegistry = getMetricsFactory(filterConfig);
 
-        String metricName = filterConfig.getInitParameter(METRIC_PREFIX);
-        if (metricName == null || metricName.isEmpty()) {
-            metricName = getClass().getName();
-        }
-
-        this.metersByStatusCode = new ConcurrentHashMap<>(meterNamesByStatusCode.size());
+        this.metersByStatusCode = new ConcurrentHashMap<Integer, Meter>(meterNamesByStatusCode
+                .size());
         for (Entry<Integer, String> entry : meterNamesByStatusCode.entrySet()) {
             metersByStatusCode.put(entry.getKey(),
-                    metricsRegistry.meter(name(metricName, entry.getValue())));
+                    metricsRegistry.meter(name(AbstractInstrumentedFilter.class, entry.getValue())));
         }
-        this.otherMeter = metricsRegistry.meter(name(metricName, otherMetricName));
-        this.timeoutsMeter = metricsRegistry.meter(name(metricName, "timeouts"));
-        this.errorsMeter = metricsRegistry.meter(name(metricName, "errors"));
-        this.activeRequests = metricsRegistry.counter(name(metricName, "activeRequests"));
-        this.requestTimer = metricsRegistry.timer(name(metricName, "requests"));
+        this.otherMeter = metricsRegistry.meter(name(AbstractInstrumentedFilter.class,
+                                                     otherMetricName));
+        this.activeRequests = metricsRegistry.counter(name(AbstractInstrumentedFilter.class,
+                                                           "activeRequests"));
+        this.requestTimer = metricsRegistry.timer(name(AbstractInstrumentedFilter.class,
+                                                       "requests"));
 
     }
 
@@ -96,7 +82,7 @@ public abstract class AbstractInstrumentedFilter implements Filter {
 
     @Override
     public void destroy() {
-
+        
     }
 
     @Override
@@ -107,24 +93,12 @@ public abstract class AbstractInstrumentedFilter implements Filter {
                 new StatusExposingServletResponse((HttpServletResponse) response);
         activeRequests.inc();
         final Timer.Context context = requestTimer.time();
-        boolean error = false;
         try {
             chain.doFilter(request, wrappedResponse);
-        } catch (IOException | RuntimeException | ServletException e) {
-            error = true;
-            throw e;
         } finally {
-            if (!error && request.isAsyncStarted()) {
-                request.getAsyncContext().addListener(new AsyncResultListener(context));
-            } else {
-                context.stop();
-                activeRequests.dec();
-                if (error) {
-                    errorsMeter.mark();
-                } else {
-                    markMeterForStatusCode(wrappedResponse.getStatus());
-                }
-            }
+            context.stop();
+            activeRequests.dec();
+            markMeterForStatusCode(wrappedResponse.getStatus());
         }
     }
 
@@ -163,56 +137,8 @@ public abstract class AbstractInstrumentedFilter implements Filter {
             super.setStatus(sc);
         }
 
-        @Override
-        @SuppressWarnings("deprecation")
-        public void setStatus(int sc, String sm) {
-            httpStatus = sc;
-            super.setStatus(sc, sm);
-        }
-
-        @Override
         public int getStatus() {
             return httpStatus;
-        }
-    }
-
-    private class AsyncResultListener implements AsyncListener {
-        private Timer.Context context;
-        private boolean done = false;
-
-        public AsyncResultListener(Timer.Context context) {
-            this.context = context;
-        }
-
-        @Override
-        public void onComplete(AsyncEvent event) throws IOException {
-            if (!done) {
-                HttpServletResponse suppliedResponse = (HttpServletResponse) event.getSuppliedResponse();
-                context.stop();
-                activeRequests.dec();
-                markMeterForStatusCode(suppliedResponse.getStatus());
-            }
-        }
-
-        @Override
-        public void onTimeout(AsyncEvent event) throws IOException {
-            context.stop();
-            activeRequests.dec();
-            timeoutsMeter.mark();
-            done = true;
-        }
-
-        @Override
-        public void onError(AsyncEvent event) throws IOException {
-            context.stop();
-            activeRequests.dec();
-            errorsMeter.mark();
-            done = true;
-        }
-
-        @Override
-        public void onStartAsync(AsyncEvent event) throws IOException {
-
         }
     }
 }

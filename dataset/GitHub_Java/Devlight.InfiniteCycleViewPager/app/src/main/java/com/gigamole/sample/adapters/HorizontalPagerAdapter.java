@@ -66,7 +66,7 @@ public class HorizontalPagerAdapter extends PagerAdapter {
             final VerticalInfiniteCycleViewPager verticalInfiniteCycleViewPager =
                     (VerticalInfiniteCycleViewPager) view.findViewById(R.id.vicvp);
             verticalInfiniteCycleViewPager.setAdapter(
-                    new VerticalPagerAdapter(mContext)
+                    new VerticalPagerAdapter(mContext, position)
             );
             verticalInfiniteCycleViewPager.setCurrentItem(position);
         } else {

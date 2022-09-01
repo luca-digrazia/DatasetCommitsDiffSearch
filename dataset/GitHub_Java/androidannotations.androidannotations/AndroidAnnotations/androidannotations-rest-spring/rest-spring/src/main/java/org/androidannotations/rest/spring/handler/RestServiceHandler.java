@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,66 +21,48 @@ import javax.lang.model.element.Element;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.ElementValidation;
 import org.androidannotations.handler.BaseAnnotationHandler;
-import org.androidannotations.handler.MethodInjectionHandler;
-import org.androidannotations.helper.InjectHelper;
 import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.process.ElementValidation;
 import org.androidannotations.rest.spring.annotations.Rest;
 import org.androidannotations.rest.spring.annotations.RestService;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJAssignmentTarget;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JExpr;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JFieldRef;
 
-public class RestServiceHandler extends BaseAnnotationHandler<EComponentHolder> implements MethodInjectionHandler<EComponentHolder> {
-
-	private final InjectHelper<EComponentHolder> injectHelper;
+public class RestServiceHandler extends BaseAnnotationHandler<EComponentHolder> {
 
 	public RestServiceHandler(AndroidAnnotationsEnvironment environment) {
 		super(RestService.class, environment);
-		injectHelper = new InjectHelper<>(validatorHelper, this);
 	}
 
 	@Override
 	public void validate(Element element, ElementValidation validation) {
-		injectHelper.validate(RestService.class, element, validation);
-		if (!validation.isValid()) {
-			return;
-		}
+		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(element, validation);
 
 		validatorHelper.isNotPrivate(element, validation);
 
-		Element param = injectHelper.getParam(element);
-		validatorHelper.typeHasValidAnnotation(Rest.class, param, validation);
+		validatorHelper.typeHasAnnotation(Rest.class, element, validation);
 	}
 
 	@Override
 	public void process(Element element, EComponentHolder holder) {
-		injectHelper.process(element, holder);
-	}
+		String fieldName = element.getSimpleName().toString();
 
-	@Override
-	public JBlock getInvocationBlock(EComponentHolder holder) {
-		return holder.getInitBodyInjectionBlock();
-	}
-
-	@Override
-	public void assignValue(JBlock targetBlock, IJAssignmentTarget fieldRef, EComponentHolder holder, Element element, Element param) {
-		TypeMirror fieldTypeMirror = param.asType();
-		TypeMirror erasedFieldTypeMirror = getProcessingEnvironment().getTypeUtils().erasure(fieldTypeMirror);
+		TypeMirror fieldTypeMirror = element.asType();
+		TypeMirror erasedFieldTypeMirror = processingEnvironment().getTypeUtils().erasure(fieldTypeMirror);
 		String interfaceName = erasedFieldTypeMirror.toString();
 
 		String generatedClassName = interfaceName + classSuffix();
 
-		AbstractJClass clazz = codeModelHelper.narrowGeneratedClass(getJClass(generatedClassName), fieldTypeMirror);
+		JClass clazz = codeModelHelper.narrowGeneratedClass(refClass(generatedClassName), fieldTypeMirror);
 
-		targetBlock.add(fieldRef.assign(JExpr._new(clazz).arg(holder.getContextRef())));
-	}
+		JBlock methodBody = holder.getInitBody();
 
-	@Override
-	public void validateEnclosingElement(Element element, ElementValidation valid) {
-		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(element, valid);
+		JFieldRef field = JExpr.ref(fieldName);
+
+		methodBody.assign(field, JExpr._new(clazz).arg(holder.getContextRef()));
 	}
 }

@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.inspector.database;
@@ -13,12 +15,12 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteStatement;
-
 import com.facebook.stetho.common.Util;
+import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
 import com.facebook.stetho.inspector.protocol.module.Database;
 import com.facebook.stetho.inspector.protocol.module.DatabaseConstants;
-import com.facebook.stetho.inspector.protocol.module.DatabaseDescriptor;
-import com.facebook.stetho.inspector.protocol.module.DatabaseDriver2;
+
+import javax.annotation.concurrent.ThreadSafe;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -27,11 +29,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import javax.annotation.concurrent.ThreadSafe;
-
 @ThreadSafe
-public class SqliteDatabaseDriver
-    extends DatabaseDriver2<SqliteDatabaseDriver.SqliteDatabaseDescriptor> {
+public class SqliteDatabaseDriver extends Database.DatabaseDriver {
   private static final String[] UNINTERESTING_FILENAME_SUFFIXES = new String[]{
       "-journal",
       "-shm",
@@ -40,61 +39,59 @@ public class SqliteDatabaseDriver
   };
 
   private final DatabaseFilesProvider mDatabaseFilesProvider;
-  private final DatabaseConnectionProvider mDatabaseConnectionProvider;
+  private final Set<String> mDatabases;
 
   /**
    * Constructs the object with a {@link DatabaseFilesProvider} that supplies the database files
    * from {@link Context#databaseList()}.
    *
    * @param context the context
-   * @deprecated use {@link SqliteDatabaseDriver#SqliteDatabaseDriver(Context, String, DatabaseFilesProvider, DatabaseConnectionProvider)}
+   * @deprecated use the other {@linkplain SqliteDatabaseDriver#SqliteDatabaseDriver(Context,
+   * DatabaseFilesProvider) constructor} and pass in the {@linkplain DefaultDatabaseFilesProvider
+   * default provider}.
    */
   @Deprecated
   public SqliteDatabaseDriver(Context context) {
-    this(
-        context,
-        new DefaultDatabaseFilesProvider(context),
-        new DefaultDatabaseConnectionProvider());
-  }
-
-  /**
-   * @deprecated use {@link SqliteDatabaseDriver#SqliteDatabaseDriver(Context, String, DatabaseFilesProvider, DatabaseConnectionProvider)}
-   */
-  @Deprecated
-  public SqliteDatabaseDriver(
-      Context context,
-      DatabaseFilesProvider databaseFilesProvider) {
-    this(
-        context,
-        databaseFilesProvider,
-        new DefaultDatabaseConnectionProvider());
+    this(context, new DefaultDatabaseFilesProvider(context));
   }
 
   /**
    * @param context the context
-   * @param namespace label to apply to the driver when it appears in the UI
    * @param databaseFilesProvider a database file name provider
-   * @param databaseConnectionProvider a database connection provider
    */
-  public SqliteDatabaseDriver(
-      Context context,
-      DatabaseFilesProvider databaseFilesProvider,
-      DatabaseConnectionProvider databaseConnectionProvider) {
+  public SqliteDatabaseDriver(Context context, DatabaseFilesProvider databaseFilesProvider) {
     super(context);
+    mDatabases = new HashSet<>();
     mDatabaseFilesProvider = databaseFilesProvider;
-    mDatabaseConnectionProvider = databaseConnectionProvider;
   }
 
   @Override
-  public List<SqliteDatabaseDescriptor> getDatabaseNames() {
-    ArrayList<SqliteDatabaseDescriptor> databases = new ArrayList<>();
+  protected void onRegistered(JsonRpcPeer peer) {
     List<File> potentialDatabaseFiles = mDatabaseFilesProvider.getDatabaseFiles();
     Collections.sort(potentialDatabaseFiles);
     Iterable<File> tidiedList = tidyDatabaseList(potentialDatabaseFiles);
     for (File database : tidiedList) {
-      databases.add(new SqliteDatabaseDescriptor(database));
+      Database.DatabaseObject databaseParams = new Database.DatabaseObject();
+      databaseParams.id = database.getPath();
+      databaseParams.name = database.getName();
+      databaseParams.domain = mContext.getPackageName();
+      databaseParams.version = "N/A";
+      Database.AddDatabaseEvent eventParams = new Database.AddDatabaseEvent();
+      eventParams.database = databaseParams;
+
+      peer.invokeMethod("Database.addDatabase", eventParams, null /* callback */);
+      mDatabases.add(databaseParams.id);
     }
-    return databases;
+  }
+
+  @Override
+  protected void onUnregistered(JsonRpcPeer peer) {
+
+  }
+
+  @Override
+  public boolean contains(String databaseId) {
+    return mDatabases.contains(databaseId);
   }
 
   /**
@@ -128,9 +125,9 @@ public class SqliteDatabaseDriver
     return str;
   }
 
-  public List<String> getTableNames(SqliteDatabaseDescriptor databaseDesc)
+  public List<String> getDatabaseTableNames(String databaseName)
       throws SQLiteException {
-    SQLiteDatabase database = openDatabase(databaseDesc);
+    SQLiteDatabase database = openDatabase(databaseName);
     try {
       Cursor cursor = database.rawQuery("SELECT name FROM sqlite_master WHERE type IN (?, ?)",
           new String[] { "table", "view" });
@@ -148,14 +145,11 @@ public class SqliteDatabaseDriver
     }
   }
 
-  public Database.ExecuteSQLResponse executeSQL(
-      SqliteDatabaseDescriptor databaseDesc,
-      String query,
-      ExecuteResultHandler<Database.ExecuteSQLResponse> handler)
-          throws SQLiteException {
+  public <T> T executeSQL(String databaseName, String query, ExecuteResultHandler<T> handler)
+      throws SQLiteException {
     Util.throwIfNull(query);
     Util.throwIfNull(handler);
-    SQLiteDatabase database = openDatabase(databaseDesc);
+    SQLiteDatabase database = openDatabase(databaseName);
     try {
       String firstWordUpperCase = getFirstWord(query).toUpperCase();
       switch (firstWordUpperCase) {
@@ -221,23 +215,14 @@ public class SqliteDatabaseDriver
     return handler.handleRawQuery();
   }
 
-  private SQLiteDatabase openDatabase(
-      SqliteDatabaseDescriptor databaseDesc)
-      throws SQLiteException {
-    Util.throwIfNull(databaseDesc);
-    return mDatabaseConnectionProvider.openDatabase(databaseDesc.file);
+  private SQLiteDatabase openDatabase(String databaseName) throws SQLiteException {
+    Util.throwIfNull(databaseName);
+    File databaseFile = mContext.getDatabasePath(databaseName);
+
+    // Execpted to throw if it cannot open the file (for example, if it doesn't exist).
+    return SQLiteDatabase.openDatabase(databaseFile.getAbsolutePath(),
+        null /* cursorFactory */,
+        SQLiteDatabase.OPEN_READWRITE);
   }
 
-  static class SqliteDatabaseDescriptor implements DatabaseDescriptor {
-    public final File file;
-
-    public SqliteDatabaseDescriptor(File file) {
-      this.file = file;
-    }
-
-    @Override
-    public String name() {
-      return file.getName();
-    }
-  }
 }

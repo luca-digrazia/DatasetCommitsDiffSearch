@@ -1,15 +1,9 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.protocol.module;
 
 import android.annotation.SuppressLint;
 
-import com.facebook.stetho.inspector.console.ConsolePeerManager;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsDomain;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsMethod;
@@ -24,12 +18,10 @@ public class Console implements ChromeDevtoolsDomain {
 
   @ChromeDevtoolsMethod
   public void enable(JsonRpcPeer peer, JSONObject params) {
-    ConsolePeerManager.getOrCreateInstance().addPeer(peer);
   }
 
   @ChromeDevtoolsMethod
   public void disable(JsonRpcPeer peer, JSONObject params) {
-    ConsolePeerManager.getOrCreateInstance().removePeer(peer);
   }
 
   @SuppressLint({ "UsingDefaultJsonDeserializer", "EmptyJsonPropertyUse" })

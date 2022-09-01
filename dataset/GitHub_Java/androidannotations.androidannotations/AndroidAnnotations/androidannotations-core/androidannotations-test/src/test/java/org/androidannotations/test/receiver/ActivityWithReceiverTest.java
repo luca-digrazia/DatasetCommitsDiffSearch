@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,7 +15,6 @@
  */
 package org.androidannotations.test.receiver;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -25,7 +23,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.RuntimeEnvironment;
 
 import android.content.Intent;
 import android.net.Uri;
@@ -57,20 +54,20 @@ public class ActivityWithReceiverTest {
 	public void onLocalWifiStateChangedTest() {
 		Intent intent = new Intent(WifiManager.NETWORK_STATE_CHANGED_ACTION);
 
-		LocalBroadcastManager.getInstance(RuntimeEnvironment.application).sendBroadcast(intent);
+		LocalBroadcastManager.getInstance(Robolectric.application).sendBroadcast(intent);
 
 		assertTrue(activity.localWifiChangeIntentReceived);
 	}
 
 	@Test
 	public void onDataShemeHttpTest() {
-		Intent intentFtp = new Intent(ActivityWithReceiver.CUSTOM_HTTP_ACTION);
+		Intent intentFtp = new Intent("CUSTOM_HTTP_ACTION");
 		intentFtp.setData(Uri.parse("ftp://androidannotations.org"));
 		activity.sendBroadcast(intentFtp);
 
 		assertFalse(activity.dataSchemeHttpIntentReceived);
 
-		Intent intentHttp = new Intent(ActivityWithReceiver.CUSTOM_HTTP_ACTION);
+		Intent intentHttp = new Intent("CUSTOM_HTTP_ACTION");
 		intentHttp.setData(Uri.parse("http://androidannotations.org"));
 		activity.sendBroadcast(intentHttp);
 
@@ -79,8 +76,8 @@ public class ActivityWithReceiverTest {
 
 	@Test
 	public void onBroadcastWithTwoActionsTest() {
-		Intent intent1 = new Intent(ActivityWithReceiver.ACTION_1);
-		Intent intent2 = new Intent(ActivityWithReceiver.ACTION_2);
+		Intent intent1 = new Intent("org.androidannotations.ACTION_1");
+		Intent intent2 = new Intent("org.androidannotations.ACTION_2");
 
 		assertFalse(activity.action1Fired);
 		assertFalse(activity.action2Fired);
@@ -92,18 +89,6 @@ public class ActivityWithReceiverTest {
 		activity.sendBroadcast(intent2);
 		assertTrue(activity.action1Fired);
 		assertTrue(activity.action2Fired);
-	}
-
-	@Test
-	public void onBroadcastWithExtrasTest() {
-		Intent intent = new Intent(ActivityWithReceiver.ACTION_1);
-		Intent extraIntent = new Intent("someAction");
-		intent.putExtra("extraIntent", extraIntent);
-
-		activity.sendBroadcast(intent);
-
-		assertEquals(intent, activity.originalIntent);
-		assertEquals(extraIntent, activity.extraIntent);
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,18 +29,16 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.scope;
 
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.LLVMInternalTruffleObject;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 
 /**
  * This class is used to wrap global variables when they are added to debug scopes by the LLVM
  * parser, so that the LLVMToDebugValueNode later on recognizes them.
  */
-@ExportLibrary(value = LLVMAsForeignLibrary.class, useForAOT = true, useForAOTPriority = 1)
-public final class LLVMDebugGlobalVariable extends LLVMInternalTruffleObject {
+public final class LLVMDebugGlobalVariable implements LLVMInternalTruffleObject {
 
     private final LLVMGlobal descriptor;
 
@@ -52,9 +50,12 @@ public final class LLVMDebugGlobalVariable extends LLVMInternalTruffleObject {
         return descriptor;
     }
 
-    @ExportMessage
-    public static boolean isForeign(@SuppressWarnings("unused") LLVMDebugGlobalVariable receiver) {
-        return false;
+    public static boolean isInstance(TruffleObject object) {
+        return object instanceof LLVMDebugGlobalVariable;
     }
 
+    @Override
+    public ForeignAccess getForeignAccess() {
+        throw new RuntimeException("should not reach here - should not escape out of Sulong");
+    }
 }

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,31 +15,30 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._this;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JExpr._this;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.helper.AndroidManifest;
+import org.androidannotations.helper.IntentBuilder;
+import org.androidannotations.helper.ServiceIntentBuilder;
 import org.androidannotations.holder.ReceiverRegistrationDelegate.IntentFilterData;
-import org.androidannotations.internal.core.helper.IntentBuilder;
-import org.androidannotations.internal.core.helper.ServiceIntentBuilder;
 
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JMethod;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JMethod;
 
 public class EServiceHolder extends EComponentHolder implements HasIntentBuilder, HasReceiverRegistration {
 
 	private ServiceIntentBuilder intentBuilder;
 	private JDefinedClass intentBuilderClass;
 	private ReceiverRegistrationDelegate<EServiceHolder> receiverRegistrationDelegate;
-	private JBlock onCreateAfterSuperBlock;
 	private JBlock onDestroyBeforeSuperBlock;
 
 	public EServiceHolder(AndroidAnnotationsEnvironment environment, TypeElement annotatedElement, AndroidManifest androidManifest) throws Exception {
@@ -62,24 +60,23 @@ public class EServiceHolder extends EComponentHolder implements HasIntentBuilder
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, getCodeModel().VOID, "init" + generationSuffix());
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
 		setOnCreate();
 	}
 
 	private void setOnCreate() {
-		JMethod onCreate = generatedClass.method(PUBLIC, getCodeModel().VOID, "onCreate");
+		JMethod onCreate = generatedClass.method(PUBLIC, codeModel().VOID, "onCreate");
 		onCreate.annotate(Override.class);
 		JBlock onCreateBody = onCreate.body();
 		onCreateBody.invoke(getInit());
 		onCreateBody.invoke(JExpr._super(), onCreate);
-		onCreateAfterSuperBlock = onCreateBody.blockVirtual();
 	}
 
 	private void setOnDestroy() {
-		JMethod onDestroy = generatedClass.method(PUBLIC, getCodeModel().VOID, "onDestroy");
+		JMethod onDestroy = generatedClass.method(PUBLIC, codeModel().VOID, "onDestroy");
 		onDestroy.annotate(Override.class);
 		JBlock onDestroyBody = onDestroy.body();
-		onDestroyBeforeSuperBlock = onDestroyBody.blockSimple();
+		onDestroyBeforeSuperBlock = onDestroyBody.block();
 		onDestroyBody.invoke(JExpr._super(), onDestroy);
 	}
 
@@ -100,20 +97,49 @@ public class EServiceHolder extends EComponentHolder implements HasIntentBuilder
 
 	@Override
 	public JBlock getIntentFilterInitializationBlock(IntentFilterData intentFilterData) {
-		return getInitBodyInjectionBlock();
+		return getInitBody();
 	}
 
 	@Override
-	public JBlock getStartLifecycleAfterSuperBlock() {
-		return onCreateAfterSuperBlock;
+	public JBlock getOnCreateAfterSuperBlock() {
+		return getInitBody();
 	}
 
 	@Override
-	public JBlock getEndLifecycleBeforeSuperBlock() {
+	public JBlock getOnDestroyBeforeSuperBlock() {
 		if (onDestroyBeforeSuperBlock == null) {
 			setOnDestroy();
 		}
-
 		return onDestroyBeforeSuperBlock;
+	}
+
+	@Override
+	public JBlock getOnStartAfterSuperBlock() {
+		return receiverRegistrationDelegate.getOnStartAfterSuperBlock();
+	}
+
+	@Override
+	public JBlock getOnStopBeforeSuperBlock() {
+		return receiverRegistrationDelegate.getOnStopBeforeSuperBlock();
+	}
+
+	@Override
+	public JBlock getOnResumeAfterSuperBlock() {
+		return receiverRegistrationDelegate.getOnAttachAfterSuperBlock();
+	}
+
+	@Override
+	public JBlock getOnPauseBeforeSuperBlock() {
+		return receiverRegistrationDelegate.getOnPauseBeforeSuperBlock();
+	}
+
+	@Override
+	public JBlock getOnAttachAfterSuperBlock() {
+		return receiverRegistrationDelegate.getOnAttachAfterSuperBlock();
+	}
+
+	@Override
+	public JBlock getOnDetachBeforeSuperBlock() {
+		return receiverRegistrationDelegate.getOnDetachBeforeSuperBlock();
 	}
 }

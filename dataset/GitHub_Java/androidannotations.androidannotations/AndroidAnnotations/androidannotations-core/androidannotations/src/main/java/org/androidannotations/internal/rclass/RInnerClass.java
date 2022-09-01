@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -129,10 +128,6 @@ public class RInnerClass implements IRInnerClass {
 
 			String rClassQualifiedName = rInnerClassName.substring(0, innerClassSuffix);
 			String innerClassSimpleName = rInnerClassName.substring(innerClassSuffix + 1);
-
-			if (rClassQualifiedName.endsWith("R2")) {
-				rClassQualifiedName = rClassQualifiedName.substring(0, rClassQualifiedName.length() - 1);
-			}
 
 			JDirectClass rClass = (JDirectClass) environment.getJClass(rClassQualifiedName);
 

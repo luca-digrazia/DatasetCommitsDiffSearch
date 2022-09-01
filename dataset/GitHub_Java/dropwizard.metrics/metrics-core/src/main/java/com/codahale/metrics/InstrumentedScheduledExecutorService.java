@@ -3,24 +3,18 @@ package com.codahale.metrics;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * An {@link ScheduledExecutorService} that monitors the number of tasks submitted, running,
  * completed and also keeps a {@link Timer} for the task duration.
- * <p>
+ * <p/>
  * It will register the metrics using the given (or auto-generated) name as classifier, e.g:
  * "your-executor-service.submitted", "your-executor-service.running", etc.
  */
 public class InstrumentedScheduledExecutorService implements ScheduledExecutorService {
-    private static final AtomicLong NAME_COUNTER = new AtomicLong();
+    private static final AtomicLong nameCounter = new AtomicLong();
 
     private final ScheduledExecutorService delegate;
 
@@ -41,7 +35,7 @@ public class InstrumentedScheduledExecutorService implements ScheduledExecutorSe
      * @param registry {@link MetricRegistry} that will contain the metrics.
      */
     public InstrumentedScheduledExecutorService(ScheduledExecutorService delegate, MetricRegistry registry) {
-        this(delegate, registry, "instrumented-scheduled-executor-service-" + NAME_COUNTER.incrementAndGet());
+        this(delegate, registry, "instrumented-scheduled-executor-service-" + nameCounter.incrementAndGet());
     }
 
     /**
@@ -81,7 +75,7 @@ public class InstrumentedScheduledExecutorService implements ScheduledExecutorSe
     @Override
     public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
         scheduledOnce.mark();
-        return delegate.schedule(new InstrumentedCallable<>(callable), delay, unit);
+        return delegate.schedule(new InstrumentedCallable<V>(callable), delay, unit);
     }
 
     /**
@@ -99,7 +93,7 @@ public class InstrumentedScheduledExecutorService implements ScheduledExecutorSe
     @Override
     public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
         scheduledRepetitively.mark();
-        return delegate.scheduleWithFixedDelay(new InstrumentedRunnable(command), initialDelay, delay, unit);
+        return delegate.scheduleAtFixedRate(new InstrumentedRunnable(command), initialDelay, delay, unit);
     }
 
     /**
@@ -148,7 +142,7 @@ public class InstrumentedScheduledExecutorService implements ScheduledExecutorSe
     @Override
     public <T> Future<T> submit(Callable<T> task) {
         submitted.mark();
-        return delegate.submit(new InstrumentedCallable<>(task));
+        return delegate.submit(new InstrumentedCallable<T>(task));
     }
 
     /**
@@ -210,9 +204,9 @@ public class InstrumentedScheduledExecutorService implements ScheduledExecutorSe
     }
 
     private <T> Collection<? extends Callable<T>> instrument(Collection<? extends Callable<T>> tasks) {
-        final List<InstrumentedCallable<T>> instrumented = new ArrayList<>(tasks.size());
+        final List<InstrumentedCallable<T>> instrumented = new ArrayList<InstrumentedCallable<T>>(tasks.size());
         for (Callable<T> task : tasks) {
-            instrumented.add(new InstrumentedCallable<>(task));
+            instrumented.add(new InstrumentedCallable(task));
         }
         return instrumented;
     }

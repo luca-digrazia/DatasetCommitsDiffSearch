@@ -1,15 +1,12 @@
 package io.dropwizard;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.dropwizard.health.HealthFactory;
-import io.dropwizard.logging.DefaultLoggingFactory;
+import com.google.common.base.MoreObjects;
 import io.dropwizard.logging.LoggingFactory;
 import io.dropwizard.metrics.MetricsFactory;
 import io.dropwizard.server.DefaultServerFactory;
 import io.dropwizard.server.ServerFactory;
-import io.dropwizard.setup.AdminFactory;
-import java.util.Optional;
-import javax.annotation.Nullable;
+
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
 
@@ -67,20 +64,12 @@ public class Configuration {
     private ServerFactory server = new DefaultServerFactory();
 
     @Valid
-    @Nullable
-    private LoggingFactory logging;
+    @NotNull
+    private LoggingFactory logging = new LoggingFactory();
 
     @Valid
     @NotNull
     private MetricsFactory metrics = new MetricsFactory();
-
-    @Valid
-    @NotNull
-    private AdminFactory admin = new AdminFactory();
-
-    @Valid
-    @Nullable
-    private HealthFactory health;
 
     /**
      * Returns the server-specific section of the configuration file.
@@ -106,11 +95,7 @@ public class Configuration {
      * @return logging-specific configuration parameters
      */
     @JsonProperty("logging")
-    public synchronized LoggingFactory getLoggingFactory() {
-        if (logging == null) {
-            // Lazy init to avoid a hard dependency to logback
-            logging = new DefaultLoggingFactory();
-        }
+    public LoggingFactory getLoggingFactory() {
         return logging;
     }
 
@@ -118,7 +103,7 @@ public class Configuration {
      * Sets the logging-specific section of the configuration file.
      */
     @JsonProperty("logging")
-    public synchronized void setLoggingFactory(LoggingFactory factory) {
+    public void setLoggingFactory(LoggingFactory factory) {
         this.logging = factory;
     }
 
@@ -132,50 +117,11 @@ public class Configuration {
         this.metrics = metrics;
     }
 
-    /**
-     * Returns the admin interface-specific section of the configuration file.
-     *
-     * @return admin interface-specific configuration parameters
-     * @since 2.0
-     */
-    @JsonProperty("admin")
-    public AdminFactory getAdminFactory() {
-        return admin;
-    }
-
-    /**
-     * Sets the admin interface-specific section of the configuration file.
-     *
-     * @since 2.0
-     */
-    @JsonProperty("admin")
-    public void setAdminFactory(AdminFactory admin) {
-        this.admin = admin;
-    }
-
-    /**
-     * Returns the health interface-specific section of the configuration file.
-     *
-     * @return health interface-specific configuration parameters
-     * @since 2.1
-     */
-    @JsonProperty("health")
-    public Optional<HealthFactory> getHealthFactory() {
-        return Optional.ofNullable(health);
-    }
-
-    /**
-     * Sets the health interface-specific section of the configuration file.
-     *
-     * @since 2.1
-     */
-    @JsonProperty("health")
-    public void setHealthFactory(HealthFactory health) {
-        this.health = health;
-    }
-
     @Override
     public String toString() {
-        return "Configuration{server=" + server + ", logging=" + logging + ", metrics=" + metrics + ", admin=" + admin + ", health=" + health + "}";
+        return MoreObjects.toStringHelper(this)
+                .add("server", server)
+                .add("logging", logging)
+                .toString();
     }
 }

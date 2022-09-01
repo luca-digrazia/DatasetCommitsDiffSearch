@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,74 +15,55 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JExpr._null;
-import static com.helger.jcodemodel.JExpr._this;
-import static com.helger.jcodemodel.JExpr.cast;
-import static com.helger.jcodemodel.JExpr.invoke;
-import static com.helger.jcodemodel.JMod.FINAL;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr._this;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.invoke;
+import static com.sun.codemodel.JMod.FINAL;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.api.bean.BeanHolder;
 import org.androidannotations.api.view.HasViews;
 import org.androidannotations.api.view.OnViewChangedListener;
 import org.androidannotations.api.view.OnViewChangedNotifier;
-import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.internal.helper.ViewNotifierHelper;
+import org.androidannotations.helper.ViewNotifierHelper;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJAssignmentTarget;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JDirectClass;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JSwitch;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
-public abstract class EComponentWithViewSupportHolder extends EComponentHolder implements HasKeyEventCallbackMethods {
+public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 
 	protected ViewNotifierHelper viewNotifierHelper;
 	private JMethod onViewChanged;
 	private JBlock onViewChangedBody;
-	private JBlock onViewChangedBodyInjectionBlock;
-	private JBlock onViewChangedBodyViewHolderBlock;
-	private JBlock onViewChangedBodyAfterInjectionBlock;
-	private JBlock onViewChangedBodyBeforeInjectionBlock;
+	private JBlock onViewChangedBodyBeforeFindViews;
 	private JVar onViewChangedHasViewsParam;
 	protected Map<String, FoundHolder> foundHolders = new HashMap<>();
-	protected DataBindingDelegate dataBindingDelegate;
 	protected JMethod findNativeFragmentById;
 	protected JMethod findSupportFragmentById;
 	protected JMethod findNativeFragmentByTag;
 	protected JMethod findSupportFragmentByTag;
 	private Map<String, TextWatcherHolder> textWatcherHolders = new HashMap<>();
 	private Map<String, OnSeekBarChangeListenerHolder> onSeekBarChangeListenerHolders = new HashMap<>();
-	private Map<String, PageChangeHolder> pageChangeHolders = new HashMap<>();
-	private KeyEventCallbackMethodsDelegate<EComponentWithViewSupportHolder> keyEventCallbackMethodsDelegate;
 
 	public EComponentWithViewSupportHolder(AndroidAnnotationsEnvironment environment, TypeElement annotatedElement) throws Exception {
 		super(environment, annotatedElement);
-		viewNotifierHelper = new ViewNotifierHelper(this, environment);
-		keyEventCallbackMethodsDelegate = new KeyEventCallbackMethodsDelegate<>(this);
-		dataBindingDelegate = new DataBindingDelegate(this);
-	}
-
-	public IJExpression getFindViewByIdExpression(JVar idParam) {
-		return _null();
+		viewNotifierHelper = new ViewNotifierHelper(this);
 	}
 
 	public JBlock getOnViewChangedBody() {
@@ -93,32 +73,11 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		return onViewChangedBody;
 	}
 
-	public JBlock getOnViewChangedBodyBeforeInjectionBlock() {
-		if (onViewChangedBodyBeforeInjectionBlock == null) {
+	public JBlock getOnViewChangedBodyBeforeFindViews() {
+		if (onViewChangedBodyBeforeFindViews == null) {
 			setOnViewChanged();
 		}
-		return onViewChangedBodyBeforeInjectionBlock;
-	}
-
-	public JBlock getOnViewChangedBodyInjectionBlock() {
-		if (onViewChangedBodyInjectionBlock == null) {
-			setOnViewChanged();
-		}
-		return onViewChangedBodyInjectionBlock;
-	}
-
-	public JBlock getOnViewChangedBodyViewHolderBlock() {
-		if (onViewChangedBodyViewHolderBlock == null) {
-			setOnViewChanged();
-		}
-		return onViewChangedBodyViewHolderBlock;
-	}
-
-	public JBlock getOnViewChangedBodyAfterInjectionBlock() {
-		if (onViewChangedBodyAfterInjectionBlock == null) {
-			setOnViewChanged();
-		}
-		return onViewChangedBodyAfterInjectionBlock;
+		return onViewChangedBodyBeforeFindViews;
 	}
 
 	public JVar getOnViewChangedHasViewsParam() {
@@ -130,80 +89,71 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 
 	protected void setOnViewChanged() {
 		getGeneratedClass()._implements(OnViewChangedListener.class);
-		onViewChanged = getGeneratedClass().method(PUBLIC, getCodeModel().VOID, "onViewChanged");
+		onViewChanged = getGeneratedClass().method(PUBLIC, codeModel().VOID, "onViewChanged");
 		onViewChanged.annotate(Override.class);
 		onViewChangedBody = onViewChanged.body();
-		onViewChangedBodyBeforeInjectionBlock = onViewChangedBody.blockVirtual();
-		onViewChangedBodyViewHolderBlock = onViewChangedBody.blockVirtual();
-		onViewChangedBodyInjectionBlock = onViewChangedBody.blockVirtual();
-		onViewChangedBodyAfterInjectionBlock = onViewChangedBody.blockVirtual();
+		onViewChangedBodyBeforeFindViews = onViewChangedBody.block();
 		onViewChangedHasViewsParam = onViewChanged.param(HasViews.class, "hasViews");
-		AbstractJClass notifierClass = getJClass(OnViewChangedNotifier.class);
-		getInitBodyInjectionBlock().staticInvoke(notifierClass, "registerOnViewChangedListener").arg(_this());
-	}
-
-	protected void implementBeanHolder() {
-		getGeneratedClass()._implements(BeanHolder.class);
-		JDirectClass genericType = getCodeModel().directClass("T");
-
-		JFieldVar beansField = getGeneratedClass().field(PRIVATE | FINAL, getClasses().MAP.narrow(getClasses().CLASS.narrowAny(), getClasses().OBJECT), "beans_",
-				_new(getClasses().HASH_MAP.narrow(getClasses().CLASS.narrowAny(), getClasses().OBJECT)));
-
-		JMethod getBeanMethod = getGeneratedClass().method(PUBLIC, genericType, "getBean");
-		getBeanMethod.generify("T");
-		getBeanMethod.annotate(Override.class);
-
-		JVar keyParam = getBeanMethod.param(getClasses().CLASS.narrow(genericType), "key");
-		getBeanMethod.body()._return(cast(genericType, beansField.invoke("get").arg(keyParam)));
-
-		JMethod putBeanMethod = getGeneratedClass().method(PUBLIC, getCodeModel().VOID, "putBean");
-		putBeanMethod.generify("T");
-		putBeanMethod.annotate(Override.class);
-
-		keyParam = putBeanMethod.param(getClasses().CLASS.narrow(genericType), "key");
-		JVar valueParam = putBeanMethod.param(genericType, "value");
-		putBeanMethod.body().add(beansField.invoke("put").arg(keyParam).arg(valueParam));
+		JClass notifierClass = refClass(OnViewChangedNotifier.class);
+		getInitBody().staticInvoke(notifierClass, "registerOnViewChangedListener").arg(_this());
 	}
 
 	public JInvocation findViewById(JFieldRef idRef) {
-		JInvocation findViewById = invoke(getOnViewChangedHasViewsParam(), "internalFindViewById");
+		JInvocation findViewById = invoke(getOnViewChangedHasViewsParam(), "findViewById");
 		findViewById.arg(idRef);
 		return findViewById;
 	}
 
-	public FoundViewHolder getFoundViewHolder(JFieldRef idRef, AbstractJClass viewClass) {
-		return getFoundViewHolder(idRef, viewClass, null);
+	public void processViewById(JFieldRef idRef, JClass viewClass, JFieldRef fieldRef) {
+		assignFindViewById(idRef, viewClass, fieldRef);
 	}
 
-	public FoundViewHolder getFoundViewHolder(JFieldRef idRef, AbstractJClass viewClass, IJAssignmentTarget fieldRef) {
-		String idRefString = idRef.name();
+	public void assignFindViewById(JFieldRef idRef, JClass viewClass, JFieldRef fieldRef) {
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
+		FoundViewHolder foundViewHolder = (FoundViewHolder) foundHolders.get(idRefString);
+
+		JBlock block = getOnViewChangedBody();
+		JExpression assignExpression;
+
+		if (foundViewHolder != null) {
+			assignExpression = foundViewHolder.getOrCastRef(viewClass);
+		} else {
+			assignExpression = findViewById(idRef);
+			if (viewClass != null && viewClass != classes().VIEW) {
+				assignExpression = cast(viewClass, assignExpression);
+
+				if (viewClass.isParameterized()) {
+					codeModelHelper.addSuppressWarnings(onViewChanged, "unchecked");
+				}
+			}
+			foundHolders.put(idRefString, new FoundViewHolder(this, viewClass, fieldRef, block));
+		}
+
+		block.assign(fieldRef, assignExpression);
+	}
+
+	public FoundViewHolder getFoundViewHolder(JFieldRef idRef, JClass viewClass) {
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
 		FoundViewHolder foundViewHolder = (FoundViewHolder) foundHolders.get(idRefString);
 		if (foundViewHolder == null) {
-			foundViewHolder = createFoundViewAndIfNotNullBlock(idRef, viewClass, fieldRef);
+			foundViewHolder = createFoundViewAndIfNotNullBlock(idRef, viewClass);
 			foundHolders.put(idRefString, foundViewHolder);
 		}
 		return foundViewHolder;
 	}
 
-	protected FoundViewHolder createFoundViewAndIfNotNullBlock(JFieldRef idRef, AbstractJClass viewClass, IJAssignmentTarget fieldRef) {
-		IJExpression findViewExpression = findViewById(idRef);
-		JBlock block = getOnViewChangedBodyBeforeInjectionBlock();
+	protected FoundViewHolder createFoundViewAndIfNotNullBlock(JFieldRef idRef, JClass viewClass) {
+		JExpression findViewExpression = findViewById(idRef);
+		JBlock block = getOnViewChangedBody().block();
 
 		if (viewClass == null) {
-			viewClass = getClasses().VIEW;
+			viewClass = classes().VIEW;
+		} else if (viewClass != classes().VIEW) {
+			findViewExpression = cast(viewClass, findViewExpression);
 		}
 
-		IJAssignmentTarget foundView = fieldRef;
-		if (foundView == null) {
-			JVar view = block.decl(viewClass, "view_" + idRef.name(), findViewExpression);
-			if (viewClass.isParameterized()) {
-				codeModelHelper.addSuppressWarnings(view, "unchecked");
-			}
-			foundView = view;
-		} else {
-			block.add(foundView.assign(findViewExpression));
-		}
-		return new FoundViewHolder(this, viewClass, foundView, getOnViewChangedBodyViewHolderBlock());
+		JVar view = block.decl(viewClass, "view", findViewExpression);
+		return new FoundViewHolder(this, viewClass, view, block);
 	}
 
 	public JMethod getFindNativeFragmentById() {
@@ -214,14 +164,14 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	protected void setFindNativeFragmentById() {
-		findNativeFragmentById = getGeneratedClass().method(PRIVATE, getClasses().FRAGMENT, "findNativeFragmentById");
-		JVar idParam = findNativeFragmentById.param(getCodeModel().INT, "id");
+		findNativeFragmentById = getGeneratedClass().method(PRIVATE, classes().FRAGMENT, "findNativeFragmentById");
+		JVar idParam = findNativeFragmentById.param(codeModel().INT, "id");
 
 		JBlock body = findNativeFragmentById.body();
 
-		body._if(getContextRef()._instanceof(getClasses().ACTIVITY).not())._then()._return(_null());
+		body._if(getContextRef()._instanceof(classes().ACTIVITY).not())._then()._return(_null());
 
-		JVar activityVar = body.decl(getClasses().ACTIVITY, "activity_", cast(getClasses().ACTIVITY, getContextRef()));
+		JVar activityVar = body.decl(classes().ACTIVITY, "activity_", cast(classes().ACTIVITY, getContextRef()));
 
 		body._return(activityVar.invoke("getFragmentManager").invoke("findFragmentById").arg(idParam));
 	}
@@ -234,30 +184,16 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	protected void setFindSupportFragmentById() {
-		if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT) == null) {
-			findSupportFragmentById = getGeneratedClass().method(PRIVATE, getClasses().SUPPORT_V4_FRAGMENT, "findSupportFragmentById");
-		} else {
-			findSupportFragmentById = getGeneratedClass().method(PRIVATE, getClasses().ANDROIDX_FRAGMENT, "findSupportFragmentById");
-		}
-		JVar idParam = findSupportFragmentById.param(getCodeModel().INT, "id");
+		findSupportFragmentById = getGeneratedClass().method(PRIVATE, classes().SUPPORT_V4_FRAGMENT, "findSupportFragmentById");
+		JVar idParam = findSupportFragmentById.param(codeModel().INT, "id");
 
 		JBlock body = findSupportFragmentById.body();
 
-		AbstractJClass fragmentActivity = getFragmentActivity();
-		body._if(getContextRef()._instanceof(fragmentActivity).not())._then()._return(_null());
+		body._if(getContextRef()._instanceof(classes().FRAGMENT_ACTIVITY).not())._then()._return(_null());
 
-		JVar activityVar = body.decl(fragmentActivity, "activity_", cast(fragmentActivity, getContextRef()));
+		JVar activityVar = body.decl(classes().FRAGMENT_ACTIVITY, "activity_", cast(classes().FRAGMENT_ACTIVITY, getContextRef()));
 
 		body._return(activityVar.invoke("getSupportFragmentManager").invoke("findFragmentById").arg(idParam));
-	}
-
-	private AbstractJClass getFragmentActivity() {
-		Elements elementUtils = getProcessingEnvironment().getElementUtils();
-		if (elementUtils.getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT_ACTIVITY) != null) {
-			return getClasses().ANDROIDX_FRAGMENT_ACTIVITY;
-		} else {
-			return getClasses().FRAGMENT_ACTIVITY;
-		}
 	}
 
 	public JMethod getFindNativeFragmentByTag() {
@@ -268,14 +204,14 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	protected void setFindNativeFragmentByTag() {
-		findNativeFragmentByTag = getGeneratedClass().method(PRIVATE, getClasses().FRAGMENT, "findNativeFragmentByTag");
-		JVar tagParam = findNativeFragmentByTag.param(getClasses().STRING, "tag");
+		findNativeFragmentByTag = getGeneratedClass().method(PRIVATE, classes().FRAGMENT, "findNativeFragmentByTag");
+		JVar tagParam = findNativeFragmentByTag.param(classes().STRING, "tag");
 
 		JBlock body = findNativeFragmentByTag.body();
 
-		body._if(getContextRef()._instanceof(getClasses().ACTIVITY).not())._then()._return(_null());
+		body._if(getContextRef()._instanceof(classes().ACTIVITY).not())._then()._return(_null());
 
-		JVar activityVar = body.decl(getClasses().ACTIVITY, "activity_", cast(getClasses().ACTIVITY, getContextRef()));
+		JVar activityVar = body.decl(classes().ACTIVITY, "activity_", cast(classes().ACTIVITY, getContextRef()));
 
 		body._return(activityVar.invoke("getFragmentManager").invoke("findFragmentByTag").arg(tagParam));
 	}
@@ -288,25 +224,20 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	protected void setFindSupportFragmentByTag() {
-		if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT) == null) {
-			findSupportFragmentByTag = getGeneratedClass().method(PRIVATE, getClasses().SUPPORT_V4_FRAGMENT, "findSupportFragmentByTag");
-		} else {
-			findSupportFragmentByTag = getGeneratedClass().method(PRIVATE, getClasses().ANDROIDX_FRAGMENT, "findSupportFragmentByTag");
-		}
-		JVar tagParam = findSupportFragmentByTag.param(getClasses().STRING, "tag");
+		findSupportFragmentByTag = getGeneratedClass().method(PRIVATE, classes().SUPPORT_V4_FRAGMENT, "findSupportFragmentByTag");
+		JVar tagParam = findSupportFragmentByTag.param(classes().STRING, "tag");
 
 		JBlock body = findSupportFragmentByTag.body();
 
-		AbstractJClass fragmentActivity = getFragmentActivity();
-		body._if(getContextRef()._instanceof(fragmentActivity).not())._then()._return(_null());
+		body._if(getContextRef()._instanceof(classes().FRAGMENT_ACTIVITY).not())._then()._return(_null());
 
-		JVar activityVar = body.decl(fragmentActivity, "activity_", cast(fragmentActivity, getContextRef()));
+		JVar activityVar = body.decl(classes().FRAGMENT_ACTIVITY, "activity_", cast(classes().FRAGMENT_ACTIVITY, getContextRef()));
 
 		body._return(activityVar.invoke("getSupportFragmentManager").invoke("findFragmentByTag").arg(tagParam));
 	}
 
 	public TextWatcherHolder getTextWatcherHolder(JFieldRef idRef, TypeMirror viewParameterType) {
-		String idRefString = idRef.name();
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
 		TextWatcherHolder textWatcherHolder = textWatcherHolders.get(idRefString);
 		if (textWatcherHolder == null) {
 			textWatcherHolder = createTextWatcherHolder(idRef, viewParameterType);
@@ -316,22 +247,22 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	private TextWatcherHolder createTextWatcherHolder(JFieldRef idRef, TypeMirror viewParameterType) {
-		JDefinedClass onTextChangeListenerClass = getCodeModel().anonymousClass(getClasses().TEXT_WATCHER);
-		AbstractJClass viewClass = getClasses().TEXT_VIEW;
+		JDefinedClass onTextChangeListenerClass = codeModel().anonymousClass(classes().TEXT_WATCHER);
+		JClass viewClass = classes().TEXT_VIEW;
 		if (viewParameterType != null) {
-			viewClass = getJClass(viewParameterType.toString());
+			viewClass = refClass(viewParameterType.toString());
 		}
 
-		JBlock onViewChangedBody = getOnViewChangedBodyInjectionBlock().blockSimple();
+		JBlock onViewChangedBody = getOnViewChangedBody().block();
 		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
 		onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then() //
-				.invoke(viewVariable, "addTextChangedListener").arg(_new(onTextChangeListenerClass));
+		.invoke(viewVariable, "addTextChangedListener").arg(_new(onTextChangeListenerClass));
 
 		return new TextWatcherHolder(this, viewVariable, onTextChangeListenerClass);
 	}
 
 	public OnSeekBarChangeListenerHolder getOnSeekBarChangeListenerHolder(JFieldRef idRef) {
-		String idRefString = idRef.name();
+		String idRefString = codeModelHelper.getIdStringFromIdFieldRef(idRef);
 		OnSeekBarChangeListenerHolder onSeekBarChangeListenerHolder = onSeekBarChangeListenerHolders.get(idRefString);
 		if (onSeekBarChangeListenerHolder == null) {
 			onSeekBarChangeListenerHolder = createOnSeekBarChangeListenerHolder(idRef);
@@ -341,100 +272,15 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	private OnSeekBarChangeListenerHolder createOnSeekBarChangeListenerHolder(JFieldRef idRef) {
-		JDefinedClass onSeekbarChangeListenerClass = getCodeModel().anonymousClass(getClasses().ON_SEEKBAR_CHANGE_LISTENER);
-		AbstractJClass viewClass = getClasses().SEEKBAR;
+		JDefinedClass onSeekbarChangeListenerClass = codeModel().anonymousClass(classes().ON_SEEKBAR_CHANGE_LISTENER);
+		JClass viewClass = classes().SEEKBAR;
 
-		FoundViewHolder foundViewHolder = getFoundViewHolder(idRef, viewClass);
-		foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getRef(), "setOnSeekBarChangeListener").arg(_new(onSeekbarChangeListenerClass));
+		JBlock onViewChangedBody = getOnViewChangedBody().block();
+		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
+		onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then() //
+		.invoke(viewVariable, "setOnSeekBarChangeListener").arg(_new(onSeekbarChangeListenerClass));
 
 		return new OnSeekBarChangeListenerHolder(this, onSeekbarChangeListenerClass);
-	}
-
-	public PageChangeHolder getPageChangeHolder(JFieldRef idRef, TypeMirror viewParameterType, boolean hasAddOnPageChangeListenerMethod) {
-		String idRefString = idRef.name();
-		PageChangeHolder pageChangeHolder = pageChangeHolders.get(idRefString);
-		if (pageChangeHolder == null) {
-			pageChangeHolder = createPageChangeHolder(idRef, viewParameterType, hasAddOnPageChangeListenerMethod);
-			pageChangeHolders.put(idRefString, pageChangeHolder);
-		}
-		return pageChangeHolder;
-	}
-
-	private PageChangeHolder createPageChangeHolder(JFieldRef idRef, TypeMirror viewParameterType, boolean hasAddOnPageChangeListenerMethod) {
-		AbstractJClass viewClass;
-		JDefinedClass onPageChangeListenerClass;
-		if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_VIEW_PAGER) == null) {
-			viewClass = getClasses().VIEW_PAGER;
-			onPageChangeListenerClass = getCodeModel().anonymousClass(getClasses().PAGE_CHANGE_LISTENER);
-		} else {
-			viewClass = getClasses().ANDROIDX_VIEW_PAGER;
-			onPageChangeListenerClass = getCodeModel().anonymousClass(getClasses().ANDROIDX_PAGE_CHANGE_LISTENER);
-		}
-		if (viewParameterType != null) {
-			viewClass = getJClass(viewParameterType.toString());
-		}
-		JBlock onViewChangedBody = getOnViewChangedBodyInjectionBlock().blockSimple();
-		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
-		JBlock block = onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then();
-		if (hasAddOnPageChangeListenerMethod) {
-			block.invoke(viewVariable, "addOnPageChangeListener").arg(_new(onPageChangeListenerClass));
-		} else {
-			block.invoke(viewVariable, "setOnPageChangeListener").arg(_new(onPageChangeListenerClass));
-		}
-		return new PageChangeHolder(this, viewVariable, onPageChangeListenerClass);
-	}
-
-	@Override
-	public JSwitch getOnKeyDownSwitchBody() {
-		return keyEventCallbackMethodsDelegate.getOnKeyDownSwitchBody();
-	}
-
-	@Override
-	public JVar getOnKeyDownKeyEventParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyDownKeyEventParam();
-	}
-
-	@Override
-	public JSwitch getOnKeyLongPressSwitchBody() {
-		return keyEventCallbackMethodsDelegate.getOnKeyLongPressSwitchBody();
-	}
-
-	@Override
-	public JVar getOnKeyLongPressKeyEventParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyLongPressKeyEventParam();
-	}
-
-	@Override
-	public JSwitch getOnKeyMultipleSwitchBody() {
-		return keyEventCallbackMethodsDelegate.getOnKeyMultipleSwitchBody();
-	}
-
-	@Override
-	public JVar getOnKeyMultipleKeyEventParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyMultipleKeyEventParam();
-	}
-
-	@Override
-	public JVar getOnKeyMultipleCountParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyMultipleCountParam();
-	}
-
-	@Override
-	public JSwitch getOnKeyUpSwitchBody() {
-		return keyEventCallbackMethodsDelegate.getOnKeyUpSwitchBody();
-	}
-
-	@Override
-	public JVar getOnKeyUpKeyEventParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyUpKeyEventParam();
-	}
-
-	public JFieldVar getDataBindingField() {
-		return dataBindingDelegate.getDataBindingField();
-	}
-
-	public IJExpression getDataBindingInflationExpression(IJExpression contentViewId, IJExpression container, boolean attachToRoot) {
-		return dataBindingDelegate.getDataBindingInflationExpression(contentViewId, container, attachToRoot);
 	}
 
 }

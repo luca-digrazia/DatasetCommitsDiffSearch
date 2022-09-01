@@ -3,17 +3,16 @@ package com.codahale.metrics;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Comparator;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * A statistical snapshot of a {@link WeightedSnapshot}.
  */
 public class WeightedSnapshot extends Snapshot {
-
+    
     /**
      * A single sample item with value and its weights for {@link WeightedSnapshot}.
      */
@@ -26,6 +25,8 @@ public class WeightedSnapshot extends Snapshot {
             this.weight = weight;
         }
     }
+    
+    private static final Charset UTF_8 = Charset.forName("UTF-8");
 
     private final long[] values;
     private final double[] normWeights;
@@ -34,17 +35,27 @@ public class WeightedSnapshot extends Snapshot {
     /**
      * Create a new {@link Snapshot} with the given values.
      *
-     * @param values an unordered set of values in the reservoir
+     * @param values    an unordered set of values in the reservoir
      */
     public WeightedSnapshot(Collection<WeightedSample> values) {
-        final WeightedSample[] copy = values.toArray(new WeightedSample[]{});
-
-        Arrays.sort(copy, Comparator.comparingLong(w -> w.value));
+        final WeightedSample[] copy = values.toArray( new WeightedSample[]{} );
+    
+        Arrays.sort(copy, new Comparator<WeightedSample>() {
+            @Override
+            public int compare(WeightedSample o1, WeightedSample o2) {
+                if (o1.value > o2.value)
+                    return 1;
+                if (o1.value < o2.value)
+                    return -1;
+                return 0;
+            }
+        }
+        );
 
         this.values = new long[copy.length];
         this.normWeights = new double[copy.length];
         this.quantiles = new double[copy.length];
-
+        
         double sumWeight = 0;
         for (WeightedSample sample : copy) {
             sumWeight += sample.weight;
@@ -52,7 +63,7 @@ public class WeightedSnapshot extends Snapshot {
 
         for (int i = 0; i < copy.length; i++) {
             this.values[i] = copy[i].value;
-            this.normWeights[i] = sumWeight != 0 ? copy[i].weight / sumWeight : 0;
+            this.normWeights[i] = copy[i].weight / sumWeight;
         }
 
         for (int i = 1; i < copy.length; i++) {
@@ -63,12 +74,12 @@ public class WeightedSnapshot extends Snapshot {
     /**
      * Returns the value at the given quantile.
      *
-     * @param quantile a given quantile, in {@code [0..1]}
+     * @param quantile    a given quantile, in {@code [0..1]}
      * @return the value in the distribution at {@code quantile}
      */
     @Override
     public double getValue(double quantile) {
-        if (quantile < 0.0 || quantile > 1.0 || Double.isNaN(quantile)) {
+        if (quantile < 0.0 || quantile > 1.0 || Double.isNaN( quantile )) {
             throw new IllegalArgumentException(quantile + " is not in [0..1]");
         }
 
@@ -88,7 +99,7 @@ public class WeightedSnapshot extends Snapshot {
             return values[values.length - 1];
         }
 
-        return values[posx];
+        return values[(int) posx];
     }
 
     /**
@@ -173,7 +184,7 @@ public class WeightedSnapshot extends Snapshot {
 
         for (int i = 0; i < values.length; i++) {
             final double diff = values[i] - mean;
-            variance += normWeights[i] * diff * diff;
+            variance += normWeights[i] * diff*diff;
         }
 
         return Math.sqrt(variance);
@@ -186,10 +197,13 @@ public class WeightedSnapshot extends Snapshot {
      */
     @Override
     public void dump(OutputStream output) {
-        try (PrintWriter out = new PrintWriter(new OutputStreamWriter(output, UTF_8))) {
+        final PrintWriter out = new PrintWriter(new OutputStreamWriter(output, UTF_8));
+        try {
             for (long value : values) {
                 out.printf("%d%n", value);
             }
+        } finally {
+            out.close();
         }
     }
 }

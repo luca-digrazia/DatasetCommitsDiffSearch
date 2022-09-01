@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,9 +16,9 @@
 package org.androidannotations.rest.spring.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.startsWith;
+import static org.mockito.Matchers.argThat;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.startsWith;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
@@ -32,9 +31,9 @@ import org.apache.http.message.BasicHeader;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentMatcher;
-import org.mockito.ArgumentMatchers;
+import org.mockito.Matchers;
+import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.shadows.httpclient.FakeHttp;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -56,8 +55,7 @@ public class MyServiceTest {
 		for (int i = 0, j = 1; i < cookies.length - 1; i += 2, j++) {
 			headers[j] = new BasicHeader("set-cookie", cookies[i] + "=" + cookies[i + 1]);
 		}
-
-		FakeHttp.addPendingHttpResponse(HttpStatus.OK.value(), jsonResponse.replaceAll("'", "\""), headers);
+		Robolectric.addPendingHttpResponse(HttpStatus.OK.value(), jsonResponse.replaceAll("'", "\""), headers);
 	}
 
 	@Test
@@ -70,8 +68,7 @@ public class MyServiceTest {
 
 		myService.removeEvent(42);
 
-		verify(restTemplate).exchange(startsWith("http://newRootUrl"), (HttpMethod) ArgumentMatchers.any(), ArgumentMatchers.<HttpEntity<?>> any(), ArgumentMatchers.<Class<Object>> any(),
-				ArgumentMatchers.<Map<String, ?>> any());
+		verify(restTemplate).exchange(startsWith("http://newRootUrl"), Matchers.<HttpMethod> any(), Matchers.<HttpEntity<?>> any(), Matchers.<Class<Object>> any(), Matchers.<Map<String, ?>> any());
 	}
 
 	@Test
@@ -194,7 +191,7 @@ public class MyServiceTest {
 		addPendingResponse("fancyHeaderToken");
 		myService.setHttpBasicAuth("fancyUser", "fancierPassword");
 		myService.ping();
-		verify(restTemplate).exchange(eq("http://company.com/client/ping"), ArgumentMatchers.<HttpMethod> any(), ArgumentMatchers.<HttpEntity<?>> any(), ArgumentMatchers.<Class<Object>> any());
+		verify(restTemplate).exchange(eq("http://company.com/client/ping"), Matchers.<HttpMethod> any(), Matchers.<HttpEntity<?>> any(), Matchers.<Class<Object>> any());
 	}
 
 	@Test
@@ -221,9 +218,9 @@ public class MyServiceTest {
 		ArgumentMatcher<HttpEntity<Void>> matcher = new ArgumentMatcher<HttpEntity<Void>>() {
 
 			@Override
-			public boolean matches(HttpEntity<Void> argument) {
+			public boolean matches(Object argument) {
 				final String expected = "sjsaid=" + sjsaidValue + ";";
-				return expected.equals(argument.getHeaders().get("Cookie").get(0));
+				return expected.equals(((HttpEntity<?>) argument).getHeaders().get("Cookie").get(0));
 			}
 		};
 
@@ -231,7 +228,7 @@ public class MyServiceTest {
 		urlVariables.put("location", locationValue);
 		urlVariables.put("year", yearValue);
 		urlVariables.put("xt", xtValue);
-		verify(restTemplate).exchange(ArgumentMatchers.anyString(), ArgumentMatchers.<HttpMethod> any(), argThat(matcher), ArgumentMatchers.<Class<Object>> any(), eq(urlVariables));
+		verify(restTemplate).exchange(Matchers.anyString(), Matchers.<HttpMethod> any(), argThat(matcher), Matchers.<Class<Object>> any(), eq(urlVariables));
 	}
 
 	@Test
@@ -319,51 +316,6 @@ public class MyServiceTest {
 					@Override
 					public void execute(MyService myService) {
 						myService.addEventWithPathParameters("now", "param1");
-					}
-				});
-	}
-
-	@Test
-	public void addEventWithHeadersOverriden() {
-		RequestTestBuilder.build() //
-				.requestCookie("myCookie", "myCookieValue") //
-				.requestHeader("SomeFancyHeader", "aFancyHeader") //
-				.responseContent("{'id':1,'name':'event1'}") //
-				.hasUrlVariables(true) //
-				.asserts(new RequestTestBuilder.RequestTestBuilderExecutor() {
-					@Override
-					public void execute(MyService myService) {
-						myService.addEventWithHeaders("now", "event");
-					}
-				});
-	}
-
-	@Test
-	public void addEventWithHeaders() {
-		RequestTestBuilder.build() //
-				.requestCookie("myCookie", "myCookieValue") //
-				.expectedHeader("SomeFancyHeader", "fancy") //
-				.responseContent("{'id':1,'name':'event1'}") //
-				.hasUrlVariables(true) //
-				.asserts(new RequestTestBuilder.RequestTestBuilderExecutor() {
-					@Override
-					public void execute(MyService myService) {
-						myService.addEventWithHeaders("now", "event");
-					}
-				});
-	}
-
-	@Test
-	public void addEventWithHeadersHeadersAnnotation() {
-		RequestTestBuilder.build() //
-				.requestCookie("myCookie", "myCookieValue") //
-				.expectedHeader("SomeFancyHeader", "fancy") //
-				.responseContent("{'id':1,'name':'event1'}") //
-				.hasUrlVariables(true) //
-				.asserts(new RequestTestBuilder.RequestTestBuilderExecutor() {
-					@Override
-					public void execute(MyService myService) {
-						myService.addEventWithHeadersHeadersAnnotation("now", "event");
 					}
 				});
 	}

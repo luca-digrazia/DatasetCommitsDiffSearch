@@ -1,22 +1,21 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
 package com.facebook.stetho.urlconnection;
 
+import com.facebook.stetho.inspector.network.DefaultResponseHandler;
+import com.facebook.stetho.inspector.network.NetworkEventReporter;
+import com.facebook.stetho.inspector.network.NetworkEventReporterImpl;
+
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Individual connection flow manager that aids in communicating network events to Stetho
- * via the {@link com.facebook.stetho.inspector.network.NetworkEventReporter} API.  This class is
- * stateful and should be instantiated for each individual HTTP request.
+ * via the {@link NetworkEventReporter} API.  This class is stateful and should be instantiated
+ * for each individual HTTP request.
  * <p>
  * Be aware that there are caveats with inspection using {@link HttpURLConnection} on Android:
  * <ul>
@@ -29,41 +28,24 @@ import java.net.HttpURLConnection;
  */
 @NotThreadSafe
 public class StethoURLConnectionManager {
-  private static final boolean sIsStethoPresent;
+  private static final AtomicInteger sSequenceNumberGenerator = new AtomicInteger(0);
 
-  static {
-    boolean isStethoPresent = false;
-    try {
-      Class.forName("com.facebook.stetho.Stetho");
-      isStethoPresent = true;
-    } catch (ClassNotFoundException e) {
-    }
-    sIsStethoPresent = isStethoPresent;
-  }
+  private final NetworkEventReporter mStethoHook = NetworkEventReporterImpl.get();
+  private final int mRequestId;
+  @Nullable private final String mFriendlyName;
 
-  @Nullable
-  private final Holder mHolder;
+  @Nullable private String mRequestIdString;
 
-  // Holder hides StethoURLConnectionManagerImpl from the class verifier as per:
-  // http://en.wikipedia.org/wiki/Initialization-on-demand_holder_idiom
-  private static class Holder {
-    private final StethoURLConnectionManagerImpl impl;
-
-    public Holder(@Nullable String friendlyName) {
-      impl = new StethoURLConnectionManagerImpl(friendlyName);
-    }
-  }
+  private HttpURLConnection mConnection;
+  @Nullable private URLConnectionInspectorRequest mInspectorRequest;
 
   public StethoURLConnectionManager(@Nullable String friendlyName) {
-    if (sIsStethoPresent) {
-      mHolder = new Holder(friendlyName);
-    } else {
-      mHolder = null;
-    }
+    mRequestId = sSequenceNumberGenerator.getAndIncrement();
+    mFriendlyName = friendlyName;
   }
 
   public boolean isStethoEnabled() {
-    return mHolder != null && mHolder.impl.isStethoActive();
+    return mStethoHook.isEnabled();
   }
 
   /**
@@ -78,8 +60,15 @@ public class StethoURLConnectionManager {
   public void preConnect(
       HttpURLConnection connection,
       @Nullable SimpleRequestEntity requestEntity) {
-    if (mHolder != null) {
-      mHolder.impl.preConnect(connection, requestEntity);
+    throwIfConnection();
+    mConnection = connection;
+    if (isStethoEnabled()) {
+      mInspectorRequest = new URLConnectionInspectorRequest(
+          getStethoRequestId(),
+          mFriendlyName,
+          connection,
+          requestEntity);
+      mStethoHook.requestWillBeSent(mInspectorRequest);
     }
   }
 
@@ -93,8 +82,18 @@ public class StethoURLConnectionManager {
    *     throws.
    */
   public void postConnect() throws IOException {
-    if (mHolder != null) {
-      mHolder.impl.postConnect();
+    throwIfNoConnection();
+    if (isStethoEnabled()) {
+      if (mInspectorRequest != null) {
+        byte[] body = mInspectorRequest.body();
+        if (body != null) {
+          mStethoHook.dataSent(getStethoRequestId(), body.length, body.length);
+        }
+      }
+      mStethoHook.responseHeadersReceived(
+          new URLConnectionInspectorResponse(
+              getStethoRequestId(),
+              mConnection));
     }
   }
 
@@ -105,8 +104,9 @@ public class StethoURLConnectionManager {
    * @param ex Relay the exception that was thrown from {@link java.net.HttpURLConnection}
    */
   public void httpExchangeFailed(IOException ex) {
-    if (mHolder != null) {
-      mHolder.impl.httpExchangeFailed(ex);
+    throwIfNoConnection();
+    if (isStethoEnabled()) {
+      mStethoHook.httpExchangeFailed(getStethoRequestId(), ex.toString());
     }
   }
 
@@ -126,44 +126,51 @@ public class StethoURLConnectionManager {
    * @return The filtering stream which is to be read after this method is called.
    */
   public InputStream interpretResponseStream(@Nullable InputStream responseStream) {
-    if (mHolder != null) {
-      return mHolder.impl.interpretResponseStream(responseStream);
-    } else {
-      return responseStream;
+    throwIfNoConnection();
+    if (isStethoEnabled()) {
+      // Note that Content-Encoding is stripped out by HttpURLConnection on modern versions of
+      // Android (fun fact, it's powered by okhttp) when decompression is handled transparently.
+      // When this occurs, we will not be able to report the compressed size properly.  Callers,
+      // however, can disable this behaviour which will once again give us access to the raw
+      // Content-Encoding so that we can handle it properly.
+      responseStream = mStethoHook.interpretResponseStream(
+          getStethoRequestId(),
+          mConnection.getHeaderField("Content-Type"),
+          mConnection.getHeaderField("Content-Encoding"),
+          responseStream,
+          new DefaultResponseHandler(mStethoHook, getStethoRequestId()));
+    }
+    return responseStream;
+  }
+
+  private void throwIfNoConnection() {
+    if (mConnection == null) {
+      throw new IllegalStateException("Must call preConnect");
+    }
+  }
+
+  private void throwIfConnection() {
+    if (mConnection != null) {
+      throw new IllegalStateException("Must not call preConnect twice");
     }
   }
 
   /**
-   * Convenience method to access the lower level
-   * {@link com.facebook.stetho.inspector.network.NetworkEventReporter} API (must be explicitly
-   * cast).
-   *
-   * @deprecated This should no longer be used as it could potentially break the mechanism
-   *     we use to allow convenient stripping of Stetho from release builds when using this
-   *     module.  If you need access to this, consider writing your own custom version of this
-   *     module.
+   * Convenience method to access the lower level {@link NetworkEventReporter} API.
    */
-  @Deprecated
-  @Nullable
-  public Object getStethoHook() {
-    if (mHolder != null) {
-      return mHolder.impl.getStethoHook();
-    } else {
-      return null;
-    }
+  public NetworkEventReporter getStethoHook() {
+    return mStethoHook;
   }
 
   /**
    * Low level method to access this request's unique identifier according to
-   * {@link com.facebook.stetho.inspector.network.NetworkEventReporter}.  Most callers won't
-   * need this.
+   * {@link NetworkEventReporter}.  Most callers won't need this.
    */
-  @Nullable
+  @Nonnull
   public String getStethoRequestId() {
-    if (mHolder != null) {
-      return mHolder.impl.getStethoRequestId();
-    } else {
-      return null;
+    if (mRequestIdString == null) {
+      mRequestIdString = String.valueOf(mRequestId);
     }
+    return mRequestIdString;
   }
 }

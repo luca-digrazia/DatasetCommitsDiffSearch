@@ -1,32 +1,14 @@
-/*
- * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.github.pedrovgs.effectiveandroidui.domain.tvshow;
-
-import java.io.Serializable;
 
 /**
  * Contains all the information related with a TvShow.
  *
  * Title field works as TvShow identifier because for the sample we don't have a unique identifier
- * ready to be used for this sample.
+ * ready to be used.
  *
  * @author Pedro Vicente Gómez Sánchez
  */
-public class TvShow implements Serializable {
-  private static final long serialVersionUID = 8799656478674716638L;
+public class TvShow {
 
   private final String title;
   private final String poster;
@@ -86,18 +68,12 @@ public class TvShow implements Serializable {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof TvShow)) {
-      return false;
-    }
+    if (this == o) return true;
+    if (!(o instanceof TvShow)) return false;
 
     TvShow tvShow = (TvShow) o;
 
-    if (!title.equals(tvShow.title)) {
-      return false;
-    }
+    if (!title.equals(tvShow.title)) return false;
 
     return true;
   }

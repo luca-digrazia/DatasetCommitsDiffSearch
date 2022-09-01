@@ -1,11 +1,6 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
 package com.facebook.stetho.sample;
+
+import java.util.ArrayList;
 
 import android.content.ContentProvider;
 import android.content.ContentProviderOperation;
@@ -17,8 +12,6 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.net.Uri;
-
-import java.util.ArrayList;
 
 public class APODContentProvider extends ContentProvider {
   private APODSQLiteOpenHelper mOpenHelper;
@@ -59,7 +52,6 @@ public class APODContentProvider extends ContentProvider {
   public Uri insert(Uri uri, ContentValues values) {
     SQLiteDatabase db = mOpenHelper.getWritableDatabase();
     long id = db.insert(APODContract.TABLE_NAME, null /* nullColumnHack */, values);
-    notifyChange();
     return uri.buildUpon().appendEncodedPath(String.valueOf(id)).build();
   }
 
@@ -67,7 +59,6 @@ public class APODContentProvider extends ContentProvider {
   public int delete(Uri uri, String selection, String[] selectionArgs) {
     SQLiteDatabase db = mOpenHelper.getWritableDatabase();
     int count = db.delete(APODContract.TABLE_NAME, selection, selectionArgs);
-    notifyChange();
     return count;
   }
 
@@ -75,7 +66,6 @@ public class APODContentProvider extends ContentProvider {
   public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
     SQLiteDatabase db = mOpenHelper.getWritableDatabase();
     int count = db.update(APODContract.TABLE_NAME, values, selection, selectionArgs);
-    notifyChange();
     return count;
   }
 
@@ -100,7 +90,7 @@ public class APODContentProvider extends ContentProvider {
 
   private static class APODSQLiteOpenHelper extends SQLiteOpenHelper {
     private static final String DB_NAME = "apod.db";
-    private static final int DB_VERSION = 2;
+    private static final int DB_VERSION = 1;
 
     public APODSQLiteOpenHelper(Context context) {
       super(context, DB_NAME, null /* factory */, DB_VERSION);
@@ -113,8 +103,7 @@ public class APODContentProvider extends ContentProvider {
               APODContract.Columns._ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
               APODContract.Columns.TITLE + " TEXT, " +
               APODContract.Columns.DESCRIPTION_IMAGE_URL + " TEXT, " +
-              APODContract.Columns.DESCRIPTION_TEXT + " TEXT, " +
-              APODContract.Columns.LARGE_IMAGE_URL + " TEXT " +
+              APODContract.Columns.DESCRIPTION_TEXT + " TEXT " +
               ")");
     }
 

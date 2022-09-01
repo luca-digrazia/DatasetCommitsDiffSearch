@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -50,12 +49,12 @@ public class MyListFragmentTest {
 	@Before
 	public void setUp() {
 		myListFragment = new MyListFragment_();
+		startFragment(myListFragment);
 	}
 
 	@Test
 	public void isItemClickAvailableFromListFragment() {
-		startFragment(myListFragment);
-		ListView listView = (ListView) myListFragment.internalFindViewById(android.R.id.list);
+		ListView listView = (ListView) myListFragment.findViewById(android.R.id.list);
 		long itemId = listView.getAdapter().getItemId(TESTED_CLICKED_INDEX);
 		View view = listView.getChildAt(TESTED_CLICKED_INDEX);
 
@@ -66,7 +65,6 @@ public class MyListFragmentTest {
 
 	@Test
 	public void notIgnoredMethodIsCalled() {
-		startFragment(myListFragment);
 		assertFalse(myListFragment.didExecute);
 		myListFragment.notIgnored();
 		assertTrue(myListFragment.didExecute);
@@ -74,7 +72,6 @@ public class MyListFragmentTest {
 
 	@Test
 	public void uithreadMethodIsCalled() {
-		startFragment(myListFragment);
 		assertFalse(myListFragment.didExecute);
 		myListFragment.uiThread();
 		assertTrue(myListFragment.didExecute);
@@ -82,7 +79,6 @@ public class MyListFragmentTest {
 
 	@Test
 	public void uithreadMethodIsCanceled() {
-		startFragment(myListFragment);
 		ShadowLooper.pauseMainLooper();
 		myListFragment.uiThreadWithId();
 		UiThreadExecutor.cancelAll("id");
@@ -92,7 +88,6 @@ public class MyListFragmentTest {
 
 	@Test
 	public void backgroundMethodIsCalled() {
-		startFragment(myListFragment);
 		assertFalse(myListFragment.didExecute);
 		runBackgroundsOnSameThread();
 		myListFragment.backgroundThread();
@@ -101,7 +96,6 @@ public class MyListFragmentTest {
 
 	@Test
 	public void ignoredWhenDetachedWorksForUithreadMethod() {
-		startFragment(myListFragment);
 		popBackStack();
 
 		assertFalse(myListFragment.didExecute);
@@ -111,7 +105,6 @@ public class MyListFragmentTest {
 
 	@Test
 	public void ignoredWhenDetachedWorksForBackgroundMethod() {
-		startFragment(myListFragment);
 		popBackStack();
 
 		assertFalse(myListFragment.didExecute);
@@ -122,7 +115,6 @@ public class MyListFragmentTest {
 
 	@Test
 	public void ignoredWhenDetachedWorksForIgnoredMethod() {
-		startFragment(myListFragment);
 		popBackStack();
 
 		assertFalse(myListFragment.didExecute);
@@ -131,60 +123,7 @@ public class MyListFragmentTest {
 	}
 
 	@Test
-	public void ignoredBeforeOnCreateView() {
-		assertFalse(myListFragment.didExecute);
-		myListFragment.ignoreWhenViewDestroyed();
-		assertFalse(myListFragment.didExecute);
-	}
-
-	@Test
-	public void notIgnoredAfterOnCreateView() {
-		startFragment(myListFragment);
-		assertFalse(myListFragment.didExecute);
-		myListFragment.onCreateView(null, null, null);
-		assertFalse(myListFragment.didExecute);
-		myListFragment.ignoreWhenViewDestroyed();
-		assertTrue(myListFragment.didExecute);
-	}
-
-	@Test
-	public void ignoredWhenViewDestroyedForIgnoredMethod() {
-		startFragment(myListFragment);
-		assertFalse(myListFragment.didExecute);
-		myListFragment.onDestroyView();
-		myListFragment.ignoreWhenViewDestroyed();
-		assertFalse(myListFragment.didExecute);
-	}
-
-	@Test
-	public void notIgnoredAfterFragmentRecreate() {
-		startFragment(myListFragment);
-		assertFalse(myListFragment.didExecute);
-		myListFragment.onDestroyView();
-		myListFragment.onCreateView(null, null, null);
-		myListFragment.ignoreWhenViewDestroyed();
-		assertTrue(myListFragment.didExecute);
-	}
-
-	@Test
-	public void notIgnoredBeforeDetached() {
-		startFragment(myListFragment);
-		assertFalse(myListFragment.didExecute);
-		myListFragment.ignored();
-		assertTrue(myListFragment.didExecute);
-	}
-
-	@Test
-	public void notIgnoredBeforeViewDestroyed() {
-		startFragment(myListFragment);
-		assertFalse(myListFragment.didExecute);
-		myListFragment.ignoreWhenViewDestroyed();
-		assertTrue(myListFragment.didExecute);
-	}
-
-	@Test
 	public void layoutNotInjectedWithoutForce() {
-		startFragment(myListFragment);
 		View buttonInInjectedLayout = myListFragment.getView().findViewById(R.id.conventionButton);
 
 		assertThat(buttonInInjectedLayout).isNull();

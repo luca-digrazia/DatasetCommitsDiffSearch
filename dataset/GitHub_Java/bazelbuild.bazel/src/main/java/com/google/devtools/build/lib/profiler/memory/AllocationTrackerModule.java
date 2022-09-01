@@ -21,10 +21,10 @@ import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.WorkspaceBuilder;
+import com.google.devtools.build.lib.syntax.Callstack;
 import com.google.devtools.build.lib.vfs.FileSystem;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import java.util.UUID;
-import net.starlark.java.eval.Debug;
 
 /**
  * A {@link BlazeModule} that can be used to record interesting information about all allocations
@@ -34,11 +34,7 @@ import net.starlark.java.eval.Debug;
  *
  * <ol>
  *   <li>--host_jvm_args=-javaagent:(path to Google's java agent jar)
- *       <ul>
- *         <li>For Bazel use <a
- *             href="https://github.com/bazelbuild/bazel/tree/master/third_party/allocation_instrumenter">java-allocation-instrumenter-3.3.0.jar</a>
- *       </ul>
- *   <li>--host_jvm_args=-DRULE_MEMORY_TRACKER=1
+ *   <li>--host_jvm_args=-RULE_MEMORY_TRACKER=1
  * </ol>
  *
  * <p>The memory tracking information is accessible via blaze dump --rules and blaze dump
@@ -59,7 +55,7 @@ public class AllocationTrackerModule extends BlazeModule {
 
   @Override
   public void blazeStartup(
-      OptionsParsingResult startupOptions,
+      OptionsProvider startupOptions,
       BlazeVersionInfo versionInfo,
       UUID instanceId,
       FileSystem fileSystem,
@@ -69,7 +65,7 @@ public class AllocationTrackerModule extends BlazeModule {
     enabled = memoryTrackerPropery != null && memoryTrackerPropery.equals("1");
     if (enabled) {
       tracker = new AllocationTracker(SAMPLE_SIZE, VARIANCE);
-      Debug.setThreadHook(tracker);
+      Callstack.setEnabled(true);
       CurrentRuleTracker.setEnabled(true);
       AllocationTrackerInstaller.installAllocationTracker(tracker);
     }

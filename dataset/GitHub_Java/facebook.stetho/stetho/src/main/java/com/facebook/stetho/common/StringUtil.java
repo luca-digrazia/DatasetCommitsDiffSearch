@@ -1,9 +1,4 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.common;
 
@@ -26,17 +21,5 @@ public final class StringUtil {
     } else {
       return string;
     }
-  }
-
-  public static String removeAll(String string, char target) {
-    final int length = string.length();
-    final StringBuilder builder = new StringBuilder(length);
-    for (int i = 0; i < length; ++i) {
-      char c = string.charAt(i);
-      if (c != target) {
-        builder.append(c);
-      }
-    }
-    return builder.toString();
   }
 }

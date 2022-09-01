@@ -1,64 +1,50 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.protocol.module;
 
 import android.graphics.Color;
-import com.facebook.stetho.common.Accumulator;
-import com.facebook.stetho.common.ArrayListAccumulator;
+
 import com.facebook.stetho.common.LogUtil;
-import com.facebook.stetho.common.UncheckedCallable;
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.inspector.elements.DocumentView;
-import com.facebook.stetho.inspector.elements.Document;
-import com.facebook.stetho.inspector.elements.ElementInfo;
+import com.facebook.stetho.inspector.elements.DOMProvider;
+import com.facebook.stetho.inspector.elements.NodeAttribute;
 import com.facebook.stetho.inspector.elements.NodeDescriptor;
 import com.facebook.stetho.inspector.elements.NodeType;
 import com.facebook.stetho.inspector.helper.ChromePeerManager;
+import com.facebook.stetho.inspector.helper.ObjectIdMapper;
 import com.facebook.stetho.inspector.helper.PeersRegisteredListener;
-import com.facebook.stetho.inspector.jsonrpc.JsonRpcException;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcResult;
-import com.facebook.stetho.inspector.jsonrpc.protocol.JsonRpcError;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsDomain;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsMethod;
 import com.facebook.stetho.json.ObjectMapper;
 import com.facebook.stetho.json.annotation.JsonProperty;
-import org.json.JSONObject;
 
-import javax.annotation.Nullable;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.annotation.Nullable;
 
 public class DOM implements ChromeDevtoolsDomain {
-  private final ObjectMapper mObjectMapper;
-  private final Document mDocument;
-  private final Map<String, List<Integer>> mSearchResults;
-  private final AtomicInteger mResultCounter;
   private final ChromePeerManager mPeerManager;
-  private final DocumentUpdateListener mListener;
+  private final DOMProvider.Factory mDOMProviderFactory;
+  private final ObjectMapper mObjectMapper;
+  private final DOMObjectIdMapper mObjectIdMapper;
 
-  private ChildNodeRemovedEvent mCachedChildNodeRemovedEvent;
-  private ChildNodeInsertedEvent mCachedChildNodeInsertedEvent;
+  @Nullable
+  private DOMProvider mDOMProvider;
 
-  public DOM(Document document) {
-    mObjectMapper = new ObjectMapper();
-    mDocument = Util.throwIfNull(document);
-    mSearchResults = Collections.synchronizedMap(
-      new HashMap<String, List<Integer>>());
-    mResultCounter = new AtomicInteger(0);
+  public DOM(DOMProvider.Factory providerFactory) {
+    mDOMProviderFactory = Util.throwIfNull(providerFactory);
+
     mPeerManager = new ChromePeerManager();
     mPeerManager.setListener(new PeerManagerListener());
-    mListener = new DocumentUpdateListener();
+
+    mObjectMapper = new ObjectMapper();
+    mObjectIdMapper = new DOMObjectIdMapper();
   }
 
   @ChromeDevtoolsMethod
@@ -73,334 +59,174 @@ public class DOM implements ChromeDevtoolsDomain {
 
   @ChromeDevtoolsMethod
   public JsonRpcResult getDocument(JsonRpcPeer peer, JSONObject params) {
-    final GetDocumentResponse result = new GetDocumentResponse();
+    Object rootElement = mDOMProvider.getRootElement();
+    if (rootElement == null) {
+      return null;
+    }
 
-    result.root = mDocument.postAndWait(new UncheckedCallable<Node>() {
-      @Override
-      public Node call() {
-        Object element = mDocument.getRootElement();
-        return createNodeForElement(element, mDocument.getDocumentView(), null);
-      }
-    });
+    Node rootNode = createNodeForElement(rootElement);
 
+    GetDocumentResponse result = new GetDocumentResponse();
+    result.root = rootNode;
     return result;
   }
 
   @ChromeDevtoolsMethod
   public void highlightNode(JsonRpcPeer peer, JSONObject params) {
-    final HighlightNodeRequest request =
-      mObjectMapper.convertValue(params, HighlightNodeRequest.class);
+    HighlightNodeRequest request = mObjectMapper.convertValue(params, HighlightNodeRequest.class);
     if (request.nodeId == null) {
-      LogUtil.w("DOM.highlightNode was not given a nodeId; JS objectId is not supported");
-      return;
+      LogUtil.w("highlightNode was not given a nodeId; JS objectId is not supported");
+    } else {
+      Object element = mObjectIdMapper.getObjectForId(request.nodeId);
+      mDOMProvider.highlightElement(
+          element,
+          request.highlightConfig.contentColor.getColor(),
+          request.highlightConfig.paddingColor.getColor(),
+          request.highlightConfig.borderColor.getColor(),
+          request.highlightConfig.marginColor.getColor());
     }
-
-    final RGBAColor contentColor = request.highlightConfig.contentColor;
-    if (contentColor == null) {
-      LogUtil.w("DOM.highlightNode was not given a color to highlight with");
-      return;
-    }
-
-    mDocument.postAndWait(new Runnable() {
-      @Override
-      public void run() {
-        Object element = mDocument.getElementForNodeId(request.nodeId);
-        if (element != null) {
-          mDocument.highlightElement(element, contentColor.getColor());
-        }
-      }
-    });
   }
 
   @ChromeDevtoolsMethod
   public void hideHighlight(JsonRpcPeer peer, JSONObject params) {
-    mDocument.postAndWait(new Runnable() {
-      @Override
-      public void run() {
-        mDocument.hideHighlight();
-      }
-    });
+    mDOMProvider.hideHighlight();
   }
 
-  @ChromeDevtoolsMethod
-  public ResolveNodeResponse resolveNode(JsonRpcPeer peer, JSONObject params)
-      throws JsonRpcException {
-    final ResolveNodeRequest request = mObjectMapper.convertValue(params, ResolveNodeRequest.class);
+  private Node createNodeForElement(Object element) {
+    NodeDescriptor descriptor = mDOMProvider.getNodeDescriptor(element);
 
-    final Object element = mDocument.postAndWait(new UncheckedCallable<Object>() {
-      @Override
-      public Object call() {
-        return mDocument.getElementForNodeId(request.nodeId);
-      }
-    });
-
-    if (element == null) {
-      throw new JsonRpcException(
-          new JsonRpcError(
-              JsonRpcError.ErrorCode.INVALID_PARAMS,
-              "No known nodeId=" + request.nodeId,
-              null /* data */));
-    }
-
-    int mappedObjectId = Runtime.mapObject(peer, element);
-
-    Runtime.RemoteObject remoteObject = new Runtime.RemoteObject();
-    remoteObject.type = Runtime.ObjectType.OBJECT;
-    remoteObject.subtype = Runtime.ObjectSubType.NODE;
-    remoteObject.className = element.getClass().getName();
-    remoteObject.value = null; // not a primitive
-    remoteObject.description = null; // not sure what this does...
-    remoteObject.objectId = String.valueOf(mappedObjectId);
-    ResolveNodeResponse response = new ResolveNodeResponse();
-    response.object = remoteObject;
-
-    return response;
-  }
-
-  @ChromeDevtoolsMethod
-  public void setAttributesAsText(JsonRpcPeer peer, JSONObject params) {
-    final SetAttributesAsTextRequest request = mObjectMapper.convertValue(
-        params,
-        SetAttributesAsTextRequest.class);
-
-    mDocument.postAndWait(new Runnable() {
-      @Override
-      public void run() {
-        Object element = mDocument.getElementForNodeId(request.nodeId);
-        if (element != null) {
-          mDocument.setAttributesAsText(element, request.text);
-        }
-      }
-    });
-  }
-
-  @ChromeDevtoolsMethod
-  public void setInspectModeEnabled(JsonRpcPeer peer, JSONObject params) {
-    final SetInspectModeEnabledRequest request = mObjectMapper.convertValue(
-        params,
-        SetInspectModeEnabledRequest.class);
-
-    mDocument.postAndWait(new Runnable() {
-      @Override
-      public void run() {
-        mDocument.setInspectModeEnabled(request.enabled);
-      }
-    });
-  }
-
-  @ChromeDevtoolsMethod
-  public PerformSearchResponse performSearch(JsonRpcPeer peer, final JSONObject params) {
-    final PerformSearchRequest request = mObjectMapper.convertValue(
-        params,
-        PerformSearchRequest.class);
-
-    final ArrayListAccumulator<Integer> resultNodeIds = new ArrayListAccumulator<>();
-
-    mDocument.postAndWait(new Runnable() {
-      @Override
-      public void run() {
-        mDocument.findMatchingElements(request.query, resultNodeIds);
-      }
-    });
-
-    // Each search action has a unique ID so that
-    // it can be queried later.
-    final String searchId = String.valueOf(mResultCounter.getAndIncrement());
-
-    mSearchResults.put(searchId, resultNodeIds);
-
-    final PerformSearchResponse response = new PerformSearchResponse();
-    response.searchId = searchId;
-    response.resultCount = resultNodeIds.size();
-
-    return response;
-  }
-
-  @ChromeDevtoolsMethod
-  public GetSearchResultsResponse getSearchResults(JsonRpcPeer peer, JSONObject params) {
-    final GetSearchResultsRequest request = mObjectMapper.convertValue(
-        params,
-        GetSearchResultsRequest.class);
-
-    if (request.searchId == null) {
-      LogUtil.w("searchId may not be null");
-      return null;
-    }
-
-    final List<Integer> results = mSearchResults.get(request.searchId);
-
-    if (results == null) {
-      LogUtil.w("\"" + request.searchId + "\" is not a valid reference to a search result");
-      return null;
-    }
-
-    final List<Integer> resultsRange = results.subList(request.fromIndex, request.toIndex);
-
-    final GetSearchResultsResponse response = new GetSearchResultsResponse();
-    response.nodeIds = resultsRange;
-
-    return response;
-  }
-
-  @ChromeDevtoolsMethod
-  public void discardSearchResults(JsonRpcPeer peer, JSONObject params) {
-    final DiscardSearchResultsRequest request = mObjectMapper.convertValue(
-      params,
-      DiscardSearchResultsRequest.class);
-
-    if (request.searchId != null) {
-      mSearchResults.remove(request.searchId);
-    }
-  }
-
-  private Node createNodeForElement(
-      Object element,
-      DocumentView view,
-      @Nullable Accumulator<Object> processedElements) {
-    if (processedElements != null) {
-      processedElements.store(element);
-    }
-
-    NodeDescriptor descriptor = mDocument.getNodeDescriptor(element);
-
-    Node node = new DOM.Node();
-    node.nodeId = mDocument.getNodeIdForElement(element);
+    Node node = new Node();
+    node.nodeId = mObjectIdMapper.putObject(element);
     node.nodeType = descriptor.getNodeType(element);
     node.nodeName = descriptor.getNodeName(element);
     node.localName = descriptor.getLocalName(element);
     node.nodeValue = descriptor.getNodeValue(element);
 
-    Document.AttributeListAccumulator accumulator = new Document.AttributeListAccumulator();
-    descriptor.getAttributes(element, accumulator);
+    node.children = getChildNodesForElement(element);
+    node.childNodeCount = node.children.size();
 
-    // Attributes
-    node.attributes = accumulator;
+    int attributeCount = descriptor.getAttributeCount(element);
+    if (attributeCount > 0) {
+      node.attributes = new ArrayList<String>(attributeCount * 2);
 
-    // Children
-    ElementInfo elementInfo = view.getElementInfo(element);
-    List<Node> childrenNodes = (elementInfo.children.size() == 0)
-        ? Collections.<Node>emptyList()
-        : new ArrayList<Node>(elementInfo.children.size());
+      NodeAttribute attribute = new NodeAttribute();
+      for (int i = 0; i < attributeCount; ++i) {
+        descriptor.copyAttributeAt(element, i, attribute);
 
-    for (int i = 0, N = elementInfo.children.size(); i < N; ++i) {
-      final Object childElement = elementInfo.children.get(i);
-      Node childNode = createNodeForElement(childElement, view, processedElements);
-      childrenNodes.add(childNode);
+        node.attributes.add(attribute.name);
+        node.attributes.add(attribute.value);
+
+        attribute.name = null;
+        attribute.value = null;
+      }
     }
-
-    node.children = childrenNodes;
-    node.childNodeCount = childrenNodes.size();
 
     return node;
   }
 
-  private ChildNodeInsertedEvent acquireChildNodeInsertedEvent() {
-    ChildNodeInsertedEvent childNodeInsertedEvent = mCachedChildNodeInsertedEvent;
-    if (childNodeInsertedEvent == null) {
-      childNodeInsertedEvent = new ChildNodeInsertedEvent();
-    }
-    mCachedChildNodeInsertedEvent = null;
-    return childNodeInsertedEvent;
-  }
+  private List<Node> getChildNodesForElement(Object element) {
+    NodeDescriptor descriptor = mDOMProvider.getNodeDescriptor(element);
+    int childNodeCount = descriptor.getChildCount(element);
 
-  private void releaseChildNodeInsertedEvent(ChildNodeInsertedEvent childNodeInsertedEvent) {
-    childNodeInsertedEvent.parentNodeId = -1;
-    childNodeInsertedEvent.previousNodeId = -1;
-    childNodeInsertedEvent.node = null;
-    if (mCachedChildNodeInsertedEvent == null) {
-      mCachedChildNodeInsertedEvent = childNodeInsertedEvent;
-    }
-  }
-
-  private ChildNodeRemovedEvent acquireChildNodeRemovedEvent() {
-    ChildNodeRemovedEvent childNodeRemovedEvent = mCachedChildNodeRemovedEvent;
-    if (childNodeRemovedEvent == null) {
-      childNodeRemovedEvent = new ChildNodeRemovedEvent();
-    }
-    mCachedChildNodeRemovedEvent = null;
-    return childNodeRemovedEvent;
-  }
-
-  private void releaseChildNodeRemovedEvent(ChildNodeRemovedEvent childNodeRemovedEvent) {
-    childNodeRemovedEvent.parentNodeId = -1;
-    childNodeRemovedEvent.nodeId = -1;
-    if (mCachedChildNodeRemovedEvent == null) {
-      mCachedChildNodeRemovedEvent = childNodeRemovedEvent;
-    }
-  }
-
-  private final class DocumentUpdateListener implements Document.UpdateListener {
-    public void onAttributeModified(Object element, String name, String value) {
-      AttributeModifiedEvent message = new AttributeModifiedEvent();
-      message.nodeId = mDocument.getNodeIdForElement(element);
-      message.name = name;
-      message.value = value;
-      mPeerManager.sendNotificationToPeers("DOM.attributeModified", message);
-    }
-
-    public void onAttributeRemoved(Object element, String name) {
-      AttributeRemovedEvent message = new AttributeRemovedEvent();
-      message.nodeId = mDocument.getNodeIdForElement(element);
-      message.name = name;
-      mPeerManager.sendNotificationToPeers("DOM.attributeRemoved", message);
-    }
-
-    public void onInspectRequested(Object element) {
-      Integer nodeId = mDocument.getNodeIdForElement(element);
-      if (nodeId == null) {
-        LogUtil.d(
-            "DocumentProvider.Listener.onInspectRequested() " +
-                "called for a non-mapped node: element=%s",
-            element);
-      } else {
-        InspectNodeRequestedEvent message = new InspectNodeRequestedEvent();
-        message.nodeId = nodeId;
-        mPeerManager.sendNotificationToPeers("DOM.inspectNodeRequested", message);
+    List<Node> childNodes;
+    if (childNodeCount == 0) {
+      childNodes = Collections.emptyList();
+    } else {
+      childNodes = new ArrayList<Node>(childNodeCount);
+      for (int i = 0; i < childNodeCount; ++i) {
+        Object childElement = descriptor.getChildAt(element, i);
+        Node childNode = createNodeForElement(childElement);
+        childNodes.add(childNode);
       }
     }
 
-    public void onChildNodeRemoved(
-        int parentNodeId,
-        int nodeId) {
-      ChildNodeRemovedEvent removedEvent = acquireChildNodeRemovedEvent();
+    return childNodes;
+  }
 
-      removedEvent.parentNodeId = parentNodeId;
-      removedEvent.nodeId = nodeId;
-      mPeerManager.sendNotificationToPeers("DOM.childNodeRemoved", removedEvent);
-
-      releaseChildNodeRemovedEvent(removedEvent);
+  private void removeElementTree(Object element) {
+    NodeDescriptor descriptor = mDOMProvider.getNodeDescriptor(element);
+    int childCount = descriptor.getChildCount(element);
+    for (int i = 0; i < childCount; ++i) {
+      Object childElement = descriptor.getChildAt(element, i);
+      removeElementTree(childElement);
     }
-
-    public void onChildNodeInserted(
-        DocumentView view,
-        Object element,
-        int parentNodeId,
-        int previousNodeId,
-        Accumulator<Object> insertedElements) {
-      ChildNodeInsertedEvent insertedEvent = acquireChildNodeInsertedEvent();
-
-      insertedEvent.parentNodeId = parentNodeId;
-      insertedEvent.previousNodeId = previousNodeId;
-      insertedEvent.node = createNodeForElement(element, view, insertedElements);
-
-      mPeerManager.sendNotificationToPeers("DOM.childNodeInserted", insertedEvent);
-
-      releaseChildNodeInsertedEvent(insertedEvent);
-    }
+    mObjectIdMapper.removeObject(element);
   }
 
   private final class PeerManagerListener extends PeersRegisteredListener {
     @Override
     protected synchronized void onFirstPeerRegistered() {
-      mDocument.addRef();
-      mDocument.addUpdateListener(mListener);
+      mDOMProvider = mDOMProviderFactory.create();
+      mDOMProvider.setListener(new ProviderListener());
     }
 
     @Override
     protected synchronized void onLastPeerUnregistered() {
-      mSearchResults.clear();
-      mDocument.removeUpdateListener(mListener);
-      mDocument.release();
+      Object rootElement = mDOMProvider.getRootElement();
+      removeElementTree(rootElement);
+
+      mObjectIdMapper.clear();
+
+      mDOMProvider.dispose();
+      mDOMProvider = null;
+    }
+  }
+
+  private final class DOMObjectIdMapper extends ObjectIdMapper {
+    @Override
+    protected void onMapped(Object object, int id) {
+      NodeDescriptor descriptor = mDOMProvider.getNodeDescriptor(object);
+      descriptor.hook(object);
+    }
+
+    @Override
+    protected void onUnmapped(Object object, int id) {
+      NodeDescriptor descriptor = mDOMProvider.getNodeDescriptor(object);
+      descriptor.unhook(object);
+    }
+  }
+
+  private final class ProviderListener implements DOMProvider.Listener {
+    @Override
+    public void onAttributeModified(Object element, String name, String value) {
+      AttributeModifiedEvent message = new AttributeModifiedEvent();
+      message.nodeId = mObjectIdMapper.getIdForObject(element);
+      message.name = name;
+      message.value = value;
+      mPeerManager.sendNotificationToPeers("DOM.attributeModified", message);
+    }
+
+    @Override
+    public void onAttributeRemoved(Object element, String name) {
+      AttributeRemovedEvent message = new AttributeRemovedEvent();
+      message.nodeId = mObjectIdMapper.getIdForObject(element);
+      message.name = name;
+      mPeerManager.sendNotificationToPeers("DOM.attributeRemoved", message);
+    }
+
+    @Override
+    public void onChildInserted(Object parentElement, Object previousElement, Object childElement) {
+      ChildNodeInsertedEvent message = new ChildNodeInsertedEvent();
+      message.parentNodeId = mObjectIdMapper.getIdForObject(parentElement);
+
+      // using -1 was just a guess, and it seemed to work. this is for the case where we
+      // go from 0 to 1 children, or if we just happen to be inserting at index 0
+      message.previousNodeId = (previousElement == null)
+          ? -1
+          : mObjectIdMapper.getIdForObject(previousElement);
+
+      message.node = createNodeForElement(childElement);
+      mPeerManager.sendNotificationToPeers("DOM.childNodeInserted", message);
+    }
+
+    @Override
+    public void onChildRemoved(Object parentElement, Object childElement) {
+      ChildNodeRemovedEvent message = new ChildNodeRemovedEvent();
+      message.parentNodeId = mObjectIdMapper.getIdForObject(parentElement);
+      message.nodeId = mObjectIdMapper.getIdForObject(childElement);
+      mPeerManager.sendNotificationToPeers("DOM.childNodeRemoved", message);
+
+      removeElementTree(childElement);
     }
   }
 
@@ -487,22 +313,15 @@ public class DOM implements ChromeDevtoolsDomain {
   private static class HighlightConfig {
     @JsonProperty
     public RGBAColor contentColor;
-  }
-
-  private static class InspectNodeRequestedEvent {
-    @JsonProperty
-    public int nodeId;
-  }
-
-  private static class SetInspectModeEnabledRequest {
-    @JsonProperty(required = true)
-    public boolean enabled;
 
     @JsonProperty
-    public Boolean inspectShadowDOM;
+    public RGBAColor paddingColor;
 
     @JsonProperty
-    public HighlightConfig highlightConfig;
+    public RGBAColor borderColor;
+
+    @JsonProperty
+    public RGBAColor marginColor;
   }
 
   private static class RGBAColor {
@@ -529,63 +348,5 @@ public class DOM implements ChromeDevtoolsDomain {
 
       return Color.argb(alpha, this.r, this.g, this.b);
     }
-  }
-
-  private static class ResolveNodeRequest {
-    @JsonProperty(required = true)
-    public int nodeId;
-
-    @JsonProperty
-    public String objectGroup;
-  }
-
-  private static class SetAttributesAsTextRequest {
-    @JsonProperty(required = true)
-    public int nodeId;
-
-    @JsonProperty(required = true)
-    public String text;
-  }
-
-  private static class ResolveNodeResponse implements JsonRpcResult {
-    @JsonProperty(required = true)
-    public Runtime.RemoteObject object;
-  }
-
-  private static class PerformSearchRequest {
-    @JsonProperty(required = true)
-    public String query;
-
-    @JsonProperty
-    public Boolean includeUserAgentShadowDOM;
-  }
-
-  private static class PerformSearchResponse implements JsonRpcResult {
-    @JsonProperty(required = true)
-    public String searchId;
-
-    @JsonProperty(required = true)
-    public int resultCount;
-  }
-
-  private static class GetSearchResultsRequest {
-    @JsonProperty(required = true)
-    public String searchId;
-
-    @JsonProperty(required = true)
-    public int fromIndex;
-
-    @JsonProperty(required = true)
-    public int toIndex;
-  }
-
-  private static class GetSearchResultsResponse implements JsonRpcResult {
-    @JsonProperty(required = true)
-    public List<Integer> nodeIds;
-  }
-
-  private static class DiscardSearchResultsRequest {
-    @JsonProperty(required = true)
-    public String searchId;
   }
 }

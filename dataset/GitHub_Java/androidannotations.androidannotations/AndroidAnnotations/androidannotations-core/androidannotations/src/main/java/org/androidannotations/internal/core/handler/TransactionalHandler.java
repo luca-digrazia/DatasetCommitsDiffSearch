@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,8 +14,6 @@
  * the License.
  */
 package org.androidannotations.internal.core.handler;
-
-import static org.androidannotations.helper.LogHelper.logTagForClassHolder;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -87,7 +84,7 @@ public class TransactionalHandler extends BaseAnnotationHandler<EComponentHolder
 			superCall.arg(param);
 		}
 		JBlock tryBody = tryBlock.body();
-		if ("void".equals(returnTypeName)) {
+		if (returnTypeName.equals("void")) {
 			tryBody.add(superCall);
 			tryBody.invoke(db, "setTransactionSuccessful");
 			tryBody._return();
@@ -105,7 +102,7 @@ public class TransactionalHandler extends BaseAnnotationHandler<EComponentHolder
 
 		JInvocation errorInvoke = catchBody.staticInvoke(getClasses().LOG, "e");
 
-		errorInvoke.arg(logTagForClassHolder(holder));
+		errorInvoke.arg(holder.getGeneratedClass().name());
 		errorInvoke.arg("Error in transaction");
 		errorInvoke.arg(exceptionParam);
 

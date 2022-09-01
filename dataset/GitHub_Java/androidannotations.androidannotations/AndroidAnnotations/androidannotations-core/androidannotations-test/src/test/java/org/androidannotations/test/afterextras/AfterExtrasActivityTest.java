@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,9 +20,8 @@ import static org.fest.assertions.api.Assertions.assertThat;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-import org.robolectric.android.controller.ActivityController;
+import org.robolectric.util.ActivityController;
 
 import android.content.Intent;
 
@@ -36,8 +34,7 @@ public class AfterExtrasActivityTest {
 
 	@Before
 	public void setUp() {
-
-		activityController = Robolectric.buildActivity(AfterExtrasActivity_.class);
+		activityController = ActivityController.of(AfterExtrasActivity_.class);
 		activity = activityController.get();
 
 		intent = AfterExtrasActivity_.intent(activity).extraDataSet(true).get();
@@ -47,7 +44,7 @@ public class AfterExtrasActivityTest {
 	public void afterExtraCalledActivityAfterSetIntent() {
 		activityController.create();
 		assertThat(activity.extraDataSet).isFalse();
-		assertThat(activity.afterExtrasCalled).isTrue();
+		assertThat(activity.afterExtrasCalled).isFalse();
 
 		activity.setIntent(intent);
 		assertThat(activity.extraDataSet).isTrue();
@@ -59,8 +56,7 @@ public class AfterExtrasActivityTest {
 		assertThat(activity.extraDataSet).isFalse();
 		assertThat(activity.afterExtrasCalled).isFalse();
 
-		activity = Robolectric.buildActivity(AfterExtrasActivity_.class, intent).setup().get();
-
+		activityController.withIntent(intent).create();
 		assertThat(activity.extraDataSet).isTrue();
 		assertThat(activity.afterExtrasCalled).isTrue();
 	}

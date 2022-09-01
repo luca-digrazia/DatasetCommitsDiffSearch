@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -42,16 +42,4 @@ public interface ToolchainConfig extends LLVMCapability {
      * Relative toolchain path.
      */
     String getToolchainSubdir();
-
-    /**
-     * Returns true if C++ support is enabled.
-     */
-    boolean enableCXX();
-
-    /**
-     * Binds the signature with the function.
-     */
-    default Object bind(@SuppressWarnings("unused") Object signature, @SuppressWarnings("unused") Object function) {
-        return null;
-    }
 }

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -18,17 +17,17 @@ package org.androidannotations.test;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.io.Serializable;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 import android.accounts.Account;
 import android.os.Bundle;
 
+@Config(shadows = CustomShadowBundle.class)
 @RunWith(RobolectricTestRunner.class)
 public class GenericFragmentArgsTest {
 
@@ -39,7 +38,7 @@ public class GenericFragmentArgsTest {
 		Bundle bundle = new Bundle();
 		bundle.putParcelableArray("parcelableArray", TEST_ARRAY);
 
-		GenericFragmentArguments<CloseableSerializable, Account> fragment = new GenericFragmentArguments_<CloseableSerializable, Account>();
+		GenericFragmentArguments<Serializable, Account> fragment = new GenericFragmentArguments_<Serializable, Account>();
 		fragment.setArguments(bundle);
 
 		assertThat(fragment.parcelableArray).isNull();
@@ -47,12 +46,5 @@ public class GenericFragmentArgsTest {
 		fragment.onCreate(null);
 
 		assertThat(fragment.parcelableArray).isEqualTo(TEST_ARRAY);
-	}
-
-	private static class CloseableSerializable implements Closeable, Serializable {
-		@Override
-		public void close() throws IOException {
-
-		}
 	}
 }

@@ -26,7 +26,7 @@ import org.junit.runners.JUnit4;
 public final class UtilTest {
 
   @Test
-  public void testIsNullOrEmpty() {
+  public void testIsNullOrEmpty() throws Exception {
     assertThat(Util.isNullOrEmpty(null)).isTrue();
     assertThat(Util.isNullOrEmpty("")).isTrue();
     assertThat(Util.isNullOrEmpty("\0")).isFalse();
@@ -34,7 +34,7 @@ public final class UtilTest {
   }
 
   @Test
-  public void testCheckArgument() {
+  public void testCheckArgument() throws Exception {
     Util.checkArgument(true, null, null);
 
     IllegalArgumentException e =

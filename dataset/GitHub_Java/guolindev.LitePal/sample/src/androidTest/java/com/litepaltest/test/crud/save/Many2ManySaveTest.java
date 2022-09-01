@@ -1,22 +1,15 @@
 package com.litepaltest.test.crud.save;
 
-import androidx.test.filters.SmallTest;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import org.junit.Test;
-import org.litepal.crud.LitePalSupport;
+import org.litepal.crud.DataSupport;
 
 import com.litepaltest.model.Student;
 import com.litepaltest.model.Teacher;
 import com.litepaltest.test.LitePalTestCase;
 
-import static junit.framework.TestCase.assertFalse;
-import static junit.framework.TestCase.assertTrue;
-
-@SmallTest
 public class Many2ManySaveTest extends LitePalTestCase {
 
 	private Student danny;
@@ -71,8 +64,8 @@ public class Many2ManySaveTest extends LitePalTestCase {
 		}
 	}
 
-	private List<LitePalSupport> getModelList() {
-		List<LitePalSupport> list = new ArrayList<>();
+	private List<DataSupport> getModelList() {
+		List<DataSupport> list = new ArrayList<DataSupport>();
 		list.add(jack);
 		list.add(danny);
 		list.add(cam);
@@ -81,16 +74,15 @@ public class Many2ManySaveTest extends LitePalTestCase {
 	}
 
 	private void saveAllByRandom() {
-		List<LitePalSupport> modelList = getModelList();
+		List<DataSupport> modelList = getModelList();
 		while (!modelList.isEmpty()) {
 			Random rand = new Random();
 			int index = rand.nextInt(modelList.size());
-            LitePalSupport model = modelList.remove(index);
+			DataSupport model = modelList.remove(index);
 			model.save();
 		}
 	}
 
-	@Test
 	public void testCase1() {
 		init();
 		buildBidirectionalAssociation();
@@ -105,7 +97,6 @@ public class Many2ManySaveTest extends LitePalTestCase {
 		assertM2M(getTableName(mick), getTableName(jack), mick.getId(), jack.getId());
 	}
 
-    @Test
 	public void testCase2() {
 		init();
 		buildBidirectionalAssociation();
@@ -113,7 +104,7 @@ public class Many2ManySaveTest extends LitePalTestCase {
 		jack.save();
 		cam.save();
 		assertTrue(isDataExists(getTableName(danny), danny.getId()));
-		assertFalse(isDataExists(getTableName(mick), mick.getId()));
+		assertTrue(!isDataExists(getTableName(mick), mick.getId()));
 		assertTrue(isDataExists(getTableName(cam), cam.getId()));
 		assertTrue(isDataExists(getTableName(jack), jack.getId()));
 		assertM2M(getTableName(danny), getTableName(cam), danny.getId(), cam.getId());
@@ -122,7 +113,6 @@ public class Many2ManySaveTest extends LitePalTestCase {
 		assertM2MFalse(getTableName(mick), getTableName(jack), mick.getId(), jack.getId());
 	}
 
-    @Test
 	public void testCase3() {
 		init();
 		buildBidirectionalAssociation();
@@ -138,7 +128,6 @@ public class Many2ManySaveTest extends LitePalTestCase {
 		assertM2MFalse(getTableName(mick), getTableName(jack), mick.getId(), jack.getId());
 	}
 
-    @Test
 	public void testCase4() {
 		init();
 		buildUnidirectionalAssociation();

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -30,11 +29,11 @@ import org.androidannotations.annotations.ResId;
  * </p>
  * <p>
  * The annotation value must be one of R.color.* fields. If the value is not
- * set, the field or method name will be used as the R.color.* field name.
+ * set, the field name will be used as the R.color.* field name.
  * </p>
  */
 @Retention(RetentionPolicy.CLASS)
-@Target({ ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER })
+@Target(ElementType.FIELD)
 public @interface ColorStateListRes {
 
 	/**
@@ -45,7 +44,8 @@ public @interface ColorStateListRes {
 	int value() default ResId.DEFAULT_VALUE;
 
 	/**
-	 * The resource name as a string which refers to the ColorStateList resource.
+	 * The resource name as a string which refers to the ColorStateList
+	 * resource.
 	 * 
 	 * @return the resource name of the resource
 	 */

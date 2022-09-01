@@ -1,9 +1,12 @@
 package com.example.gsyvideoplayer;
 
 import android.os.Bundle;
+import android.support.v4.widget.NestedScrollView;
 import android.view.View;
 import android.widget.ImageView;
-import com.example.gsyvideoplayer.databinding.ActivityDetailAdPlayerBinding;
+import android.widget.RelativeLayout;
+
+
 import com.shuyu.gsyvideoplayer.GSYBaseActivityDetail;
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
@@ -13,59 +16,55 @@ import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
 import java.util.ArrayList;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
 
 
 public class DetailADPlayer extends GSYBaseActivityDetail<ListGSYVideoPlayer> {
 
-    ActivityDetailAdPlayerBinding binding;
+
+    @BindView(R.id.post_detail_nested_scroll)
+    NestedScrollView postDetailNestedScroll;
+    @BindView(R.id.ad_player)
+    GSYSampleADVideoPlayer detailPlayer;
+    @BindView(R.id.activity_detail_player)
+    RelativeLayout activityDetailPlayer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        binding = ActivityDetailAdPlayerBinding.inflate(getLayoutInflater());
-
-        View rootView = binding.getRoot();
-        setContentView(rootView);
-
+        setContentView(R.layout.activity_detail_ad_player);
+        ButterKnife.bind(this);
 
         //普通模式
         initVideo();
 
         ArrayList<GSYSampleADVideoPlayer.GSYADVideoModel> urls = new ArrayList<>();
-        //广告1
-        urls.add(new GSYSampleADVideoPlayer.GSYADVideoModel("http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4",
+        urls.add(new GSYSampleADVideoPlayer.GSYADVideoModel("http://video.7k.cn/app_video/20171202/6c8cf3ea/v.m3u8.mp4",
                 "", GSYSampleADVideoPlayer.GSYADVideoModel.TYPE_AD));
-        //正式内容1
         urls.add(new GSYSampleADVideoPlayer.GSYADVideoModel("http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4",
-                "正文1标题", GSYSampleADVideoPlayer.GSYADVideoModel.TYPE_NORMAL));
-        //广告2
-        urls.add(new GSYSampleADVideoPlayer.GSYADVideoModel("http://7xjmzj.com1.z0.glb.clouddn.com/20171026175005_JObCxCE2.mp4",
-                "", GSYSampleADVideoPlayer.GSYADVideoModel.TYPE_AD, true));
-        //正式内容2
-        urls.add(new GSYSampleADVideoPlayer.GSYADVideoModel("http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f30.mp4",
-                "正文2标题", GSYSampleADVideoPlayer.GSYADVideoModel.TYPE_NORMAL));
+                "正文标题", GSYSampleADVideoPlayer.GSYADVideoModel.TYPE_NORMAL));
 
-        binding.adPlayer.setAdUp(urls, true, 0);
+        detailPlayer.setAdUp(urls, true, 0);
 
         //增加封面
         ImageView imageView = new ImageView(this);
         imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
         imageView.setImageResource(R.mipmap.xxx1);
-        binding.adPlayer.setThumbImageView(imageView);
+        detailPlayer.setThumbImageView(imageView);
 
         resolveNormalVideoUI();
 
-        binding.adPlayer.setIsTouchWiget(true);
+        detailPlayer.setIsTouchWiget(true);
         //关闭自动旋转
-        binding.adPlayer.setRotateViewAuto(false);
-        binding.adPlayer.setLockLand(false);
-        binding.adPlayer.setShowFullAnimation(false);
-        binding.adPlayer.setNeedLockFull(true);
+        detailPlayer.setRotateViewAuto(false);
+        detailPlayer.setLockLand(false);
+        detailPlayer.setShowFullAnimation(false);
+        detailPlayer.setNeedLockFull(true);
 
-        binding.adPlayer.setVideoAllCallBack(this);
+        detailPlayer.setStandardVideoAllCallBack(this);
 
-        binding.adPlayer.setLockClickListener(new LockClickListener() {
+        detailPlayer.setLockClickListener(new LockClickListener() {
             @Override
             public void onClick(View view, boolean lock) {
                 if (orientationUtils != null) {
@@ -79,7 +78,7 @@ public class DetailADPlayer extends GSYBaseActivityDetail<ListGSYVideoPlayer> {
 
     @Override
     public ListGSYVideoPlayer getGSYVideoPlayer() {
-        return binding.adPlayer;
+        return detailPlayer;
     }
 
     @Override
@@ -114,8 +113,8 @@ public class DetailADPlayer extends GSYBaseActivityDetail<ListGSYVideoPlayer> {
 
     private void resolveNormalVideoUI() {
         //增加title
-        binding.adPlayer.getTitleTextView().setVisibility(View.VISIBLE);
-        binding.adPlayer.getBackButton().setVisibility(View.VISIBLE);
+        detailPlayer.getTitleTextView().setVisibility(View.VISIBLE);
+        detailPlayer.getBackButton().setVisibility(View.VISIBLE);
     }
 }
 

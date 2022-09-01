@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -25,37 +24,31 @@ import java.lang.annotation.Target;
  * <p>
  * This annotation is intended to be used on methods to receive events defined
  * by
- * <code>OnPreferenceChangeListener#onPreferenceChange(Preference, Object)</code>
- * when the value of a <code>Preference</code> has been changed by the user and
- * is about to be set and/or persisted.
+ * {@link android.preference.Preference.OnPreferenceChangeListener#onPreferenceChange(android.preference.Preference, Object)
+ * OnPreferenceChangeListener#onPreferenceChange} when the value of a
+ * {@link android.preference.Preference Preference} has been changed by the user
+ * and is about to be set and/or persisted.
  * </p>
  * <p>
  * The annotation value should be one or several R.string.* fields that refers
  * to {@link android.preference.Preference Preference} or subclasses of
- * {@link android.preference.Preference Preference} or
- * <code>android.support.v7.preference.Preference</code> or subclasses of
- * <code>android.support.v7.preference.Preference</code>. If not set, the method
- * name will be used as the R.string.* field name. This annotation only can be
- * used inside {@link org.androidannotations.annotations.EActivity EActivity} or
- * {@link org.androidannotations.annotations.EFragment EFragment} annotated
- * class, which is a subclass of {@link android.preference.PreferenceActivity
- * PreferenceActivity} or <code>PreferenceFragment(Compat)</code>, respectively.
+ * {@link android.preference.Preference Preference}. If not set, the method name
+ * will be used as the R.string.* field name.
  * </p>
  * <p>
  * The method MAY have multiple parameter:
  * </p>
  * <ul>
- * <li>A {@link android.preference.Preference Preference} (or a subclass) or
- * <code>android.support.v7.preference.Preference</code> (or a subclass)
+ * <li>A {@link android.preference.Preference Preference} (or a sublcass)
  * parameter to know which preference was targeted by this event</li>
  * <li>An {@link Object}, {@link String}, {@link java.util.Set Set of strings}
  * and also a {@link Boolean}, {@link Float}, {@link Integer}, {@link Long} or
  * their corresponding primitive types to obtain the new value of the
- * <code>Preference</code>. Please note with number types, we assume that the
- * <code>newValue</code> parameter coming from the <code>Preference</code> is a
- * {@link String}, so we parse it to a number object (Android
- * <code>Preference</code> classes use {@link String}s instead of number
- * objects).</li>
+ * {@link android.preference.Preference Preference}. Please note with number
+ * types, we assume that the <code>newValue</code> parameter coming from the
+ * {@link android.preference.Preference Preference} is a {@link String}, so we
+ * parse it to a number object (Android {@link android.preference.Preference
+ * Preference} classes use {@link String}s instead of number objects).</li>
  * </ul>
  * <blockquote>
  * 
@@ -96,17 +89,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 public @interface PreferenceChange {
 
-	/**
-	 * The R.string.* fields which refer to the Preferences.
-	 * 
-	 * @return the keys of the Preferences
-	 */
 	int[] value() default ResId.DEFAULT_VALUE;
 
-	/**
-	 * The resource names which refer to the Preferences.
-	 * 
-	 * @return the keys of the Preferences
-	 */
 	String[] resName() default "";
 }

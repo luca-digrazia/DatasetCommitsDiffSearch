@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -30,14 +29,14 @@ import org.androidannotations.annotations.PreferenceClick;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.HasPreferences;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JMod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JVar;
 
 public class PreferenceClickHandler extends AbstractPreferenceListenerHandler {
 
@@ -55,7 +54,7 @@ public class PreferenceClickHandler extends AbstractPreferenceListenerHandler {
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
 		validatorHelper.param //
-				.extendsAnyOfTypes(CanonicalNameConstants.PREFERENCE, CanonicalNameConstants.SUPPORT_V7_PREFERENCE, CanonicalNameConstants.ANDROIDX_PREFERENCE).optional() //
+				.extendsType(CanonicalNameConstants.PREFERENCE).optional() //
 				.validate(executableElement, valid);
 	}
 
@@ -72,12 +71,10 @@ public class PreferenceClickHandler extends AbstractPreferenceListenerHandler {
 
 	@Override
 	protected void processParameters(HasPreferences holder, JMethod listenerMethod, JInvocation call, List<? extends VariableElement> userParameters) {
-		String preferenceClassName = holder.getBasePreferenceClass().fullName();
-
-		JVar preferenceParam = listenerMethod.param(getEnvironment().getJClass(preferenceClassName), "preference");
+		JVar preferenceParam = listenerMethod.param(getClasses().PREFERENCE, "preference");
 
 		if (userParameters.size() == 1) {
-			call.arg(castArgumentIfNecessary(holder, preferenceClassName, preferenceParam, userParameters.get(0)));
+			call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.PREFERENCE, preferenceParam, userParameters.get(0)));
 		}
 	}
 
@@ -92,9 +89,8 @@ public class PreferenceClickHandler extends AbstractPreferenceListenerHandler {
 	}
 
 	@Override
-	protected AbstractJClass getListenerClass(HasPreferences holder) {
-		return holder.usingAndroidxPreference() ? getClasses().ANDROIDX_PREFERENCE_CLICK_LISTENER
-				: holder.usingSupportV7Preference() ? getClasses().SUPPORT_V7_PREFERENCE_CLICK_LISTENER : getClasses().PREFERENCE_CLICK_LISTENER;
+	protected JClass getListenerClass() {
+		return getClasses().PREFERENCE_CLICK_LISTENER;
 	}
 
 }

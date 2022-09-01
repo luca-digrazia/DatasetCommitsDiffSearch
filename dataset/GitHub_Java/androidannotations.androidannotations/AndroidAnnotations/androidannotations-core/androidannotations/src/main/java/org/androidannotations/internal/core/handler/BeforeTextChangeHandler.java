@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -27,19 +26,20 @@ import javax.lang.model.type.TypeMirror;
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.ElementValidation;
 import org.androidannotations.annotations.BeforeTextChange;
+import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.IdValidatorHelper;
 import org.androidannotations.holder.EComponentWithViewSupportHolder;
 import org.androidannotations.holder.TextWatcherHolder;
 import org.androidannotations.rclass.IRClass;
 
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JVar;
 
-public class BeforeTextChangeHandler extends CoreBaseAnnotationHandler<EComponentWithViewSupportHolder> {
+public class BeforeTextChangeHandler extends BaseAnnotationHandler<EComponentWithViewSupportHolder> {
 
 	public BeforeTextChangeHandler(AndroidAnnotationsEnvironment environment) {
 		super(BeforeTextChange.class, environment);
@@ -57,7 +57,7 @@ public class BeforeTextChangeHandler extends CoreBaseAnnotationHandler<EComponen
 
 		validatorHelper.returnTypeIsVoid((ExecutableElement) element, validation);
 
-		coreValidatorHelper.hasBeforeTextChangedMethodParameters((ExecutableElement) element, validation);
+		validatorHelper.hasBeforeTextChangedMethodParameters((ExecutableElement) element, validation);
 	}
 
 	@Override
@@ -104,7 +104,7 @@ public class BeforeTextChangeHandler extends CoreBaseAnnotationHandler<EComponen
 			TextWatcherHolder textWatcherHolder = holder.getTextWatcherHolder(idRef, viewParameterType);
 			JBlock methodBody = textWatcherHolder.getBeforeTextChangedBody();
 
-			IJExpression activityRef = holder.getGeneratedClass().staticRef("this");
+			JExpression activityRef = holder.getGeneratedClass().staticRef("this");
 			JInvocation textChangeCall = methodBody.invoke(activityRef, methodName);
 
 			for (int i = 0; i < parameters.size(); i++) {

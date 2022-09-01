@@ -20,13 +20,14 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
+import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.config.TransitionFactories;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.packages.RuleTransitionData;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.query2.PostAnalysisQueryEnvironment;
 import com.google.devtools.build.lib.query2.cquery.CqueryOptions.Transitions;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.Setting;
@@ -50,12 +51,11 @@ public class TransitionsOutputFormatterTest extends ConfiguredTargetQueryTest {
   private CqueryOptions options;
   private Reporter reporter;
   private final List<Event> events = new ArrayList<>();
-  @Nullable private TransitionFactory<RuleTransitionData> trimmingTransitionFactory;
+  @Nullable private TransitionFactory<Rule> trimmingTransitionFactory;
 
   @Before
   public final void setUpCqueryOptions() {
     this.options = new CqueryOptions();
-    helper.setQuerySettings(Setting.INCLUDE_ASPECTS);
     this.reporter = new Reporter(new EventBus(), events::add);
   }
 
@@ -78,19 +78,23 @@ public class TransitionsOutputFormatterTest extends ConfiguredTargetQueryTest {
 
     List<String> result = getOutput("deps(//test:rule_with_patch)", Transitions.FULL);
 
-    assertThat(result.get(0)).startsWith("FooPatchTransition -> //test:rule_with_patch");
-    assertThat(result.get(1)).startsWith("  patched#//test:foo#FooPatch");
-    assertThat(result.get(2)).isEqualTo("    foo:SET BY RULE CLASS PATCH -> [SET BY PATCH]");
-    assertThat(result.get(3)).startsWith("  patched#//test:foo2#FooPatch");
+    assertThat(result.get(0)).startsWith("TestArgPatchTransition -> //test:rule_with_patch");
+    assertThat(result.get(1)).startsWith("  patched#//test:foo#TestArgPatch");
+    assertThat(result.get(2))
+        .isEqualTo("    test_arg:[SET BY RULE CLASS PATCH] -> [[SET BY PATCH]]");
+    assertThat(result.get(3)).startsWith("  patched#//test:foo2#TestArgPatch");
     assertThat(result.get(4)).isEqualTo(result.get(2));
     assertThat(result.get(5))
-        .startsWith("  patched#//test:trimmed_foo#(FooPatchTransition + FooPatchTransition(trim))");
-    assertThat(result.get(6)).isEqualTo("    foo:SET BY RULE CLASS PATCH -> [SET BY TRIM]");
+        .startsWith(
+            "  patched#//test:trimmed_foo#(TestArgPatchTransition + TestArgPatchTransition(trim))");
+    assertThat(result.get(6))
+        .isEqualTo("    test_arg:[SET BY RULE CLASS PATCH] -> [[SET BY TRIM]]");
 
     result = getOutput("deps(//test:rule_with_split)", Transitions.FULL);
-    assertThat(result.get(1)).startsWith("  split#//test:bar#FooSplitTransition");
+    assertThat(result.get(1)).startsWith("  split#//test:bar#TestArgSplitTransition");
     assertThat(result.get(2))
-        .isEqualTo("    foo:SET BY RULE CLASS PATCH -> [SET BY SPLIT 1, SET BY SPLIT 2]");
+        .isEqualTo(
+            "    test_arg:[SET BY RULE CLASS PATCH] -> [[SET BY SPLIT 1], [SET BY SPLIT 2]]");
   }
 
   @Test
@@ -111,13 +115,13 @@ public class TransitionsOutputFormatterTest extends ConfiguredTargetQueryTest {
 
     List<String> result = getOutput("deps(//test:rule_with_patch)", Transitions.LITE);
 
-    assertThat(result.get(0)).startsWith("FooPatchTransition -> //test:rule_with_patch");
-    assertThat(result.get(1)).startsWith("  patched#//test:foo#FooPatchTransition");
-    assertThat(result.get(2)).startsWith("  patched#//test:foo2#FooPatchTransition");
+    assertThat(result.get(0)).startsWith("TestArgPatchTransition -> //test:rule_with_patch");
+    assertThat(result.get(1)).startsWith("  patched#//test:foo#TestArgPatchTransition");
+    assertThat(result.get(2)).startsWith("  patched#//test:foo2#TestArgPatchTransition");
 
     result = getOutput("deps(//test:rule_with_split)", Transitions.LITE);
-    assertThat(result.get(0)).startsWith("FooPatchTransition -> //test:rule_with_split");
-    assertThat(result.get(1)).startsWith("  split#//test:bar#FooSplitTransition");
+    assertThat(result.get(0)).startsWith("TestArgPatchTransition -> //test:rule_with_split");
+    assertThat(result.get(1)).startsWith("  split#//test:bar#TestArgSplitTransition");
   }
 
   @Test
@@ -132,10 +136,7 @@ public class TransitionsOutputFormatterTest extends ConfiguredTargetQueryTest {
         "simple_rule(name = 'foo')");
 
     List<String> result = getOutput("deps(//test:rule_with_patch)", Transitions.LITE);
-    String depEntry = result.get(2);
-    // depEntry is "//test:rule_with_path (<config_id>)". This gets just "<config_id>".
-    String postPatchConfig =
-        depEntry.substring(depEntry.lastIndexOf("(") + 1, depEntry.length() - 1);
+    String postPatchConfig = result.get(2).substring("//test:foo (".length());
     assertThat(result.get(1)).endsWith(postPatchConfig);
   }
 
@@ -156,18 +157,19 @@ public class TransitionsOutputFormatterTest extends ConfiguredTargetQueryTest {
   }
 
   private void setUpRules() throws Exception {
-    TransitionFactory<RuleTransitionData> infixTrimmingTransitionFactory =
-        (ruleData) -> {
-          if (!ruleData.rule().getName().contains("trimmed")) {
+    TransitionFactory<Rule> infixTrimmingTransitionFactory =
+        (rule) -> {
+          if (!rule.getName().contains("trimmed")) {
             return NoTransition.INSTANCE;
           }
           // rename the transition so it's distinguishable from the others in tests
-          return new FooPatchTransition("SET BY TRIM", "FooPatchTransition(trim)");
+          return new TestArgPatchTransition("SET BY TRIM", "TestArgPatchTransition(trim)");
         };
-    FooPatchTransition ruleClassTransition = new FooPatchTransition("SET BY RULE CLASS PATCH");
-    FooPatchTransition attributePatchTransition = new FooPatchTransition("SET BY PATCH");
-    FooSplitTransition attributeSplitTransitions =
-        new FooSplitTransition("SET BY SPLIT 1", "SET BY SPLIT 2");
+    TestArgPatchTransition ruleClassTransition =
+        new TestArgPatchTransition("SET BY RULE CLASS PATCH");
+    TestArgPatchTransition attributePatchTransition = new TestArgPatchTransition("SET BY PATCH");
+    TestArgSplitTransition attributeSplitTransitions =
+        new TestArgSplitTransition("SET BY SPLIT 1", "SET BY SPLIT 2");
 
     MockRule ruleWithTransitions =
         () ->
@@ -206,10 +208,10 @@ public class TransitionsOutputFormatterTest extends ConfiguredTargetQueryTest {
     Set<String> targetPatternSet = new LinkedHashSet<>();
     expression.collectTargetPatterns(targetPatternSet);
     helper.setQuerySettings(Setting.NO_IMPLICIT_DEPS);
-    PostAnalysisQueryEnvironment<KeyedConfiguredTarget> env =
+    PostAnalysisQueryEnvironment<ConfiguredTarget> env =
         ((ConfiguredTargetQueryHelper) helper).getPostAnalysisQueryEnvironment(targetPatternSet);
     options.transitions = verbosity;
-    // TODO(blaze-configurability): Test late-bound attributes.
+    // TODO(juliexxia): Test late-bound attributes.
     TransitionsOutputFormatterCallback callback =
         new TransitionsOutputFormatterCallback(
             reporter,

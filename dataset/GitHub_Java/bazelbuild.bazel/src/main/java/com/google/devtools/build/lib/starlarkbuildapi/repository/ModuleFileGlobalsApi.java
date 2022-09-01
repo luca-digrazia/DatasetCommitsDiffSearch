@@ -24,7 +24,7 @@ import net.starlark.java.eval.StarlarkInt;
 
 /** A collection of global Starlark build API functions that apply to MODULE.bazel files. */
 @DocumentMethods
-public interface ModuleFileGlobalsApi {
+public interface ModuleFileGlobalsApi<ModuleFileFunctionExceptionT extends Exception> {
 
   @StarlarkMethod(
       name = "module",
@@ -37,7 +37,6 @@ public interface ModuleFileGlobalsApi {
       parameters = {
         @Param(
             name = "name",
-            // TODO(wyv): explain module name format
             doc =
                 "The name of the module. Can be omitted only if this module is the root module (as"
                     + " in, if it's not going to be depended on by another module).",
@@ -46,7 +45,6 @@ public interface ModuleFileGlobalsApi {
             defaultValue = "''"),
         @Param(
             name = "version",
-            // TODO(wyv): explain version format
             doc =
                 "The version of the module. Can be omitted only if this module is the root module"
                     + " (as in, if it's not going to be depended on by another module).",
@@ -55,23 +53,15 @@ public interface ModuleFileGlobalsApi {
             defaultValue = "''"),
         @Param(
             name = "compatibility_level",
-            // TODO(wyv): See X for more details
             doc =
                 "The compatibility level of the module; this should be changed every time a major"
-                    + " incompatible change is introduced. This is essentially the \"major"
-                    + " version\" of the module in terms of SemVer, except that it's not embedded"
-                    + " in the version string itself, but exists as a separate field. Modules with"
-                    + " different compatibility levels participate in version resolution as if"
-                    + " they're modules with different names, but the final dependency graph"
-                    + " cannot contain multiple modules with the same name but different"
-                    + " compatibility levels (unless <code>multiple_version_override</code> is in"
-                    + " effect; see there for more details).",
+                    + " incompatible change is introduced.", // TODO(wyv): See X for more details.
             named = true,
             positional = false,
-            defaultValue = "0"),
+            defaultValue = "''"),
         // TODO(wyv): bazel_compatibility, module_rule_exports, toolchains & platforms
       })
-  void module(String name, String version, StarlarkInt compatibilityLevel)
+  void module(String name, String version, String compatibilityLevel)
       throws EvalException, InterruptedException;
 
   @StarlarkMethod(
@@ -116,7 +106,7 @@ public interface ModuleFileGlobalsApi {
         @Param(
             name = "version",
             doc =
-                "Overrides the declared version of this module in the dependency graph. In other"
+                "Override the declared version of this module in the dependency graph. In other"
                     + " words, this module will be \"pinned\" to this override version. This"
                     + " attribute can be omitted if all one wants to override is the registry or"
                     + " the patches. ",
@@ -154,44 +144,6 @@ public interface ModuleFileGlobalsApi {
       String registry,
       Iterable<?> patches,
       StarlarkInt patchStrip)
-      throws EvalException;
-
-  @StarlarkMethod(
-      name = "multiple_version_override",
-      doc =
-          "Specifies that a dependency should still come from a registry, but multiple versions of"
-              + " it should be allowed to coexist. This directive can only be used by the root"
-              + " module; in other words, if a module specifies any overrides, it cannot be used"
-              + " as a dependency by others.",
-      parameters = {
-        @Param(
-            name = "module_name",
-            doc = "The name of the Bazel module dependency to apply this override to.",
-            named = true,
-            positional = false),
-        @Param(
-            name = "versions",
-            // TODO(wyv): See X for more details
-            doc =
-                "Explicitly specifies the versions allowed to coexist. These versions must already"
-                    + " be present in the dependency graph pre-selection. Dependencies on this"
-                    + " module will be \"upgraded\" to the nearest higher allowed version at the"
-                    + " same compatibility level, whereas dependencies that have a higher version"
-                    + " than any allowed versions at the same compatibility level will cause an"
-                    + " error.",
-            allowedTypes = {@ParamType(type = Iterable.class, generic1 = String.class)},
-            named = true,
-            positional = false),
-        @Param(
-            name = "registry",
-            doc =
-                "Overrides the registry for this module; instead of finding this module from the"
-                    + " default list of registries, the given registry should be used.",
-            named = true,
-            positional = false,
-            defaultValue = "''"),
-      })
-  void multipleVersionOverride(String moduleName, Iterable<?> versions, String registry)
       throws EvalException;
 
   @StarlarkMethod(
@@ -252,7 +204,7 @@ public interface ModuleFileGlobalsApi {
       String stripPrefix,
       Iterable<?> patches,
       StarlarkInt patchStrip)
-      throws EvalException;
+      throws EvalException, ModuleFileFunctionExceptionT;
 
   @StarlarkMethod(
       name = "git_override",
@@ -296,7 +248,7 @@ public interface ModuleFileGlobalsApi {
       })
   void gitOverride(
       String moduleName, String remote, String commit, Iterable<?> patches, StarlarkInt patchStrip)
-      throws EvalException;
+      throws EvalException, ModuleFileFunctionExceptionT;
 
   @StarlarkMethod(
       name = "local_path_override",
@@ -317,4 +269,6 @@ public interface ModuleFileGlobalsApi {
             positional = false),
       })
   void localPathOverride(String moduleName, String path) throws EvalException;
+
+  // TODO(wyv): multiple_version_override
 }

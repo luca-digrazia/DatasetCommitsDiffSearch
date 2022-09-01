@@ -1,16 +1,16 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.common.android;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
-import android.app.Dialog;
-import android.app.DialogFragment;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.content.res.Resources;
@@ -19,12 +19,13 @@ import android.view.View;
 
 import javax.annotation.Nullable;
 
+@TargetApi(Build.VERSION_CODES.HONEYCOMB)
 final class FragmentCompatFramework
-    extends FragmentCompat<Fragment, DialogFragment, FragmentManager, Activity> {
+    extends FragmentCompat<Fragment, FragmentManager, Activity> {
   private static final FragmentAccessorFrameworkHoneycomb sFragmentAccessor;
-  private static final DialogFragmentAccessorFramework sDialogFragmentAccessor;
   private static final FragmentManagerAccessorViaReflection<FragmentManager, Fragment>
-      sFragmentManagerAccessor = new FragmentManagerAccessorViaReflection<>();
+      sFragmentManagerAccessor =
+          new FragmentManagerAccessorViaReflection<>(FragmentManager.class);
   private static final FragmentActivityAccessorFramework sFragmentActivityAccessor =
       new FragmentActivityAccessorFramework();
 
@@ -34,8 +35,6 @@ final class FragmentCompatFramework
     } else {
       sFragmentAccessor = new FragmentAccessorFrameworkHoneycomb();
     }
-
-    sDialogFragmentAccessor = new DialogFragmentAccessorFramework(sFragmentAccessor);
   }
 
   @Override
@@ -44,23 +43,8 @@ final class FragmentCompatFramework
   }
 
   @Override
-  public Class<DialogFragment> getDialogFragmentClass() {
-    return DialogFragment.class;
-  }
-
-  @Override
-  public Class<Activity> getFragmentActivityClass() {
-    return Activity.class;
-  }
-
-  @Override
   public FragmentAccessorFrameworkHoneycomb forFragment() {
     return sFragmentAccessor;
-  }
-
-  @Override
-  public DialogFragmentAccessorFramework forDialogFragment() {
-    return sDialogFragmentAccessor;
   }
 
   @Override
@@ -117,55 +101,6 @@ final class FragmentCompatFramework
     @Override
     public FragmentManager getChildFragmentManager(Fragment fragment) {
       return fragment.getChildFragmentManager();
-    }
-  }
-
-  private static class DialogFragmentAccessorFramework
-      implements DialogFragmentAccessor<DialogFragment, Fragment, FragmentManager> {
-    private final FragmentAccessor<Fragment, FragmentManager> mFragmentAccessor;
-
-    public DialogFragmentAccessorFramework(
-        FragmentAccessor<Fragment, FragmentManager> fragmentAccessor) {
-      mFragmentAccessor = fragmentAccessor;
-    }
-
-    @Override
-    public Dialog getDialog(DialogFragment dialogFragment) {
-      return dialogFragment.getDialog();
-    }
-
-    @Nullable
-    @Override
-    public FragmentManager getFragmentManager(Fragment fragment) {
-      return mFragmentAccessor.getFragmentManager(fragment);
-    }
-
-    @Override
-    public Resources getResources(Fragment fragment) {
-      return mFragmentAccessor.getResources(fragment);
-    }
-
-    @Override
-    public int getId(Fragment fragment) {
-      return mFragmentAccessor.getId(fragment);
-    }
-
-    @Nullable
-    @Override
-    public String getTag(Fragment fragment) {
-      return mFragmentAccessor.getTag(fragment);
-    }
-
-    @Nullable
-    @Override
-    public View getView(Fragment fragment) {
-      return mFragmentAccessor.getView(fragment);
-    }
-
-    @Nullable
-    @Override
-    public FragmentManager getChildFragmentManager(Fragment fragment) {
-      return mFragmentAccessor.getChildFragmentManager(fragment);
     }
   }
 

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -40,28 +39,15 @@ public class PreferencesInjectedActivity extends PreferenceActivity {
 
 	boolean afterPreferencesCalled;
 
-	CheckBoxPreference methodInjectedPref;
-	EditTextPreference multiInjectedPref;
-
 	@SuppressWarnings("deprecation")
 	@Override
 	protected void onCreate(android.os.Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
 		addPreferencesFromResource(R.xml.settings);
 	}
 
 	@AfterPreferences
 	void afterPreferences() {
 		afterPreferencesCalled = true;
-	}
-
-	@PreferenceByKey(R.string.checkBoxPrefKey)
-	void methodInjectedPref(CheckBoxPreference somePref) {
-		methodInjectedPref = somePref;
-	}
-
-	void multiInjectedPref(@PreferenceByKey EditTextPreference conventionKey, @PreferenceByKey(R.string.listPreferenceKey) Preference activityPrefs) {
-		multiInjectedPref = conventionKey;
 	}
 
 }

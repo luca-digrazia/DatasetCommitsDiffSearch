@@ -16,15 +16,10 @@
 
 package org.litepal.litepalsample.activity;
 
-import android.content.Context;
-import android.content.Intent;
-import android.content.res.AssetManager;
-import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
-import android.view.View;
-import android.widget.AdapterView;
-import android.widget.AdapterView.OnItemClickListener;
-import android.widget.ListView;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.litepal.LitePalApplication;
 import org.litepal.exceptions.ParseConfigurationFileException;
@@ -35,14 +30,23 @@ import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 import org.xmlpull.v1.XmlPullParserFactory;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
+import android.app.Activity;
+import android.content.Context;
+import android.content.Intent;
+import android.content.res.AssetManager;
+import android.os.Bundle;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.ListView;
 
-public class ModelListActivity extends AppCompatActivity {
+public class ModelListActivity extends Activity {
 
-    private List<String> mList = new ArrayList<>();
+	private ListView mModelListview;
+
+	private StringArrayAdapter mAdapter;
+
+	private List<String> mList = new ArrayList<String>();
 
 	public static void actionStart(Context context) {
 		Intent intent = new Intent(context, ModelListActivity.class);
@@ -53,11 +57,11 @@ public class ModelListActivity extends AppCompatActivity {
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.model_list_layout);
-        ListView mModelListView = findViewById(R.id.model_listview);
+		mModelListview = (ListView) findViewById(R.id.model_listview);
 		populateMappingClasses();
-        StringArrayAdapter mAdapter = new StringArrayAdapter(this, 0, mList);
-        mModelListView.setAdapter(mAdapter);
-        mModelListView.setOnItemClickListener(new OnItemClickListener() {
+		mAdapter = new StringArrayAdapter(this, 0, mList);
+		mModelListview.setAdapter(mAdapter);
+		mModelListview.setOnItemClickListener(new OnItemClickListener() {
 			@Override
 			public void onItemClick(AdapterView<?> arg0, View view, int index, long id) {
 				ModelStructureActivity.actionStart(ModelListActivity.this, mList.get(index));
@@ -99,7 +103,7 @@ public class ModelListActivity extends AppCompatActivity {
 		String[] fileNames = assetManager.list("");
 		if (fileNames != null && fileNames.length > 0) {
 			for (String fileName : fileNames) {
-				if (Const.Config.CONFIGURATION_FILE_NAME.equalsIgnoreCase(fileName)) {
+				if (Const.LitePal.CONFIGURATION_FILE_NAME.equalsIgnoreCase(fileName)) {
 					return assetManager.open(fileName, AssetManager.ACCESS_BUFFER);
 				}
 			}

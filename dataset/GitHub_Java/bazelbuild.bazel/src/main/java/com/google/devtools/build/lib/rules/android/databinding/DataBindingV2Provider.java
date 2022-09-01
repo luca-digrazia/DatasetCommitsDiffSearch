@@ -13,18 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android.databinding;
 
-import static com.google.devtools.build.lib.rules.android.AndroidStarlarkData.fromNoneable;
-
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
-import com.google.devtools.build.lib.starlarkbuildapi.android.DataBindingV2ProviderApi;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Sequence;
+import com.google.devtools.build.lib.skylarkbuildapi.android.DataBindingV2ProviderApi;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 
 /**
  * A provider that exposes this enables <a
@@ -36,72 +33,42 @@ public final class DataBindingV2Provider extends NativeInfo
 
   public static final Provider PROVIDER = new Provider();
 
-  private final NestedSet<Artifact> classInfos;
+  private final ImmutableList<Artifact> classInfos;
 
-  private final NestedSet<Artifact> setterStores;
+  private final ImmutableList<Artifact> setterStores;
 
   private final NestedSet<Artifact> transitiveBRFiles;
-
-  /** The label and java package of this rule and any rules that this rule exports. */
-  private final ImmutableList<LabelJavaPackagePair> labelAndJavaPackages;
 
   private final NestedSet<LabelJavaPackagePair> transitiveLabelAndJavaPackages;
 
   public DataBindingV2Provider(
-      NestedSet<Artifact> classInfos,
-      NestedSet<Artifact> setterStores,
+      ImmutableList<Artifact> classInfos,
+      ImmutableList<Artifact> setterStores,
       NestedSet<Artifact> transitiveBRFiles,
-      ImmutableList<LabelJavaPackagePair> labelAndJavaPackages,
       NestedSet<LabelJavaPackagePair> transitiveLabelAndJavaPackages) {
+    super(PROVIDER);
     this.classInfos = classInfos;
     this.setterStores = setterStores;
     this.transitiveBRFiles = transitiveBRFiles;
-    this.labelAndJavaPackages = labelAndJavaPackages;
     this.transitiveLabelAndJavaPackages = transitiveLabelAndJavaPackages;
   }
 
   @Override
-  public Provider getProvider() {
-    return PROVIDER;
-  }
-
-  @Override
-  public Depset /*<Artifact>*/ getClassInfosForStarlark() {
-    return Depset.of(Artifact.TYPE, classInfos);
-  }
-
-  public NestedSet<Artifact> getClassInfos() {
+  public ImmutableList<Artifact> getClassInfos() {
     return classInfos;
   }
 
   @Override
-  public Depset /*<Artifact>*/ getSetterStoresForStarlark() {
-    return Depset.of(Artifact.TYPE, setterStores);
-  }
-
-  public NestedSet<Artifact> getSetterStores() {
+  public ImmutableList<Artifact> getSetterStores() {
     return setterStores;
   }
 
   @Override
-  public Depset /*<Artifact>*/ getTransitiveBRFilesForStarlark() {
-    return Depset.of(Artifact.TYPE, transitiveBRFiles);
-  }
-
   public NestedSet<Artifact> getTransitiveBRFiles() {
     return transitiveBRFiles;
   }
 
   @Override
-  public ImmutableList<LabelJavaPackagePair> getLabelAndJavaPackages() {
-    return labelAndJavaPackages;
-  }
-
-  @Override
-  public Depset /*<LabelJavaPackagePair>*/ getTransitiveLabelAndJavaPackagesForStarlark() {
-    return Depset.of(LabelJavaPackagePair.TYPE, transitiveLabelAndJavaPackages);
-  }
-
   public NestedSet<LabelJavaPackagePair> getTransitiveLabelAndJavaPackages() {
     return transitiveLabelAndJavaPackages;
   }
@@ -112,16 +79,15 @@ public final class DataBindingV2Provider extends NativeInfo
       Artifact brFile,
       String label,
       String javaPackage,
-      // ugh these *Api types do not help one bit
       Iterable<? extends DataBindingV2ProviderApi<Artifact>> databindingV2ProvidersInDeps,
       Iterable<? extends DataBindingV2ProviderApi<Artifact>> databindingV2ProvidersInExports) {
 
-    NestedSetBuilder<Artifact> setterStoreFiles = NestedSetBuilder.stableOrder();
+    ImmutableList.Builder<Artifact> setterStoreFiles = ImmutableList.builder();
     if (setterStoreFile != null) {
       setterStoreFiles.add(setterStoreFile);
     }
 
-    NestedSetBuilder<Artifact> classInfoFiles = NestedSetBuilder.stableOrder();
+    ImmutableList.Builder<Artifact> classInfoFiles = ImmutableList.builder();
     if (classInfoFile != null) {
       classInfoFiles.add(classInfoFile);
     }
@@ -131,36 +97,24 @@ public final class DataBindingV2Provider extends NativeInfo
       brFiles.add(brFile);
     }
 
-    NestedSetBuilder<LabelJavaPackagePair> transitiveLabelAndJavaPackages =
-        NestedSetBuilder.stableOrder();
-    ImmutableList.Builder<LabelJavaPackagePair> labelAndJavaPackages = ImmutableList.builder();
-
-    if (label != null && javaPackage != null) {
-      LabelJavaPackagePair labelAndJavaPackage = new LabelJavaPackagePair(label, javaPackage);
-      labelAndJavaPackages.add(labelAndJavaPackage);
-      transitiveLabelAndJavaPackages.add(labelAndJavaPackage);
-    }
+    NestedSetBuilder<LabelJavaPackagePair> labelAndJavaPackages = NestedSetBuilder.stableOrder();
+    labelAndJavaPackages.add(LabelJavaPackagePair.create(label, javaPackage));
 
     if (databindingV2ProvidersInDeps != null) {
 
-      for (DataBindingV2ProviderApi<Artifact> p : databindingV2ProvidersInDeps) {
-        DataBindingV2Provider provider = (DataBindingV2Provider) p;
+      for (DataBindingV2ProviderApi<Artifact> provider : databindingV2ProvidersInDeps) {
         brFiles.addTransitive(provider.getTransitiveBRFiles());
-        transitiveLabelAndJavaPackages.addTransitive(provider.getTransitiveLabelAndJavaPackages());
+        labelAndJavaPackages.addTransitive(provider.getTransitiveLabelAndJavaPackages());
       }
     }
 
     if (databindingV2ProvidersInExports != null) {
 
-      // Add all of the information from providers from exported targets, so that targets which
-      // depend on this target appear to depend on the exported targets.
-      for (DataBindingV2ProviderApi<Artifact> p : databindingV2ProvidersInExports) {
-        DataBindingV2Provider provider = (DataBindingV2Provider) p;
-        setterStoreFiles.addTransitive(provider.getSetterStores());
-        classInfoFiles.addTransitive(provider.getClassInfos());
+      for (DataBindingV2ProviderApi<Artifact> provider : databindingV2ProvidersInExports) {
+        setterStoreFiles.addAll(provider.getSetterStores());
+        classInfoFiles.addAll(provider.getClassInfos());
         brFiles.addTransitive(provider.getTransitiveBRFiles());
-        labelAndJavaPackages.addAll(provider.getLabelAndJavaPackages());
-        transitiveLabelAndJavaPackages.addTransitive(provider.getTransitiveLabelAndJavaPackages());
+        labelAndJavaPackages.addTransitive(provider.getTransitiveLabelAndJavaPackages());
       }
     }
 
@@ -168,8 +122,7 @@ public final class DataBindingV2Provider extends NativeInfo
         classInfoFiles.build(),
         setterStoreFiles.build(),
         brFiles.build(),
-        labelAndJavaPackages.build(),
-        transitiveLabelAndJavaPackages.build());
+        labelAndJavaPackages.build());
   }
 
   /** The provider can construct the DataBindingV2Provider provider. */
@@ -182,35 +135,27 @@ public final class DataBindingV2Provider extends NativeInfo
 
     @Override
     public DataBindingV2ProviderApi<Artifact> createInfo(
-        Object setterStoreFile,
-        Object classInfoFile,
-        Object brFile,
-        Object label,
-        Object javaPackage,
-        Sequence<?> databindingV2ProvidersInDeps, // <DataBindingV2Provider>
-        Sequence<?> databindingV2ProvidersInExports) // <DataBindingV2Provider>
+        Artifact setterStoreFile,
+        Artifact classInfoFile,
+        Artifact brFile,
+        String label,
+        String javaPackage,
+        SkylarkList<DataBindingV2ProviderApi<Artifact>> databindingV2ProvidersInDeps,
+        SkylarkList<DataBindingV2ProviderApi<Artifact>> databindingV2ProvidersInExports)
         throws EvalException {
 
       return createProvider(
-          fromNoneable(setterStoreFile, Artifact.class),
-          fromNoneable(classInfoFile, Artifact.class),
-          fromNoneable(brFile, Artifact.class),
-          fromNoneable(label, String.class),
-          fromNoneable(javaPackage, String.class),
+          setterStoreFile,
+          classInfoFile,
+          brFile,
+          label,
+          javaPackage,
           databindingV2ProvidersInDeps == null
               ? null
-              : ImmutableList.copyOf(
-                  Sequence.cast(
-                      databindingV2ProvidersInDeps,
-                      DataBindingV2Provider.class,
-                      "databinding_v2_providers_in_deps")),
+              : databindingV2ProvidersInDeps.getImmutableList(),
           databindingV2ProvidersInExports == null
               ? null
-              : ImmutableList.copyOf(
-                  Sequence.cast(
-                      databindingV2ProvidersInExports,
-                      DataBindingV2Provider.class,
-                      "databinding_v2_providers_in_exports")));
+              : databindingV2ProvidersInExports.getImmutableList());
     }
   }
 }

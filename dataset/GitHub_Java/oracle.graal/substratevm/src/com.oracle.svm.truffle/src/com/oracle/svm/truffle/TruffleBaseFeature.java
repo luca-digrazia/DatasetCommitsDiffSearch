@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -110,8 +110,8 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Base feature for using Truffle in the SVM. If only this feature is used (not included through
- * {@link TruffleFeature}'s dependency), then {@link TruffleRuntime} <b>must</b> be set to the
- * {@link DefaultTruffleRuntime}.
+ * {@link TruffleCompilationFeature}'s dependency), then {@link TruffleRuntime} <b>must</b> be set to
+ * the {@link DefaultTruffleRuntime}.
  */
 public final class TruffleBaseFeature implements com.oracle.svm.core.graal.GraalFeature {
 
@@ -153,7 +153,6 @@ public final class TruffleBaseFeature implements com.oracle.svm.core.graal.Graal
     private AnalysisMetaAccess metaAccess;
     private GraalObjectReplacer graalObjectReplacer;
     private final Set<Class<?>> registeredClasses = new HashSet<>();
-    private boolean profilingEnabled;
     // Checkstyle: resume
 
     private static void initializeTruffleReflectively(ClassLoader imageClassLoader) {
@@ -209,8 +208,6 @@ public final class TruffleBaseFeature implements com.oracle.svm.core.graal.Graal
         // reinitialize language cache
         invokeStaticMethod("com.oracle.truffle.api.library.LibraryFactory", "reinitializeNativeImageState",
                         Collections.emptyList());
-
-        profilingEnabled = Truffle.getRuntime().isProfilingEnabled();
     }
 
     @Override
@@ -254,7 +251,7 @@ public final class TruffleBaseFeature implements com.oracle.svm.core.graal.Graal
         r.register0("isProfilingEnabled", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(profilingEnabled));
+                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(false));
                 return true;
             }
         });
@@ -272,8 +269,8 @@ public final class TruffleBaseFeature implements com.oracle.svm.core.graal.Graal
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-        if (!ImageSingletons.contains(TruffleFeature.class) && (Truffle.getRuntime() instanceof SubstrateTruffleRuntime)) {
-            VMError.shouldNotReachHere("TruffleFeature is required for SubstrateTruffleRuntime.");
+        if (!ImageSingletons.contains(TruffleCompilationFeature.class) && (Truffle.getRuntime() instanceof SubstrateTruffleRuntime)) {
+            VMError.shouldNotReachHere("TruffleCompilationFeature is required for SubstrateTruffleRuntime.");
         }
 
         FeatureImpl.DuringSetupAccessImpl config = (FeatureImpl.DuringSetupAccessImpl) access;
@@ -369,14 +366,6 @@ public final class TruffleBaseFeature implements com.oracle.svm.core.graal.Graal
             initializeTruffleLibrariesAtBuildTime(type);
             initializeDynamicObjectLayouts(type);
         }
-    }
-
-    @Override
-    public void afterCompilation(AfterCompilationAccess access) {
-        FeatureImpl.AfterCompilationAccessImpl config = (FeatureImpl.AfterCompilationAccessImpl) access;
-
-        graalObjectReplacer.updateSubstrateDataAfterCompilation(config.getUniverse(), config.getProviders().getConstantFieldProvider());
-        graalObjectReplacer.registerImmutableObjects(access);
     }
 
     @SuppressWarnings("deprecation")

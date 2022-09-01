@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -25,13 +24,8 @@ import org.androidannotations.annotations.ResId;
 
 /**
  * <p>
- * Use on methods in {@link SharedPref} annotated class to specified the default
- * value of this preference.
- * </p>
- * <p>
- * The annotation value must be a <code>String[]</code>. The generated method
- * will return a {@link java.util.Set Set&lt;String&gt;} containing the values
- * of the given array.
+ * Use on methods in {@link SharedPref} annotated class. The generated method
+ * will return an empty {@link java.util.Set} of Strings by default.
  * </p>
  * <p>
  * The key of the preference will be the method name by default. This can be
@@ -55,13 +49,6 @@ import org.androidannotations.annotations.ResId;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface DefaultStringSet {
-
-	/**
-	 * The default value of the preference.
-	 *
-	 * @return the default value
-	 */
-	String[] value();
 
 	/**
 	 * The R.string.* field which refers to the key of the preference.

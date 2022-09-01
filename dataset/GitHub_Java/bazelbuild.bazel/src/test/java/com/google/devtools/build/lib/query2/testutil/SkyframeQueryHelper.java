@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.query2.testutil;
 import static com.google.devtools.build.lib.packages.Rule.ALL_LABELS;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -30,11 +31,11 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
+import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
-import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
@@ -45,21 +46,17 @@ import com.google.devtools.build.lib.query2.engine.QueryEnvironment.ThreadSafeMu
 import com.google.devtools.build.lib.query2.engine.QueryEvalResult;
 import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryParser;
-import com.google.devtools.build.lib.query2.engine.QuerySyntaxException;
 import com.google.devtools.build.lib.query2.engine.QueryUtil;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.AggregateAllOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
-import com.google.devtools.build.lib.skyframe.IgnoredPackagePrefixesFunction;
 import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.testutil.SkyframeExecutorTestHelper;
-import com.google.devtools.build.lib.testutil.TestPackageFactoryBuilderFactory;
+import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -75,15 +72,13 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 /** An implementation of AbstractQueryHelper to support testing bazel query. */
 public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
   protected SkyframeExecutor skyframeExecutor;
-  protected FileSystem fileSystem =
-      new InMemoryFileSystem(BlazeClock.instance(), DigestHashFunction.SHA256);
+  protected FileSystem fileSystem = new InMemoryFileSystem(BlazeClock.instance());
   protected Path rootDirectory;
   protected BlazeDirectories directories;
   private String toolsRepository;
@@ -93,10 +88,12 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
 
   private PackageManager pkgManager;
   private TargetPatternPreloader targetParser;
+  private PathFragment relativeWorkingDirectory = PathFragment.EMPTY_FRAGMENT;
   private boolean blockUniverseEvaluationErrors;
   protected final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
-  private final PathFragment ignoredPackagePrefixesFile = PathFragment.create("ignored");
+  private final PathFragment additionalBlacklistedPackagePrefixesFile =
+      PathFragment.create("blacklist");
 
   @Override
   public void setUp() throws Exception {
@@ -138,8 +135,8 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
   }
 
   @Override
-  public PathFragment getIgnoredPackagePrefixesFile() {
-    return ignoredPackagePrefixesFile;
+  public PathFragment getBlacklistedPackagePrefixesFile() {
+    return additionalBlacklistedPackagePrefixesFile;
   }
 
   @Override
@@ -192,12 +189,12 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
   @Override
   public AbstractBlazeQueryEnvironment<Target> getQueryEnvironment() {
     return queryEnvironmentFactory.create(
-        pkgManager.transitiveLoader(),
+        pkgManager.newTransitiveLoader(),
         skyframeExecutor,
         pkgManager,
         pkgManager,
         targetParser,
-        /*relativeWorkingDirectory=*/ PathFragment.EMPTY_FRAGMENT,
+        relativeWorkingDirectory,
         keepGoing,
         /*strictScope=*/ true,
         orderedResults,
@@ -222,7 +219,7 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
     }
   }
 
-  public static ResultAndTargets<Target> evaluateQuery(
+  public ResultAndTargets<Target> evaluateQuery(
       String query, AbstractBlazeQueryEnvironment<Target> env)
       throws QueryException, InterruptedException {
     AggregateAllOutputFormatterCallback<Target, ?> callback =
@@ -234,9 +231,6 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
     } catch (IOException e) {
       // Should be impossible since AggregateAllOutputFormatterCallback doesn't throw IOException.
       throw new IllegalStateException(e);
-    } catch (QuerySyntaxException e) {
-      // Expect valid query syntax in tests.
-      throw new IllegalArgumentException(e);
     }
     return new ResultAndTargets<>(
         queryEvalResult, new OrderedThreadSafeImmutableSet(env, callback.getResult()));
@@ -258,9 +252,6 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
       } catch (IOException e) {
         // Should be impossible since the callback we passed in above doesn't throw IOException.
         throw new IllegalStateException(e);
-      } catch (QuerySyntaxException e) {
-        // Expect valid query syntax in tests.
-        throw new IllegalArgumentException(e);
       }
     }
     return result;
@@ -279,24 +270,22 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
   protected void initTargetPatternEvaluator(ConfiguredRuleClassProvider ruleClassProvider) {
     this.toolsRepository = ruleClassProvider.getToolsRepository();
     skyframeExecutor = createSkyframeExecutor(ruleClassProvider);
-    PackageOptions packageOptions = Options.getDefaults(PackageOptions.class);
-
-    packageOptions.defaultVisibility = ConstantRuleVisibility.PRIVATE;
-    packageOptions.showLoadingProgress = true;
-    packageOptions.globbingThreads = 7;
-    packageOptions.packagePath = ImmutableList.of(rootDirectory.getPathString());
+    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
+    packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PRIVATE;
+    packageCacheOptions.showLoadingProgress = true;
+    packageCacheOptions.globbingThreads = 7;
+    packageCacheOptions.packagePath = ImmutableList.of(rootDirectory.getPathString());
     PathPackageLocator packageLocator =
         skyframeExecutor.createPackageLocator(
-            getReporter(), packageOptions.packagePath, rootDirectory);
+            getReporter(), packageCacheOptions.packagePath, rootDirectory);
     try {
       skyframeExecutor.sync(
           getReporter(),
-          packageOptions,
+          packageCacheOptions,
           packageLocator,
-          Options.getDefaults(BuildLanguageOptions.class),
+          Options.getDefaults(StarlarkSemanticsOptions.class),
           UUID.randomUUID(),
-          ImmutableMap.of(),
-          ImmutableMap.of(),
+          ImmutableMap.<String, String>of(),
           new TimestampGranularityMonitor(BlazeClock.instance()),
           OptionsProvider.EMPTY);
     } catch (InterruptedException | AbruptExitException e) {
@@ -313,7 +302,7 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
 
   protected SkyframeExecutor createSkyframeExecutor(ConfiguredRuleClassProvider ruleClassProvider) {
     PackageFactory pkgFactory =
-        TestPackageFactoryBuilderFactory.getInstance()
+        TestConstants.PACKAGE_FACTORY_BUILDER_FACTORY_FOR_TESTING
             .builder(directories)
             .setEnvironmentExtensions(getEnvironmentExtensions())
             .build(ruleClassProvider, fileSystem);
@@ -323,21 +312,20 @@ public abstract class SkyframeQueryHelper extends AbstractQueryHelper<Target> {
             .setFileSystem(fileSystem)
             .setDirectories(directories)
             .setActionKeyContext(actionKeyContext)
-            .setIgnoredPackagePrefixesFunction(
-                new IgnoredPackagePrefixesFunction(ignoredPackagePrefixesFile))
+            .setDefaultBuildOptions(getDefaultBuildOptions(ruleClassProvider))
+            .setAdditionalBlacklistedPackagePrefixesFile(additionalBlacklistedPackagePrefixesFile)
             .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
             .build();
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.absent()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.REPOSITORY_OVERRIDES, ImmutableMap.of()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
-                RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY),
-            PrecomputedValue.injected(RepositoryDelegatorFunction.ENABLE_BZLMOD, false)));
-    SkyframeExecutorTestHelper.process(skyframeExecutor);
+                RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY)));
+    TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
     return skyframeExecutor;
   }
 

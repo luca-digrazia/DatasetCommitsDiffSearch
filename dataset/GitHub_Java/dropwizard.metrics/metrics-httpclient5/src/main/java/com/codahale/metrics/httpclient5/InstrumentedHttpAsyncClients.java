@@ -4,7 +4,6 @@ import com.codahale.metrics.MetricRegistry;
 import org.apache.hc.client5.http.impl.ChainElement;
 import org.apache.hc.client5.http.impl.async.CloseableHttpAsyncClient;
 import org.apache.hc.client5.http.impl.async.HttpAsyncClientBuilder;
-import org.apache.hc.client5.http.nio.AsyncClientConnectionManager;
 
 import static com.codahale.metrics.httpclient5.HttpClientMetricNameStrategies.METHOD_ONLY;
 
@@ -28,16 +27,9 @@ public class InstrumentedHttpAsyncClients {
 
     public static HttpAsyncClientBuilder custom(MetricRegistry metricRegistry,
                                                 HttpClientMetricNameStrategy metricNameStrategy) {
-        return custom(metricRegistry, metricNameStrategy, InstrumentedAsyncClientConnectionManager.builder(metricRegistry).build());
-    }
-
-    public static HttpAsyncClientBuilder custom(MetricRegistry metricRegistry,
-                                                HttpClientMetricNameStrategy metricNameStrategy,
-                                                AsyncClientConnectionManager clientConnectionManager) {
         return HttpAsyncClientBuilder.create()
-                .setConnectionManager(clientConnectionManager)
-                .addExecInterceptorBefore(ChainElement.CONNECT.name(), "dropwizard-metrics",
-                        new InstrumentedAsyncExecChainHandler(metricRegistry, metricNameStrategy));
+                .setConnectionManager(InstrumentedAsyncClientConnectionManager.builder(metricRegistry).build())
+                .addExecInterceptorBefore(ChainElement.CONNECT.name(), "dropwizard-metrics", new InstrumentedAsyncExecChainHandler(metricRegistry, metricNameStrategy));
     }
 
 }

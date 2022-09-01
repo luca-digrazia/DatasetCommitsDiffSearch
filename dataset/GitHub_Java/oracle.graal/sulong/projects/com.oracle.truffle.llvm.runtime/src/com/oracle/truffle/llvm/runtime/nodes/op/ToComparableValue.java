@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,11 +34,12 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.library.LLVMNativeLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativePointerSupport;
 import com.oracle.truffle.llvm.runtime.nodes.op.ToComparableValueNodeGen.ManagedToComparableValueNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
@@ -46,27 +47,27 @@ public abstract class ToComparableValue extends LLVMNode {
 
     public abstract long executeWithTarget(Object obj);
 
-    @Specialization(guards = "isPointer.execute(obj)", rewriteOn = UnsupportedMessageException.class)
+    @Specialization(guards = "lib.isPointer(obj)", limit = "3", rewriteOn = UnsupportedMessageException.class)
     protected long doPointer(Object obj,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointer,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointer) throws UnsupportedMessageException {
-        return asPointer.execute(obj);
+                    @CachedLibrary("obj") LLVMNativeLibrary lib) throws UnsupportedMessageException {
+        return lib.asPointer(obj);
     }
 
-    @Specialization(guards = "isPointer.execute(obj)")
+    @Specialization(guards = "lib.isPointer(obj)", limit = "3")
     protected long doPointerException(Object obj,
-                    @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointer,
-                    @Cached LLVMNativePointerSupport.AsPointerNode asPointer,
+                    @CachedLibrary("obj") LLVMNativeLibrary lib,
                     @Cached("createUseOffset()") ManagedToComparableValue toComparable) {
         try {
-            return asPointer.execute(obj);
+            return lib.asPointer(obj);
         } catch (UnsupportedMessageException ex) {
-            return doManaged(obj, isPointer, toComparable);
+            return doManaged(obj, lib, toComparable);
         }
     }
 
-    @Specialization(guards = "!isPointer.execute(obj)")
-    protected long doManaged(Object obj, @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointer,
+    @Specialization(guards = "!lib.isPointer(obj)", limit = "3")
+    @SuppressWarnings("unused")
+    protected long doManaged(Object obj,
+                    @CachedLibrary("obj") LLVMNativeLibrary lib,
                     @Cached("createUseOffset()") ManagedToComparableValue toComparable) {
         return toComparable.executeWithTarget(obj);
     }
@@ -89,6 +90,21 @@ public abstract class ToComparableValue extends LLVMNode {
         abstract long executeWithTarget(Object obj);
 
         @Specialization
+        protected long doManagedMalloc(LLVMVirtualAllocationAddress address) {
+            long result;
+            if (address.isNull()) {
+                result = 0L;
+            } else {
+                result = getHashCode(address.getObject());
+            }
+
+            if (includeOffset) {
+                result += address.getOffset();
+            }
+            return result;
+        }
+
+        @Specialization
         protected long doManaged(LLVMManagedPointer address) {
             // TODO (chaeubl): this code path is also used for pointers to global variables and
             // functions
@@ -108,7 +124,7 @@ public abstract class ToComparableValue extends LLVMNode {
         }
 
         protected ForeignToLLVM createForeignToI64() {
-            return CommonNodeFactory.createForeignToLLVM(ForeignToLLVMType.I64);
+            return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I64);
         }
     }
 }

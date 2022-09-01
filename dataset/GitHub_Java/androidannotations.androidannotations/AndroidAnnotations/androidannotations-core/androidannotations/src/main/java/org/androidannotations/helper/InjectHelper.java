@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -72,7 +71,6 @@ public class InjectHelper<T extends GeneratedClassHolder> {
 
 		} else {
 			handler.validateEnclosingElement(element, valid);
-			validatorHelper.isNotFinal(element, valid);
 		}
 	}
 
@@ -119,7 +117,7 @@ public class InjectHelper<T extends GeneratedClassHolder> {
 				JVar fieldRef = targetBlock.decl(type, param.getSimpleName().toString(), getDefault(param.asType()));
 
 				handler.assignValue(targetBlock, fieldRef, holder, param, param);
-				parameterList.add(new ParamHelper(fieldRef, paramIndex, param));
+				parameterList.add(new ParamHelper(fieldRef, paramIndex));
 			}
 		}
 
@@ -133,10 +131,6 @@ public class InjectHelper<T extends GeneratedClassHolder> {
 				invocation.arg(parameter.beanInstance);
 			}
 			targetBlock.add(invocation);
-
-			if (handler instanceof MethodInjectionHandler.AfterAllParametersInjectedHandler<?>) {
-				((MethodInjectionHandler.AfterAllParametersInjectedHandler<T>) handler).afterAllParametersInjected(holder, method, parameterList);
-			}
 
 			methodParameterMap.remove(method);
 		}
@@ -193,27 +187,13 @@ public class InjectHelper<T extends GeneratedClassHolder> {
 		}
 	}
 
-	public static class ParamHelper implements Comparable<ParamHelper> {
+	private static class ParamHelper implements Comparable<ParamHelper> {
 		private final int argumentOrder;
-		private final Element parameterElement;
 		private final IJExpression beanInstance;
 
-		ParamHelper(IJExpression beanInstance, int argumentOrder, Element parameterElement) {
+		ParamHelper(IJExpression beanInstance, int argumentOrder) {
 			this.beanInstance = beanInstance;
 			this.argumentOrder = argumentOrder;
-			this.parameterElement = parameterElement;
-		}
-
-		public int getArgumentOrder() {
-			return argumentOrder;
-		}
-
-		public Element getParameterElement() {
-			return parameterElement;
-		}
-
-		public IJExpression getBeanInstance() {
-			return beanInstance;
 		}
 
 		@Override

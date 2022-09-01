@@ -1,9 +1,4 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.elements;
 
@@ -12,22 +7,20 @@ import com.facebook.stetho.common.UncheckedCallable;
 import com.facebook.stetho.common.Util;
 
 import javax.annotation.Nullable;
-import java.util.HashMap;
-import java.util.Map;
 
-public abstract class Descriptor<E> implements NodeDescriptor<E> {
+public abstract class Descriptor implements NodeDescriptor {
   private Host mHost;
 
   protected Descriptor() {
   }
 
-  final void initialize(Host host) {
+  void initialize(Host host) {
     Util.throwIfNull(host);
     Util.throwIfNotNull(mHost);
     mHost = host;
   }
 
-  final boolean isInitialized() {
+  boolean isInitialized() {
     return mHost != null;
   }
 
@@ -55,54 +48,9 @@ public abstract class Descriptor<E> implements NodeDescriptor<E> {
     getHost().postAndWait(r);
   }
 
-  @Override
-  public final void postDelayed(Runnable r, long delayMillis) {
-    getHost().postDelayed(r, delayMillis);
-  }
-
-  @Override
-  public final void removeCallbacks(Runnable r) {
-    getHost().removeCallbacks(r);
-  }
-
-  /**
-   * Parses the text argument text from DOM.setAttributeAsText()
-   * Text will be in the format "attribute1=\"Value 1\" attribute2=\"Value2\""
-   * @param text the text argument to be parsed
-   * @return a map of attributes to their respective values to be set.
-   */
-  protected static Map<String, String> parseSetAttributesAsTextArg(String text) {
-    String value = "";
-    String key = "";
-    StringBuilder buffer = new StringBuilder();
-    Map<String, String> keyValuePairs = new HashMap<>();
-    boolean isInsideQuotes = false;
-    for (int i = 0, N = text.length(); i < N; ++i) {
-      final char c = text.charAt(i);
-      if (c == '=') {
-        key = buffer.toString();
-        buffer.setLength(0);
-      } else if (c == '\"') {
-        if (isInsideQuotes) {
-          value = buffer.toString();
-          buffer.setLength(0);
-        }
-        isInsideQuotes = !isInsideQuotes;
-      } else if (c == ' ' && !isInsideQuotes) {
-        keyValuePairs.put(key, value);
-      } else {
-        buffer.append(c);
-      }
-    }
-    if (!key.isEmpty() && !value.isEmpty()) {
-      keyValuePairs.put(key, value);
-    }
-    return keyValuePairs;
-  }
-
   public interface Host extends ThreadBound {
     @Nullable
-    public Descriptor<?> getDescriptor(@Nullable Object element);
+    public Descriptor getDescriptor(@Nullable Object element);
 
     public void onAttributeModified(
         Object element,
@@ -112,5 +60,14 @@ public abstract class Descriptor<E> implements NodeDescriptor<E> {
     public void onAttributeRemoved(
         Object element,
         String name);
+
+    public void onChildInserted(
+        Object parentElement,
+        @Nullable Object previousElement,
+        Object childElement);
+
+    public void onChildRemoved(
+        Object parentElement,
+        Object childElement);
   }
 }

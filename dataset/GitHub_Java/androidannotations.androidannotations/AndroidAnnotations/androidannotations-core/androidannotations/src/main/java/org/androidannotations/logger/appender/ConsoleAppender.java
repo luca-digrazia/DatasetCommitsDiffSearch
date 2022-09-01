@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,9 +15,6 @@
  */
 package org.androidannotations.logger.appender;
 
-import java.util.LinkedList;
-import java.util.List;
-
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 
@@ -26,8 +22,6 @@ import org.androidannotations.logger.Level;
 import org.androidannotations.logger.formatter.FormatterFull;
 
 public class ConsoleAppender extends Appender {
-
-	private final List<String> errors = new LinkedList<>();
 
 	public ConsoleAppender() {
 		super(new FormatterFull());
@@ -42,17 +36,12 @@ public class ConsoleAppender extends Appender {
 		if (level.isSmaller(Level.ERROR)) {
 			System.out.println(message);
 		} else {
-			errors.add(message);
+			System.err.println(message);
 		}
 	}
 
 	@Override
-	public synchronized void close(boolean lastRound) {
-		if (lastRound) {
-			for (String error : errors) {
-				System.err.println(error);
-			}
-		}
+	public void close() {
 	}
 
 }

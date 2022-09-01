@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -98,7 +97,7 @@ public class ValidatorParameterHelper {
 		}
 
 		protected void invalidate(ElementValidation validation) {
-			validation.addError("method annotated with %s can only have the following parameter: " + parameterRequirement);
+			validation.addError("%s can only have the following parameter: " + parameterRequirement);
 		}
 	}
 
@@ -120,12 +119,8 @@ public class ValidatorParameterHelper {
 			return param(new ExtendsTypeParameterRequirement(qualifiedName));
 		}
 
-		public V extendsAnyOfTypes(String... types) {
-			return param(new ExtendsAnyOfTypesParameterRequirement(types));
-		}
-
 		public V anyType() {
-			return param(new AnyTypeParameterRequirement());
+			return extendsType(CanonicalNameConstants.OBJECT);
 		}
 
 		public V annotatedWith(Class<? extends Annotation> annotationClass) {
@@ -169,6 +164,7 @@ public class ValidatorParameterHelper {
 		protected void invalidate(ExecutableElement element, ElementValidation validation) {
 			validation.addError("%s can only have the following parameters: " + createMessage(element));
 		}
+
 
 		protected String createMessage(ExecutableElement element) {
 			StringBuilder builder = new StringBuilder();
@@ -226,9 +222,8 @@ public class ValidatorParameterHelper {
 			}
 			if (currentParameterRequirement.isSatisfied(parameter)) {
 				satisfiedParameterRequirements.add(currentParameterRequirement);
-				if (!currentParameterRequirement.multiple()) {
-					nextParameterRequirement();
-				}
+			} else if (!currentParameterRequirement.multiple()) {
+				nextParameterRequirement();
 			} else {
 				if (currentParameterRequirement.required() && !satisfiedParameterRequirements.contains(currentParameterRequirement)) {
 					return false;
@@ -366,44 +361,6 @@ public class ValidatorParameterHelper {
 		}
 	}
 
-	public class ExtendsAnyOfTypesParameterRequirement extends BaseParameterRequirement {
-
-		private List<String> types;
-
-		public ExtendsAnyOfTypesParameterRequirement(String... types) {
-			this.types = Arrays.asList(types);
-		}
-
-		@Override
-		public boolean isSatisfied(VariableElement parameter) {
-			TypeMirror elementType = parameter.asType();
-
-			for (String type : types) {
-				TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(type);
-				if (typeElement != null) {
-					TypeMirror expectedType = typeElement.asType();
-					if (annotationHelper.isSubtype(elementType, expectedType)) {
-						return true;
-					}
-				}
-			}
-
-			return false;
-		}
-
-		@Override
-		protected String description() {
-			StringBuilder builder = new StringBuilder();
-			builder.append("extending one of the following: [");
-			for (int i = 0; i < types.size() - 1; ++i) {
-				builder.append(types.get(i)).append(", ");
-			}
-			builder.append(types.get(types.size() - 1)).append(" ]");
-
-			return builder.toString();
-		}
-	}
-
 	public class AnnotatedWithParameterRequirement extends BaseParameterRequirement {
 
 		private Class<? extends Annotation> annotationClass;
@@ -448,17 +405,12 @@ public class ValidatorParameterHelper {
 			case INT:
 				return CanonicalNameConstants.INTEGER;
 			case BYTE:
-				return CanonicalNameConstants.BYTE;
 			case SHORT:
-				return CanonicalNameConstants.SHORT;
 			case LONG:
-				return CanonicalNameConstants.LONG;
 			case CHAR:
-				return CanonicalNameConstants.CHAR;
 			case FLOAT:
-				return CanonicalNameConstants.FLOAT;
 			case DOUBLE:
-				return CanonicalNameConstants.DOUBLE;
+				throw new UnsupportedOperationException("This primitive is not handled yet");
 			default:
 				throw new IllegalArgumentException("The TypeKind passed does not represent a primitive");
 			}
@@ -506,10 +458,6 @@ public class ValidatorParameterHelper {
 
 	public OneParamValidator extendsType(String qualifiedName) {
 		return param(new ExtendsTypeParameterRequirement(qualifiedName));
-	}
-
-	public OneParamValidator extendsAnyOfTypes(String... types) {
-		return param(new ExtendsAnyOfTypesParameterRequirement(types));
 	}
 
 	public OneParamValidator anyType() {

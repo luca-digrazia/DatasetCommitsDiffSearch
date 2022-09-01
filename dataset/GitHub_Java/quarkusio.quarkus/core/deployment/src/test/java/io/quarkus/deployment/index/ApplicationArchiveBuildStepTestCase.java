@@ -1,0 +1,24 @@
+package io.quarkus.deployment.index;
+
+import static io.quarkus.deployment.index.ApplicationArchiveBuildStep.urlToPath;
+import static org.junit.Assert.assertEquals;
+
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.file.Paths;
+
+import org.junit.Test;
+
+public class ApplicationArchiveBuildStepTestCase {
+    @Test
+    public void testUrlToPath() throws MalformedURLException {
+        assertEquals(Paths.get("/a/path"), urlToPath(new URL("jar:file:/a/path!/META-INF/services/my.Service")));
+        assertEquals(Paths.get("/a/path"), urlToPath(new URL("file:/a/path/META-INF/services/my.Service")));
+        assertEquals(Paths.get("/a/path"), urlToPath(new URL("file:/a/path")));
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void testUrlToPathWithWrongProtocol() throws MalformedURLException {
+        urlToPath(new URL("http://a/path"));
+    }
+}

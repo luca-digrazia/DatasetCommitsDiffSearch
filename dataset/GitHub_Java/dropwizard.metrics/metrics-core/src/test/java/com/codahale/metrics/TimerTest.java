@@ -2,16 +2,12 @@ package com.codahale.metrics;
 
 import org.junit.Test;
 
-import java.time.Duration;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.offset;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class TimerTest {
     private final Reservoir reservoir = mock(Reservoir.class);
@@ -27,7 +23,7 @@ public class TimerTest {
     private final Timer timer = new Timer(reservoir, clock);
 
     @Test
-    public void hasRates() {
+    public void hasRates() throws Exception {
         assertThat(timer.getCount())
                 .isZero();
 
@@ -45,7 +41,7 @@ public class TimerTest {
     }
 
     @Test
-    public void updatesTheCountOnUpdates() {
+    public void updatesTheCountOnUpdates() throws Exception {
         assertThat(timer.getCount())
                 .isZero();
 
@@ -57,7 +53,12 @@ public class TimerTest {
 
     @Test
     public void timesCallableInstances() throws Exception {
-        final String value = timer.time(() -> "one");
+        final String value = timer.time(new Callable<String>() {
+            @Override
+            public String call() throws Exception {
+                return "one";
+            }
+        });
 
         assertThat(timer.getCount())
                 .isEqualTo(1);
@@ -69,34 +70,7 @@ public class TimerTest {
     }
 
     @Test
-    public void timesSuppliedInstances() {
-        final String value = timer.timeSupplier(() -> "one");
-
-        assertThat(timer.getCount())
-                .isEqualTo(1);
-
-        assertThat(value)
-                .isEqualTo("one");
-
-        verify(reservoir).update(50000000);
-    }
-
-    @Test
-    public void timesRunnableInstances() {
-        final AtomicBoolean called = new AtomicBoolean();
-        timer.time(() -> called.set(true));
-
-        assertThat(timer.getCount())
-                .isEqualTo(1);
-
-        assertThat(called.get())
-                .isTrue();
-
-        verify(reservoir).update(50000000);
-    }
-
-    @Test
-    public void timesContexts() {
+    public void timesContexts() throws Exception {
         timer.time().stop();
 
         assertThat(timer.getCount())
@@ -106,7 +80,7 @@ public class TimerTest {
     }
 
     @Test
-    public void returnsTheSnapshotFromTheReservoir() {
+    public void returnsTheSnapshotFromTheReservoir() throws Exception {
         final Snapshot snapshot = mock(Snapshot.class);
         when(reservoir.getSnapshot()).thenReturn(snapshot);
 
@@ -115,7 +89,7 @@ public class TimerTest {
     }
 
     @Test
-    public void ignoresNegativeValues() {
+    public void ignoresNegativeValues() throws Exception {
         timer.update(-1, TimeUnit.SECONDS);
 
         assertThat(timer.getCount())
@@ -123,39 +97,4 @@ public class TimerTest {
 
         verifyZeroInteractions(reservoir);
     }
-
-    @Test
-    public void java8Duration() {
-        timer.update(Duration.ofSeconds(1234));
-
-        assertThat(timer.getCount()).isEqualTo(1);
-
-        verify(reservoir).update((long) 1234e9);
-    }
-
-    @Test
-    public void java8NegativeDuration() {
-        timer.update(Duration.ofMillis(-5678));
-
-        assertThat(timer.getCount()).isZero();
-
-        verifyZeroInteractions(reservoir);
-    }
-
-    @Test
-    public void tryWithResourcesWork() {
-        assertThat(timer.getCount()).isZero();
-
-        int dummy = 0;
-        try (Timer.Context context = timer.time()) {
-            assertThat(context).isNotNull();
-            dummy += 1;
-        }
-        assertThat(dummy).isEqualTo(1);
-        assertThat(timer.getCount())
-                .isEqualTo(1);
-
-        verify(reservoir).update(50000000);
-    }
-
 }

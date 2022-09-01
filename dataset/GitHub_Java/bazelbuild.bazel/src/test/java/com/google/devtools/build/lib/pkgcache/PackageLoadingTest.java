@@ -17,29 +17,32 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.testutil.SkyframeExecutorTestHelper;
@@ -47,11 +50,12 @@ import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.common.options.OptionsParser;
+import com.google.devtools.common.options.OptionsParsingException;
 import java.io.IOException;
-import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
-import net.starlark.java.syntax.StarlarkFile;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -61,6 +65,8 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class PackageLoadingTest extends FoundationTestCase {
 
+  private AnalysisMock analysisMock;
+  private ConfiguredRuleClassProvider ruleClassProvider;
   private SkyframeExecutor skyframeExecutor;
   private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
@@ -74,8 +80,8 @@ public class PackageLoadingTest extends FoundationTestCase {
    *     this test performs, and the results compared to SkyFrame's result.
    */
   private void initializeSkyframeExecutor(boolean doPackageLoadingChecks) throws Exception {
-    AnalysisMock analysisMock = AnalysisMock.get();
-    ConfiguredRuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
+    analysisMock = AnalysisMock.get();
+    ruleClassProvider = analysisMock.createRuleClassProvider();
     BlazeDirectories directories =
         new BlazeDirectories(
             new ServerDirectories(outputBase, outputBase, outputBase),
@@ -87,26 +93,33 @@ public class PackageLoadingTest extends FoundationTestCase {
     if (!doPackageLoadingChecks) {
       packageFactoryBuilder.disableChecks();
     }
+    BuildOptions defaultBuildOptions;
+    try {
+      defaultBuildOptions = BuildOptions.of(ImmutableList.of());
+    } catch (OptionsParsingException e) {
+      throw new RuntimeException(e);
+    }
     skyframeExecutor =
         BazelSkyframeExecutorConstants.newBazelSkyframeExecutorBuilder()
             .setPkgFactory(packageFactoryBuilder.build(ruleClassProvider, fileSystem))
             .setFileSystem(fileSystem)
             .setDirectories(directories)
             .setActionKeyContext(actionKeyContext)
+            .setDefaultBuildOptions(defaultBuildOptions)
             .setExtraSkyFunctions(analysisMock.getSkyFunctions(directories))
             .build();
     SkyframeExecutorTestHelper.process(skyframeExecutor);
-    setUpSkyframe(parsePackageOptions(), parseBuildLanguageOptions());
+    setUpSkyframe(parsePackageOptions(), parseStarlarkSemanticsOptions());
   }
 
   private void setUpSkyframe(
-      PackageOptions packageOptions, BuildLanguageOptions buildLanguageOptions) {
+      PackageOptions packageOptions, StarlarkSemanticsOptions starlarkSemanticsOptions) {
     PathPackageLocator pkgLocator =
         PathPackageLocator.create(
-            /*outputBase=*/ null,
+            null,
             packageOptions.packagePath,
             reporter,
-            rootDirectory.asFragment(),
+            rootDirectory,
             rootDirectory,
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     packageOptions.showLoadingProgress = true;
@@ -114,23 +127,23 @@ public class PackageLoadingTest extends FoundationTestCase {
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
-            PrecomputedValue.injected(RepositoryDelegatorFunction.ENABLE_BZLMOD, false)));
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
+                Optional.<RootedPath>absent())));
     skyframeExecutor.preparePackageLoading(
         pkgLocator,
         packageOptions,
-        buildLanguageOptions,
+        starlarkSemanticsOptions,
         UUID.randomUUID(),
-        ImmutableMap.of(),
+        ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
-    skyframeExecutor.setActionEnv(ImmutableMap.of());
+    skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
     skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageOptions.getDeletedPackages()));
   }
 
-  private static OptionsParser parse(String... options) throws Exception {
+  private OptionsParser parse(String... options) throws Exception {
     OptionsParser parser =
         OptionsParser.builder()
-            .optionsClasses(PackageOptions.class, BuildLanguageOptions.class)
+            .optionsClasses(PackageOptions.class, StarlarkSemanticsOptions.class)
             .build();
     parser.parse("--default_visibility=public");
     parser.parse(options);
@@ -138,17 +151,17 @@ public class PackageLoadingTest extends FoundationTestCase {
     return parser;
   }
 
-  private static PackageOptions parsePackageOptions(String... options) throws Exception {
+  private PackageOptions parsePackageOptions(String... options) throws Exception {
     return parse(options).getOptions(PackageOptions.class);
   }
 
-  private static BuildLanguageOptions parseBuildLanguageOptions(String... options)
+  private StarlarkSemanticsOptions parseStarlarkSemanticsOptions(String... options)
       throws Exception {
-    return parse(options).getOptions(BuildLanguageOptions.class);
+    return parse(options).getOptions(StarlarkSemanticsOptions.class);
   }
 
   protected void setOptions(String... options) throws Exception {
-    setUpSkyframe(parsePackageOptions(options), parseBuildLanguageOptions(options));
+    setUpSkyframe(parsePackageOptions(options), parseStarlarkSemanticsOptions(options));
   }
 
   private PackageManager getPackageManager() {
@@ -180,7 +193,7 @@ public class PackageLoadingTest extends FoundationTestCase {
   }
 
   // Check that a substring is present in an error message.
-  private void checkGetPackageFails(String packageName, String expectedMessage) {
+  private void checkGetPackageFails(String packageName, String expectedMessage) throws Exception {
     NoSuchPackageException e =
         assertThrows(NoSuchPackageException.class, () -> getPackage(packageName));
     assertThat(e).hasMessageThat().contains(expectedMessage);
@@ -204,7 +217,7 @@ public class PackageLoadingTest extends FoundationTestCase {
   }
 
   @Test
-  public void testGetNonexistentPackage() {
+  public void testGetNonexistentPackage() throws Exception {
     checkGetPackageFails("not-there", "no such package 'not-there': " + "BUILD file not found");
   }
 
@@ -404,11 +417,9 @@ public class PackageLoadingTest extends FoundationTestCase {
     scratch.file("e/f/BUILD");
     scratch.file("e/BUILD", "# Whatever", "filegroup(name='fg', srcs=['f/g'])");
     reporter.removeHandler(failFastHandler);
-
-    getPackage("e");
-
-    assertThat(eventCollector).hasSize(1);
-    assertThat(Iterables.getOnlyElement(eventCollector).getLocation().line()).isEqualTo(2);
+    List<Event> events = getPackage("e").getEvents();
+    assertThat(events).hasSize(1);
+    assertThat(events.get(0).getLocation().line()).isEqualTo(2);
   }
 
   /** Static tests (i.e. no changes to filesystem, nor calls to sync). */

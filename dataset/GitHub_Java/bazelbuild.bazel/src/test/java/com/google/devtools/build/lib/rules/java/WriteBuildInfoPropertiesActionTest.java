@@ -13,20 +13,17 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Joiner;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Properties;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.JUnit4;
 
-/** Tests for {@link WriteBuildInfoPropertiesAction} utilities methods */
-@RunWith(JUnit4.class)
+/**
+ * Tests for {@link WriteBuildInfoPropertiesAction} utilities methods
+ */
 public class WriteBuildInfoPropertiesActionTest extends FoundationTestCase {
 
   private static final Joiner LINE_JOINER = Joiner.on("\r\n");
@@ -40,35 +37,20 @@ public class WriteBuildInfoPropertiesActionTest extends FoundationTestCase {
         writer.write(testCase);
       }
     }
-    assertThat(new String(out.toByteArray(), UTF_8)).isEqualTo(expected);
+    assertEquals(expected, new String(out.toByteArray(), UTF_8));
   }
 
-  @Test
   public void testStripFirstLine() throws IOException {
     assertStripFirstLine("", "");
     assertStripFirstLine("", "no linefeed");
     assertStripFirstLine("", "no", "linefeed");
-    assertStripFirstLine(
-        LINEFEED_JOINER.join("toto", "titi"),
+    assertStripFirstLine(LINEFEED_JOINER.join("toto", "titi"),
         LINEFEED_JOINER.join("# timestamp comment", "toto", "titi"));
-    assertStripFirstLine(
-        LINE_JOINER.join("toto", "titi"), LINE_JOINER.join("# timestamp comment", "toto", "titi"));
-    assertStripFirstLine(
-        LINEFEED_JOINER.join("toto", "titi"), "# timestamp comment\n", "toto\n", "titi");
-    assertStripFirstLine(
-        LINE_JOINER.join("toto", "titi"), "# timestamp comment\r\n", "toto\r\n", "titi");
-  }
-
-  @Test
-  public void deterministicProperties() throws IOException {
-    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-    Properties underTest = new WriteBuildInfoPropertiesAction.DeterministicProperties();
-    underTest.put("second", "keyb");
-    underTest.put("first", "keya");
-    try (WriteBuildInfoPropertiesAction.StripFirstLineWriter writer =
-        new WriteBuildInfoPropertiesAction.StripFirstLineWriter(bytes)) {
-      underTest.store(writer, null);
-    }
-    assertThat(new String(bytes.toByteArray(), UTF_8)).isEqualTo("first=keya\nsecond=keyb\n");
+    assertStripFirstLine(LINE_JOINER.join("toto", "titi"),
+        LINE_JOINER.join("# timestamp comment", "toto", "titi"));
+    assertStripFirstLine(LINEFEED_JOINER.join("toto", "titi"),
+        "# timestamp comment\n", "toto\n", "titi");
+    assertStripFirstLine(LINE_JOINER.join("toto", "titi"),
+        "# timestamp comment\r\n", "toto\r\n", "titi");
   }
 }

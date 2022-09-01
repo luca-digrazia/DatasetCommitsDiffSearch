@@ -1,13 +1,11 @@
 package org.elasticsearch.plugin.nlpcn;
 
+import org.elasticsearch.common.text.StringText;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.internal.InternalSearchHit;
 import org.nlpcn.es4sql.domain.Field;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Created by Eliran on 2/11/2015.
@@ -36,11 +34,11 @@ public class HashJoinComparisonStructure {
         return comparisonIDtoComparisonFields;
     }
 
-    public void insertIntoComparisonHash(String comparisonID,String comparisonKey,SearchHit hit){
+    public void insertIntoComparisonHash(String comparisonID,String comparisonKey,InternalSearchHit hit){
         HashMap<String, SearchHitsResult> comparisonHash = this.comparisonIDtoComparisonHash.get(comparisonID);
         SearchHitsResult currentSearchHitsResult = comparisonHash.get(comparisonKey);
         if(currentSearchHitsResult == null) {
-            currentSearchHitsResult = new SearchHitsResult(new ArrayList<SearchHit>(),false);
+            currentSearchHitsResult = new SearchHitsResult(new ArrayList<InternalSearchHit>(),false);
             comparisonHash.put(comparisonKey, currentSearchHitsResult);
         }
         currentSearchHitsResult.getSearchHits().add(hit);

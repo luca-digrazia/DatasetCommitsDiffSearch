@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,7 +15,6 @@
  */
 package org.androidannotations.internal.core.helper;
 
-import static java.util.Arrays.asList;
 import static org.androidannotations.helper.ModelConstants.classSuffix;
 
 import java.lang.annotation.Annotation;
@@ -41,10 +39,6 @@ import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Elements;
 
 import org.androidannotations.ElementValidation;
-import org.androidannotations.annotations.DataBound;
-import org.androidannotations.annotations.EActivity;
-import org.androidannotations.annotations.EFragment;
-import org.androidannotations.annotations.EViewGroup;
 import org.androidannotations.annotations.Receiver;
 import org.androidannotations.annotations.Trace;
 import org.androidannotations.annotations.UiThread;
@@ -72,7 +66,6 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 	private static final List<Receiver.RegisterAt> VALID_SERVICE_REGISTER_AT = Collections.singletonList(Receiver.RegisterAt.OnCreateOnDestroy);
 	private static final List<Receiver.RegisterAt> VALID_FRAGMENT_REGISTER_AT = Arrays.asList(Receiver.RegisterAt.OnCreateOnDestroy, Receiver.RegisterAt.OnResumeOnPause,
 			Receiver.RegisterAt.OnStartOnStop, Receiver.RegisterAt.OnAttachOnDetach);
-	private static final List<Receiver.RegisterAt> VALID_VIEW_REGISTER_AT = Collections.singletonList(Receiver.RegisterAt.OnAttachOnDetach);
 
 	public CoreValidatorHelper(IdAnnotationHelper idAnnotationHelper) {
 		super(idAnnotationHelper);
@@ -108,8 +101,8 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 
 			if (!typeElement.getModifiers().contains(Modifier.ABSTRACT) && !applicationClassName.equals(generatedComponentQualifiedName)) {
 				if (applicationClassName.equals(componentQualifiedName)) {
-					valid.addError("The AndroidManifest.xml file contains the original component, and not the AndroidAnnotations generated component." + " Please register "
-							+ generatedComponentQualifiedName + " instead of " + componentQualifiedName);
+					valid.addError("The AndroidManifest.xml file contains the original component, and not the AndroidAnnotations generated component."
+							+ " Please register " + generatedComponentQualifiedName + " instead of " + componentQualifiedName);
 				} else {
 					valid.addWarning("The component " + generatedComponentQualifiedName + " is not registered in the AndroidManifest.xml file.");
 				}
@@ -123,10 +116,6 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 	public void isSharedPreference(Element element, ElementValidation valid) {
 
 		TypeMirror type = element.asType();
-		if (element instanceof ExecutableElement) {
-			element = ((ExecutableElement) element).getParameters().get(0);
-			type = element.asType();
-		}
 
 		/*
 		 * The type is not available yet because it has just been generated
@@ -222,7 +211,7 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 	}
 
 	private <T extends Annotation> void checkDefaultAnnotation(ExecutableElement method, Class<T> annotationClass, String expectedReturnType, DefaultAnnotationCondition condition,
-			ElementValidation valid) {
+																ElementValidation valid) {
 		T defaultAnnotation = method.getAnnotation(annotationClass);
 		if (defaultAnnotation != null) {
 			if (!condition.correctReturnType(method.getReturnType())) {
@@ -352,8 +341,8 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 				fromUserParameterFound = true;
 				continue;
 			}
-			valid.addError("Unrecognized parameter '" + parameter.toString() + "'. %s signature should be " + executableElement.getSimpleName() + "(" + CanonicalNameConstants.SEEKBAR
-					+ " seekBar, int progress, boolean fromUser). The 'fromUser' and 'progress' parameters are optional.");
+			valid.addError("Unrecognized parameter '" + parameter.toString() + "'. %s signature should be " + executableElement.getSimpleName() + "("
+					+ CanonicalNameConstants.SEEKBAR + " seekBar, int progress, boolean fromUser). The 'fromUser' and 'progress' parameters are optional.");
 		}
 	}
 
@@ -361,16 +350,16 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 		List<? extends VariableElement> parameters = executableElement.getParameters();
 
 		if (parameters.size() > 1) {
-			valid.addError("Unrecognized parameter declaration. You can only have one parameter of type " + CanonicalNameConstants.SEEKBAR + ". Try declaring " + executableElement.getSimpleName()
-					+ "(" + CanonicalNameConstants.SEEKBAR + " seekBar);");
+			valid.addError("Unrecognized parameter declaration. You can only have one parameter of type " + CanonicalNameConstants.SEEKBAR
+					+ ". Try declaring " + executableElement.getSimpleName() + "(" + CanonicalNameConstants.SEEKBAR + " seekBar);");
 			return;
 		}
 
 		if (parameters.size() == 1) {
 			String parameterType = parameters.get(0).asType().toString();
 			if (!parameterType.equals(CanonicalNameConstants.SEEKBAR)) {
-				valid.addError("Unrecognized parameter declaration. You can only have one parameter of type " + CanonicalNameConstants.SEEKBAR + ". Try declaring " + executableElement.getSimpleName()
-						+ "(" + CanonicalNameConstants.SEEKBAR + " seekBar);");
+				valid.addError("Unrecognized parameter declaration. You can only have one parameter of type " + CanonicalNameConstants.SEEKBAR
+						+ ". Try declaring " + executableElement.getSimpleName() + "(" + CanonicalNameConstants.SEEKBAR + " seekBar);");
 			}
 		}
 
@@ -384,7 +373,6 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 		validRegisterAts.put(CanonicalNameConstants.ACTIVITY, VALID_ACTIVITY_REGISTER_AT);
 		validRegisterAts.put(CanonicalNameConstants.SERVICE, VALID_SERVICE_REGISTER_AT);
 		validRegisterAts.put(CanonicalNameConstants.FRAGMENT, VALID_FRAGMENT_REGISTER_AT);
-		validRegisterAts.put(CanonicalNameConstants.VIEW, VALID_VIEW_REGISTER_AT);
 
 		for (Map.Entry<String, List<Receiver.RegisterAt>> validRegisterAt : validRegisterAts.entrySet()) {
 			String enclosingType = validRegisterAt.getKey();
@@ -399,8 +387,8 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 		boolean local = element.getAnnotation(Receiver.class).local();
 		if (local) {
 			Elements elementUtils = annotationHelper.getElementUtils();
-			if (elementUtils.getTypeElement(CanonicalNameConstants.LOCAL_BROADCAST_MANAGER) == null && elementUtils.getTypeElement(CanonicalNameConstants.ANDROIDX_LOCAL_BROADCAST_MANAGER) == null) {
-				valid.addError("To use the LocalBroadcastManager, you MUST include the android-support-v4 or androidx.localbroadcastmanager jar");
+			if (elementUtils.getTypeElement(CanonicalNameConstants.LOCAL_BROADCAST_MANAGER) == null) {
+				valid.addError("To use the LocalBroadcastManager, you MUST include the android-support-v4 jar");
 			}
 		}
 	}
@@ -427,7 +415,6 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 		if (childFragment) {
 			TypeElement fragment = annotationHelper.getElementUtils().getTypeElement(CanonicalNameConstants.FRAGMENT);
 			TypeElement supportFragment = annotationHelper.getElementUtils().getTypeElement(CanonicalNameConstants.SUPPORT_V4_FRAGMENT);
-			TypeElement androidxFragment = annotationHelper.getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT);
 
 			boolean enclosingElementIsFragment = false;
 
@@ -437,13 +424,11 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 				enclosingElementIsFragment = true;
 			} else if (supportFragment != null && annotationHelper.isSubtype(enclosingElement, supportFragment)) {
 				enclosingElementIsFragment = true;
-			} else if (androidxFragment != null && annotationHelper.isSubtype(enclosingElement, androidxFragment)) {
-				enclosingElementIsFragment = true;
 			}
 
 			if (!enclosingElementIsFragment) {
 				validation.addError(element, "The 'childFragmentManager' parameter only can be used if the class containing the annotated field is either subclass of "
-						+ CanonicalNameConstants.FRAGMENT + ", " + CanonicalNameConstants.SUPPORT_V4_FRAGMENT + " or " + CanonicalNameConstants.ANDROIDX_FRAGMENT);
+						+ CanonicalNameConstants.FRAGMENT + " or " + CanonicalNameConstants.SUPPORT_V4_FRAGMENT);
 			}
 		}
 	}
@@ -456,21 +441,15 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 
 			TypeElement fragment = annotationHelper.getElementUtils().getTypeElement(CanonicalNameConstants.FRAGMENT);
 			TypeElement supportFragment = annotationHelper.getElementUtils().getTypeElement(CanonicalNameConstants.SUPPORT_V4_FRAGMENT);
-			TypeElement androidxFragment = annotationHelper.getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_FRAGMENT);
 
 			if (supportFragment != null && annotationHelper.isSubtype(enclosingElement, supportFragment)) {
 				if (!methodIsAvailableIn(supportFragment, "getChildFragmentManager")) {
 					validation.addError(element, "The 'childFragmentManager' parameter only can be used if the getChildFragmentManager() method is available in "
 							+ CanonicalNameConstants.SUPPORT_V4_FRAGMENT + ", update your support library version.");
 				}
-			} else if (androidxFragment != null && annotationHelper.isSubtype(enclosingElement, androidxFragment)) {
-				if (!methodIsAvailableIn(androidxFragment, "getChildFragmentManager")) {
-					validation.addError(element, "The 'childFragmentManager' parameter only can be used if the getChildFragmentManager() method is available in "
-							+ CanonicalNameConstants.ANDROIDX_FRAGMENT + ", update your support library version.");
-				}
 			} else if (fragment != null && annotationHelper.isSubtype(enclosingElement, fragment) && environment().getAndroidManifest().getMinSdkVersion() < 17) {
-				validation.addError(element, "The 'childFragmentManager' parameter only can be used if the getChildFragmentManager() method is available in " + CanonicalNameConstants.FRAGMENT
-						+ " (from API 17). Increment 'minSdkVersion' or use " + CanonicalNameConstants.SUPPORT_V4_FRAGMENT + " or " + CanonicalNameConstants.ANDROIDX_FRAGMENT + ".");
+				validation.addError(element, "The 'childFragmentManager' parameter only can be used if the getChildFragmentManager() method is available in "
+						+ CanonicalNameConstants.FRAGMENT + " (from API 17). Increment 'minSdkVersion' or use " + CanonicalNameConstants.SUPPORT_V4_FRAGMENT + ".");
 			}
 
 		}
@@ -483,26 +462,5 @@ public class CoreValidatorHelper extends IdValidatorHelper {
 			}
 		}
 		return false;
-	}
-
-	public void checkDataBoundAnnotation(Element element, ElementValidation validation) {
-		if (element.getAnnotation(DataBound.class) != null && !isClassPresent(CanonicalNameConstants.DATA_BINDING_UTIL) && !isClassPresent(CanonicalNameConstants.ANDROIDX_DATA_BINDING_UTIL)) {
-			validation.invalidate();
-		}
-	}
-
-	public void hasDataBindingOnClasspath(ElementValidation validation) {
-		if (!isClassPresent(CanonicalNameConstants.DATA_BINDING_UTIL) && !isClassPresent(CanonicalNameConstants.ANDROIDX_DATA_BINDING_UTIL)) {
-			validation.addError("Data binding is not found on classpath, be sure to enable data binding for the project.");
-		}
-	}
-
-	public void hasEActivityOrEFragmentOrEViewGroup(Element element, Element reportElement, ElementValidation valid) {
-		List<Class<? extends Annotation>> validAnnotations = asList(EActivity.class, EFragment.class, EViewGroup.class);
-		hasOneOfAnnotations(reportElement, element, validAnnotations, valid);
-	}
-
-	public void enclosingElementHasDataBoundAnnotation(Element element, ElementValidation validation) {
-		enclosingElementHasAnnotation(DataBound.class, element, validation);
 	}
 }

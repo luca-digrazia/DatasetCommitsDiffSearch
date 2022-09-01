@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -20,14 +19,14 @@ package org.androidannotations.rest.spring.api;
  * A @Rest interface implementing this interface will automatically have the
  * implementations of this method generated.
  * 
- * @see org.androidannotations.rest.spring.annotations.Rest
+ * @see org.androidannotations.annotations.rest.Rest
  */
 public interface RestClientErrorHandling {
 	/**
 	 * Sets the error handler called when a rest error occurs.
 	 * 
-	 * @param handler
-	 *            {@link RestErrorHandler} which handle exception from rest service
+	 * @param handler {@link org.androidannotations.api.rest.RestErrorHandler}
+	 *      which handle exception from rest service
 	 */
 	void setRestErrorHandler(RestErrorHandler handler);
 }

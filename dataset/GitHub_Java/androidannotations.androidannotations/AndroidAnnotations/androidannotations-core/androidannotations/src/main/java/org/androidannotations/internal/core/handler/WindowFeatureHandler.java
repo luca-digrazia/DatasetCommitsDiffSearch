@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,16 +16,14 @@
 package org.androidannotations.internal.core.handler;
 
 import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.ElementValidation;
 import org.androidannotations.annotations.WindowFeature;
 import org.androidannotations.handler.BaseAnnotationHandler;
-import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.EActivityHolder;
 
-import com.helger.jcodemodel.JExpr;
+import com.sun.codemodel.JExpr;
 
 public class WindowFeatureHandler extends BaseAnnotationHandler<EActivityHolder> {
 
@@ -44,20 +41,8 @@ public class WindowFeatureHandler extends BaseAnnotationHandler<EActivityHolder>
 		WindowFeature annotation = element.getAnnotation(WindowFeature.class);
 		int[] features = annotation.value();
 
-		TypeElement appCompatActivity = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.APPCOMPAT_ACTIVITY);
-		TypeElement androidxAppCompatActivity = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.ANDROIDX_APPCOMPAT_ACTIVITY);
-		TypeElement actionBarActivity = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.ACTIONBAR_ACTIVITY);
-		TypeElement type = (TypeElement) element;
-
-		String methodName;
-		if ((appCompatActivity != null && annotationHelper.isSubtype(type, appCompatActivity)) || (androidxAppCompatActivity != null && annotationHelper.isSubtype(type, androidxAppCompatActivity))
-				|| (actionBarActivity != null && annotationHelper.isSubtype(type, actionBarActivity))) {
-			methodName = "supportRequestWindowFeature";
-		} else {
-			methodName = "requestWindowFeature";
-		}
 		for (int feature : features) {
-			holder.getInitBodyInjectionBlock().invoke(methodName).arg(JExpr.lit(feature));
+			holder.getInitBody().invoke("requestWindowFeature").arg(JExpr.lit(feature));
 		}
 	}
 }

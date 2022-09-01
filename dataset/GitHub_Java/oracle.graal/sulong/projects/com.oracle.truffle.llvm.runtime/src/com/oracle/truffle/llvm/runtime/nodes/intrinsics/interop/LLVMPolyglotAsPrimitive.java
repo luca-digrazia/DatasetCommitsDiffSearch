@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,16 +30,15 @@
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
+import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMPolyglotAsPrimitiveFactory.AsBooleanNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMPolyglotAsPrimitiveFactory.AsDoubleNodeGen;
@@ -48,33 +47,25 @@ import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMPolyglotAsPr
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMPolyglotAsPrimitiveFactory.AsI32NodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMPolyglotAsPrimitiveFactory.AsI64NodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMPolyglotAsPrimitiveFactory.AsI8NodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
 
-@NodeChild(type = LLVMExpressionNode.class)
+@NodeChild(type = LLVMAsForeignNode.class)
 public abstract class LLVMPolyglotAsPrimitive extends LLVMIntrinsic {
-
-    @Fallback
-    boolean onFallback(@SuppressWarnings("unused") Object receiver) {
-        throw new LLVMPolyglotException(this, "Pointer does not point to a polyglot value");
-    }
 
     public abstract static class AsBoolean extends LLVMPolyglotAsPrimitive {
 
         public static LLVMPolyglotAsPrimitive create(LLVMExpressionNode arg) {
-            return AsBooleanNodeGen.create(arg);
+            return AsBooleanNodeGen.create(LLVMAsForeignNode.create(arg));
         }
 
-        @Specialization(guards = "foreigns.isForeign(receiver)", limit = "3")
-        @GenerateAOT.Exclude
-        boolean asBoolean(Object receiver,
-                        @CachedLibrary("receiver") LLVMAsForeignLibrary foreigns,
-                        @CachedLibrary(limit = "3") InteropLibrary interop,
+        @Specialization(limit = "3")
+        boolean asBoolean(Object foreign,
+                        @CachedLibrary("foreign") InteropLibrary interop,
                         @Cached BranchProfile exception) {
             try {
-                return interop.asBoolean(foreigns.asForeign(receiver));
+                return interop.asBoolean(foreign);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Argument to polyglot_as_boolean cannot be converted to boolean.");
+                throw new LLVMPolyglotException(this, "Argument to polyglot_as_boolean can not be convented to boolean.");
             }
         }
     }
@@ -82,20 +73,18 @@ public abstract class LLVMPolyglotAsPrimitive extends LLVMIntrinsic {
     public abstract static class AsI8 extends LLVMPolyglotAsPrimitive {
 
         public static LLVMPolyglotAsPrimitive create(LLVMExpressionNode arg) {
-            return AsI8NodeGen.create(arg);
+            return AsI8NodeGen.create(LLVMAsForeignNode.create(arg));
         }
 
-        @Specialization(guards = "foreigns.isForeign(receiver)", limit = "3")
-        @GenerateAOT.Exclude
-        byte asI8(Object receiver,
-                        @CachedLibrary("receiver") LLVMAsForeignLibrary foreigns,
-                        @CachedLibrary(limit = "3") InteropLibrary interop,
+        @Specialization(limit = "3")
+        byte asI8(Object foreign,
+                        @CachedLibrary("foreign") InteropLibrary interop,
                         @Cached BranchProfile exception) {
             try {
-                return interop.asByte(foreigns.asForeign(receiver));
+                return interop.asByte(foreign);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Argument to polyglot_as_i8 cannot be converted to i8.");
+                throw new LLVMPolyglotException(this, "Argument to polyglot_as_i8 can not be convented to i8.");
             }
         }
     }
@@ -103,20 +92,18 @@ public abstract class LLVMPolyglotAsPrimitive extends LLVMIntrinsic {
     public abstract static class AsI16 extends LLVMPolyglotAsPrimitive {
 
         public static LLVMPolyglotAsPrimitive create(LLVMExpressionNode arg) {
-            return AsI16NodeGen.create(arg);
+            return AsI16NodeGen.create(LLVMAsForeignNode.create(arg));
         }
 
-        @Specialization(guards = "foreigns.isForeign(receiver)", limit = "3")
-        @GenerateAOT.Exclude
-        short asI16(Object receiver,
-                        @CachedLibrary("receiver") LLVMAsForeignLibrary foreigns,
-                        @CachedLibrary(limit = "3") InteropLibrary interop,
+        @Specialization(limit = "3")
+        short asI16(Object foreign,
+                        @CachedLibrary("foreign") InteropLibrary interop,
                         @Cached BranchProfile exception) {
             try {
-                return interop.asShort(foreigns.asForeign(receiver));
+                return interop.asShort(foreign);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Argument to polyglot_as_i16 cannot be converted to i16.");
+                throw new LLVMPolyglotException(this, "Argument to polyglot_as_i16 can not be convented to i16.");
             }
         }
     }
@@ -124,20 +111,18 @@ public abstract class LLVMPolyglotAsPrimitive extends LLVMIntrinsic {
     public abstract static class AsI32 extends LLVMPolyglotAsPrimitive {
 
         public static LLVMPolyglotAsPrimitive create(LLVMExpressionNode arg) {
-            return AsI32NodeGen.create(arg);
+            return AsI32NodeGen.create(LLVMAsForeignNode.create(arg));
         }
 
-        @Specialization(guards = "foreigns.isForeign(receiver)", limit = "3")
-        @GenerateAOT.Exclude
-        int asI32(Object receiver,
-                        @CachedLibrary("receiver") LLVMAsForeignLibrary foreigns,
-                        @CachedLibrary(limit = "3") InteropLibrary interop,
+        @Specialization(limit = "3")
+        int asI32(Object foreign,
+                        @CachedLibrary("foreign") InteropLibrary interop,
                         @Cached BranchProfile exception) {
             try {
-                return interop.asInt(foreigns.asForeign(receiver));
+                return interop.asInt(foreign);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Argument to polyglot_as_i32 cannot be converted to i32.");
+                throw new LLVMPolyglotException(this, "Argument to polyglot_as_i32 can not be convented to i32.");
             }
         }
     }
@@ -145,20 +130,18 @@ public abstract class LLVMPolyglotAsPrimitive extends LLVMIntrinsic {
     public abstract static class AsI64 extends LLVMPolyglotAsPrimitive {
 
         public static LLVMPolyglotAsPrimitive create(LLVMExpressionNode arg) {
-            return AsI64NodeGen.create(arg);
+            return AsI64NodeGen.create(LLVMAsForeignNode.create(arg));
         }
 
-        @Specialization(guards = "foreigns.isForeign(receiver)", limit = "3")
-        @GenerateAOT.Exclude
-        long asI64(Object receiver,
-                        @CachedLibrary("receiver") LLVMAsForeignLibrary foreigns,
-                        @CachedLibrary(limit = "3") InteropLibrary interop,
+        @Specialization(limit = "3")
+        long asI64(Object foreign,
+                        @CachedLibrary("foreign") InteropLibrary interop,
                         @Cached BranchProfile exception) {
             try {
-                return interop.asLong(foreigns.asForeign(receiver));
+                return interop.asLong(foreign);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Argument to polyglot_as_i64 cannot be converted to i64.");
+                throw new LLVMPolyglotException(this, "Argument to polyglot_as_i64 can not be convented to i64.");
             }
         }
     }
@@ -166,20 +149,18 @@ public abstract class LLVMPolyglotAsPrimitive extends LLVMIntrinsic {
     public abstract static class AsFloat extends LLVMPolyglotAsPrimitive {
 
         public static LLVMPolyglotAsPrimitive create(LLVMExpressionNode arg) {
-            return AsFloatNodeGen.create(arg);
+            return AsFloatNodeGen.create(LLVMAsForeignNode.create(arg));
         }
 
-        @Specialization(guards = "foreigns.isForeign(receiver)", limit = "3")
-        @GenerateAOT.Exclude
-        float asFloat(Object receiver,
-                        @CachedLibrary("receiver") LLVMAsForeignLibrary foreigns,
-                        @CachedLibrary(limit = "3") InteropLibrary interop,
+        @Specialization(limit = "3")
+        float asFloat(Object foreign,
+                        @CachedLibrary("foreign") InteropLibrary interop,
                         @Cached BranchProfile exception) {
             try {
-                return interop.asFloat(foreigns.asForeign(receiver));
+                return interop.asFloat(foreign);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Argument to polyglot_as_float cannot be converted to float.");
+                throw new LLVMPolyglotException(this, "Argument to polyglot_as_float can not be convented to float.");
             }
         }
     }
@@ -187,20 +168,18 @@ public abstract class LLVMPolyglotAsPrimitive extends LLVMIntrinsic {
     public abstract static class AsDouble extends LLVMPolyglotAsPrimitive {
 
         public static LLVMPolyglotAsPrimitive create(LLVMExpressionNode arg) {
-            return AsDoubleNodeGen.create(arg);
+            return AsDoubleNodeGen.create(LLVMAsForeignNode.create(arg));
         }
 
-        @Specialization(guards = "foreigns.isForeign(receiver)", limit = "3")
-        @GenerateAOT.Exclude
-        double asDouble(Object receiver,
-                        @CachedLibrary("receiver") LLVMAsForeignLibrary foreigns,
-                        @CachedLibrary(limit = "3") InteropLibrary interop,
+        @Specialization(limit = "3")
+        double asDouble(Object foreign,
+                        @CachedLibrary("foreign") InteropLibrary interop,
                         @Cached BranchProfile exception) {
             try {
-                return interop.asDouble(foreigns.asForeign(receiver));
+                return interop.asDouble(foreign);
             } catch (UnsupportedMessageException ex) {
                 exception.enter();
-                throw new LLVMPolyglotException(this, "Argument to polyglot_as_double cannot be converted to double.");
+                throw new LLVMPolyglotException(this, "Argument to polyglot_as_double can not be convented to double.");
             }
         }
     }

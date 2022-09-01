@@ -247,7 +247,7 @@ public abstract class Runfiles {
   private static final class DirectoryBased extends Runfiles {
     private final String runfilesRoot;
 
-    DirectoryBased(String runfilesDir) {
+    DirectoryBased(String runfilesDir) throws IOException {
       Util.checkArgument(!Util.isNullOrEmpty(runfilesDir));
       Util.checkArgument(new File(runfilesDir).isDirectory());
       this.runfilesRoot = runfilesDir;
@@ -272,7 +272,7 @@ public abstract class Runfiles {
     return new ManifestBased(manifestPath);
   }
 
-  static Runfiles createDirectoryBasedForTesting(String runfilesDir) {
+  static Runfiles createDirectoryBasedForTesting(String runfilesDir) throws IOException {
     return new DirectoryBased(runfilesDir);
   }
 }

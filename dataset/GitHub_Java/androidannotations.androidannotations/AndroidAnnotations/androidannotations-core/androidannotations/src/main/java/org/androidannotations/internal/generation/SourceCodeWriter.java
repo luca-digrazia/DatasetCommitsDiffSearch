@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -18,7 +17,6 @@ package org.androidannotations.internal.generation;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.Charset;
 
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.FilerException;
@@ -46,8 +44,8 @@ public class SourceCodeWriter extends AbstractCodeWriter {
 		}
 	}
 
-	public SourceCodeWriter(Filer filer, OriginatingElements originatingElements, Charset charset) {
-		super(charset, getDefaultNewLine());
+	public SourceCodeWriter(Filer filer, OriginatingElements originatingElements) {
+		super(null);
 		this.filer = filer;
 		this.originatingElements = originatingElements;
 	}
@@ -70,13 +68,14 @@ public class SourceCodeWriter extends AbstractCodeWriter {
 
 			return sourceFile.openOutputStream();
 		} catch (FilerException e) {
-			LOGGER.error("Could not generate source file for {} due to error: {}", qualifiedClassName, e.getMessage());
+			LOGGER.error("Could not generate source file for {}", qualifiedClassName, e.getMessage());
 			/*
-			 * This exception is expected, when some files are created twice. We cannot
-			 * delete existing files, unless using a dirty hack. Files a created twice when
-			 * the same file is created from different annotation rounds. Happens when
-			 * renaming classes, and for Background executor. It also probably means I
-			 * didn't fully understand how annotation processing works. If anyone can point
+			 * This exception is expected, when some files are created twice. We
+			 * cannot delete existing files, unless using a dirty hack. Files a
+			 * created twice when the same file is created from different
+			 * annotation rounds. Happens when renaming classes, and for
+			 * Background executor. It also probably means I didn't fully
+			 * understand how annotation processing works. If anyone can point
 			 * me out...
 			 */
 			return VOID_OUTPUT_STREAM;

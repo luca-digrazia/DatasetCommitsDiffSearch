@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -32,36 +31,6 @@ import org.androidannotations.annotations.ResId;
  * The annotation value must be one of R.* fields. If the value is not set, the
  * method name will be used as the R.* field name.
  * </p>
- * <table summary="Mapping of return types to thier resource types">
- * <tr>
- * <th>Return Type</th>
- * <th>Resource Type</th>
- * </tr>
- * <tr>
- * <td>String</td>
- * <td>R.string.*</td>
- * </tr>
- * <tr>
- * <td>int</td>
- * <td>R.integer.*</td>
- * </tr>
- * <tr>
- * <td>long</td>
- * <td>R.integer.*</td>
- * </tr>
- * <tr>
- * <td>float</td>
- * <td>R.integer.*</td>
- * </tr>
- * <tr>
- * <td>boolean</td>
- * <td>R.bool.*</td>
- * </tr>
- * <tr>
- * <td>Set&lt;String&gt;</td>
- * <td>R.array.*</td>
- * </tr>
- * </table>
  * <p>
  * The key of the preference will be the method name by default. This can be
  * overridden by specifying a string resource with the {@link #keyRes()}
@@ -73,16 +42,16 @@ import org.androidannotations.annotations.ResId;
 public @interface DefaultRes {
 
 	/**
-	 * The R.id.* field which refers the the resource which is used as the default
-	 * value of the preference.
+	 * The R.id.* field which refers the the resource which is used as the
+	 * default value of the preference.
 	 * 
 	 * @return the default value
 	 */
 	int value() default ResId.DEFAULT_VALUE;
 
 	/**
-	 * The resource name which refers the the resource which is used as the default
-	 * value of the preference.
+	 * The resource name which refers the the resource which is used as the
+	 * default value of the preference.
 	 * 
 	 * @return the resource name of the default value
 	 */

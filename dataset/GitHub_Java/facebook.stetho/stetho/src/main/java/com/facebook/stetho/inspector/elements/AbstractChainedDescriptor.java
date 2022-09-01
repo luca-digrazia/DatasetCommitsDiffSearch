@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.inspector.elements;
@@ -10,7 +12,6 @@ package com.facebook.stetho.inspector.elements;
 import com.facebook.stetho.common.Accumulator;
 import com.facebook.stetho.common.ThreadBound;
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.inspector.protocol.module.DOM;
 
 import javax.annotation.Nullable;
 
@@ -29,16 +30,14 @@ import javax.annotation.Nullable;
  * {@link #verifyThreadAccess()} in a few important methods such as {@link #hook(Object)} and
  * {@link #unhook(Object)} (anything that writes or is potentially really dangerous if misused).<p/>
  *
- * @param <E> the class that this descriptor will be describing for {@link DocumentProvider},
- * {@link Document}, and ultimately {@link DOM}.
+ * @param <E> the class that this descriptor will be describing for {@link DocumentProvider} and
+ * {@link com.facebook.stetho.inspector.protocol.module.DOM}
  */
-public abstract class AbstractChainedDescriptor<E>
-    extends Descriptor<E> implements ChainedDescriptor<E> {
+public abstract class AbstractChainedDescriptor<E> extends Descriptor implements ChainedDescriptor {
 
-  private Descriptor<? super E> mSuper;
+  private Descriptor mSuper;
 
-  @Override
-  public void setSuper(Descriptor<? super E> superDescriptor) {
+  public void setSuper(Descriptor superDescriptor) {
     Util.throwIfNull(superDescriptor);
 
     if (superDescriptor != mSuper) {
@@ -49,24 +48,26 @@ public abstract class AbstractChainedDescriptor<E>
     }
   }
 
-  final Descriptor<? super E> getSuper() {
+  final Descriptor getSuper() {
     return mSuper;
   }
 
   @Override
-  public final void hook(E element) {
+  @SuppressWarnings("unchecked")
+  public final void hook(Object element) {
     verifyThreadAccess();
     mSuper.hook(element);
-    onHook(element);
+    onHook((E) element);
   }
 
   protected void onHook(E element) {
   }
 
   @Override
-  public final void unhook(E element) {
+  @SuppressWarnings("unchecked")
+  public final void unhook(Object element) {
     verifyThreadAccess();
-    onUnhook(element);
+    onUnhook((E) element);
     mSuper.unhook(element);
   }
 
@@ -74,8 +75,9 @@ public abstract class AbstractChainedDescriptor<E>
   }
 
   @Override
-  public final NodeType getNodeType(E element) {
-    return onGetNodeType(element);
+  @SuppressWarnings("unchecked")
+  public final NodeType getNodeType(Object element) {
+    return onGetNodeType((E) element);
   }
 
   protected NodeType onGetNodeType(E element) {
@@ -83,8 +85,9 @@ public abstract class AbstractChainedDescriptor<E>
   }
 
   @Override
-  public final String getNodeName(E element) {
-    return onGetNodeName(element);
+  @SuppressWarnings("unchecked")
+  public final String getNodeName(Object element) {
+    return onGetNodeName((E) element);
   }
 
   protected String onGetNodeName(E element) {
@@ -92,8 +95,9 @@ public abstract class AbstractChainedDescriptor<E>
   }
 
   @Override
-  public final String getLocalName(E element) {
-    return onGetLocalName(element);
+  @SuppressWarnings("unchecked")
+  public final String getLocalName(Object element) {
+    return onGetLocalName((E) element);
   }
 
   protected String onGetLocalName(E element) {
@@ -101,8 +105,9 @@ public abstract class AbstractChainedDescriptor<E>
   }
 
   @Override
-  public final String getNodeValue(E element) {
-    return onGetNodeValue(element);
+  @SuppressWarnings("unchecked")
+  public final String getNodeValue(Object element) {
+    return onGetNodeValue((E) element);
   }
 
   @Nullable
@@ -111,65 +116,32 @@ public abstract class AbstractChainedDescriptor<E>
   }
 
   @Override
-  public final void getChildren(E element, Accumulator<Object> children) {
+  @SuppressWarnings("unchecked")
+  public final void getChildren(Object element, Accumulator<Object> children) {
     mSuper.getChildren(element, children);
-    onGetChildren(element, children);
+    onGetChildren((E) element, children);
   }
 
   protected void onGetChildren(E element, Accumulator<Object> children) {
   }
 
   @Override
-  public final void getAttributes(E element, AttributeAccumulator attributes) {
+  @SuppressWarnings("unchecked")
+  public final void getAttributes(Object element, AttributeAccumulator attributes) {
     mSuper.getAttributes(element, attributes);
-    onGetAttributes(element, attributes);
+    onGetAttributes((E) element, attributes);
   }
 
   protected void onGetAttributes(E element, AttributeAccumulator attributes) {
   }
 
   @Override
-  public final void setAttributesAsText(E element, String text) {
-    onSetAttributesAsText(element, text);
+  @SuppressWarnings("unchecked")
+  public final void setAttributesAsText(Object element, String text) {
+    onSetAttributesAsText((E) element, text);
   }
 
   protected void onSetAttributesAsText(E element, String text) {
     mSuper.setAttributesAsText(element, text);
-  }
-
-  @Override
-  public final void getStyleRuleNames(E element, StyleRuleNameAccumulator accumulator) {
-    mSuper.getStyleRuleNames(element, accumulator);
-    onGetStyleRuleNames(element, accumulator);
-  }
-
-  protected void onGetStyleRuleNames(E element, StyleRuleNameAccumulator accumulator) {
-  }
-
-  @Override
-  public final void getStyles(E element, String ruleName, StyleAccumulator accumulator) {
-    mSuper.getStyles(element, ruleName, accumulator);
-    onGetStyles(element, ruleName, accumulator);
-  }
-
-  protected void onGetStyles(E element, String ruleName, StyleAccumulator accumulator) {
-  }
-
-  @Override
-  public final void setStyle(E element, String ruleName, String name, String value) {
-    mSuper.setStyle(element, ruleName, name, value);
-    onSetStyle(element, ruleName, name, value);
-  }
-
-  protected void onSetStyle(E element, String ruleName, String name, String value) {
-  }
-
-  @Override
-  public void getComputedStyles(E element, ComputedStyleAccumulator accumulator) {
-    mSuper.getComputedStyles(element, accumulator);
-    onGetComputedStyles(element, accumulator);
-  }
-
-  protected void onGetComputedStyles(E element, ComputedStyleAccumulator accumulator) {
   }
 }

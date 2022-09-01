@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -39,7 +39,7 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.llvm.spi.NativeTypeLibrary;
 
-@ExportLibrary(value = NativeTypeLibrary.class, useForAOT = false)
+@ExportLibrary(NativeTypeLibrary.class)
 @ExportLibrary(InteropLibrary.class)
 @SuppressWarnings("static-method")
 public final class DoubleArrayObject implements TruffleObject {
@@ -47,7 +47,7 @@ public final class DoubleArrayObject implements TruffleObject {
     final double[] array;
     final Object type;
 
-    public DoubleArrayObject(Object type, double... array) {
+    public DoubleArrayObject(double[] array, Object type) {
         this.array = array;
         this.type = type;
     }

@@ -1,23 +1,18 @@
 package org.nlpcn.es4sql;
 
-import com.alibaba.druid.support.json.JSONUtils;
 import com.google.common.io.Files;
 import org.junit.Test;
 import org.nlpcn.es4sql.exception.SqlParseException;
 import org.nlpcn.es4sql.query.SqlElasticRequestBuilder;
-
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLFeatureNotSupportedException;
-import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.nlpcn.es4sql.TestsConstants.TEST_INDEX_ACCOUNT;
-import static org.nlpcn.es4sql.TestsConstants.TEST_INDEX_LOCATION;
-import static org.nlpcn.es4sql.TestsConstants.TEST_INDEX_NESTED_TYPE;
+import static org.hamcrest.Matchers.*;
+import static org.nlpcn.es4sql.TestsConstants.*;
 
 public class ExplainTest {
 
@@ -79,7 +74,7 @@ public class ExplainTest {
     @Test
     public void orderByOnNestedFieldTest() throws Exception {
         String result = explain(String.format("SELECT * FROM %s ORDER BY NESTED('message.info','message')", TEST_INDEX_NESTED_TYPE));
-        assertThat(result.replaceAll("\\s+", ""), equalTo("{\"from\":0,\"size\":1000,\"sort\":[{\"message.info\":{\"order\":\"asc\",\"nested\":{\"path\":\"message\"}}}]}"));
+        assertThat(result.replaceAll("\\s+", ""), equalTo("{\"from\":0,\"size\":200,\"sort\":[{\"message.info\":{\"order\":\"asc\",\"nested\":{\"path\":\"message\"}}}]}"));
     }
 
     @Test
@@ -98,59 +93,7 @@ public class ExplainTest {
 
     @Test
     public void testSpanNearQueryExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("SELECT * FROM index WHERE q=span_near(boost=10.0,slop=12,in_order=false,clauses='[{\"span_term\":{\"field\":\"value1\"}},{\"span_term\":{\"field\":\"value2\"}},{\"span_term\":{\"field\":\"value3\"}}]')"));
-    }
-
-    @Test
-    public void testCountDistinctExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("SELECT COUNT(DISTINCT sourceIP.keyword) AS size FROM dataflow WHERE startTime > 525757149439 AND startTime < 1525757449439 GROUP BY appName.keyword ORDER BY size DESC"));
-    }
-
-    @Test
-    public void testStatsGroupsExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        Map map = (Map) JSONUtils.parse(explain("SELECT /*! STATS(group1, group2) */ * FROM index"));
-        assertThat(map.get("stats").toString(), equalTo("[group1, group2]"));
-    }
-
-    @Test
-    public void testCastInWhereExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("select * from file1 where cast(offset as int) > 20"));
-    }
-
-    @Test
-    public void testPreferenceExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("select /*! PREFERENCE(_shards:2,3|_local) */ * from myindex"));
-    }
-
-    @Test
-    public void testCompareTwoFieldExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("select first_field,second_field from index-* where first_field=second_field and third_field=''"));
-    }
-
-    @Test
-    public void testNotNestedExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("select * from test where not nested(\"tags\",tags.name=TERM(\"test\"))"));
-    }
-
-    @Test
-    public void testMatchPhrasePrefixQueryExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("SELECT * FROM index WHERE q=match_phrase_prefix(query='this is a test',boost=10.0,slop=12)"));
-    }
-
-    @Test
-    public void testDocvalueFieldQueryExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("SELECT docvalue('my_keyword_field') FROM index"));
-        System.out.println(explain("SELECT docvalue('my_date_field','epoch_millis') FROM index"));
-    }
-
-    @Test
-    public void testSignificantTextAggregationExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("SELECT * FROM index GROUP BY significant_text(field='my_field',alias='keywords',size=100,shard_size=100,min_doc_count=1)"));
-    }
-
-    @Test
-    public void testSearchAfterHintQueryExplain() throws SqlParseException, SQLFeatureNotSupportedException {
-        System.out.println(explain("select /*! SEARCH_AFTER(2021-05-20T05:30:04.832Z, 4294967298) */ * from index order by field_sort(['@timestamp'], missing='missing value', numeric_type='date_nanos', unmapped_type='long', format='strict_date_optional_time_nanos') desc, _shard_doc asc"));
+        System.out.println(explain("SELECT * FROM index WHERE field=span_near(boost=10.0,slop=12,in_order=false,clauses='[{\"span_term\":{\"field\":\"value1\"}},{\"span_term\":{\"field\":\"value2\"}},{\"span_term\":{\"field\":\"value3\"}}]')"));
     }
 
     private String explain(String sql) throws SQLFeatureNotSupportedException, SqlParseException {

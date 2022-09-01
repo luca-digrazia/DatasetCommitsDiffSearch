@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.starlarkbuildapi.repository;
 import com.google.devtools.build.docgen.annot.DocCategory;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.starlarkbuildapi.core.StructApi;
-import javax.annotation.Nullable;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
 import net.starlark.java.annot.StarlarkBuiltin;
@@ -25,7 +24,6 @@ import net.starlark.java.annot.StarlarkMethod;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
 
@@ -127,17 +125,20 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
             doc = "path of the file to create, relative to the repository directory."),
         @Param(
             name = "content",
+            type = String.class,
             named = true,
             defaultValue = "''",
             doc = "the content of the file to create, empty by default."),
         @Param(
             name = "executable",
             named = true,
+            type = Boolean.class,
             defaultValue = "True",
             doc = "set the executable flag on the created file, true by default."),
         @Param(
             name = "legacy_utf8",
             named = true,
+            type = Boolean.class,
             defaultValue = "True",
             doc =
                 "encode file content to UTF-8, true by default. Future versions will change"
@@ -175,11 +176,13 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
             doc = "path to the template file."),
         @Param(
             name = "substitutions",
+            type = Dict.class,
             defaultValue = "{}",
             named = true,
             doc = "substitutions to make when expanding the template."),
         @Param(
             name = "executable",
+            type = Boolean.class,
             defaultValue = "True",
             named = true,
             doc = "set the executable flag on the created file, true by default."),
@@ -227,26 +230,31 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
       parameters = {
         @Param(
             name = "arguments",
+            type = Sequence.class,
             doc =
                 "List of arguments, the first element should be the path to the program to "
                     + "execute."),
         @Param(
             name = "timeout",
+            type = Integer.class,
             named = true,
             defaultValue = "600",
             doc = "maximum duration of the command in seconds (default is 600 seconds)."),
         @Param(
             name = "environment",
+            type = Dict.class,
             defaultValue = "{}",
             named = true,
             doc = "force some environment variables to be set to be passed to the process."),
         @Param(
             name = "quiet",
+            type = Boolean.class,
             defaultValue = "True",
             named = true,
             doc = "If stdout and stderr should be printed to the terminal."),
         @Param(
             name = "working_directory",
+            type = String.class,
             defaultValue = "\"\"",
             named = true,
             doc =
@@ -255,7 +263,7 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
       })
   StarlarkExecutionResultApi execute(
       Sequence<?> arguments,
-      StarlarkInt timeout,
+      Integer timeout,
       Dict<?, ?> environment, // <String, String> expected
       boolean quiet,
       String workingDirectory,
@@ -305,11 +313,12 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + "If it's a relative path, it will resolve to the repository directory."),
         @Param(
             name = "strip",
+            type = Integer.class,
             named = true,
             defaultValue = "0",
             doc = "strip the specified number of leading components from file names."),
       })
-  void patch(Object patchFile, StarlarkInt strip, StarlarkThread thread)
+  void patch(Object patchFile, Integer strip, StarlarkThread thread)
       throws EvalException, RepositoryFunctionExceptionT, InterruptedException;
 
   @StarlarkMethod(
@@ -320,9 +329,12 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
       allowReturnNones = true,
       useStarlarkThread = true,
       parameters = {
-        @Param(name = "program", named = false, doc = "Program to find in the path."),
+        @Param(
+            name = "program",
+            type = String.class,
+            named = false,
+            doc = "Program to find in the path."),
       })
-  @Nullable
   RepositoryPathApi<?> which(String program, StarlarkThread thread) throws EvalException;
 
   @StarlarkMethod(
@@ -353,6 +365,7 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
             doc = "path to the output file, relative to the repository directory."),
         @Param(
             name = "sha256",
+            type = String.class,
             defaultValue = "''",
             named = true,
             doc =
@@ -363,11 +376,13 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " easier but should be set before shipping."),
         @Param(
             name = "executable",
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             doc = "set the executable flag on the created file, false by default."),
         @Param(
             name = "allow_fail",
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             doc =
@@ -375,6 +390,7 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " instead of raising an error for failed downloads"),
         @Param(
             name = "canonical_id",
+            type = String.class,
             defaultValue = "''",
             named = true,
             doc =
@@ -382,11 +398,13 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " with the same canonical id"),
         @Param(
             name = "auth",
+            type = Dict.class,
             defaultValue = "{}",
             named = true,
             doc = "An optional dict specifying authentication information for some of the URLs."),
         @Param(
             name = "integrity",
+            type = String.class,
             defaultValue = "''",
             named = true,
             positional = false,
@@ -439,6 +457,7 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " relative to the repository directory."),
         @Param(
             name = "stripPrefix",
+            type = String.class,
             defaultValue = "''",
             named = true,
             doc =
@@ -481,6 +500,7 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " relative to the repository directory."),
         @Param(
             name = "sha256",
+            type = String.class,
             defaultValue = "''",
             named = true,
             doc =
@@ -495,6 +515,7 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " cache."),
         @Param(
             name = "type",
+            type = String.class,
             defaultValue = "''",
             named = true,
             doc =
@@ -502,10 +523,10 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " By default, the archive type is determined from the file extension of"
                     + " the URL."
                     + " If the file has no extension, you can explicitly specify either \"zip\","
-                    + " \"jar\", \"war\", \"aar\", \"tar.gz\", \"tgz\", \"tar.bz2\", or \"tar.xz\""
-                    + " here."),
+                    + " \"jar\", \"war\", \"tar.gz\", \"tgz\", \"tar.bz2\", or \"tar.xz\" here."),
         @Param(
             name = "stripPrefix",
+            type = String.class,
             defaultValue = "''",
             named = true,
             doc =
@@ -516,6 +537,7 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " files."),
         @Param(
             name = "allow_fail",
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             doc =
@@ -523,6 +545,7 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " instead of raising an error for failed downloads"),
         @Param(
             name = "canonical_id",
+            type = String.class,
             defaultValue = "''",
             named = true,
             doc =
@@ -530,11 +553,13 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
                     + " with the same canonical id"),
         @Param(
             name = "auth",
+            type = Dict.class,
             defaultValue = "{}",
             named = true,
             doc = "An optional dict specifying authentication information for some of the URLs."),
         @Param(
             name = "integrity",
+            type = String.class,
             defaultValue = "''",
             named = true,
             positional = false,
@@ -566,7 +591,7 @@ public interface StarlarkRepositoryContextApi<RepositoryFunctionExceptionT exten
       useStarlarkThread = true,
       documented = false,
       parameters = {
-        @Param(name = "flag", doc = "Flag to get the value for."),
+        @Param(name = "flag", type = String.class, doc = "Flag to get the value for."),
       })
   boolean flagEnabled(String flag, StarlarkThread starlarkThread) throws EvalException;
 }

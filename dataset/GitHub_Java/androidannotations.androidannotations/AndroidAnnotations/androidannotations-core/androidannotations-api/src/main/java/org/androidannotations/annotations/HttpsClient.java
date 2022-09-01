@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -60,10 +59,10 @@ import java.lang.annotation.Target;
  * &#064;EBean
  * public class MyBean {
  * 	&#064;HttpsClient(trustStore = R.raw.cacerts, //
- * 			trustStorePwd = &quot;changeit&quot;, //
- * 			keyStore = R.raw.client, //
- * 			keyStorePwd = &quot;secret&quot;, //
- * 			allowAllHostnames = false)
+ * 	trustStorePwd = &quot;changeit&quot;, //
+ * 	keyStore = R.raw.client, //
+ * 	keyStorePwd = &quot;secret&quot;, //
+ * 	allowAllHostnames = false)
  * 	HttpClient httpsClient;
  * 
  * 	&#064;AfterInject
@@ -86,13 +85,9 @@ import java.lang.annotation.Target;
  * </pre>
  * 
  * </blockquote>
- *
- * @deprecated See
- *             https://developer.android.com/about/versions/marshmallow/android-6.0-changes.html#behavior-apache-http-client
  */
 @Retention(RetentionPolicy.CLASS)
-@Target({ ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER })
-@Deprecated
+@Target(ElementType.FIELD)
 public @interface HttpsClient {
 
 	/**

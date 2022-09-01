@@ -456,7 +456,7 @@ public class LitePalSupport {
     @SuppressWarnings("unchecked")
     public boolean saveOrUpdate(String... conditions) {
         synchronized (LitePalSupport.class) {
-            if (conditions == null || conditions.length == 0) {
+            if (conditions == null) {
                 return save();
             }
             List<LitePalSupport> list = (List<LitePalSupport>) Operator.where(conditions).find(getClass());
@@ -543,9 +543,8 @@ public class LitePalSupport {
      * Assigns value to baseObjId. This will override the original value. <b>Never call this method
      * unless you know exactly what you are doing.</b>
      * @param baseObjId
-     *          Assigns value to baseObjId.
      */
-    public void assignBaseObjId(long baseObjId) {
+    public void assignBaseObjId(int baseObjId) {
         this.baseObjId = baseObjId;
     }
 

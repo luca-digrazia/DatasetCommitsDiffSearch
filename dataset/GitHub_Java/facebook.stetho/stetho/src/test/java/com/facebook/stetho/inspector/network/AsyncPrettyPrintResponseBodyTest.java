@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.inspector.network;
@@ -17,9 +19,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Matchers.any;
 
-import com.facebook.stetho.inspector.network.AsyncPrettyPrinter;
-import com.facebook.stetho.inspector.network.AsyncPrettyPrinterExecutorHolder;
-import dalvik.annotation.TestTargetClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -73,7 +72,6 @@ public class AsyncPrettyPrintResponseBodyTest {
     mResponseBodyFileManager = mock(ResponseBodyFileManager.class);
     mAsyncPrettyPrinterRegistry = new AsyncPrettyPrinterRegistry();
     mAsyncPrettyPrinterRegistry.register(TEST_HEADER_NAME, mPrettyPrinterTestFactory);
-    AsyncPrettyPrinterExecutorHolder.ensureInitialized();
   }
 
   @Test

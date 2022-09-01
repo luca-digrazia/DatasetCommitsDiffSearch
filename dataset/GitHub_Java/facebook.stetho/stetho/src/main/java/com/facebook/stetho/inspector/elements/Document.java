@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.inspector.elements;
@@ -11,7 +13,6 @@ import android.os.SystemClock;
 import com.facebook.stetho.common.Accumulator;
 import com.facebook.stetho.common.ArrayListAccumulator;
 import com.facebook.stetho.common.LogUtil;
-import com.facebook.stetho.common.Util;
 import com.facebook.stetho.inspector.helper.ObjectIdMapper;
 import com.facebook.stetho.inspector.helper.ThreadBoundProxy;
 
@@ -27,7 +28,7 @@ import java.util.Queue;
 import java.util.regex.Pattern;
 
 public final class Document extends ThreadBoundProxy {
-  private final DocumentProviderFactory mFactory;
+  private final DocumentProvider.Factory mFactory;
   private final ObjectIdMapper mObjectIdMapper;
   private final Queue<Object> mCachedUpdateQueue;
 
@@ -41,11 +42,11 @@ public final class Document extends ThreadBoundProxy {
   @GuardedBy("this")
   private int mReferenceCounter;
 
-  public Document(DocumentProviderFactory factory) {
+  public Document(DocumentProvider.Factory factory) {
     super(factory);
 
     mFactory = factory;
-    mObjectIdMapper = new DocumentObjectIdMapper();
+    mObjectIdMapper = new DOMObjectIdMapper();
     mReferenceCounter = 0;
     mUpdateListeners = new UpdateListenerCollection();
     mCachedUpdateQueue = new ArrayDeque<>();
@@ -72,7 +73,7 @@ public final class Document extends ThreadBoundProxy {
       @Override
       public void run() {
         mShadowDocument = new ShadowDocument(mDocumentProvider.getRootElement());
-        createShadowDocumentUpdate().commit();
+        createShadowDOMUpdate().commit();
         mDocumentProvider.setListener(new ProviderListener());
       }
     });
@@ -137,30 +138,6 @@ public final class Document extends ThreadBoundProxy {
   public void setAttributesAsText(Object element, String text) {
     verifyThreadAccess();
     mDocumentProvider.setAttributesAsText(element, text);
-  }
-
-  public void getElementStyleRuleNames(Object element, StyleRuleNameAccumulator accumulator) {
-    NodeDescriptor nodeDescriptor = getNodeDescriptor(element);
-
-    nodeDescriptor.getStyleRuleNames(element, accumulator);
-  }
-
-  public void getElementStyles(Object element, String ruleName, StyleAccumulator accumulator) {
-    NodeDescriptor nodeDescriptor = getNodeDescriptor(element);
-
-    nodeDescriptor.getStyles(element, ruleName, accumulator);
-  }
-
-  public void setElementStyle(Object element, String ruleName, String name, String value) {
-    NodeDescriptor nodeDescriptor = getNodeDescriptor(element);
-
-    nodeDescriptor.setStyle(element, ruleName, name, value);
-  }
-
-  public void getElementComputedStyles(Object element, ComputedStyleAccumulator styleAccumulator) {
-    NodeDescriptor nodeDescriptor = getNodeDescriptor(element);
-
-    nodeDescriptor.getComputedStyles(element, styleAccumulator);
   }
 
   public DocumentView getDocumentView() {
@@ -286,7 +263,7 @@ public final class Document extends ThreadBoundProxy {
     }
   }
 
-  private ShadowDocument.Update createShadowDocumentUpdate() {
+  private ShadowDocument.Update createShadowDOMUpdate() {
     verifyThreadAccess();
 
     if (mDocumentProvider.getRootElement() != mShadowDocument.getRootElement()) {
@@ -303,28 +280,10 @@ public final class Document extends ThreadBoundProxy {
       NodeDescriptor descriptor = mDocumentProvider.getNodeDescriptor(element);
       mObjectIdMapper.putObject(element);
       descriptor.getChildren(element, childrenAccumulator);
-
-      for (int i = 0, size = childrenAccumulator.size(); i < size; ++i) {
-        Object child = childrenAccumulator.get(i);
-        if (child != null) {
-          mCachedUpdateQueue.add(child);
-        } else {
-          // This could be indicative of a bug in Stetho code, but could also be caused by a
-          // custom element of some kind, e.g. ViewGroup. Let's not allow it to kill the hosting
-          // app.
-          LogUtil.e(
-              "%s.getChildren() emitted a null child at position %s for element %s",
-              descriptor.getClass().getName(),
-              Integer.toString(i),
-              element);
-
-          childrenAccumulator.remove(i);
-          --i;
-          --size;
-        }
-      }
-
       updateBuilder.setElementChildren(element, childrenAccumulator);
+      for (int i = 0, N = childrenAccumulator.size(); i < N; ++i) {
+        mCachedUpdateQueue.add(childrenAccumulator.get(i));
+      }
       childrenAccumulator.clear();
     }
 
@@ -336,130 +295,84 @@ public final class Document extends ThreadBoundProxy {
   private void updateTree() {
     long startTimeMs = SystemClock.elapsedRealtime();
 
-    ShadowDocument.Update docUpdate = createShadowDocumentUpdate();
-    boolean isEmpty = docUpdate.isEmpty();
+    ShadowDocument.Update domUpdate = createShadowDOMUpdate();
+    boolean isEmpty = domUpdate.isEmpty();
     if (isEmpty) {
-      docUpdate.abandon();
+      domUpdate.abandon();
     } else {
-      applyDocumentUpdate(docUpdate);
+      applyDOMUpdate(domUpdate);
     }
 
     long deltaMs = SystemClock.elapsedRealtime() - startTimeMs;
     LogUtil.d(
-        "Document.updateTree() completed in %s ms%s",
+        "DOM.updateTree() completed in %s ms%s",
         Long.toString(deltaMs),
         isEmpty ? " (no changes)" : "");
   }
-
-  private void applyDocumentUpdate(final ShadowDocument.Update docUpdate) {
+  
+  private void applyDOMUpdate(final ShadowDocument.Update domUpdate) {
     // TODO: it'd be nice if we could delegate our calls into mPeerManager.sendNotificationToPeers()
     //       to a background thread so as to offload the UI from JSON serialization stuff
 
-    // Applying the ShadowDocument.Update is done in five stages:
-
-    // Stage 1: any elements that have been disconnected from the tree, and any elements in those
-    // sub-trees which have not been reconnected to the tree, should be garbage collected. For now
-    // we gather a list of garbage element IDs which we use in stages 2 to test a changed element
-    // to see if it's also garbage. Then during stage 3 we use this list to unhook all of the
-    // garbage elements.
-
-    // This is used to collect the garbage element IDs in stage 1. It is sorted before stage 2 so
-    // that it can use a binary search as a quick "contains()" method.
-    // Note that this could be accomplished in a simpler way by employing a HashSet<Object> and
-    // storing the element Objects. However, HashSet wraps HashMap and we would have a lot more
-    // allocations (Map.Entry, iterator during stage 3) and thus GC pressure.
-    // Using SparseArray wouldn't be good because it ensures sorted ordering as you go, but we don't
-    // need that during stage 1. Using ArrayList with int boxing is fine because the Integers are
-    // already boxed inside of mObjectIdMapper and we make sure to reuse that allocation.
-    final ArrayList<Integer> garbageElementIds = new ArrayList<>();
-
-    docUpdate.getGarbageElements(new Accumulator<Object>() {
+    // First, any elements that have been disconnected from the tree, and any elements in those
+    // sub-trees which have not been reconnected to the tree, should be garbage collected.
+    // We do this first so that we can tag nodes as garbage by removing them from mObjectIdMapper
+    // (which also unhooks them). We rely on this marking later.
+    domUpdate.getGarbageElements(new Accumulator<Object>() {
       @Override
       public void store(Object element) {
-        Integer nodeId = Util.throwIfNull(mObjectIdMapper.getIdForObject(element));
-        ElementInfo newElementInfo = docUpdate.getElementInfo(element);
+        if (!mObjectIdMapper.containsObject(element)) {
+          throw new IllegalStateException();
+        }
 
-        // Only raise onChildNodeRemoved for the root of a disconnected tree. The remainder of the
-        // sub-tree is included automatically, so we don't need to send events for those.
+        ElementInfo newElementInfo = domUpdate.getElementInfo(element);
+
+        // Only send over DOM.childNodeRemoved for the root of a disconnected tree. The remainder
+        // of the sub-tree is included automatically, so we don't need to send events for those.
         if (newElementInfo.parentElement == null) {
           ElementInfo oldElementInfo = mShadowDocument.getElementInfo(element);
           int parentNodeId = mObjectIdMapper.getIdForObject(oldElementInfo.parentElement);
+          int nodeId = mObjectIdMapper.getIdForObject(element);
           mUpdateListeners.onChildNodeRemoved(parentNodeId, nodeId);
         }
 
-        garbageElementIds.add(nodeId);
+        // All garbage elements should be unhooked.
+        mObjectIdMapper.removeObject(element);
       }
     });
 
-    Collections.sort(garbageElementIds);
-
-    // Stage 2: remove all elements that have been reparented. Otherwise we get into trouble if we
-    // transmit an event to insert under the new parent before we've transmitted an event to remove
-    // it from the old parent. The removal event is ignored because the parent doesn't match the
-    // listener's expectations, so we get ghost elements that are stuck and can't be exorcised.
-    docUpdate.getChangedElements(new Accumulator<Object>() {
-      @Override
-      public void store(Object element) {
-        Integer nodeId = Util.throwIfNull(mObjectIdMapper.getIdForObject(element));
-
-        // Skip garbage elements
-        if (Collections.binarySearch(garbageElementIds, nodeId) >= 0) {
-          return;
-        }
-
-        // Skip new elements
-        final ElementInfo oldElementInfo = mShadowDocument.getElementInfo(element);
-        if (oldElementInfo == null) {
-          return;
-        }
-
-        final ElementInfo newElementInfo = docUpdate.getElementInfo(element);
-        if (newElementInfo.parentElement != oldElementInfo.parentElement) {
-          int parentNodeId = mObjectIdMapper.getIdForObject(oldElementInfo.parentElement);
-          mUpdateListeners.onChildNodeRemoved(parentNodeId, nodeId);
-        }
-      }
-    });
-
-    // Stage 3: unhook garbage elements
-    for (int i = 0, N = garbageElementIds.size(); i < N; ++i) {
-      mObjectIdMapper.removeObjectById(garbageElementIds.get(i));
-    }
-
-    // Stage 4: transmit all other changes to our listener. This includes inserting reparented
-    // elements that we removed in the 2nd stage.
-    docUpdate.getChangedElements(new Accumulator<Object>() {
-      private final HashSet<Object> listenerInsertedElements = new HashSet<>();
+    // Transmit other DOM changes over to Chrome
+    domUpdate.getChangedElements(new Accumulator<Object>() {
+      private final HashSet<Object> domInsertedElements = new HashSet<>();
 
       private Accumulator<Object> insertedElements = new Accumulator<Object>() {
         @Override
         public void store(Object element) {
-          if (docUpdate.isElementChanged(element)) {
+          if (domUpdate.isElementChanged(element)) {
             // We only need to track changed elements because unchanged elements will never be
             // encountered by the code below, in store(), which uses this Set to skip elements that
             // don't need to be processed.
-            listenerInsertedElements.add(element);
+            domInsertedElements.add(element);
           }
         }
       };
 
       @Override
       public void store(Object element) {
+        // If this returns false then it means the element was garbage, and has already been removed
         if (!mObjectIdMapper.containsObject(element)) {
-          // The element was garbage and has already been removed. At this stage that's okay and we
-          // just skip it and continue forward with the algorithm.
           return;
         }
 
-        if (listenerInsertedElements.contains(element)) {
-          // This element was already transmitted in its entirety by an onChildNodeInserted event.
+        if (domInsertedElements.contains(element)) {
+          // This element was already transmitted in its entirety by a DOM.childNodeInserted event.
           // Trying to send any further updates about it is both unnecessary and incorrect (we'd
           // end up with duplicated elements and really bad performance).
           return;
         }
 
+        final ElementInfo newElementInfo = domUpdate.getElementInfo(element);
         final ElementInfo oldElementInfo = mShadowDocument.getElementInfo(element);
-        final ElementInfo newElementInfo = docUpdate.getElementInfo(element);
 
         final List<Object> oldChildren = (oldElementInfo != null)
             ? oldElementInfo.children
@@ -467,87 +380,78 @@ public final class Document extends ThreadBoundProxy {
 
         final List<Object> newChildren = newElementInfo.children;
 
-        // This list is representative of our listener's view of the Document (ultimately, this
-        // means Chrome DevTools). We need to sync it up with newChildren.
-        ChildEventingList listenerChildren = acquireChildEventingList(element, docUpdate);
+        // This list is representative of Chrome's view of the DOM.
+        // We need to sync up Chrome with newChildren.
+        ChildEventingList domChildren = acquireChildEventingList(element, domUpdate);
         for (int i = 0, N = oldChildren.size(); i < N; ++i) {
           final Object childElement = oldChildren.get(i);
           if (mObjectIdMapper.containsObject(childElement)) {
-            final ElementInfo newChildElementInfo = docUpdate.getElementInfo(childElement);
-            if (newChildElementInfo != null &&
-                newChildElementInfo.parentElement != element) {
-              // This element was reparented, so we already told our listener to remove it.
-            } else {
-              listenerChildren.add(childElement);
-            }
+            domChildren.add(childElement);
           }
         }
-
-        updateListenerChildren(listenerChildren, newChildren, insertedElements);
-        releaseChildEventingList(listenerChildren);
+        updateDOMChildren(domChildren, newChildren, insertedElements);
+        releaseChildEventingList(domChildren);
       }
     });
 
-    // Stage 5: Finally, commit the update to the ShadowDocument.
-    docUpdate.commit();
+    domUpdate.commit();
   }
 
-  private static void updateListenerChildren(
-      ChildEventingList listenerChildren,
+  private static void updateDOMChildren(
+      ChildEventingList domChildren,
       List<Object> newChildren,
       Accumulator<Object> insertedElements) {
     int index = 0;
-    while (index <= listenerChildren.size()) {
+    while (index <= domChildren.size()) {
       // Insert new items that were added to the end of the list
-      if (index == listenerChildren.size()) {
+      if (index == domChildren.size()) {
         if (index == newChildren.size()) {
           break;
         }
 
         final Object newElement = newChildren.get(index);
-        listenerChildren.addWithEvent(index, newElement, insertedElements);
+        domChildren.addWithEvent(index, newElement, insertedElements);
         ++index;
         continue;
       }
 
       // Remove old items that were removed from the end of the list
       if (index == newChildren.size()) {
-        listenerChildren.removeWithEvent(index);
+        domChildren.removeWithEvent(index);
         continue;
       }
 
-      final Object listenerElement = listenerChildren.get(index);
+      final Object domElement = domChildren.get(index);
       final Object newElement = newChildren.get(index);
 
       // This slot has exactly what we need to have here.
-      if (listenerElement == newElement) {
+      if (domElement == newElement) {
         ++index;
         continue;
       }
 
-      int newElementListenerIndex = listenerChildren.indexOf(newElement);
-      if (newElementListenerIndex == -1) {
-        listenerChildren.addWithEvent(index, newElement, insertedElements);
+      int newElementDomIndex = domChildren.indexOf(newElement);
+      if (newElementDomIndex == -1) {
+        domChildren.addWithEvent(index, newElement, insertedElements);
         ++index;
         continue;
       }
 
       // TODO: use longest common substring to decide whether to
-      //       1) remove(newElementListenerIndex)-then-add(index), or
+      //       1) remove(newElementDomIndex)-then-add(index), or
       //       2) remove(index) and let a subsequent loop iteration do add() (that is, when index
-      //          catches up the current value of newElementListenerIndex)
+      //          catches up the current value of newElementDomIndex)
       //       Neither one of these is the best strategy -- it depends on context.
 
-      listenerChildren.removeWithEvent(newElementListenerIndex);
-      listenerChildren.addWithEvent(index, newElement, insertedElements);
+      domChildren.removeWithEvent(newElementDomIndex);
+      domChildren.addWithEvent(index, newElement, insertedElements);
 
       ++index;
     }
   }
 
   /**
-   * A private implementation of {@link List} that transmits our changes to our listener (and,
-   * ultimately, to the DevTools client).
+   * A private implementation of {@link List} that transmits DOM changes to Chrome.
    */
   private final class ChildEventingList extends ArrayList<Object> {
     private Object mParentElement = null;
@@ -694,7 +598,7 @@ public final class Document extends ThreadBoundProxy {
         Accumulator<Object> insertedItems);
   }
 
-  private final class DocumentObjectIdMapper extends ObjectIdMapper {
+  private final class DOMObjectIdMapper extends ObjectIdMapper {
     @Override
     protected void onMapped(Object object, int id) {
       verifyThreadAccess();
@@ -712,7 +616,7 @@ public final class Document extends ThreadBoundProxy {
     }
   }
 
-  private final class ProviderListener implements DocumentProviderListener {
+  private final class ProviderListener implements DocumentProvider.Listener {
     @Override
     public void onPossiblyChanged() {
       updateTree();

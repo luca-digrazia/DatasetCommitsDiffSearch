@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -47,7 +46,7 @@ public class HierarchyViewerSupportHandler extends BaseAnnotationHandler<EActivi
 	public void process(Element element, EActivityHolder holder) throws Exception {
 		JInvocation viewServerInvocation = getClasses().VIEW_SERVER.staticInvoke("get").arg(_this());
 
-		holder.getOnViewChangedBodyInjectionBlock().invoke(viewServerInvocation, "addWindow").arg(_this());
+		holder.getOnViewChangedBody().invoke(viewServerInvocation, "addWindow").arg(_this());
 		holder.getOnDestroyAfterSuperBlock().invoke(viewServerInvocation, "removeWindow").arg(_this());
 		holder.getOnResumeAfterSuperBlock().invoke(viewServerInvocation, "setFocusedWindow").arg(_this());
 	}

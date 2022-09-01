@@ -1,33 +1,30 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.elements.android;
 
+import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.Application;
-import android.view.View;
+import android.os.Build;
+import android.os.Bundle;
 
-import com.facebook.stetho.common.Accumulator;
+import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.inspector.elements.AbstractChainedDescriptor;
+import com.facebook.stetho.common.android.ApplicationUtil;
+import com.facebook.stetho.inspector.elements.ChainedDescriptor;
 import com.facebook.stetho.inspector.elements.NodeType;
-import com.facebook.stetho.inspector.elements.android.window.WindowRootViewCompat;
 
-import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 
-final class ApplicationDescriptor extends AbstractChainedDescriptor<Application> {
+final class ApplicationDescriptor extends ChainedDescriptor<Application> {
+  private static final String TAG = "ApplicationDescriptor";
+
   private final Map<Application, ElementContext> mElementToContextMap =
       Collections.synchronizedMap(new IdentityHashMap<Application, ElementContext>());
-
-  private final ActivityTracker mActivityTracker = ActivityTracker.get();
 
   private ElementContext getContext(Application element) {
     return mElementToContextMap.get(element);
@@ -35,7 +32,7 @@ final class ApplicationDescriptor extends AbstractChainedDescriptor<Application>
 
   @Override
   protected void onHook(Application element) {
-    ElementContext context = new ElementContext();
+    ElementContext context = newElementContext();
     context.hook(element);
     mElementToContextMap.put(element, context);
   }
@@ -48,76 +45,122 @@ final class ApplicationDescriptor extends AbstractChainedDescriptor<Application>
 
   @Override
   protected NodeType onGetNodeType(Application element) {
-    return NodeType.ELEMENT_NODE;
+    return NodeType.DOCUMENT_NODE;
   }
 
   @Override
-  protected void onGetChildren(Application element, Accumulator<Object> children) {
+  protected int onGetChildCount(Application element) {
     ElementContext context = getContext(element);
-    List<WeakReference<Activity>> activities = context.getActivitiesList();
-    // We report these in reverse order so that the newer ones show up on top
-    for (int i = activities.size() - 1; i >= 0; --i) {
-      Activity activity = activities.get(i).get();
-      if (activity != null) {
-        children.store(activity);
-      }
-    }
-    storeWindowIfNeeded(element, children, activities);
+    return context.getActivitiesList().size();
   }
 
-  private void storeWindowIfNeeded(Application application, Accumulator<Object> children, List<WeakReference<Activity>> activities) {
-    List<View> rootViews = WindowRootViewCompat.get(application).getRootViews();
-    for (View view : rootViews) {
-      if (!isDecorViewOfActivity(view, activities)) {
-        children.store(view);
-      }
+  @Override
+  protected Object onGetChildAt(Application element, int index) {
+    ElementContext context = getContext(element);
+    return context.getActivitiesList().get(index);
+  }
+
+  private ElementContext newElementContext() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+      return new ElementContextICS();
+    } else {
+      LogUtil.w(TAG, "Running on pre-ICS: must manually reload inspector when Activity changes");
+      return new ElementContextPreICS();
     }
   }
 
-  private static boolean isDecorViewOfActivity(View view, List<WeakReference<Activity>> references) {
-    Util.throwIfNull(references);
-    for (WeakReference<Activity> reference : references) {
-      Activity activity = reference.get();
-      if (activity == null) {
-        continue;
-      }
-      if (activity.getWindow().getDecorView() == view) {
-        return true;
-      }
-    }
-    return false;
+  private abstract class ElementContext {
+    public abstract void hook(Application element);
+
+    public abstract void unhook();
+
+    public abstract List<Activity> getActivitiesList();
   }
 
-  private class ElementContext {
-    private Application mElement;
-
-    public ElementContext() {
-    }
-
+  private final class ElementContextPreICS extends ElementContext {
+    @Override
     public void hook(Application element) {
-      mElement = element;
-      mActivityTracker.registerListener(mListener);
     }
 
+    @Override
     public void unhook() {
-      mActivityTracker.unregisterListener(mListener);
-      mElement = null;
     }
 
-    public List<WeakReference<Activity>> getActivitiesList() {
-      return mActivityTracker.getActivitiesView();
+    @Override
+    public List<Activity> getActivitiesList() {
+      return ApplicationUtil.getAllActivities();
+    }
+  }
+
+  @TargetApi(Build.VERSION_CODES.ICE_CREAM_SANDWICH)
+  private final class ElementContextICS extends ElementContext {
+    private Application mElement;
+    private Application.ActivityLifecycleCallbacks mCallbacks;
+    private List<Activity> mActivities;
+
+    @Override
+    public void hook(Application element) {
+      mElement = Util.throwIfNull(element);
+      mActivities = new ArrayList<Activity>();
+
+      // TODO: tree diffing will remove the need to even worry about installing this callback,
+      //       which will then allow ~realtime updates for pre-ICS. for now, pre-ICS will just
+      //       have to close and re-open the inspector whenever the activity changes.
+      //       (this does assume that the hack below for getAllActivitiesHack() works on pre-ICS)
+      mCallbacks = new Application.ActivityLifecycleCallbacks() {
+        @Override
+        public void onActivityCreated(Activity activity, Bundle savedInstanceState) {
+          mActivities.add(0, activity);
+          getListener().onChildInserted(mElement, null, activity);
+        }
+
+        @Override
+        public void onActivityStarted(Activity activity) {
+        }
+
+        @Override
+        public void onActivityResumed(Activity activity) {
+        }
+
+        @Override
+        public void onActivityPaused(Activity activity) {
+        }
+
+        @Override
+        public void onActivityStopped(Activity activity) {
+        }
+
+        @Override
+        public void onActivitySaveInstanceState(Activity activity, Bundle outState) {
+        }
+
+        @Override
+        public void onActivityDestroyed(Activity activity) {
+          mActivities.remove(activity);
+          getListener().onChildRemoved(mElement, activity);
+        }
+      };
+
+      mElement.registerActivityLifecycleCallbacks(mCallbacks);
+
+      mActivities = ApplicationUtil.getAllActivities();
     }
 
-    private final ActivityTracker.Listener mListener = new ActivityTracker.Listener() {
-      @Override
-      public void onActivityAdded(Activity activity) {
-        // TODO: once we have the ability to report fine-grained updates, do that here
-      }
+    @Override
+    public void unhook() {
+      if (mElement != null) {
+        if (mCallbacks != null) {
+          mElement.unregisterActivityLifecycleCallbacks(mCallbacks);
+          mCallbacks = null;
+        }
 
-      @Override
-      public void onActivityRemoved(Activity activity) {
-        // TODO: once we have the ability to report fine-grained updates, do that here
+        mElement = null;
       }
-    };
+    }
+
+    @Override
+    public List<Activity> getActivitiesList() {
+      return mActivities;
+    }
   }
 }

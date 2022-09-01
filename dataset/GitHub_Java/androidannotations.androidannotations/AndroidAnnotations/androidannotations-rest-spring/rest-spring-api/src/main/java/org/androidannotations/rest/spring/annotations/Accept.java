@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -27,8 +26,8 @@ import java.lang.annotation.Target;
  * response format expected, and so the converter to use.
  * </p>
  * <p>
- * The annotation {@link #value()} is mandatory and define the
- * <a href="https://en.wikipedia.org/wiki/Internet_media_type">media type</a> to
+ * The annotation {@link #value()} is mandatory and define the <a
+ * href="https://en.wikipedia.org/wiki/Internet_media_type">media type</a> to
  * accept. We provide a {@link org.androidannotations.rest.spring.api.MediaType
  * MediaType} class to help you.
  * </p>
@@ -46,7 +45,7 @@ import java.lang.annotation.Target;
  * 
  * 	&#064;Post(&quot;/entity&quot;)
  * 	&#064;Accept(<b>MediaType.APPLICATION_XML</b>)
- * 	Event addEvent(&#064;Body Event event);
+ * 	Event addEvent(Event event);
  * }
  * </pre>
  * 

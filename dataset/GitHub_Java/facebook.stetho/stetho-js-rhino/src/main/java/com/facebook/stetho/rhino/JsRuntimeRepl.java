@@ -1,20 +1,19 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.rhino;
 
-
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import com.facebook.stetho.inspector.console.RuntimeRepl;
-
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.ScriptableObject;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 class JsRuntimeRepl implements RuntimeRepl {
 
@@ -30,10 +29,6 @@ class JsRuntimeRepl implements RuntimeRepl {
       final Context jsContext = enterJsContext();
       try {
         result = jsContext.evaluateString(mJsScope, expression, "chrome", 1, null);
-
-        // Google chrome automatically saves the last expression to `$_`, we do the same
-        Object jsValue = Context.javaToJS(result, mJsScope);
-        ScriptableObject.putProperty(mJsScope, "$_", jsValue);
       } finally {
         Context.exit();
       }

@@ -51,11 +51,6 @@ public class ColumnModel {
      */
     private String defaultValue = "";
 
-    /**
-     * Has index for this column or not.
-     */
-    private boolean hasIndex = false;
-
     public String getColumnName() {
         return columnName;
     }
@@ -90,14 +85,6 @@ public class ColumnModel {
 
     public String getDefaultValue() {
         return defaultValue;
-    }
-
-    public boolean hasIndex() {
-        return hasIndex;
-    }
-
-    public void setHasIndex(boolean hasIndex) {
-        this.hasIndex = hasIndex;
     }
 
     public void setDefaultValue(String defaultValue) {

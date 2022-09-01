@@ -92,30 +92,9 @@ public class Operator {
      * @return A writable SQLiteDatabase instance
      */
     public static SQLiteDatabase getDatabase() {
-        return Connector.getDatabase();
-    }
-
-    /**
-     * Begins a transaction in EXCLUSIVE mode.
-     */
-    public static void beginTransaction() {
-        getDatabase().beginTransaction();
-    }
-
-    /**
-     * End a transaction.
-     */
-    public static void endTransaction() {
-        getDatabase().endTransaction();
-    }
-
-    /**
-     * Marks the current transaction as successful. Do not do any more database work between calling this and calling endTransaction.
-     * Do as little non-database work as possible in that situation too.
-     * If any errors are encountered between this and endTransaction the transaction will still be committed.
-     */
-    public static void setTransactionSuccessful() {
-        getDatabase().setTransactionSuccessful();
+        synchronized (LitePalSupport.class) {
+            return Connector.getDatabase();
+        }
     }
 
     /**
@@ -1214,17 +1193,8 @@ public class Operator {
      */
     public static int deleteAll(Class<?> modelClass, String... conditions) {
         synchronized (LitePalSupport.class) {
-            int rowsAffected;
-            SQLiteDatabase db = Connector.getDatabase();
-            db.beginTransaction();
-            try {
-                DeleteHandler deleteHandler = new DeleteHandler(db);
-                rowsAffected = deleteHandler.onDeleteAll(modelClass, conditions);
-                db.setTransactionSuccessful();
-                return rowsAffected;
-            } finally {
-                db.endTransaction();
-            }
+            DeleteHandler deleteHandler = new DeleteHandler(Connector.getDatabase());
+            return deleteHandler.onDeleteAll(modelClass, conditions);
         }
     }
 
@@ -1504,9 +1474,8 @@ public class Operator {
      *
      * @param collection
      *            Holds all models to save.
-     * @return True if all records in collection are saved. False none record in collection is saved. There won't be partial saved condition.
      */
-    public static <T extends LitePalSupport> boolean saveAll(Collection<T> collection) {
+    public static <T extends LitePalSupport> void saveAll(Collection<T> collection) {
         synchronized (LitePalSupport.class) {
             SQLiteDatabase db = Connector.getDatabase();
             db.beginTransaction();
@@ -1514,10 +1483,8 @@ public class Operator {
                 SaveHandler saveHandler = new SaveHandler(db);
                 saveHandler.onSaveAll(collection);
                 db.setTransactionSuccessful();
-                return true;
             } catch (Exception e) {
-                e.printStackTrace();
-                return false;
+                throw new LitePalSupportException(e.getMessage(), e);
             } finally {
                 db.endTransaction();
             }

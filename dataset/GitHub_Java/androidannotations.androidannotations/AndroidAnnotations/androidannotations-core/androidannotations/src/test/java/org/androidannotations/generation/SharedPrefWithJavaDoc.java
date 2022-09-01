@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -24,13 +23,13 @@ import org.androidannotations.annotations.sharedpreferences.SharedPref.Scope;
 
 @SharedPref(Scope.UNIQUE)
 public interface SharedPrefWithJavaDoc {
-
+	
 	@DefaultString("John")
 	String name();
 
 	/**
 	 * The Age!
-	 * 
+	 * @return the age as int
 	 * @deprecated use {@link #ageLong()}
 	 */
 	@Deprecated
@@ -39,9 +38,4 @@ public interface SharedPrefWithJavaDoc {
 
 	@DefaultLong(42L)
 	long ageLong();
-
-	String title();
-
-	@DefaultString("something")
-	String something();
 }

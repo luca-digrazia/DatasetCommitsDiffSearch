@@ -21,10 +21,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.StarlarkDefinedConfigTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -32,11 +32,12 @@ import com.google.devtools.build.lib.packages.AttributeTransitionData;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
-import com.google.devtools.build.lib.starlarkbuildapi.SplitTransitionProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SplitTransitionProviderApi;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Starlark;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
-import net.starlark.java.eval.Printer;
 
 /**
  * This class implements {@link TransitionFactory} to provide a starlark-defined transition that
@@ -67,16 +68,8 @@ public class StarlarkAttributeTransitionProvider
   public SplitTransition create(AttributeTransitionData data) {
     AttributeMap attributeMap = data.attributes();
     Preconditions.checkArgument(attributeMap instanceof ConfiguredAttributeMapper);
-    // TODO(bazel-team): consider caching transition instances to save CPU time, similar to what's
-    // done in StarlarkRuleTransitionProvider. This could benefit builds that apply transitions over
-    // many build graph edges.
     return new FunctionSplitTransition(
         starlarkDefinedConfigTransition, (ConfiguredAttributeMapper) attributeMap);
-  }
-
-  @Override
-  public TransitionType transitionType() {
-    return TransitionType.ATTRIBUTE;
   }
 
   @Override
@@ -89,9 +82,8 @@ public class StarlarkAttributeTransitionProvider
     printer.append("<transition object>");
   }
 
-  final class FunctionSplitTransition extends StarlarkTransition implements SplitTransition {
+  class FunctionSplitTransition extends StarlarkTransition implements SplitTransition {
     private final StructImpl attrObject;
-    private final int hashCode;
 
     FunctionSplitTransition(
         StarlarkDefinedConfigTransition starlarkDefinedConfigTransition,
@@ -101,10 +93,9 @@ public class StarlarkAttributeTransitionProvider
       LinkedHashMap<String, Object> attributes = new LinkedHashMap<>();
       for (String attribute : attributeMap.getAttributeNames()) {
         Object val = attributeMap.get(attribute, attributeMap.getAttributeType(attribute));
-        attributes.put(Attribute.getStarlarkName(attribute), Attribute.valueToStarlark(val));
+        attributes.put(Attribute.getStarlarkName(attribute), Starlark.fromJava(val, null));
       }
       attrObject = StructProvider.STRUCT.create(attributes, ERROR_MESSAGE_FOR_NO_ATTR);
-      this.hashCode = Objects.hash(attrObject, super.hashCode());
     }
 
     /**
@@ -113,34 +104,23 @@ public class StarlarkAttributeTransitionProvider
      */
     @Override
     public final Map<String, BuildOptions> split(
-        BuildOptionsView buildOptionsView, EventHandler eventHandler) throws InterruptedException {
-      // Starlark transitions already have logic to enforce they only access declared inputs and
-      // outputs. Rather than complicate BuildOptionsView with more access points to BuildOptions,
-      // we just use the original BuildOptions and trust the transition's enforcement logic.
-      BuildOptions buildOptions = buildOptionsView.underlying();
-      Map<String, BuildOptions> res =
-          applyAndValidate(buildOptions, starlarkDefinedConfigTransition, attrObject, eventHandler);
-      if (res == null) {
+        BuildOptions buildOptions, EventHandler eventHandler) {
+      try {
+        return applyAndValidate(
+            buildOptions, starlarkDefinedConfigTransition, attrObject, eventHandler);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        eventHandler.handle(
+            Event.error(
+                starlarkDefinedConfigTransition.getLocationForErrorReporting(),
+                "Starlark transition interrupted during attribute transition implementation"));
+        return ImmutableMap.of("error", buildOptions.clone());
+      } catch (EvalException e) {
+        eventHandler.handle(
+            Event.error(
+                starlarkDefinedConfigTransition.getLocationForErrorReporting(), e.getMessage()));
         return ImmutableMap.of("error", buildOptions.clone());
       }
-      return res;
-    }
-
-    @Override
-    public boolean equals(Object object) {
-      if (object == this) {
-        return true;
-      }
-      if (!(object instanceof FunctionSplitTransition)) {
-        return false;
-      }
-      FunctionSplitTransition other = (FunctionSplitTransition) object;
-      return Objects.equals(attrObject, other.attrObject) && super.equals(other);
-    }
-
-    @Override
-    public int hashCode() {
-      return hashCode;
     }
   }
 }

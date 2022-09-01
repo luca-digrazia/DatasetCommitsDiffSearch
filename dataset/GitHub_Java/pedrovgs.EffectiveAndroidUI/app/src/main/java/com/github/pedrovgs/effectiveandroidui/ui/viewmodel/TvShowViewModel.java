@@ -1,18 +1,3 @@
-/*
- * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.github.pedrovgs.effectiveandroidui.ui.viewmodel;
 
 import com.github.pedrovgs.effectiveandroidui.domain.GetTvShowById;
@@ -20,8 +5,6 @@ import com.github.pedrovgs.effectiveandroidui.domain.tvshow.Chapter;
 import com.github.pedrovgs.effectiveandroidui.domain.tvshow.ChapterCollection;
 import com.github.pedrovgs.effectiveandroidui.domain.tvshow.TvShow;
 import com.github.pedrovgs.effectiveandroidui.ui.fragment.TvShowFragment;
-import com.github.pedrovgs.effectiveandroidui.ui.viewmodel.action.ActionCommand;
-import com.github.pedrovgs.effectiveandroidui.ui.viewmodel.action.ShowTvShowOnBrowserActionCommand;
 import java.util.LinkedList;
 import java.util.List;
 import javax.inject.Inject;
@@ -37,84 +20,38 @@ import javax.inject.Inject;
 public class TvShowViewModel {
 
   private final GetTvShowById getTvShowById;
-  private final ShowTvShowOnBrowserActionCommand showTvShowOnBrowserActionCommand;
 
-  private Listener listener;
-  private boolean isReady;
+  private TvShowFragment listener;
 
   @Inject
-  public TvShowViewModel(GetTvShowById getTvShowById,
-      ShowTvShowOnBrowserActionCommand showTvShowOnBrowserActionCommand) {
+  public TvShowViewModel(GetTvShowById getTvShowById) {
     this.getTvShowById = getTvShowById;
-    this.showTvShowOnBrowserActionCommand = showTvShowOnBrowserActionCommand;
-  }
-
-  public void initialize() {
-    listener.onEmptyCaseVisibilityChanged(true);
   }
 
   public void loadTvShow(final String tvShowId) {
     listener.onLoadVisibilityChanged(true);
-    listener.onEmptyCaseVisibilityChanged(false);
     getTvShowById.execute(tvShowId, new GetTvShowById.Callback() {
       @Override public void onTvShowLoaded(TvShow tvShow) {
-        notifyTvShowLoaded(tvShow);
+        listener.onFanArtLoaded(tvShow.getFanArt());
+        listener.onTvShowTitleLoaded(tvShow.getTitle());
+        listener.onChaptersLoaded(getChaptersViewModel(tvShow.getChapters()));
+        listener.onVisibilityChanged(true);
+        listener.onLoadVisibilityChanged(false);
+        listener.onEmptyCaseVisibilityChanged(false);
       }
 
       @Override public void onTvShowNotFound() {
-        notifyTvShowNotFound();
+        listener.onLoadVisibilityChanged(false);
+        listener.onEmptyCaseVisibilityChanged(true);
+        listener.onTvShowMessageNotFound();
       }
 
       @Override public void onConnectionError() {
-        notifyConnectionError();
+        listener.onLoadVisibilityChanged(false);
+        listener.onEmptyCaseVisibilityChanged(true);
+        listener.onConnectionErrorMessageNotFound();
       }
     });
-  }
-
-  public ActionCommand getTvShowClickedCommand() {
-    return showTvShowOnBrowserActionCommand;
-  }
-
-  public void setListener(TvShowFragment listener) {
-    this.listener = listener;
-  }
-
-  public Listener getListener() {
-    return listener;
-  }
-
-  public void setReady(boolean isReady) {
-    this.isReady = isReady;
-  }
-
-  private void notifyConnectionError() {
-    if (isReady) {
-      listener.onLoadVisibilityChanged(false);
-      listener.onVisibilityChanged(false);
-      listener.onEmptyCaseVisibilityChanged(true);
-      listener.onConnectionErrorMessageNotFound();
-    }
-  }
-
-  private void notifyTvShowNotFound() {
-    if (isReady) {
-      listener.onLoadVisibilityChanged(false);
-      listener.onVisibilityChanged(false);
-      listener.onEmptyCaseVisibilityChanged(true);
-      listener.onTvShowMessageNotFound();
-    }
-  }
-
-  private void notifyTvShowLoaded(TvShow tvShow) {
-    showTvShowOnBrowserActionCommand.setTvShowUrl(tvShow.getPoster());
-    if (isReady) {
-      listener.onFanArtLoaded(tvShow.getFanArt());
-      listener.onTvShowTitleLoaded(tvShow.getTitle());
-      listener.onChaptersLoaded(getChaptersViewModel(tvShow.getChapters()));
-      listener.onVisibilityChanged(true);
-      listener.onLoadVisibilityChanged(false);
-      listener.onEmptyCaseVisibilityChanged(false);
-    }
   }
 
   private List<ChapterViewModel> getChaptersViewModel(ChapterCollection chapterCollection) {
@@ -125,11 +62,14 @@ public class TvShowViewModel {
     return chapterViewModels;
   }
 
-  /**
-   * Interface created to work as ViewModel listener.
-   * Every change in the view model will be
-   * notified to Listener implementation.
-   */
+  public void setListener(TvShowFragment listener) {
+    this.listener = listener;
+  }
+
+  public TvShowFragment getListener() {
+    return listener;
+  }
+
   public interface Listener {
 
     void onFanArtLoaded(final String fanArt);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.runtime.interop.access;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
@@ -55,10 +54,9 @@ public abstract class LLVMInteropInvokeNode extends LLVMNode {
     }
 
     @Specialization
-    @GenerateAOT.Exclude
     Object doClazz(LLVMPointer receiver, LLVMInteropType.Clazz type, String method, Object[] arguments,
                     @Cached LLVMInteropMethodInvokeNode invoke,
-                    @Cached LLVMSelfArgumentPackNode selfPackNode,
+                    @Cached(value = "create()", allowUncached = true) LLVMSelfArgumentPackNode selfPackNode,
                     @CachedLibrary(limit = "5") InteropLibrary interop)
                     throws ArityException, UnknownIdentifierException, UnsupportedTypeException, UnsupportedMessageException {
         Object[] selfArgs = selfPackNode.execute(receiver, arguments);
@@ -74,7 +72,6 @@ public abstract class LLVMInteropInvokeNode extends LLVMNode {
      * @param type
      */
     @Specialization(guards = "!isClass(type)")
-    @GenerateAOT.Exclude
     Object doStruct(LLVMPointer receiver, LLVMInteropType.Struct type, String member, Object[] arguments,
                     @CachedLibrary(limit = "5") InteropLibrary interop)
                     throws UnsupportedMessageException, UnknownIdentifierException, UnsupportedTypeException, ArityException {
@@ -95,6 +92,23 @@ public abstract class LLVMInteropInvokeNode extends LLVMNode {
     @Fallback
     Object doError(LLVMPointer receiver, LLVMInteropType type, String member, Object[] arguments) throws UnsupportedMessageException {
         throw UnsupportedMessageException.create();
+    }
+
+    @GenerateUncached
+    static class LLVMSelfArgumentPackNode extends LLVMNode {
+
+        Object[] execute(LLVMPointer receiver, Object[] arguments) {
+            Object[] newArgs = new Object[arguments.length + 1];
+            newArgs[0] = receiver;
+            for (int i = 0; i < arguments.length; i++) {
+                newArgs[i + 1] = arguments[i];
+            }
+            return newArgs;
+        }
+
+        public static LLVMSelfArgumentPackNode create() {
+            return new LLVMSelfArgumentPackNode();
+        }
     }
 
 }

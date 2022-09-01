@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.inspector.elements;
@@ -231,8 +233,6 @@ public final class ShadowDocument implements DocumentView {
 
       if (parentElement == null) {
         mRootElementChanges.add(element);
-      } else {
-        mRootElementChanges.remove(element);
       }
     }
 
@@ -282,7 +282,7 @@ public final class ShadowDocument implements DocumentView {
 
     public ElementInfo getElementInfo(Object element) {
       // Return ElementInfo for the new (albeit uncommitted and pre-garbage collected) view of the
-      // Document. If element is garbage then you'll still get its info (feature, not a bug :)).
+      // DOM. If element is garbage then you'll still get its info (feature, not a bug :)).
       ElementInfo elementInfo = mElementToInfoChangesMap.get(element);
       if (elementInfo != null) {
         return elementInfo;
@@ -353,96 +353,19 @@ public final class ShadowDocument implements DocumentView {
       mElementToInfoMap.putAll(mElementToInfoChangesMap);
 
       // Remove garbage elements: those that have a null parent (other than mRootElement), and
-      // their entire sub-trees, but excluding reparented elements.
+      // their entire sub-trees.
       for (Object element : mRootElementChangesSet) {
-        removeGarbageSubTree(mElementToInfoMap, element);
+        removeSubTree(mElementToInfoMap, element);
       }
 
       mIsUpdating = false;
-
-      // Not usually enabled because it's expensive. Very useful for debugging.
-      //validateTree(mElementToInfoMap);
     }
 
-    private void removeGarbageSubTree(
-        Map<Object, ElementInfo> elementToInfoMap,
-        Object element) {
+    private void removeSubTree(Map<Object, ElementInfo> elementToInfoMap, Object element) {
       final ElementInfo elementInfo = elementToInfoMap.get(element);
-
-      // If this element has a parent (it's not a root), and that parent is still in the tree after
-      // changes have been applied and after our caller (removeGarbageSubTree) removed another
-      // element that claims this element as its child, then that means this element should not be
-      // removed. It has been reparented, and recursion stops here.
-      if (elementInfo.parentElement != null &&
-          elementToInfoMap.containsKey(elementInfo.parentElement)) {
-        return;
-      }
-
       elementToInfoMap.remove(element);
-
       for (int i = 0, N = elementInfo.children.size(); i < N; ++i) {
-        removeGarbageSubTree(elementToInfoMap, elementInfo.children.get(i));
-      }
-    }
-
-    // This method is intended for use during debugging. Put a breakpoint on each throw statement in
-    // order to catch structural problems in the tree. This method should only be called at the very
-    // end of commit().
-    private void validateTree(Map<Object, ElementInfo> elementToInfoMap) {
-      // We need a tree, not a forest.
-      HashSet<Object> rootElements = new HashSet<>();
-
-      for (Map.Entry<Object, ElementInfo> entry : elementToInfoMap.entrySet()) {
-        final Object element = entry.getKey();
-        final ElementInfo elementInfo = entry.getValue();
-
-        if (element != elementInfo.element) {
-          // should not be possible
-          throw new IllegalStateException("element != elementInfo.element");
-        }
-
-        // Verify children
-        for (int i = 0, N = elementInfo.children.size(); i < N; ++i) {
-          final Object childElement = elementInfo.children.get(i);
-          final ElementInfo childElementInfo = elementToInfoMap.get(childElement);
-
-          if (childElementInfo == null) {
-            throw new IllegalStateException(String.format(
-                "elementInfo.get(elementInfo.children.get(%s)) == null",
-                i));
-          }
-
-          if (childElementInfo.parentElement != element) {
-            throw new IllegalStateException("childElementInfo.parentElement != element");
-          }
-        }
-
-        // Verify parent
-        if (elementInfo.parentElement == null) {
-          rootElements.add(element);
-        } else {
-          final ElementInfo parentElementInfo = elementToInfoMap.get(elementInfo.parentElement);
-          if (parentElementInfo == null) {
-            throw new IllegalStateException(
-                "elementToInfoMap.get(elementInfo.parentElementInfo) == NULL");
-          }
-
-          if (elementInfo.parentElement != parentElementInfo.element) {
-            // should not be possible
-            throw new IllegalStateException(
-                "elementInfo.parentElementInfo != parentElementInfo.parent");
-          }
-
-          if (!parentElementInfo.children.contains(element)) {
-            throw new IllegalStateException(
-                "parentElementInfo.children.contains(element) == FALSE");
-          }
-        }
-      }
-
-      if (rootElements.size() != 1) {
-        throw new IllegalStateException(
-            "elementToInfoMap is a forest, not a tree. rootElements.size() != 1");
+        removeSubTree(elementToInfoMap, elementInfo.children.get(i));
       }
     }
   }

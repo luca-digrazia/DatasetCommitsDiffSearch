@@ -16,25 +16,34 @@
 
 package org.litepal.litepalsample.activity;
 
+import org.litepal.litepalsample.R;
+import org.litepal.litepalsample.model.Album;
+import org.litepal.litepalsample.model.Singer;
+
+import android.app.Activity;
 import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 
-import org.litepal.litepalsample.R;
+import java.util.Date;
+import java.util.UUID;
 
-public class MainActivity extends AppCompatActivity implements OnClickListener {
+public class MainActivity extends Activity implements OnClickListener {
 
-    private static final String TAG = "MainActivity";
+	private Button mManageTableBtn;
 
-    @Override
+	private Button mCrudBtn;
+
+	private Button mAggregateBtn;
+
+	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main_layout);
-        Button mManageTableBtn = findViewById(R.id.manage_table_btn);
-        Button mCrudBtn = findViewById(R.id.crud_btn);
-        Button mAggregateBtn = findViewById(R.id.aggregate_btn);
+		mManageTableBtn = (Button) findViewById(R.id.manage_table_btn);
+		mCrudBtn = (Button) findViewById(R.id.crud_btn);
+		mAggregateBtn = (Button) findViewById(R.id.aggregate_btn);
 		mManageTableBtn.setOnClickListener(this);
 		mCrudBtn.setOnClickListener(this);
 		mAggregateBtn.setOnClickListener(this);
@@ -47,7 +56,22 @@ public class MainActivity extends AppCompatActivity implements OnClickListener {
 			ManageTablesActivity.actionStart(this);
 			break;
 		case R.id.crud_btn:
-			CRUDActivity.actionStart(this);
+            Album album = new Album();
+            album.setPublisher("华谊");
+//            album.setName("范特西");
+            album.setPrice(29);
+            album.setSerial(UUID.randomUUID().toString());
+            album.setRelease(new Date(System.currentTimeMillis()));
+            Singer singer = new Singer();
+            singer.setName("周杰伦");
+            singer.setAge(35);
+            singer.setMale(true);
+            singer.setIdentity(UUID.randomUUID().toString());
+//            singer.getAlbums().add(album);
+//            album.setSinger(singer);
+            album.saveThrows();
+            singer.saveThrows();
+//			CRUDActivity.actionStart(this);
 			break;
 		case R.id.aggregate_btn:
 			AggregateActivity.actionStart(this);

@@ -20,14 +20,14 @@ public class InstrumentedEhcacheTest {
     private Ehcache cache;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         final Cache c = new Cache(new CacheConfiguration("test", 100));
         MANAGER.addCache(c);
         this.cache = InstrumentedEhcache.instrument(registry, c);
     }
 
     @Test
-    public void measuresGetsAndPuts() {
+    public void measuresGetsAndPuts() throws Exception {
         cache.get("woo");
 
         cache.put(new Element("woo", "whee"));

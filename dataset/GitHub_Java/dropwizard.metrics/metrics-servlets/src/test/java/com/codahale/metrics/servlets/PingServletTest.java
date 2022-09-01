@@ -14,7 +14,7 @@ public class PingServletTest extends AbstractServletTest {
     }
 
     @Before
-    public void setUp() throws Exception  {
+    public void setUp() throws Exception {
         request.setMethod("GET");
         request.setURI("/ping");
         request.setVersion("HTTP/1.0");
@@ -23,25 +23,25 @@ public class PingServletTest extends AbstractServletTest {
     }
 
     @Test
-    public void returns200OK()  {
+    public void returns200OK() throws Exception {
         assertThat(response.getStatus())
                 .isEqualTo(200);
     }
 
     @Test
-    public void returnsPong()  {
+    public void returnsPong() throws Exception {
         assertThat(response.getContent())
                 .isEqualTo(String.format("pong%n"));
     }
 
     @Test
-    public void returnsTextPlain()  {
+    public void returnsTextPlain() throws Exception {
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("text/plain;charset=ISO-8859-1");
     }
 
     @Test
-    public void returnsUncacheable()  {
+    public void returnsUncacheable() throws Exception {
         assertThat(response.get(HttpHeader.CACHE_CONTROL))
                 .isEqualTo("must-revalidate,no-cache,no-store");
 

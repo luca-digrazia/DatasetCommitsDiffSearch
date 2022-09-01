@@ -1,24 +1,7 @@
-/*
- * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.github.pedrovgs.effectiveandroidui.ui.presenter;
 
 import com.github.pedrovgs.effectiveandroidui.domain.GetTvShows;
 import com.github.pedrovgs.effectiveandroidui.domain.tvshow.TvShow;
-import com.github.pedrovgs.effectiveandroidui.ui.activity.Navigator;
-import com.github.pedrovgs.effectiveandroidui.ui.renderer.tvshow.TvShowCollection;
 import java.util.Collection;
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -38,15 +21,12 @@ import javax.inject.Singleton;
 public class TvShowCatalogPresenter extends Presenter {
 
   private GetTvShows getTvShowsInteractor;
-  private Navigator navigator;
 
   private View view;
-  private TvShowCollection currentTvShowCollection;
 
   @Inject
-  public TvShowCatalogPresenter(GetTvShows getTvShowsInteractor, Navigator navigator) {
+  public TvShowCatalogPresenter(GetTvShows getTvShowsInteractor) {
     this.getTvShowsInteractor = getTvShowsInteractor;
-    this.navigator = navigator;
   }
 
   public void setView(View view) {
@@ -59,12 +39,12 @@ public class TvShowCatalogPresenter extends Presenter {
   @Override
   public void initialize() {
     checkViewAlreadySetted();
-    loadTvShows();
+    loadVideos();
   }
 
   @Override
   public void resume() {
-    //Empty
+    checkViewAlreadySetted();
   }
 
   @Override
@@ -72,26 +52,12 @@ public class TvShowCatalogPresenter extends Presenter {
     //Empty
   }
 
-  /**
-   * Used to force a TvShowCollection load in the presenter. This method is used by
-   * TvShowCatalogFragment when the fragment lifecycle is restored and there are already loaded tv
-   * shows.
-   */
-  public void loadCatalog(final TvShowCollection tvShowCollection) {
-    currentTvShowCollection = tvShowCollection;
-    showTvShows(tvShowCollection.getAsList());
-  }
-
   public void onTvShowThumbnailClicked(final TvShow tvShow) {
-      navigator.openTvShowDetails(tvShow);
+    view.showTvShow(tvShow);
   }
 
   public void onTvShowClicked(final TvShow tvShow) {
-    view.showTvShowTitleAsMessage(tvShow);
-  }
-
-  public TvShowCollection getCurrentTvShows() {
-    return currentTvShowCollection;
+    view.showTvShowInfo(tvShow);
   }
 
   /**
@@ -99,37 +65,22 @@ public class TvShowCatalogPresenter extends Presenter {
    * object setted previously. If the interactor returns an error the presenter will show an error
    * message and the empty case. In both cases, the progress bar visibility will be hidden.
    */
-  private void loadTvShows() {
-    if (view.isReady()) {
-      view.showLoading();
-    }
+  private void loadVideos() {
     getTvShowsInteractor.execute(new GetTvShows.Callback() {
       @Override public void onTvShowsLoaded(final Collection<TvShow> tvShows) {
-        currentTvShowCollection = new TvShowCollection(tvShows);
-        showTvShows(tvShows);
+
+        view.renderVideos(tvShows);
+        view.hideLoading();
+        view.updateTitleWithCountOfVideow(tvShows.size());
       }
 
       @Override public void onConnectionError() {
-        notifyConnectionError();
+        view.hideLoading();
+        view.showConnectionErrorMessage();
+        view.showEmptyCase();
+        view.showDefaultTitle();
       }
     });
-  }
-
-  private void notifyConnectionError() {
-    if (view.isReady() && !view.isAlreadyLoaded()) {
-      view.hideLoading();
-      view.showConnectionErrorMessage();
-      view.showEmptyCase();
-      view.showDefaultTitle();
-    }
-  }
-
-  private void showTvShows(Collection<TvShow> tvShows) {
-    if (view.isReady()) {
-      view.renderVideos(tvShows);
-      view.hideLoading();
-      view.updateTitleWithCountOfTvShows(tvShows.size());
-    }
   }
 
   private void checkViewAlreadySetted() {
@@ -139,18 +90,15 @@ public class TvShowCatalogPresenter extends Presenter {
   }
 
   /**
-   * View interface created to abstract the view
-   * implementation used in this presenter.
+   * View interface created to abstract the view implementation used in this sample.
    */
   public interface View {
 
     void hideLoading();
 
-    void showLoading();
-
     void renderVideos(final Collection<TvShow> tvShows);
 
-    void updateTitleWithCountOfTvShows(final int counter);
+    void updateTitleWithCountOfVideow(final int counter);
 
     void showConnectionErrorMessage();
 
@@ -158,10 +106,8 @@ public class TvShowCatalogPresenter extends Presenter {
 
     void showDefaultTitle();
 
-    void showTvShowTitleAsMessage(TvShow tvShow);
+    void showTvShowInfo(TvShow tvShow);
 
-    boolean isReady();
-
-    boolean isAlreadyLoaded();
+    void showTvShow(TvShow tvShow);
   }
 }

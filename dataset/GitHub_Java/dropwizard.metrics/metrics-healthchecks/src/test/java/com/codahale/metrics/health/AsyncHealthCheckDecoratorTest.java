@@ -1,43 +1,29 @@
 package com.codahale.metrics.health;
 
-import com.codahale.metrics.Clock;
-import com.codahale.metrics.health.annotation.Async;
-import org.junit.Test;
-import org.mockito.ArgumentCaptor;
-
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentCaptor.forClass;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+
+import com.codahale.metrics.health.annotation.Async;
+
 /**
  * Unit tests for {@link AsyncHealthCheckDecorator}.
  */
 public class AsyncHealthCheckDecoratorTest {
-
-    private static final long CURRENT_TIME = 1551002401000L;
-    
-    private static final Clock FIXED_CLOCK = clockWithFixedTime(CURRENT_TIME);
-
-    private static final HealthCheck.Result EXPECTED_EXPIRED_RESULT = HealthCheck.Result
-            .builder()
-            .usingClock(FIXED_CLOCK)
-            .unhealthy()
-            .withMessage("Result was healthy but it expired 1 milliseconds ago")
-            .build();
-    
     private final HealthCheck mockHealthCheck = mock(HealthCheck.class);
     private final ScheduledExecutorService mockExecutorService = mock(ScheduledExecutorService.class);
-
-    @SuppressWarnings("rawtypes")
     private final ScheduledFuture mockFuture = mock(ScheduledFuture.class);
 
     @Test(expected = IllegalArgumentException.class)
@@ -100,7 +86,6 @@ public class AsyncHealthCheckDecoratorTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void tearDownTriggersCancellation() throws Exception {
         when(mockExecutorService.scheduleAtFixedRate(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS))).
                 thenReturn(mockFuture);
@@ -115,7 +100,6 @@ public class AsyncHealthCheckDecoratorTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void afterFirstExecutionDecoratedHealthCheckResultIsProvided() throws Exception {
         HealthCheck.Result expectedResult = HealthCheck.Result.healthy("AsyncHealthCheckTest");
         when(mockExecutorService.scheduleAtFixedRate(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)))
@@ -137,7 +121,6 @@ public class AsyncHealthCheckDecoratorTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void exceptionInDecoratedHealthCheckWontAffectAsyncDecorator() throws Exception {
         Exception exception = new Exception("TestException");
         when(mockExecutorService.scheduleAtFixedRate(any(Runnable.class), eq(0L), eq(1L), eq(TimeUnit.SECONDS)))
@@ -157,59 +140,11 @@ public class AsyncHealthCheckDecoratorTest {
         assertThat(result.getError()).isEqualTo(exception);
     }
 
-    @Test
-    public void returnUnhealthyIfPreviousResultIsExpiredBasedOnTtl() throws Exception {
-        HealthCheck healthCheck = new HealthyAsyncHealthCheckWithExpiredExplicitTtlInMilliseconds();
-        AsyncHealthCheckDecorator asyncDecorator = new AsyncHealthCheckDecorator(healthCheck, mockExecutorService, FIXED_CLOCK);
-        
-        ArgumentCaptor<Runnable> runnableCaptor = forClass(Runnable.class);
-        verify(mockExecutorService, times(1)).scheduleAtFixedRate(runnableCaptor.capture(),
-                eq(0L), eq(1000L), eq(TimeUnit.MILLISECONDS));
-        Runnable capturedRunnable = runnableCaptor.getValue();
-        capturedRunnable.run();
-
-        HealthCheck.Result result = asyncDecorator.check();
-
-        assertThat(result).isEqualTo(EXPECTED_EXPIRED_RESULT);
-    }
-
-    @Test
-    public void returnUnhealthyIfPreviousResultIsExpiredBasedOnPeriod() throws Exception {
-        HealthCheck healthCheck = new HealthyAsyncHealthCheckWithExpiredTtlInMillisecondsBasedOnPeriod();
-        AsyncHealthCheckDecorator asyncDecorator = new AsyncHealthCheckDecorator(healthCheck, mockExecutorService, FIXED_CLOCK);
-
-        ArgumentCaptor<Runnable> runnableCaptor = forClass(Runnable.class);
-        verify(mockExecutorService, times(1)).scheduleAtFixedRate(runnableCaptor.capture(),
-                eq(0L), eq(1000L), eq(TimeUnit.MILLISECONDS));
-        Runnable capturedRunnable = runnableCaptor.getValue();
-        capturedRunnable.run();
-
-        HealthCheck.Result result = asyncDecorator.check();
-
-        assertThat(result).isEqualTo(EXPECTED_EXPIRED_RESULT);
-    }
-
-    @Test
-    public void convertTtlToMillisecondsWhenCheckingExpiration() throws Exception {
-        HealthCheck healthCheck = new HealthyAsyncHealthCheckWithExpiredExplicitTtlInSeconds();
-        AsyncHealthCheckDecorator asyncDecorator = new AsyncHealthCheckDecorator(healthCheck, mockExecutorService, FIXED_CLOCK);
-
-        ArgumentCaptor<Runnable> runnableCaptor = forClass(Runnable.class);
-        verify(mockExecutorService, times(1)).scheduleAtFixedRate(runnableCaptor.capture(),
-                eq(0L), eq(1L), eq(TimeUnit.SECONDS));
-        Runnable capturedRunnable = runnableCaptor.getValue();
-        capturedRunnable.run();
-
-        HealthCheck.Result result = asyncDecorator.check();
-
-        assertThat(result).isEqualTo(EXPECTED_EXPIRED_RESULT);
-    }
-
     @Async(period = -1)
     private static class NegativePeriodAsyncHealthCheck extends HealthCheck {
 
         @Override
-        protected Result check() {
+        protected Result check() throws Exception {
             return null;
         }
     }
@@ -218,7 +153,7 @@ public class AsyncHealthCheckDecoratorTest {
     private static class ZeroPeriodAsyncHealthCheck extends HealthCheck {
 
         @Override
-        protected Result check() {
+        protected Result check() throws Exception {
             return null;
         }
     }
@@ -227,7 +162,7 @@ public class AsyncHealthCheckDecoratorTest {
     private static class NegativeInitialDelayAsyncHealthCheck extends HealthCheck {
 
         @Override
-        protected Result check() {
+        protected Result check() throws Exception {
             return null;
         }
     }
@@ -236,7 +171,7 @@ public class AsyncHealthCheckDecoratorTest {
     private static class DefaultAsyncHealthCheck extends HealthCheck {
 
         @Override
-        protected Result check() {
+        protected Result check() throws Exception {
             return null;
         }
     }
@@ -245,7 +180,7 @@ public class AsyncHealthCheckDecoratorTest {
     private static class FixedDelayAsyncHealthCheck extends HealthCheck {
 
         @Override
-        protected Result check() {
+        protected Result check() throws Exception {
             return null;
         }
     }
@@ -254,7 +189,7 @@ public class AsyncHealthCheckDecoratorTest {
     private static class UnhealthyAsyncHealthCheck extends HealthCheck {
 
         @Override
-        protected Result check() {
+        protected Result check() throws Exception {
             return null;
         }
     }
@@ -284,47 +219,6 @@ public class AsyncHealthCheckDecoratorTest {
             }
             return result;
         }
-    }
-
-    @Async(period = 1000, initialState = Async.InitialState.UNHEALTHY, healthyTtl = 3000, unit = TimeUnit.MILLISECONDS)
-    private static class HealthyAsyncHealthCheckWithExpiredExplicitTtlInMilliseconds extends HealthCheck {
-
-        @Override
-        protected Result check() {
-            return Result.builder().usingClock(clockWithFixedTime(CURRENT_TIME - 3001L)).healthy().build();
-        }
-    }
-
-    @Async(period = 1, initialState = Async.InitialState.UNHEALTHY, healthyTtl = 5, unit = TimeUnit.SECONDS)
-    private static class HealthyAsyncHealthCheckWithExpiredExplicitTtlInSeconds extends HealthCheck {
-
-        @Override
-        protected Result check() {
-            return Result.builder().usingClock(clockWithFixedTime(CURRENT_TIME - 5001L)).healthy().build();
-        }
-    }
-
-    @Async(period = 1000, initialState = Async.InitialState.UNHEALTHY, unit = TimeUnit.MILLISECONDS)
-    private static class HealthyAsyncHealthCheckWithExpiredTtlInMillisecondsBasedOnPeriod extends HealthCheck {
-
-        @Override
-        protected Result check() {
-            return Result.builder().usingClock(clockWithFixedTime(CURRENT_TIME - 2001L)).healthy().build();
-        }
-    }
-
-    private static Clock clockWithFixedTime(final long time) {
-        return new Clock() {
-            @Override
-            public long getTick() {
-                return 0;
-            }
-
-            @Override
-            public long getTime() {
-                return time;
-            }
-        };
     }
 
 }

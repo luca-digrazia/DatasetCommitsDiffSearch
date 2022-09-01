@@ -17,14 +17,11 @@ package com.google.devtools.build.lib.starlarkbuildapi.java;
 import com.google.devtools.build.docgen.annot.DocCategory;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
-import com.google.devtools.build.lib.starlarkbuildapi.FilesToRunProviderApi;
-import com.google.devtools.build.lib.starlarkbuildapi.core.StructApi;
+import com.google.devtools.build.lib.starlarkbuildapi.platform.ToolchainInfoApi;
 import javax.annotation.Nullable;
 import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.eval.StarlarkValue;
+import net.starlark.java.eval.Sequence;
 
 /**
  * Provides access to information about the Java toolchain rule. Accessible as a 'java_toolchain'
@@ -36,7 +33,7 @@ import net.starlark.java.eval.StarlarkValue;
     doc =
         "Provides access to information about the Java toolchain rule. "
             + "Accessible as a 'java_toolchain' field on a Target struct.")
-public interface JavaToolchainStarlarkApiProviderApi extends StructApi {
+public interface JavaToolchainStarlarkApiProviderApi extends ToolchainInfoApi {
 
   String LEGACY_NAME = "java_toolchain";
 
@@ -46,24 +43,16 @@ public interface JavaToolchainStarlarkApiProviderApi extends StructApi {
   @StarlarkMethod(name = "target_version", doc = "The java target version.", structField = true)
   String getTargetVersion();
 
+  @StarlarkMethod(
+      name = "javac_jar",
+      doc = "The javac jar.",
+      structField = true,
+      allowReturnNones = true)
+  @Nullable
+  FileApi getJavacJar();
+
   @StarlarkMethod(name = "single_jar", doc = "The SingleJar deploy jar.", structField = true)
   FileApi getSingleJar();
-
-  @Nullable
-  @StarlarkMethod(
-      name = "one_version_tool",
-      doc = "The artifact that enforces One-Version compliance of java binaries.",
-      structField = true,
-      allowReturnNones = true)
-  FileApi getOneVersionBinary();
-
-  @StarlarkMethod(
-      name = "one_version_allowlist",
-      doc = "The allowlist used by the One-Version compliance checker",
-      structField = true,
-      allowReturnNones = true)
-  @Nullable
-  FileApi getOneVersionAllowlist();
 
   @StarlarkMethod(
       name = "bootclasspath",
@@ -75,27 +64,8 @@ public interface JavaToolchainStarlarkApiProviderApi extends StructApi {
       name = "jvm_opt",
       doc = "The default options for the JVM running the java compiler and associated tools.",
       structField = true)
-  Depset getStarlarkJvmOptions();
-
-  @StarlarkMethod(
-      name = "jacocorunner",
-      doc = "The jacocorunner used by the toolchain.",
-      structField = true,
-      allowReturnNones = true)
-  @Nullable
-  FilesToRunProviderApi<?> getJacocoRunner();
+  Sequence<String> getStarlarkJvmOptions();
 
   @StarlarkMethod(name = "tools", doc = "The compilation tools.", structField = true)
   Depset getStarlarkTools();
-
-  @StarlarkMethod(name = "java_runtime", doc = "The java runtime information.", structField = true)
-  JavaRuntimeInfoApi getJavaRuntime();
-
-  @StarlarkMethod(
-      name = "android_linter",
-      documented = false,
-      useStarlarkThread = true,
-      allowReturnNones = true)
-  @Nullable
-  StarlarkValue stalarkAndroidLinter(StarlarkThread thread) throws EvalException;
 }

@@ -1,9 +1,4 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.jsonrpc;
 
@@ -33,7 +28,8 @@ public class JsonRpcPeer {
   private long mNextRequestId;
 
   @GuardedBy("this")
-  private final Map<Long, PendingRequest> mPendingRequests = new HashMap<>();
+  private final Map<Long, PendingRequest> mPendingRequests =
+      new HashMap<Long, PendingRequest>();
 
   private final DisconnectObservable mDisconnectObservable = new DisconnectObservable();
 
@@ -87,8 +83,7 @@ public class JsonRpcPeer {
 
   private static class DisconnectObservable extends Observable<DisconnectReceiver> {
     public void onDisconnect() {
-      for (int i = 0, N = mObservers.size(); i < N; ++i) {
-        final DisconnectReceiver observer = mObservers.get(i);
+      for (DisconnectReceiver observer : mObservers) {
         observer.onDisconnect();
       }
     }

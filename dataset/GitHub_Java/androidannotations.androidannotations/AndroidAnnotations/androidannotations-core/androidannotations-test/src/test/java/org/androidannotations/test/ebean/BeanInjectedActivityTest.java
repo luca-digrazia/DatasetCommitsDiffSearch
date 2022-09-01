@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -40,28 +39,8 @@ public class BeanInjectedActivityTest {
 	}
 
 	@Test
-	public void methodInjectedDependencyIsInjected() {
-		assertThat(activity.methodInjectedDependency).isNotNull();
-	}
-
-	@Test
-	public void methodAnnotatedParamsDependencyIsInjected() {
-		assertThat(activity.annotatedParamDependency).isNotNull();
-	}
-
-	@Test
 	public void dependencyWithAnnotationValueIsInjected() {
 		assertThat(activity.interfaceDependency).isNotNull();
-	}
-
-	@Test
-	public void methodInjectedDependencyWithAnnotationValueIsInjected() {
-		assertThat(activity.methodInjectedInterface).isNotNull();
-	}
-
-	@Test
-	public void methodAnnotatedParamsDependencyWithAnnotationValueIsInjected() {
-		assertThat(activity.annotatedParamInterface).isNotNull();
 	}
 
 	@Test
@@ -70,33 +49,12 @@ public class BeanInjectedActivityTest {
 	}
 
 	@Test
-	public void methodInjectedDependencyWithAnnotationValueIsOfAnnotationValueType() {
-		assertThat(activity.methodInjectedInterface).isInstanceOf(SomeImplementation.class);
-	}
-
-	@Test
-	public void methodAnnotatedParamsDependencyWithAnnotationValueIsOfAnnotationValueType() {
-		assertThat(activity.annotatedParamInterface).isInstanceOf(SomeImplementation.class);
-	}
-
-	@Test
-	public void multipleDependenciesInjected() {
-		assertThat(activity.multiDependency).isNotNull();
-		assertThat(activity.multiDependencyInterface).isNotNull();
-		assertThat(activity.multiDependencySingleton).isNotNull();
-		assertThat(activity.multiDependencyActivityScopedBean).isNotNull();
-		assertThat(activity.multiDependencyFragmentScopedBean).isNotNull();
-		assertThat(activity.multiDependencyInterface).isInstanceOf(SomeImplementation.class);
+	public void singletonDependencyIsSameReference() {
+		SomeSingleton initialDependency = activity.singletonDependency;
 
 		BeanInjectedActivity_ newActivity = Robolectric.buildActivity(BeanInjectedActivity_.class).create().get();
 
-		SomeSingleton initialSingletonDependency = activity.multiDependencySingleton;
-		assertThat(newActivity.multiDependencySingleton).isSameAs(initialSingletonDependency);
-
-		ActivityScopedBean initialActivityScopedDependency = activity.multiDependencyActivityScopedBean;
-		assertThat(newActivity.multiDependencyActivityScopedBean).isNotSameAs(initialActivityScopedDependency);
-
-		FragmentScopedBean initialFragmentScopedDependency = activity.multiDependencyFragmentScopedBean;
-		assertThat(newActivity.multiDependencyFragmentScopedBean).isNotSameAs(initialFragmentScopedDependency);
+		assertThat(newActivity.singletonDependency).isSameAs(initialDependency);
 	}
+
 }

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,8 +15,8 @@
  */
 package org.androidannotations.eviewgroup;
 
-import org.androidannotations.internal.AndroidAnnotationProcessor;
-import org.androidannotations.testutils.AAProcessorTestHelper;
+import org.androidannotations.AndroidAnnotationProcessor;
+import org.androidannotations.utils.AAProcessorTestHelper;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -30,7 +29,9 @@ public class EViewGroupTest extends AAProcessorTestHelper {
 
 	@Test
 	public void viewGroupWithGenericCompiles() {
-		assertCompilationSuccessful(compileFiles(SomeGenericViewGroup.class, SomeGenericViewGroupExt.class));
+		assertCompilationSuccessful(compileFiles(
+				SomeGenericViewGroup.class,
+				SomeGenericViewGroupExt.class));
 	}
 
 }

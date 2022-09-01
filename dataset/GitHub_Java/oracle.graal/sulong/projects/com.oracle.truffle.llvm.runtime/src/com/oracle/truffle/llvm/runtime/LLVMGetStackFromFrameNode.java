@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,23 +29,24 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.LLVMStackAccessHolder;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.func.LLVMRootNode;
 
-@GenerateAOT
 public abstract class LLVMGetStackFromFrameNode extends LLVMExpressionNode {
 
-    protected LLVMStackAccessHolder createStackAccessHolder() {
-        return new LLVMStackAccessHolder(((LLVMRootNode) getRootNode()).getStackAccess());
+    private final FrameSlot llvmStackSlot;
+
+    LLVMGetStackFromFrameNode(FrameDescriptor frameDescriptor) {
+        this.llvmStackSlot = LLVMStack.getStackPointerSlot(frameDescriptor);
     }
 
     @Specialization
-    Object getStack(VirtualFrame frame, @Cached("createStackAccessHolder()") LLVMStackAccessHolder stackAccessHolder) {
-        return stackAccessHolder.stackAccess.executeGetStack(frame);
+    LLVMStack getLLVMStack(VirtualFrame frame) {
+        return ((LLVMStack.StackPointer) FrameUtil.getObjectSafe(frame, llvmStackSlot)).getLLVMStack();
     }
 }

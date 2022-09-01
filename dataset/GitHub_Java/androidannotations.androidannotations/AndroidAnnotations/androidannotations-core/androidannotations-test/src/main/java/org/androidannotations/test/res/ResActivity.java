@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,15 +16,12 @@
 package org.androidannotations.test.res;
 
 import org.androidannotations.annotations.EActivity;
-import org.androidannotations.annotations.res.AnimationRes;
-import org.androidannotations.annotations.res.DrawableRes;
 import org.androidannotations.annotations.res.HtmlRes;
 import org.androidannotations.annotations.res.StringRes;
 import org.androidannotations.test.R;
 
 import android.app.Activity;
 import android.content.res.XmlResourceParser;
-import android.graphics.drawable.Drawable;
 import android.text.Spanned;
 import android.view.animation.Animation;
 
@@ -37,11 +33,8 @@ public class ResActivity extends Activity {
 	// @AnimationRes
 	XmlResourceParser fade_in;
 
-	@AnimationRes
+	// @AnimationRes
 	Animation fadein;
-
-	@DrawableRes
-	Drawable icon;
 
 	@StringRes
 	String injected_string;
@@ -55,50 +48,5 @@ public class ResActivity extends Activity {
 	@HtmlRes(R.string.hello_html)
 	CharSequence htmlInjected;
 
-	String methodInjectedString;
-	String multiInjectedString;
-	Drawable methodInjectedDrawable;
-	Drawable multiInjectedDrawable;
-	Spanned methodInjectedHtml;
-	Spanned multiInjectedHtml;
-	Animation methodInjectedAnimation;
-	Animation multiInjectedAnimation;
-
-	@StringRes
-	void injectedString(String anythingWeWant) {
-		methodInjectedString = anythingWeWant;
-	}
-
-	void stringResources(@StringRes String injectedString, @StringRes String injected_string) {
-		multiInjectedString = injectedString;
-	}
-
-	@DrawableRes
-	void icon(Drawable anythingWeWant) {
-		methodInjectedDrawable = anythingWeWant;
-	}
-
-	void drawableResources(@DrawableRes Drawable icon, @DrawableRes(resName = "icon") Drawable resNameIcon) {
-		multiInjectedDrawable = icon;
-	}
-
-	@HtmlRes
-	void helloHtml(Spanned anythingWeWant) {
-		methodInjectedHtml = anythingWeWant;
-	}
-
-	void htmlResources(@HtmlRes Spanned helloHtml, @HtmlRes(resName = "helloHtml") CharSequence htmlInjected) {
-		multiInjectedHtml = helloHtml;
-	}
-
-	@AnimationRes
-	void fadeIn(Animation anythingWeWant) {
-		methodInjectedAnimation = anythingWeWant;
-	}
-
-	void animResources(@AnimationRes Animation fadein, @AnimationRes(resName = "fade_in") Animation animInjected) {
-		multiInjectedAnimation = fadein;
-	}
 	// CHECKSTYLE:ON
-
 }

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,52 +15,37 @@
  */
 package org.androidannotations.internal.core.handler;
 
+import static com.helger.jcodemodel.JExpr.ref;
+
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ElementKind;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.ElementValidation;
 import org.androidannotations.annotations.PreferenceByKey;
 import org.androidannotations.handler.BaseAnnotationHandler;
-import org.androidannotations.handler.MethodInjectionHandler;
 import org.androidannotations.helper.IdValidatorHelper;
-import org.androidannotations.helper.InjectHelper;
-import org.androidannotations.holder.FoundPreferenceHolder;
 import org.androidannotations.holder.HasPreferences;
 import org.androidannotations.rclass.IRClass;
 
 import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJAssignmentTarget;
-import com.helger.jcodemodel.JBlock;
 import com.helger.jcodemodel.JFieldRef;
 
-public class PreferenceByKeyHandler extends BaseAnnotationHandler<HasPreferences> implements MethodInjectionHandler<HasPreferences> {
-
-	private final InjectHelper<HasPreferences> injectHelper;
+public class PreferenceByKeyHandler extends BaseAnnotationHandler<HasPreferences> {
 
 	public PreferenceByKeyHandler(AndroidAnnotationsEnvironment environment) {
 		super(PreferenceByKey.class, environment);
-		injectHelper = new InjectHelper<>(validatorHelper, this);
 	}
 
 	@Override
 	protected void validate(Element element, ElementValidation valid) {
-		injectHelper.validate(PreferenceByKey.class, element, valid);
-		if (!valid.isValid()) {
-			return;
-		}
+		validatorHelper.enclosingElementHasEActivityOrEFragment(element, valid);
 
-		if (element.getKind() == ElementKind.PARAMETER) {
-			validatorHelper.enclosingElementExtendsPreferenceActivityOrPreferenceFragment(element.getEnclosingElement(), valid);
-		} else {
-			validatorHelper.enclosingElementExtendsPreferenceActivityOrPreferenceFragment(element, valid);
-		}
+		validatorHelper.enclosingElementExtendsPreferenceActivityOrPreferenceFragment(element, valid);
 
-		Element param = injectHelper.getParam(element);
-		validatorHelper.isDeclaredType(param, valid);
+		validatorHelper.isDeclaredType(element, valid);
 
-		validatorHelper.extendsPreference(param, valid);
+		validatorHelper.extendsPreference(element, valid);
 
 		validatorHelper.isNotPrivate(element, valid);
 
@@ -70,34 +54,16 @@ public class PreferenceByKeyHandler extends BaseAnnotationHandler<HasPreferences
 
 	@Override
 	public void process(Element element, HasPreferences holder) throws Exception {
-		injectHelper.process(element, holder);
-	}
+		String fieldName = element.getSimpleName().toString();
 
-	@Override
-	public JBlock getInvocationBlock(HasPreferences holder) {
-		return holder.getAddPreferencesFromResourceInjectionBlock();
-	}
-
-	@Override
-	public void assignValue(JBlock targetBlock, IJAssignmentTarget fieldRef, HasPreferences holder, Element element, Element param) {
-		TypeMirror prefFieldTypeMirror = param.asType();
+		TypeMirror prefFieldTypeMirror = element.asType();
 		String typeQualifiedName = prefFieldTypeMirror.toString();
 
 		JFieldRef idRef = annotationHelper.extractOneAnnotationFieldRef(element, IRClass.Res.STRING, true);
 		AbstractJClass preferenceClass = getJClass(typeQualifiedName);
+		JFieldRef fieldRef = ref(fieldName);
 
-		IJAssignmentTarget preferenceHolderTarget = null;
-		if (element.getKind() == ElementKind.FIELD) {
-			preferenceHolderTarget = fieldRef;
-		}
-		FoundPreferenceHolder preferenceHolder = holder.getFoundPreferenceHolder(idRef, preferenceClass, preferenceHolderTarget);
-		if (!preferenceHolder.getRef().equals(preferenceHolderTarget)) {
-			targetBlock.add(fieldRef.assign(preferenceHolder.getOrCastRef(preferenceClass)));
-		}
+		holder.assignFindPreferenceByKey(idRef, preferenceClass, fieldRef);
 	}
 
-	@Override
-	public void validateEnclosingElement(Element element, ElementValidation valid) {
-		validatorHelper.enclosingElementHasEActivityOrEFragment(element, valid);
-	}
 }

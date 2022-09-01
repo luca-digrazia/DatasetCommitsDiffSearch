@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2016-2017 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,26 +26,34 @@ import org.junit.Test;
 
 public class DataBindingTest extends AAProcessorTestHelper {
 
-	// CHECKSTYLE:OFF
-	private static final String[] DATA_BINDING_EXPRESSIONS = new String[] { "        ViewGroup contentView = internalFindViewById(android.R.id.content);",
-			"        viewDataBinding_ = DataBindingUtil.inflate(LayoutInflater.from(this), R.layout.activity_main, contentView, false);",
-			"        setContentView(viewDataBinding_.getRoot(), viewDataBinding_.getRoot().getLayoutParams());", };
+	private static final String[] DATA_BINDING_EXPRESSIONS = new String[] {
+		"        ViewGroup contentView = internalFindViewById(R.id.content);",
+		"        viewDataBinding_ = DataBindingUtil.inflate(LayoutInflater.from(this), org.androidannotations.databinding.R.layout.activity_main, contentView, false);",
+		"        setContentView(viewDataBinding_.getRoot(), viewDataBinding_.getRoot().getLayoutParams());",
+	};
 
-	private static final String[] INJECT_DATA_BINDING_FIELD_EXPRESSIONS = new String[] { "        this.bindingField = ((org.androidannotations.databinding.ActivityBinding) viewDataBinding_);", };
+	private static final String[] INJECT_DATA_BINDING_FIELD_EXPRESSIONS = new String[] {
+		"        this.bindingField = ((org.androidannotations.databinding.ActivityBinding) viewDataBinding_);",
+	};
 
-	private static final String[] INJECT_DATA_BINDING_METHOD_EXPRESSIONS = new String[] { "            binding = ((org.androidannotations.databinding.ActivityBinding) viewDataBinding_);",
-			"            bindingMethod(binding);", };
+	private static final String[] INJECT_DATA_BINDING_METHOD_EXPRESSIONS = new String[] {
+		"            binding = ((org.androidannotations.databinding.ActivityBinding) viewDataBinding_);",
+		"            bindingMethod(binding);",
+	};
 
-	private static final String[] INJECT_DATA_BINDING_PARAM_EXPRESSIONS = new String[] { "            bindingParam = ((org.androidannotations.databinding.ActivityBinding) viewDataBinding_);",
-			"            injectBinding(bindingParam);", };
+	private static final String[] INJECT_DATA_BINDING_PARAM_EXPRESSIONS = new String[] {
+		"            bindingParam = ((org.androidannotations.databinding.ActivityBinding) viewDataBinding_);",
+		"            injectBinding(bindingParam);",
+	};
 
 	private static final String[] DATA_BINDING_EXPRESSIONS_FRAGMENT = new String[] {
-			"            viewDataBinding_ = DataBindingUtil.inflate(LayoutInflater.from(getActivity()), R.layout.activity_main, container, false);",
-			"            contentView_ = viewDataBinding_.getRoot();", };
+		"            viewDataBinding_ = DataBindingUtil.inflate(LayoutInflater.from(getActivity()), R.layout.activity_main, container, false);",
+		"            contentView_ = viewDataBinding_.getRoot();",
+	};
 
 	private static final String[] DATA_BINDING_EXPRESSIONS_VIEWGROUP = new String[] {
-			"            viewDataBinding_ = DataBindingUtil.inflate(LayoutInflater.from(getContext()), R.layout.activity_main, this, true);", };
-	// CHECKSTYLE:ON
+		"            viewDataBinding_ = DataBindingUtil.inflate(LayoutInflater.from(getContext()), R.layout.activity_main, this, true);",
+	};
 
 	@Before
 	public void setUp() {

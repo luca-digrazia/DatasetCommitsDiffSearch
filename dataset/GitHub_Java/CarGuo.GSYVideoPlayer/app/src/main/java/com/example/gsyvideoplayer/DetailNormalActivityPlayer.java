@@ -5,8 +5,12 @@ import android.content.res.Configuration;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ImageView;
+import android.widget.RelativeLayout;
 
-import com.example.gsyvideoplayer.databinding.ActivityDetailPlayerBinding;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.widget.NestedScrollView;
+
+import com.example.gsyvideoplayer.video.LandLayoutVideo;
 import com.google.android.exoplayer2.SeekParameters;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.builder.GSYVideoOptionBuilder;
@@ -20,29 +24,36 @@ import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 import java.util.HashMap;
 import java.util.Map;
 
+import butterknife.BindView;
+import butterknife.ButterKnife;
 import tv.danmaku.ijk.media.exo2.Exo2PlayerManager;
 
 
 public class DetailNormalActivityPlayer extends Activity {
 
+    @BindView(R.id.post_detail_nested_scroll)
+    NestedScrollView postDetailNestedScroll;
+
+    //推荐使用StandardGSYVideoPlayer，功能一致
+    //CustomGSYVideoPlayer部分功能处于试验阶段
+    @BindView(R.id.detail_player)
+    LandLayoutVideo detailPlayer;
+
+    @BindView(R.id.activity_detail_player)
+    RelativeLayout activityDetailPlayer;
 
     private boolean isPlay;
     private boolean isPause;
 
     private OrientationUtils orientationUtils;
-    private ActivityDetailPlayerBinding binding;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_detail_player);
+        ButterKnife.bind(this);
 
-        binding = ActivityDetailPlayerBinding.inflate(getLayoutInflater());
-
-        View rootView = binding.getRoot();
-        setContentView(rootView);
-
-
-        String url = getUrl();
+        String url =  getUrl();
 
         //增加封面
         ImageView imageView = new ImageView(this);
@@ -52,7 +63,7 @@ public class DetailNormalActivityPlayer extends Activity {
         resolveNormalVideoUI();
 
         //外部辅助的旋转，帮助全屏
-        orientationUtils = new OrientationUtils(this, binding.detailPlayer);
+        orientationUtils = new OrientationUtils(this, detailPlayer);
         //初始化不打开外部的旋转
         orientationUtils.setEnable(false);
 
@@ -61,85 +72,85 @@ public class DetailNormalActivityPlayer extends Activity {
         header.put("allowCrossProtocolRedirects", "true");
         GSYVideoOptionBuilder gsyVideoOption = new GSYVideoOptionBuilder();
         gsyVideoOption.setThumbImageView(imageView)
-            .setIsTouchWiget(true)
-            .setRotateViewAuto(false)
-            .setLockLand(false)
-            .setAutoFullWithSize(false)
-            .setShowFullAnimation(false)
-            .setNeedLockFull(true)
-            .setUrl(url)
-            .setMapHeadData(header)
-            .setCacheWithPlay(false)
-            .setVideoTitle("测试视频")
-            .setVideoAllCallBack(new GSYSampleCallBack() {
-                @Override
-                public void onPrepared(String url, Object... objects) {
-                    Debuger.printfError("***** onPrepared **** " + objects[0]);
-                    Debuger.printfError("***** onPrepared **** " + objects[1]);
-                    super.onPrepared(url, objects);
-                    //开始播放了才能旋转和全屏
-                    orientationUtils.setEnable(binding.detailPlayer.isRotateWithSystem());
-                    isPlay = true;
+                .setIsTouchWiget(true)
+                .setRotateViewAuto(false)
+                .setLockLand(false)
+                .setAutoFullWithSize(false)
+                .setShowFullAnimation(false)
+                .setNeedLockFull(true)
+                .setUrl(url)
+                .setMapHeadData(header)
+                .setCacheWithPlay(false)
+                .setVideoTitle("测试视频")
+                .setVideoAllCallBack(new GSYSampleCallBack() {
+                    @Override
+                    public void onPrepared(String url, Object... objects) {
+                        Debuger.printfError("***** onPrepared **** " + objects[0]);
+                        Debuger.printfError("***** onPrepared **** " + objects[1]);
+                        super.onPrepared(url, objects);
+                        //开始播放了才能旋转和全屏
+                        orientationUtils.setEnable(true);
+                        isPlay = true;
 
-                    //设置 seek 的临近帧。
-                    if (binding.detailPlayer.getGSYVideoManager().getPlayer() instanceof Exo2PlayerManager) {
-                        ((Exo2PlayerManager) binding.detailPlayer.getGSYVideoManager().getPlayer()).setSeekParameter(SeekParameters.NEXT_SYNC);
-                        Debuger.printfError("***** setSeekParameter **** ");
+                        //设置 seek 的临近帧。
+                        if(detailPlayer.getGSYVideoManager().getPlayer() instanceof Exo2PlayerManager) {
+                            ((Exo2PlayerManager) detailPlayer.getGSYVideoManager().getPlayer()).setSeekParameter(SeekParameters.NEXT_SYNC);
+                            Debuger.printfError("***** setSeekParameter **** ");
+                        }
                     }
-                }
 
-                @Override
-                public void onEnterFullscreen(String url, Object... objects) {
-                    super.onEnterFullscreen(url, objects);
-                    Debuger.printfError("***** onEnterFullscreen **** " + objects[0]);//title
-                    Debuger.printfError("***** onEnterFullscreen **** " + objects[1]);//当前全屏player
-                }
-
-                @Override
-                public void onAutoComplete(String url, Object... objects) {
-                    super.onAutoComplete(url, objects);
-                }
-
-                @Override
-                public void onClickStartError(String url, Object... objects) {
-                    super.onClickStartError(url, objects);
-                }
-
-                @Override
-                public void onQuitFullscreen(String url, Object... objects) {
-                    super.onQuitFullscreen(url, objects);
-                    Debuger.printfError("***** onQuitFullscreen **** " + objects[0]);//title
-                    Debuger.printfError("***** onQuitFullscreen **** " + objects[1]);//当前非全屏player
-                    if (orientationUtils != null) {
-                        orientationUtils.backToProtVideo();
+                    @Override
+                    public void onEnterFullscreen(String url, Object... objects) {
+                        super.onEnterFullscreen(url, objects);
+                        Debuger.printfError("***** onEnterFullscreen **** " + objects[0]);//title
+                        Debuger.printfError("***** onEnterFullscreen **** " + objects[1]);//当前全屏player
                     }
-                }
-            })
-            .setLockClickListener(new LockClickListener() {
-                @Override
-                public void onClick(View view, boolean lock) {
-                    if (orientationUtils != null) {
-                        //配合下方的onConfigurationChanged
-                        orientationUtils.setEnable(!lock);
-                    }
-                }
-            })
-            .setGSYVideoProgressListener(new GSYVideoProgressListener() {
-                @Override
-                public void onProgress(int progress, int secProgress, int currentPosition, int duration) {
-                    Debuger.printfLog(" progress " + progress + " secProgress " + secProgress + " currentPosition " + currentPosition + " duration " + duration);
-                }
-            })
-            .build(binding.detailPlayer);
 
-        binding.detailPlayer.getFullscreenButton().setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onAutoComplete(String url, Object... objects) {
+                        super.onAutoComplete(url, objects);
+                    }
+
+                    @Override
+                    public void onClickStartError(String url, Object... objects) {
+                        super.onClickStartError(url, objects);
+                    }
+
+                    @Override
+                    public void onQuitFullscreen(String url, Object... objects) {
+                        super.onQuitFullscreen(url, objects);
+                        Debuger.printfError("***** onQuitFullscreen **** " + objects[0]);//title
+                        Debuger.printfError("***** onQuitFullscreen **** " + objects[1]);//当前非全屏player
+                        if (orientationUtils != null) {
+                            orientationUtils.backToProtVideo();
+                        }
+                    }
+                })
+                .setLockClickListener(new LockClickListener() {
+                    @Override
+                    public void onClick(View view, boolean lock) {
+                        if (orientationUtils != null) {
+                            //配合下方的onConfigurationChanged
+                            orientationUtils.setEnable(!lock);
+                        }
+                    }
+                })
+                .setGSYVideoProgressListener(new GSYVideoProgressListener() {
+                    @Override
+                    public void onProgress(int progress, int secProgress, int currentPosition, int duration) {
+                        Debuger.printfLog(" progress " + progress + " secProgress " + secProgress + " currentPosition " + currentPosition + " duration " + duration);
+                    }
+                })
+                .build(detailPlayer);
+
+        detailPlayer.getFullscreenButton().setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 //直接横屏
                 orientationUtils.resolveByClick();
 
                 //第一个true是否需要隐藏actionbar，第二个true是否需要隐藏statusbar
-                binding.detailPlayer.startWindowFullscreen(DetailNormalActivityPlayer.this, false, true);
+                detailPlayer.startWindowFullscreen(DetailNormalActivityPlayer.this, false, true);
             }
         });
     }
@@ -184,31 +195,34 @@ public class DetailNormalActivityPlayer extends Activity {
     }
 
 
+
     /**
-     * orientationUtils 和  binding.detailPlayer.onConfigurationChanged 方法是用于触发屏幕旋转的
+     * orientationUtils 和  detailPlayer.onConfigurationChanged 方法是用于触发屏幕旋转的
      */
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         //如果旋转了就全屏
         if (isPlay && !isPause) {
-            binding.detailPlayer.onConfigurationChanged(this, newConfig, orientationUtils, true, true);
+            detailPlayer.onConfigurationChanged(this, newConfig, orientationUtils, true, true);
         }
     }
 
 
     private void resolveNormalVideoUI() {
         //增加title
-        binding.detailPlayer.getTitleTextView().setVisibility(View.GONE);
-        binding.detailPlayer.getBackButton().setVisibility(View.GONE);
+        detailPlayer.getTitleTextView().setVisibility(View.GONE);
+        detailPlayer.getBackButton().setVisibility(View.GONE);
     }
 
     private GSYVideoPlayer getCurPlay() {
-        if (binding.detailPlayer.getFullWindowPlayer() != null) {
-            return binding.detailPlayer.getFullWindowPlayer();
+        if (detailPlayer.getFullWindowPlayer() != null) {
+            return  detailPlayer.getFullWindowPlayer();
         }
-        return binding.detailPlayer;
+        return detailPlayer;
     }
+
+
 
 
     private String getUrl() {

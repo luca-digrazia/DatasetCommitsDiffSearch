@@ -1,31 +1,23 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.dumpapp.plugins;
+
+import javax.annotation.Nullable;
+
+import java.io.File;
+import java.io.PrintStream;
+import java.util.List;
+import java.util.Map;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.text.TextUtils;
 
+import com.facebook.stetho.common.Util;
 import com.facebook.stetho.dumpapp.DumpUsageException;
 import com.facebook.stetho.dumpapp.DumperContext;
 import com.facebook.stetho.dumpapp.DumperPlugin;
-import com.facebook.stetho.inspector.domstorage.SharedPreferencesHelper;
-
-import java.io.File;
-import java.io.PrintStream;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 public class SharedPreferencesDumperPlugin implements DumperPlugin {
 
@@ -61,15 +53,20 @@ public class SharedPreferencesDumperPlugin implements DumperPlugin {
   /**
    * Executes command to update one value in the shared preferences
    */
-  // We explicitly want commit() so that the dumper blocks while the write occurs.
-  @SuppressLint("CommitPrefEdits")
   private void doWrite(List<String> args) throws DumpUsageException {
     String usagePrefix = "Usage: prefs write <path> <key> <type> <value>, where type is one of: ";
+    int expectedCount = 4;
+    if (args.size() != expectedCount) {
+      throw new DumpUsageException(
+          Type.appendNamesList(new StringBuilder(usagePrefix), ", ").toString());
+    }
 
-    Iterator<String> argsIter = args.iterator();
-    String path = nextArg(argsIter, "Expected <path>");
-    String key = nextArg(argsIter, "Expected <key>");
-    String typeName = nextArg(argsIter, "Expected <type>");
+    int index = 0;
+    String path = args.get(index++);
+    String key = args.get(index++);
+    String typeName = args.get(index++);
+    String value = args.get(index++);
+    Util.throwIfNot(index == expectedCount);
 
     Type type = Type.of(typeName);
     if (type == null) {
@@ -82,51 +79,23 @@ public class SharedPreferencesDumperPlugin implements DumperPlugin {
 
     switch (type) {
       case BOOLEAN:
-        editor.putBoolean(key, Boolean.valueOf(nextArgValue(argsIter)));
+        editor.putBoolean(key, Boolean.valueOf(value));
         break;
       case INT:
-        editor.putInt(key, Integer.valueOf(nextArgValue(argsIter)));
+        editor.putInt(key, Integer.valueOf(value));
         break;
       case LONG:
-        editor.putLong(key, Long.valueOf(nextArgValue(argsIter)));
+        editor.putLong(key, Long.valueOf(value));
         break;
       case FLOAT:
-        editor.putFloat(key, Float.valueOf(nextArgValue(argsIter)));
+        editor.putFloat(key, Float.valueOf(value));
         break;
       case STRING:
-        editor.putString(key, nextArgValue(argsIter));
-        break;
-      case SET:
-        putStringSet(editor, key, argsIter);
+        editor.putString(key, value);
         break;
     }
 
     editor.commit();
-  }
-
-  @Nonnull
-  private static String nextArg(Iterator<String> iter, String messageIfNotPresent)
-      throws DumpUsageException {
-    if (!iter.hasNext()) {
-      throw new DumpUsageException(messageIfNotPresent);
-    }
-    return iter.next();
-  }
-
-  @Nonnull
-  private static String nextArgValue(Iterator<String> iter) throws DumpUsageException {
-    return nextArg(iter, "Expected <value>");
-  }
-
-  private static void putStringSet(
-      SharedPreferences.Editor editor,
-      String key,
-      Iterator<String> remainingArgs) {
-    HashSet<String> set = new HashSet<String>();
-    while (remainingArgs.hasNext()) {
-      set.add(remainingArgs.next());
-    }
-    editor.putStringSet(key, set);
   }
 
   /**
@@ -172,7 +141,7 @@ public class SharedPreferencesDumperPlugin implements DumperPlugin {
   private void printFile(PrintStream writer, String prefsName, String keyPrefix) {
     writer.println(prefsName + ":");
     SharedPreferences preferences = getSharedPreferences(prefsName);
-    for (Map.Entry<String, ?> entry : SharedPreferencesHelper.getSharedPreferenceEntriesSorted(preferences)) {
+    for (Map.Entry<String, ?> entry : preferences.getAll().entrySet()) {
       if (entry.getKey().startsWith(keyPrefix)) {
         writer.println("  " + entry.getKey() + " = " + entry.getValue());
       }
@@ -206,8 +175,7 @@ public class SharedPreferencesDumperPlugin implements DumperPlugin {
     INT("int"),
     LONG("long"),
     FLOAT("float"),
-    STRING("string"),
-    SET("set");
+    STRING("string");
 
     private final String name;
 

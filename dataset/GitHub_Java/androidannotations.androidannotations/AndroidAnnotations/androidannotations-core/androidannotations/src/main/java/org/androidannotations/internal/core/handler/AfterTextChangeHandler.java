@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,19 +25,20 @@ import javax.lang.model.type.TypeMirror;
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.ElementValidation;
 import org.androidannotations.annotations.AfterTextChange;
+import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.IdValidatorHelper;
 import org.androidannotations.holder.EComponentWithViewSupportHolder;
 import org.androidannotations.holder.TextWatcherHolder;
 import org.androidannotations.rclass.IRClass;
 
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JFieldRef;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JVar;
 
-public class AfterTextChangeHandler extends CoreBaseAnnotationHandler<EComponentWithViewSupportHolder> {
+public class AfterTextChangeHandler extends BaseAnnotationHandler<EComponentWithViewSupportHolder> {
 
 	public AfterTextChangeHandler(AndroidAnnotationsEnvironment environment) {
 		super(AfterTextChange.class, environment);
@@ -56,7 +56,7 @@ public class AfterTextChangeHandler extends CoreBaseAnnotationHandler<EComponent
 
 		validatorHelper.returnTypeIsVoid((ExecutableElement) element, validation);
 
-		coreValidatorHelper.hasAfterTextChangedMethodParameters((ExecutableElement) element, validation);
+		validatorHelper.hasAfterTextChangedMethodParameters((ExecutableElement) element, validation);
 
 		validatorHelper.param.anyOrder().type(CanonicalNameConstants.TEXT_VIEW).optional().type(CanonicalNameConstants.EDITABLE).optional().validate((ExecutableElement) element, validation);
 	}
@@ -93,7 +93,7 @@ public class AfterTextChangeHandler extends CoreBaseAnnotationHandler<EComponent
 			TextWatcherHolder textWatcherHolder = holder.getTextWatcherHolder(idRef, viewParameterType);
 			JBlock methodBody = textWatcherHolder.getAfterTextChangedBody();
 
-			IJExpression activityRef = holder.getGeneratedClass().staticRef("this");
+			JExpression activityRef = holder.getGeneratedClass().staticRef("this");
 			JInvocation textChangeCall = methodBody.invoke(activityRef, methodName);
 
 			for (int i = 0; i < parameters.size(); i++) {

@@ -1,8 +1,7 @@
 package com.davemorrissey.labs.subscaleview.test.viewpager;
 
 import android.content.Context;
-import androidx.annotation.NonNull;
-import androidx.viewpager.widget.ViewPager;
+import android.support.v4.view.ViewPager;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
@@ -30,7 +29,7 @@ public class VerticalViewPager extends ViewPager {
     private class VerticalPageTransformer implements ViewPager.PageTransformer {
 
         @Override
-        public void transformPage(@NonNull View view, float position) {
+        public void transformPage(View view, float position) {
             if (position < -1) {
                 view.setAlpha(0);
             } else if (position <= 1) {

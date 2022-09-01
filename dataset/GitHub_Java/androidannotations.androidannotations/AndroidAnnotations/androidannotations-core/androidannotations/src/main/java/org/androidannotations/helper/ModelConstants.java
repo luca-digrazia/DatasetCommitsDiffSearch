@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,10 +20,9 @@ import static java.util.Arrays.asList;
 import java.lang.annotation.Annotation;
 import java.util.List;
 
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.SourceVersion;
 
-import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.Option;
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.EApplication;
 import org.androidannotations.annotations.EBean;
@@ -35,31 +33,34 @@ import org.androidannotations.annotations.EReceiver;
 import org.androidannotations.annotations.EService;
 import org.androidannotations.annotations.EView;
 import org.androidannotations.annotations.EViewGroup;
+import org.androidannotations.annotations.sharedpreferences.SharedPref;
 
 public abstract class ModelConstants {
-
-	public static final Option OPTION_CLASS_SUFFIX = new Option("classSuffix", "_");
 
 	private static String generationSuffix = "_";
 	private static String classSuffix;
 
 	public static final List<Class<? extends Annotation>> VALID_ENHANCED_VIEW_SUPPORT_ANNOTATIONS = asList(EActivity.class, EViewGroup.class, EView.class, EBean.class, EFragment.class);
 
-	public static final List<Class<? extends Annotation>> VALID_ENHANCED_COMPONENT_ANNOTATIONS = asList(EApplication.class, EActivity.class, EViewGroup.class, EView.class, EBean.class, EService.class,
-			EIntentService.class, EReceiver.class, EProvider.class, EFragment.class);
+	public static final List<Class<? extends Annotation>> VALID_ENHANCED_COMPONENT_ANNOTATIONS = asList(EApplication.class, EActivity.class, EViewGroup.class, EView.class, EBean.class,
+			EService.class, EIntentService.class, EReceiver.class, EProvider.class, EFragment.class);
+
+	public static final List<Class<? extends Annotation>> VALID_ANDROID_ANNOTATIONS = asList(EApplication.class, EActivity.class, EViewGroup.class, EView.class, EBean.class, EService.class,
+			EReceiver.class, EProvider.class, EFragment.class, SharedPref.class);
 
 	private ModelConstants() {
 	}
 
-	public static void init(AndroidAnnotationsEnvironment environment) {
-		classSuffix = environment.getOptionValue(OPTION_CLASS_SUFFIX).trim();
+	public static void init(ProcessingEnvironment processingEnv) {
+		OptionsHelper optionsHelper = new OptionsHelper(processingEnv);
+		classSuffix = optionsHelper.getClassSuffix().trim();
 
 		if (classSuffix.isEmpty()) {
-			throw new IllegalArgumentException("'" + classSuffix + "' may not be an empty string.");
+			throw new IllegalArgumentException("'" + classSuffix + "' may not be an emtpy string.");
 		}
 
-		if (!SourceVersion.isName("ValidName" + classSuffix) || classSuffix.contains(".")) {
-			throw new IllegalArgumentException("'" + classSuffix + "' may not be a valid Java identifier.");
+		if (!SourceVersion.isName(classSuffix) || classSuffix.contains(".")) {
+			throw new IllegalArgumentException("'" + classSuffix + "' is not a valid Java identifier.");
 		}
 	}
 

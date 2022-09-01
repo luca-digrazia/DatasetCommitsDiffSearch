@@ -1,9 +1,11 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant 
+ * of patent rights can be found in the PATENTS file in the same directory.
+*/
 
 package com.facebook.stetho.okhttp3;
 
@@ -21,6 +23,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Provides easy integration with <a href="http://square.github.io/okhttp/">OkHttp</a> 3.x by way of
@@ -35,9 +38,11 @@ import java.io.OutputStream;
 public class StethoInterceptor implements Interceptor {
   private final NetworkEventReporter mEventReporter = NetworkEventReporterImpl.get();
 
+  private final AtomicInteger mNextRequestId = new AtomicInteger(0);
+
   @Override
   public Response intercept(Chain chain) throws IOException {
-    String requestId = mEventReporter.nextRequestId();
+    String requestId = String.valueOf(mNextRequestId.getAndIncrement());
 
     Request request = chain.request();
 
@@ -65,11 +70,6 @@ public class StethoInterceptor implements Interceptor {
       }
 
       Connection connection = chain.connection();
-      if (connection == null) {
-        throw new IllegalStateException(
-            "No connection associated with this request; " +
-                "did you use addInterceptor instead of addNetworkInterceptor?");
-      }
       mEventReporter.responseHeadersReceived(
           new OkHttpInspectorResponse(
               requestId,
@@ -185,13 +185,13 @@ public class StethoInterceptor implements Interceptor {
     private final String mRequestId;
     private final Request mRequest;
     private final Response mResponse;
-    private @Nullable final Connection mConnection;
+    private final Connection mConnection;
 
     public OkHttpInspectorResponse(
         String requestId,
         Request request,
         Response response,
-        @Nullable Connection connection) {
+        Connection connection) {
       mRequestId = requestId;
       mRequest = request;
       mResponse = response;
@@ -226,7 +226,7 @@ public class StethoInterceptor implements Interceptor {
 
     @Override
     public int connectionId() {
-      return mConnection == null ? 0 : mConnection.hashCode();
+      return mConnection.hashCode();
     }
 
     @Override

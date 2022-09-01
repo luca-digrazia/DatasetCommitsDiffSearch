@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,23 +15,22 @@
  */
 package org.androidannotations.holder;
 
-import static com.helger.jcodemodel.JExpr._null;
-import static com.helger.jcodemodel.JExpr.ref;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr.ref;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
 public class InstanceStateDelegate extends GeneratedClassHolderDelegate<EComponentHolder> implements HasInstanceState {
 
 	private JBlock saveStateMethodBody;
 	private JVar saveStateBundleParam;
 	private JMethod restoreStateMethod;
-	private JBlock restoreStateMethodBody;
 	private JVar restoreStateBundleParam;
 
 	public InstanceStateDelegate(EComponentHolder holder) {
@@ -58,7 +56,7 @@ public class InstanceStateDelegate extends GeneratedClassHolderDelegate<ECompone
 	private void setSaveStateMethod() {
 		JMethod method = getGeneratedClass().method(PUBLIC, codeModel().VOID, "onSaveInstanceState");
 		method.annotate(Override.class);
-		saveStateBundleParam = method.param(getClasses().BUNDLE, "bundle" + generationSuffix());
+		saveStateBundleParam = method.param(classes().BUNDLE, "bundle" + generationSuffix());
 
 		saveStateMethodBody = method.body();
 
@@ -74,14 +72,6 @@ public class InstanceStateDelegate extends GeneratedClassHolderDelegate<ECompone
 	}
 
 	@Override
-	public JBlock getRestoreStateMethodBody() {
-		if (restoreStateMethodBody == null) {
-			setRestoreStateMethod();
-		}
-		return restoreStateMethodBody;
-	}
-
-	@Override
 	public JVar getRestoreStateBundleParam() {
 		if (restoreStateBundleParam == null) {
 			setRestoreStateMethod();
@@ -91,12 +81,15 @@ public class InstanceStateDelegate extends GeneratedClassHolderDelegate<ECompone
 
 	private void setRestoreStateMethod() {
 		restoreStateMethod = getGeneratedClass().method(PRIVATE, codeModel().VOID, "restoreSavedInstanceState" + generationSuffix());
-		restoreStateBundleParam = restoreStateMethod.param(getClasses().BUNDLE, "savedInstanceState");
-		holder.getInitBodyInjectionBlock().invoke(restoreStateMethod).arg(restoreStateBundleParam);
+		restoreStateBundleParam = restoreStateMethod.param(classes().BUNDLE, "savedInstanceState");
+		getInit().body().invoke(restoreStateMethod).arg(restoreStateBundleParam);
 
-		restoreStateMethodBody = restoreStateMethod.body();
-		restoreStateMethodBody //
+		restoreStateMethod.body() //
 				._if(ref("savedInstanceState").eq(_null())) //
 				._then()._return();
+	}
+
+	public JMethod getInit() {
+		return holder.getInit();
 	}
 }

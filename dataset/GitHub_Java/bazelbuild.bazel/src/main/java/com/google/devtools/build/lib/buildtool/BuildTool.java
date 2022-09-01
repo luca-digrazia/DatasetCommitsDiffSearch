@@ -1,4 +1,4 @@
-// Copyright 2014 The Bazel Authors. All rights reserved.
+// Copyright 2014 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,374 +13,96 @@
 // limitations under the License.
 package com.google.devtools.build.lib.buildtool;
 
-import static com.google.devtools.build.lib.platform.SuspendCounter.suspendCount;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
-import com.google.common.flogger.GoogleLogger;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.BuildFailedException;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
+import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.TestExecException;
-import com.google.devtools.build.lib.analysis.AnalysisResult;
+import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
 import com.google.devtools.build.lib.analysis.BuildInfoEvent;
+import com.google.devtools.build.lib.analysis.BuildView;
+import com.google.devtools.build.lib.analysis.BuildView.AnalysisResult;
+import com.google.devtools.build.lib.analysis.ConfigurationsCreatedEvent;
+import com.google.devtools.build.lib.analysis.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.LicensesProvider;
+import com.google.devtools.build.lib.analysis.LicensesProvider.TargetLicense;
+import com.google.devtools.build.lib.analysis.MakeEnvironmentEvent;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
-import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.DummyEnvironment;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationKey;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader.UploadContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
+import com.google.devtools.build.lib.buildtool.BuildRequest.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
-import com.google.devtools.build.lib.buildtool.buildevent.NoExecutionEvent;
-import com.google.devtools.build.lib.buildtool.buildevent.StartingAqueryDumpAfterBuildEvent;
+import com.google.devtools.build.lib.buildtool.buildevent.TestFilteringCompleteEvent;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.OutputFilter;
 import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.exec.ExecutionOptions;
+import com.google.devtools.build.lib.packages.InputFile;
+import com.google.devtools.build.lib.packages.License;
+import com.google.devtools.build.lib.packages.License.DistributionType;
+import com.google.devtools.build.lib.packages.PackageIdentifier;
+import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.Callback;
+import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner.LoadingResult;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.query2.aquery.ActionGraphProtoOutputFormatterCallback;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
-import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.server.FailureDetails.ActionQuery;
-import com.google.devtools.build.lib.server.FailureDetails.BuildConfiguration;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.WorkspaceInfoFromDiff;
-import com.google.devtools.build.lib.skyframe.actiongraph.v2.ActionGraphDump;
-import com.google.devtools.build.lib.skyframe.actiongraph.v2.AqueryOutputHandler;
-import com.google.devtools.build.lib.skyframe.actiongraph.v2.AqueryOutputHandler.OutputType;
-import com.google.devtools.build.lib.skyframe.actiongraph.v2.InvalidAqueryOutputFormatException;
+import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.CrashFailureDetails;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.InterruptedFailureDetails;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.common.options.OptionsProvider;
-import com.google.devtools.common.options.RegexPatternOption;
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintStream;
-import javax.annotation.Nullable;
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 /**
  * Provides the bulk of the implementation of the 'blaze build' command.
  *
- * <p>The various concrete build command classes handle the command options and request setup, then
- * delegate the handling of the request (the building of targets) to this class.
+ * <p>The various concrete build command classes handle the command options and request
+ * setup, then delegate the handling of the request (the building of targets) to this class.
  *
  * <p>The main entry point is {@link #buildTargets}.
  *
- * <p>Most of analysis is handled in {@link com.google.devtools.build.lib.analysis.BuildView}, and
- * execution in {@link ExecutionTool}.
+ * <p>This class is always instantiated and managed as a singleton, being constructed and held by
+ * {@link BlazeRuntime}. This is so multiple kinds of build commands can share this single
+ * instance.
+ *
+ * <p>Most of analysis is handled in {@link BuildView}, and execution in {@link ExecutionTool}.
  */
 public class BuildTool {
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger LOG = Logger.getLogger(BuildTool.class.getName());
 
-  protected final CommandEnvironment env;
   protected final BlazeRuntime runtime;
 
   /**
    * Constructs a BuildTool.
    *
-   * @param env a reference to the command environment of the currently executing command
+   * @param runtime a reference to the blaze runtime.
    */
-  public BuildTool(CommandEnvironment env) {
-    this.env = env;
-    this.runtime = env.getRuntime();
-  }
-
-  /**
-   * The crux of the build system: builds the targets specified in the request.
-   *
-   * <p>Performs loading, analysis and execution for the specified set of targets, honoring the
-   * configuration options in the BuildRequest. Returns normally iff successful, throws an exception
-   * otherwise.
-   *
-   * <p>Callers must ensure that {@link #stopRequest} is called after this method, even if it
-   * throws.
-   *
-   * <p>The caller is responsible for setting up and syncing the package cache.
-   *
-   * <p>During this function's execution, the actualTargets and successfulTargets fields of the
-   * request object are set.
-   *
-   * @param request the build request that this build tool is servicing, which specifies various
-   *     options; during this method's execution, the actualTargets and successfulTargets fields of
-   *     the request object are populated
-   * @param result the build result that is the mutable result of this build
-   * @param validator target validator
-   */
-  public void buildTargets(BuildRequest request, BuildResult result, TargetValidator validator)
-      throws BuildFailedException, InterruptedException, ViewCreationFailedException,
-          TargetParsingException, LoadingFailedException, AbruptExitException,
-          InvalidConfigurationException, TestExecException, ExitException,
-          PostExecutionActionGraphDumpException {
-    try (SilentCloseable c = Profiler.instance().profile("validateOptions")) {
-      validateOptions(request);
-    }
-    BuildOptions buildOptions;
-    try (SilentCloseable c = Profiler.instance().profile("createBuildOptions")) {
-      buildOptions = runtime.createBuildOptions(request);
-    }
-
-    ExecutionTool executionTool = null;
-    boolean catastrophe = false;
-    try {
-      try (SilentCloseable c = Profiler.instance().profile("BuildStartingEvent")) {
-        env.getEventBus().post(new BuildStartingEvent(env, request));
-      }
-      logger.atInfo().log("Build identifier: %s", request.getId());
-
-      // Error out early if multi_cpus is set, but we're not in build or test command.
-      if (!request.getMultiCpus().isEmpty()) {
-        getReporter()
-            .handle(
-                Event.warn(
-                    "The --experimental_multi_cpu option is _very_ experimental and only intended"
-                        + " for internal testing at this time. If you do not work on the build"
-                        + " tool, then you should stop now!"));
-        if (!"build".equals(request.getCommandName()) && !"test".equals(request.getCommandName())) {
-          throw new InvalidConfigurationException(
-              "The experimental setting to select multiple CPUs is only supported for 'build' and "
-                  + "'test' right now!",
-              BuildConfiguration.Code.MULTI_CPU_PREREQ_UNMET);
-        }
-      }
-
-      // Exit if there are any pending exceptions from modules.
-      env.throwPendingException();
-
-      initializeOutputFilter(request);
-
-      AnalysisResult analysisResult =
-          AnalysisPhaseRunner.execute(env, request, buildOptions, validator);
-
-      // We cannot move the executionTool down to the execution phase part since it does set up the
-      // symlinks for tools.
-      // TODO(twerth): Extract embedded tool setup from execution tool and move object creation to
-      // execution phase.
-      executionTool = new ExecutionTool(env, request);
-      if (request.getBuildOptions().performAnalysisPhase) {
-
-        if (!analysisResult.getExclusiveTests().isEmpty()
-            && executionTool.getTestActionContext().forceParallelTestExecution()) {
-          String testStrategy = request.getOptions(ExecutionOptions.class).testStrategy;
-          for (ConfiguredTarget test : analysisResult.getExclusiveTests()) {
-            getReporter()
-                .handle(
-                    Event.warn(
-                        test.getLabel()
-                            + " is tagged exclusive, but --test_strategy="
-                            + testStrategy
-                            + " forces parallel test execution."));
-          }
-          analysisResult = analysisResult.withExclusiveTestsAsParallelTests();
-        }
-
-        result.setBuildConfigurationCollection(analysisResult.getConfigurationCollection());
-        result.setActualTargets(analysisResult.getTargetsToBuild());
-        result.setTestTargets(analysisResult.getTargetsToTest());
-
-        try (SilentCloseable c = Profiler.instance().profile("postProcessAnalysisResult")) {
-          postProcessAnalysisResult(request, analysisResult);
-        }
-
-        // Execution phase.
-        if (needsExecutionPhase(request.getBuildOptions())) {
-          try (SilentCloseable closeable = Profiler.instance().profile("ExecutionTool.init")) {
-            executionTool.init();
-          }
-          executionTool.executeBuild(
-              request.getId(),
-              analysisResult,
-              result,
-              analysisResult.getPackageRoots(),
-              request.getTopLevelArtifactContext());
-        } else {
-          env.getReporter().post(new NoExecutionEvent());
-        }
-        FailureDetail delayedFailureDetail = analysisResult.getFailureDetail();
-        if (delayedFailureDetail != null) {
-          throw new BuildFailedException(
-              delayedFailureDetail.getMessage(), DetailedExitCode.of(delayedFailureDetail));
-        }
-
-        // Only consider builds with SequencedSkyframeExecutor.
-        if (env.getSkyframeExecutor() instanceof SequencedSkyframeExecutor
-            && request.getBuildOptions().aqueryDumpAfterBuildFormat != null) {
-          try (SilentCloseable c = Profiler.instance().profile("postExecutionDumpSkyframe")) {
-            dumpSkyframeStateAfterBuild(
-                request.getOptions(BuildEventProtocolOptions.class),
-                request.getBuildOptions().aqueryDumpAfterBuildFormat,
-                request.getBuildOptions().aqueryDumpAfterBuildOutputFile);
-          } catch (CommandLineExpansionException | IOException e) {
-            throw new PostExecutionActionGraphDumpException(e);
-          } catch (InvalidAqueryOutputFormatException e) {
-            throw new PostExecutionActionGraphDumpException(
-                "--skyframe_state must be used with --output=proto|textproto|jsonproto.", e);
-          }
-        }
-      }
-    } catch (Error | RuntimeException e) {
-      // Don't handle the error here. We will do so in stopRequest.
-      catastrophe = true;
-      throw e;
-    } finally {
-      if (executionTool != null) {
-        executionTool.shutdown();
-      }
-      if (!catastrophe) {
-        // Delete dirty nodes to ensure that they do not accumulate indefinitely.
-        long versionWindow = request.getViewOptions().versionWindowForDirtyNodeGc;
-        if (versionWindow != -1) {
-          env.getSkyframeExecutor().deleteOldNodes(versionWindow);
-        }
-        // The workspace status actions will not run with certain flags, or if an error
-        // occurs early in the build. Tell a lie so that the event is not missing.
-        // If multiple build_info events are sent, only the first is kept, so this does not harm
-        // successful runs (which use the workspace status action).
-        env.getEventBus()
-            .post(
-                new BuildInfoEvent(
-                    env.getBlazeWorkspace()
-                        .getWorkspaceStatusActionFactory()
-                        .createDummyWorkspaceStatus(
-                            new DummyEnvironment() {
-                              @Override
-                              public Path getWorkspace() {
-                                return env.getWorkspace();
-                              }
-
-                              @Override
-                              public String getBuildRequestId() {
-                                return env.getBuildRequestId();
-                              }
-
-                              @Override
-                              public OptionsProvider getOptions() {
-                                return env.getOptions();
-                              }
-
-                              @Nullable
-                              @Override
-                              public WorkspaceInfoFromDiff getWorkspaceInfoFromDiff() {
-                                return env.getWorkspaceInfoFromDiff();
-                              }
-                            })));
-      }
-    }
-  }
-
-  /**
-   * This class is meant to be overridden by classes that want to perform the Analysis phase and
-   * then process the results in some interesting way. See {@link CqueryBuildTool} as an example.
-   */
-  protected void postProcessAnalysisResult(BuildRequest request, AnalysisResult analysisResult)
-      throws InterruptedException, ViewCreationFailedException, ExitException {}
-
-  /**
-   * Produces an aquery dump of the state of Skyframe.
-   *
-   * <p>There are 2 possible output channels: a local file or a remote FS.
-   */
-  private void dumpSkyframeStateAfterBuild(
-      @Nullable BuildEventProtocolOptions besOptions,
-      String format,
-      @Nullable PathFragment outputFilePathFragment)
-      throws CommandLineExpansionException, IOException, InvalidAqueryOutputFormatException {
-    Preconditions.checkState(env.getSkyframeExecutor() instanceof SequencedSkyframeExecutor);
-
-    UploadContext streamingContext = null;
-    Path localOutputFilePath = null;
-    String outputFileName;
-
-    if (outputFilePathFragment == null) {
-      outputFileName = getDefaultOutputFileName(format);
-      if (besOptions != null && besOptions.streamingLogFileUploads) {
-        streamingContext =
-            runtime
-                .getBuildEventArtifactUploaderFactoryMap()
-                .select(besOptions.buildEventUploadStrategy)
-                .create(env)
-                .startUpload(LocalFileType.PERFORMANCE_LOG, /* inputSupplier= */ null);
-      } else {
-        localOutputFilePath = env.getOutputBase().getRelative(outputFileName);
-      }
-    } else {
-      localOutputFilePath = env.getOutputBase().getRelative(outputFilePathFragment);
-      outputFileName = localOutputFilePath.getBaseName();
-    }
-
-    if (localOutputFilePath != null) {
-      getReporter().handle(Event.info("Writing aquery dump to " + localOutputFilePath));
-      getReporter()
-          .post(new StartingAqueryDumpAfterBuildEvent(localOutputFilePath, outputFileName));
-    } else {
-      getReporter().handle(Event.info("Streaming aquery dump."));
-      getReporter().post(new StartingAqueryDumpAfterBuildEvent(streamingContext, outputFileName));
-    }
-
-    try (OutputStream outputStream = initOutputStream(streamingContext, localOutputFilePath);
-        PrintStream printStream = new PrintStream(outputStream);
-        AqueryOutputHandler aqueryOutputHandler =
-            ActionGraphProtoOutputFormatterCallback.constructAqueryOutputHandler(
-                OutputType.fromString(format), outputStream, printStream)) {
-      // These options are fixed for simplicity. We'll add more configurability if the need arises.
-      ActionGraphDump actionGraphDump =
-          new ActionGraphDump(
-              /* includeActionCmdLine= */ false,
-              /* includeArtifacts= */ true,
-              /* actionFilters= */ null,
-              /* includeParamFiles= */ false,
-              /* deduplicateDepsets= */ true,
-              aqueryOutputHandler);
-      ((SequencedSkyframeExecutor) env.getSkyframeExecutor()).dumpSkyframeState(actionGraphDump);
-    }
-  }
-
-  private static String getDefaultOutputFileName(String format) {
-    switch (format) {
-      case "proto":
-        return "aquery_dump.proto";
-      case "textproto":
-        return "aquery_dump.textproto";
-      case "jsonproto":
-        return "aquery_dump.json";
-      default:
-        throw new IllegalArgumentException("Unsupported format type: " + format);
-    }
-  }
-
-  private static OutputStream initOutputStream(
-      @Nullable UploadContext streamingContext, Path outputFilePath) throws IOException {
-    if (streamingContext != null) {
-      return new BufferedOutputStream(streamingContext.getOutputStream());
-    }
-    return new BufferedOutputStream(outputFilePath.getOutputStream());
-  }
-
-  private void reportExceptionError(Exception e) {
-    if (e.getMessage() != null) {
-      getReporter().handle(Event.error(e.getMessage()));
-    }
-  }
-
-  public BuildResult processRequest(BuildRequest request, TargetValidator validator) {
-    return processRequest(request, validator, /* postBuildCallback= */ null);
+  public BuildTool(BlazeRuntime runtime) {
+    this.runtime = runtime;
   }
 
   /**
@@ -391,146 +113,299 @@ public class BuildTool {
    * configuration options in the BuildRequest. Returns normally iff successful, throws an exception
    * otherwise.
    *
+   * <p>Callers must ensure that {@link #stopRequest} is called after this method, even if it
+   * throws.
+   *
    * <p>The caller is responsible for setting up and syncing the package cache.
    *
-   * <p>During this function's execution, the actualTargets and successfulTargets fields of the
-   * request object are set.
+   * <p>During this function's execution, the actualTargets and successfulTargets
+   * fields of the request object are set.
    *
    * @param request the build request that this build tool is servicing, which specifies various
-   *     options; during this method's execution, the actualTargets and successfulTargets fields of
-   *     the request object are populated
-   * @param validator an optional target validator
-   * @param postBuildCallback an optional callback called after the build has been completed
-   *     successfully
-   * @return the result as a {@link BuildResult} object
+   *        options; during this method's execution, the actualTargets and successfulTargets fields
+   *        of the request object are populated
+   * @param result the build result that is the mutable result of this build
+   * @param validator target validator
    */
-  public BuildResult processRequest(
-      BuildRequest request, TargetValidator validator, PostBuildCallback postBuildCallback) {
-    BuildResult result = new BuildResult(request.getStartTime());
-    maybeSetStopOnFirstFailure(request, result);
-    int startSuspendCount = suspendCount();
-    Throwable crash = null;
-    DetailedExitCode detailedExitCode = null;
+  public void buildTargets(BuildRequest request, BuildResult result, TargetValidator validator)
+      throws BuildFailedException, LocalEnvironmentException,
+             InterruptedException, ViewCreationFailedException,
+             TargetParsingException, LoadingFailedException, ExecutorInitException,
+             AbruptExitException, InvalidConfigurationException, TestExecException {
+    validateOptions(request);
+    BuildOptions buildOptions = runtime.createBuildOptions(request);
+    // Sync the package manager before sending the BuildStartingEvent in runLoadingPhase()
+    runtime.setupPackageCache(request.getPackageCacheOptions(),
+        DefaultsPackage.getDefaultsPackageContent(buildOptions));
+
+    ExecutionTool executionTool = null;
+    LoadingResult loadingResult = null;
+    BuildConfigurationCollection configurations = null;
     try {
-      try (SilentCloseable c = Profiler.instance().profile("buildTargets")) {
-        buildTargets(request, result, validator);
+      getEventBus().post(new BuildStartingEvent(runtime.getOutputFileSystem(), request));
+      LOG.info("Build identifier: " + request.getId());
+      executionTool = new ExecutionTool(runtime, request);
+      if (needsExecutionPhase(request.getBuildOptions())) {
+        // Initialize the execution tool early if we need it. This hides the latency of setting up
+        // the execution backends.
+        executionTool.init();
       }
-      detailedExitCode = DetailedExitCode.success();
-      if (postBuildCallback != null) {
-        try (SilentCloseable c = Profiler.instance().profile("postBuildCallback.process")) {
-          result.setPostBuildCallbackFailureDetail(
-              postBuildCallback.process(result.getSuccessfulTargets()));
-        } catch (InterruptedException e) {
-          detailedExitCode =
-              InterruptedFailureDetails.detailedExitCode("post build callback interrupted");
+
+      // Loading phase.
+      loadingResult = runLoadingPhase(request, validator);
+
+      // Create the build configurations.
+      if (!request.getMultiCpus().isEmpty()) {
+        getReporter().handle(Event.warn(
+            "The --experimental_multi_cpu option is _very_ experimental and only intended for "
+            + "internal testing at this time. If you do not work on the build tool, then you "
+            + "should stop now!"));
+        if (!"build".equals(request.getCommandName()) && !"test".equals(request.getCommandName())) {
+          throw new InvalidConfigurationException(
+              "The experimental setting to select multiple CPUs is only supported for 'build' and "
+              + "'test' right now!");
         }
       }
+      configurations = getConfigurations(
+          runtime.getBuildConfigurationKey(buildOptions, request.getMultiCpus()),
+          request.getViewOptions().keepGoing);
+
+      getEventBus().post(new ConfigurationsCreatedEvent(configurations));
+      runtime.throwPendingException();
+      if (configurations.getTargetConfigurations().size() == 1) {
+        // TODO(bazel-team): This is not optimal - we retain backwards compatibility in the case
+        // where there's only a single configuration, but we don't send an event in the multi-config
+        // case. Can we do better? [multi-config]
+        getEventBus().post(new MakeEnvironmentEvent(
+            configurations.getTargetConfigurations().get(0).getMakeEnvironment()));
+      }
+      LOG.info("Configurations created");
+
+      // Analysis phase.
+      AnalysisResult analysisResult = runAnalysisPhase(request, loadingResult, configurations);
+      result.setActualTargets(analysisResult.getTargetsToBuild());
+      result.setTestTargets(analysisResult.getTargetsToTest());
+
+      reportTargets(analysisResult);
+
+      // Execution phase.
+      if (needsExecutionPhase(request.getBuildOptions())) {
+        executionTool.executeBuild(analysisResult, result, runtime.getSkyframeExecutor(),
+            configurations, mergePackageRoots(loadingResult.getPackageRoots(),
+            runtime.getSkyframeExecutor().getPackageRoots()));
+      }
+
+      String delayedErrorMsg = analysisResult.getError();
+      if (delayedErrorMsg != null) {
+        throw new BuildFailedException(delayedErrorMsg);
+      }
+    } catch (RuntimeException e) {
+      // Print an error message for unchecked runtime exceptions. This does not concern Error
+      // subclasses such as OutOfMemoryError.
+      request.getOutErr().printErrLn("Unhandled exception thrown during build; message: " +
+          e.getMessage());
+      throw e;
+    } finally {
+      // Delete dirty nodes to ensure that they do not accumulate indefinitely.
+      long versionWindow = request.getViewOptions().versionWindowForDirtyNodeGc;
+      if (versionWindow != -1) {
+        runtime.getSkyframeExecutor().deleteOldNodes(versionWindow);
+      }
+
+      if (executionTool != null) {
+        executionTool.shutdown();
+      }
+      // The workspace status actions will not run with certain flags, or if an error
+      // occurs early in the build. Tell a lie so that the event is not missing.
+      // If multiple build_info events are sent, only the first is kept, so this does not harm
+      // successful runs (which use the workspace status action).
+      getEventBus().post(new BuildInfoEvent(
+          runtime.getworkspaceStatusActionFactory().createDummyWorkspaceStatus()));
+    }
+
+    if (loadingResult != null && loadingResult.hasTargetPatternError()) {
+      throw new BuildFailedException("execution phase successful, but there were errors " +
+                                     "parsing the target pattern");
+    }
+  }
+
+  private ImmutableMap<PathFragment, Path> mergePackageRoots(
+      ImmutableMap<PackageIdentifier, Path> first,
+      ImmutableMap<PackageIdentifier, Path> second) {
+    Map<PathFragment, Path> builder = Maps.newHashMap();
+    for (Map.Entry<PackageIdentifier, Path> entry : first.entrySet()) {
+      builder.put(entry.getKey().getPackageFragment(), entry.getValue());
+    }
+    for (Map.Entry<PackageIdentifier, Path> entry : second.entrySet()) {
+      if (first.containsKey(entry.getKey())) {
+        Preconditions.checkState(first.get(entry.getKey()).equals(entry.getValue()));
+      } else {
+        // This could overwrite entries from first in other repositories.
+        builder.put(entry.getKey().getPackageFragment(), entry.getValue());
+      }
+    }
+    return ImmutableMap.copyOf(builder);
+  }
+
+  private void reportExceptionError(Exception e) {
+    if (e.getMessage() != null) {
+      getReporter().handle(Event.error(e.getMessage()));
+    }
+  }
+  /**
+   * The crux of the build system. Builds the targets specified in the request using the specified
+   * Executor.
+   *
+   * <p>Performs loading, analysis and execution for the specified set of targets, honoring the
+   * configuration options in the BuildRequest. Returns normally iff successful, throws an exception
+   * otherwise.
+   *
+   * <p>The caller is responsible for setting up and syncing the package cache.
+   *
+   * <p>During this function's execution, the actualTargets and successfulTargets
+   * fields of the request object are set.
+   *
+   * @param request the build request that this build tool is servicing, which specifies various
+   *        options; during this method's execution, the actualTargets and successfulTargets fields
+   *        of the request object are populated
+   * @param validator target validator
+   * @return the result as a {@link BuildResult} object
+   */
+  public BuildResult processRequest(BuildRequest request, TargetValidator validator) {
+    BuildResult result = new BuildResult(request.getStartTime());
+    runtime.getEventBus().register(result);
+    Throwable catastrophe = null;
+    ExitCode exitCode = ExitCode.BLAZE_INTERNAL_ERROR;
+    try {
+      buildTargets(request, result, validator);
+      exitCode = ExitCode.SUCCESS;
     } catch (BuildFailedException e) {
-      if (!e.isErrorAlreadyShown()) {
-        // The actual error has not already been reported by the Builder.
-        // TODO(janakr): This is wrong: --keep_going builds with errors don't have a message in
-        //  this BuildFailedException, so any error message that is only reported here will be
-        //  missing for --keep_going builds. All error reporting should be done at the site of the
-        //  error, if only for clearer behavior.
+      if (e.isErrorAlreadyShown()) {
+        // The actual error has already been reported by the Builder.
+      } else {
         reportExceptionError(e);
       }
       if (e.isCatastrophic()) {
         result.setCatastrophe();
       }
-      detailedExitCode = e.getDetailedExitCode();
+      exitCode = ExitCode.BUILD_FAILURE;
     } catch (InterruptedException e) {
-      // We may have been interrupted by an error, or the user's interruption may have raced with
-      // an error, so check to see if we should report that error code instead.
-      detailedExitCode = env.getRuntime().getCrashExitCode();
-      AbruptExitException environmentPendingAbruptExitException = env.getPendingException();
-      if (detailedExitCode == null && environmentPendingAbruptExitException != null) {
-        detailedExitCode = environmentPendingAbruptExitException.getDetailedExitCode();
-        // Report the exception from the environment - the exception we're handling here is just an
-        // interruption.
-        reportExceptionError(environmentPendingAbruptExitException);
-      }
-      if (detailedExitCode == null) {
-        String message = "build interrupted";
-        detailedExitCode = InterruptedFailureDetails.detailedExitCode(message);
-        env.getReporter().handle(Event.error(message));
-        env.getEventBus().post(new BuildInterruptedEvent());
-      } else {
-        result.setCatastrophe();
-      }
-    } catch (TargetParsingException | LoadingFailedException e) {
-      detailedExitCode = e.getDetailedExitCode();
-      reportExceptionError(e);
-    } catch (ViewCreationFailedException e) {
-      detailedExitCode = DetailedExitCode.of(ExitCode.PARSING_FAILURE, e.getFailureDetail());
-      reportExceptionError(e);
-    } catch (ExitException e) {
-      detailedExitCode = e.getDetailedExitCode();
+      exitCode = ExitCode.INTERRUPTED;
+      getReporter().handle(Event.error("build interrupted"));
+      getEventBus().post(new BuildInterruptedEvent());
+    } catch (TargetParsingException | LoadingFailedException | ViewCreationFailedException e) {
+      exitCode = ExitCode.PARSING_FAILURE;
       reportExceptionError(e);
     } catch (TestExecException e) {
       // ExitCode.SUCCESS means that build was successful. Real return code of program
       // is going to be calculated in TestCommand.doTest().
-      detailedExitCode = DetailedExitCode.success();
+      exitCode = ExitCode.SUCCESS;
       reportExceptionError(e);
     } catch (InvalidConfigurationException e) {
-      detailedExitCode = e.getDetailedExitCode();
+      exitCode = ExitCode.COMMAND_LINE_ERROR;
       reportExceptionError(e);
-      // TODO(gregce): With "global configurations" we cannot tie a configuration creation failure
-      // to a single target and have to halt the entire build. Once configurations are genuinely
-      // created as part of the analysis phase they should report their error on the level of the
-      // target(s) that triggered them.
-      result.setCatastrophe();
     } catch (AbruptExitException e) {
-      detailedExitCode = e.getDetailedExitCode();
+      exitCode = e.getExitCode();
       reportExceptionError(e);
       result.setCatastrophe();
-    } catch (PostExecutionActionGraphDumpException e) {
-      detailedExitCode =
-          DetailedExitCode.of(
-              FailureDetail.newBuilder()
-                  .setMessage(e.getMessage())
-                  .setActionQuery(
-                      ActionQuery.newBuilder()
-                          .setCode(ActionQuery.Code.SKYFRAME_STATE_AFTER_EXECUTION)
-                          .build())
-                  .build());
-      reportExceptionError(e);
     } catch (Throwable throwable) {
-      crash = throwable;
-      detailedExitCode = CrashFailureDetails.detailedExitCodeForThrowable(crash);
-      Throwables.throwIfUnchecked(throwable);
-      throw new IllegalStateException(throwable);
+      catastrophe = throwable;
+      Throwables.propagate(throwable);
     } finally {
-      if (detailedExitCode == null) {
-        detailedExitCode =
-            CrashFailureDetails.detailedExitCodeForThrowable(
-                new IllegalStateException("Unspecified DetailedExitCode"));
-      }
-      try (SilentCloseable c = Profiler.instance().profile("stopRequest")) {
-        stopRequest(result, crash, detailedExitCode, startSuspendCount);
-      }
+      stopRequest(request, result, catastrophe, exitCode);
     }
 
     return result;
   }
 
-  private static void maybeSetStopOnFirstFailure(BuildRequest request, BuildResult result) {
-    if (shouldStopOnFailure(request)) {
-      result.setStopOnFirstFailure(true);
-    }
+  protected final BuildConfigurationCollection getConfigurations(BuildConfigurationKey key,
+      boolean keepGoing)
+      throws InvalidConfigurationException, InterruptedException {
+    SkyframeExecutor executor = runtime.getSkyframeExecutor();
+    // TODO(bazel-team): consider a possibility of moving ConfigurationFactory construction into
+    // skyframe.
+    return executor.createConfigurations(keepGoing, runtime.getConfigurationFactory(), key);
   }
 
-  private static boolean shouldStopOnFailure(BuildRequest request) {
-    return !(request.getKeepGoing() && request.getExecutionOptions().testKeepGoing);
+  @VisibleForTesting
+  protected final LoadingResult runLoadingPhase(final BuildRequest request,
+                                                final TargetValidator validator)
+          throws LoadingFailedException, TargetParsingException, InterruptedException,
+          AbruptExitException {
+    Profiler.instance().markPhase(ProfilePhase.LOAD);
+    runtime.throwPendingException();
+
+    final boolean keepGoing = request.getViewOptions().keepGoing;
+
+    Callback callback = new Callback() {
+      @Override
+      public void notifyTargets(Collection<Target> targets) throws LoadingFailedException {
+        if (validator != null) {
+          validator.validateTargets(targets, keepGoing);
+        }
+      }
+
+      @Override
+      public void notifyVisitedPackages(Set<PackageIdentifier> visitedPackages) {
+        runtime.getSkyframeExecutor().updateLoadedPackageSet(visitedPackages);
+      }
+    };
+
+    LoadingResult result = runtime.getLoadingPhaseRunner().execute(getReporter(),
+        getEventBus(), request.getTargets(), request.getLoadingOptions(),
+        runtime.createBuildOptions(request).getAllLabels(), keepGoing,
+        request.shouldRunTests(), callback);
+    runtime.throwPendingException();
+    return result;
   }
 
-  /** Initializes the output filter to the value given with {@code --output_filter}. */
-  private void initializeOutputFilter(BuildRequest request) {
-    RegexPatternOption outputFilterOption = request.getBuildOptions().outputFilter;
-    if (outputFilterOption != null) {
-      getReporter()
-          .setOutputFilter(
-              OutputFilter.RegexOutputFilter.forPattern(outputFilterOption.regexPattern()));
+  /**
+   * Performs the initial phases 0-2 of the build: Setup, Loading and Analysis.
+   * <p>
+   * Postcondition: On success, populates the BuildRequest's set of targets to
+   * build.
+   *
+   * @return null if loading / analysis phases were successful; a useful error
+   *         message if loading or analysis phase errors were encountered and
+   *         request.keepGoing.
+   * @throws InterruptedException if the current thread was interrupted.
+   * @throws ViewCreationFailedException if analysis failed for any reason.
+   */
+  private AnalysisResult runAnalysisPhase(BuildRequest request, LoadingResult loadingResult,
+      BuildConfigurationCollection configurations)
+      throws InterruptedException, ViewCreationFailedException {
+    Stopwatch timer = Stopwatch.createStarted();
+    if (!request.getBuildOptions().performAnalysisPhase) {
+      getReporter().handle(Event.progress("Loading complete."));
+      LOG.info("No analysis requested, so finished");
+      return AnalysisResult.EMPTY;
     }
+
+    getReporter().handle(Event.progress("Loading complete.  Analyzing..."));
+    Profiler.instance().markPhase(ProfilePhase.ANALYZE);
+
+    AnalysisResult analysisResult = getView().update(loadingResult, configurations,
+        request.getViewOptions(), request.getTopLevelArtifactContext(), getReporter(),
+        getEventBus());
+
+    // TODO(bazel-team): Merge these into one event.
+    getEventBus().post(new AnalysisPhaseCompleteEvent(analysisResult.getTargetsToBuild(),
+        getView().getTargetsVisited(), timer.stop().elapsed(TimeUnit.MILLISECONDS)));
+    getEventBus().post(new TestFilteringCompleteEvent(analysisResult.getTargetsToBuild(),
+        analysisResult.getTargetsToTest()));
+
+    // Check licenses.
+    // We check licenses if the first target configuration has license checking enabled. Right now,
+    // it is not possible to have multiple target configurations with different settings for this
+    // flag, which allows us to take this short cut.
+    boolean checkLicenses = configurations.getTargetConfigurations().get(0).checkLicenses();
+    if (checkLicenses) {
+      Profiler.instance().markPhase(ProfilePhase.LICENSE);
+      validateLicensingForTargets(analysisResult.getTargetsToBuild(),
+          request.getViewOptions().keepGoing);
+    }
+
+    return analysisResult;
   }
 
   private static boolean needsExecutionPhase(BuildRequestOptions options) {
@@ -542,65 +417,39 @@ public class BuildTool {
    *
    * <p>This logs the build result, cleans up and stops the clock.
    *
-   * @param result result to update
-   * @param crash any unexpected {@link RuntimeException} or {@link Error}, may be null
-   * @param detailedExitCode describes the exit code and an optional detailed failure value to add
-   *     to {@code result}
-   * @param startSuspendCount number of suspensions before the build started
+   * @param request the build request that this build tool is servicing
+   * @param crash Any unexpected RuntimeException or Error. May be null
+   * @param exitCondition A suggested exit condition from either the build logic or
+   *        a thrown exception somewhere along the way.
    */
-  public void stopRequest(
-      BuildResult result,
-      @Nullable Throwable crash,
-      DetailedExitCode detailedExitCode,
-      int startSuspendCount) {
-    Preconditions.checkState((crash == null) || !detailedExitCode.isSuccess());
-    int stopSuspendCount = suspendCount();
-    Preconditions.checkState(startSuspendCount <= stopSuspendCount);
+  public void stopRequest(BuildRequest request, BuildResult result, Throwable crash,
+      ExitCode exitCondition) {
+    Preconditions.checkState((crash == null) || (exitCondition != ExitCode.SUCCESS));
     result.setUnhandledThrowable(crash);
-    result.setDetailedExitCode(detailedExitCode);
-
-    InterruptedException ie = null;
-    try {
-      env.getSkyframeExecutor().notifyCommandComplete(env.getReporter());
-    } catch (InterruptedException e) {
-      env.getReporter().handle(Event.error("Build interrupted during command completion"));
-      ie = e;
-    }
+    result.setExitCondition(exitCondition);
     // The stop time has to be captured before we send the BuildCompleteEvent.
     result.setStopTime(runtime.getClock().currentTimeMillis());
-    result.setWasSuspended(stopSuspendCount > startSuspendCount);
+    getEventBus().post(new BuildCompleteEvent(request, result));
+  }
 
-    // Skip the build complete events so that modules can run blazeShutdownOnCrash without thinking
-    // that the build completed normally. BlazeCommandDispatcher will call handleCrash.
-    if (crash == null) {
-      try {
-        Profiler.instance().markPhase(ProfilePhase.FINISH);
-      } catch (InterruptedException e) {
-        env.getReporter().handle(Event.error("Build interrupted during command completion"));
-        ie = e;
+  private void reportTargets(AnalysisResult analysisResult) {
+    Collection<ConfiguredTarget> targetsToBuild = analysisResult.getTargetsToBuild();
+    Collection<ConfiguredTarget> targetsToTest = analysisResult.getTargetsToTest();
+    if (targetsToTest != null) {
+      int testCount = targetsToTest.size();
+      int targetCount = targetsToBuild.size() - testCount;
+      if (targetCount == 0) {
+        getReporter().handle(Event.info("Found "
+            + testCount + (testCount == 1 ? " test target..." : " test targets...")));
+      } else {
+        getReporter().handle(Event.info("Found "
+            + targetCount + (targetCount == 1 ? " target and " : " targets and ")
+            + testCount + (testCount == 1 ? " test target..." : " test targets...")));
       }
-      env.getEventBus().post(new BuildPrecompleteEvent());
-      env.getEventBus()
-          .post(
-              new BuildCompleteEvent(
-                  result,
-                  ImmutableList.of(
-                      BuildEventIdUtil.buildToolLogs(), BuildEventIdUtil.buildMetrics())));
-    }
-    // Post the build tool logs event; the corresponding local files may be contributed from
-    // modules, and this has to happen after posting the BuildCompleteEvent because that's when
-    // modules add their data to the collection.
-    env.getEventBus().post(result.getBuildToolLogCollection().freeze().toEvent());
-    if (ie != null) {
-      if (detailedExitCode.isSuccess()) {
-        result.setDetailedExitCode(
-            InterruptedFailureDetails.detailedExitCode(
-                "Build interrupted during command completion"));
-      } else if (!detailedExitCode.getExitCode().equals(ExitCode.INTERRUPTED)) {
-        logger.atWarning().withCause(ie).log(
-            "Suppressed interrupted exception during stop request because already failing with: %s",
-            detailedExitCode);
-      }
+    } else {
+      int targetCount = targetsToBuild.size();
+      getReporter().handle(Event.info("Found "
+          + targetCount + (targetCount == 1 ? " target..." : " targets...")));
     }
   }
 
@@ -611,31 +460,81 @@ public class BuildTool {
    * settings that conflict.
    */
   @VisibleForTesting
-  public void validateOptions(BuildRequest request) {
+  public void validateOptions(BuildRequest request) throws InvalidConfigurationException {
     for (String issue : request.validateOptions()) {
       getReporter().handle(Event.warn(issue));
     }
   }
 
-  private Reporter getReporter() {
-    return env.getReporter();
+  /**
+   * Takes a set of configured targets, and checks if the distribution methods
+   * declared for the targets are compatible with the constraints imposed by
+   * their prerequisites' licenses.
+   *
+   * @param configuredTargets the targets to check
+   * @param keepGoing if false, and a licensing error is encountered, both
+   *        generates an error message on the reporter, <em>and</em> throws an
+   *        exception. If true, then just generates a message on the reporter.
+   * @throws ViewCreationFailedException if the license checking failed (and not
+   *         --keep_going)
+   */
+  private void validateLicensingForTargets(Iterable<ConfiguredTarget> configuredTargets,
+      boolean keepGoing) throws ViewCreationFailedException {
+    for (ConfiguredTarget configuredTarget : configuredTargets) {
+      final Target target = configuredTarget.getTarget();
+
+      if (TargetUtils.isTestRule(target)) {
+        continue;  // Tests are exempt from license checking
+      }
+
+      final Set<DistributionType> distribs = target.getDistributions();
+      BuildConfiguration config = configuredTarget.getConfiguration();
+      boolean staticallyLinked = (config != null) && config.performsStaticLink();
+      staticallyLinked |= (config != null) && (target instanceof Rule)
+          && ((Rule) target).getRuleClassObject().hasAttr("linkopts", Type.STRING_LIST)
+          && ConfiguredAttributeMapper.of((RuleConfiguredTarget) configuredTarget)
+              .get("linkopts", Type.STRING_LIST).contains("-static");
+
+      LicensesProvider provider = configuredTarget.getProvider(LicensesProvider.class);
+      if (provider != null) {
+        NestedSet<TargetLicense> licenses = provider.getTransitiveLicenses();
+        for (TargetLicense targetLicense : licenses) {
+          if (!targetLicense.getLicense().checkCompatibility(
+              distribs, target, targetLicense.getLabel(), getReporter(), staticallyLinked)) {
+            if (!keepGoing) {
+              throw new ViewCreationFailedException("Build aborted due to licensing error");
+            }
+          }
+        }
+      } else if (configuredTarget.getTarget() instanceof InputFile) {
+        // Input file targets do not provide licenses because they do not
+        // depend on the rule where their license is taken from. This is usually
+        // not a problem, because the transitive collection of licenses always
+        // hits the rule they come from, except when the input file is a
+        // top-level target. Thus, we need to handle that case specially here.
+        //
+        // See FileTarget#getLicense for more information about the handling of
+        // license issues with File targets.
+        License license = configuredTarget.getTarget().getLicense();
+        if (!license.checkCompatibility(distribs, target, configuredTarget.getLabel(),
+            getReporter(), staticallyLinked)) {
+          if (!keepGoing) {
+            throw new ViewCreationFailedException("Build aborted due to licensing error");
+          }
+       }
+      }
+    }
   }
 
-  /** Describes a failure that isn't severe enough to halt the command in keep_going mode. */
-  // TODO(mschaller): consider promoting this to be a sibling of AbruptExitException.
-  static class ExitException extends Exception {
+  public BuildView getView() {
+    return runtime.getView();
+  }
 
-    private final DetailedExitCode detailedExitCode;
+  private Reporter getReporter() {
+    return runtime.getReporter();
+  }
 
-    ExitException(DetailedExitCode detailedExitCode) {
-      super(
-          Preconditions.checkNotNull(detailedExitCode.getFailureDetail(), "failure detail")
-              .getMessage());
-      this.detailedExitCode = detailedExitCode;
-    }
-
-    DetailedExitCode getDetailedExitCode() {
-      return detailedExitCode;
-    }
+  private EventBus getEventBus() {
+    return runtime.getEventBus();
   }
 }

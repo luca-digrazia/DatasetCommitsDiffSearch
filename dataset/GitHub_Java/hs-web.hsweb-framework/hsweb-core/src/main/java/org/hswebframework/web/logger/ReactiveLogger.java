@@ -2,7 +2,9 @@ package org.hswebframework.web.logger;
 
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
-import reactor.core.publisher.*;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Signal;
+import reactor.core.publisher.SignalType;
 import reactor.util.context.Context;
 
 import java.util.*;
@@ -13,30 +15,15 @@ import java.util.function.Function;
 @Slf4j
 public class ReactiveLogger {
 
-    private static final String CONTEXT_KEY = ReactiveLogger.class.getName();
+    private static String CONTEXT_KEY = ReactiveLogger.class.getName();
 
     public static Function<Context, Context> start(String key, String value) {
         return start(Collections.singletonMap(key, value));
     }
 
-    public static Function<Context, Context> start(String... keyAndValue) {
-        Map<String, String> map = new HashMap<>();
-        for (int i = 0, len = keyAndValue.length / 2; i < len; i++) {
-            map.put(keyAndValue[i * 2], keyAndValue[i * 2 + 1]);
-        }
-        return start(map);
-    }
-
     public static Mono<Void> mdc(String key, String value) {
-        return Mono
-                .<Void>empty()
+        return Mono.<Void>empty()
                 .subscriberContext(start(key, value));
-    }
-
-    public static Mono<Void> mdc(String... keyAndValue) {
-        return Mono
-                .<Void>empty()
-                .subscriberContext(start(keyAndValue));
     }
 
     public static Function<Context, Context> start(Map<String, String> context) {
@@ -89,8 +76,7 @@ public class ReactiveLogger {
     }
 
     public static Mono<Void> mdc(Consumer<Map<String, String>> consumer) {
-        return Mono
-                .subscriberContext()
+        return Mono.subscriberContext()
                 .doOnNext(ctx -> {
                     Optional<Map<String, String>> maybeContextMap = ctx.getOrEmpty(CONTEXT_KEY);
                     if (maybeContextMap.isPresent()) {
@@ -101,14 +87,6 @@ public class ReactiveLogger {
                     }
                 })
                 .then();
-    }
-
-    public static <T, R> BiConsumer<T, SynchronousSink<R>> handle(BiConsumer<T, SynchronousSink<R>> logger) {
-        return (t, rFluxSink) -> {
-            log(rFluxSink.currentContext(), context -> {
-                logger.accept(t, rFluxSink);
-            });
-        };
     }
 
     public static <T> Consumer<Signal<T>> onNext(Consumer<T> logger) {

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,8 +15,8 @@
  */
 package org.androidannotations.internal.core.handler;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JExpr._null;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
 
 import java.util.Collections;
 import java.util.List;
@@ -35,14 +34,15 @@ import org.androidannotations.handler.AnnotationHandler;
 import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.handler.HasParameterHandlers;
 import org.androidannotations.helper.CanonicalNameConstants;
+import org.androidannotations.holder.GeneratedClassHolder;
 import org.androidannotations.holder.HasOnActivityResult;
 
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JOp;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JOp;
+import com.sun.codemodel.JVar;
 
 public class OnActivityResultHandler extends BaseAnnotationHandler<HasOnActivityResult> implements HasParameterHandlers<HasOnActivityResult> {
 
@@ -54,8 +54,8 @@ public class OnActivityResultHandler extends BaseAnnotationHandler<HasOnActivity
 	}
 
 	@Override
-	public Iterable<AnnotationHandler> getParameterHandlers() {
-		return Collections.<AnnotationHandler> singleton(extraHandler);
+	public Iterable<AnnotationHandler<? extends GeneratedClassHolder>> getParameterHandlers() {
+		return Collections.<AnnotationHandler<? extends GeneratedClassHolder>> singleton(extraHandler);
 	}
 
 	@Override
@@ -87,9 +87,9 @@ public class OnActivityResultHandler extends BaseAnnotationHandler<HasOnActivity
 		List<? extends VariableElement> parameters = executableElement.getParameters();
 
 		int requestCode = executableElement.getAnnotation(OnActivityResult.class).value();
-		JBlock onResultBlock = holder.getOnActivityResultCaseBlock(requestCode).blockSimple();
+		JBlock onResultBlock = holder.getOnActivityResultCaseBlock(requestCode).block();
 
-		IJExpression activityRef = holder.getGeneratedClass().staticRef("this");
+		JExpression activityRef = holder.getGeneratedClass().staticRef("this");
 		JInvocation onResultInvocation = JExpr.invoke(activityRef, methodName);
 
 		JVar intent = holder.getOnActivityResultDataParam();
@@ -102,7 +102,7 @@ public class OnActivityResultHandler extends BaseAnnotationHandler<HasOnActivity
 					extras = onResultBlock.decl(getClasses().BUNDLE, "extras_",
 							JOp.cond(intent.ne(_null()).cand(intent.invoke("getExtras").ne(_null())), intent.invoke("getExtras"), _new(getClasses().BUNDLE)));
 				}
-				IJExpression extraParameter = extraHandler.getExtraValue(parameter, extras, onResultBlock, holder);
+				JExpression extraParameter = extraHandler.getExtraValue(parameter, extras, onResultBlock, holder);
 				onResultInvocation.arg(extraParameter);
 			} else if (CanonicalNameConstants.INTENT.equals(parameterType.toString())) {
 				onResultInvocation.arg(intent);
@@ -125,8 +125,8 @@ public class OnActivityResultHandler extends BaseAnnotationHandler<HasOnActivity
 			return parameter.getAnnotation(OnActivityResult.Extra.class).value();
 		}
 
-		public IJExpression getExtraValue(VariableElement parameter, JVar extras, JBlock block, HasOnActivityResult holder) {
-			return super.getExtraValue(parameter, extras, block, holder.getOnActivityResultMethod(), holder);
+		public JExpression getExtraValue(VariableElement parameter, JVar extras, JBlock block, HasOnActivityResult holder) {
+			return super.getExtraValue(parameter, holder.getOnActivityResultDataParam(), extras, block, holder.getOnActivityResultMethod(), holder);
 		}
 	}
 

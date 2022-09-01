@@ -7,17 +7,10 @@ import android.content.res.AssetManager;
 import android.content.res.Resources;
 import android.graphics.*;
 import android.net.Uri;
-import android.os.Build;
-import androidx.annotation.Keep;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 import android.text.TextUtils;
-
-import com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView;
 
 import java.io.InputStream;
 import java.util.List;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -28,9 +21,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * however it has some problems with grayscale, indexed and CMYK images.
  *
  * A {@link ReadWriteLock} is used to delegate responsibility for multi threading behaviour to the
- * {@link BitmapRegionDecoder} instance on SDK &gt;= 21, whilst allowing this class to block until no
- * tiles are being loaded before recycling the decoder. In practice, {@link BitmapRegionDecoder} is
- * synchronized internally so this has no real impact on performance.
+ * {@link BitmapRegionDecoder} instance, whilst allowing this class to block until no tiles are being
+ * loaded before recycling the decoder. In practice, {@link BitmapRegionDecoder} is single threaded
+ * so this has no real impact on performance.
  */
 public class SkiaImageRegionDecoder implements ImageRegionDecoder {
 
@@ -43,27 +36,20 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
 
     private final Bitmap.Config bitmapConfig;
 
-    @Keep
-    @SuppressWarnings("unused")
     public SkiaImageRegionDecoder() {
         this(null);
     }
 
-    @SuppressWarnings({"WeakerAccess", "SameParameterValue"})
-    public SkiaImageRegionDecoder(@Nullable Bitmap.Config bitmapConfig) {
-        Bitmap.Config globalBitmapConfig = SubsamplingScaleImageView.getPreferredBitmapConfig();
-        if (bitmapConfig != null) {
-            this.bitmapConfig = bitmapConfig;
-        } else if (globalBitmapConfig != null) {
-            this.bitmapConfig = globalBitmapConfig;
-        } else {
+    public SkiaImageRegionDecoder(Bitmap.Config bitmapConfig) {
+        if (bitmapConfig == null) {
             this.bitmapConfig = Bitmap.Config.RGB_565;
+        } else {
+            this.bitmapConfig = bitmapConfig;
         }
     }
 
     @Override
-    @NonNull
-    public Point init(Context context, @NonNull Uri uri) throws Exception {
+    public Point init(Context context, Uri uri) throws Exception {
         String uriString = uri.toString();
         if (uriString.startsWith(RESOURCE_PREFIX)) {
             Resources res;
@@ -99,13 +85,10 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
             try {
                 ContentResolver contentResolver = context.getContentResolver();
                 inputStream = contentResolver.openInputStream(uri);
-                if (inputStream == null) {
-                    throw new Exception("Content resolver returned null stream. Unable to initialise with uri.");
-                }
                 decoder = BitmapRegionDecoder.newInstance(inputStream, false);
             } finally {
                 if (inputStream != null) {
-                    try { inputStream.close(); } catch (Exception e) { /* Ignore */ }
+                    try { inputStream.close(); } catch (Exception e) { }
                 }
             }
         }
@@ -113,9 +96,8 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
     }
 
     @Override
-    @NonNull
-    public Bitmap decodeRegion(@NonNull Rect sRect, int sampleSize) {
-        getDecodeLock().lock();
+    public Bitmap decodeRegion(Rect sRect, int sampleSize) {
+        decoderLock.readLock().lock();
         try {
             if (decoder != null && !decoder.isRecycled()) {
                 BitmapFactory.Options options = new BitmapFactory.Options();
@@ -130,36 +112,27 @@ public class SkiaImageRegionDecoder implements ImageRegionDecoder {
                 throw new IllegalStateException("Cannot decode region after decoder has been recycled");
             }
         } finally {
-            getDecodeLock().unlock();
+            decoderLock.readLock().unlock();
         }
     }
 
     @Override
-    public synchronized boolean isReady() {
-        return decoder != null && !decoder.isRecycled();
+    public boolean isReady() {
+        decoderLock.readLock().lock();
+        try {
+            return decoder != null && !decoder.isRecycled();
+        } finally {
+            decoderLock.readLock().unlock();
+        }
     }
 
     @Override
-    public synchronized void recycle() {
+    public void recycle() {
         decoderLock.writeLock().lock();
         try {
             decoder.recycle();
-            decoder = null;
         } finally {
             decoderLock.writeLock().unlock();
-        }
-    }
-
-    /**
-     * Before SDK 21, BitmapRegionDecoder was not synchronized internally. Any attempt to decode
-     * regions from multiple threads with one decoder instance causes a segfault. For old versions
-     * use the write lock to enforce single threaded decoding.
-     */
-    private Lock getDecodeLock() {
-        if (Build.VERSION.SDK_INT < 21) {
-            return decoderLock.writeLock();
-        } else {
-            return decoderLock.readLock();
         }
     }
 }

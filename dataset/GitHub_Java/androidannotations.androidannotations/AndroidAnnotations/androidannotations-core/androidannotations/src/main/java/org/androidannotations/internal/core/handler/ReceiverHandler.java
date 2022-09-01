@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,11 +15,11 @@
  */
 package org.androidannotations.internal.core.handler;
 
-import static com.helger.jcodemodel.JExpr._new;
-import static com.helger.jcodemodel.JExpr._null;
-import static com.helger.jcodemodel.JMod.FINAL;
-import static com.helger.jcodemodel.JMod.PRIVATE;
-import static com.helger.jcodemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JMod.FINAL;
+import static com.sun.codemodel.JMod.PRIVATE;
+import static com.sun.codemodel.JMod.PUBLIC;
 import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.Collections;
@@ -36,20 +35,19 @@ import org.androidannotations.annotations.Receiver;
 import org.androidannotations.handler.AnnotationHandler;
 import org.androidannotations.handler.HasParameterHandlers;
 import org.androidannotations.helper.CanonicalNameConstants;
-import org.androidannotations.holder.EFragmentHolder;
-import org.androidannotations.holder.HasActivityLifecycleMethods;
+import org.androidannotations.holder.GeneratedClassHolder;
 import org.androidannotations.holder.HasReceiverRegistration;
 import org.androidannotations.holder.ReceiverRegistrationDelegate.IntentFilterData;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JOp;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JOp;
+import com.sun.codemodel.JVar;
 
 public class ReceiverHandler extends CoreBaseAnnotationHandler<HasReceiverRegistration> implements HasParameterHandlers<HasReceiverRegistration> {
 
@@ -61,13 +59,14 @@ public class ReceiverHandler extends CoreBaseAnnotationHandler<HasReceiverRegist
 	}
 
 	@Override
-	public Iterable<AnnotationHandler> getParameterHandlers() {
-		return Collections.<AnnotationHandler> singleton(extraHandler);
+	public Iterable<AnnotationHandler<? extends GeneratedClassHolder>> getParameterHandlers() {
+		return Collections.<AnnotationHandler<? extends GeneratedClassHolder>> singleton(extraHandler);
 	}
+
 
 	@Override
 	protected void validate(Element element, ElementValidation validation) {
-		validatorHelper.enclosingElementHasEActivityOrEFragmentOrEServiceOrEIntentServiceOrEViewOrEViewGroup(element, validation);
+		validatorHelper.enclosingElementHasEActivityOrEFragmentOrEServiceOrEIntentService(element, validation);
 
 		validatorHelper.isNotPrivate(element, validation);
 
@@ -111,72 +110,55 @@ public class ReceiverHandler extends CoreBaseAnnotationHandler<HasReceiverRegist
 
 		JBlock body = onReceiveMethod.body();
 
-		IJExpression receiverRef = holder.getGeneratedClass().staticRef("this");
+		JExpression receiverRef = holder.getGeneratedClass().staticRef("this");
 		JInvocation methodCall = receiverRef.invoke(methodName);
 		JVar extras = null;
 
 		List<? extends VariableElement> methodParameters = executableElement.getParameters();
 		for (VariableElement param : methodParameters) {
-			AbstractJClass extraParamClass = codeModelHelper.typeMirrorToJClass(param.asType());
+			JClass extraParamClass = codeModelHelper.typeMirrorToJClass(param.asType());
 
 			if (extraParamClass.equals(getClasses().CONTEXT)) {
 				methodCall.arg(contextVar);
-			} else if (extraParamClass.equals(getClasses().INTENT) && param.getAnnotation(Receiver.Extra.class) == null) {
+			} else if (extraParamClass.equals(getClasses().INTENT)) {
 				methodCall.arg(intentVar);
 			} else if (param.getAnnotation(Receiver.Extra.class) != null) {
 				if (extras == null) {
 					extras = body.decl(getClasses().BUNDLE, "extras_", JOp.cond(intentVar.invoke("getExtras").ne(_null()), intentVar.invoke("getExtras"), _new(getClasses().BUNDLE)));
 				}
-				methodCall.arg(extraHandler.getExtraValue(param, extras, body, onReceiveMethod, anonymousReceiverClass));
+				methodCall.arg(extraHandler.getExtraValue(param, intentVar, extras, body, onReceiveMethod, anonymousReceiverClass));
 			}
 		}
 
 		body.add(methodCall);
-		IJExpression receiverInit = _new(anonymousReceiverClass);
+		JExpression receiverInit = _new(anonymousReceiverClass);
 		return holder.getGeneratedClass().field(PRIVATE | FINAL, getClasses().BROADCAST_RECEIVER, receiverName, receiverInit);
 	}
 
 	private void registerAndUnregisterReceiver(HasReceiverRegistration holder, Receiver.RegisterAt registerAt, JFieldVar intentFilterField, JFieldVar receiverField, boolean local) {
 		JBlock registerBlock = null;
 		JBlock unregisterBlock = null;
-
-		if (holder instanceof HasActivityLifecycleMethods) {
-			HasActivityLifecycleMethods activityLifecycleMethods = (HasActivityLifecycleMethods) holder;
-
-			switch (registerAt) {
-			case OnCreateOnDestroy:
-				registerBlock = activityLifecycleMethods.getOnCreateAfterSuperBlock();
-				unregisterBlock = activityLifecycleMethods.getOnDestroyBeforeSuperBlock();
-				break;
-			case OnStartOnStop:
-				registerBlock = activityLifecycleMethods.getOnStartAfterSuperBlock();
-				unregisterBlock = activityLifecycleMethods.getOnStopBeforeSuperBlock();
-				break;
-			case OnResumeOnPause:
-				registerBlock = activityLifecycleMethods.getOnResumeAfterSuperBlock();
-				unregisterBlock = activityLifecycleMethods.getOnPauseBeforeSuperBlock();
-				break;
-			}
-
-			if (holder instanceof EFragmentHolder && registerAt == Receiver.RegisterAt.OnAttachOnDetach) {
-				EFragmentHolder fragmentHolder = (EFragmentHolder) holder;
-
-				registerBlock = fragmentHolder.getOnAttachAfterSuperBlock();
-				unregisterBlock = fragmentHolder.getOnDetachBeforeSuperBlock();
-			}
-
-		} else {
-			registerBlock = holder.getStartLifecycleAfterSuperBlock();
-			unregisterBlock = holder.getEndLifecycleBeforeSuperBlock();
+		switch (registerAt) {
+		case OnCreateOnDestroy:
+			registerBlock = holder.getOnCreateAfterSuperBlock();
+			unregisterBlock = holder.getOnDestroyBeforeSuperBlock();
+			break;
+		case OnStartOnStop:
+			registerBlock = holder.getOnStartAfterSuperBlock();
+			unregisterBlock = holder.getOnStopBeforeSuperBlock();
+			break;
+		case OnResumeOnPause:
+			registerBlock = holder.getOnResumeAfterSuperBlock();
+			unregisterBlock = holder.getOnPauseBeforeSuperBlock();
+			break;
+		case OnAttachOnDetach:
+			registerBlock = holder.getOnAttachAfterSuperBlock();
+			unregisterBlock = holder.getOnDetachBeforeSuperBlock();
 		}
 
-		IJExpression broadcastManager;
+		JExpression broadcastManager;
 		if (local) {
-			if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.LOCAL_BROADCAST_MANAGER) == null) {
-				broadcastManager = getClasses().ANDROIDX_LOCAL_BROADCAST_MANAGER.staticInvoke("getInstance").arg(holder.getContextRef());
-			} else {
-				broadcastManager = getClasses().LOCAL_BROADCAST_MANAGER.staticInvoke("getInstance").arg(holder.getContextRef());
-			}
+			broadcastManager = getClasses().LOCAL_BROADCAST_MANAGER.staticInvoke("getInstance").arg(holder.getContextRef());
 		} else {
 			broadcastManager = holder.getContextRef();
 		}

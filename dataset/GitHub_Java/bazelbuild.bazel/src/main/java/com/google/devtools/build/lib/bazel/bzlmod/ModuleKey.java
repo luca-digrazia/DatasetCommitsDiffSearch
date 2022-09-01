@@ -37,9 +37,4 @@ public abstract class ModuleKey {
         + "@"
         + (getVersion().isEmpty() ? "_" : getVersion().toString());
   }
-
-  /** Returns the canonical name of the repo backing this module. */
-  public String getCanonicalRepoName() {
-    return getName() + "." + getVersion();
-  }
 }

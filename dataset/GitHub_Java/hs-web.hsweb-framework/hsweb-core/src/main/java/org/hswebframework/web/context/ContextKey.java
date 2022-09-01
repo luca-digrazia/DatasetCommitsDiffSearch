@@ -7,7 +7,7 @@ import lombok.Getter;
 public final class ContextKey<T> {
 
     @Getter
-    private final String key;
+    private String key;
 
     public static <T> ContextKey<T> of(String key) {
         return new ContextKey<>(key);

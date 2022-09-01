@@ -43,12 +43,21 @@ public class VerticalPagerAdapter extends PagerAdapter {
             )
     };
 
+    private Context mContext;
     private LayoutInflater mLayoutInflater;
 
+    private int mOffset;
+
     public VerticalPagerAdapter(final Context context) {
-        mLayoutInflater = LayoutInflater.from(context);
+        this(context, 0);
     }
 
+    public VerticalPagerAdapter(final Context context, final int offset) {
+        mContext = context;
+        mLayoutInflater = LayoutInflater.from(context);
+
+        mOffset = offset;
+    }
 
     @Override
     public int getCount() {

@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.config.transitions;
 
+import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory.TransitionFactoryData;
+
 /**
  * Factory interface for transitions that are created dynamically, instead of being created as
  * singletons.
@@ -29,55 +31,18 @@ package com.google.devtools.build.lib.analysis.config.transitions;
  * @param <T> the type of data object passed to the {@link #create} method, used to create the
  *     actual {@link ConfigurationTransition} instance
  */
-public interface TransitionFactory<T extends TransitionFactory.Data> {
+public interface TransitionFactory<T extends TransitionFactoryData> {
 
-  /** Enum that describes what type of transition a TransitionFactory creates. */
-  enum TransitionType {
-    /** A transition that can be used for rules or attributes. */
-    ANY,
-    /** A transition that can be used for rules only. */
-    RULE,
-    /** A transition that can be used for attributes only. */
-    ATTRIBUTE;
-
-    public boolean isCompatibleWith(TransitionType other) {
-      if (this == ANY) {
-        return true;
-      }
-      if (other == ANY) {
-        return true;
-      }
-      return this == other;
-    }
-  }
-
-  /** A marker interface for classes that provide data to TransitionFactory instances. */
-  interface Data {}
+  /** Interface for types of data that a {@link TransitionFactory} can use. */
+  interface TransitionFactoryData {}
 
   /** Returns a new {@link ConfigurationTransition}, based on the given data. */
   ConfigurationTransition create(T data);
-
-  default TransitionType transitionType() {
-    return TransitionType.ANY;
-  }
 
   // TODO(https://github.com/bazelbuild/bazel/issues/7814): Once everything uses TransitionFactory,
   // remove these methods.
   /** Returns {@code true} if the result of this {@link TransitionFactory} is a host transition. */
   default boolean isHost() {
-    return false;
-  }
-
-  /**
-   * Returns {@code true} if the result of this {@link TransitionFactory} should be considered as
-   * part of the tooling rather than a dependency of the original target.
-   */
-  default boolean isTool() {
-    if (isHost()) {
-      // Every host dependency is also a tool dependency.
-      return true;
-    }
-
     return false;
   }
 

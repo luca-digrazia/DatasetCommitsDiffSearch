@@ -15,11 +15,12 @@ package com.google.devtools.build.lib.analysis.config;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
+import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory.TransitionFactoryData;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -30,7 +31,7 @@ public class TransitionFactoriesTest {
 
   @Test
   public void hostTransition() {
-    TransitionFactory<TransitionFactory.Data> factory =
+    TransitionFactory<TransitionFactoryData> factory =
         TransitionFactories.of(HostTransition.INSTANCE);
     assertThat(factory).isNotNull();
     assertThat(HostTransition.isInstance(factory)).isTrue();
@@ -40,7 +41,7 @@ public class TransitionFactoriesTest {
 
   @Test
   public void noTransition() {
-    TransitionFactory<TransitionFactory.Data> factory =
+    TransitionFactory<TransitionFactoryData> factory =
         TransitionFactories.of(NoTransition.INSTANCE);
     assertThat(factory).isNotNull();
     assertThat(NoTransition.isInstance(factory)).isTrue();
@@ -50,7 +51,7 @@ public class TransitionFactoriesTest {
 
   @Test
   public void nullTransition() {
-    TransitionFactory<TransitionFactory.Data> factory =
+    TransitionFactory<TransitionFactoryData> factory =
         TransitionFactories.of(NullTransition.INSTANCE);
     assertThat(factory).isNotNull();
     assertThat(NullTransition.isInstance(factory)).isTrue();
@@ -60,11 +61,9 @@ public class TransitionFactoriesTest {
 
   @Test
   public void splitTransition() {
-    TransitionFactory<TransitionFactory.Data> factory =
+    TransitionFactory<TransitionFactoryData> factory =
         TransitionFactories.of(
-            (SplitTransition)
-                (buildOptions, eventHandler) ->
-                    ImmutableMap.of("test0", buildOptions.clone().underlying()));
+            (SplitTransition) buildOptions -> ImmutableList.of(buildOptions.clone()));
     assertThat(factory).isNotNull();
     assertThat(factory.isHost()).isFalse();
     assertThat(factory.isSplit()).isTrue();

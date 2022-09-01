@@ -14,19 +14,19 @@ import static org.mockito.Mockito.when;
 
 public class ThreadDeadlockHealthCheckTest {
     @Test
-    public void isHealthyIfNoThreadsAreDeadlocked() {
+    public void isHealthyIfNoThreadsAreDeadlocked() throws Exception {
         final ThreadDeadlockDetector detector = mock(ThreadDeadlockDetector.class);
         final ThreadDeadlockHealthCheck healthCheck = new ThreadDeadlockHealthCheck(detector);
 
-        when(detector.getDeadlockedThreads()).thenReturn(Collections.emptySet());
+        when(detector.getDeadlockedThreads()).thenReturn(Collections.<String>emptySet());
 
         assertThat(healthCheck.execute().isHealthy())
                 .isTrue();
     }
 
     @Test
-    public void isUnhealthyIfThreadsAreDeadlocked() {
-        final Set<String> threads = new TreeSet<>();
+    public void isUnhealthyIfThreadsAreDeadlocked() throws Exception {
+        final Set<String> threads = new TreeSet<String>();
         threads.add("one");
         threads.add("two");
 
@@ -45,7 +45,7 @@ public class ThreadDeadlockHealthCheckTest {
     }
 
     @Test
-    public void automaticallyUsesThePlatformThreadBeans() {
+    public void automaticallyUsesThePlatformThreadBeans() throws Exception {
         final ThreadDeadlockHealthCheck healthCheck = new ThreadDeadlockHealthCheck();
         assertThat(healthCheck.execute().isHealthy())
                 .isTrue();

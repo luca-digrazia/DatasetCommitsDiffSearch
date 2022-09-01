@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,7 +15,7 @@
  */
 package org.androidannotations.internal.core.handler;
 
-import static com.helger.jcodemodel.JExpr._new;
+import static com.sun.codemodel.JExpr._new;
 
 import java.util.List;
 
@@ -28,9 +27,9 @@ import org.androidannotations.holder.FoundPreferenceHolder;
 import org.androidannotations.holder.HasPreferences;
 import org.androidannotations.rclass.IRClass.Res;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JFieldRef;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JFieldRef;
 
 public abstract class AbstractPreferenceListenerHandler extends AbstractListenerHandler<HasPreferences> {
 
@@ -49,8 +48,8 @@ public abstract class AbstractPreferenceListenerHandler extends AbstractListener
 	}
 
 	@Override
-	protected final AbstractJClass getListenerTargetClass(HasPreferences holder) {
-		return holder.getBasePreferenceClass();
+	protected final JClass getListenerTargetClass() {
+		return getClasses().PREFERENCE;
 	}
 
 	@Override
@@ -61,8 +60,9 @@ public abstract class AbstractPreferenceListenerHandler extends AbstractListener
 	@Override
 	protected final void assignListeners(HasPreferences holder, List<JFieldRef> idsRefs, JDefinedClass listenerAnonymousClass) {
 		for (JFieldRef idRef : idsRefs) {
-			FoundPreferenceHolder foundPreferenceHolder = holder.getFoundPreferenceHolder(idRef, getListenerTargetClass(holder));
+			FoundPreferenceHolder foundPreferenceHolder = holder.getFoundPreferenceHolder(idRef, getListenerTargetClass());
 			foundPreferenceHolder.getIfNotNullBlock().invoke(foundPreferenceHolder.getRef(), getSetterName()).arg(_new(listenerAnonymousClass));
 		}
 	}
+
 }

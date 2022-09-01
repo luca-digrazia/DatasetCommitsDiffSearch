@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -85,15 +84,6 @@ import java.lang.annotation.Target;
  * AbstractIntentService} class, which implements that method, so you do not
  * have to do in your actual class if you derive it.
  * </p>
- * <p>
- * Use on any native, {@link android.os.Parcelable Parcelable} or
- * {@link java.io.Serializable Serializable} field in an {@link EService}
- * annotated class to bind it with Android's arguments. If
- * <a href="http://parceler.org">Parceler</a> is on the classpath, extras
- * annotated with &#064;Parcel, or collections supported by Parceler will be
- * automatically marshaled using a {@link android.os.Parcelable Parcelable}
- * through the Parcels utility class.
- * </p>
  * 
  * @see EIntentService
  * @see org.androidannotations.api.support.app.AbstractIntentService
@@ -104,8 +94,8 @@ import java.lang.annotation.Target;
 public @interface ServiceAction {
 
 	/**
-	 * Define the action's name. If this field isn't set the annotated method name
-	 * will be used.
+	 * Define the action's name. If this field isn't set the annotated method
+	 * name will be used.
 	 * 
 	 * @return the name of the action
 	 */

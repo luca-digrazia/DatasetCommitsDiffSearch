@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -56,213 +56,34 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
-import org.junit.After;
 import org.junit.Assert;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.TestName;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventListener;
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.ExceptionType;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
-import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
-public class ContextInterruptStandaloneTest extends AbstractPolyglotTest {
-
-    @Rule public TestName testNameRule = new TestName();
-
-    @After
-    public void checkInterrupted() {
-        Assert.assertFalse("Interrupted flag was left set by test: " + testNameRule.getMethodName(), Thread.interrupted());
-    }
-
-    @Test
-    public void testCancelDuringHostSleep() throws ExecutionException, InterruptedException {
-        CountDownLatch beforeSleep = new CountDownLatch(1);
-        enterContext = false;
-        setupEnv(Context.newBuilder(ProxyLanguage.ID).allowHostClassLookup((s) -> true).allowHostAccess(HostAccess.ALL),
-                        new ProxyLanguage() {
-                            @Override
-                            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                                return Truffle.getRuntime().createCallTarget(new RootNode(languageInstance) {
-                                    @Child InteropLibrary library = InteropLibrary.getFactory().createDispatched(1);
-
-                                    @Override
-                                    public Object execute(VirtualFrame frame) {
-                                        callHostSleep();
-                                        return 0;
-                                    }
-
-                                    @CompilerDirectives.TruffleBoundary
-                                    private void callHostSleep() {
-                                        ContextReference<LanguageContext> languageContext = lookupContextReference(ProxyLanguage.class);
-                                        Object javaThread = languageContext.get().getEnv().lookupHostSymbol("java.lang.Thread");
-                                        beforeSleep.countDown();
-                                        try {
-                                            library.invokeMember(javaThread, "sleep", 10000);
-                                        } catch (UnsupportedMessageException | ArityException | UnknownIdentifierException | UnsupportedTypeException e) {
-                                            throw new AssertionError(e);
-                                        }
-                                    }
-                                });
-                            }
-
-                            @Override
-                            protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
-                                return true;
-                            }
-                        });
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        try {
-            Future<?> future = executorService.submit(() -> {
-                try {
-                    context.eval(ProxyLanguage.ID, "");
-                    Assert.fail();
-                } catch (PolyglotException pe) {
-                    if (!pe.isCancelled() || pe.isInterrupted()) {
-                        throw pe;
-                    }
-                }
-            });
-            beforeSleep.await();
-            context.close(true);
-            future.get();
-        } finally {
-            executorService.shutdownNow();
-            executorService.awaitTermination(100, TimeUnit.SECONDS);
-        }
-    }
-
-    private static Context staticContext;
-
-    public static void callStaticContextCancel(boolean nestedContextEntered) {
-        if (nestedContextEntered) {
-            try (Context c = Context.create()) {
-                c.enter();
-                staticContext.close(true);
-            }
-        } else {
-            staticContext.close(true);
-        }
-    }
-
-    @Test
-    public void testCancelFromHostCall() {
-        testCancelFromHostCall(false);
-    }
-
-    @Test
-    public void testCancelFromHostCallWithNestedContextEntered() {
-        testCancelFromHostCall(true);
-    }
-
-    private void testCancelFromHostCall(boolean nestedContextEntered) {
-        setupEnv(Context.newBuilder(ProxyLanguage.ID).allowHostClassLookup((s) -> true).allowHostAccess(HostAccess.ALL),
-                        new ProxyLanguage() {
-                            @Override
-                            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                                return Truffle.getRuntime().createCallTarget(new RootNode(languageInstance) {
-                                    @Child InteropLibrary library = InteropLibrary.getFactory().createDispatched(1);
-
-                                    @Override
-                                    public Object execute(VirtualFrame frame) {
-                                        TruffleLanguage.ContextReference<ProxyLanguage.LanguageContext> languageContext = lookupContextReference(ProxyLanguage.class);
-                                        Object thisTestClass = languageContext.get().getEnv().lookupHostSymbol(ContextInterruptStandaloneTest.class.getName());
-                                        try {
-                                            library.invokeMember(thisTestClass, "callStaticContextCancel", nestedContextEntered);
-                                        } catch (UnsupportedMessageException | ArityException | UnknownIdentifierException | UnsupportedTypeException e) {
-                                            throw new AssertionError(e);
-                                        }
-                                        return 0;
-                                    }
-                                });
-                            }
-                        });
-        try {
-            staticContext = context;
-            context.eval(ProxyLanguage.ID, "");
-            Assert.fail();
-        } catch (PolyglotException pe) {
-            if (!pe.isCancelled()) {
-                throw pe;
-            }
-        } finally {
-            staticContext = null;
-        }
-    }
-
-    @Test
-    public void testListenerInterruptCausedByCancel() throws InterruptedException, IOException, ExecutionException {
-        ExecutorService executorService = Executors.newFixedThreadPool(1);
-        try (Context ctx = Context.create()) {
-            ctx.initialize(InstrumentationTestLanguage.ID);
-            CountDownLatch beforeSleep = new CountDownLatch(1);
-            Source source = Source.newBuilder(InstrumentationTestLanguage.ID, "CONSTANT(42)", "InfiniteLoop").build();
-            TruffleInstrument.Env instrEnv = getInstrumentEnv(ctx.getEngine());
-            attachListener(new Runnable() {
-                @Override
-                public void run() {
-                    beforeSleep.countDown();
-                    try {
-                        Thread.sleep(10000);
-                        Assert.fail();
-                    } catch (InterruptedException ie) {
-                        throw new AssertionError(ie);
-                    }
-                }
-            }, instrEnv);
-            Future<?> future = executorService.submit(() -> {
-                try {
-                    ctx.eval(source);
-                    Assert.fail();
-                } catch (PolyglotException pe) {
-                    if (!pe.isCancelled() || pe.isInterrupted()) {
-                        throw pe;
-                    }
-                }
-            });
-            beforeSleep.await();
-            ctx.close(true);
-            future.get();
-        } finally {
-            executorService.shutdownNow();
-            executorService.awaitTermination(100, TimeUnit.SECONDS);
-        }
-    }
+public class ContextInterruptStandaloneTest {
 
     @Test
     public void testParallelCloseAndInterrupt() throws InterruptedException, IOException, ExecutionException {
         ExecutorService executorService = Executors.newFixedThreadPool(10);
-        try (Context ctx = Context.create()) {
-            ctx.initialize(InstrumentationTestLanguage.ID);
+        try (Context context = Context.create()) {
+            context.initialize(InstrumentationTestLanguage.ID);
             CountDownLatch passLatch = new CountDownLatch(5);
             Source source = Source.newBuilder(InstrumentationTestLanguage.ID, "BLOCK(CONSTANT(42),LOOP(infinity, STATEMENT))", "InfiniteLoop").build();
-            TruffleInstrument.Env instrEnv = getInstrumentEnv(ctx.getEngine());
-            attachListener(passLatch::countDown, instrEnv);
+            TruffleInstrument.Env instrumentEnv = getInstrumentEnv(context.getEngine());
+            attachListener(passLatch::countDown, instrumentEnv);
             List<Future<?>> futures = new ArrayList<>();
             for (int i = 0; i < 5; i++) {
                 futures.add(executorService.submit(() -> {
                     try {
-                        ctx.eval(source);
+                        context.eval(source);
                         Assert.fail();
                     } catch (PolyglotException pe) {
                         if (!pe.isInterrupted() && !pe.isCancelled()) {
@@ -276,18 +97,25 @@ public class ContextInterruptStandaloneTest extends AbstractPolyglotTest {
             for (int i = 0; i < 5; i++) {
                 futures.add(executorService.submit(() -> {
                     if (rnd.nextBoolean()) {
-                        ctx.close(true);
+                        context.close(true);
                     } else {
                         try {
-                            ctx.interrupt(Duration.ofSeconds(50));
+                            context.interrupt(Duration.ofSeconds(50));
                         } catch (TimeoutException te) {
-                            throw new AssertionError(te);
+                            throw new RuntimeException(te);
                         }
                     }
                 }));
             }
             for (Future<?> future : futures) {
-                future.get();
+                boolean finished = false;
+                do {
+                    try {
+                        future.get();
+                        finished = true;
+                    } catch (InterruptedException e) {
+                    }
+                } while (!finished);
             }
         } finally {
             executorService.shutdownNow();
@@ -295,51 +123,32 @@ public class ContextInterruptStandaloneTest extends AbstractPolyglotTest {
         }
     }
 
-    private static final Node DUMMY_NODE = new Node() {
-    };
-
     @Test
     public void testInterruptTimeout() throws InterruptedException, IOException, ExecutionException {
         ExecutorService executorService = Executors.newFixedThreadPool(1);
-        try (Context ctx = Context.create()) {
-            ctx.initialize(InstrumentationTestLanguage.ID);
+        try (Context context = Context.create()) {
+            context.initialize(InstrumentationTestLanguage.ID);
             CountDownLatch passLatch = new CountDownLatch(1);
             CountDownLatch interruptFinishLatch = new CountDownLatch(1);
             AtomicBoolean interruptFinished = new AtomicBoolean();
             Source source = Source.newBuilder(InstrumentationTestLanguage.ID, "CONSTANT(42)", "InfiniteLoop").build();
-            TruffleInstrument.Env instrEnv = getInstrumentEnv(ctx.getEngine());
+            TruffleInstrument.Env instrumentEnv = getInstrumentEnv(context.getEngine());
             attachListener(() -> {
                 passLatch.countDown();
                 while (!interruptFinished.get()) {
                     try {
-                        TruffleSafepoint.setBlockedThreadInterruptible(DUMMY_NODE, new TruffleSafepoint.Interruptible<CountDownLatch>() {
-                            @Override
-                            public void apply(CountDownLatch arg) throws InterruptedException {
-                                if (!interruptFinished.get()) {
-                                    arg.await();
-                                }
-                            }
-                        }, interruptFinishLatch);
-                    } catch (Exception ie) {
-                        if (InteropLibrary.getUncached().isException(ie)) {
-                            try {
-                                if (InteropLibrary.getUncached().getExceptionType(ie) != ExceptionType.INTERRUPT) {
-                                    throw ie;
-                                }
-                            } catch (UnsupportedMessageException ume) {
-                                throw new AssertionError(ume);
-                            }
-                        }
+                        interruptFinishLatch.await();
+                    } catch (InterruptedException ie) {
                     }
                 }
-            }, instrEnv);
+            }, instrumentEnv);
             List<Future<?>> futures = new ArrayList<>();
             futures.add(executorService.submit(() -> {
-                ctx.eval(source);
+                context.eval(source);
             }));
             passLatch.await();
             try {
-                ctx.interrupt(Duration.ofSeconds(1));
+                context.interrupt(Duration.ofSeconds(1));
                 Assert.fail();
             } catch (TimeoutException te) {
                 Assert.assertEquals("Interrupt timed out.", te.getMessage());
@@ -347,7 +156,14 @@ public class ContextInterruptStandaloneTest extends AbstractPolyglotTest {
             interruptFinished.set(true);
             interruptFinishLatch.countDown();
             for (Future<?> future : futures) {
-                future.get();
+                boolean finished = false;
+                do {
+                    try {
+                        future.get();
+                        finished = true;
+                    } catch (InterruptedException e) {
+                    }
+                } while (!finished);
             }
         } finally {
             executorService.shutdownNow();
@@ -357,51 +173,47 @@ public class ContextInterruptStandaloneTest extends AbstractPolyglotTest {
 
     @Test
     public void testInterruptCurrentThreadEntered() throws IOException {
-        Context[] ctx = new Context[1];
-        ctx[0] = Context.create();
+        Context[] context = new Context[1];
+        context[0] = Context.create();
         try {
             attachListener(() -> {
                 try {
-                    ctx[0].interrupt(Duration.ofSeconds(100));
+                    context[0].interrupt(Duration.ofSeconds(100));
                 } catch (TimeoutException te) {
-                    throw new AssertionError(te);
+                    throw new RuntimeException(te);
                 }
-            }, getInstrumentEnv(ctx[0].getEngine()));
-            ctx[0].initialize(InstrumentationTestLanguage.ID);
+            }, getInstrumentEnv(context[0].getEngine()));
+            context[0].initialize(InstrumentationTestLanguage.ID);
             Source source = Source.newBuilder(InstrumentationTestLanguage.ID, "LOOP(infinity,CONSTANT(42))", "SelfInterruptingScript").build();
-            ctx[0].eval(source);
+            context[0].eval(source);
             Assert.fail();
         } catch (PolyglotException pe) {
             Assert.assertEquals("java.lang.IllegalStateException: Cannot interrupt context from a thread where the context is active.", pe.getMessage());
         } finally {
-            ctx[0].close();
+            context[0].close();
         }
     }
 
     @Test
     public void testInterruptCurrentThreadEnteredByChild() {
-        Context[] ctx = new Context[1];
-        ctx[0] = Context.newBuilder().allowCreateThread(true).build();
+        Context[] context = new Context[1];
+        context[0] = Context.newBuilder().allowCreateThread(true).build();
         Exception[] polyglotThreadException = new Exception[1];
         try {
             attachListener(() -> {
                 try {
-                    ctx[0].interrupt(Duration.ofSeconds(100));
+                    context[0].interrupt(Duration.ofSeconds(100));
                 } catch (TimeoutException te) {
                     polyglotThreadException[0] = te;
-                    throw new AssertionError(te);
-                } catch (IllegalStateException e) {
+                    throw new RuntimeException(te);
+                } catch (Exception e) {
                     polyglotThreadException[0] = e;
-                    if (!"Cannot interrupt context from a thread where its child context is active.".equals(e.getMessage())) {
-                        throw e;
-                    } else {
-                        throw new RuntimeException(new InterruptedException());
-                    }
+                    throw e;
                 }
-            }, getInstrumentEnv(ctx[0].getEngine()));
-            ctx[0].initialize(InstrumentationTestLanguage.ID);
+            }, getInstrumentEnv(context[0].getEngine()));
+            context[0].initialize(InstrumentationTestLanguage.ID);
             Source source = Source.newBuilder(InstrumentationTestLanguage.ID, "CONTEXT(DEFINE(foo,LOOP(infinity,CONSTANT(42))),SPAWN(foo),JOIN())", "SelfInterruptingScript").build();
-            ctx[0].eval(source);
+            context[0].eval(source);
             if (polyglotThreadException[0] != null) {
                 throw polyglotThreadException[0];
             }
@@ -410,14 +222,14 @@ public class ContextInterruptStandaloneTest extends AbstractPolyglotTest {
             Assert.assertTrue(e instanceof IllegalStateException);
             Assert.assertEquals("Cannot interrupt context from a thread where its child context is active.", e.getMessage());
         } finally {
-            ctx[0].close();
+            context[0].close();
         }
     }
 
     @Test
     public void testInterruptCurrentThreadNotEntered() throws TimeoutException {
-        try (Context ctx = Context.create()) {
-            ctx.interrupt(Duration.ofSeconds(100));
+        try (Context context = Context.create()) {
+            context.interrupt(Duration.ofSeconds(100));
         }
     }
 
@@ -448,5 +260,4 @@ public class ContextInterruptStandaloneTest extends AbstractPolyglotTest {
     static TruffleInstrument.Env getInstrumentEnv(Engine engine) {
         return engine.getInstruments().get("InstrumentationUpdateInstrument").lookup(TruffleInstrument.Env.class);
     }
-
 }

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -22,47 +21,33 @@ import org.androidannotations.annotations.sharedpreferences.DefaultBoolean;
 import org.androidannotations.annotations.sharedpreferences.DefaultFloat;
 import org.androidannotations.annotations.sharedpreferences.DefaultInt;
 import org.androidannotations.annotations.sharedpreferences.DefaultLong;
-import org.androidannotations.annotations.sharedpreferences.DefaultRes;
 import org.androidannotations.annotations.sharedpreferences.DefaultString;
-import org.androidannotations.annotations.sharedpreferences.DefaultStringSet;
 import org.androidannotations.annotations.sharedpreferences.SharedPref;
 import org.androidannotations.annotations.sharedpreferences.SharedPref.Scope;
 import org.androidannotations.test.R;
 
 @SharedPref(Scope.UNIQUE)
 public interface SomePrefs {
-
+	
 	@DefaultString("John")
 	String name();
-
+	
 	@DefaultInt(42)
 	int age();
-
+	
 	@DefaultLong(400000L)
 	long ageLong();
 
 	@DefaultFloat(42f)
 	float ageFloat();
-
+	
 	@DefaultBoolean(true)
 	boolean isAwesome();
-
+	
 	@DefaultInt(value = 42, keyRes = R.string.prefStringKey)
 	int stringResKeyPref();
 
 	long lastUpdated();
 
 	Set<String> types();
-
-	@DefaultStringSet({ "a", "b", "c" })
-	Set<String> setWithDefault();
-
-	@DefaultStringSet("")
-	Set<String> emtpyString();
-
-	@DefaultStringSet({})
-	Set<String> emtpyStringSet();
-
-	@DefaultRes(R.array.planets_array)
-	Set<String> planetsStringSet();
 }

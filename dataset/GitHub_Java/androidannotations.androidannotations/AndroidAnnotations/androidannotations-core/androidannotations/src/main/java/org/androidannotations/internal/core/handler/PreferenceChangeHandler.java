@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -30,14 +29,15 @@ import org.androidannotations.annotations.PreferenceChange;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.HasPreferences;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JDefinedClass;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JMod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JDefinedClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JMod;
+import com.sun.codemodel.JType;
+import com.sun.codemodel.JVar;
 
 public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
 
@@ -56,13 +56,12 @@ public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
 		validatorHelper.returnTypeIsVoidOrBoolean(executableElement, valid);
 
 		validatorHelper.param.anyOrder() //
-				.extendsAnyOfTypes(CanonicalNameConstants.PREFERENCE, CanonicalNameConstants.SUPPORT_V7_PREFERENCE, CanonicalNameConstants.ANDROIDX_PREFERENCE).optional() //
+				.extendsType(CanonicalNameConstants.PREFERENCE).optional() //
 				.anyOfTypes(CanonicalNameConstants.OBJECT, CanonicalNameConstants.STRING_SET, CanonicalNameConstants.STRING, //
 						CanonicalNameConstants.BOOLEAN, boolean.class.getName(), //
 						CanonicalNameConstants.INTEGER, int.class.getName(), //
 						CanonicalNameConstants.LONG, long.class.getName(), //
-						CanonicalNameConstants.FLOAT, float.class.getName())
-				.optional() //
+						CanonicalNameConstants.FLOAT, float.class.getName()).optional() //
 				.validate(executableElement, valid);
 	}
 
@@ -79,27 +78,22 @@ public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
 
 	@Override
 	protected void processParameters(HasPreferences holder, JMethod listenerMethod, JInvocation call, List<? extends VariableElement> userParameters) {
-		JVar preferenceParam = listenerMethod.param(holder.getBasePreferenceClass(), "preference");
-
+		JVar preferenceParam = listenerMethod.param(getClasses().PREFERENCE, "preference");
 		JVar newValueParam = listenerMethod.param(getClasses().OBJECT, "newValue");
 
 		for (VariableElement variableElement : userParameters) {
 			String type = variableElement.asType().toString();
 			if (isTypeOrSubclass(CanonicalNameConstants.PREFERENCE, variableElement)) {
 				call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.PREFERENCE, preferenceParam, variableElement));
-			} else if (isTypeOrSubclass(CanonicalNameConstants.SUPPORT_V7_PREFERENCE, variableElement)) {
-				call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.SUPPORT_V7_PREFERENCE, preferenceParam, variableElement));
-			} else if (isTypeOrSubclass(CanonicalNameConstants.ANDROIDX_PREFERENCE, variableElement)) {
-				call.arg(castArgumentIfNecessary(holder, CanonicalNameConstants.ANDROIDX_PREFERENCE, preferenceParam, variableElement));
 			} else if (type.equals(CanonicalNameConstants.OBJECT)) {
 				call.arg(newValueParam);
 			} else if (type.equals(CanonicalNameConstants.INTEGER) || type.equals(int.class.getName()) || //
 					type.equals(CanonicalNameConstants.FLOAT) || type.equals(float.class.getName()) || //
 					type.equals(CanonicalNameConstants.LONG) || type.equals(long.class.getName())) {
-				AbstractJClass wrapperClass = getEnvironment().getCodeModel().parseType(type).boxify();
+				JClass wrapperClass = type.startsWith("java") ? getJClass(type) : JType.parse(getEnvironment().getCodeModel(), type.replace(".class", "")).boxify();
 				call.arg(wrapperClass.staticInvoke("valueOf").arg(JExpr.cast(getClasses().STRING, newValueParam)));
 			} else {
-				AbstractJClass userParamClass = codeModelHelper.typeMirrorToJClass(variableElement.asType());
+				JClass userParamClass = codeModelHelper.typeMirrorToJClass(variableElement.asType());
 				call.arg(JExpr.cast(userParamClass, newValueParam));
 
 				if (type.equals(CanonicalNameConstants.STRING_SET)) {
@@ -120,8 +114,7 @@ public class PreferenceChangeHandler extends AbstractPreferenceListenerHandler {
 	}
 
 	@Override
-	protected AbstractJClass getListenerClass(HasPreferences holder) {
-		return holder.usingAndroidxPreference() ? getClasses().ANDROIDX_PREFERENCE_CHANGE_LISTENER
-				: holder.usingSupportV7Preference() ? getClasses().SUPPORT_V7_PREFERENCE_CHANGE_LISTENER : getClasses().PREFERENCE_CHANGE_LISTENER;
+	protected JClass getListenerClass() {
+		return getClasses().PREFERENCE_CHANGE_LISTENER;
 	}
 }

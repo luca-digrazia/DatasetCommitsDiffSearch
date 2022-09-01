@@ -19,7 +19,6 @@
 package org.hswebframework.web.authorization.events;
 
 import org.hswebframework.web.authorization.Authentication;
-import org.hswebframework.web.event.DefaultAsyncEvent;
 import org.springframework.context.ApplicationEvent;
 
 /**
@@ -27,13 +26,14 @@ import org.springframework.context.ApplicationEvent;
  *
  * @author zhouhao
  */
-public class AuthorizationExitEvent extends DefaultAsyncEvent implements AuthorizationEvent {
+public class AuthorizationExitEvent extends ApplicationEvent implements AuthorizationEvent {
 
     private static final long serialVersionUID = -4590245933665047280L;
 
-    private final Authentication authentication;
+    private Authentication authentication;
 
     public AuthorizationExitEvent(Authentication authentication) {
+        super(authentication);
         this.authentication = authentication;
     }
 

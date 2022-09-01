@@ -13,27 +13,15 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
-import com.google.common.base.Suppliers;
-import com.google.common.collect.MapMaker;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
-import com.google.devtools.build.lib.skyframe.ArtifactFunction.SourceArtifactException;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.SkyFunction;
-import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import com.google.devtools.build.skyframe.ValueOrException3;
-import java.util.ArrayList;
-import java.util.List;
+import com.google.devtools.build.skyframe.ValueOrException2;
+import java.io.IOException;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Supplier;
 
 /**
  * A builder of values for {@link ArtifactNestedSetKey}.
@@ -43,8 +31,7 @@ import java.util.function.Supplier;
  *
  * <p>{@link ArtifactNestedSetFunction} then evaluates the {@link ArtifactNestedSetKey} by:
  *
- * <p>- Evaluating the directs elements as Artifacts. Commit the result into
- * artifactSkyKeyToSkyValue.
+ * <p>- Evaluating the directs elements as Artifacts. Commit the result into artifactToSkyValueMap.
  *
  * <p>- Evaluating the transitive elements as {@link ArtifactNestedSetKey}s.
  *
@@ -53,210 +40,83 @@ import java.util.function.Supplier;
  * <p>[1] Heuristic: If the size of the NestedSet exceeds a certain threshold, we evaluate it as an
  * ArtifactNestedSetKey.
  */
-final class ArtifactNestedSetFunction implements SkyFunction {
+class ArtifactNestedSetFunction implements SkyFunction {
 
   /**
-   * A concurrent map from Artifacts' SkyKeys to their SkyValue, for Artifacts that are part of
-   * NestedSets which were evaluated as {@link ArtifactNestedSetKey}.
+   * A concurrent map from Artifacts' SkyKeys to their ValueOrException, for Artifacts that are part
+   * of NestedSets which were evaluated as {@link ArtifactNestedSetKey}.
    *
-   * <p>Question: Why don't we clear artifactSkyKeyToSkyValue after each build?
+   * <p>Question: Why don't we clear artifactToSkyValueMap after each build?
    *
    * <p>The map maintains an invariant: if an ArtifactNestedSetKey exists on Skyframe, the SkyValues
-   * of its member Artifacts are available in artifactSkyKeyToSkyValue.
+   * of its member Artifacts are available in artifactToSkyValueMap.
    *
    * <p>Example: Action A has as input NestedSet X, where X = (X1, X2), where X1 & X2 are 2
    * transitive NestedSets.
    *
    * <p>Run 0: Establish dependency from A to X and from X to X1 & X2. Artifacts from X1 & X2 have
-   * entries in artifactSkyKeyToSkyValue.
+   * entries in artifactToSkyValueMap.
    *
    * <p>Run 1 (incremental): Some changes were made to an Artifact in X1 such that X1, X and A's
    * SkyKeys are marked as dirty. A's ActionLookupData has to be re-evaluated. This involves asking
    * Skyframe to compute SkyValues for its inputs.
    *
    * <p>However, X2 is not dirty, so Skyframe won't re-run ArtifactNestedSetFunction#compute for X2,
-   * therefore not populating artifactSkyKeyToSkyValue with X2's member Artifacts. Hence if we clear
-   * artifactSkyKeyToSkyValue between build 0 and 1, X2's member artifacts' SkyValues would not be
-   * available in the map. TODO(leba): Make this weak-keyed.
-   */
-  private ConcurrentMap<SkyKey, SkyValue> artifactSkyKeyToSkyValue = new ConcurrentHashMap<>();
-
-  /**
-   * Maps the NestedSets' underlying objects to the corresponding SkyKey. This is to avoid
-   * re-creating SkyKey for the same nested set upon reevaluation because of e.g. a missing value.
+   * therefore not populating artifactToSkyValueMap with X2's member Artifacts. Hence if we clear
+   * artifactToSkyValueMap between build 0 and 1, X2's member artifacts' SkyValues would not be
+   * available in the map.
    *
-   * <p>The map weakly references its values: when the ArtifactNestedSetKey becomes otherwise
-   * unreachable, the entry is collected.
+   * <p>Keeping the map in between builds introduces a potential memory leak: if an Artifact is no
+   * longer valid, it would still exist in the map. TODO(leba): Address this memory leak if it
+   * causes serious regression.
    */
-  // Note: Not using a caffeine cache here because it used more memory (b/193294367).
-  private final ConcurrentMap<NestedSet.Node, ArtifactNestedSetKey> nestedSetToSkyKey =
-      new MapMaker().concurrencyLevel(BlazeInterners.concurrencyLevel()).weakValues().makeMap();
-
-  private final Supplier<ArtifactNestedSetValue> valueSupplier;
+  private final ConcurrentMap<SkyKey, ValueOrException2<IOException, ActionExecutionException>>
+      artifactToSkyValueMap;
 
   private static ArtifactNestedSetFunction singleton = null;
 
-  private ArtifactNestedSetFunction(Supplier<ArtifactNestedSetValue> valueSupplier) {
-    this.valueSupplier = valueSupplier;
+  private ArtifactNestedSetFunction() {
+    artifactToSkyValueMap = new ConcurrentHashMap<>();
   }
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env)
-      throws InterruptedException, ArtifactNestedSetFunctionException {
-    List<SkyKey> depKeys = getDepSkyKeys((ArtifactNestedSetKey) skyKey);
-    List<
-            ValueOrException3<
-                SourceArtifactException, ActionExecutionException, ArtifactNestedSetEvalException>>
-        depsEvalResult =
-            env.getOrderedValuesOrThrow(
-                depKeys,
-                SourceArtifactException.class,
-                ActionExecutionException.class,
-                ArtifactNestedSetEvalException.class);
-
-    NestedSetBuilder<Pair<SkyKey, Exception>> transitiveExceptionsBuilder =
-        NestedSetBuilder.stableOrder();
-    boolean catastrophic = false;
-
-    // Throw a SkyFunctionException when a dep evaluation results in an exception.
-    // Only non-null values should be committed to
-    // ArtifactNestedSetFunction#artifacSkyKeyToSkyValue.
-    int i = 0;
-    for (ValueOrException3<
-            SourceArtifactException, ActionExecutionException, ArtifactNestedSetEvalException>
-        valueOrException : depsEvalResult) {
-      SkyKey key = depKeys.get(i++);
-      try {
-        // Trigger the exception, if any.
-        SkyValue value = valueOrException.get();
-        if (key instanceof ArtifactNestedSetKey || value == null) {
-          continue;
-        }
-        artifactSkyKeyToSkyValue.put(key, value);
-      } catch (SourceArtifactException e) {
-        // SourceArtifactException is never catastrophic.
-        transitiveExceptionsBuilder.add(Pair.of(key, e));
-      } catch (ActionExecutionException e) {
-        transitiveExceptionsBuilder.add(Pair.of(key, e));
-        catastrophic |= e.isCatastrophe();
-      } catch (ArtifactNestedSetEvalException e) {
-        catastrophic |= e.isCatastrophic();
-        transitiveExceptionsBuilder.addTransitive(e.getNestedExceptions());
-      }
-    }
-
-    if (!transitiveExceptionsBuilder.isEmpty()) {
-      NestedSet<Pair<SkyKey, Exception>> transitiveExceptions = transitiveExceptionsBuilder.build();
-      // The NestedSet of exceptions is usually small, hence flattening won't be too costly.
-      Pair<SkyKey, Exception> firstSkyKeyAndException = transitiveExceptions.toList().get(0);
-      throw new ArtifactNestedSetFunctionException(
-          new ArtifactNestedSetEvalException(
-              "Error evaluating artifact nested set. First exception: "
-                  + firstSkyKeyAndException.getSecond()
-                  + ", SkyKey: "
-                  + firstSkyKeyAndException.getFirst(),
-              transitiveExceptions,
-              catastrophic));
-    }
-
-    // This should only happen when all error handling is done.
+  public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException {
+    ArtifactNestedSetKey artifactNestedSetKey = (ArtifactNestedSetKey) skyKey;
+    Map<SkyKey, ValueOrException2<IOException, ActionExecutionException>>
+        directArtifactsEvalResult =
+            env.getValuesOrThrow(
+                artifactNestedSetKey.directKeys(),
+                IOException.class,
+                ActionExecutionException.class);
     if (env.valuesMissing()) {
       return null;
     }
-    return valueSupplier.get();
-  }
 
-  private List<SkyKey> getDepSkyKeys(ArtifactNestedSetKey skyKey) {
-    List<Artifact> leaves = skyKey.getSet().getLeaves();
-    List<NestedSet<Artifact>> nonLeaves = skyKey.getSet().getNonLeaves();
+    // Evaluate all children.
+    env.getValues(artifactNestedSetKey.transitiveKeys());
 
-    List<SkyKey> keys = new ArrayList<>(leaves.size() + nonLeaves.size());
-    for (Artifact file : leaves) {
-      keys.add(Artifact.key(file));
+    if (env.valuesMissing()) {
+      return null;
     }
-    for (NestedSet<Artifact> nonLeaf : nonLeaves) {
-      keys.add(
-          nestedSetToSkyKey.computeIfAbsent(
-              nonLeaf.toNode(), node -> new ArtifactNestedSetKey(nonLeaf, node)));
+
+    // Only commit to the map when every value is present.
+    artifactToSkyValueMap.putAll(directArtifactsEvalResult);
+    return ArtifactNestedSetValue.createOrGetInstance();
+  }
+
+  public static ArtifactNestedSetFunction getInstance() {
+    if (singleton == null) {
+      singleton = new ArtifactNestedSetFunction();
     }
-    return keys;
-  }
-
-  static ArtifactNestedSetFunction getInstance() {
-    return checkNotNull(singleton);
-  }
-
-  /**
-   * Creates a new instance. Should only be used in {@code SkyframeExecutor#skyFunctions}. Keeping
-   * this method separated from {@code #getInstance} since sometimes we need to overwrite the
-   * existing instance.
-   *
-   * <p>If value-based change pruning is disabled, the function makes an optimization of using a
-   * singleton {@link ArtifactNestedSetValue}, since (in)equality of the value doesn't matter.
-   */
-  static ArtifactNestedSetFunction createInstance(boolean valueBasedChangePruningEnabled) {
-    singleton =
-        new ArtifactNestedSetFunction(
-            valueBasedChangePruningEnabled
-                ? ArtifactNestedSetValue::new
-                : Suppliers.ofInstance(new ArtifactNestedSetValue()));
     return singleton;
   }
 
-  /** Reset the various state-keeping maps of ArtifactNestedSetFunction. */
-  void resetArtifactNestedSetFunctionMaps() {
-    artifactSkyKeyToSkyValue = new ConcurrentHashMap<>();
-  }
-
-  SkyValue getValueForKey(SkyKey skyKey) {
-    return artifactSkyKeyToSkyValue.get(skyKey);
-  }
-
-  void updateValueForKey(SkyKey skyKey, SkyValue skyValue) {
-    artifactSkyKeyToSkyValue.put(skyKey, skyValue);
+  Map<SkyKey, ValueOrException2<IOException, ActionExecutionException>> getArtifactToSkyValueMap() {
+    return artifactToSkyValueMap;
   }
 
   @Override
   public String extractTag(SkyKey skyKey) {
     return null;
-  }
-
-  /** Mainly used for error bubbling when evaluating direct/transitive children. */
-  private static final class ArtifactNestedSetFunctionException extends SkyFunctionException {
-
-    private final boolean catastrophic;
-
-    ArtifactNestedSetFunctionException(ArtifactNestedSetEvalException e) {
-      super(e, Transience.PERSISTENT);
-      this.catastrophic = e.isCatastrophic();
-    }
-
-    @Override
-    public boolean isCatastrophic() {
-      return catastrophic;
-    }
-  }
-
-  /** Bundles the exceptions from the evaluation of the children keys together. */
-  static final class ArtifactNestedSetEvalException extends Exception {
-
-    private final NestedSet<Pair<SkyKey, Exception>> nestedExceptions;
-    private final boolean catastrophic;
-
-    ArtifactNestedSetEvalException(
-        String message, NestedSet<Pair<SkyKey, Exception>> nestedExceptions, boolean catastrophic) {
-      super(message);
-      this.nestedExceptions = nestedExceptions;
-      this.catastrophic = catastrophic;
-    }
-
-    NestedSet<Pair<SkyKey, Exception>> getNestedExceptions() {
-      return nestedExceptions;
-    }
-
-    // Should be true if at least one child exception is catastrophic.
-    boolean isCatastrophic() {
-      return catastrophic;
-    }
   }
 }

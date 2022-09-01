@@ -13,47 +13,34 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Multimap;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
-import com.google.devtools.build.lib.skyframe.TreeArtifactValue;
+import com.google.common.collect.Maps;
 import java.util.Collection;
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /** A {@link ActionInputDepOwners} which, as a {@link ActionInputMapSink}, is mutable. */
 public class ActionInputDepOwnerMap implements ActionInputMapSink, ActionInputDepOwners {
 
   private final ImmutableSet<ActionInput> inputsOfInterest;
-  private final Multimap<ActionInput, Artifact> depOwnersByInputs;
+  private final Map<ActionInput, Artifact> depOwnersByInputs;
 
   public ActionInputDepOwnerMap(Collection<ActionInput> inputsOfInterest) {
     this.inputsOfInterest = ImmutableSet.copyOf(inputsOfInterest);
-    this.depOwnersByInputs =
-        HashMultimap.create(/*expectedKeys=*/ inputsOfInterest.size(), /*expectedValuesPerKey=*/ 1);
+    this.depOwnersByInputs = Maps.newHashMapWithExpectedSize(inputsOfInterest.size());
   }
 
   @Override
   public boolean put(ActionInput input, FileArtifactValue metadata, @Nullable Artifact depOwner) {
-    return addOwner(input, depOwner);
-  }
-
-  @Override
-  public void putTreeArtifact(
-      SpecialArtifact tree, TreeArtifactValue treeArtifactValue, @Nullable Artifact depOwner) {
-    treeArtifactValue.getChildren().forEach(treeFile -> addOwner(treeFile, depOwner));
-    addOwner(tree, depOwner);
-  }
-
-  public boolean addOwner(ActionInput input, @Nullable Artifact depOwner) {
     if (depOwner == null || !inputsOfInterest.contains(input)) {
       return false;
     }
-    return depOwnersByInputs.put(input, depOwner);
+    return depOwnersByInputs.put(input, depOwner) == null;
   }
 
   @Override
-  public ImmutableSet<Artifact> getDepOwners(ActionInput input) {
-    return ImmutableSet.copyOf(depOwnersByInputs.get(input));
+  @Nullable
+  public Artifact getDepOwner(ActionInput input) {
+    return depOwnersByInputs.get(input);
   }
 }

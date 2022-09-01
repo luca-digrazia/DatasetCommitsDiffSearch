@@ -1,27 +1,16 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
 package com.facebook.stetho.json;
 
 import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Map;
 
 import com.facebook.stetho.common.ExceptionUtil;
 import com.facebook.stetho.json.annotation.JsonProperty;
@@ -44,9 +33,6 @@ import org.json.JSONObject;
  * results of reflection this class is sufficient for stethos needs.
  */
 public class ObjectMapper {
-
-  @GuardedBy("mJsonValueMethodCache")
-  private final Map<Class<?>, Method> mJsonValueMethodCache = new IdentityHashMap<>();
 
   /**
    * Support mapping between arbitrary classes and {@link JSONObject}.
@@ -103,19 +89,14 @@ public class ObjectMapper {
     Field[] fields = type.getFields();
     for (int i = 0; i < fields.length; ++i) {
       Field field = fields[i];
-      if (Modifier.isStatic(field.getModifiers())) {
-        continue;
-      }
       Object value = jsonObject.opt(field.getName());
       Object setValue = getValueForField(field, value);
       try {
-        field.set(instance, setValue);
+        field.set(instance, getValueForField(field, value));
       } catch (IllegalArgumentException e) {
         throw new IllegalArgumentException(
             "Class: " + type.getSimpleName() + " " +
-            "Field: " + field.getName() + " type " + (setValue != null ?
-                setValue.getClass().getName()
-                : "null"),
+            "Field: " + field.getName() + " type " + setValue.getClass().getName(),
             e);
       }
     }
@@ -242,25 +223,21 @@ public class ObjectMapper {
     JSONObject jsonObject = new JSONObject();
     Field[] fields = fromValue.getClass().getFields();
     for (int i = 0; i < fields.length; ++i) {
-      Field field = fields[i];
-      if (Modifier.isStatic(field.getModifiers())) {
-        continue;
-      }
-      JsonProperty property = field.getAnnotation(JsonProperty.class);
+      JsonProperty property = fields[i].getAnnotation(JsonProperty.class);
       if (property != null) {
         // AutoBox here ...
-        Object value = field.get(fromValue);
-        Class clazz = field.getType();
+        Object value = fields[i].get(fromValue);
+        Class clazz = fields[i].getType();
         if (value != null) {
           clazz = value.getClass();
         }
-        String name = field.getName();
+        String name = fields[i].getName();
         if (property.required() && value == null) {
           value = JSONObject.NULL;
         } else if (value == JSONObject.NULL) {
           // Leave it as null in this case.
         } else {
-          value = getJsonValue(value, clazz, field);
+          value = getJsonValue(value, clazz, fields[i]);
         }
         jsonObject.put(name, value);
       }
@@ -286,18 +263,6 @@ public class ObjectMapper {
     if (!canDirectlySerializeClass(clazz)) {
       return convertValue(value, JSONObject.class);
     }
-    // JSON has no support for NaN, Infinity or -Infinity, so we serialize
-    // then as strings. Google Chrome's inspector will accept them just fine.
-    if (clazz.equals(Double.class) || clazz.equals(Float.class)) {
-      double doubleValue = ((Number) value).doubleValue();
-      if (Double.isNaN(doubleValue)) {
-        return "NaN";
-      } else if (doubleValue == Double.POSITIVE_INFINITY) {
-        return "Infinity";
-      } else if (doubleValue == Double.NEGATIVE_INFINITY) {
-        return "-Infinity";
-      }
-    }
     // hmm we should be able to directly serialize here...
     return value;
   }
@@ -319,19 +284,7 @@ public class ObjectMapper {
    * @return the first method annotated with {@link JsonValue} or null if one does not exist.
    */
   @Nullable
-  private Method getJsonValueMethod(Class<?> clazz) {
-    synchronized (mJsonValueMethodCache) {
-      Method method = mJsonValueMethodCache.get(clazz);
-      if (method == null && !mJsonValueMethodCache.containsKey(clazz)) {
-        method = getJsonValueMethodImpl(clazz);
-        mJsonValueMethodCache.put(clazz, method);
-      }
-      return method;
-    }
-  }
-
-  @Nullable
-  private static Method getJsonValueMethodImpl(Class<?> clazz) {
+  private static Method getJsonValueMethod(Class<?> clazz) {
     Method[] methods = clazz.getMethods();
     for(int i = 0; i < methods.length; ++i) {
       Annotation jsonValue = methods[i].getAnnotation(JsonValue.class);

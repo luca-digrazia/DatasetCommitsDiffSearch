@@ -1,9 +1,4 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector;
 
@@ -32,9 +27,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Implements a limited version of the Chrome Debugger WebSocket protocol (using JSON-RPC 2.0).
- * The most up-to-date documentation can be found in the Blink source code:
- * <a href="https://code.google.com/p/chromium/codesearch#chromium/src/third_party/WebKit/Source/devtools/protocol.json&q=protocol.json&sq=package:chromium&type=cs">protocol.json</a>
+ * Implements a limited version of the WebKit Inspector WebSocket protocol (using JSON-RPC 2.0).
+ * The most up-to-date documentation can be found in the WebKit source code:
+ * <a href="https://github.com/WebKit/webkit/blob/master/Source/WebCore/inspector/protocol">https://github.com/WebKit/webkit/blob/master/Source/WebCore/inspector/protocol</a>
  */
 public class ChromeDevtoolsServer implements SimpleEndpoint {
   private static final String TAG = "ChromeDevtoolsServer";
@@ -137,16 +132,7 @@ public class ChromeDevtoolsServer implements SimpleEndpoint {
       response.result = result;
       response.error = error;
       JSONObject jsonObject = mObjectMapper.convertValue(response, JSONObject.class);
-      String responseString;
-      try {
-        responseString = jsonObject.toString();
-      } catch (OutOfMemoryError e) {
-        // JSONStringer can cause an OOM when the Json to handle is too big.
-        response.result = null;
-        response.error = mObjectMapper.convertValue(e.getMessage(), JSONObject.class);
-        jsonObject = mObjectMapper.convertValue(response, JSONObject.class);
-        responseString = jsonObject.toString();
-      }
+      String responseString = jsonObject.toString();
       peer.getWebSocket().sendText(responseString);
     }
   }

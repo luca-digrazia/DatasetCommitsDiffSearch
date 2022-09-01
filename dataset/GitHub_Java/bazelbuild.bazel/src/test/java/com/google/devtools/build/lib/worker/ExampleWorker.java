@@ -15,26 +15,18 @@ package com.google.devtools.build.lib.worker;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.common.base.Ascii;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.actions.ExecutionRequirements.WorkerProtocolFormat;
 import com.google.devtools.build.lib.worker.ExampleWorkerOptions.ExampleWorkOptions;
-import com.google.devtools.build.lib.worker.WorkRequestHandler.WorkerMessageProcessor;
 import com.google.devtools.build.lib.worker.WorkerProtocol.Input;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
+import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.gson.stream.JsonReader;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.io.PrintStream;
-import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -43,12 +35,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** An example implementation of a worker process that is used for integration tests. */
-public final class ExampleWorker {
+/**
+ * An example implementation of a worker process that is used for integration tests.
+ */
+public class ExampleWorker {
 
   static final Pattern FLAG_FILE_PATTERN = Pattern.compile("(?:@|--?flagfile=)(.+)");
 
@@ -61,173 +54,98 @@ public final class ExampleWorker {
   // If true, returns corrupt responses instead of correct protobufs.
   static boolean poisoned = false;
 
+  // Keep state across multiple builds.
   static final LinkedHashMap<String, String> inputs = new LinkedHashMap<>();
 
-  // Contains the request currently being worked on.
-  private static WorkRequest currentRequest;
+  public static void main(String[] args) throws Exception {
+    if (ImmutableSet.copyOf(args).contains("--persistent_worker")) {
+      OptionsParser parser = OptionsParser.newOptionsParser(ExampleWorkerOptions.class);
+      parser.setAllowResidue(false);
+      parser.parse(args);
+      ExampleWorkerOptions workerOptions = parser.getOptions(ExampleWorkerOptions.class);
+      Preconditions.checkState(workerOptions.persistentWorker);
 
-  // The options passed to this worker on a per-worker-lifetime basis.
-  static ExampleWorkerOptions workerOptions;
-  private static WorkerMessageProcessor messageProcessor;
-
-  private static class InterruptableWorkRequestHandler extends WorkRequestHandler {
-
-    InterruptableWorkRequestHandler(
-        BiFunction<List<String>, PrintWriter, Integer> callback,
-        PrintStream stderr,
-        WorkerMessageProcessor messageProcessor) {
-      super(callback, stderr, messageProcessor);
+      runPersistentWorker(workerOptions);
+    } else {
+      // This is a single invocation of the example that exits after it processed the request.
+      processRequest(ImmutableList.copyOf(args));
     }
+  }
 
-    @Override
-    public void processRequests() throws IOException {
-      while (true) {
-        WorkRequest request = messageProcessor.readWorkRequest();
+  private static void runPersistentWorker(ExampleWorkerOptions workerOptions) throws IOException {
+    PrintStream originalStdOut = System.out;
+    PrintStream originalStdErr = System.err;
+
+    while (true) {
+      try {
+        WorkRequest request = WorkRequest.parseDelimitedFrom(System.in);
         if (request == null) {
           break;
         }
 
-        currentRequest = request;
         inputs.clear();
         for (Input input : request.getInputsList()) {
           inputs.put(input.getPath(), input.getDigest().toStringUtf8());
         }
-        if (poisoned && workerOptions.hardPoison) {
-          throw new IllegalStateException("I'm a very poisoned worker and will just crash.");
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        int exitCode = 0;
+
+        try (PrintStream ps = new PrintStream(baos)) {
+          System.setOut(ps);
+          System.setErr(ps);
+
+          if (poisoned) {
+            if (workerOptions.hardPoison) {
+              throw new IllegalStateException("I'm a very poisoned worker and will just crash.");
+            }
+            System.out.println("I'm a poisoned worker and this is not a protobuf.");
+            System.out.println("Here's a fake stack trace for you:");
+            System.out.println("    at com.example.Something(Something.java:83)");
+            System.out.println("    at java.lang.Thread.run(Thread.java:745)");
+            System.out.print("And now, 8k of random bytes: ");
+            byte[] b = new byte[8192];
+            new Random().nextBytes(b);
+            System.out.write(b);
+          } else {
+            try {
+              processRequest(request.getArgumentsList());
+            } catch (Exception e) {
+              e.printStackTrace();
+              exitCode = 1;
+            }
+          }
+        } finally {
+          System.setOut(originalStdOut);
+          System.setErr(originalStdErr);
         }
-        if (request.getCancel()) {
-          respondToCancelRequest(request);
+
+        if (poisoned) {
+          baos.writeTo(System.out);
         } else {
-          try {
-            startResponseThread(request);
-          } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            // We don't expect interrupts at this level, only inside the individual request
-            // handling threads, so here we just abort on interrupt.
-            e.printStackTrace();
-            return;
-          }
+          WorkResponse.newBuilder()
+              .setOutput(baos.toString())
+              .setExitCode(exitCode)
+              .build()
+              .writeDelimitedTo(System.out);
         }
-        if (workerOptions.exitAfter > 0 && workUnitCounter > workerOptions.exitAfter) {
-          System.exit(0);
-        }
-      }
-    }
-  }
-
-  public static void main(String[] args) throws Exception {
-    if (ImmutableSet.copyOf(args).contains("--persistent_worker")) {
-      OptionsParser parser =
-          OptionsParser.builder()
-              .optionsClasses(ExampleWorkerOptions.class)
-              .allowResidue(false)
-              .build();
-      parser.parse(args);
-      workerOptions = parser.getOptions(ExampleWorkerOptions.class);
-      WorkerProtocolFormat protocolFormat = workerOptions.workerProtocol;
-      messageProcessor = null;
-      switch (protocolFormat) {
-        case JSON:
-          messageProcessor =
-              new JsonWorkerMessageProcessor(
-                  new JsonReader(new BufferedReader(new InputStreamReader(System.in, UTF_8))),
-                  new BufferedWriter(new OutputStreamWriter(System.out, UTF_8)));
-          break;
-        case PROTO:
-          messageProcessor = new ProtoWorkerMessageProcessor(System.in, System.out);
-          break;
-      }
-      Preconditions.checkNotNull(messageProcessor);
-      WorkRequestHandler workRequestHandler =
-          new InterruptableWorkRequestHandler(ExampleWorker::doWork, System.err, messageProcessor);
-      workRequestHandler.processRequests();
-
-    } else {
-      // This is a single invocation of the example that exits after it processed the request.
-      parseOptionsAndLog(ImmutableList.copyOf(args));
-    }
-  }
-
-  private static int doWork(List<String> args, PrintWriter err) {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-
-    PrintStream originalStdOut = System.out;
-    PrintStream originalStdErr = System.err;
-
-    if (workerOptions.waitForCancel) {
-      try {
-        WorkRequest workRequest = messageProcessor.readWorkRequest();
-        if (workRequest.getRequestId() != currentRequest.getRequestId()) {
-          System.err.format(
-              "Got cancel request for %d while expecting cancel request for %d%n",
-              workRequest.getRequestId(), currentRequest.getRequestId());
-          return 1;
-        }
-        if (!workRequest.getCancel()) {
-          System.err.format(
-              "Got non-cancel request for %d while expecting cancel request%n",
-              workRequest.getRequestId());
-          return 1;
-        }
-      } catch (IOException e) {
-        throw new RuntimeException("Exception while waiting for cancel request", e);
-      }
-    }
-    try (PrintStream ps = new PrintStream(baos)) {
-      System.setOut(ps);
-      System.setErr(ps);
-      if (poisoned) {
-        System.out.println("I'm a poisoned worker and this is not a protobuf.");
-        System.out.println("Here's a fake stack trace for you:");
-        System.out.println("    at com.example.Something(Something.java:83)");
-        System.out.println("    at java.lang.Thread.run(Thread.java:745)");
-        System.out.print("And now, 8k of random bytes: ");
-        byte[] b = new byte[8192];
-        new Random().nextBytes(b);
-        try {
-          System.out.write(b);
-        } catch (IOException e) {
-          e.printStackTrace();
-          return 1;
-        }
-      } else {
-        try {
-          if (currentRequest.getVerbosity() > 0) {
-            originalStdErr.println("VERBOSE: Pretending to do work.");
-          }
-          parseOptionsAndLog(args);
-        } catch (Exception e) {
-          e.printStackTrace();
-          return 1;
-        }
-      }
-    } finally {
-      System.setOut(originalStdOut);
-      System.setErr(originalStdErr);
-      currentRequest = null;
-    }
-
-    if (workerOptions.exitDuring > 0 && workUnitCounter > workerOptions.exitDuring) {
-      System.exit(0);
-    }
-
-    if (poisoned) {
-      try {
-        baos.writeTo(System.out);
         System.out.flush();
-        System.exit(1);
-      } catch (IOException e) {
-        e.printStackTrace();
-        System.exit(1);
+
+        if (workerOptions.exitAfter > 0 && workUnitCounter > workerOptions.exitAfter) {
+          return;
+        }
+
+        if (workerOptions.poisonAfter > 0 && workUnitCounter > workerOptions.poisonAfter) {
+          poisoned = true;
+        }
+      } finally {
+        // Be a good worker process and consume less memory when idle.
+        System.gc();
       }
     }
-    if (workerOptions.poisonAfter > 0 && workUnitCounter > workerOptions.poisonAfter) {
-      poisoned = true;
-    }
-    return 0;
   }
 
-  private static void parseOptionsAndLog(List<String> args) throws Exception {
+  private static void processRequest(List<String> args) throws Exception {
     ImmutableList.Builder<String> expandedArgs = ImmutableList.builder();
     for (String arg : args) {
       Matcher flagFileMatcher = FLAG_FILE_PATTERN.matcher(arg);
@@ -238,15 +156,15 @@ public final class ExampleWorker {
       }
     }
 
-    OptionsParser parser =
-        OptionsParser.builder().optionsClasses(ExampleWorkOptions.class).allowResidue(true).build();
+    OptionsParser parser = OptionsParser.newOptionsParser(ExampleWorkOptions.class);
+    parser.setAllowResidue(true);
     parser.parse(expandedArgs.build());
     ExampleWorkOptions options = parser.getOptions(ExampleWorkOptions.class);
 
     List<String> outputs = new ArrayList<>();
 
     if (options.writeUUID) {
-      outputs.add("UUID " + workerUuid);
+      outputs.add("UUID " + workerUuid.toString());
     }
 
     if (options.writeCounter) {
@@ -255,7 +173,7 @@ public final class ExampleWorker {
 
     String residueStr = Joiner.on(' ').join(parser.getResidue());
     if (options.uppercase) {
-      residueStr = Ascii.toUpperCase(residueStr);
+      residueStr = residueStr.toUpperCase();
     }
     outputs.add(residueStr);
 
@@ -263,10 +181,6 @@ public final class ExampleWorker {
       for (Map.Entry<String, String> input : inputs.entrySet()) {
         outputs.add("INPUT " + input.getKey() + " " + input.getValue());
       }
-    }
-
-    if (options.printRequests) {
-      outputs.add("REQUEST: " + currentRequest);
     }
 
     if (options.printEnv) {
@@ -284,6 +198,4 @@ public final class ExampleWorker {
       }
     }
   }
-
-  private ExampleWorker() {}
 }

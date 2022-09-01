@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -44,12 +43,12 @@ public class CustomTitleHandler extends BaseAnnotationHandler<EActivityHolder> {
 
 	@Override
 	public void process(Element element, EActivityHolder holder) {
-		JBlock onViewChangedBody = holder.getOnViewChangedBodyBeforeInjectionBlock();
+		JBlock onViewChangedBody = holder.getOnViewChangedBody();
 
 		JFieldRef contentViewId = annotationHelper.extractAnnotationFieldRefs(element, getTarget(), getEnvironment().getRClass().get(IRClass.Res.LAYOUT), false).get(0);
 
 		JFieldRef customTitleFeature = getClasses().WINDOW.staticRef("FEATURE_CUSTOM_TITLE");
-		holder.getInitBodyInjectionBlock().invoke("requestWindowFeature").arg(customTitleFeature);
+		holder.getInitBody().invoke("requestWindowFeature").arg(customTitleFeature);
 		onViewChangedBody.add(holder.getContextRef().invoke("getWindow").invoke("setFeatureInt").arg(customTitleFeature).arg(contentViewId));
 	}
 }

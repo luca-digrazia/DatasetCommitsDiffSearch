@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,8 +15,8 @@
  */
 package org.androidannotations.ebean;
 
-import org.androidannotations.internal.AndroidAnnotationProcessor;
-import org.androidannotations.testutils.AAProcessorTestHelper;
+import org.androidannotations.AndroidAnnotationProcessor;
+import org.androidannotations.utils.AAProcessorTestHelper;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -31,28 +30,11 @@ public class EBeanTest extends AAProcessorTestHelper {
 
 	@Test
 	public void activitySubclassInManifestCompiles() {
-		assertCompilationSuccessful(compileFiles(SomeActivity.class, SomeImplementation.class, SomeGenericBean.class, SomeGenericBeanExt.class, SingletonBean.class, SomeBeanWithEmptyConstructor.class,
-				SomeBeanWithContextParamConstructor.class));
-	}
-
-	@Test
-	public void eBeansWithScopeCompile() {
-		assertCompilationSuccessful(compileFiles(SingletonBean.class, ActivityScopedBean.class, FragmentScopedBean.class));
-	}
-
-	@Test
-	public void eBeanOnInterfaceDoesNotCompile() {
-		assertCompilationError(compileFiles(InterfaceWithEBean.class));
-	}
-
-	@Test
-	public void eBeanWithContextAndNoParamsConstructorsCompile() {
-		assertCompilationSuccessful(compileFiles(SomeBeanWithEmptyConstructor.class, SomeBeanWithContextParamConstructor.class));
-	}
-
-	@Test
-	public void eBeanWithNonContextOnlyConstructorsDoesNotCompile() {
-		assertCompilationError(compileFiles(SomeBeanWithNonContextConstructors.class, SomeBeanWithContextAndNoParamsConstructors.class));
+		assertCompilationSuccessful(compileFiles(
+				SomeActivity.class,
+				SomeImplementation.class,
+				SomeGenericBean.class,
+				SomeGenericBeanExt.class));
 	}
 
 }

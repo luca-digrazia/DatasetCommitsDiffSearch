@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.packages.AttributeTransitionData;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleTransitionData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.util.ClassName;
 import java.util.Collection;
@@ -87,7 +86,7 @@ public class RequiredFragmentsUtil {
   public static ImmutableSortedSet<String> getRequiredFragments(
       Rule target,
       BuildConfiguration configuration,
-      FragmentClassSet universallyRequiredFragments,
+      Collection<Class<? extends Fragment>> universallyRequiredFragments,
       ConfigurationFragmentPolicy configurationFragmentPolicy,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       Iterable<ConfiguredTargetAndData> prerequisites) {
@@ -97,7 +96,7 @@ public class RequiredFragmentsUtil {
         universallyRequiredFragments,
         configurationFragmentPolicy,
         configConditions.values(),
-        getTransitions(target, configConditions, configuration.checksum()),
+        getTransitions(target, configConditions),
         prerequisites);
   }
 
@@ -121,7 +120,7 @@ public class RequiredFragmentsUtil {
       Aspect aspect,
       Rule associatedTarget,
       BuildConfiguration configuration,
-      FragmentClassSet universallyRequiredFragments,
+      Collection<Class<? extends Fragment>> universallyRequiredFragments,
       ConfigurationFragmentPolicy configurationFragmentPolicy,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       Iterable<ConfiguredTargetAndData> prerequisites) {
@@ -131,10 +130,7 @@ public class RequiredFragmentsUtil {
         universallyRequiredFragments,
         configurationFragmentPolicy,
         configConditions.values(),
-        getTransitions(
-            aspect,
-            ConfiguredAttributeMapper.of(
-                associatedTarget, configConditions, configuration.checksum())),
+        getTransitions(aspect, ConfiguredAttributeMapper.of(associatedTarget, configConditions)),
         prerequisites);
   }
 
@@ -142,7 +138,7 @@ public class RequiredFragmentsUtil {
   private static ImmutableSortedSet<String> getRequiredFragments(
       Optional<Label> buildSettingLabel,
       BuildConfiguration configuration,
-      FragmentClassSet universallyRequiredFragments,
+      Collection<Class<? extends Fragment>> universallyRequiredFragments,
       ConfigurationFragmentPolicy configurationFragmentPolicy,
       Collection<ConfigMatchingProvider> configConditions,
       Collection<ConfigurationTransition> associatedTransitions,
@@ -163,10 +159,11 @@ public class RequiredFragmentsUtil {
     configurationFragmentPolicy
         .getRequiredStarlarkFragments()
         .forEach(
-            starlarkName ->
-                requiredFragments.add(
-                    ClassName.getSimpleNameWithOuter(
-                        configuration.getStarlarkFragmentByName(starlarkName))));
+            starlarkName -> {
+              requiredFragments.add(
+                  ClassName.getSimpleNameWithOuter(
+                      configuration.getStarlarkFragmentByName(starlarkName)));
+            });
     // Fragments universally required by everything:
     universallyRequiredFragments.forEach(
         fragment -> requiredFragments.add(ClassName.getSimpleNameWithOuter(fragment)));
@@ -198,23 +195,17 @@ public class RequiredFragmentsUtil {
    * because the child's properties determine that dependency.
    */
   private static ImmutableList<ConfigurationTransition> getTransitions(
-      Rule target,
-      ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      String configHash) {
+      Rule target, ImmutableMap<Label, ConfigMatchingProvider> configConditions) {
     ImmutableList.Builder<ConfigurationTransition> transitions = ImmutableList.builder();
     if (target.getRuleClassObject().getTransitionFactory() != null) {
-      transitions.add(
-          target
-              .getRuleClassObject()
-              .getTransitionFactory()
-              .create(RuleTransitionData.create(target)));
+      transitions.add(target.getRuleClassObject().getTransitionFactory().create(target));
     }
     // We don't set the execution platform in this data because a) that doesn't affect which
     // fragments are required and b) it's one less parameter we have to pass to
     // RequiredFragmenstUtil's public interface.
     AttributeTransitionData attributeTransitionData =
         AttributeTransitionData.builder()
-            .attributes(ConfiguredAttributeMapper.of(target, configConditions, configHash))
+            .attributes(ConfiguredAttributeMapper.of(target, configConditions))
             .build();
     for (Attribute attribute : target.getRuleClassObject().getAttributes()) {
       if (attribute.getTransitionFactory() != null) {

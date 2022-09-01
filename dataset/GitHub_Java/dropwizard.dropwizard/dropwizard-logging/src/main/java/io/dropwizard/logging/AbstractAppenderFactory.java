@@ -1,34 +1,19 @@
 package io.dropwizard.logging;
 
-import ch.qos.logback.classic.AsyncAppender;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.classic.filter.ThresholdFilter;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
-import ch.qos.logback.core.AsyncAppenderBase;
-import ch.qos.logback.core.Context;
-import ch.qos.logback.core.LayoutBase;
-import ch.qos.logback.core.pattern.PatternLayoutBase;
-import ch.qos.logback.core.spi.DeferredProcessingAware;
+import ch.qos.logback.core.spi.FilterAttachable;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.dropwizard.logback.ThrottlingAppenderWrapper;
-import io.dropwizard.logging.async.AsyncAppenderFactory;
-import io.dropwizard.logging.filter.FilterFactory;
-import io.dropwizard.logging.layout.DiscoverableLayoutFactory;
-import io.dropwizard.logging.layout.LayoutFactory;
-import io.dropwizard.util.Strings;
+import com.google.common.base.Strings;
 import io.dropwizard.util.Duration;
-import io.dropwizard.validation.MaxDuration;
 import io.dropwizard.validation.MinDuration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 
@@ -53,239 +38,111 @@ import java.util.concurrent.TimeUnit;
  *         <td>An appender-specific log format.</td>
  *     </tr>
  *     <tr>
- *         <td>{@code timeZone}</td>
- *         <td>{@code UTC}</td>
+ *         <td>{@code bounded}</td>
+ *         <td>true</td>
+ *         <td>Whether or not the appender should block when its queue is full.</td>
+ *     </tr>
+ *     <tr>
+ *         <td>{@code batchSize}</td>
+ *         <td>128</td>
  *         <td>
- *             The time zone to which event timestamps will be converted.
- *             Ignored if logFormat is supplied.
+ *             The maximum number of events to write in a single batch.
  *         </td>
  *     </tr>
  *     <tr>
- *         <td>{@code queueSize}</td>
- *         <td>{@link AsyncAppenderBase}</td>
- *         <td>The maximum capacity of the blocking queue.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code includeCallerData}</td>
- *         <td>{@link AsyncAppenderBase}</td>
+ *         <td>{@code batchDuration}</td>
+ *         <td>100ms</td>
  *         <td>
- *             Whether to include caller data, required for line numbers.
- *             Beware, is considered expensive.
- *         </td>
- *     </tr>
- *     <tr>
- *         <td>{@code discardingThreshold}</td>
- *         <td>{@link AsyncAppenderBase}</td>
- *         <td>
- *             By default, when the blocking queue has 20% capacity remaining,
- *             it will drop events of level TRACE, DEBUG and INFO, keeping only
- *             events of level WARN and ERROR. To keep all events, set discardingThreshold to 0.
- *         </td>
- *     </tr>
- *     <tr>
- *         <td>{@code messageRate}</td>
- *         <td>
- *             Maximum message rate: average duration between messages. Extra messages are discarded.
- *             This setting avoids flooding a paid logging service by accident.
- *             For example, a duration of 100ms allows for a maximum of 10 messages per second and 30s would mean
- *             1 message every 30 seconds.
- *             The maximum acceptable duration is 1 minute.
- *             By default, this duration is not set and this feature is disabled.
- *         </td>
- *     </tr>
- *     <tr>
- *         <td>{@code filterFactories}</td>
- *         <td>(none)</td>
- *         <td>
- *             A list of {@link FilterFactory filters} to apply to the appender, in order,
- *             after the {@code threshold}.
+ *             The maximum amount of time to wait for a full batch before writing a partial batch.
  *         </td>
  *     </tr>
  * </table>
  */
-public abstract class AbstractAppenderFactory<E extends DeferredProcessingAware> implements AppenderFactory<E> {
-    private static final Logger LOGGER = LoggerFactory.getLogger(AbstractAppenderFactory.class);
+public abstract class AbstractAppenderFactory implements AppenderFactory {
+    private boolean bounded;
 
     @NotNull
     protected Level threshold = Level.ALL;
 
-    @Nullable
     protected String logFormat;
-
-    @Nullable
-    protected DiscoverableLayoutFactory<E> layout;
-
-    @NotNull
-    protected TimeZone timeZone = TimeZone.getTimeZone("UTC");
 
     @Min(1)
     @Max(Integer.MAX_VALUE)
-    private int queueSize = AsyncAppenderBase.DEFAULT_QUEUE_SIZE;
+    private int batchSize = 128;
 
-    private int discardingThreshold = -1;
-
-    @Nullable
-    @MinDuration(value = 0, unit = TimeUnit.SECONDS, inclusive = false)
-    @MaxDuration(value = 1, unit = TimeUnit.MINUTES)
-    private Duration messageRate;
-
-    private boolean includeCallerData = false;
-
-    private List<FilterFactory<E>> filterFactories = Collections.emptyList();
-
-    private boolean neverBlock = false;
+    @NotNull
+    @MinDuration(value = 1, unit = TimeUnit.MILLISECONDS)
+    private Duration batchDuration = Duration.milliseconds(100);
 
     @JsonProperty
-    public int getQueueSize() {
-        return queueSize;
+    public boolean isBounded() {
+        return bounded;
     }
 
     @JsonProperty
-    public void setQueueSize(int queueSize) {
-        this.queueSize = queueSize;
+    public void setBounded(boolean bounded) {
+        this.bounded = bounded;
     }
 
     @JsonProperty
-    public int getDiscardingThreshold() {
-        return discardingThreshold;
+    public int getBatchSize() {
+        return batchSize;
     }
 
     @JsonProperty
-    public void setDiscardingThreshold(int discardingThreshold) {
-        this.discardingThreshold = discardingThreshold;
-    }
-
-    /**
-     * @since 2.0
-     */
-    @JsonProperty
-    @Nullable
-    public Duration getMessageRate() {
-        return messageRate;
-    }
-
-    /**
-     * @since 2.0
-     */
-    @JsonProperty
-    public void setMessageRate(Duration messageRate) {
-        this.messageRate = messageRate;
+    public void setBatchSize(int batchSize) {
+        this.batchSize = batchSize;
     }
 
     @JsonProperty
-    public String getThreshold() {
-        return threshold.toString();
+    public Duration getBatchDuration() {
+        return batchDuration;
     }
 
     @JsonProperty
-    public void setThreshold(String threshold) {
-        this.threshold = DefaultLoggingFactory.toLevel(threshold);
+    public void setBatchDuration(Duration batchDuration) {
+        this.batchDuration = batchDuration;
     }
 
     @JsonProperty
-    @Nullable
+    public Level getThreshold() {
+        return threshold;
+    }
+
+    @JsonProperty
+    public void setThreshold(Level threshold) {
+        this.threshold = threshold;
+    }
+
+    @JsonProperty
     public String getLogFormat() {
         return logFormat;
     }
 
     @JsonProperty
-    public void setLogFormat(@Nullable String logFormat) {
+    public void setLogFormat(String logFormat) {
         this.logFormat = logFormat;
     }
 
-    @JsonProperty
-    public TimeZone getTimeZone() {
-        return timeZone;
-    }
-
-    @JsonProperty
-    public void setTimeZone(String zoneId) {
-        this.timeZone = Strings.nullToEmpty(zoneId).equalsIgnoreCase("system") ? TimeZone.getDefault() :
-            TimeZone.getTimeZone(zoneId);
-    }
-
-    @JsonProperty
-    public void setTimeZone(TimeZone timeZone) {
-        this.timeZone = timeZone;
-    }
-
-    @JsonProperty
-    public boolean isIncludeCallerData() {
-        return includeCallerData;
-    }
-
-    @JsonProperty
-    public void setIncludeCallerData(boolean includeCallerData) {
-        this.includeCallerData = includeCallerData;
-    }
-
-    @JsonProperty
-    public List<FilterFactory<E>> getFilterFactories() {
-        return filterFactories;
-    }
-
-    @JsonProperty
-    public void setFilterFactories(List<FilterFactory<E>> appenders) {
-        this.filterFactories = new ArrayList<>(appenders);
-    }
-
-    @JsonProperty
-    public void setNeverBlock(boolean neverBlock) {
-        this.neverBlock = neverBlock;
-    }
-
-    @Nullable
-    @JsonProperty
-    public DiscoverableLayoutFactory<?> getLayout() {
-        return layout;
-    }
-
-    @JsonProperty
-    public void setLayout(@Nullable DiscoverableLayoutFactory<E> layout) {
-        this.layout = layout;
-    }
-
-    protected Appender<E> wrapAsync(Appender<E> appender, AsyncAppenderFactory<E> asyncAppenderFactory) {
-        return wrapAsync(appender, asyncAppenderFactory, appender.getContext());
-    }
-
-    protected Appender<E> wrapAsync(Appender<E> appender, AsyncAppenderFactory<E> asyncAppenderFactory, Context context) {
-        final AsyncAppenderBase<E> asyncAppender = asyncAppenderFactory.build();
-        if (asyncAppender instanceof AsyncAppender) {
-            ((AsyncAppender) asyncAppender).setIncludeCallerData(includeCallerData);
-        }
-        asyncAppender.setQueueSize(queueSize);
-        asyncAppender.setDiscardingThreshold(discardingThreshold);
-        asyncAppender.setContext(context);
-        asyncAppender.setName("async-" + appender.getName());
-        asyncAppender.addAppender(appender);
-        asyncAppender.setNeverBlock(neverBlock);
+    protected Appender<ILoggingEvent> wrapAsync(Appender<ILoggingEvent> appender) {
+        final AsyncAppender asyncAppender = new AsyncAppender(appender, batchSize, batchDuration, bounded);
         asyncAppender.start();
-        if (messageRate == null) {
-            return asyncAppender;
-        } else {
-            return new ThrottlingAppenderWrapper<>(asyncAppender, messageRate.getQuantity(), messageRate.getUnit());
-        }
+        return asyncAppender;
     }
 
-    protected LayoutBase<E> buildLayout(LoggerContext context, LayoutFactory<E> defaultLayoutFactory) {
-        final LayoutBase<E> layoutBase;
-        if (layout == null) {
-            layoutBase = defaultLayoutFactory.build(context, timeZone);
-        } else {
-            layoutBase = layout.build(context, timeZone);
-        }
-        if (!Strings.isNullOrEmpty(logFormat)) {
-            if (layoutBase instanceof PatternLayoutBase) {
-                @SuppressWarnings("NullAway")
-                String logFormatWithTimeZone = logFormat.replace("%dwTimeZone", timeZone.getID());
-                ((PatternLayoutBase<E>)layoutBase).setPattern(logFormatWithTimeZone);
-            } else {
-                LOGGER.warn("Ignoring 'logFormat', because 'layout' does not extend PatternLayoutBase");
-            }
-        }
+    protected void addThresholdFilter(FilterAttachable<ILoggingEvent> appender, Level threshold) {
+        final ThresholdFilter filter = new ThresholdFilter();
+        filter.setLevel(threshold.toString());
+        filter.start();
+        appender.addFilter(filter);
+    }
 
-        layoutBase.start();
-        return layoutBase;
+    protected DropwizardLayout buildLayout(LoggerContext context, TimeZone timeZone) {
+        final DropwizardLayout formatter = new DropwizardLayout(context, timeZone);
+        if (!Strings.isNullOrEmpty(logFormat)) {
+            formatter.setPattern(logFormat);
+        }
+        formatter.start();
+        return formatter;
     }
 }

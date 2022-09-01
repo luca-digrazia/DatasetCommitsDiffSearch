@@ -16,15 +16,12 @@
 
 package org.litepal;
 
-import android.text.TextUtils;
-
 import org.litepal.crud.LitePalSupport;
 import org.litepal.crud.QueryHandler;
 import org.litepal.crud.async.AverageExecutor;
 import org.litepal.crud.async.CountExecutor;
 import org.litepal.crud.async.FindExecutor;
 import org.litepal.crud.async.FindMultiExecutor;
-import org.litepal.exceptions.LitePalSupportException;
 import org.litepal.tablemanager.Connector;
 import org.litepal.util.BaseUtility;
 import org.litepal.util.DBUtility;
@@ -42,32 +39,32 @@ public class FluentQuery {
 	/**
 	 * Representing the selected columns in SQL.
 	 */
-	String[] mColumns;
+	public String[] mColumns;
 
 	/**
 	 * Representing the where clause in SQL.
 	 */
-	String[] mConditions;
+    public String[] mConditions;
 
 	/**
 	 * Representing the order by clause in SQL.
 	 */
-	String mOrderBy;
+    public String mOrderBy;
 
 	/**
 	 * Representing the limit clause in SQL.
 	 */
-	String mLimit;
+    public String mLimit;
 
 	/**
 	 * Representing the offset in SQL.
 	 */
-	String mOffset;
+    public String mOffset;
 
 	/**
 	 * Do not allow to create instance by developers.
 	 */
-	FluentQuery() {
+	public FluentQuery() {
 	}
 
 	/**
@@ -198,11 +195,13 @@ public class FluentQuery {
         return find(modelClass, false);
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #find(Class)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query and the object type to return as a list.
+     * @return A FindMultiExecutor instance.
+     */
     public <T> FindMultiExecutor<T> findAsync(final Class<T> modelClass) {
         return findAsync(modelClass, false);
     }
@@ -236,11 +235,15 @@ public class FluentQuery {
         }
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #find(Class, boolean)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query and the object type to return as a list.
+     * @param isEager
+     *            True to load the associated models, false not.
+     * @return A FindMultiExecutor instance.
+     */
     public <T> FindMultiExecutor<T> findAsync(final Class<T> modelClass, final boolean isEager) {
         final FindMultiExecutor<T> executor = new FindMultiExecutor<>();
         Runnable runnable = new Runnable() {
@@ -284,11 +287,13 @@ public class FluentQuery {
         return findFirst(modelClass, false);
     }
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #findFirst(Class)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query and the object type to return.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> findFirstAsync(Class<T> modelClass) {
         return findFirstAsync(modelClass, false);
     }
@@ -308,25 +313,23 @@ public class FluentQuery {
      */
     public <T> T findFirst(Class<T> modelClass, boolean isEager) {
         synchronized (LitePalSupport.class) {
-        	String limitTemp = mLimit;
-        	if (!"0".equals(mLimit)) { // If mLimit not equals to 0, set mLimit to 1 to find the first record.
-        		mLimit = "1";
-			}
             List<T> list = find(modelClass, isEager);
-        	mLimit = limitTemp; // Don't forget to change it back after finding operation.
             if (list.size() > 0) {
-				if (list.size() != 1) throw new LitePalSupportException("Found multiple records while only one record should be found at most.");
                 return list.get(0);
             }
             return null;
         }
     }
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #findFirst(Class, boolean)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query and the object type to return.
+     * @param isEager
+     *            True to load the associated models, false not.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> findFirstAsync(final Class<T> modelClass, final boolean isEager) {
         final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {
@@ -370,11 +373,13 @@ public class FluentQuery {
         return findLast(modelClass, false);
     }
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #findLast(Class)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query and the object type to return.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> findLastAsync(Class<T> modelClass) {
         return findLastAsync(modelClass, false);
     }
@@ -394,29 +399,7 @@ public class FluentQuery {
      */
     public <T> T findLast(Class<T> modelClass, boolean isEager) {
         synchronized (LitePalSupport.class) {
-			String orderByTemp = mOrderBy;
-			String limitTemp = mLimit;
-        	if (TextUtils.isEmpty(mOffset) && TextUtils.isEmpty(mLimit)) { // If mOffset or mLimit is specified, we can't use the strategy in this block to speed up finding.
-				if (TextUtils.isEmpty(mOrderBy)) {
-					// If mOrderBy is null, we can use id desc order, then the first record will be the record value where want to find.
-					mOrderBy = "id desc";
-				} else {
-					// If mOrderBy is not null, check if it ends with desc.
-					if (mOrderBy.endsWith(" desc")) {
-						// If mOrderBy ends with desc, then the last record of desc order will be the first record of asc order, so we remove the desc.
-						mOrderBy = mOrderBy.replace(" desc", "");
-					} else {
-						// If mOrderBy not ends with desc, then the last record of asc order will be the first record of desc order, so we add the desc.
-						mOrderBy += " desc";
-					}
-				}
-				if (!"0".equals(mLimit)) {
-					mLimit = "1";
-				}
-			}
             List<T> list = find(modelClass, isEager);
-        	mOrderBy = orderByTemp;
-        	mLimit = limitTemp;
             int size = list.size();
             if (size > 0) {
                 return list.get(size - 1);
@@ -425,11 +408,15 @@ public class FluentQuery {
         }
     }
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #findLast(Class, boolean)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query and the object type to return.
+     * @param isEager
+     *            True to load the associated models, false not.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> findLastAsync(final Class<T> modelClass, final boolean isEager) {
         final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {
@@ -474,11 +461,13 @@ public class FluentQuery {
         return count(BaseUtility.changeCase(modelClass.getSimpleName()));
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #count(Class)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query from by class.
+     * @return A CountExecutor instance.
+     */
     public CountExecutor countAsync(Class<?> modelClass) {
         return countAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())));
     }
@@ -508,11 +497,13 @@ public class FluentQuery {
         }
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #count(String)} but pending to a new thread for executing.
+     *
+     * @param tableName
+     *            Which table to query from.
+     * @return A CountExecutor instance.
+     */
     public CountExecutor countAsync(final String tableName) {
         final CountExecutor executor = new CountExecutor();
         Runnable runnable = new Runnable() {
@@ -558,11 +549,15 @@ public class FluentQuery {
         return average(BaseUtility.changeCase(modelClass.getSimpleName()), column);
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #average(Class, String)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query from by class.
+     * @param column
+     *            The based on column to calculate.
+     * @return A AverageExecutor instance.
+     */
     public AverageExecutor averageAsync(final Class<?> modelClass, final String column) {
         return averageAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), column);
     }
@@ -593,11 +588,15 @@ public class FluentQuery {
         }
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #average(String, String)} but pending to a new thread for executing.
+     *
+     * @param tableName
+     *            Which table to query from.
+     * @param column
+     *            The based on column to calculate.
+     * @return A AverageExecutor instance.
+     */
     public AverageExecutor averageAsync(final String tableName, final String column) {
         final AverageExecutor executor = new AverageExecutor();
         Runnable runnable = new Runnable() {
@@ -646,11 +645,17 @@ public class FluentQuery {
         return max(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #max(Class, String, Class)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query from by class.
+     * @param columnName
+     *            The based on column to calculate.
+     * @param columnType
+     *            The type of the based on column.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> maxAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
         return maxAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), columnName, columnType);
     }
@@ -684,11 +689,17 @@ public class FluentQuery {
         }
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #max(String, String, Class)} but pending to a new thread for executing.
+     *
+     * @param tableName
+     *            Which table to query from.
+     * @param columnName
+     *            The based on column to calculate.
+     * @param columnType
+     *            The type of the based on column.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> maxAsync(final String tableName, final String columnName, final Class<T> columnType) {
         final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {
@@ -737,11 +748,17 @@ public class FluentQuery {
         return min(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #min(Class, String, Class)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query from by class.
+     * @param columnName
+     *            The based on column to calculate.
+     * @param columnType
+     *            The type of the based on column.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> minAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
         return minAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), columnName, columnType);
     }
@@ -775,11 +792,17 @@ public class FluentQuery {
         }
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #min(String, String, Class)} but pending to a new thread for executing.
+     *
+     * @param tableName
+     *            Which table to query from.
+     * @param columnName
+     *            The based on column to calculate.
+     * @param columnType
+     *            The type of the based on column.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> minAsync(final String tableName, final String columnName, final Class<T> columnType) {
         final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {
@@ -828,11 +851,17 @@ public class FluentQuery {
         return sum(BaseUtility.changeCase(modelClass.getSimpleName()), columnName, columnType);
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #sum(Class, String, Class)} but pending to a new thread for executing.
+     *
+     * @param modelClass
+     *            Which table to query from by class.
+     * @param columnName
+     *            The based on column to calculate.
+     * @param columnType
+     *            The type of the based on column.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> sumAsync(final Class<?> modelClass, final String columnName, final Class<T> columnType) {
         return sumAsync(BaseUtility.changeCase(DBUtility.getTableNameByClassName(modelClass.getName())), columnName, columnType);
     }
@@ -866,11 +895,17 @@ public class FluentQuery {
         }
 	}
 
-	/**
-	 * This method is deprecated and will be removed in the future releases.
-	 * Handle async db operation in your own logic instead.
-	 */
-	@Deprecated
+    /**
+     * Basically same as {@link #sum(String, String, Class)} but pending to a new thread for executing.
+     *
+     * @param tableName
+     *            Which table to query from.
+     * @param columnName
+     *            The based on column to calculate.
+     * @param columnType
+     *            The type of the based on column.
+     * @return A FindExecutor instance.
+     */
     public <T> FindExecutor<T> sumAsync(final String tableName, final String columnName, final Class<T> columnType) {
         final FindExecutor<T> executor = new FindExecutor<>();
         Runnable runnable = new Runnable() {

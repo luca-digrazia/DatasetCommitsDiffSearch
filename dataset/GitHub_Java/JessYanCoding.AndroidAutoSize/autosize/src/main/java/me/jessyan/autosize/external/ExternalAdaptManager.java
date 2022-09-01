@@ -48,17 +48,17 @@ public class ExternalAdaptManager {
      * 支持链式调用, 如:
      * {@link ExternalAdaptManager#addCancelAdaptOfActivity(Class)#addCancelAdaptOfActivity(Class)}
      *
-     * @param targetClass {@link Activity} class, Fragment class
+     * @param activityClass {@link Activity} class
      */
-    public synchronized ExternalAdaptManager addCancelAdaptOfActivity(Class<?> targetClass) {
-        Preconditions.checkNotNull(targetClass, "targetClass == null");
+    public synchronized ExternalAdaptManager addCancelAdaptOfActivity(Class<?> activityClass) {
+        Preconditions.checkNotNull(activityClass, "activityClass == null");
         if (!isRun) {
             isRun = true;
         }
         if (mCancelAdaptList == null) {
             mCancelAdaptList = new ArrayList<>();
         }
-        mCancelAdaptList.add(targetClass.getCanonicalName());
+        mCancelAdaptList.add(activityClass.getCanonicalName());
         return this;
     }
 
@@ -66,58 +66,50 @@ public class ExternalAdaptManager {
      * 将需要提供自定义适配参数的三方库 {@link Activity} 添加进来 (但不局限于三方库), 即可让该 {@link Activity} 根据自己提供的适配参数进行适配
      * 默认的全局适配参数不能满足您时可以使用此方法
      * <p>
-     * 一般用于三方库的 Activity, 因为三方库的设计图尺寸可能和项目自身的设计图尺寸不一致, 所以要想完美适配三方库的页面
-     * 就需要提供三方库的设计图尺寸, 以及适配的方向 (以宽为基准还是高为基准?)
-     * 三方库页面的设计图尺寸可能无法获知, 所以如果想让三方库的适配效果达到最好, 只有靠不断的尝试
-     * 由于 AndroidAutoSize 可以让布局在所有设备上都等比例缩放, 所以只要您在一个设备上测试出了一个最完美的设计图尺寸
-     * 那这个三方库页面在其他设备上也会呈现出同样的适配效果, 等比例缩放, 所以也就完成了三方库页面的屏幕适配
-     * 即使在不改三方库源码的情况下也可以完美适配三方库的页面, 这就是 AndroidAutoSize 的优势
-     * 但前提是三方库页面的布局使用的是 dp 和 sp, 如果布局全部使用的 px, 那 AndroidAutoSize 也将无能为力
-     * <p>
      * 支持链式调用, 如:
      * {@link ExternalAdaptManager#addExternalAdaptInfoOfActivity(Class, ExternalAdaptInfo)#addExternalAdaptInfoOfActivity(Class, ExternalAdaptInfo)}
      *
-     * @param targetClass {@link Activity} class, Fragment class
-     * @param info        {@link ExternalAdaptInfo} 适配参数
+     * @param activityClass {@link Activity} class
+     * @param info          {@link ExternalAdaptInfo} 适配参数
      */
-    public synchronized ExternalAdaptManager addExternalAdaptInfoOfActivity(Class<?> targetClass, ExternalAdaptInfo info) {
-        Preconditions.checkNotNull(targetClass, "targetClass == null");
+    public synchronized ExternalAdaptManager addExternalAdaptInfoOfActivity(Class<?> activityClass, ExternalAdaptInfo info) {
+        Preconditions.checkNotNull(activityClass, "activityClass == null");
         if (!isRun) {
             isRun = true;
         }
         if (mExternalAdaptInfos == null) {
             mExternalAdaptInfos = new HashMap<>(16);
         }
-        mExternalAdaptInfos.put(targetClass.getCanonicalName(), info);
+        mExternalAdaptInfos.put(activityClass.getCanonicalName(), info);
         return this;
     }
 
     /**
      * 这个 {@link Activity} 是否存在在取消适配的列表中, 如果在, 则该 {@link Activity} 适配失效
      *
-     * @param targetClass {@link Activity} class, Fragment class
+     * @param activityClass {@link Activity} class
      * @return {@code true} 为存在, {@code false} 为不存在
      */
-    public synchronized boolean isCancelAdapt(Class<?> targetClass) {
-        Preconditions.checkNotNull(targetClass, "targetClass == null");
+    public synchronized boolean isCancelAdapt(Class<?> activityClass) {
+        Preconditions.checkNotNull(activityClass, "activityClass == null");
         if (mCancelAdaptList == null) {
             return false;
         }
-        return mCancelAdaptList.contains(targetClass.getCanonicalName());
+        return mCancelAdaptList.contains(activityClass.getCanonicalName());
     }
 
     /**
      * 这个 {@link Activity} 是否提供有自定义的适配参数, 如果有则使用此适配参数进行适配
      *
-     * @param targetClass {@link Activity} class, Fragment class
+     * @param activityClass {@link Activity} class
      * @return 如果返回 {@code null} 则说明该 {@link Activity} 没有提供自定义的适配参数
      */
-    public synchronized ExternalAdaptInfo getExternalAdaptInfoOfActivity(Class<?> targetClass) {
-        Preconditions.checkNotNull(targetClass, "targetClass == null");
+    public synchronized ExternalAdaptInfo getExternalAdaptInfoOfActivity(Class<?> activityClass) {
+        Preconditions.checkNotNull(activityClass, "activityClass == null");
         if (mExternalAdaptInfos == null) {
             return null;
         }
-        return mExternalAdaptInfos.get(targetClass.getCanonicalName());
+        return mExternalAdaptInfos.get(activityClass.getCanonicalName());
     }
 
     /**
@@ -134,8 +126,7 @@ public class ExternalAdaptManager {
      *
      * @param run {@code true} 为让管理器启动运行, {@code false} 为让管理器停止运行
      */
-    public ExternalAdaptManager setRun(boolean run) {
+    public void setRun(boolean run) {
         isRun = run;
-        return this;
     }
 }

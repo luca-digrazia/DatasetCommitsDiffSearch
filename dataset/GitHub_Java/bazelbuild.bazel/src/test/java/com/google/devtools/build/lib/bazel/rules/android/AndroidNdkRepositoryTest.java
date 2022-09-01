@@ -14,52 +14,25 @@
 package com.google.devtools.build.lib.bazel.rules.android;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
 
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryTest.WithPlatforms;
-import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryTest.WithoutPlatforms;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.packages.RepositoryFetchException;
-import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.util.BazelMockCcSupport;
-import com.google.devtools.build.lib.packages.util.Crosstool.CcToolchainConfig;
-import com.google.devtools.build.lib.packages.util.MockPlatformSupport;
-import com.google.devtools.build.lib.packages.util.ResourceLoader;
-import com.google.devtools.build.lib.rules.android.AndroidBuildViewTestCase;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
-import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.junit.runners.Suite;
-import org.junit.runners.Suite.SuiteClasses;
 
 /** Tests for {@link AndroidNdkRepositoryTest}. */
-@RunWith(Suite.class)
-@SuiteClasses({WithoutPlatforms.class, WithPlatforms.class})
-public class AndroidNdkRepositoryTest extends AndroidBuildViewTestCase {
-  /** Use legacy toolchain resolution. */
-  @RunWith(JUnit4.class)
-  public static class WithoutPlatforms extends AndroidNdkRepositoryTest {}
-
-  /** Use platform-based toolchain resolution. */
-  @RunWith(JUnit4.class)
-  public static class WithPlatforms extends AndroidNdkRepositoryTest {
-    @Override
-    protected boolean platformBasedToolchains() {
-      return true;
-    }
-  }
-
+@RunWith(JUnit4.class)
+public class AndroidNdkRepositoryTest extends BuildViewTestCase {
   @Override
-  protected ConfiguredRuleClassProvider createRuleClassProvider() {
+  protected ConfiguredRuleClassProvider getRuleClassProvider() {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     TestRuleClassProvider.addStandardRules(builder);
     return builder.addRuleDefinition(new AndroidNdkRepositoryRule()).build();
@@ -67,44 +40,10 @@ public class AndroidNdkRepositoryTest extends AndroidBuildViewTestCase {
 
   @Before
   public void setup() throws Exception {
-    // This test needs to use Bazel's repository semantics, and so we need to set up the required
-    // repositories in @bazel_tools and @platforms.
-    if (!TestConstants.PRODUCT_NAME.equals("bazel")) {
-      MockPlatformSupport.setup(mockToolsConfig);
-      // TODO(wyv): consider removing this test within Google.
-      mockToolsConfig.create("embedded_tools/WORKSPACE", "workspace(name = 'bazel_tools')");
-    }
-    BazelMockCcSupport.INSTANCE.setup(mockToolsConfig);
-    // Replace the default host cc toolchain with one that uses Bazel platform constraints.
-    BazelMockCcSupport.INSTANCE.setupCcToolchainConfig(
-        mockToolsConfig,
-        CcToolchainConfig.builder()
-            .withToolchainTargetConstraints("@platforms//os:linux", "@platforms//cpu:x86_64"));
-    scratch.overwriteFile("embedded_tools/tools/build_defs/cc/BUILD");
-    scratch.overwriteFile(
-        "embedded_tools/tools/build_defs/cc/action_names.bzl",
-        ResourceLoader.readFromResources(
-            TestConstants.RULES_CC_REPOSITORY_EXECROOT + "cc/action_names.bzl"));
-
-    scratch.overwriteFile(
-        "embedded_tools/tools/cpp/cc_toolchain_config_lib.bzl",
-        ResourceLoader.readFromResources(
-            TestConstants.RULES_CC_REPOSITORY_EXECROOT + "cc/cc_toolchain_config_lib.bzl"));
-    scratch.file("/ndk/source.properties", "Pkg.Desc = Android NDK", "Pkg.Revision = 13.1.3345770");
-
-    // Set up a fake @platforms repository.
-    scratch.appendFile(
-        "WORKSPACE", "local_repository(name = 'platforms', path = 'platforms_workspace')");
-    if (!scratch.resolve("platforms_workspace/WORKSPACE").exists()) {
-      // Create the needed platforms and constraints if they don't already exist.
-      scratch.file("platforms_workspace/WORKSPACE", "workspace(name = 'platforms')");
-      MockPlatformSupport.setup(
-          mockToolsConfig,
-          "@bazel_tools//platforms",
-          "embedded_tools/platforms",
-          "@platforms//",
-          "platforms_workspace");
-    }
+    scratch.file(
+        "/ndk/source.properties",
+        "Pkg.Desc = Android NDK",
+        "Pkg.Revision = 13.1.3345770");
   }
 
   private void scratchPlatformsDirectories(String arch, int... apiLevels) throws Exception {
@@ -118,20 +57,17 @@ public class AndroidNdkRepositoryTest extends AndroidBuildViewTestCase {
   @Test
   public void testApiLevelHighestVersionDetection() throws Exception {
     scratchPlatformsDirectories("arch-x86", 19, 20, 22, 24);
-    String bazelToolsWorkspace = scratch.dir("embedded_tools").getPathString();
     FileSystemUtils.appendIsoLatin1(
         scratch.resolve("WORKSPACE"),
-        "local_repository(name = 'bazel_tools', path = '" + bazelToolsWorkspace + "')",
         "android_ndk_repository(",
         "    name = 'androidndk',",
         "    path = '/ndk',",
         ")");
     invalidatePackages();
 
-    NestedSet<Artifact> x86ClangHighestApiLevelFilesToRun =
+    ImmutableList<Artifact> x86ClangHighestApiLevelFilesToRun =
         getConfiguredTarget("@androidndk//:x86-clang3.8-gnu-libstdcpp-all_files")
-            .getProvider(FilesToRunProvider.class)
-            .getFilesToRun();
+            .getProvider(FilesToRunProvider.class).getFilesToRun();
     assertThat(artifactsToStrings(x86ClangHighestApiLevelFilesToRun))
         .contains(
             "src external/androidndk/ndk/platforms/android-24/arch-x86/usr/lib/libandroid.so");
@@ -143,10 +79,8 @@ public class AndroidNdkRepositoryTest extends AndroidBuildViewTestCase {
   @Test
   public void testInvalidNdkReleaseTxt() throws Exception {
     scratchPlatformsDirectories("arch-x86", 24);
-    String bazelToolsWorkspace = scratch.dir("embedded_tools").getPathString();
     FileSystemUtils.appendIsoLatin1(
         scratch.resolve("WORKSPACE"),
-        "local_repository(name = 'bazel_tools', path = '" + bazelToolsWorkspace + "')",
         "android_ndk_repository(",
         "    name = 'androidndk',",
         "    path = '/ndk',",
@@ -163,16 +97,14 @@ public class AndroidNdkRepositoryTest extends AndroidBuildViewTestCase {
         eventCollector,
         "The revision of the Android NDK referenced by android_ndk_repository rule 'androidndk' "
             + "could not be determined (the revision string found is 'not a valid release string')."
-            + " Bazel will attempt to treat the NDK as if it was r21.");
+            + " Defaulting to revision 13.");
   }
 
   @Test
   public void testInvalidNdkSourceProperties() throws Exception {
     scratchPlatformsDirectories("arch-x86", 24);
-    String bazelToolsWorkspace = scratch.dir("embedded_tools").getPathString();
     FileSystemUtils.appendIsoLatin1(
         scratch.resolve("WORKSPACE"),
-        "local_repository(name = 'bazel_tools', path = '" + bazelToolsWorkspace + "')",
         "android_ndk_repository(",
         "    name = 'androidndk',",
         "    path = '/ndk',",
@@ -191,16 +123,14 @@ public class AndroidNdkRepositoryTest extends AndroidBuildViewTestCase {
         eventCollector,
         "The revision of the Android NDK referenced by android_ndk_repository rule 'androidndk' "
             + "could not be determined (the revision string found is 'invalid package revision'). "
-            + "Bazel will attempt to treat the NDK as if it was r21.");
+            + "Defaulting to revision 13.");
   }
 
   @Test
   public void testUnsupportedNdkVersion() throws Exception {
     scratchPlatformsDirectories("arch-x86", 24);
-    String bazelToolsWorkspace = scratch.dir("embedded_tools").getPathString();
     FileSystemUtils.appendIsoLatin1(
         scratch.resolve("WORKSPACE"),
-        "local_repository(name = 'bazel_tools', path = '" + bazelToolsWorkspace + "')",
         "android_ndk_repository(",
         "    name = 'androidndk',",
         "    path = '/ndk',",
@@ -208,62 +138,16 @@ public class AndroidNdkRepositoryTest extends AndroidBuildViewTestCase {
         ")");
 
     scratch.overwriteFile(
-        "/ndk/source.properties", "Pkg.Desc = Android NDK", "Pkg.Revision = 22.0.3675639-beta2");
+        "/ndk/source.properties",
+        "Pkg.Desc = Android NDK",
+        "Pkg.Revision = 14.0.3675639-beta2");
     invalidatePackages();
 
     assertThat(getConfiguredTarget("@androidndk//:files")).isNotNull();
     MoreAsserts.assertContainsEvent(
         eventCollector,
         "The major revision of the Android NDK referenced by android_ndk_repository rule "
-            + "'androidndk' is 22. The major revisions supported by Bazel are "
-            + "[10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]. "
-            + "Bazel will attempt to treat the NDK as if it was r21.");
-  }
-
-  @Test
-  public void testMiscLibraries() throws Exception {
-    scratchPlatformsDirectories("arch-x86", 19, 20, 22, 24);
-    scratch.file(String.format("/ndk/sources/android/cpufeatures/cpu-features.c"));
-    scratch.file(String.format("/ndk/sources/android/cpufeatures/cpu-features.h"));
-    String bazelToolsWorkspace = scratch.dir("embedded_tools").getPathString();
-    FileSystemUtils.appendIsoLatin1(
-        scratch.resolve("WORKSPACE"),
-        "local_repository(name = 'bazel_tools', path = '" + bazelToolsWorkspace + "')",
-        "android_ndk_repository(",
-        "    name = 'androidndk',",
-        "    path = '/ndk',",
-        ")");
-    invalidatePackages();
-
-    ConfiguredTargetAndData cpufeatures = getConfiguredTargetAndData("@androidndk//:cpufeatures");
-    assertThat(cpufeatures).isNotNull();
-    Rule rule = cpufeatures.getTarget().getAssociatedRule();
-    assertThat(rule.isAttributeValueExplicitlySpecified("srcs")).isTrue();
-    assertThat(rule.getAttr("srcs").toString())
-        .isEqualTo("[@androidndk//:ndk/sources/android/cpufeatures/cpu-features.c]");
-    assertThat(rule.isAttributeValueExplicitlySpecified("hdrs")).isTrue();
-    assertThat(rule.getAttr("hdrs").toString())
-        .isEqualTo("[@androidndk//:ndk/sources/android/cpufeatures/cpu-features.h]");
-  }
-
-  @Test
-  public void testMissingPlatformsDirectory() throws Exception {
-    String bazelToolsWorkspace = scratch.dir("embedded_tools").getPathString();
-    FileSystemUtils.appendIsoLatin1(
-        scratch.resolve("WORKSPACE"),
-        "local_repository(name = 'bazel_tools', path = '" + bazelToolsWorkspace + "')",
-        "android_ndk_repository(",
-        "    name = 'androidndk',",
-        "    path = '/ndk',",
-        ")");
-    invalidatePackages(false);
-    reporter.removeHandler(failFastHandler);
-    RepositoryFetchException e =
-        assertThrows(RepositoryFetchException.class, () -> getTarget("@androidndk//:files"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains(
-            "Expected directory at /ndk/platforms but it is not a directory or it does not "
-                + "exist.");
+            + "'androidndk' is 14. The major revisions supported by Bazel are [10, 11, 12, 13]. "
+            + "Defaulting to revision 13.");
   }
 }

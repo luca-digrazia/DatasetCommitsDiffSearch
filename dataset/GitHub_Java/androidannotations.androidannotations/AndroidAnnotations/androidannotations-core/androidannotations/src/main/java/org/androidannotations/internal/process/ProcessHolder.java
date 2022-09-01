@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -33,10 +32,10 @@ import javax.lang.model.element.Element;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.GeneratedClassHolder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.JClassAlreadyExistsException;
-import com.helger.jcodemodel.JCodeModel;
-import com.helger.jcodemodel.JDefinedClass;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JDefinedClass;
 
 public class ProcessHolder {
 
@@ -46,126 +45,100 @@ public class ProcessHolder {
 		/*
 		 * Java
 		 */
-		public final AbstractJClass RUNTIME_EXCEPTION = refClass(RuntimeException.class);
-		public final AbstractJClass EXCEPTION = refClass(Exception.class);
-		public final AbstractJClass THROWABLE = refClass(Throwable.class);
-		public final AbstractJClass CHAR_SEQUENCE = refClass(CharSequence.class);
-		public final AbstractJClass CLASS_CAST_EXCEPTION = refClass(ClassCastException.class);
-		public final AbstractJClass SERIALIZABLE = refClass(Serializable.class);
-		public final AbstractJClass STRING = refClass(String.class);
-		public final AbstractJClass STRING_BUILDER = refClass(StringBuilder.class);
-		public final AbstractJClass SYSTEM = refClass(System.class);
-		public final AbstractJClass INPUT_STREAM = refClass(InputStream.class);
-		public final AbstractJClass FILE_INPUT_STREAM = refClass(FileInputStream.class);
-		public final AbstractJClass SQL_EXCEPTION = refClass(SQLException.class);
-		public final AbstractJClass COLLECTIONS = refClass(Collections.class);
-		public final AbstractJClass THREAD = refClass(Thread.class);
-		public final AbstractJClass HASH_MAP = refClass(HashMap.class);
-		public final AbstractJClass LIST = refClass(List.class);
-		public final AbstractJClass OBJECT = refClass(Object.class);
-		public final AbstractJClass ARRAYS = refClass(Arrays.class);
-		public final AbstractJClass HASH_SET = refClass(HashSet.class);
-		public final AbstractJClass CLASS = refClass(Class.class);
-		public final AbstractJClass MAP = refClass(Map.class);
+		public final JClass RUNTIME_EXCEPTION = refClass(RuntimeException.class);
+		public final JClass EXCEPTION = refClass(Exception.class);
+		public final JClass THROWABLE = refClass(Throwable.class);
+		public final JClass CHAR_SEQUENCE = refClass(CharSequence.class);
+		public final JClass CLASS_CAST_EXCEPTION = refClass(ClassCastException.class);
+		public final JClass SERIALIZABLE = refClass(Serializable.class);
+		public final JClass STRING = refClass(String.class);
+		public final JClass STRING_BUILDER = refClass(StringBuilder.class);
+		public final JClass SYSTEM = refClass(System.class);
+		public final JClass INPUT_STREAM = refClass(InputStream.class);
+		public final JClass FILE_INPUT_STREAM = refClass(FileInputStream.class);
+		public final JClass SQL_EXCEPTION = refClass(SQLException.class);
+		public final JClass COLLECTIONS = refClass(Collections.class);
+		public final JClass THREAD = refClass(Thread.class);
+		public final JClass HASH_MAP = refClass(HashMap.class);
+		public final JClass LIST = refClass(List.class);
+		public final JClass OBJECT = refClass(Object.class);
+		public final JClass ARRAYS = refClass(Arrays.class);
+		public final JClass HASH_SET = refClass(HashSet.class);
 
 		/*
 		 * Android
 		 */
-		public final AbstractJClass LOG = refClass(CanonicalNameConstants.LOG);
-		public final AbstractJClass BUNDLE = refClass(CanonicalNameConstants.BUNDLE);
-		public final AbstractJClass ACTIVITY = refClass(CanonicalNameConstants.ACTIVITY);
-		public final AbstractJClass EDITABLE = refClass(CanonicalNameConstants.EDITABLE);
-		public final AbstractJClass TEXT_WATCHER = refClass(CanonicalNameConstants.TEXT_WATCHER);
-		public final AbstractJClass SEEKBAR = refClass(CanonicalNameConstants.SEEKBAR);
-		public final AbstractJClass ON_SEEKBAR_CHANGE_LISTENER = refClass(CanonicalNameConstants.ON_SEEKBAR_CHANGE_LISTENER);
-		public final AbstractJClass TEXT_VIEW = refClass(CanonicalNameConstants.TEXT_VIEW);
-		public final AbstractJClass TEXT_VIEW_ON_EDITOR_ACTION_LISTENER = refClass(CanonicalNameConstants.TEXT_VIEW_ON_EDITOR_ACTION_LISTENER);
-		public final AbstractJClass COMPOUND_BUTTON = refClass(CanonicalNameConstants.COMPOUND_BUTTON);
-		public final AbstractJClass COMPOUND_BUTTON_ON_CHECKED_CHANGE_LISTENER = refClass(CanonicalNameConstants.COMPOUND_BUTTON_ON_CHECKED_CHANGE_LISTENER);
-		public final AbstractJClass VIEW = refClass(CanonicalNameConstants.VIEW);
-		public final AbstractJClass VIEW_ON_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_CLICK_LISTENER);
-		public final AbstractJClass VIEW_ON_TOUCH_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_TOUCH_LISTENER);
-		public final AbstractJClass VIEW_ON_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_LONG_CLICK_LISTENER);
-		public final AbstractJClass VIEW_ON_FOCUS_CHANGE_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_FOCUS_CHANGE_LISTENER);
-		public final AbstractJClass VIEW_GROUP_LAYOUT_PARAMS = refClass(CanonicalNameConstants.VIEW_GROUP_LAYOUT_PARAMS);
-		public final AbstractJClass KEY_EVENT = refClass(CanonicalNameConstants.KEY_EVENT);
-		public final AbstractJClass CONTEXT = refClass(CanonicalNameConstants.CONTEXT);
-		public final AbstractJClass INTENT = refClass(CanonicalNameConstants.INTENT);
-		public final AbstractJClass INTENT_FILTER = refClass(CanonicalNameConstants.INTENT_FILTER);
-		public final AbstractJClass BROADCAST_RECEIVER = refClass(CanonicalNameConstants.BROADCAST_RECEIVER);
-		public final AbstractJClass LOCAL_BROADCAST_MANAGER = refClass(CanonicalNameConstants.LOCAL_BROADCAST_MANAGER);
-		public final AbstractJClass COMPONENT_NAME = refClass(CanonicalNameConstants.COMPONENT_NAME);
-		public final AbstractJClass VIEW_GROUP = refClass(CanonicalNameConstants.VIEW_GROUP);
-		public final AbstractJClass LAYOUT_INFLATER = refClass(CanonicalNameConstants.LAYOUT_INFLATER);
-		public final AbstractJClass FRAGMENT_ACTIVITY = refClass(CanonicalNameConstants.FRAGMENT_ACTIVITY);
-		public final AbstractJClass FRAGMENT = refClass(CanonicalNameConstants.FRAGMENT);
-		public final AbstractJClass SUPPORT_V4_FRAGMENT = refClass(CanonicalNameConstants.SUPPORT_V4_FRAGMENT);
-		public final AbstractJClass HTML = refClass(CanonicalNameConstants.HTML);
-		public final AbstractJClass WINDOW_MANAGER_LAYOUT_PARAMS = refClass(CanonicalNameConstants.WINDOW_MANAGER_LAYOUT_PARAMS);
-		public final AbstractJClass ADAPTER_VIEW = refClass(CanonicalNameConstants.ADAPTER_VIEW);
-		public final AbstractJClass ON_ITEM_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_LONG_CLICK_LISTENER);
-		public final AbstractJClass ON_ITEM_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_CLICK_LISTENER);
-		public final AbstractJClass ON_ITEM_SELECTED_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_SELECTED_LISTENER);
-		public final AbstractJClass WINDOW = refClass(CanonicalNameConstants.WINDOW);
-		public final AbstractJClass MENU_ITEM = refClass(CanonicalNameConstants.MENU_ITEM);
-		public final AbstractJClass MENU_INFLATER = refClass(CanonicalNameConstants.MENU_INFLATER);
-		public final AbstractJClass MENU = refClass(CanonicalNameConstants.MENU);
-		public final AbstractJClass ANIMATION_UTILS = refClass(CanonicalNameConstants.ANIMATION_UTILS);
-		public final AbstractJClass RESOURCES = refClass(CanonicalNameConstants.RESOURCES);
-		public final AbstractJClass CONFIGURATION = refClass(CanonicalNameConstants.CONFIGURATION);
-		public final AbstractJClass MOTION_EVENT = refClass(CanonicalNameConstants.MOTION_EVENT);
-		public final AbstractJClass HANDLER = refClass(CanonicalNameConstants.HANDLER);
-		public final AbstractJClass KEY_STORE = refClass(CanonicalNameConstants.KEY_STORE);
-		public final AbstractJClass VIEW_SERVER = refClass(CanonicalNameConstants.VIEW_SERVER);
-		public final AbstractJClass PARCELABLE = refClass(CanonicalNameConstants.PARCELABLE);
-		public final AbstractJClass LOOPER = refClass(CanonicalNameConstants.LOOPER);
-		public final AbstractJClass POWER_MANAGER = refClass(CanonicalNameConstants.POWER_MANAGER);
-		public final AbstractJClass WAKE_LOCK = refClass(CanonicalNameConstants.WAKE_LOCK);
-		public final AbstractJClass BUILD_VERSION = refClass(CanonicalNameConstants.BUILD_VERSION);
-		public final AbstractJClass BUILD_VERSION_CODES = refClass(CanonicalNameConstants.BUILD_VERSION_CODES);
-		public final AbstractJClass ACTIVITY_COMPAT = refClass(CanonicalNameConstants.ACTIVITY_COMPAT);
-		public final AbstractJClass CONTEXT_COMPAT = refClass(CanonicalNameConstants.CONTEXT_COMPAT);
-		public final AbstractJClass APP_WIDGET_MANAGER = refClass(CanonicalNameConstants.APP_WIDGET_MANAGER);
-		public final AbstractJClass VIEW_PAGER = refClass(CanonicalNameConstants.VIEW_PAGER);
-		public final AbstractJClass PAGE_CHANGE_LISTENER = refClass(CanonicalNameConstants.PAGE_CHANGE_LISTENER);
+		public final JClass LOG = refClass(CanonicalNameConstants.LOG);
+		public final JClass BUNDLE = refClass(CanonicalNameConstants.BUNDLE);
+		public final JClass ACTIVITY = refClass(CanonicalNameConstants.ACTIVITY);
+		public final JClass EDITABLE = refClass(CanonicalNameConstants.EDITABLE);
+		public final JClass TEXT_WATCHER = refClass(CanonicalNameConstants.TEXT_WATCHER);
+		public final JClass SEEKBAR = refClass(CanonicalNameConstants.SEEKBAR);
+		public final JClass ON_SEEKBAR_CHANGE_LISTENER = refClass(CanonicalNameConstants.ON_SEEKBAR_CHANGE_LISTENER);
+		public final JClass TEXT_VIEW = refClass(CanonicalNameConstants.TEXT_VIEW);
+		public final JClass TEXT_VIEW_ON_EDITOR_ACTION_LISTENER = refClass(CanonicalNameConstants.TEXT_VIEW_ON_EDITOR_ACTION_LISTENER);
+		public final JClass COMPOUND_BUTTON = refClass(CanonicalNameConstants.COMPOUND_BUTTON);
+		public final JClass COMPOUND_BUTTON_ON_CHECKED_CHANGE_LISTENER = refClass(CanonicalNameConstants.COMPOUND_BUTTON_ON_CHECKED_CHANGE_LISTENER);
+		public final JClass VIEW = refClass(CanonicalNameConstants.VIEW);
+		public final JClass VIEW_ON_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_CLICK_LISTENER);
+		public final JClass VIEW_ON_TOUCH_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_TOUCH_LISTENER);
+		public final JClass VIEW_ON_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_LONG_CLICK_LISTENER);
+		public final JClass VIEW_ON_FOCUS_CHANGE_LISTENER = refClass(CanonicalNameConstants.VIEW_ON_FOCUS_CHANGE_LISTENER);
+		public final JClass VIEW_GROUP_LAYOUT_PARAMS = refClass(CanonicalNameConstants.VIEW_GROUP_LAYOUT_PARAMS);
+		public final JClass KEY_EVENT = refClass(CanonicalNameConstants.KEY_EVENT);
+		public final JClass CONTEXT = refClass(CanonicalNameConstants.CONTEXT);
+		public final JClass INTENT = refClass(CanonicalNameConstants.INTENT);
+		public final JClass INTENT_FILTER = refClass(CanonicalNameConstants.INTENT_FILTER);
+		public final JClass BROADCAST_RECEIVER = refClass(CanonicalNameConstants.BROADCAST_RECEIVER);
+		public final JClass LOCAL_BROADCAST_MANAGER = refClass(CanonicalNameConstants.LOCAL_BROADCAST_MANAGER);
+		public final JClass COMPONENT_NAME = refClass(CanonicalNameConstants.COMPONENT_NAME);
+		public final JClass VIEW_GROUP = refClass(CanonicalNameConstants.VIEW_GROUP);
+		public final JClass LAYOUT_INFLATER = refClass(CanonicalNameConstants.LAYOUT_INFLATER);
+		public final JClass FRAGMENT_ACTIVITY = refClass(CanonicalNameConstants.FRAGMENT_ACTIVITY);
+		public final JClass FRAGMENT = refClass(CanonicalNameConstants.FRAGMENT);
+		public final JClass SUPPORT_V4_FRAGMENT = refClass(CanonicalNameConstants.SUPPORT_V4_FRAGMENT);
+		public final JClass HTML = refClass(CanonicalNameConstants.HTML);
+		public final JClass WINDOW_MANAGER_LAYOUT_PARAMS = refClass(CanonicalNameConstants.WINDOW_MANAGER_LAYOUT_PARAMS);
+		public final JClass ADAPTER_VIEW = refClass(CanonicalNameConstants.ADAPTER_VIEW);
+		public final JClass ON_ITEM_LONG_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_LONG_CLICK_LISTENER);
+		public final JClass ON_ITEM_CLICK_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_CLICK_LISTENER);
+		public final JClass ON_ITEM_SELECTED_LISTENER = refClass(CanonicalNameConstants.ON_ITEM_SELECTED_LISTENER);
+		public final JClass WINDOW = refClass(CanonicalNameConstants.WINDOW);
+		public final JClass MENU_ITEM = refClass(CanonicalNameConstants.MENU_ITEM);
+		public final JClass MENU_INFLATER = refClass(CanonicalNameConstants.MENU_INFLATER);
+		public final JClass MENU = refClass(CanonicalNameConstants.MENU);
+		public final JClass ANIMATION_UTILS = refClass(CanonicalNameConstants.ANIMATION_UTILS);
+		public final JClass RESOURCES = refClass(CanonicalNameConstants.RESOURCES);
+		public final JClass CONFIGURATION = refClass(CanonicalNameConstants.CONFIGURATION);
+		public final JClass MOTION_EVENT = refClass(CanonicalNameConstants.MOTION_EVENT);
+		public final JClass HANDLER = refClass(CanonicalNameConstants.HANDLER);
+		public final JClass KEY_STORE = refClass(CanonicalNameConstants.KEY_STORE);
+		public final JClass VIEW_SERVER = refClass(CanonicalNameConstants.VIEW_SERVER);
+		public final JClass PARCELABLE = refClass(CanonicalNameConstants.PARCELABLE);
+		public final JClass LOOPER = refClass(CanonicalNameConstants.LOOPER);
+		public final JClass POWER_MANAGER = refClass(CanonicalNameConstants.POWER_MANAGER);
+		public final JClass WAKE_LOCK = refClass(CanonicalNameConstants.WAKE_LOCK);
+		public final JClass BUILD_VERSION = refClass(CanonicalNameConstants.BUILD_VERSION);
+		public final JClass BUILD_VERSION_CODES = refClass(CanonicalNameConstants.BUILD_VERSION_CODES);
+		public final JClass ACTIVITY_COMPAT = refClass(CanonicalNameConstants.ACTIVITY_COMPAT);
+		public final JClass CONTEXT_COMPAT = refClass(CanonicalNameConstants.CONTEXT_COMPAT);
+		public final JClass APP_WIDGET_MANAGER = refClass(CanonicalNameConstants.APP_WIDGET_MANAGER);
 
-		public final AbstractJClass PREFERENCE = refClass(CanonicalNameConstants.PREFERENCE);
-		public final AbstractJClass SUPPORT_V7_PREFERENCE = refClass(CanonicalNameConstants.SUPPORT_V7_PREFERENCE);
-		public final AbstractJClass PREFERENCE_CHANGE_LISTENER = refClass(CanonicalNameConstants.PREFERENCE_CHANGE_LISTENER);
-		public final AbstractJClass SUPPORT_V7_PREFERENCE_CHANGE_LISTENER = refClass(CanonicalNameConstants.SUPPORT_V7_PREFERENCE_CHANGE_LISTENER);
-		public final AbstractJClass PREFERENCE_CLICK_LISTENER = refClass(CanonicalNameConstants.PREFERENCE_CLICK_LISTENER);
-		public final AbstractJClass SUPPORT_V7_PREFERENCE_CLICK_LISTENER = refClass(CanonicalNameConstants.SUPPORT_V7_PREFERENCE_CLICK_LISTENER);
-		public final AbstractJClass PREFERENCE_ACTIVITY_HEADER = refClass(CanonicalNameConstants.PREFERENCE_ACTIVITY_HEADER);
-
-		public final AbstractJClass VIEW_DATA_BINDING = refClass(CanonicalNameConstants.VIEW_DATA_BINDING);
-		public final AbstractJClass DATA_BINDING_UTIL = refClass(CanonicalNameConstants.DATA_BINDING_UTIL);
-
-		/*
-		 * Android X
-		 */
-		public final AbstractJClass ANDROIDX_ACTIVITY_COMPAT = refClass(CanonicalNameConstants.ANDROIDX_ACTIVITY_COMPAT);
-		public final AbstractJClass ANDROIDX_FRAGMENT = refClass(CanonicalNameConstants.ANDROIDX_FRAGMENT);
-		public final AbstractJClass ANDROIDX_FRAGMENT_ACTIVITY = refClass(CanonicalNameConstants.ANDROIDX_FRAGMENT_ACTIVITY);
-		public final AbstractJClass ANDROIDX_LOCAL_BROADCAST_MANAGER = refClass(CanonicalNameConstants.ANDROIDX_LOCAL_BROADCAST_MANAGER);
-		public final AbstractJClass ANDROIDX_CONTEXT_COMPAT = refClass(CanonicalNameConstants.ANDROIDX_CONTEXT_COMPAT);
-		public final AbstractJClass ANDROIDX_PREFERENCE = refClass(CanonicalNameConstants.ANDROIDX_PREFERENCE);
-		public final AbstractJClass ANDROIDX_PREFERENCE_CLICK_LISTENER = refClass(CanonicalNameConstants.ANDROIDX_PREFERENCE_CLICK_LISTENER);
-		public final AbstractJClass ANDROIDX_PREFERENCE_CHANGE_LISTENER = refClass(CanonicalNameConstants.ANDROIDX_PREFERENCE_CHANGE_LISTENER);
-		public final AbstractJClass ANDROIDX_VIEW_PAGER = refClass(CanonicalNameConstants.ANDROIDX_VIEW_PAGER);
-		public final AbstractJClass ANDROIDX_PAGE_CHANGE_LISTENER = refClass(CanonicalNameConstants.ANDROIDX_PAGE_CHANGE_LISTENER);
-		public final AbstractJClass ANDROIDX_VIEW_DATA_BINDING = refClass(CanonicalNameConstants.ANDROIDX_VIEW_DATA_BINDING);
-		public final AbstractJClass ANDROIDX_DATA_BINDING_UTIL = refClass(CanonicalNameConstants.ANDROIDX_DATA_BINDING_UTIL);
+		public final JClass PREFERENCE = refClass(CanonicalNameConstants.PREFERENCE);
+		public final JClass PREFERENCE_CHANGE_LISTENER = refClass(CanonicalNameConstants.PREFERENCE_CHANGE_LISTENER);
+		public final JClass PREFERENCE_CLICK_LISTENER = refClass(CanonicalNameConstants.PREFERENCE_CLICK_LISTENER);
+		public final JClass PREFERENCE_ACTIVITY_HEADER = refClass(CanonicalNameConstants.PREFERENCE_ACTIVITY_HEADER);
 
 		/*
 		 * HttpClient
 		 */
-		public final AbstractJClass CLIENT_CONNECTION_MANAGER = refClass(CanonicalNameConstants.CLIENT_CONNECTION_MANAGER);
-		public final AbstractJClass DEFAULT_HTTP_CLIENT = refClass(CanonicalNameConstants.DEFAULT_HTTP_CLIENT);
-		public final AbstractJClass SSL_SOCKET_FACTORY = refClass(CanonicalNameConstants.SSL_SOCKET_FACTORY);
-		public final AbstractJClass PLAIN_SOCKET_FACTORY = refClass(CanonicalNameConstants.PLAIN_SOCKET_FACTORY);
-		public final AbstractJClass SCHEME = refClass(CanonicalNameConstants.SCHEME);
-		public final AbstractJClass SCHEME_REGISTRY = refClass(CanonicalNameConstants.SCHEME_REGISTRY);
-		public final AbstractJClass SINGLE_CLIENT_CONN_MANAGER = refClass(CanonicalNameConstants.SINGLE_CLIENT_CONN_MANAGER);
+		public final JClass CLIENT_CONNECTION_MANAGER = refClass(CanonicalNameConstants.CLIENT_CONNECTION_MANAGER);
+		public final JClass DEFAULT_HTTP_CLIENT = refClass(CanonicalNameConstants.DEFAULT_HTTP_CLIENT);
+		public final JClass SSL_SOCKET_FACTORY = refClass(CanonicalNameConstants.SSL_SOCKET_FACTORY);
+		public final JClass PLAIN_SOCKET_FACTORY = refClass(CanonicalNameConstants.PLAIN_SOCKET_FACTORY);
+		public final JClass SCHEME = refClass(CanonicalNameConstants.SCHEME);
+		public final JClass SCHEME_REGISTRY = refClass(CanonicalNameConstants.SCHEME_REGISTRY);
+		public final JClass SINGLE_CLIENT_CONN_MANAGER = refClass(CanonicalNameConstants.SINGLE_CLIENT_CONN_MANAGER);
 	}
 
 	// CHECKSTYLE:ON
@@ -176,7 +149,7 @@ public class ProcessHolder {
 
 	private final JCodeModel codeModel;
 
-	private final Map<String, AbstractJClass> loadedClasses = new HashMap<>();
+	private final Map<String, JClass> loadedClasses = new HashMap<>();
 
 	private final Classes classes;
 
@@ -185,8 +158,14 @@ public class ProcessHolder {
 	public ProcessHolder(ProcessingEnvironment processingEnvironment) {
 		this.processingEnvironment = processingEnvironment;
 		codeModel = new JCodeModel();
-		codeModel.addDontImportClass(refClass("android.R"));
 		classes = new Classes();
+		refClass(CanonicalNameConstants.STRING);
+		preloadJavaLangClasses();
+	}
+
+	private void preloadJavaLangClasses() {
+		loadedClasses.put(String.class.getName(), refClass(String.class));
+		loadedClasses.put(Object.class.getName(), refClass(Object.class));
 	}
 
 	public void put(Element element, GeneratedClassHolder generatedClassHolder) {
@@ -209,13 +188,11 @@ public class ProcessHolder {
 		return null;
 	}
 
-	public AbstractJClass refClass(Class<?> clazz) {
-		AbstractJClass referencedClass = codeModel.ref(clazz);
-		loadedClasses.put(clazz.getCanonicalName(), referencedClass);
-		return referencedClass;
+	public JClass refClass(Class<?> clazz) {
+		return codeModel.ref(clazz);
 	}
 
-	public AbstractJClass refClass(String fullyQualifiedClassName) {
+	public JClass refClass(String fullyQualifiedClassName) {
 
 		int arrayCounter = 0;
 		while (fullyQualifiedClassName.endsWith("[]")) {
@@ -223,7 +200,7 @@ public class ProcessHolder {
 			fullyQualifiedClassName = fullyQualifiedClassName.substring(0, fullyQualifiedClassName.length() - 2);
 		}
 
-		AbstractJClass refClass = loadedClasses.get(fullyQualifiedClassName);
+		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
 
 		if (refClass == null) {
 			refClass = codeModel.directClass(fullyQualifiedClassName);

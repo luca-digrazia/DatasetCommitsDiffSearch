@@ -22,7 +22,7 @@ public class ThreadDumpTest {
     private final ThreadInfo runnable = mock(ThreadInfo.class);
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         final StackTraceElement rLine1 = new StackTraceElement("Blah", "blee", "Blah.java", 100);
 
         when(runnable.getThreadName()).thenReturn("runnable");
@@ -38,7 +38,7 @@ public class ThreadDumpTest {
     }
 
     @Test
-    public void dumpsAllThreads() {
+    public void dumpsAllThreads() throws Exception {
         final ByteArrayOutputStream output = new ByteArrayOutputStream();
         threadDump.dump(output);
 

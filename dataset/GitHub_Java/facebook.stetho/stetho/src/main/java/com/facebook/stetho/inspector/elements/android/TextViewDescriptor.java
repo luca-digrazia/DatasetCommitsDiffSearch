@@ -1,9 +1,4 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.elements.android;
 
@@ -12,14 +7,14 @@ import android.text.TextWatcher;
 import android.widget.TextView;
 
 import com.facebook.stetho.common.Util;
-import com.facebook.stetho.inspector.elements.AttributeAccumulator;
-import com.facebook.stetho.inspector.elements.AbstractChainedDescriptor;
+import com.facebook.stetho.inspector.elements.ChainedDescriptor;
+import com.facebook.stetho.inspector.elements.NodeAttribute;
 
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
-final class TextViewDescriptor extends AbstractChainedDescriptor<TextView> {
+final class TextViewDescriptor extends ChainedDescriptor<TextView> {
   private static final String TEXT_ATTRIBUTE_NAME = "text";
 
   private final Map<TextView, ElementContext> mElementToContextMap =
@@ -38,10 +33,22 @@ final class TextViewDescriptor extends AbstractChainedDescriptor<TextView> {
   }
 
   @Override
-  protected void onGetAttributes(TextView element, AttributeAccumulator attributes) {
+  protected int onGetAttributeCount(TextView element) {
+    return (element.getText().length() == 0) ? 0 : 1;
+  }
+
+  @Override
+  protected void onCopyAttributeAt(TextView element, int index, NodeAttribute outAttribute) {
+    if (index != 0) {
+      throw new IndexOutOfBoundsException();
+    }
+
     CharSequence text = element.getText();
-    if (text != null && text.length() != 0) {
-      attributes.store(TEXT_ATTRIBUTE_NAME, text.toString());
+    if (text.length() == 0) {
+      throw new IndexOutOfBoundsException();
+    } else {
+      outAttribute.name = TEXT_ATTRIBUTE_NAME;
+      outAttribute.value = text.toString();
     }
   }
 
@@ -71,9 +78,9 @@ final class TextViewDescriptor extends AbstractChainedDescriptor<TextView> {
     @Override
     public void afterTextChanged(Editable s) {
       if (s.length() == 0) {
-        getHost().onAttributeRemoved(mElement, TEXT_ATTRIBUTE_NAME);
+        getListener().onAttributeRemoved(mElement, TEXT_ATTRIBUTE_NAME);
       } else {
-        getHost().onAttributeModified(mElement, TEXT_ATTRIBUTE_NAME, s.toString());
+        getListener().onAttributeModified(mElement, TEXT_ATTRIBUTE_NAME, s.toString());
       }
     }
   }

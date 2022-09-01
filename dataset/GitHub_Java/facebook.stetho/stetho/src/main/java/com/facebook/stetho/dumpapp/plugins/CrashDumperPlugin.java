@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.dumpapp.plugins;
@@ -111,60 +113,61 @@ public class CrashDumperPlugin implements DumperPlugin {
   }
 
   private void doUncaughtException(Iterator<String> argsIter) throws DumpException {
-    String throwableClassString = ArgsHelper.nextOptionalArg(argsIter, OPTION_THROW_DEFAULT);
+    String throwableClass = ArgsHelper.nextOptionalArg(argsIter, OPTION_THROW_DEFAULT);
     try {
-      Class<? extends Throwable> throwableClass =
-          (Class<? extends Throwable>)Class.forName(throwableClassString);
-      Throwable t;
-      Constructor<? extends Throwable> ctorWithMessage =
-          tryGetDeclaredConstructor(throwableClass, String.class);
-      if (ctorWithMessage != null) {
-        t = ctorWithMessage.newInstance("Uncaught exception triggered by Stetho");
-      } else {
-        Constructor<? extends Throwable> ctorParameterless =
-            throwableClass.getDeclaredConstructor();
-        t = ctorParameterless.newInstance();
-      }
-
-      Thread crashThread = new Thread(new ThrowRunnable(t));
+      Thread crashThread = new Thread(
+          new ThrowRunnable(
+              (Class<? extends Throwable>)Class.forName(throwableClass)));
       crashThread.start();
 
-      Util.joinUninterruptibly(crashThread);
-    } catch (
-        ClassNotFoundException |
-        ClassCastException |
-        NoSuchMethodException |
-        IllegalAccessException |
-        InstantiationException e) {
+      CountDownLatch impossibleLatch = new CountDownLatch(1);
+      Util.awaitUninterruptibly(impossibleLatch);
+    } catch (NoSuchMethodException | ClassNotFoundException | ClassCastException e) {
       throw new DumpException("Invalid supplied Throwable class: " + e);
-    } catch (InvocationTargetException e) {
-      // This means that the method invoked actually threw, independent of reflection.  Best
-      // reflect that as a normal unchecked exception in dumpapp output.
-      throw ExceptionUtil.propagate(e.getCause());
-    }
-  }
-
-  @Nullable
-  private static <T> Constructor<? extends T> tryGetDeclaredConstructor(
-      Class<T> clazz,
-      Class<?>... parameterTypes) {
-    try {
-      return clazz.getDeclaredConstructor(parameterTypes);
-    } catch (NoSuchMethodException e) {
-      return null;
     }
   }
 
   private static class ThrowRunnable implements Runnable {
-    private final Throwable mThrowable;
+    @Nullable
+    private final Constructor<? extends Throwable> mDetailMessageConstructor;
 
-    public ThrowRunnable(Throwable t) {
-      mThrowable = t;
+    private final Constructor<? extends Throwable> mParameterlessConstructor;
+
+    public ThrowRunnable(Class<? extends Throwable> throwableClass) throws NoSuchMethodException {
+      mDetailMessageConstructor = tryGetDeclaredConstructor(throwableClass, String.class);
+      mParameterlessConstructor = throwableClass.getDeclaredConstructor();
+    }
+
+    @Nullable
+    private static <T> Constructor<? extends T> tryGetDeclaredConstructor(
+        Class<T> clazz,
+        Class<?>... parameterTypes) {
+      try {
+        return clazz.getDeclaredConstructor(parameterTypes);
+      } catch (NoSuchMethodException e) {
+        return null;
+      }
     }
 
     @Override
     public void run() {
-      ExceptionUtil.<Error>sneakyThrow(mThrowable);
+      try {
+        Throwable t = createThrowable();
+        ExceptionUtil.<Error>sneakyThrow(t);
+      } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        // Hehe, ok whatever :)
+        ExceptionUtil.<Error>sneakyThrow(e);
+      }
+    }
+
+    private Throwable createThrowable()
+        throws IllegalAccessException, InvocationTargetException, InstantiationException {
+      if (mDetailMessageConstructor != null) {
+        return mDetailMessageConstructor.newInstance(
+            "Uncaught exception triggered by Stetho");
+      } else {
+        return mParameterlessConstructor.newInstance();
+      }
     }
   }
 }

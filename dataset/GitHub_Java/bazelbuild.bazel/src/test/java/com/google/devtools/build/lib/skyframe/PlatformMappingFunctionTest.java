@@ -15,24 +15,26 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.analysis.PlatformOptions.LEGACY_DEFAULT_TARGET_PLATFORM;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.PlatformOptions;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
+import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.EvaluationResult;
-import java.util.Optional;
-import org.junit.Before;
+import com.google.devtools.common.options.OptionsParsingException;
+import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -43,30 +45,28 @@ import org.junit.runners.JUnit4;
  * <p>Note that all parsing tests are located in {@link PlatformMappingFunctionParserTest}.
  */
 @RunWith(JUnit4.class)
-public final class PlatformMappingFunctionTest extends BuildViewTestCase {
+public class PlatformMappingFunctionTest extends BuildViewTestCase {
 
   // We don't actually care about the contents of this set other than that it is passed intact
   // through the mapping logic. The platform fragment in it is purely an example, it could be any
   // set of fragments.
-  private static final FragmentClassSet PLATFORM_FRAGMENT_CLASS =
-      FragmentClassSet.of(ImmutableSet.of(PlatformConfiguration.class));
+  private static final Set<Class<? extends BuildConfiguration.Fragment>> PLATFORM_FRAGMENT_CLASS =
+      ImmutableSet.of(PlatformConfiguration.class);
+
+  private static final ImmutableList<Class<? extends FragmentOptions>>
+      BUILD_CONFIG_PLATFORM_OPTIONS =
+          ImmutableList.of(BuildConfiguration.Options.class, PlatformOptions.class);
 
   private static final Label PLATFORM1 = Label.parseAbsoluteUnchecked("//platforms:one");
 
-  private static final Label DEFAULT_TARGET_PLATFORM =
-      Label.parseAbsoluteUnchecked("@local_config_platform//:host");
-
-  private BuildOptions defaultBuildOptions;
-
-  @Before
-  public void setDefaultBuildOptions() {
-    defaultBuildOptions =
-        BuildOptions.getDefaultBuildOptionsForFragments(
-            ruleClassProvider.getConfigurationOptions());
-  }
+  private static final BuildOptions DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS =
+      getDefaultBuildConfigPlatformOptions();
+  private static final BuildOptions.OptionsDiffForReconstruction EMPTY_DIFF =
+      BuildOptions.diffForReconstruction(
+          DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS, DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS);
 
   @Test
-  public void testMappingFileDoesNotExist() {
+  public void testMappingFileDoesNotExist() throws Exception {
     MissingInputFileException exception =
         assertThrows(
             MissingInputFileException.class,
@@ -82,13 +82,13 @@ public final class PlatformMappingFunctionTest extends BuildViewTestCase {
         executeFunction(PlatformMappingValue.Key.create(null));
 
     BuildConfigurationValue.Key key =
-        BuildConfigurationValue.keyWithoutPlatformMapping(
-            PLATFORM_FRAGMENT_CLASS, defaultBuildOptions);
+        BuildConfigurationValue.key(PLATFORM_FRAGMENT_CLASS, EMPTY_DIFF);
 
-    BuildConfigurationValue.Key mapped = platformMappingValue.map(key);
+    BuildConfigurationValue.Key mapped =
+        platformMappingValue.map(key, DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS);
 
-    assertThat(mapped.getOptions().get(PlatformOptions.class).platforms)
-        .containsExactly(DEFAULT_TARGET_PLATFORM);
+    assertThat(toMappedOptions(mapped).get(PlatformOptions.class).platforms)
+        .containsExactly(LEGACY_DEFAULT_TARGET_PLATFORM);
   }
 
   @Test
@@ -113,123 +113,14 @@ public final class PlatformMappingFunctionTest extends BuildViewTestCase {
     PlatformMappingValue platformMappingValue =
         executeFunction(PlatformMappingValue.Key.create(PathFragment.create("my_mapping_file")));
 
-    BuildOptions modifiedOptions = defaultBuildOptions.clone();
+    BuildOptions modifiedOptions = DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS.clone();
     modifiedOptions.get(PlatformOptions.class).platforms = ImmutableList.of(PLATFORM1);
 
-    BuildConfigurationValue.Key mapped = platformMappingValue.map(keyForOptions(modifiedOptions));
+    BuildConfigurationValue.Key mapped =
+        platformMappingValue.map(
+            keyForOptions(modifiedOptions), DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS);
 
-    assertThat(mapped.getOptions().get(CoreOptions.class).cpu).isEqualTo("one");
-  }
-
-  @Test
-  public void testMappingFileIsRead_fromAlternatePackagePath() throws Exception {
-    scratch.setWorkingDir("/other/package/path");
-    scratch.file("WORKSPACE");
-    setPackageOptions("--package_path=/other/package/path");
-    scratch.file(
-        "my_mapping_file",
-        "platforms:", // Force line break
-        "  //platforms:one", // Force line break
-        "    --cpu=one");
-
-    PlatformMappingValue platformMappingValue =
-        executeFunction(PlatformMappingValue.Key.create(PathFragment.create("my_mapping_file")));
-
-    BuildOptions modifiedOptions = defaultBuildOptions.clone();
-    modifiedOptions.get(PlatformOptions.class).platforms = ImmutableList.of(PLATFORM1);
-
-    BuildConfigurationValue.Key mapped = platformMappingValue.map(keyForOptions(modifiedOptions));
-
-    assertThat(mapped.getOptions().get(CoreOptions.class).cpu).isEqualTo("one");
-  }
-
-  @Test
-  public void handlesNoWorkspaceFile() throws Exception {
-    scratch.setWorkingDir("/other/package/path");
-    scratch.file(
-        "my_mapping_file",
-        "platforms:", // Force line break
-        "  //platforms:one", // Force line break
-        "    --cpu=one");
-    setPackageOptions("--package_path=/other/package/path");
-
-    PlatformMappingValue platformMappingValue =
-        executeFunction(PlatformMappingValue.Key.create(PathFragment.create("my_mapping_file")));
-    BuildOptions modifiedOptions = defaultBuildOptions.clone();
-    modifiedOptions.get(PlatformOptions.class).platforms = ImmutableList.of(PLATFORM1);
-
-    BuildConfigurationValue.Key mapped = platformMappingValue.map(keyForOptions(modifiedOptions));
-
-    assertThat(mapped.getOptions().get(CoreOptions.class).cpu).isEqualTo("one");
-  }
-
-  @Test
-  public void multiplePackagePaths() throws Exception {
-    scratch.setWorkingDir("/other/package/path");
-    scratch.file(
-        "my_mapping_file",
-        "platforms:", // Force line break
-        "  //platforms:one", // Force line break
-        "    --cpu=one");
-    setPackageOptions("--package_path=%workspace%:/other/package/path");
-
-    PlatformMappingValue platformMappingValue =
-        executeFunction(PlatformMappingValue.Key.create(PathFragment.create("my_mapping_file")));
-
-    BuildOptions modifiedOptions = defaultBuildOptions.clone();
-    modifiedOptions.get(PlatformOptions.class).platforms = ImmutableList.of(PLATFORM1);
-
-    BuildConfigurationValue.Key mapped = platformMappingValue.map(keyForOptions(modifiedOptions));
-
-    assertThat(mapped.getOptions().get(CoreOptions.class).cpu).isEqualTo("one");
-  }
-
-  @Test
-  public void multiplePackagePathsFirstWins() throws Exception {
-    scratch.file(
-        "my_mapping_file",
-        "platforms:", // Force line break
-        "  //platforms:one", // Force line break
-        "    --cpu=one");
-    scratch.setWorkingDir("/other/package/path");
-    scratch.file(
-        "my_mapping_file",
-        "platforms:", // Force line break
-        "  //platforms:one", // Force line break
-        "    --cpu=two");
-    setPackageOptions("--package_path=%workspace%:/other/package/path");
-
-    PlatformMappingValue platformMappingValue =
-        executeFunction(PlatformMappingValue.Key.create(PathFragment.create("my_mapping_file")));
-
-    BuildOptions modifiedOptions = defaultBuildOptions.clone();
-    modifiedOptions.get(PlatformOptions.class).platforms = ImmutableList.of(PLATFORM1);
-
-    BuildConfigurationValue.Key mapped = platformMappingValue.map(keyForOptions(modifiedOptions));
-
-    assertThat(mapped.getOptions().get(CoreOptions.class).cpu).isEqualTo("one");
-  }
-
-  // Internal flags, such as "output directory name", cannot be set from the command-line, but
-  // platform mapping needs to access them.
-  @Test
-  public void ableToChangeInternalOption() throws Exception {
-    scratch.file(
-        "my_mapping_file",
-        "platforms:", // Force line break
-        "  //platforms:one", // Force line break
-        "    --output directory name=updated_output_dir");
-
-    PlatformMappingValue platformMappingValue =
-        executeFunction(PlatformMappingValue.Key.create(PathFragment.create("my_mapping_file")));
-
-    BuildOptions modifiedOptions = defaultBuildOptions.clone();
-    modifiedOptions.get(PlatformOptions.class).platforms = ImmutableList.of(PLATFORM1);
-
-    BuildConfigurationValue.Key mapped = platformMappingValue.map(keyForOptions(modifiedOptions));
-
-    assertThat(mapped.getOptions().get(CoreOptions.class).outputDirectoryName)
-        .isEqualTo("updated_output_dir");
+    assertThat(toMappedOptions(mapped).get(BuildConfiguration.Options.class).cpu).isEqualTo("one");
   }
 
   private PlatformMappingValue executeFunction(PlatformMappingValue.Key key) throws Exception {
@@ -237,8 +128,8 @@ public final class PlatformMappingFunctionTest extends BuildViewTestCase {
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
-            PrecomputedValue.injected(RepositoryDelegatorFunction.ENABLE_BZLMOD, false)));
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
+                Optional.absent())));
     EvaluationResult<PlatformMappingValue> result =
         SkyframeExecutorTestUtils.evaluate(skyframeExecutor, key, /*keepGoing=*/ false, reporter);
     if (result.hasError()) {
@@ -247,8 +138,22 @@ public final class PlatformMappingFunctionTest extends BuildViewTestCase {
     return result.get(key);
   }
 
-  private static BuildConfigurationValue.Key keyForOptions(BuildOptions modifiedOptions) {
-    return BuildConfigurationValue.keyWithoutPlatformMapping(
-        PLATFORM_FRAGMENT_CLASS, modifiedOptions);
+  private BuildOptions toMappedOptions(BuildConfigurationValue.Key mapped) {
+    return DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS.applyDiff(mapped.getOptionsDiff());
+  }
+
+  private static BuildOptions getDefaultBuildConfigPlatformOptions() {
+    try {
+      return BuildOptions.of(BUILD_CONFIG_PLATFORM_OPTIONS);
+    } catch (OptionsParsingException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private BuildConfigurationValue.Key keyForOptions(BuildOptions modifiedOptions) {
+    BuildOptions.OptionsDiffForReconstruction diff =
+        BuildOptions.diffForReconstruction(DEFAULT_BUILD_CONFIG_PLATFORM_OPTIONS, modifiedOptions);
+
+    return BuildConfigurationValue.key(PLATFORM_FRAGMENT_CLASS, diff);
   }
 }

@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.bzlmod;
 
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
-import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.AbstractSkyKey;
@@ -24,21 +23,18 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyValue;
 
 /** The result of {@link BzlmodRepoRuleFunction}, holding a repository rule instance. */
-@AutoCodec(explicitlyAllowClass = {Package.class})
 public class BzlmodRepoRuleValue implements SkyValue {
   public static final SkyFunctionName BZLMOD_REPO_RULE =
       SkyFunctionName.createHermetic("BZLMOD_REPO_RULE");
 
-  private final Package pkg;
-  private final String ruleName;
+  private final Rule rule;
 
-  public BzlmodRepoRuleValue(Package pkg, String ruleName) {
-    this.pkg = pkg;
-    this.ruleName = ruleName;
+  public BzlmodRepoRuleValue(Rule rule) {
+    this.rule = rule;
   }
 
   public Rule getRule() {
-    return pkg.getRule(ruleName);
+    return rule;
   }
 
   public static Key key(String repositoryName) {
@@ -48,7 +44,7 @@ public class BzlmodRepoRuleValue implements SkyValue {
   /** Represents an unsuccessful repository lookup. */
   public static final class RepoRuleNotFoundValue extends BzlmodRepoRuleValue {
     private RepoRuleNotFoundValue() {
-      super(/*pkg=*/ null, /*ruleName=*/ null);
+      super(/* rule= */ null);
     }
 
     @Override

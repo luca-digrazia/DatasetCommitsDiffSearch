@@ -83,8 +83,6 @@ import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
-import com.oracle.svm.util.ImageBuildStatistics;
-
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaMethodProfile;
 import jdk.vm.ci.meta.JavaTypeProfile;
@@ -116,7 +114,7 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
     @Override
     @SuppressWarnings("try")
     public StaticAnalysisResults makeOrApplyResults(AnalysisMethod method) {
-        StructuredGraph graph = method.getAnalyzedGraph();
+        StructuredGraph graph = method.parsedGraph();
         if (graph != null) {
             DebugContext debug = new DebugContext.Builder(bb.getOptions(), new GraalDebugHandlersFactory(bb.getProviders().getSnippetReflection())).build();
             graph.resetDebug(debug);
@@ -143,24 +141,6 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
         return null;
     }
 
-    /*
-     * Returns a type that can replace the original type in stamps as an exact type. When the
-     * returned type is the original type itself, the original type has no subtype and can be used
-     * as an exact type.
-     * 
-     * Returns null if there is no single implementor type.
-     */
-    protected abstract AnalysisType getSingleImplementorType(AnalysisType originalType);
-
-    /*
-     * Returns a type that can replace the original type in stamps.
-     * 
-     * Returns null if the original type has no assignable type that is instantiated, i.e., the code
-     * using the type is unreachable.
-     * 
-     * Returns the original type itself if there is no optimization potential, i.e., if the original
-     * type itself is instantiated or has more than one instantiated direct subtype.
-     */
     protected abstract AnalysisType getStrengthenStampType(AnalysisType originalType);
 
     protected abstract FixedNode createUnreachable(StructuredGraph graph, CoreProviders providers, Supplier<String> message);
@@ -300,10 +280,7 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
             for (int i = 0; i < arguments.size(); i++) {
                 ValueNode argument = arguments.get(i);
                 Stamp newStamp = strengthenStampFromTypeFlow(argument, invokeFlow.getActualParameters()[i], beforeInvoke, tool);
-                if (node.isDeleted()) {
-                    /* Parameter stamp was empty, so invoke is unreachable. */
-                    return;
-                } else if (newStamp != null) {
+                if (newStamp != null) {
                     PiNode pi = insertPi(argument, newStamp, beforeInvoke);
                     if (pi != null) {
                         callTarget.replaceAllInputs(argument, pi);
@@ -350,15 +327,6 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
         private void optimizeReturnedParameter(Collection<AnalysisMethod> callees, NodeInputList<ValueNode> arguments, FixedNode invoke, SimplifierTool tool) {
             int returnedParameterIndex = -1;
             for (AnalysisMethod callee : callees) {
-                if (callee.hasNeverInlineDirective()) {
-                    /*
-                     * If the method is explicitly marked as "never inline", it might be an
-                     * intentional sink to prevent an optimization. Mostly, this is a pattern we use
-                     * in unit tests. So this reduces the surprise that tests are
-                     * "too well optimized" without doing any harm for real-world methods.
-                     */
-                    return;
-                }
                 ParameterNode returnedCalleeParameter = callee.getTypeFlow().getReturnedParameter();
                 if (returnedCalleeParameter == null) {
                     /* This callee does not return a parameter. */
@@ -400,10 +368,6 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
          * allows later inlining of the callee.
          */
         private void devirtualizeInvoke(AnalysisMethod singleCallee, Invoke invoke) {
-            if (ImageBuildStatistics.Options.CollectImageBuildStatistics.getValue(graph.getOptions())) {
-                ImageBuildStatistics.counters().incDevirtualizedInvokeCounter();
-            }
-
             Stamp anchoredReceiverStamp = StampFactory.object(TypeReference.createWithoutAssumptions(singleCallee.getDeclaringClass()));
             ValueNode piReceiver = insertPi(invoke.getReceiver(), anchoredReceiverStamp, (FixedWithNextNode) invoke.asNode().predecessor());
             if (piReceiver != null) {
@@ -484,6 +448,10 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
             }
 
             TypeState nodeTypeState = methodFlow.foldTypeFlow(bb, nodeFlow);
+            if (nodeTypeState.isUnknown()) {
+                return null;
+            }
+
             node.inferStamp();
             ObjectStamp oldStamp = (ObjectStamp) node.stamp(NodeView.DEFAULT);
             AnalysisType oldType = (AnalysisType) oldStamp.type();
@@ -512,8 +480,6 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
 
             } else if (typeStateTypes.size() == 1) {
                 AnalysisType exactType = typeStateTypes.get(0);
-                assert getSingleImplementorType(exactType) == null || exactType.equals(getSingleImplementorType(exactType)) : "exactType=" + exactType + ", singleImplementor=" +
-                                getSingleImplementorType(exactType);
                 assert exactType.equals(getStrengthenStampType(exactType));
 
                 if (!oldStamp.isExactType() || !exactType.equals(oldType)) {
@@ -539,14 +505,6 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
                      */
                     baseType = oldType;
                 }
-
-                /*
-                 * With more than one type in the type state, there cannot be a single implementor.
-                 * Because that single implementor would need to be the only type in the type state.
-                 */
-                assert getSingleImplementorType(baseType) == null || baseType.equals(getSingleImplementorType(baseType)) : "baseType=" + baseType + ", singleImplementor=" +
-                                getSingleImplementorType(baseType);
-
                 AnalysisType newType = getStrengthenStampType(baseType);
 
                 assert typeStateTypes.stream().map(typeStateType -> newType.isAssignableFrom(typeStateType)).reduce(Boolean::logicalAnd).get();
@@ -592,16 +550,6 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
             if (originalType == null) {
                 return null;
             }
-
-            AnalysisType singleImplementorType = getSingleImplementorType(originalType);
-            if (singleImplementorType != null && (!stamp.isExactType() || !singleImplementorType.equals(originalType))) {
-                ResolvedJavaType targetType = toTarget(singleImplementorType);
-                if (targetType != null) {
-                    TypeReference typeRef = TypeReference.createExactTrusted(targetType);
-                    return StampFactory.object(typeRef, stamp.nonNull());
-                }
-            }
-
             AnalysisType strengthenType = getStrengthenStampType(originalType);
             if (originalType.equals(strengthenType)) {
                 /* Nothing to strengthen. */

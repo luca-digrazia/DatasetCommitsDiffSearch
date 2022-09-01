@@ -6,29 +6,31 @@ import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.transition.Explode;
-import android.view.View;
 import android.view.Window;
-
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.gsyvideoplayer.adapter.RecyclerBaseAdapter;
 import com.example.gsyvideoplayer.adapter.RecyclerNormalAdapter;
-import com.example.gsyvideoplayer.databinding.ActivityRecyclerViewBinding;
 import com.example.gsyvideoplayer.model.VideoModel;
 import com.example.gsyvideoplayer.utils.ScrollCalculatorHelper;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+import butterknife.BindView;
+import butterknife.ButterKnife;
+
 /**
  * 类似微博视频，滑动到具体位置自动播放
  */
 public class AutoPlayRecyclerViewActivity extends AppCompatActivity {
 
+
+    @BindView(R.id.list_item_recycler)
+    RecyclerView videoList;
 
     LinearLayoutManager linearLayoutManager;
 
@@ -40,8 +42,6 @@ public class AutoPlayRecyclerViewActivity extends AppCompatActivity {
 
     ScrollCalculatorHelper scrollCalculatorHelper;
 
-    ActivityRecyclerViewBinding binding;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         // 设置一个exit transition
@@ -51,12 +51,8 @@ public class AutoPlayRecyclerViewActivity extends AppCompatActivity {
             getWindow().setExitTransition(new Explode());
         }
         super.onCreate(savedInstanceState);
-
-        binding = ActivityRecyclerViewBinding.inflate(getLayoutInflater());
-
-        View rootView = binding.getRoot();
-        setContentView(rootView);
-
+        setContentView(R.layout.activity_recycler_view);
+        ButterKnife.bind(this);
 
         resolveData();
 
@@ -69,21 +65,21 @@ public class AutoPlayRecyclerViewActivity extends AppCompatActivity {
 
         final RecyclerNormalAdapter recyclerNormalAdapter = new RecyclerNormalAdapter(this, dataList);
         linearLayoutManager = new LinearLayoutManager(this);
-        binding.listItemRecycler.setLayoutManager(linearLayoutManager);
-        binding.listItemRecycler.setAdapter(recyclerNormalAdapter);
+        videoList.setLayoutManager(linearLayoutManager);
+        videoList.setAdapter(recyclerNormalAdapter);
 
-        binding.listItemRecycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
+        videoList.addOnScrollListener(new RecyclerView.OnScrollListener() {
 
             int firstVisibleItem, lastVisibleItem;
 
             @Override
-            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
                 scrollCalculatorHelper.onScrollStateChanged(recyclerView, newState);
             }
 
             @Override
-            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
                 firstVisibleItem = linearLayoutManager.findFirstVisibleItemPosition();
                 lastVisibleItem = linearLayoutManager.findLastVisibleItemPosition();
@@ -98,10 +94,14 @@ public class AutoPlayRecyclerViewActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+    public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         //如果旋转了就全屏
-        mFull = newConfig.orientation == ActivityInfo.SCREEN_ORIENTATION_USER;
+        if (newConfig.orientation != ActivityInfo.SCREEN_ORIENTATION_USER) {
+            mFull = false;
+        } else {
+            mFull = true;
+        }
 
     }
 

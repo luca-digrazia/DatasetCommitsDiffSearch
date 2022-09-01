@@ -1,33 +1,32 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.elements.android;
 
 import android.annotation.TargetApi;
-import android.graphics.Rect;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
+
 import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.common.Util;
 
-import javax.annotation.Nullable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import javax.annotation.Nullable;
+
 abstract class ViewHighlighter {
+  private static final String TAG = "ViewHighlighter";
 
   public static ViewHighlighter newInstance() {
     // TODO: find ways to do highlighting on older versions too
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
       return new OverlayHighlighter();
     } else {
-      LogUtil.w("Running on pre-JBMR2: View highlighting is not supported");
+      LogUtil.w(TAG, "Running on pre-JBMR2: View highlighting is not supported");
       return new NoopHighlighter();
     }
   }
@@ -37,7 +36,12 @@ abstract class ViewHighlighter {
 
   public abstract void clearHighlight();
 
-  public abstract void setHighlightedView(View view, @Nullable Rect bounds, int color);
+  public abstract void setHighlightedView(
+      View view,
+      int contentColor,
+      int paddingColor,
+      int borderColor,
+      int marginColor);
 
   private static final class NoopHighlighter extends ViewHighlighter {
     @Override
@@ -45,7 +49,12 @@ abstract class ViewHighlighter {
     }
 
     @Override
-    public void setHighlightedView(View view, @Nullable Rect bounds, int color) {
+    public void setHighlightedView(
+        View view,
+        int contentColor,
+        int paddingColor,
+        int borderColor,
+        int marginColor) {
     }
   }
 
@@ -55,15 +64,12 @@ abstract class ViewHighlighter {
     //       causing every single view to allocate a ViewOverlay
 
     private final Handler mHandler;
-    private final ViewHighlightOverlays mHighlightOverlays = ViewHighlightOverlays.newInstance();
+    private final ColorDrawable mHighlightDrawable;
 
     // Only assigned on the UI thread
     private View mHighlightedView;
-    private final Rect mHighlightedBounds = new Rect();
-    private final Rect mEmptyRect = new Rect();
 
     private AtomicReference<View> mViewToHighlight = new AtomicReference<View>();
-    private AtomicReference<Rect> mBoundsToHighlight = new AtomicReference<Rect>();
     private AtomicInteger mContentColor = new AtomicInteger();
 
     private final Runnable mHighlightViewOnUiThreadRunnable = new Runnable() {
@@ -75,54 +81,56 @@ abstract class ViewHighlighter {
 
     public OverlayHighlighter() {
       mHandler = new Handler(Looper.getMainLooper());
+      mHighlightDrawable = new ColorDrawable();
     }
 
     @Override
     public void clearHighlight() {
-      setHighlightedViewImpl(null, null, 0);
+      setHighlightedViewImpl(null, 0, 0, 0, 0);
     }
 
     @Override
-    public void setHighlightedView(View view, @Nullable Rect bounds, int color) {
-      setHighlightedViewImpl(Util.throwIfNull(view), bounds, color);
+    public void setHighlightedView(
+        View view,
+        int contentColor,
+        int paddingColor,
+        int borderColor,
+        int marginColor) {
+      setHighlightedViewImpl(
+          Util.throwIfNull(view),
+          contentColor,
+          paddingColor,
+          borderColor,
+          marginColor);
     }
 
-    private void setHighlightedViewImpl(@Nullable View view, @Nullable Rect bounds, int color) {
+    private void setHighlightedViewImpl(
+        @Nullable View view,
+        int contentColor,
+        int paddingColor,
+        int borderColor,
+        int marginColor) {
       mHandler.removeCallbacks(mHighlightViewOnUiThreadRunnable);
       mViewToHighlight.set(view);
-      mBoundsToHighlight.set(bounds);
-      mContentColor.set(color);
+      mContentColor.set(contentColor);
       mHandler.postDelayed(mHighlightViewOnUiThreadRunnable, 100);
     }
 
     private void highlightViewOnUiThread() {
       final View viewToHighlight = mViewToHighlight.getAndSet(null);
-      Rect boundsToHighlight = mBoundsToHighlight.getAndSet(null);
-      if (boundsToHighlight == null) {
-        boundsToHighlight = mEmptyRect;
-      }
-
-      if (viewToHighlight == mHighlightedView && mHighlightedBounds.equals(boundsToHighlight)) {
+      if (viewToHighlight == mHighlightedView) {
         return;
       }
 
       if (mHighlightedView != null) {
-        mHighlightOverlays.removeHighlight(mHighlightedView);
+        mHighlightedView.getOverlay().remove(mHighlightDrawable);
       }
 
       if (viewToHighlight != null) {
-        mHighlightOverlays.highlightView(
-            viewToHighlight,
-            boundsToHighlight,
-            mContentColor.get());
-      }
-
-      mHighlightedView = viewToHighlight;
-
-      if (boundsToHighlight == null) {
-        mHighlightedBounds.setEmpty();
-      } else {
-        mHighlightedBounds.set(boundsToHighlight);
+        mHighlightDrawable.setColor(mContentColor.get());
+        mHighlightDrawable.setBounds(0, 0, viewToHighlight.getWidth(), viewToHighlight.getHeight());
+        viewToHighlight.getOverlay().add(mHighlightDrawable);
+        mHighlightedView = viewToHighlight;
       }
     }
   }

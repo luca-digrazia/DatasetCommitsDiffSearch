@@ -1,4 +1,4 @@
-// Copyright 2015 The Bazel Authors. All rights reserved.
+// Copyright 2006-2015 Google Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,47 +13,47 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages.util;
 
+import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
-import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.analysis.ServerDirectories;
-import com.google.devtools.build.lib.clock.BlazeClock;
-import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
+import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
+import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
-import com.google.devtools.build.lib.packages.PackageValidator;
+import com.google.devtools.build.lib.packages.Preprocessor;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
+import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
-import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
-import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
+import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
+import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
+import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
-import com.google.devtools.build.lib.testutil.SkyframeExecutorTestHelper;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.common.options.Options;
+import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.skyframe.SkyFunction;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.common.options.OptionsParser;
-import java.util.List;
-import java.util.Optional;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.Before;
 
 /**
  * This is a specialization of {@link FoundationTestCase} that's useful for
@@ -61,157 +61,62 @@ import org.junit.Before;
  */
 public abstract class PackageLoadingTestCase extends FoundationTestCase {
 
-  private static final int GLOBBING_THREADS = 7;
-
-  protected LoadingMock loadingMock;
-  private PackageOptions packageOptions;
-  private BuildLanguageOptions buildLanguageOptions;
   protected ConfiguredRuleClassProvider ruleClassProvider;
-  protected PackageFactory packageFactory;
-  protected SkyframeExecutor skyframeExecutor;
-  protected BlazeDirectories directories;
-  protected PackageValidator validator = null;
+  private SkyframeExecutor skyframeExecutor;
 
-  protected final ActionKeyContext actionKeyContext = new ActionKeyContext();
+  @Override
+  protected void setUp() throws Exception {
+    super.setUp();
 
-  @Before
-  public final void initializeSkyframeExecutor() throws Exception {
-    loadingMock = LoadingMock.get();
-    packageOptions = parsePackageOptions();
-    buildLanguageOptions = parseBuildLanguageOptions();
-    List<RuleDefinition> extraRules = getExtraRules();
-    if (!extraRules.isEmpty()) {
-      ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
-      TestRuleClassProvider.addStandardRules(builder);
-      for (RuleDefinition def : extraRules) {
-        builder.addRuleDefinition(def);
-      }
-      ruleClassProvider = builder.build();
-    } else {
-      ruleClassProvider = loadingMock.createRuleClassProvider();
-    }
-    directories =
-        new BlazeDirectories(
-            new ServerDirectories(outputBase, outputBase, outputBase),
-            rootDirectory,
-            /* defaultSystemJavabase= */ null,
-            loadingMock.getProductName());
-    packageFactory =
-        loadingMock
-            .getPackageFactoryBuilderForTesting(directories)
-            .setEnvironmentExtensions(getEnvironmentExtensions())
-            .setPackageValidator(
-                (pkg, pkgOverhead, handler) -> {
-                  // Delegate to late-bound this.validator.
-                  if (validator != null) {
-                    validator.validate(pkg, pkgOverhead, handler);
-                  }
-                })
-            .build(ruleClassProvider, fileSystem);
-    skyframeExecutor = createSkyframeExecutor();
-    setUpSkyframe();
-  }
-
-  /** Allows subclasses to augment the {@link RuleDefinition}s available in this test. */
-  protected List<RuleDefinition> getExtraRules() {
-    return ImmutableList.of();
-  }
-
-  private SkyframeExecutor createSkyframeExecutor() {
-    SkyframeExecutor skyframeExecutor =
-        BazelSkyframeExecutorConstants.newBazelSkyframeExecutorBuilder()
-            .setPkgFactory(packageFactory)
-            .setFileSystem(fileSystem)
-            .setDirectories(directories)
-            .setActionKeyContext(actionKeyContext)
-            .build();
-    skyframeExecutor.injectExtraPrecomputedValues(
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
-            PrecomputedValue.injected(RepositoryDelegatorFunction.ENABLE_BZLMOD, false)));
-    SkyframeExecutorTestHelper.process(skyframeExecutor);
-    return skyframeExecutor;
+    ruleClassProvider = TestRuleClassProvider.getRuleClassProvider();
+    skyframeExecutor = SequencedSkyframeExecutor.create(reporter,
+        new PackageFactory(ruleClassProvider, getEnvironmentExtensions()),
+        new TimestampGranularityMonitor(BlazeClock.instance()),
+        new BlazeDirectories(outputBase, outputBase, rootDirectory),
+        null, /* workspaceStatusActionFactory */
+        ruleClassProvider.getBuildInfoFactories(),
+        ImmutableSet.<Path>of(),
+        ImmutableList.<DiffAwareness.Factory>of(),
+        Predicates.<PathFragment>alwaysFalse(),
+        Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
+        ImmutableMap.<SkyFunctionName, SkyFunction>of(),
+        ImmutableList.<PrecomputedValue.Injected>of()
+    );
+    skyframeExecutor.preparePackageLoading(
+        new PathPackageLocator(rootDirectory), ConstantRuleVisibility.PUBLIC, true, "",
+        UUID.randomUUID());
+    setUpSkyframe(parsePackageCacheOptions());
   }
 
   protected Iterable<EnvironmentExtension> getEnvironmentExtensions() {
-    return ImmutableList.of();
+    return ImmutableList.<EnvironmentExtension>of();
   }
 
-  protected void setUpSkyframe(RuleVisibility defaultVisibility) {
-    PackageOptions packageOptions = Options.getDefaults(PackageOptions.class);
-    packageOptions.defaultVisibility = defaultVisibility;
-    packageOptions.showLoadingProgress = true;
-    packageOptions.globbingThreads = GLOBBING_THREADS;
-    skyframeExecutor.injectExtraPrecomputedValues(
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
-            PrecomputedValue.injected(RepositoryDelegatorFunction.ENABLE_BZLMOD, false)));
-    skyframeExecutor.preparePackageLoading(
-        new PathPackageLocator(
-            outputBase,
-            ImmutableList.of(Root.fromPath(rootDirectory)),
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
-        packageOptions,
-        Options.getDefaults(BuildLanguageOptions.class),
-        UUID.randomUUID(),
-        ImmutableMap.of(),
-        new TimestampGranularityMonitor(BlazeClock.instance()));
-    skyframeExecutor.setActionEnv(ImmutableMap.of());
+  private void setUpSkyframe(PackageCacheOptions packageCacheOptions) {
+    PathPackageLocator pkgLocator = PathPackageLocator.create(
+        packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
+    skyframeExecutor.preparePackageLoading(pkgLocator,
+        packageCacheOptions.defaultVisibility, true,
+        ruleClassProvider.getDefaultsPackageContent(),
+        UUID.randomUUID());
+    skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageCacheOptions.deletedPackages));
   }
 
-  private void setUpSkyframe() {
-    PathPackageLocator pkgLocator =
-        PathPackageLocator.create(
-            outputBase,
-            packageOptions.packagePath,
-            reporter,
-            rootDirectory.asFragment(),
-            rootDirectory,
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
-    packageOptions.showLoadingProgress = true;
-    packageOptions.globbingThreads = GLOBBING_THREADS;
-    skyframeExecutor.preparePackageLoading(
-        pkgLocator,
-        packageOptions,
-        buildLanguageOptions,
-        UUID.randomUUID(),
-        ImmutableMap.of(),
-        new TimestampGranularityMonitor(BlazeClock.instance()));
-    skyframeExecutor.setActionEnv(ImmutableMap.of());
-    skyframeExecutor.setDeletedPackages(ImmutableSet.copyOf(packageOptions.getDeletedPackages()));
-  }
-
-  private static PackageOptions parsePackageOptions(String... options) throws Exception {
-    OptionsParser parser = OptionsParser.builder().optionsClasses(PackageOptions.class).build();
-    parser.parse("--default_visibility=public");
+  private PackageCacheOptions parsePackageCacheOptions(String... options) throws Exception {
+    OptionsParser parser = OptionsParser.newOptionsParser(PackageCacheOptions.class);
+    parser.parse(new String[] { "--default_visibility=public" });
     parser.parse(options);
-    return parser.getOptions(PackageOptions.class);
+    return parser.getOptions(PackageCacheOptions.class);
   }
 
-  private static BuildLanguageOptions parseBuildLanguageOptions(String... options)
-      throws Exception {
-    OptionsParser parser =
-        OptionsParser.builder().optionsClasses(BuildLanguageOptions.class).build();
-    parser.parse(options);
-    return parser.getOptions(BuildLanguageOptions.class);
-  }
-
-  protected void setPackageOptions(String... options) throws Exception {
-    packageOptions = parsePackageOptions(options);
-    setUpSkyframe();
-  }
-
-  protected void setBuildLanguageOptions(String... options) throws Exception {
-    buildLanguageOptions = parseBuildLanguageOptions(options);
-    setUpSkyframe();
+  protected void setPackageCacheOptions(String... options) throws Exception {
+    setUpSkyframe(parsePackageCacheOptions(options));
   }
 
   protected Target getTarget(String label)
       throws NoSuchPackageException, NoSuchTargetException,
-      LabelSyntaxException, InterruptedException {
-    return getTarget(Label.parseAbsolute(label, ImmutableMap.of()));
+             Label.SyntaxException, InterruptedException {
+    return getTarget(Label.parseAbsolute(label));
   }
 
   protected Target getTarget(Label label)
@@ -226,6 +131,8 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
    * @param ruleName the name of the rule.
    * @param lines the text of the rule.
    * @return the rule instance for the created rule.
+   * @throws IOException
+   * @throws Exception
    */
   protected Rule scratchRule(String packageName, String ruleName, String... lines)
       throws Exception {
@@ -235,13 +142,12 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
 
   /**
    * A Utility method that generates build file rules for tests.
-   *
    * @param rule the name of the rule class.
    * @param name the name of the rule instance.
    * @param body an array of strings containing the contents of the rule.
    * @return a string containing the build file rule.
    */
-  protected static String genRule(String rule, String name, String... body) {
+  protected String genRule(String rule, String name, String... body) {
     StringBuilder buf = new StringBuilder();
     buf.append(rule);
     buf.append("(name='");
@@ -278,9 +184,9 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
    * Utility method for tests. Converts an array of strings into a set of labels.
    *
    * @param strings the set of strings to be converted to labels.
-   * @throws LabelSyntaxException if there are any syntax errors in the strings.
+   * @throws SyntaxException if there are any syntax errors in the strings.
    */
-  public static Set<Label> asLabelSet(String... strings) throws LabelSyntaxException {
+  public static Set<Label> asLabelSet(String... strings) throws SyntaxException {
     return asLabelSet(ImmutableList.copyOf(strings));
   }
 
@@ -288,22 +194,31 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
    * Utility method for tests. Converts an array of strings into a set of labels.
    *
    * @param strings the set of strings to be converted to labels.
-   * @throws LabelSyntaxException if there are any syntax errors in the strings.
+   * @throws SyntaxException if there are any syntax errors in the strings.
    */
-  public static Set<Label> asLabelSet(Iterable<String> strings) throws LabelSyntaxException {
+  public static Set<Label> asLabelSet(Iterable<String> strings) throws SyntaxException {
     Set<Label> result = Sets.newTreeSet();
     for (String s : strings) {
-      result.add(Label.parseAbsolute(s, ImmutableMap.of()));
+      result.add(Label.parseAbsolute(s));
     }
     return result;
   }
 
+  protected final Set<Target> asTargetSet(String... strLabels)
+      throws SyntaxException, NoSuchThingException, InterruptedException {
+    return asTargetSet(Arrays.asList(strLabels));
+  }
+
+  protected Set<Target> asTargetSet(Iterable<String> strLabels)
+      throws SyntaxException, NoSuchThingException, InterruptedException {
+    Set<Target> targets = new HashSet<>();
+    for (String strLabel : strLabels) {
+      targets.add(getTarget(strLabel));
+    }
+    return targets;
+  }
+
   protected PackageManager getPackageManager() {
-    skyframeExecutor.injectExtraPrecomputedValues(
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()),
-            PrecomputedValue.injected(RepositoryDelegatorFunction.ENABLE_BZLMOD, false)));
     return skyframeExecutor.getPackageManager();
   }
 
@@ -312,12 +227,18 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
   }
 
   /**
-   * Called after files are modified to invalidate all file-system nodes below rootDirectory. It
-   * does not unconditionally invalidate PackageValue nodes; if no file-system nodes have changed,
-   * packages may not be reloaded.
+   * Invalidates all existing packages below the usual rootDirectory. Must be called _after_ the
+   * files are modified.
+   *
+   * @throws InterruptedException
    */
   protected void invalidatePackages() throws InterruptedException {
-    skyframeExecutor.invalidateFilesUnderPathForTesting(
-        reporter, ModifiedFileSet.EVERYTHING_MODIFIED, Root.fromPath(rootDirectory));
+    skyframeExecutor.invalidateFilesUnderPathForTesting(ModifiedFileSet.EVERYTHING_MODIFIED,
+        rootDirectory);
+  }
+
+  protected String getErrorMsgNonEmptyList(String attrName, String ruleType, String ruleName) {
+    return "non empty attribute '" + attrName + "' in '" + ruleType
+        + "' rule '" + ruleName + "' has to have at least one value";
   }
 }

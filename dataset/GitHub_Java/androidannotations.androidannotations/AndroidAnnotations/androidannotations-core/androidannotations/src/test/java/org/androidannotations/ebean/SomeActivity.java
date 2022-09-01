@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -31,18 +30,9 @@ public class SomeActivity extends Activity {
 
 	@Bean
 	@NonConfigurationInstance
-	SingletonBean maintainedSingletonDependency;
+	SingletonBean maintainedSingeltonDependency;
 
 	@Bean
 	SomeGenericBean<Object> objectSomeGenericBean;
-
-	@Bean
-	SomeGenericBeanExt someGenericBeanExt;
-
-	@Bean
-	SomeBeanWithEmptyConstructor beanWithEmptyConstructor;
-
-	@Bean
-	SomeBeanWithContextParamConstructor beanWithContextParamConstructor;
 
 }

@@ -1,13 +1,12 @@
 package com.litepaltest.model;
 
-import org.litepal.crud.LitePalSupport;
+import org.litepal.crud.DataSupport;
 
-public class IdCard extends LitePalSupport {
+public class IdCard extends DataSupport {
 	private int id;
 	private String number;
 	private String address;
 	private Student student;
-	private long serial;
 //	private Teacher teacher;
 
 	/**
@@ -69,11 +68,4 @@ public class IdCard extends LitePalSupport {
 		this.student = student;
 	}
 
-	public long getSerial() {
-		return serial;
-	}
-
-	public void setSerial(long serial) {
-		this.serial = serial;
-	}
 }

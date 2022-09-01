@@ -1,8 +1,7 @@
 package com.litepaltest.test.util;
 
 import android.database.sqlite.SQLiteDatabase;
-import androidx.test.filters.SmallTest;
-import android.util.Pair;
+import android.support.test.filters.SmallTest;
 
 import com.litepaltest.model.Book;
 import com.litepaltest.model.Cellphone;
@@ -13,7 +12,7 @@ import org.junit.Test;
 import org.litepal.tablemanager.Connector;
 import org.litepal.util.DBUtility;
 
-import java.util.Set;
+import java.util.List;
 
 import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertTrue;
@@ -29,18 +28,12 @@ public class DBUtilityTest extends LitePalTestCase {
     }
 
     @Test
-    public void testFindIndexedColumns() {
-        Pair<Set<String>, Set<String>> pair = DBUtility.findIndexedColumns(DBUtility.getTableNameByClassName(Cellphone.class.getName()), db);
-        Set<String> indexColumns = pair.first;
-        Set<String> uniqueColumns = pair.second;
-        assertEquals(1, indexColumns.size());
+    public void testFindUniqueColumns() {
+        List<String> uniqueColumns = DBUtility.findUniqueColumns(DBUtility.getTableNameByClassName(
+                        Cellphone.class.getName()), db);
         assertEquals(1, uniqueColumns.size());
-        assertTrue(indexColumns.contains("brand"));
         assertTrue(uniqueColumns.contains("serial"));
-        pair = DBUtility.findIndexedColumns(DBUtility.getTableNameByClassName(Book.class.getName()), db);
-        indexColumns = pair.first;
-        uniqueColumns = pair.second;
-        assertEquals(0, indexColumns.size());
+        uniqueColumns = DBUtility.findUniqueColumns(DBUtility.getTableNameByClassName(Book.class.getName()), db);
         assertEquals(0, uniqueColumns.size());
     }
 

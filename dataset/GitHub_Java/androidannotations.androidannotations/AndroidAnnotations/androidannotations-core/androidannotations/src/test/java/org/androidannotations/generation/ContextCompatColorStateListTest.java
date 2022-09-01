@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -28,11 +27,13 @@ public class ContextCompatColorStateListTest extends AAProcessorTestHelper {
 	private static final String COLOR_STATE_LIST_SIGNATURE = ".*myColorStateList = resources_\\.getColorStateList\\(R\\.color\\.myColorStateList\\);.*";
 	private static final String COLOR_STATE_LIST_VIA_SUPPORT_SIGNATURE = ".*myColorStateList = ContextCompat\\.getColorStateList\\(this, R\\.color\\.myColorStateList\\);.*";
 	private static final String COLOR_STATE_LIST_VIA_CONTEXT_ON_MARSHMALLOW = ".*myColorStateList = this\\.getColorStateList\\(R\\.color\\.myColorStateList\\);.*";
-	// CHECKSTYLE:OFF
-	private static final String[] COLOR_STATE_LIST_CONDITIONAL_WITHOUT_CONTEXT_COMPAT = new String[] { "        if (VERSION.SDK_INT >= VERSION_CODES.M) {",
-			"            this.myColorStateList = this.getColorStateList(R.color.myColorStateList);", "        } else {",
-			"            this.myColorStateList = resources_.getColorStateList(R.color.myColorStateList);", "        }", };
-	// CHECKSTYLE:ON
+	private static final String[] COLOR_STATE_LIST_CONDITIONAL_WITHOUT_CONTEXT_COMPAT =  new String[] {
+		"        if (VERSION.SDK_INT >= VERSION_CODES.M) {",
+		"            myColorStateList = this.getColorStateList(R.color.myColorStateList);",
+		"        } else {",
+		"            myColorStateList = resources_.getColorStateList(R.color.myColorStateList);",
+		"        }",
+	};
 
 	@Before
 	public void setUp() {
@@ -78,7 +79,8 @@ public class ContextCompatColorStateListTest extends AAProcessorTestHelper {
 	public void activityCompilesOnMinSdkLower23CompileSdkHigher22WithoutContextCompat() throws Exception {
 		addManifestProcessorParameter(ContextCompatColorStateListTest.class, "AndroidManifestForColorStateListMinSdk22.xml");
 
-		CompileResult result = compileFiles(toPath(ContextCompatColorStateListTest.class, "Context.java"), toPath(ContextCompatColorStateListTest.class, "Build.java"),
+		CompileResult result = compileFiles(toPath(ContextCompatColorStateListTest.class, "Context.java"),
+				toPath(ContextCompatColorStateListTest.class, "Build.java"),
 				ActivityWithGetColorStateListMethod.class);
 		File generatedFile = toGeneratedFile(ActivityWithGetColorStateListMethod.class);
 

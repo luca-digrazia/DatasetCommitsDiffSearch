@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -19,7 +18,6 @@ package org.androidannotations.internal.core.handler;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
 import org.androidannotations.ElementValidation;
@@ -53,15 +51,6 @@ public abstract class AbstractPageChangeHandler extends BaseAnnotationHandler<EC
 
 	protected boolean hasAddOnPageChangeListenerMethod() {
 		TypeElement viewPager = getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.VIEW_PAGER);
-		TypeElement androidxViewPager = getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_VIEW_PAGER);
-		return hasTargetMethod(viewPager, "addOnPageChangeListener") || hasTargetMethod(androidxViewPager, "addOnPageChangeListener");
-	}
-
-	protected boolean isViewPagerParameter(TypeMirror parameterType) {
-		TypeElement viewPagerTypeElement = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.VIEW_PAGER);
-		TypeElement androidxViewPagerTypeElement = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.ANDROIDX_VIEW_PAGER);
-		TypeMirror viewPagerType = viewPagerTypeElement == null ? null : viewPagerTypeElement.asType();
-		TypeMirror androidxViewPagerType = androidxViewPagerTypeElement == null ? null : androidxViewPagerTypeElement.asType();
-		return viewPagerType != null && annotationHelper.isSubtype(parameterType, viewPagerType) || androidxViewPagerType != null && annotationHelper.isSubtype(parameterType, androidxViewPagerType);
+		return hasTargetMethod(viewPager, "addOnPageChangeListener");
 	}
 }

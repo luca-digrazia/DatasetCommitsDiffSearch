@@ -28,9 +28,19 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingM
  * CppSemantics for objc builds.
  */
 public class ObjcCppSemantics implements CppSemantics {
-  public static final ObjcCppSemantics INSTANCE = new ObjcCppSemantics();
+  public static final ObjcCppSemantics MODULES = new ObjcCppSemantics(true);
+  public static final ObjcCppSemantics NO_MODULES = new ObjcCppSemantics(false);
 
-  private ObjcCppSemantics() {}
+  private final boolean enableModules;
+
+  /**
+   * Creates an instance of ObjcCppSemantics
+   *
+   * @param enableModules whether modules are enabled
+   */
+  public ObjcCppSemantics(boolean enableModules) {
+    this.enableModules = enableModules;
+  }
 
   @Override
   public void finalizeCompileActionBuilder(
@@ -43,7 +53,7 @@ public class ObjcCppSemantics implements CppSemantics {
         // as opposed to just the "compile" filegroup.  Even with include scanning, we need the
         // system framework headers since they are not being scanned right now.
         // TODO(waltl): do better with include scanning.
-        .addTransitiveMandatoryInputs(actionBuilder.getToolchain().getAllFilesIncludingLibc())
+        .addTransitiveMandatoryInputs(actionBuilder.getToolchain().getAllFilesMiddleman())
         .setShouldScanIncludes(
             configuration.getFragment(CppConfiguration.class).objcShouldScanIncludes());
   }
@@ -78,7 +88,10 @@ public class ObjcCppSemantics implements CppSemantics {
 
   @Override
   public boolean needsIncludeValidation() {
-    return true;
+    // We disable include validation when modules are enabled, because Apple uses absolute paths in
+    // its module maps, which include validation does not recognize.  Modules should only be used
+    // rarely and in third party code anyways.
+    return !enableModules;
   }
 
   /** cc_shared_library is not supported with Objective-C */

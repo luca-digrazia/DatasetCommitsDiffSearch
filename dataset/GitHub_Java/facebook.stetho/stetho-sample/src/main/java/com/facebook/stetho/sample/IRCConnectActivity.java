@@ -1,10 +1,3 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
 package com.facebook.stetho.sample;
 
 import android.app.Activity;
@@ -46,7 +39,7 @@ public class IRCConnectActivity extends Activity {
     }
     mIRCNickname = (EditText) findViewById(R.id.irc_nickname);
     if (TextUtils.isEmpty(mIRCNickname.getText())) {
-      mIRCNickname.setText("stetho" + (new Random().nextInt(9999) + 1));
+      mIRCNickname.setText("Guest" + (new Random().nextInt(9999) + 1));
     }
 
     findViewById(R.id.irc_connect).setOnClickListener(mConnectClicked);

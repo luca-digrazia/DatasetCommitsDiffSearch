@@ -24,19 +24,19 @@ public class CpuProfileServletTest extends AbstractServletTest {
     }
 
     @Test
-    public void returns200OK() {
+    public void returns200OK() throws Exception {
         assertThat(response.getStatus())
                 .isEqualTo(200);
     }
 
     @Test
-    public void returnsPprofRaw() {
+    public void returnsPprofRaw() throws Exception {
         assertThat(response.get(HttpHeader.CONTENT_TYPE))
                 .isEqualTo("pprof/raw");
     }
 
     @Test
-    public void returnsUncacheable() {
+    public void returnsUncacheable() throws Exception {
         assertThat(response.get(HttpHeader.CACHE_CONTROL))
                 .isEqualTo("must-revalidate,no-cache,no-store");
 

@@ -1,9 +1,4 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.elements;
 
@@ -14,8 +9,8 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
-public final class DescriptorMap implements DescriptorRegistrar {
-  private final Map<Class<?>, Descriptor> mMap = new IdentityHashMap<>();
+public final class DescriptorMap {
+  private final Map<Class<?>, Descriptor> mMap = new IdentityHashMap<Class<?>, Descriptor>();
   private boolean mIsInitializing;
   private Descriptor.Host mHost;
 
@@ -25,8 +20,7 @@ public final class DescriptorMap implements DescriptorRegistrar {
     return this;
   }
 
-  @Override
-  public DescriptorMap registerDescriptor(Class<?> elementClass, Descriptor descriptor) {
+  public DescriptorMap register(Class<?> elementClass, Descriptor descriptor) {
     Util.throwIfNull(elementClass);
     Util.throwIfNull(descriptor);
     Util.throwIf(descriptor.isInitialized());
@@ -52,6 +46,7 @@ public final class DescriptorMap implements DescriptorRegistrar {
     Util.throwIfNotNull(mHost);
 
     mHost = host;
+
     return this;
   }
 
@@ -65,7 +60,7 @@ public final class DescriptorMap implements DescriptorRegistrar {
       final Descriptor descriptor = mMap.get(elementClass);
 
       if (descriptor instanceof ChainedDescriptor) {
-        final ChainedDescriptor chainedDescriptor = (ChainedDescriptor) descriptor;
+        final ChainedDescriptor<?> chainedDescriptor = (ChainedDescriptor<?>) descriptor;
         Class<?> superClass = elementClass.getSuperclass();
         Descriptor superDescriptor = getImpl(superClass);
         chainedDescriptor.setSuper(superDescriptor);
@@ -92,8 +87,10 @@ public final class DescriptorMap implements DescriptorRegistrar {
       if (descriptor != null) {
         return descriptor;
       }
+
       theClass = theClass.getSuperclass();
     }
+
     return null;
   }
 }

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,11 +15,11 @@
  */
 package org.androidannotations.internal.core.handler;
 
-import static com.helger.jcodemodel.JExpr._null;
-import static com.helger.jcodemodel.JExpr.lit;
-import static com.helger.jcodemodel.JMod.FINAL;
-import static com.helger.jcodemodel.JMod.PUBLIC;
-import static com.helger.jcodemodel.JMod.STATIC;
+import static com.sun.codemodel.JExpr._null;
+import static com.sun.codemodel.JExpr.lit;
+import static com.sun.codemodel.JMod.FINAL;
+import static com.sun.codemodel.JMod.PUBLIC;
+import static com.sun.codemodel.JMod.STATIC;
 
 import java.util.List;
 
@@ -36,14 +35,14 @@ import org.androidannotations.helper.BundleHelper;
 import org.androidannotations.helper.CaseHelper;
 import org.androidannotations.holder.EIntentServiceHolder;
 
-import com.helger.jcodemodel.AbstractJClass;
-import com.helger.jcodemodel.IJExpression;
-import com.helger.jcodemodel.JBlock;
-import com.helger.jcodemodel.JExpr;
-import com.helger.jcodemodel.JFieldVar;
-import com.helger.jcodemodel.JInvocation;
-import com.helger.jcodemodel.JMethod;
-import com.helger.jcodemodel.JVar;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JClass;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JExpression;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JMethod;
+import com.sun.codemodel.JVar;
 
 public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHolder> {
 
@@ -106,10 +105,10 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
 				String paramName = param.getSimpleName().toString();
 				String extraParamName = paramName + "Extra";
 				JFieldVar paramVar = getStaticExtraField(holder, paramName);
-				AbstractJClass extraParamClass = codeModelHelper.typeMirrorToJClass(param.asType());
+				JClass extraParamClass = codeModelHelper.typeMirrorToJClass(param.asType());
 
 				BundleHelper bundleHelper = new BundleHelper(getEnvironment(), param.asType());
-				IJExpression getExtraExpression = bundleHelper.getExpressionToRestoreFromBundle(extraParamClass, extras, paramVar, onHandleIntentMethod);
+				JExpression getExtraExpression = bundleHelper.getExpressionToRestoreFromIntentOrBundle(extraParamClass, intent, extras, paramVar, onHandleIntentMethod);
 
 				JVar extraField = callActionBlock.decl(extraParamClass, extraParamName, getExtraExpression);
 				callActionInvocation.arg(extraField);
@@ -132,13 +131,13 @@ public class ServiceActionHandler extends BaseAnnotationHandler<EIntentServiceHo
 
 		for (VariableElement param : executableElement.getParameters()) {
 			String paramName = param.getSimpleName().toString();
-			AbstractJClass parameterClass = codeModelHelper.typeMirrorToJClass(param.asType());
+			JClass parameterClass = codeModelHelper.typeMirrorToJClass(param.asType());
 
 			JFieldVar paramVar = getStaticExtraField(holder, paramName);
 			JVar methodParam = method.param(parameterClass, paramName);
 
-			JInvocation putExtraInvocation = holder.getIntentBuilder().getSuperPutExtraInvocation(param.asType(), methodParam, paramVar);
-			body.add(putExtraInvocation);
+			JMethod putExtraMethod = holder.getIntentBuilder().getPutExtraMethod(param.asType(), paramName, paramVar, null);
+			body.invoke(putExtraMethod).arg(methodParam);
 		}
 		body._return(JExpr._this());
 	}

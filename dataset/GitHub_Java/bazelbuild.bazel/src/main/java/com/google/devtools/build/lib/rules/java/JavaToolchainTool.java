@@ -14,10 +14,9 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
-
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLine;
@@ -28,9 +27,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import javax.annotation.Nullable;
 
@@ -43,13 +40,13 @@ public abstract class JavaToolchainTool {
   public abstract FilesToRunProvider tool();
 
   /** Additional inputs required by the tool, e.g. a Class Data Sharing archive. */
-  public abstract NestedSet<Artifact> data();
+  public abstract ImmutableList<Artifact> data();
 
   /**
    * JVM flags to invoke the tool with, or empty if it is not a {@code _deploy.jar}. Location
    * expansion is performed on these flags using the inputs in {@link #data}.
    */
-  public abstract NestedSet<String> jvmOpts();
+  public abstract ImmutableList<String> jvmOpts();
 
   @Nullable
   static JavaToolchainTool fromRuleContext(
@@ -61,18 +58,18 @@ public abstract class JavaToolchainTool {
     if (tool == null) {
       return null;
     }
-    NestedSetBuilder<Artifact> dataArtifacts = NestedSetBuilder.stableOrder();
-    ImmutableMap.Builder<Label, ImmutableCollection<Artifact>> locations = ImmutableMap.builder();
-    for (TransitiveInfoCollection data : ruleContext.getPrerequisites(dataAttribute)) {
-      NestedSet<Artifact> files = data.getProvider(FileProvider.class).getFilesToBuild();
-      dataArtifacts.addTransitive(files);
-      locations.put(AliasProvider.getDependencyLabel(data), files.toList());
-    }
-    NestedSet<String> jvmOpts =
-        NestedSetBuilder.wrap(
-            Order.STABLE_ORDER,
-            ruleContext.getExpander().withExecLocations(locations.build()).list(jvmOptsAttribute));
-    return create(tool, dataArtifacts.build(), jvmOpts);
+    TransitiveInfoCollection data = ruleContext.getPrerequisite(dataAttribute);
+    ImmutableList<Artifact> dataArtifacts =
+        data == null
+            ? ImmutableList.of()
+            : data.getProvider(FileProvider.class).getFilesToBuild().toList();
+    ImmutableMap<Label, ImmutableCollection<Artifact>> locations =
+        data == null
+            ? ImmutableMap.of()
+            : ImmutableMap.of(AliasProvider.getDependencyLabel(data), dataArtifacts);
+    ImmutableList<String> jvmOpts =
+        ruleContext.getExpander().withExecLocations(locations).list(jvmOptsAttribute);
+    return create(tool, dataArtifacts, jvmOpts);
   }
 
   @Nullable
@@ -80,15 +77,12 @@ public abstract class JavaToolchainTool {
     if (executable == null) {
       return null;
     }
-    return create(
-        executable,
-        NestedSetBuilder.emptySet(STABLE_ORDER),
-        NestedSetBuilder.emptySet(STABLE_ORDER));
+    return create(executable, ImmutableList.of(), ImmutableList.of());
   }
 
   @AutoCodec.Instantiator
   static JavaToolchainTool create(
-      FilesToRunProvider tool, NestedSet<Artifact> data, NestedSet<String> jvmOpts) {
+      FilesToRunProvider tool, ImmutableList<Artifact> data, ImmutableList<String> jvmOpts) {
     return new AutoValue_JavaToolchainTool(tool, data, jvmOpts);
   }
 
@@ -98,21 +92,21 @@ public abstract class JavaToolchainTool {
    * <p>For a Java command, the executable command line will include {@code java -jar deploy.jar} as
    * well as any JVM flags.
    *
-   * @param command the executable command line builder for the tool
-   * @param toolchain {@code java_toolchain} for the action being constructed
-   * @param inputs inputs for the action being constructed
+   * @param toolchains {@code java_toolchain} for the action being constructed
+   * @param inputs for the action being constructed
+   * @returns the executable command line for the tool
    */
   void buildCommandLine(
       CustomCommandLine.Builder command,
       JavaToolchainProvider toolchain,
       NestedSetBuilder<Artifact> inputs) {
-    inputs.addTransitive(data());
+    inputs.addAll(data());
     Artifact executable = tool().getExecutable();
     if (!executable.getExtension().equals("jar")) {
       command.addExecPath(executable);
       inputs.addTransitive(tool().getFilesToRun());
     } else {
-      inputs.add(executable).addTransitive(toolchain.getJavaRuntime().javaBaseInputs());
+      inputs.add(executable).addTransitive(toolchain.getJavaRuntime().javaBaseInputsMiddleman());
       command
           .addPath(toolchain.getJavaRuntime().javaBinaryExecPathFragment())
           .addAll(toolchain.getJvmOptions())

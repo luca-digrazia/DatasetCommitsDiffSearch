@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -25,6 +24,16 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import com.sun.codemodel.JFieldRef;
+import org.androidannotations.AndroidAnnotationsEnvironment;
+import org.androidannotations.annotations.OnActivityResult;
+import org.androidannotations.annotations.OptionsItem;
+import org.androidannotations.annotations.ResId;
+import org.androidannotations.logger.Logger;
+import org.androidannotations.logger.LoggerFactory;
+import org.androidannotations.process.ProcessHolder;
+import org.androidannotations.rclass.IRInnerClass;
+import org.androidannotations.rclass.RInnerClass;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
@@ -40,18 +49,7 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 
-import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.annotations.EditorAction;
-import org.androidannotations.annotations.OnActivityResult;
-import org.androidannotations.annotations.OptionsItem;
-import org.androidannotations.annotations.ResId;
 import org.androidannotations.annotations.SeekBarTouchStop;
-import org.androidannotations.internal.rclass.RInnerClass;
-import org.androidannotations.logger.Logger;
-import org.androidannotations.logger.LoggerFactory;
-import org.androidannotations.rclass.IRInnerClass;
-
-import com.helger.jcodemodel.JFieldRef;
 
 public class AnnotationHelper {
 
@@ -73,10 +71,9 @@ public class AnnotationHelper {
 	public ProcessingEnvironment getProcessingEnvironment() {
 		return environment.getProcessingEnvironment();
 	}
-
 	/**
-	 * Tests whether one type is a subtype of another. Any type is considered to be
-	 * a subtype of itself.
+	 * Tests whether one type is a subtype of another. Any type is considered to
+	 * be a subtype of itself.
 	 */
 	public boolean isSubtype(TypeMirror potentialSubtype, TypeMirror potentialSupertype) {
 		return getTypeUtils().isSubtype(potentialSubtype, potentialSupertype);
@@ -91,20 +88,11 @@ public class AnnotationHelper {
 	}
 
 	/**
-	 * This method may return null if the {@link TypeElement} cannot be found in the
-	 * processor classpath
+	 * This method may return null if the {@link TypeElement} cannot be found in
+	 * the processor classpath
 	 */
 	public TypeElement typeElementFromQualifiedName(String qualifiedName) {
 		return getElementUtils().getTypeElement(qualifiedName);
-	}
-
-	public boolean isAnnotatedWith(Element element, String qualifiedName) {
-		for (AnnotationMirror annotationMirror : element.getAnnotationMirrors()) {
-			if (annotationMirror.getAnnotationType().toString().equals(qualifiedName)) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	public String generatedClassQualifiedNameFromQualifiedName(String qualifiedName) {
@@ -173,6 +161,10 @@ public class AnnotationHelper {
 		return getProcessingEnvironment().getTypeUtils();
 	}
 
+	public ProcessHolder getProcessHolder() {
+		return getEnvironment().getProcessHolder();
+	}
+
 	/**
 	 * Returns a list of {@link JFieldRef} linking to the R class, based on the
 	 * given annotation
@@ -183,21 +175,22 @@ public class AnnotationHelper {
 		return extractAnnotationFieldRefs(element, annotationName, rInnerClass, useElementName, DEFAULT_FIELD_NAME_VALUE, DEFAULT_FIELD_NAME_RESNAME);
 	}
 
-	public List<JFieldRef> extractAnnotationFieldRefs(Element element, String annotationName, IRInnerClass rInnerClass, boolean useElementName, String idFieldName, String resFieldName) {
+	public List<JFieldRef> extractAnnotationFieldRefs(Element element, String annotationName, IRInnerClass rInnerClass, boolean useElementName, String idFieldName,
+			String resFieldName) {
 		List<JFieldRef> fieldRefs = new ArrayList<>();
 
 		for (String refQualifiedName : extractAnnotationResources(element, annotationName, rInnerClass, useElementName, idFieldName, resFieldName)) {
-			fieldRefs.add(RInnerClass.extractIdStaticRef(environment, refQualifiedName));
+			fieldRefs.add(RInnerClass.extractIdStaticRef(getProcessHolder(), refQualifiedName));
 		}
 
 		return fieldRefs;
 	}
 
 	/**
-	 * Method to handle all annotations dealing with resource ids that can be set
-	 * using the value() parameter of the annotation (as int or int[]), the
-	 * resName() parameter of the annotation (as String or String[]), the element
-	 * name.
+	 * Method to handle all annotations dealing with resource ids that can be
+	 * set using the value() parameter of the annotation (as int or int[]), the
+	 * resName() parameter of the annotation (as String or String[]), the
+	 * element name.
 	 *
 	 * @param element
 	 *            the annotated element
@@ -206,9 +199,10 @@ public class AnnotationHelper {
 	 * @param rInnerClass
 	 *            the R innerClass the resources belong to
 	 * @param useElementName
-	 *            Should we use a default fallback strategy that uses the element
-	 *            qualified name for a resource name
-	 * @return the qualified names of the matching resources in the R inner class
+	 *            Should we use a default fallback strategy that uses the
+	 *            element qualified name for a resource name
+	 * @return the qualified names of the matching resources in the R inner
+	 *         class
 	 */
 	public List<String> extractAnnotationResources(Element element, String annotationName, IRInnerClass rInnerClass, boolean useElementName) {
 		return extractAnnotationResources(element, annotationName, rInnerClass, useElementName, DEFAULT_FIELD_NAME_VALUE, DEFAULT_FIELD_NAME_RESNAME);
@@ -219,8 +213,8 @@ public class AnnotationHelper {
 
 		List<String> resourceIdQualifiedNames = new ArrayList<>();
 		/*
-		 * if nothing defined in the annotation value() parameter, we check for its
-		 * resName() parameter
+		 * if nothing defined in the annotation value() parameter, we check for
+		 * its resName() parameter
 		 */
 		if (defaultResIdValue(values)) {
 
@@ -228,7 +222,8 @@ public class AnnotationHelper {
 
 			if (defaultResName(resNames)) {
 				/*
-				 * if we mustn't use the element name, then we'll return an empty list
+				 * if we mustn't use the element name, then we'll return an
+				 * empty list
 				 */
 				if (useElementName) {
 					/*
@@ -240,8 +235,8 @@ public class AnnotationHelper {
 				}
 			} else {
 				/*
-				 * The result will will contain all the resource qualified names based on the
-				 * resource names in the resName() parameter
+				 * The result will will contain all the resource qualified names
+				 * based on the resource names in the resName() parameter
 				 */
 				for (String resName : resNames) {
 					String resourceIdQualifiedName = rInnerClass.getIdQualifiedName(resName);
@@ -251,8 +246,8 @@ public class AnnotationHelper {
 
 		} else {
 			/*
-			 * The result will will contain all the resource qualified names based on the
-			 * integers in the value() parameter
+			 * The result will will contain all the resource qualified names
+			 * based on the integers in the value() parameter
 			 */
 			for (int value : values) {
 				String resourceIdQualifiedName = rInnerClass.getIdQualifiedName(value);
@@ -365,9 +360,6 @@ public class AnnotationHelper {
 		if (SeekBarTouchStop.class.getName().equals(annotationName)) {
 			return "SeekBarTouchStopped";
 		}
-		if (EditorAction.class.getName().equals(annotationName)) {
-			return EditorAction.class.getSimpleName();
-		}
 		String annotationSimpleName = annotationName.substring(annotationName.lastIndexOf('.') + 1);
 		if (annotationSimpleName.endsWith("e")) {
 			return annotationSimpleName + "d";
@@ -455,4 +447,5 @@ public class AnnotationHelper {
 		}
 		return false;
 	}
+
 }

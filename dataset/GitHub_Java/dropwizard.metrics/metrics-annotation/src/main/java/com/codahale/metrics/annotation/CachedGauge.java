@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * An annotation for marking a method as a gauge, which caches the result for a specified time.
  *
- * <p>
+ * <p/>
  * Given a method like this:
  * <pre><code>
  *     {@literal @}CachedGauge(name = "queueSize", timeout = 30, timeoutUnit = TimeUnit.SECONDS)
@@ -18,35 +18,35 @@ import java.util.concurrent.TimeUnit;
  *     }
  *
  * </code></pre>
- * <p>
+ * <p/>
  *
  * A gauge for the defining class with the name queueSize will be created which uses the annotated method's
  * return value as its value, and which caches the result for 30 seconds.
  *
- * @since 3.1
+ * @since 4.0.0
  */
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.METHOD, ElementType.ANNOTATION_TYPE })
+@Target(ElementType.METHOD)
 public @interface CachedGauge {
 
     /**
-     * @return The name of the counter.
+     * The name of the counter.
      */
     String name() default "";
 
     /**
-     * @return If {@code true}, use the given name as an absolute name. If {@code false}, use the given name
+     * If {@code true}, use the given name as an absolute name. If {@code false}, use the given name
      * relative to the annotated class.
      */
     boolean absolute() default false;
 
     /**
-     * @return The amount of time to cache the result
+     * The amount of time to cache the result
      */
     long timeout();
 
     /**
-     * @return The unit of timeout
+     * The unit of timeout
      */
     TimeUnit timeoutUnit() default TimeUnit.MILLISECONDS;
 

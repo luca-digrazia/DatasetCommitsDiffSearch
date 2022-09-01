@@ -16,75 +16,41 @@ package com.google.devtools.build.lib.rules.config;
 
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_KEYED_STRING_DICT;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.TransitionFactory;
+import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
-import com.google.devtools.build.lib.packages.RuleTransitionData;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import java.util.Map;
 
 /**
- * Transition factory which allows for setting the values of config_feature_flags below the rule it
- * is attached to based on one of that rule's attributes.
+ * Transition factory which allows for setting the values of config_feature_flags below the rule
+ * it is attached to based on one of that rule's attributes.
  *
  * <p>Currently, this is only intended for use by android_binary and other Android top-level rules.
  */
-public class ConfigFeatureFlagTransitionFactory implements TransitionFactory<RuleTransitionData> {
+public class ConfigFeatureFlagTransitionFactory implements RuleTransitionFactory {
 
   /** Transition which resets the set of flag-value pairs to the map it was constructed with. */
-  @AutoCodec
-  @VisibleForSerialization
-  static final class ConfigFeatureFlagValuesTransition implements PatchTransition {
+  private static final class ConfigFeatureFlagValuesTransition implements PatchTransition {
     private final ImmutableSortedMap<Label, String> flagValues;
-    private final int cachedHashCode;
 
     public ConfigFeatureFlagValuesTransition(Map<Label, String> flagValues) {
-      this(ImmutableSortedMap.copyOf(flagValues), flagValues.hashCode());
-    }
-
-    @AutoCodec.Instantiator
-    ConfigFeatureFlagValuesTransition(
-        ImmutableSortedMap<Label, String> flagValues, int cachedHashCode) {
       this.flagValues = ImmutableSortedMap.copyOf(flagValues);
-      this.cachedHashCode = cachedHashCode;
     }
 
     @Override
-    public ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments() {
-      return ImmutableSet.of(ConfigFeatureFlagOptions.class);
+    public BuildOptions apply(BuildOptions options) {
+      BuildOptions result = options.clone();
+      result.get(ConfigFeatureFlagConfiguration.Options.class).replaceFlagValues(flagValues);
+      return result;
     }
 
     @Override
-    public BuildOptions patch(BuildOptionsView options, EventHandler eventHandler) {
-      if (!options.contains(ConfigFeatureFlagOptions.class)) {
-        return options.underlying();
-      }
-      return FeatureFlagValue.replaceFlagValues(options.underlying(), flagValues);
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      return other instanceof ConfigFeatureFlagValuesTransition
-          && this.flagValues.equals(((ConfigFeatureFlagValuesTransition) other).flagValues);
-    }
-
-    @Override
-    public int hashCode() {
-      return cachedHashCode;
-    }
-
-    @Override
-    public String toString() {
-      return String.format("ConfigFeatureFlagValuesTransition{flagValues=%s}", flagValues);
+    public boolean defaultsToSelf() {
+      throw new UnsupportedOperationException("supported in dynamic mode only");
     }
   }
 
@@ -102,41 +68,8 @@ public class ConfigFeatureFlagTransitionFactory implements TransitionFactory<Rul
   }
 
   @Override
-  public PatchTransition create(RuleTransitionData ruleData) {
-    NonconfigurableAttributeMapper attrs = NonconfigurableAttributeMapper.of(ruleData.rule());
-    if (attrs.isAttributeValueExplicitlySpecified(attributeName)) {
-      return new ConfigFeatureFlagValuesTransition(
-          attrs.get(attributeName, LABEL_KEYED_STRING_DICT));
-    } else {
-      return NoTransition.INSTANCE;
-    }
-  }
-
-  @Override
-  public TransitionType transitionType() {
-    return TransitionType.RULE;
-  }
-
-  /**
-   * Returns the attribute examined by this transition factory.
-   */
-  public String getAttributeName() {
-    return this.attributeName;
-  }
-
-  @Override
-  public boolean equals(Object other) {
-    return other instanceof ConfigFeatureFlagTransitionFactory
-        && this.attributeName.equals(((ConfigFeatureFlagTransitionFactory) other).attributeName);
-  }
-
-  @Override
-  public int hashCode() {
-    return attributeName.hashCode();
-  }
-
-  @Override
-  public String toString() {
-    return String.format("ConfigFeatureFlagTransitionFactory{attributeName=%s}", attributeName);
+  public PatchTransition buildTransitionFor(Rule rule) {
+    return new ConfigFeatureFlagValuesTransition(
+        NonconfigurableAttributeMapper.of(rule).get(attributeName, LABEL_KEYED_STRING_DICT));
   }
 }

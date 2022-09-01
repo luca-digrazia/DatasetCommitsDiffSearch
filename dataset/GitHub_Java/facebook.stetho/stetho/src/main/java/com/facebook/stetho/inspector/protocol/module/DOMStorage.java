@@ -1,34 +1,26 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.protocol.module;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-
-import com.facebook.stetho.inspector.console.CLog;
+import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.inspector.domstorage.DOMStoragePeerManager;
 import com.facebook.stetho.inspector.domstorage.SharedPreferencesHelper;
-import com.facebook.stetho.inspector.jsonrpc.JsonRpcException;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcPeer;
 import com.facebook.stetho.inspector.jsonrpc.JsonRpcResult;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsDomain;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsMethod;
+
 import com.facebook.stetho.json.ObjectMapper;
 import com.facebook.stetho.json.annotation.JsonProperty;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 public class DOMStorage implements ChromeDevtoolsDomain {
   private final Context mContext;
@@ -61,7 +53,7 @@ public class DOMStorage implements ChromeDevtoolsDomain {
     String prefTag = storage.securityOrigin;
     if (storage.isLocalStorage) {
       SharedPreferences prefs = mContext.getSharedPreferences(prefTag, Context.MODE_PRIVATE);
-      for (Map.Entry<String, ?> prefsEntry : SharedPreferencesHelper.getSharedPreferenceEntriesSorted(prefs)) {
+      for (Map.Entry<String, ?> prefsEntry : prefs.getAll().entrySet()) {
         ArrayList<String> entry = new ArrayList<String>(2);
         entry.add(prefsEntry.getKey());
         entry.add(SharedPreferencesHelper.valueToString(prefsEntry.getValue()));
@@ -75,8 +67,7 @@ public class DOMStorage implements ChromeDevtoolsDomain {
   }
 
   @ChromeDevtoolsMethod
-  public void setDOMStorageItem(JsonRpcPeer peer, JSONObject params)
-      throws JSONException, JsonRpcException {
+  public void setDOMStorageItem(JsonRpcPeer peer, JSONObject params) throws JSONException {
     StorageId storage = mObjectMapper.convertValue(
         params.getJSONObject("storageId"),
         StorageId.class);
@@ -87,45 +78,12 @@ public class DOMStorage implements ChromeDevtoolsDomain {
       SharedPreferences prefs = mContext.getSharedPreferences(
           storage.securityOrigin,
           Context.MODE_PRIVATE);
-      Object existingValue = prefs.getAll().get(key);
-      try {
-        if (existingValue == null) {
-          throw new DOMStorageAssignmentException(
-              "Unsupported: cannot add new key " + key + " due to lack of type inference");
-        } else {
-          SharedPreferences.Editor editor = prefs.edit();
-          try {
-            assignByType(editor, key, SharedPreferencesHelper.valueFromString(value, existingValue));
-            editor.apply();
-          } catch (IllegalArgumentException e) {
-            throw new DOMStorageAssignmentException(
-                String.format(Locale.US,
-                    "Type mismatch setting %s to %s (expected %s)",
-                    key,
-                    value,
-                    existingValue.getClass().getSimpleName()));
-          }
-        }
-      } catch (DOMStorageAssignmentException e) {
-        CLog.writeToConsole(
-            mDOMStoragePeerManager,
-            Console.MessageLevel.ERROR,
-            Console.MessageSource.STORAGE,
-            e.getMessage());
-
-        // Force the DevTools UI to refresh with the old value again (it assumes that the set
-        // operation succeeded).  Note that we should be able to do this by throwing
-        // JsonRpcException but the UI doesn't respect setDOMStorageItem failure.
-        if (prefs.contains(key)) {
-          mDOMStoragePeerManager.signalItemUpdated(
-              storage,
-              key,
-              value,
-              SharedPreferencesHelper.valueToString(existingValue));
-        } else {
-          mDOMStoragePeerManager.signalItemRemoved(storage, key);
-        }
+      Object exitingValue = prefs.getAll().get(key);
+      SharedPreferences.Editor editor = prefs.edit();
+      if (!tryAssignByType(editor, key, value, exitingValue)) {
+        editor.putString(key, value);
       }
+      editor.apply();
     }
   }
 
@@ -144,26 +102,38 @@ public class DOMStorage implements ChromeDevtoolsDomain {
     }
   }
 
-  private static void assignByType(
+  private static boolean tryAssignByType(
       SharedPreferences.Editor editor,
       String key,
-      Object value)
-      throws IllegalArgumentException {
-    if (value instanceof Integer) {
-      editor.putInt(key, (Integer)value);
-    } else if (value instanceof Long) {
-      editor.putLong(key, (Long)value);
-    } else if (value instanceof Float) {
-      editor.putFloat(key, (Float)value);
-    } else if (value instanceof Boolean) {
-      editor.putBoolean(key, (Boolean)value);
-    } else if (value instanceof String) {
-      editor.putString(key, (String)value);
-    } else if (value instanceof Set) {
-      editor.putStringSet(key, (Set<String>)value);
-    } else {
-      throw new IllegalArgumentException("Unsupported type=" + value.getClass().getName());
+      String value,
+      @Nullable Object existingValue) {
+    try {
+      if (existingValue instanceof Integer) {
+        editor.putInt(key, Integer.parseInt(value));
+        return true;
+      } else if (existingValue instanceof Long) {
+        editor.putLong(key, Long.parseLong(value));
+        return true;
+      } else if (existingValue instanceof Float) {
+        editor.putFloat(key, Float.parseFloat(value));
+        return true;
+      } else if (existingValue instanceof Boolean) {
+        editor.putBoolean(key, parseBoolean(value));
+        return true;
+      }
+    } catch (NumberFormatException e) {
+      // Fall through...
     }
+    return false;
+  }
+
+  private static Boolean parseBoolean(String s) {
+    if ("1".equals(s) || "true".equalsIgnoreCase(s)) {
+      return Boolean.TRUE;
+    } else if ("0".equals(s) || "false".equalsIgnoreCase(s)) {
+      return Boolean.FALSE;
+    }
+    return null;
   }
 
   public static class StorageId {
@@ -215,14 +185,5 @@ public class DOMStorage implements ChromeDevtoolsDomain {
 
     @JsonProperty(required = true)
     public String newValue;
-  }
-
-  /**
-   * Exception thrown internally when we fail to honor {@link #setDOMStorageItem}.
-   */
-  private static class DOMStorageAssignmentException extends Exception {
-    public DOMStorageAssignmentException(String message) {
-      super(message);
-    }
   }
 }

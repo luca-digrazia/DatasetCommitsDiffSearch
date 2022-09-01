@@ -4,38 +4,29 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.jetty9.InstrumentedConnectionFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
-import io.dropwizard.util.Strings;
-import io.dropwizard.validation.ValidationMethod;
+import com.google.common.collect.Iterables;
 import org.eclipse.jetty.http.HttpVersion;
 import org.eclipse.jetty.io.ByteBufferPool;
-import org.eclipse.jetty.server.Connector;
-import org.eclipse.jetty.server.HttpConfiguration;
-import org.eclipse.jetty.server.HttpConnectionFactory;
-import org.eclipse.jetty.server.SecureRequestCustomizer;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.SslConnectionFactory;
-import org.eclipse.jetty.util.component.AbstractLifeCycle;
-import org.eclipse.jetty.util.component.LifeCycle;
+import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.Scheduler;
 import org.eclipse.jetty.util.thread.ThreadPool;
+import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
-import javax.net.ssl.SSLEngine;
-import javax.validation.constraints.NotEmpty;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.validation.constraints.NotNull;
 import java.io.File;
 import java.net.URI;
-import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
+
+import static com.codahale.metrics.MetricRegistry.name;
 
 /**
  * Builds HTTPS connectors (HTTP over TLS/SSL).
@@ -156,53 +147,31 @@ import java.util.stream.Collectors;
  *     </tr>
  *     <tr>
  *         <td>{@code validateCerts}</td>
- *         <td>false</td>
+ *         <td>true</td>
  *         <td>
  *             Whether or not to validate TLS certificates before starting. If enabled, Dropwizard
- *             will refuse to start with expired or otherwise invalid certificates. This option will
- *             cause unconditional failure in Dropwizard 1.x until a new validation mechanism can be
- *             implemented.
+ *             will refuse to start with expired or otherwise invalid certificates.
  *         </td>
  *     </tr>
  *     <tr>
  *         <td>{@code validatePeers}</td>
- *         <td>false</td>
- *         <td>
- *             Whether or not to validate TLS peer certificates. This option will
- *             cause unconditional failure in Dropwizard 1.x until a new validation mechanism can be
- *             implemented.
- *         </td>
+ *         <td>true</td>
+ *         <td>Whether or not to validate TLS peer certificates.</td>
  *     </tr>
  *     <tr>
  *         <td>{@code supportedProtocols}</td>
- *         <td>JVM default</td>
+ *         <td>(none)</td>
  *         <td>
  *             A list of protocols (e.g., {@code SSLv3}, {@code TLSv1}) which are supported. All
  *             other protocols will be refused.
  *         </td>
  *     </tr>
  *     <tr>
- *         <td>{@code excludedProtocols}</td>
- *         <td>["SSL.*", "TLSv1", "TLSv1\.1"]</td>
- *         <td>
- *             A list of protocols (e.g., {@code SSLv3}, {@code TLSv1}) which are excluded. These
- *             protocols will be refused.
- *         </td>
- *     </tr>
- *     <tr>
  *         <td>{@code supportedCipherSuites}</td>
- *         <td>JVM default</td>
+ *         <td>(none)</td>
  *         <td>
  *             A list of cipher suites (e.g., {@code TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256}) which
- *             are supported. All other cipher suites will be refused.
- *         </td>
- *    </tr>
- *    <tr>
- *         <td>{@code excludedCipherSuites}</td>
- *         <td>Jetty's default</td>
- *         <td>
- *             A list of cipher suites (e.g., {@code TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256}) which
- *             are excluded. These cipher suites will be refused.
+ *             are supported. All other cipher suites will be refused
  *         </td>
  *     </tr>
  *     <tr>
@@ -228,77 +197,42 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(HttpsConnectorFactory.class);
     private static final AtomicBoolean LOGGED = new AtomicBoolean(false);
 
-    @Nullable
+    @NotNull
     private String keyStorePath;
 
-    @Nullable
+    @NotNull
     private String keyStorePassword;
 
     @NotEmpty
     private String keyStoreType = "JKS";
 
-    @Nullable
     private String keyStoreProvider;
 
-    @Nullable
     private String trustStorePath;
 
-    @Nullable
     private String trustStorePassword;
 
     @NotEmpty
     private String trustStoreType = "JKS";
 
-    @Nullable
     private String trustStoreProvider;
 
-    @Nullable
     private String keyManagerPassword;
 
-    @Nullable
     private Boolean needClientAuth;
-
-    @Nullable
     private Boolean wantClientAuth;
-
-    @Nullable
     private String certAlias;
-
-    @Nullable
     private File crlPath;
-
-    @Nullable
     private Boolean enableCRLDP;
-
-    @Nullable
     private Boolean enableOCSP;
-
-    @Nullable
     private Integer maxCertPathLength;
-
-    @Nullable
     private URI ocspResponderUrl;
-
-    @Nullable
     private String jceProvider;
-    private boolean validateCerts = false;
-    private boolean validatePeers = false;
-
-    @Nullable
+    private boolean validateCerts = true;
+    private boolean validatePeers = true;
     private List<String> supportedProtocols;
-
-    @Nullable
-    private List<String> excludedProtocols = Arrays.asList("SSL.*", "TLSv1", "TLSv1\\.1");
-
-    @Nullable
     private List<String> supportedCipherSuites;
-
-    @Nullable
-    private List<String> excludedCipherSuites;
-
     private boolean allowRenegotiation = true;
-
-    @Nullable
     private String endpointIdentificationAlgorithm;
 
     @JsonProperty
@@ -312,35 +246,32 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
     }
 
     @JsonProperty
-    @Nullable
     public String getEndpointIdentificationAlgorithm() {
         return endpointIdentificationAlgorithm;
     }
 
     @JsonProperty
-    public void setEndpointIdentificationAlgorithm(@Nullable String endpointIdentificationAlgorithm) {
+    public void setEndpointIdentificationAlgorithm(String endpointIdentificationAlgorithm) {
         this.endpointIdentificationAlgorithm = endpointIdentificationAlgorithm;
     }
 
     @JsonProperty
-    @Nullable
     public String getKeyStorePath() {
         return keyStorePath;
     }
 
     @JsonProperty
-    public void setKeyStorePath(@Nullable String keyStorePath) {
+    public void setKeyStorePath(String keyStorePath) {
         this.keyStorePath = keyStorePath;
     }
 
     @JsonProperty
-    @Nullable
     public String getKeyStorePassword() {
         return keyStorePassword;
     }
 
     @JsonProperty
-    public void setKeyStorePassword(@Nullable String keyStorePassword) {
+    public void setKeyStorePassword(String keyStorePassword) {
         this.keyStorePassword = keyStorePassword;
     }
 
@@ -355,13 +286,12 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
     }
 
     @JsonProperty
-    @Nullable
     public String getKeyStoreProvider() {
         return keyStoreProvider;
     }
 
     @JsonProperty
-    public void setKeyStoreProvider(@Nullable String keyStoreProvider) {
+    public void setKeyStoreProvider(String keyStoreProvider) {
         this.keyStoreProvider = keyStoreProvider;
     }
 
@@ -376,145 +306,132 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
     }
 
     @JsonProperty
-    @Nullable
     public String getTrustStoreProvider() {
         return trustStoreProvider;
     }
 
     @JsonProperty
-    public void setTrustStoreProvider(@Nullable String trustStoreProvider) {
+    public void setTrustStoreProvider(String trustStoreProvider) {
         this.trustStoreProvider = trustStoreProvider;
     }
 
     @JsonProperty
-    @Nullable
     public String getKeyManagerPassword() {
         return keyManagerPassword;
     }
 
     @JsonProperty
-    public void setKeyManagerPassword(@Nullable String keyManagerPassword) {
+    public void setKeyManagerPassword(String keyManagerPassword) {
         this.keyManagerPassword = keyManagerPassword;
     }
 
     @JsonProperty
-    @Nullable
     public String getTrustStorePath() {
         return trustStorePath;
     }
 
     @JsonProperty
-    public void setTrustStorePath(@Nullable String trustStorePath) {
+    public void setTrustStorePath(String trustStorePath) {
         this.trustStorePath = trustStorePath;
     }
 
     @JsonProperty
-    @Nullable
     public String getTrustStorePassword() {
         return trustStorePassword;
     }
 
     @JsonProperty
-    public void setTrustStorePassword(@Nullable String trustStorePassword) {
+    public void setTrustStorePassword(String trustStorePassword) {
         this.trustStorePassword = trustStorePassword;
     }
 
     @JsonProperty
-    @Nullable
     public Boolean getNeedClientAuth() {
         return needClientAuth;
     }
 
     @JsonProperty
-    public void setNeedClientAuth(@Nullable Boolean needClientAuth) {
+    public void setNeedClientAuth(Boolean needClientAuth) {
         this.needClientAuth = needClientAuth;
     }
 
     @JsonProperty
-    @Nullable
     public Boolean getWantClientAuth() {
         return wantClientAuth;
     }
 
     @JsonProperty
-    public void setWantClientAuth(@Nullable Boolean wantClientAuth) {
+    public void setWantClientAuth(Boolean wantClientAuth) {
         this.wantClientAuth = wantClientAuth;
     }
 
     @JsonProperty
-    @Nullable
     public String getCertAlias() {
         return certAlias;
     }
 
     @JsonProperty
-    public void setCertAlias(@Nullable String certAlias) {
+    public void setCertAlias(String certAlias) {
         this.certAlias = certAlias;
     }
 
     @JsonProperty
-    @Nullable
     public File getCrlPath() {
         return crlPath;
     }
 
     @JsonProperty
-    public void setCrlPath(@Nullable File crlPath) {
+    public void setCrlPath(File crlPath) {
         this.crlPath = crlPath;
     }
 
     @JsonProperty
-    @Nullable
     public Boolean getEnableCRLDP() {
         return enableCRLDP;
     }
 
     @JsonProperty
-    public void setEnableCRLDP(@Nullable Boolean enableCRLDP) {
+    public void setEnableCRLDP(Boolean enableCRLDP) {
         this.enableCRLDP = enableCRLDP;
     }
 
     @JsonProperty
-    @Nullable
     public Boolean getEnableOCSP() {
         return enableOCSP;
     }
 
     @JsonProperty
-    public void setEnableOCSP(@Nullable Boolean enableOCSP) {
+    public void setEnableOCSP(Boolean enableOCSP) {
         this.enableOCSP = enableOCSP;
     }
 
     @JsonProperty
-    @Nullable
     public Integer getMaxCertPathLength() {
         return maxCertPathLength;
     }
 
     @JsonProperty
-    public void setMaxCertPathLength(@Nullable Integer maxCertPathLength) {
+    public void setMaxCertPathLength(Integer maxCertPathLength) {
         this.maxCertPathLength = maxCertPathLength;
     }
 
     @JsonProperty
-    @Nullable
     public URI getOcspResponderUrl() {
         return ocspResponderUrl;
     }
 
     @JsonProperty
-    public void setOcspResponderUrl(@Nullable URI ocspResponderUrl) {
+    public void setOcspResponderUrl(URI ocspResponderUrl) {
         this.ocspResponderUrl = ocspResponderUrl;
     }
 
     @JsonProperty
-    @Nullable
     public String getJceProvider() {
         return jceProvider;
     }
 
     @JsonProperty
-    public void setJceProvider(@Nullable String jceProvider) {
+    public void setJceProvider(String jceProvider) {
         this.jceProvider = jceProvider;
     }
 
@@ -529,46 +446,22 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
     }
 
     @JsonProperty
-    @Nullable
     public List<String> getSupportedProtocols() {
         return supportedProtocols;
     }
 
     @JsonProperty
-    public void setSupportedProtocols(@Nullable List<String> supportedProtocols) {
+    public void setSupportedProtocols(List<String> supportedProtocols) {
         this.supportedProtocols = supportedProtocols;
     }
 
     @JsonProperty
-    @Nullable
-    public List<String> getExcludedProtocols() {
-        return excludedProtocols;
-    }
-
-    @JsonProperty
-    public void setExcludedProtocols(@Nullable List<String> excludedProtocols) {
-        this.excludedProtocols = excludedProtocols;
-    }
-
-    @JsonProperty
-    @Nullable
     public List<String> getSupportedCipherSuites() {
         return supportedCipherSuites;
     }
 
     @JsonProperty
-    @Nullable
-    public List<String> getExcludedCipherSuites() {
-        return excludedCipherSuites;
-    }
-
-    @JsonProperty
-    public void setExcludedCipherSuites(@Nullable List<String> excludedCipherSuites) {
-        this.excludedCipherSuites = excludedCipherSuites;
-    }
-
-    @JsonProperty
-    public void setSupportedCipherSuites(@Nullable List<String> supportedCipherSuites) {
+    public void setSupportedCipherSuites(List<String> supportedCipherSuites) {
         this.supportedCipherSuites = supportedCipherSuites;
     }
 
@@ -582,28 +475,16 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
         this.validateCerts = validateCerts;
     }
 
-    @ValidationMethod(message = "keyStorePath should not be null")
-    public boolean isValidKeyStorePath() {
-        return keyStoreType.startsWith("Windows-") || keyStorePath != null;
-    }
-
-    @ValidationMethod(message = "keyStorePassword should not be null or empty")
-    public boolean isValidKeyStorePassword() {
-        return keyStoreType.startsWith("Windows-") ||
-                !Strings.isNullOrEmpty(keyStorePassword);
-    }
-
     @Override
-    public Connector build(Server server, MetricRegistry metrics, String name, @Nullable ThreadPool threadPool) {
+    public Connector build(Server server, MetricRegistry metrics, String name, ThreadPool threadPool) {
+        logSupportedParameters();
+
         final HttpConfiguration httpConfig = buildHttpConfiguration();
 
         final HttpConnectionFactory httpConnectionFactory = buildHttpConnectionFactory(httpConfig);
 
-        final SslContextFactory sslContextFactory = configureSslContextFactory(new SslContextFactory.Server());
-        sslContextFactory.addLifeCycleListener(logSslInfoOnStart(sslContextFactory));
-
+        final SslContextFactory sslContextFactory = buildSslContextFactory();
         server.addBean(sslContextFactory);
-        server.addBean(new SslReload(sslContextFactory, this::configureSslContextFactory));
 
         final SslConnectionFactory sslConnectionFactory =
                 new SslConnectionFactory(sslContextFactory, HttpVersion.HTTP_1_1.toString());
@@ -612,11 +493,15 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
 
         final ByteBufferPool bufferPool = buildBufferPool();
 
+        final String timerName = name(HttpConnectionFactory.class,
+                                      getBindHost(),
+                                      Integer.toString(getPort()),
+                                      "connections");
+
         return buildConnector(server, scheduler, bufferPool, name, threadPool,
-                              new InstrumentedConnectionFactory(
-                                      sslConnectionFactory,
-                                      metrics.timer(httpConnections())),
-                                      httpConnectionFactory);
+                              new InstrumentedConnectionFactory(sslConnectionFactory,
+                                                                metrics.timer(timerName)),
+                              httpConnectionFactory);
     }
 
     @Override
@@ -628,132 +513,37 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
         return config;
     }
 
-    /** Register a listener that waits until the ssl context factory has started. Once it has
-     *  started we can grab the fully initialized context so we can log the parameters.
-     */
-    protected AbstractLifeCycle.AbstractLifeCycleListener logSslInfoOnStart(final SslContextFactory sslContextFactory) {
-        return new AbstractLifeCycle.AbstractLifeCycleListener() {
-            @Override
-            public void lifeCycleStarted(LifeCycle event) {
-                logSupportedParameters(sslContextFactory);
-            }
-        };
-    }
-
-    /**
-     * Given a list of protocols available to the JVM that we can serve up to the client, partition
-     * this list into two groups: a group of protocols we can serve and a group where we can't. This
-     * list takes into account protocols that may have been disabled at the JVM level, and also
-     * protocols that the user explicitly wants to include / exclude. The exclude list (blacklist)
-     * is stronger than include list (whitelist), so a protocol that is in both lists will be
-     * excluded. Other than the initial list of available protocols, the other lists are patterns,
-     * such that one can exclude all SSL protocols with a single exclude entry of "SSL.*". This
-     * function will handle both cipher suites and protocols, but for the sake of conciseness, this
-     * documentation only talks about protocols. This implementation is a slimmed down version from
-     * jetty:
-     * https://github.com/eclipse/jetty.project/blob/93a8afcc6bd1a6e0af7bd9f967c97ae1bc3eb718/jetty-util/src/main/java/org/eclipse/jetty/util/ssl/SslSelectionDump.java
-     *
-     * @param supportedByJVM protocols available to the JVM.
-     * @param enabledByJVM protocols enabled by lib/security/java.security.
-     * @param excludedByConfig protocols the user doesn't want to expose.
-     * @param includedByConfig the only protocols the user wants to expose.
-     * @return two entry map of protocols that are enabled (true) and those that have been disabled (false).
-     */
-    static Map<Boolean, List<String>> partitionSupport(
-        String[] supportedByJVM,
-        String[] enabledByJVM,
-        String[] excludedByConfig,
-        String[] includedByConfig
-    ) {
-        final List<Pattern> enabled = Arrays.stream(enabledByJVM).map(Pattern::compile).collect(Collectors.toList());
-        final List<Pattern> disabled = Arrays.stream(excludedByConfig).map(Pattern::compile).collect(Collectors.toList());
-        final List<Pattern> included = Arrays.stream(includedByConfig).map(Pattern::compile).collect(Collectors.toList());
-
-        return Arrays.stream(supportedByJVM)
-            .sorted(Comparator.naturalOrder())
-            .collect(Collectors.partitioningBy(x ->
-                disabled.stream().noneMatch(pat -> pat.matcher(x).matches()) &&
-                    enabled.stream().anyMatch(pat -> pat.matcher(x).matches()) &&
-                    (included.isEmpty() || included.stream().anyMatch(pat -> pat.matcher(x).matches()))
-            ));
-
-    }
-
-    private void logSupportedParameters(SslContextFactory contextFactory) {
+    protected void logSupportedParameters() {
         if (LOGGED.compareAndSet(false, true)) {
-            // When Jetty logs out which protocols are enabled / disabled they include tracing
-            // information to detect if the protocol was disabled at the
-            // JRE/lib/security/java.security level. Since we don't log this information we take the
-            // SSLEngine from our context instead of a pristine version.
-            //
-            // For more info from Jetty:
-            // https://github.com/eclipse/jetty.project/blob/93a8afcc6bd1a6e0af7bd9f967c97ae1bc3eb718/jetty-util/src/main/java/org/eclipse/jetty/util/ssl/SslContextFactory.java#L356-L360
-            final SSLEngine engine = contextFactory.getSslContext().createSSLEngine();
+            try {
+                final SSLContext context = SSLContext.getDefault();
+                final String[] protocols = context.getSupportedSSLParameters().getProtocols();
+                final SSLSocketFactory factory = context.getSocketFactory();
+                final String[] cipherSuites = factory.getSupportedCipherSuites();
+                LOGGER.info("Supported protocols: {}", Arrays.toString(protocols));
+                LOGGER.info("Supported cipher suites: {}", Arrays.toString(cipherSuites));
+            } catch (NoSuchAlgorithmException ignored) {
 
-            final Map<Boolean, List<String>> protocols = partitionSupport(
-                engine.getSupportedProtocols(),
-                engine.getEnabledProtocols(),
-                contextFactory.getExcludeProtocols(),
-                contextFactory.getIncludeProtocols()
-            );
-
-            final Map<Boolean, List<String>> ciphers = partitionSupport(
-                engine.getSupportedCipherSuites(),
-                engine.getEnabledCipherSuites(),
-                contextFactory.getExcludeCipherSuites(),
-                contextFactory.getIncludeCipherSuites()
-            );
-
-            LOGGER.info("Enabled protocols: {}", protocols.get(true));
-            LOGGER.info("Disabled protocols: {}", protocols.get(false));
-            LOGGER.info("Enabled cipher suites: {}", ciphers.get(true));
-            LOGGER.info("Disabled cipher suites: {}", ciphers.get(false));
+            }
         }
     }
 
-    protected SslContextFactory configureSslContextFactory(SslContextFactory factory) {
-        if (keyStorePath != null) {
-            factory.setKeyStorePath(keyStorePath);
-        }
-
-        final String keyStoreType = getKeyStoreType();
-        if (keyStoreType.startsWith("Windows-")) {
-            try {
-                final KeyStore keyStore = KeyStore.getInstance(keyStoreType);
-
-                keyStore.load(null, null);
-                factory.setKeyStore(keyStore);
-            } catch (Exception e) {
-                throw new IllegalStateException("Windows key store not supported", e);
-            }
-        } else {
-            factory.setKeyStoreType(keyStoreType);
-            factory.setKeyStorePassword(keyStorePassword);
-        }
+    protected SslContextFactory buildSslContextFactory() {
+        final SslContextFactory factory = new SslContextFactory(keyStorePath);
+        factory.setKeyStorePassword(keyStorePassword);
+        factory.setKeyStoreType(keyStoreType);
 
         if (keyStoreProvider != null) {
             factory.setKeyStoreProvider(keyStoreProvider);
         }
 
-        final String trustStoreType = getTrustStoreType();
-        if (trustStoreType.startsWith("Windows-")) {
-            try {
-                final KeyStore keyStore = KeyStore.getInstance(trustStoreType);
-
-                keyStore.load(null, null);
-                factory.setTrustStore(keyStore);
-            } catch (Exception e) {
-                throw new IllegalStateException("Windows key store not supported", e);
-            }
-        } else {
-            if (trustStorePath != null) {
-                factory.setTrustStorePath(trustStorePath);
-            }
-            if (trustStorePassword != null) {
-                factory.setTrustStorePassword(trustStorePassword);
-            }
-            factory.setTrustStoreType(trustStoreType);
+        if (trustStorePath != null) {
+            factory.setTrustStorePath(trustStorePath);
         }
+        if (trustStorePassword != null) {
+            factory.setTrustStorePassword(trustStorePassword);
+        }
+        factory.setTrustStoreType(trustStoreType);
 
         if (trustStoreProvider != null) {
             factory.setTrustStoreProvider(trustStoreProvider);
@@ -763,12 +553,12 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
             factory.setKeyManagerPassword(keyManagerPassword);
         }
 
-        if (needClientAuth != null && factory instanceof SslContextFactory.Server) {
-            ((SslContextFactory.Server) factory).setNeedClientAuth(needClientAuth);
+        if (needClientAuth != null) {
+            factory.setNeedClientAuth(needClientAuth);
         }
 
-        if (wantClientAuth != null && factory instanceof SslContextFactory.Server) {
-            ((SslContextFactory.Server) factory).setWantClientAuth(wantClientAuth);
+        if (wantClientAuth != null) {
+            factory.setWantClientAuth(wantClientAuth);
         }
 
         if (certAlias != null) {
@@ -802,23 +592,21 @@ public class HttpsConnectorFactory extends HttpConnectorFactory {
         factory.setRenegotiationAllowed(allowRenegotiation);
         factory.setEndpointIdentificationAlgorithm(endpointIdentificationAlgorithm);
 
+        // TODO: 6/20/13 <coda> -- figure out SSL session caching
+        // This doesn't seem to be hooked up to anything yet in Jetty.
+        // factory.setSessionCachingEnabled(false);
+        // factory.setSslSessionCacheSize(10);
+        // factory.setSslSessionTimeout(10);
+
         factory.setValidateCerts(validateCerts);
         factory.setValidatePeerCerts(validatePeers);
 
         if (supportedProtocols != null) {
-            factory.setIncludeProtocols(supportedProtocols.toArray(new String[0]));
-        }
-
-        if (excludedProtocols != null) {
-            factory.setExcludeProtocols(excludedProtocols.toArray(new String[0]));
+            factory.setIncludeProtocols(Iterables.toArray(supportedProtocols, String.class));
         }
 
         if (supportedCipherSuites != null) {
-            factory.setIncludeCipherSuites(supportedCipherSuites.toArray(new String[0]));
-        }
-
-        if (excludedCipherSuites != null) {
-            factory.setExcludeCipherSuites(excludedCipherSuites.toArray(new String[0]));
+            factory.setIncludeCipherSuites(Iterables.toArray(supportedCipherSuites, String.class));
         }
 
         return factory;

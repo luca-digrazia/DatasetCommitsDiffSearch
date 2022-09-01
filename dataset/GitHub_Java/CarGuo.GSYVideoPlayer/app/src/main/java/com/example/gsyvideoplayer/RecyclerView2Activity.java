@@ -3,35 +3,37 @@ package com.example.gsyvideoplayer;
 import android.graphics.Point;
 import android.os.Build;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
 import android.transition.Explode;
 import android.view.View;
 import android.view.Window;
+import android.widget.AbsListView;
 import android.widget.FrameLayout;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-
+import com.example.gsyvideoplayer.adapter.ListVideoAdapter;
 import com.example.gsyvideoplayer.adapter.RecyclerBaseAdapter;
-import com.example.gsyvideoplayer.databinding.ActivityRecyclerView2Binding;
 import com.example.gsyvideoplayer.holder.RecyclerItemViewHolder;
+import com.example.gsyvideoplayer.listener.SampleListener;
 import com.example.gsyvideoplayer.model.VideoModel;
-import com.shuyu.gsyvideoplayer.GSYVideoManager;
-import com.shuyu.gsyvideoplayer.listener.GSYSampleCallBack;
+import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
-import com.shuyu.gsyvideoplayer.utils.GSYVideoHelper;
-import com.shuyu.gsyvideoplayer.video.NormalGSYVideoPlayer;
+import com.shuyu.gsyvideoplayer.utils.ListVideoUtil;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 小窗口
- */
+import butterknife.BindView;
+import butterknife.ButterKnife;
+
 public class RecyclerView2Activity extends AppCompatActivity {
 
+    @BindView(R.id.list_item_recycler)
+    RecyclerView listItemRecycler;
+    @BindView(R.id.video_full_container)
+    FrameLayout videoFullContainer;
 
     LinearLayoutManager linearLayoutManager;
 
@@ -39,15 +41,9 @@ public class RecyclerView2Activity extends AppCompatActivity {
 
     List<VideoModel> dataList = new ArrayList<>();
 
-    GSYVideoHelper smallVideoHelper;
-
-    GSYVideoHelper.GSYVideoHelperBuilder gsySmallVideoHelperBuilder;
-
+    ListVideoUtil listVideoUtil;
     int lastVisibleItem;
-
     int firstVisibleItem;
-
-    ActivityRecyclerView2Binding binding;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,54 +55,84 @@ public class RecyclerView2Activity extends AppCompatActivity {
         }
 
         super.onCreate(savedInstanceState);
-
-
-        binding = ActivityRecyclerView2Binding.inflate(getLayoutInflater());
-
-        View rootView = binding.getRoot();
-        setContentView(rootView);
-
+        setContentView(R.layout.activity_recycler_view2);
+        ButterKnife.bind(this);
 
         initView();
 
-        binding.listItemRecycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
+        listVideoUtil.setHideActionBar(true);
+
+        //listVideoUtil.setShowFullAnimation(true);
+        //listVideoUtil.setAutoRotation(true);
+        //listVideoUtil.setFullLandFrist(true);
+
+
+        listItemRecycler.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
-            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+            public void onScrollStateChanged(RecyclerView recyclerView, int newState) {
                 super.onScrollStateChanged(recyclerView, newState);
             }
 
             @Override
-            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+            public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
-                firstVisibleItem = linearLayoutManager.findFirstVisibleItemPosition();
+                firstVisibleItem   = linearLayoutManager.findFirstVisibleItemPosition();
                 lastVisibleItem = linearLayoutManager.findLastVisibleItemPosition();
-                Debuger.printfLog("firstVisibleItem " + firstVisibleItem + " lastVisibleItem " + lastVisibleItem);
+                Debuger.printfLog("firstVisibleItem " + firstVisibleItem +" lastVisibleItem " + lastVisibleItem);
                 //大于0说明有播放,//对应的播放列表TAG
-                if (smallVideoHelper.getPlayPosition() >= 0 && smallVideoHelper.getPlayTAG().equals(RecyclerItemViewHolder.TAG)) {
+                if (listVideoUtil.getPlayPosition() >= 0 && listVideoUtil.getPlayTAG().equals(RecyclerItemViewHolder.TAG)) {
                     //当前播放的位置
-                    int position = smallVideoHelper.getPlayPosition();
+                    int position = listVideoUtil.getPlayPosition();
                     //不可视的是时候
                     if ((position < firstVisibleItem || position > lastVisibleItem)) {
                         //如果是小窗口就不需要处理
-                        if (!smallVideoHelper.isSmall() && !smallVideoHelper.isFull()) {
+                        if (!listVideoUtil.isSmall()) {
                             //小窗口
                             int size = CommonUtil.dip2px(RecyclerView2Activity.this, 150);
                             //actionbar为true才不会掉下面去
-                            smallVideoHelper.showSmallVideo(new Point(size, size), true, true);
+                            listVideoUtil.showSmallVideo(new Point(size, size), true, true);
                         }
                     } else {
-                        if (smallVideoHelper.isSmall()) {
-                            smallVideoHelper.smallVideoToNormal();
+                        if (listVideoUtil.isSmall()) {
+                            listVideoUtil.smallVideoToNormal();
                         }
                     }
                 }
             }
         });
+
+        //小窗口关闭被点击的时候回调处理回复页面
+        listVideoUtil.setVideoAllCallBack(new SampleListener() {
+            @Override
+            public void onPrepared(String url, Object... objects) {
+                super.onPrepared(url, objects);
+                Debuger.printfLog("Duration " + listVideoUtil.getDuration() + " CurrentPosition " + listVideoUtil.getCurrentPositionWhenPlaying());
+            }
+
+            @Override
+            public void onQuitSmallWidget(String url, Object... objects) {
+                super.onQuitSmallWidget(url, objects);
+                //大于0说明有播放,//对应的播放列表TAG
+                if (listVideoUtil.getPlayPosition() >= 0 && listVideoUtil.getPlayTAG().equals(ListVideoAdapter.TAG)) {
+                    //当前播放的位置
+                    int position = listVideoUtil.getPlayPosition();
+                    //不可视的是时候
+                    if ((position < firstVisibleItem || position > lastVisibleItem)) {
+                        //释放掉视频
+                        listVideoUtil.releaseVideoPlayer();
+                        recyclerBaseAdapter.notifyDataSetChanged();
+                    }
+                }
+
+            }
+        });
+
+
     }
 
     @Override
     public void onBackPressed() {
-        if (smallVideoHelper.backFromFull()) {
+        if (listVideoUtil.backFromFull()) {
             return;
         }
         super.onBackPressed();
@@ -116,60 +142,24 @@ public class RecyclerView2Activity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        smallVideoHelper.releaseVideoPlayer();
-        GSYVideoManager.releaseAllVideos();
+        listVideoUtil.releaseVideoPlayer();
+        GSYVideoPlayer.releaseAllVideos();
     }
 
     private void initView() {
         linearLayoutManager = new LinearLayoutManager(this);
-        binding.listItemRecycler.setLayoutManager(linearLayoutManager);
+        listItemRecycler.setLayoutManager(linearLayoutManager);
 
         resolveData();
 
         recyclerBaseAdapter = new RecyclerBaseAdapter(this, dataList);
-        binding.listItemRecycler.setAdapter(recyclerBaseAdapter);
+        listItemRecycler.setAdapter(recyclerBaseAdapter);
 
 
-        smallVideoHelper = new GSYVideoHelper(this, new NormalGSYVideoPlayer(this));
-        smallVideoHelper.setFullViewContainer(binding.videoFullContainer);
-
-        //配置
-        gsySmallVideoHelperBuilder = new GSYVideoHelper.GSYVideoHelperBuilder();
-        gsySmallVideoHelperBuilder
-                .setHideActionBar(true)
-                .setHideStatusBar(true)
-                .setNeedLockFull(true)
-                .setCacheWithPlay(true)
-                .setAutoFullWithSize(true)
-                .setShowFullAnimation(true)
-                .setLockLand(true).setVideoAllCallBack(new GSYSampleCallBack() {
-            @Override
-            public void onPrepared(String url, Object... objects) {
-                super.onPrepared(url, objects);
-                Debuger.printfLog("Duration " + smallVideoHelper.getGsyVideoPlayer().getDuration() + " CurrentPosition " + smallVideoHelper.getGsyVideoPlayer().getCurrentPositionWhenPlaying());
-            }
-
-            @Override
-            public void onQuitSmallWidget(String url, Object... objects) {
-                super.onQuitSmallWidget(url, objects);
-                //大于0说明有播放,//对应的播放列表TAG
-                if (smallVideoHelper.getPlayPosition() >= 0 && smallVideoHelper.getPlayTAG().equals(RecyclerItemViewHolder.TAG)) {
-                    //当前播放的位置
-                    int position = smallVideoHelper.getPlayPosition();
-                    //不可视的是时候
-                    if ((position < firstVisibleItem || position > lastVisibleItem)) {
-                        //释放掉视频
-                        smallVideoHelper.releaseVideoPlayer();
-                        recyclerBaseAdapter.notifyDataSetChanged();
-                    }
-                }
-
-            }
-        });
-
-        smallVideoHelper.setGsyVideoOptionBuilder(gsySmallVideoHelperBuilder);
-
-        recyclerBaseAdapter.setVideoHelper(smallVideoHelper, gsySmallVideoHelperBuilder);
+        listVideoUtil = new ListVideoUtil(this);
+        listVideoUtil.setFullViewContainer(videoFullContainer);
+        listVideoUtil.setHideStatusBar(true);
+        recyclerBaseAdapter.setListVideoUtil(listVideoUtil);
 
     }
 

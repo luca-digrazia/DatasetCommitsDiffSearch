@@ -113,7 +113,7 @@ public interface QueryController<E, K> {
                                 .fetch(), query)
                     ;
         }
-        int total = getRepository().createQuery().setParam(query.clone()).count();
+        int total = getRepository().createQuery().setParam(query).count();
         if (total == 0) {
             return PagerResult.of(0, Collections.emptyList(), query);
         }

@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2020 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -49,17 +48,11 @@ public class ResActivityTest {
 		assertThat(activity.injectedString).isEqualTo("test");
 	}
 
-	@Test
-	public void methodInjectedStringNotNull() {
-		assertNotNull(activity.methodInjectedString);
-	}
-
-	@Test
-	public void multiInjectedStringNotNull() {
-		assertNotNull(activity.multiInjectedString);
-	}
-
-	@Test
+	/**
+	 * Cannot be tested right now, because there is no Robolectric shadow class
+	 * for {@link android.view.animation.AnimationUtils AnimationUtils}.
+	 */
+	// @Test
 	public void animNotNull() {
 		assertThat(activity.fadein).isNotNull();
 	}
@@ -76,31 +69,6 @@ public class ResActivityTest {
 	}
 
 	@Test
-	public void methodInjectedAnimationNotNull() {
-		assertNotNull(activity.methodInjectedAnimation);
-	}
-
-	@Test
-	public void multiInjectedAnimationNotNull() {
-		assertNotNull(activity.multiInjectedAnimation);
-	}
-
-	@Test
-	public void drawableResNotNull() {
-		assertNotNull(activity.icon);
-	}
-
-	@Test
-	public void methodInjectedDrawableNotNull() {
-		assertNotNull(activity.methodInjectedDrawable);
-	}
-
-	@Test
-	public void multiInjectedDrawableNotNull() {
-		assertNotNull(activity.multiInjectedDrawable);
-	}
-
-	@Test
 	public void htmlResNotNull() {
 		assertNotNull(activity.helloHtml);
 	}
@@ -112,22 +80,11 @@ public class ResActivityTest {
 
 	@Test
 	public void htmlResCorrectlySet() {
-		assertEquals(Html.fromHtml(activity.getString(R.string.hello_html)).toString(), activity.helloHtml.toString());
+		assertEquals(Html.fromHtml(activity.getString(R.string.hello_html)), activity.helloHtml);
 	}
 
 	@Test
 	public void htmlInjectedCorrectlySet() {
-		assertEquals(Html.fromHtml(activity.getString(R.string.hello_html)).toString(), activity.htmlInjected.toString());
+		assertEquals(Html.fromHtml(activity.getString(R.string.hello_html)), activity.htmlInjected);
 	}
-
-	@Test
-	public void methodInjectedHtmlNotNull() {
-		assertNotNull(activity.methodInjectedHtml);
-	}
-
-	@Test
-	public void multiInjectedHtmlNotNull() {
-		assertNotNull(activity.multiInjectedHtml);
-	}
-
 }

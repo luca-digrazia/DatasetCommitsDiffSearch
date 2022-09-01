@@ -14,28 +14,28 @@
 
 package com.google.devtools.build.lib.starlarkbuildapi;
 
-import com.google.devtools.build.docgen.annot.DocumentMethods;
-import com.google.devtools.build.docgen.annot.StarlarkConstructor;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.starlarkbuildapi.StarlarkConfigApi.BuildSettingApi;
 import com.google.devtools.build.lib.starlarkbuildapi.core.ProviderApi;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.NoneType;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkFunction;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
+import net.starlark.java.annot.StarlarkConstructor;
+import net.starlark.java.annot.StarlarkGlobalLibrary;
 import net.starlark.java.annot.StarlarkMethod;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.NoneType;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkCallable;
-import net.starlark.java.eval.StarlarkFunction;
-import net.starlark.java.eval.StarlarkThread;
 
 /**
  * Interface for a global Starlark library containing rule-related helper and registration
  * functions.
  */
-@DocumentMethods
+@StarlarkGlobalLibrary
 public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
 
   String EXEC_COMPATIBLE_WITH_PARAM = "exec_compatible_with";
@@ -65,6 +65,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
       parameters = {
         @Param(
             name = "doc",
+            type = String.class,
             named = true,
             defaultValue = "''",
             doc =
@@ -82,9 +83,9 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + " })</pre></ul>All fields are optional.",
             allowedTypes = {
               @ParamType(type = Sequence.class, generic1 = String.class),
-              @ParamType(type = Dict.class),
-              @ParamType(type = NoneType.class),
+              @ParamType(type = Dict.class)
             },
+            noneable = true,
             named = true,
             positional = false,
             defaultValue = "None")
@@ -104,6 +105,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
       parameters = {
         @Param(
             name = "implementation",
+            type = StarlarkFunction.class,
             named = true,
             doc =
                 "the Starlark function implementing this rule, must have exactly one parameter: "
@@ -113,6 +115,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "outputs."),
         @Param(
             name = "test",
+            type = Boolean.class,
             named = true,
             defaultValue = "False",
             doc =
@@ -125,11 +128,9 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "for more information."),
         @Param(
             name = "attrs",
-            allowedTypes = {
-              @ParamType(type = Dict.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = Dict.class,
             named = true,
+            noneable = true,
             defaultValue = "None",
             doc =
                 "dictionary to declare all the attributes of the rule. It maps from an attribute "
@@ -150,9 +151,11 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
               @ParamType(type = StarlarkFunction.class) // a function defined in Starlark
             },
             named = true,
+            callbackEnabled = true,
+            noneable = true,
             defaultValue = "None",
             valueWhenDisabled = "None",
-            disableWithFlag = BuildLanguageOptions.INCOMPATIBLE_NO_RULE_OUTPUTS_PARAM,
+            disableWithFlag = FlagIdentifier.INCOMPATIBLE_NO_RULE_OUTPUTS_PARAM,
             doc =
                 "This parameter has been deprecated. Migrate rules to use"
                     + " <code>OutputGroupInfo</code> or <code>attr.output</code> instead. <p>A"
@@ -199,6 +202,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + " <code>ctx.outputs.bin</code>."),
         @Param(
             name = "executable",
+            type = Boolean.class,
             named = true,
             defaultValue = "False",
             doc =
@@ -208,6 +212,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "for more information."),
         @Param(
             name = "output_to_genfiles",
+            type = Boolean.class,
             named = true,
             defaultValue = "False",
             doc =
@@ -216,22 +221,25 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "(e.g. when generating header files for C++), do not set this flag."),
         @Param(
             name = "fragments",
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
             named = true,
+            generic1 = String.class,
             defaultValue = "[]",
             doc =
                 "List of names of configuration fragments that the rule requires "
                     + "in target configuration."),
         @Param(
             name = "host_fragments",
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
             named = true,
+            generic1 = String.class,
             defaultValue = "[]",
             doc =
                 "List of names of configuration fragments that the rule requires "
                     + "in host configuration."),
         @Param(
             name = "_skylark_testable",
+            type = Boolean.class,
             named = true,
             defaultValue = "False",
             doc =
@@ -245,8 +253,9 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "Starlark rules. This flag may be removed in the future."),
         @Param(
             name = TOOLCHAINS_PARAM,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
             named = true,
+            generic1 = String.class,
             defaultValue = "[]",
             doc =
                 "If set, the set of toolchains this rule requires. Toolchains will be "
@@ -254,6 +263,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "implementation via <code>ctx.toolchain</code>."),
         @Param(
             name = "incompatible_use_toolchain_transition",
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             doc =
@@ -262,6 +272,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + " set."),
         @Param(
             name = "doc",
+            type = String.class,
             named = true,
             defaultValue = "''",
             doc =
@@ -269,13 +280,15 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "tools."),
         @Param(
             name = "provides",
+            type = Sequence.class,
             named = true,
             positional = false,
             defaultValue = "[]",
             doc = PROVIDES_DOC),
         @Param(
             name = EXEC_COMPATIBLE_WITH_PARAM,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
+            generic1 = String.class,
             named = true,
             positional = false,
             defaultValue = "[]",
@@ -284,6 +297,9 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "this rule type."),
         @Param(
             name = "analysis_test",
+            allowedTypes = {
+              @ParamType(type = Boolean.class),
+            },
             named = true,
             positional = false,
             defaultValue = "False",
@@ -303,10 +319,8 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + " href='AnalysisTestResultInfo.html'>AnalysisTestResultInfo</a>.</li></ul>"),
         @Param(
             name = "build_setting",
-            allowedTypes = {
-              @ParamType(type = BuildSettingApi.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = BuildSettingApi.class,
+            noneable = true,
             defaultValue = "None",
             named = true,
             positional = false,
@@ -319,6 +333,8 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "added to this rule, with a type corresponding to the value passed in here."),
         @Param(
             name = "cfg",
+            type = Object.class,
+            noneable = true,
             defaultValue = "None",
             named = true,
             positional = false,
@@ -327,31 +343,15 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "apply to its own configuration before analysis."),
         @Param(
             name = "exec_groups",
-            allowedTypes = {
-              @ParamType(type = Dict.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = Dict.class,
             named = true,
+            noneable = true,
             defaultValue = "None",
             positional = false,
-            doc =
-                "Dict of execution group name (string) to <a"
-                    + " href='globals.html#exec_group'><code>exec_group</code>s</a>. If set,"
-                    + " allows rules to run actions on multiple execution platforms within a"
-                    + " single target. See <a href='../../exec-groups.html'>execution groups"
-                    + " documentation</a> for more info."),
-        @Param(
-            name = "compile_one_filetype",
-            defaultValue = "None",
-            allowedTypes = {
-              @ParamType(type = String.class),
-              @ParamType(type = NoneType.class),
-            },
-            named = true,
-            positional = false,
-            doc =
-                "Used by --compile_one_dependency: if multiple rules consume the specified file, "
-                    + "should we choose this rule over others."),
+            enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_EXEC_GROUPS,
+            valueWhenDisabled = "None",
+            // TODO(juliexxia): beef up this description when we actually hook up to something"
+            doc = "Dictionary to declare execution groups. DO NOT USE - not function yet.")
       },
       useStarlarkThread = true)
   StarlarkCallable rule(
@@ -373,7 +373,6 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
       Object buildSetting,
       Object cfg,
       Object execGroups,
-      Object compileOneFiletype,
       StarlarkThread thread)
       throws EvalException;
 
@@ -386,6 +385,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
       parameters = {
         @Param(
             name = "implementation",
+            type = StarlarkFunction.class,
             named = true,
             doc =
                 "A Starlark function that implements this aspect, with exactly two parameters: "
@@ -396,8 +396,9 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "analysis phase for each application of an aspect to a target."),
         @Param(
             name = "attr_aspects",
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
             named = true,
+            generic1 = String.class,
             defaultValue = "[]",
             doc =
                 "List of attribute names. The aspect propagates along dependencies specified in "
@@ -407,11 +408,9 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "target."),
         @Param(
             name = "attrs",
-            allowedTypes = {
-              @ParamType(type = Dict.class),
-              @ParamType(type = NoneType.class),
-            },
+            type = Dict.class,
             named = true,
+            noneable = true,
             defaultValue = "None",
             doc =
                 "A dictionary declaring all the attributes of the aspect. It maps from an "
@@ -428,42 +427,17 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "aspect to only be used with rules that have attributes of the same "
                     + "name, type, and valid values according to the restriction."),
         @Param(
-            name = "required_providers",
-            named = true,
-            defaultValue = "[]",
-            doc =
-                "This attribute allows the aspect to limit its propagation to only the targets "
-                    + "whose rules advertise its required providers. The value must be a "
-                    + "list containing either individual providers or lists of providers but not "
-                    + "both. For example, <code>[[FooInfo], [BarInfo], [BazInfo, QuxInfo]]</code> "
-                    + "is a valid value while <code>[FooInfo, BarInfo, [BazInfo, QuxInfo]]</code> "
-                    + "is not valid."
-                    + ""
-                    + "<p>An unnested list of providers will automatically be converted to a list "
-                    + "containing one list of providers. That is, <code>[FooInfo, BarInfo]</code> "
-                    + "will automatically be converted to <code>[[FooInfo, BarInfo]]</code>."
-                    + ""
-                    + "<p>To make some rule (e.g. <code>some_rule</code>) targets visible to an "
-                    + "aspect, <code>some_rule</code> must advertise all providers from at least "
-                    + "one of the required providers lists. For example, if the "
-                    + "<code>required_providers</code> of an aspect are "
-                    + "<code>[[FooInfo], [BarInfo], [BazInfo, QuxInfo]]</code>, this aspect can "
-                    + "only see <code>some_rule</code> targets if and only if "
-                    + "<code>some_rule</code> provides <code>FooInfo</code> *or* "
-                    + "<code>BarInfo</code> *or* both <code>BazInfo</code> *and* "
-                    + "<code>QuxInfo</code>."),
-        @Param(
             name = "required_aspect_providers",
+            type = Sequence.class,
             named = true,
             defaultValue = "[]",
             doc =
                 "This attribute allows this aspect to inspect other aspects. The value must be a "
-                    + "list containing either individual providers or lists of providers but not "
-                    + "both. For example, <code>[[FooInfo], [BarInfo], [BazInfo, QuxInfo]]</code> "
-                    + "is a valid value while <code>[FooInfo, BarInfo, [BazInfo, QuxInfo]]</code> "
-                    + "is not valid."
+                    + "list of providers, or a list of lists of providers. For example, "
+                    + "<code>[FooInfo, BarInfo, [BazInfo, QuxInfo]]</code> is a "
+                    + "valid value."
                     + ""
-                    + "<p>An unnested list of providers will automatically be converted to a list "
+                    + "<p>A single list of providers will automatically be converted to a list "
                     + "containing one list of providers. That is, "
                     + "<code>[FooInfo, BarInfo]</code> will automatically be converted to "
                     + "<code>[[FooInfo, BarInfo]]</code>. "
@@ -471,39 +445,39 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "<p>To make another aspect (e.g. <code>other_aspect</code>) visible to this "
                     + "aspect, <code>other_aspect</code> must provide all providers from at least "
                     + "one of the lists. In the example of "
-                    + "<code>[[FooInfo], [BarInfo], [BazInfo, QuxInfo]]</code>, this aspect can "
-                    + "only see <code>other_aspect</code> if and only if <code>other_aspect</code> "
+                    + "<code>[FooInfo, BarInfo, [BazInfo, QuxInfo]]</code>, this aspect can only "
+                    + "see <code>other_aspect</code> if and only if <code>other_aspect</code> "
                     + "provides <code>FooInfo</code> *or* <code>BarInfo</code> *or* both "
                     + "<code>BazInfo</code> *and* <code>QuxInfo</code>."),
-        @Param(name = "provides", named = true, defaultValue = "[]", doc = PROVIDES_DOC),
         @Param(
-            name = "requires",
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = StarlarkAspectApi.class)},
+            name = "provides",
+            type = Sequence.class,
             named = true,
-            enableOnlyWithFlag = BuildLanguageOptions.EXPERIMENTAL_REQUIRED_ASPECTS,
             defaultValue = "[]",
-            valueWhenDisabled = "[]",
-            doc = "(Experimental) List of aspects required to be propagated before this aspect."),
+            doc = PROVIDES_DOC),
         @Param(
             name = "fragments",
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
             named = true,
+            generic1 = String.class,
             defaultValue = "[]",
             doc =
                 "List of names of configuration fragments that the aspect requires "
                     + "in target configuration."),
         @Param(
             name = "host_fragments",
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
             named = true,
+            generic1 = String.class,
             defaultValue = "[]",
             doc =
                 "List of names of configuration fragments that the aspect requires "
                     + "in host configuration."),
         @Param(
             name = TOOLCHAINS_PARAM,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
             named = true,
+            generic1 = String.class,
             defaultValue = "[]",
             doc =
                 "If set, the set of toolchains this rule requires. Toolchains will be "
@@ -511,6 +485,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "implementation via <code>ctx.toolchain</code>."),
         @Param(
             name = "incompatible_use_toolchain_transition",
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             doc =
@@ -519,6 +494,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + " set."),
         @Param(
             name = "doc",
+            type = String.class,
             named = true,
             defaultValue = "''",
             doc =
@@ -526,6 +502,7 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "tools."),
         @Param(
             name = "apply_to_generating_rules",
+            type = Boolean.class,
             named = true,
             positional = false,
             defaultValue = "False",
@@ -545,10 +522,8 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
       StarlarkFunction implementation,
       Sequence<?> attributeAspects,
       Object attrs,
-      Sequence<?> requiredProvidersArg,
       Sequence<?> requiredAspectProvidersArg,
       Sequence<?> providesArg,
-      Sequence<?> requiredAspects,
       Sequence<?> fragments,
       Sequence<?> hostFragments,
       Sequence<?> toolchains,
@@ -566,9 +541,10 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
               + "attributes. The argument must refer to an absolute label. "
               + "Example: <br><pre class=language-python>Label(\"//tools:default\")</pre>",
       parameters = {
-        @Param(name = "label_string", doc = "the label string."),
+        @Param(name = "label_string", type = String.class, doc = "the label string."),
         @Param(
             name = "relative_to_caller_repository",
+            type = Boolean.class,
             defaultValue = "False",
             named = true,
             positional = false,
@@ -582,46 +558,38 @@ public interface StarlarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "Label() call appears.")
       },
       useStarlarkThread = true)
-  @StarlarkConstructor
+  @StarlarkConstructor(objectType = Label.class)
   Label label(String labelString, Boolean relativeToCallerRepository, StarlarkThread thread)
       throws EvalException;
 
   @StarlarkMethod(
       name = "exec_group",
+      // TODO(juliexxia); uncomment or remove based on resolution of b/152637857
+      // enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_EXEC_GROUPS,
       doc =
-          "<i>experimental</i> Creates an <a href='../../exec-groups.html'>execution group</a> "
-              + "which can be used to create actions for a specific execution platform during rule "
-              + "implementation.",
+          "<i>experimental</i> Creates an execution group which can be used to create"
+              + "actions for a specific execution platform during rule implementation. This is "
+              + "ongoing work and not yet functional - DO NOT USE.",
       parameters = {
         @Param(
             name = TOOLCHAINS_PARAM,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
+            generic1 = String.class,
             named = true,
             positional = false,
             defaultValue = "[]",
             doc = "<i>Experimental</i> The set of toolchains this execution group requires."),
         @Param(
             name = EXEC_COMPATIBLE_WITH_PARAM,
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = String.class)},
+            type = Sequence.class,
+            generic1 = String.class,
             named = true,
             positional = false,
             defaultValue = "[]",
             doc = "<i>Experimental</i> A list of constraints on the execution platform."),
-        @Param(
-            name = "copy_from_rule",
-            defaultValue = "False",
-            named = true,
-            positional = false,
-            doc =
-                "<i>Experimental</i> If set to true, this exec group inherits the toolchains and "
-                    + "constraints of the rule to which this group is attached. If set to any "
-                    + "other string this will throw an error.")
       },
       useStarlarkThread = true)
   ExecGroupApi execGroup(
-      Sequence<?> execCompatibleWith,
-      Sequence<?> toolchains,
-      Boolean copyFromRule,
-      StarlarkThread thread)
+      Sequence<?> execCompatibleWith, Sequence<?> toolchains, StarlarkThread thread)
       throws EvalException;
 }
