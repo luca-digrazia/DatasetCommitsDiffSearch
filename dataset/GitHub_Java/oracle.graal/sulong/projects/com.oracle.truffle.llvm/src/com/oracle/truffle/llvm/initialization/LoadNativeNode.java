@@ -31,8 +31,6 @@ package com.oracle.truffle.llvm.initialization;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleFile;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -44,27 +42,22 @@ import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 public final class LoadNativeNode extends RootNode {
 
     final String sourceName;
-    final TruffleFile file;
-    @CompilerDirectives.CompilationFinal
-    TruffleLanguage.ContextReference<LLVMContext> ctxRef;
+    final CallTarget callTarget;
+    final LLVMContext context;
 
-    private LoadNativeNode(String name, FrameDescriptor rootFrame, LLVMLanguage language, TruffleFile file) {
+    private LoadNativeNode(String name, FrameDescriptor rootFrame, LLVMContext context, LLVMLanguage language, CallTarget callTarget) {
         super(language, rootFrame);
-        this.file = file;
+        this.callTarget = callTarget;
         this.sourceName = name;
+        this.context = context;
     }
 
-    public static LoadNativeNode create(String name, FrameDescriptor rootFrame, LLVMLanguage language, TruffleFile file) {
-        return new LoadNativeNode(name, rootFrame, language, file);
+    public static LoadNativeNode create(String name, FrameDescriptor rootFrame, LLVMContext context, LLVMLanguage language, CallTarget callTarget) {
+        return new LoadNativeNode(name, rootFrame, context, language, callTarget);
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        if (ctxRef == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.ctxRef = lookupContextReference(LLVMLanguage.class);
-        }
-
         LoadModulesNode.LLVMLoadingPhase phase;
         if (frame.getArguments().length > 0 && (frame.getArguments()[0] instanceof LoadModulesNode.LLVMLoadingPhase)) {
             phase = (LoadModulesNode.LLVMLoadingPhase) frame.getArguments()[0];
@@ -73,18 +66,17 @@ public final class LoadNativeNode extends RootNode {
         }
 
         if (LoadModulesNode.LLVMLoadingPhase.INIT_SYMBOLS.isActive(phase)) {
-            LLVMContext context = ctxRef.get();
-            parseAndInitialiseNativeLib(context);
+            addLibraryHandler(callTarget.call());
         }
+
         return null;
     }
 
     @CompilerDirectives.TruffleBoundary
-    private void parseAndInitialiseNativeLib(LLVMContext context) {
+    private void addLibraryHandler(Object library) {
         NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
         if (nfiContextExtension != null) {
-            CallTarget callTarget = nfiContextExtension.parseNativeLibrary(file, context);
-            nfiContextExtension.addLibraryHandles(callTarget.call());
+            nfiContextExtension.addLibraryHandles(library);
         }
     }
 
