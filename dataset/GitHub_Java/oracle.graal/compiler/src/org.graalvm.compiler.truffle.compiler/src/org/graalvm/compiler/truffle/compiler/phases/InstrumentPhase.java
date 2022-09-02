@@ -25,11 +25,6 @@
 package org.graalvm.compiler.truffle.compiler.phases;
 
 import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InstrumentBranches;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InstrumentBranchesPerInlineSite;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InstrumentBoundaries;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InstrumentBoundariesPerInlineSite;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InstrumentationTableSize;
 
 import java.lang.reflect.Method;
 import java.util.AbstractMap;
@@ -86,14 +81,14 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
     }
 
     private static final String[] OMITTED_STACK_PATTERNS = new String[]{
-                    asStackPattern("org.graalvm.compiler.truffle.runtime.OptimizedCallTarget", "executeRootNode"),
-                    asStackPattern("org.graalvm.compiler.truffle.runtime.OptimizedCallTarget", "partialEvaluationRoot"),
-                    asStackPattern("org.graalvm.compiler.truffle.runtime.OptimizedCallTarget", "partialEvaluationRootForInlining"),
+                    asStackPattern("org.graalvm.compiler.truffle.runtime.OptimizedCallTarget", "callProxy"),
+                    asStackPattern("org.graalvm.compiler.truffle.runtime.OptimizedCallTarget", "callRoot"),
+                    asStackPattern("org.graalvm.compiler.truffle.runtime.OptimizedCallTarget", "callInlined"),
                     asStackPattern("org.graalvm.compiler.truffle.runtime.OptimizedCallTarget", "callDirect"),
                     asStackPattern("org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode", "call"),
     };
     private final Instrumentation instrumentation;
-    protected final MethodFilter methodFilter;
+    protected final MethodFilter[] methodFilter;
     protected final SnippetReflectionProvider snippetReflection;
 
     public InstrumentPhase(OptionValues options, SnippetReflectionProvider snippetReflection, Instrumentation instrumentation) {
@@ -101,7 +96,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
         if (filterValue != null) {
             methodFilter = MethodFilter.parse(filterValue);
         } else {
-            methodFilter = MethodFilter.matchNothing();
+            methodFilter = new MethodFilter[0];
         }
         this.snippetReflection = snippetReflection;
         this.instrumentation = instrumentation;
@@ -149,7 +144,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
 
     protected abstract int instrumentationPointSlotCount();
 
-    protected abstract boolean instrumentPerInlineSite();
+    protected abstract boolean instrumentPerInlineSite(org.graalvm.compiler.options.OptionValues options);
 
     protected abstract Point createPoint(int id, int startIndex, Node n);
 
@@ -200,13 +195,13 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
          * we discriminate nodes by their inlining site, or only by the method in which they were
          * defined.
          */
-        private static String filterAndEncode(MethodFilter methodFilter, Node node, InstrumentPhase phase) {
+        private static String filterAndEncode(MethodFilter[] methodFilter, Node node, InstrumentPhase phase) {
             NodeSourcePosition pos = node.getNodeSourcePosition();
             if (pos != null) {
-                if (!methodFilter.matches(pos.getMethod())) {
+                if (!MethodFilter.matches(methodFilter, pos.getMethod())) {
                     return null;
                 }
-                if (phase.instrumentPerInlineSite()) {
+                if (phase.instrumentPerInlineSite(node.getOptions())) {
                     StringBuilder sb = new StringBuilder();
                     while (pos != null) {
                         MetaUtil.appendLocation(sb.append("at "), pos.getMethod(), pos.getBCI());
@@ -226,8 +221,8 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
             }
         }
 
-        private static String prettify(String key, Point p) {
-            if (p.isPrettified()) {
+        private static String prettify(org.graalvm.compiler.options.OptionValues options, String key, Point p) {
+            if (p.isPrettified(options)) {
                 StringBuilder sb = new StringBuilder();
                 NodeSourcePosition pos = p.getPosition();
                 NodeSourcePosition lastPos = null;
@@ -279,7 +274,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
             }
         }
 
-        public synchronized ArrayList<String> accessTableToList() {
+        public synchronized ArrayList<String> accessTableToList(org.graalvm.compiler.options.OptionValues options) {
 
             /*
              * Using sortedEntries.addAll(pointMap.entrySet(), instead of the iteration below, is
@@ -303,7 +298,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
 
             ArrayList<String> list = new ArrayList<>();
             for (Map.Entry<String, Point> entry : sortedEntries) {
-                list.add(prettify(entry.getKey(), entry.getValue()) + CodeUtil.NEW_LINE + entry.getValue());
+                list.add(prettify(options, entry.getKey(), entry.getValue()) + CodeUtil.NEW_LINE + entry.getValue());
             }
             return list;
         }
@@ -331,7 +326,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
             return histogram;
         }
 
-        public synchronized void dumpAccessTable() {
+        public synchronized void dumpAccessTable(org.graalvm.compiler.options.OptionValues options) {
             // Dump accumulated profiling information.
             TTY.println("Execution profile (sorted by hotness)");
             TTY.println("=====================================");
@@ -339,13 +334,13 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
                 TTY.println(line);
             }
             TTY.println();
-            for (String line : accessTableToList()) {
+            for (String line : accessTableToList(options)) {
                 TTY.println(line);
                 TTY.println();
             }
         }
 
-        public synchronized Point getOrCreatePoint(MethodFilter methodFilter, Node n, InstrumentPhase phase) {
+        public synchronized Point getOrCreatePoint(MethodFilter[] methodFilter, Node n, InstrumentPhase phase) {
             String key = filterAndEncode(methodFilter, n, phase);
             if (key == null) {
                 return null;
@@ -372,23 +367,6 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
 
         public long[] getAccessTable() {
             return accessTable;
-        }
-    }
-
-    public static final class InstrumentationConfiguration {
-
-        public final boolean instrumentBranches;
-        public final boolean instrumentBranchesPerInlineSite;
-        public final boolean instrumentBoundaries;
-        public final boolean instrumentBoundariesPerInlineSite;
-        public final int instrumentationTableSize;
-
-        public InstrumentationConfiguration(OptionValues options) {
-            this.instrumentBranches = getPolyglotOptionValue(options, InstrumentBranches);
-            this.instrumentBranchesPerInlineSite = getPolyglotOptionValue(options, InstrumentBranchesPerInlineSite);
-            this.instrumentBoundaries = getPolyglotOptionValue(options, InstrumentBoundaries);
-            this.instrumentBoundariesPerInlineSite = getPolyglotOptionValue(options, InstrumentBoundariesPerInlineSite);
-            this.instrumentationTableSize = getPolyglotOptionValue(options, InstrumentationTableSize);
         }
     }
 
@@ -420,7 +398,7 @@ public abstract class InstrumentPhase extends BasePhase<CoreProviders> {
 
         public abstract long getHotness();
 
-        public abstract boolean isPrettified();
+        public abstract boolean isPrettified(org.graalvm.compiler.options.OptionValues options);
 
         public boolean shouldInclude() {
             return true;

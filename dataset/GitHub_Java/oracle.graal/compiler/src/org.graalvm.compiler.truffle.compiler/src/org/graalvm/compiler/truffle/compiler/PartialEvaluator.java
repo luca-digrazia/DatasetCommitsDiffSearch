@@ -44,12 +44,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
@@ -751,18 +749,18 @@ public abstract class PartialEvaluator {
 
         private static final ThreadLocal<PerformanceInformationHandler> instance = new ThreadLocal<>();
         private final OptionValues options;
-        private Set<PolyglotCompilerOptions.PerformanceWarningKind> warningKinds = EnumSet.noneOf(PolyglotCompilerOptions.PerformanceWarningKind.class);
+        private boolean warningSeen;
 
         private PerformanceInformationHandler(OptionValues options) {
             this.options = options;
         }
 
-        private void addWarning(PolyglotCompilerOptions.PerformanceWarningKind warningKind) {
-            warningKinds.add(warningKind);
+        private void setWarnings(boolean hasWarnings) {
+            warningSeen = hasWarnings;
         }
 
-        private Set<PolyglotCompilerOptions.PerformanceWarningKind> getWarnings() {
-            return warningKinds;
+        private boolean hasWarnings() {
+            return warningSeen;
         }
 
         @Override
@@ -778,16 +776,14 @@ public abstract class PartialEvaluator {
             return handler;
         }
 
-        public static boolean isEnabled(PolyglotCompilerOptions.PerformanceWarningKind warningKind) {
+        public static boolean isEnabled() {
             PerformanceInformationHandler handler = instance.get();
-            return getPolyglotOptionValue(handler.options, TracePerformanceWarnings).contains(warningKind) ||
-                            getPolyglotOptionValue(handler.options, PerformanceWarningsAreFatal).contains(warningKind);
+            return getPolyglotOptionValue(handler.options, TracePerformanceWarnings) || getPolyglotOptionValue(handler.options, PerformanceWarningsAreFatal); // TODO
         }
 
-        public static void logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind warningKind, String callTargetName, List<? extends Node> locations, String details,
-                        Map<String, Object> properties) {
+        public static void logPerformanceWarning(String callTargetName, List<? extends Node> locations, String details, Map<String, Object> properties) {
             PerformanceInformationHandler handler = instance.get();
-            handler.addWarning(warningKind);
+            handler.setWarnings(true);
             logPerformanceWarningImpl(callTargetName, "perf warn", details, properties);
             handler.logPerformanceStackTrace(locations);
         }
@@ -847,41 +843,40 @@ public abstract class PartialEvaluator {
 
         @SuppressWarnings("try")
         void reportPerformanceWarnings(CompilableTruffleAST target, StructuredGraph graph) {
+            if (!isEnabled()) {
+                return;
+            }
             DebugContext debug = graph.getDebug();
             ArrayList<ValueNode> warnings = new ArrayList<>();
-            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.INLINE)) {
-                for (MethodCallTargetNode call : graph.getNodes(MethodCallTargetNode.TYPE)) {
-                    if (call.targetMethod().isNative()) {
-                        continue; // native methods cannot be inlined
-                    }
-                    TruffleCompilerRuntime runtime = TruffleCompilerRuntime.getRuntime();
-                    if (runtime.getInlineKind(call.targetMethod(), true).allowsInlining()) {
-                        logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.INLINE, target.getName(), Arrays.asList(call),
-                                        String.format("not inlined %s call to %s (%s)", call.invokeKind(), call.targetMethod(), call), null);
-                        warnings.add(call);
+            for (MethodCallTargetNode call : graph.getNodes(MethodCallTargetNode.TYPE)) {
+                if (call.targetMethod().isNative()) {
+                    continue; // native methods cannot be inlined
+                }
+                TruffleCompilerRuntime runtime = TruffleCompilerRuntime.getRuntime();
+                if (runtime.getInlineKind(call.targetMethod(), true).allowsInlining()) {
+                    logPerformanceWarning(target.getName(), Arrays.asList(call), String.format("not inlined %s call to %s (%s)", call.invokeKind(), call.targetMethod(), call), null);
+                    warnings.add(call);
+                }
+            }
+
+            EconomicMap<ResolvedJavaType, ArrayList<ValueNode>> groupedByType = EconomicMap.create(Equivalence.DEFAULT);
+            for (InstanceOfNode instanceOf : graph.getNodes().filter(InstanceOfNode.class)) {
+                if (!instanceOf.type().isExact()) {
+                    ResolvedJavaType type = instanceOf.type().getType();
+                    if (isSecondaryType(type)) {
+                        warnings.add(instanceOf);
+                        if (!groupedByType.containsKey(type)) {
+                            groupedByType.put(type, new ArrayList<>());
+                        }
+                        groupedByType.get(type).add(instanceOf);
                     }
                 }
             }
-            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.INSTANCEOF)) {
-                EconomicMap<ResolvedJavaType, ArrayList<ValueNode>> groupedByType = EconomicMap.create(Equivalence.DEFAULT);
-                for (InstanceOfNode instanceOf : graph.getNodes().filter(InstanceOfNode.class)) {
-                    if (!instanceOf.type().isExact()) {
-                        ResolvedJavaType type = instanceOf.type().getType();
-                        if (isSecondaryType(type)) {
-                            warnings.add(instanceOf);
-                            if (!groupedByType.containsKey(type)) {
-                                groupedByType.put(type, new ArrayList<>());
-                            }
-                            groupedByType.get(type).add(instanceOf);
-                        }
-                    }
-                }
-                MapCursor<ResolvedJavaType, ArrayList<ValueNode>> entry = groupedByType.getEntries();
-                while (entry.advance()) {
-                    ResolvedJavaType type = entry.getKey();
-                    String reason = type.isInterface() ? String.format("interface type check: %s", type) : String.format("too deep in class hierarchy: %s", type);
-                    logPerformanceInfo(target.getName(), entry.getValue(), reason, Collections.singletonMap("Nodes", entry.getValue()));
-                }
+            MapCursor<ResolvedJavaType, ArrayList<ValueNode>> entry = groupedByType.getEntries();
+            while (entry.advance()) {
+                ResolvedJavaType type = entry.getKey();
+                String reason = type.isInterface() ? String.format("interface type check: %s", type) : String.format("too deep in class hierarchy: %s", type);
+                logPerformanceInfo(target.getName(), entry.getValue(), reason, Collections.singletonMap("Nodes", entry.getValue()));
             }
 
             if (debug.areScopesEnabled() && !warnings.isEmpty()) {
@@ -892,7 +887,7 @@ public abstract class PartialEvaluator {
                 }
             }
 
-            if (!Collections.disjoint(getWarnings(), getPolyglotOptionValue(options, PerformanceWarningsAreFatal))) { // TODO
+            if (hasWarnings() && getPolyglotOptionValue(options, PerformanceWarningsAreFatal)) { // TODO
                 throw new AssertionError("Performance warning detected and is fatal.");
             }
         }
@@ -919,22 +914,22 @@ public abstract class PartialEvaluator {
         }
 
         static void reportDecisionIsNull(JavaConstant target, JavaConstant callNode) {
-            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.UNREACHABLEDIRECTCALL)) {
-                Map<String, Object> properties = new LinkedHashMap<>();
-                properties.put("callNode", callNode.toValueString());
-                logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.UNREACHABLEDIRECTCALL, target.toValueString(), null,
-                                "A direct call within the Truffle AST is not reachable anymore. Call node could not be inlined.", properties);
+            if (!isEnabled()) {
+                return;
             }
+            Map<String, Object> properties = new LinkedHashMap<>();
+            properties.put("callNode", callNode.toValueString());
+            logPerformanceWarning(target.toValueString(), null, "A direct call within the Truffle AST is not reachable anymore. Call node could not be inlined.", properties);
         }
 
         static void reportCallTargetChanged(JavaConstant target, JavaConstant callNode, TruffleInliningPlan.Decision decision) {
-            if (isEnabled(PolyglotCompilerOptions.PerformanceWarningKind.CALLTARGETCHANGE)) {
-                Map<String, Object> properties = new LinkedHashMap<>();
-                properties.put("originalTarget", decision.getTargetName());
-                properties.put("callNode", callNode.toValueString());
-                logPerformanceWarning(PolyglotCompilerOptions.PerformanceWarningKind.CALLTARGETCHANGE, target.toValueString(), null,
-                                "CallTarget changed during compilation. Call node could not be inlined.", properties);
+            if (!isEnabled()) {
+                return;
             }
+            Map<String, Object> properties = new LinkedHashMap<>();
+            properties.put("originalTarget", decision.getTargetName());
+            properties.put("callNode", callNode.toValueString());
+            logPerformanceWarning(target.toValueString(), null, "CallTarget changed during compilation. Call node could not be inlined.", properties);
         }
     }
 
