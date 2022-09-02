@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,6 +27,7 @@ package com.oracle.graal.pointsto.typestate;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -33,7 +36,6 @@ import java.util.List;
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.flow.context.object.AnalysisObject;
-import com.oracle.graal.pointsto.meta.AnalysisType;
 
 import jdk.vm.ci.common.JVMCIError;
 
@@ -41,11 +43,16 @@ import jdk.vm.ci.common.JVMCIError;
 public class TypeStateUtils {
 
     private static final MethodHandle bitSetArrayAccess;
+    private static final MethodHandle trimToSizeAccess;
     static {
         try {
             Field bitSetArrayField = BitSet.class.getDeclaredField("words");
             bitSetArrayField.setAccessible(true);
             bitSetArrayAccess = MethodHandles.lookup().unreflectGetter(bitSetArrayField);
+
+            Method trimToSizeMethod = BitSet.class.getDeclaredMethod("trimToSize");
+            trimToSizeMethod.setAccessible(true);
+            trimToSizeAccess = MethodHandles.lookup().unreflect(trimToSizeMethod);
         } catch (Throwable t) {
             throw JVMCIError.shouldNotReachHere(t);
         }
@@ -66,6 +73,15 @@ public class TypeStateUtils {
         } catch (Throwable t) {
             throw JVMCIError.shouldNotReachHere(t);
         }
+    }
+
+    static void trimBitSetToSize(BitSet bs) {
+        try {
+            trimToSizeAccess.invokeExact(bs);
+        } catch (Throwable t) {
+            throw JVMCIError.shouldNotReachHere(t);
+        }
+
     }
 
     protected static AnalysisObject[] concat(AnalysisObject[] oa1, AnalysisObject[] oa2) {
@@ -323,9 +339,9 @@ public class TypeStateUtils {
     @SuppressWarnings("RedundantIfStatement")
     static boolean holdsSingleTypeState(AnalysisObject[] objects, int size) {
         assert size > 0;
-        AnalysisType firstType = objects[0].type();
-        AnalysisType lastType = objects[size - 1].type();
-        if (firstType.equals(lastType)) {
+        int firstType = objects[0].getTypeId();
+        int lastType = objects[size - 1].getTypeId();
+        if (firstType == lastType) {
             /* Objects are sorted, first and last have the same type, must be single type. */
             return true;
         }
@@ -362,6 +378,15 @@ public class TypeStateUtils {
     protected static BitSet clear(BitSet bs1, int bitIndex) {
         BitSet bsr = (BitSet) bs1.clone();
         bsr.clear(bitIndex);
+        return bsr;
+    }
+
+    /**
+     * Sets the bit specified by the index to {@code true} without modifying the source.
+     */
+    protected static BitSet set(BitSet bs1, int bitIndex) {
+        BitSet bsr = (BitSet) bs1.clone();
+        bsr.set(bitIndex);
         return bsr;
     }
 
