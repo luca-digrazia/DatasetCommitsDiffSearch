@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -79,7 +79,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     private static final String NODE_REWRITING_ASSUMPTION_NAME = "nodeRewritingAssumption";
     static final String CALL_BOUNDARY_METHOD_NAME = "callProxy";
-    static final String CALL_INLINED_METHOD_NAME = "call";
 
     /** The AST to be executed when this call target is called. */
     private final RootNode rootNode;
@@ -440,18 +439,14 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                 }
             }
             if (task != null) {
-                return maybeWaitForTask(task);
+                boolean allowBackgroundCompilation = !getOptionValue(PolyglotCompilerOptions.PerformanceWarningsAreFatal) &&
+                                !getOptionValue(PolyglotCompilerOptions.CompilationExceptionsAreThrown);
+                boolean mayBeAsynchronous = allowBackgroundCompilation && getOptionValue(PolyglotCompilerOptions.BackgroundCompilation);
+                runtime().finishCompilation(this, task, mayBeAsynchronous);
+                return !mayBeAsynchronous;
             }
         }
         return false;
-    }
-
-    public final boolean maybeWaitForTask(CancellableCompileTask task) {
-        boolean allowBackgroundCompilation = !getOptionValue(PolyglotCompilerOptions.PerformanceWarningsAreFatal) &&
-                        !getOptionValue(PolyglotCompilerOptions.CompilationExceptionsAreThrown);
-        boolean mayBeAsynchronous = allowBackgroundCompilation && getOptionValue(PolyglotCompilerOptions.BackgroundCompilation);
-        runtime().finishCompilation(this, task, mayBeAsynchronous);
-        return !mayBeAsynchronous;
     }
 
     private boolean needsCompile(boolean isLastTierCompilation) {
