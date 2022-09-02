@@ -62,7 +62,7 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 @TruffleLanguage.Registration(id = LLVMLanguage.ID, name = LLVMLanguage.NAME, internal = false, interactive = false, defaultMimeType = LLVMLanguage.LLVM_BITCODE_MIME_TYPE, //
                 byteMimeTypes = {LLVMLanguage.LLVM_BITCODE_MIME_TYPE, LLVMLanguage.LLVM_ELF_SHARED_MIME_TYPE, LLVMLanguage.LLVM_ELF_EXEC_MIME_TYPE}, //
                 characterMimeTypes = {LLVMLanguage.LLVM_BITCODE_BASE64_MIME_TYPE}, fileTypeDetectors = LLVMFileDetector.class, services = {Toolchain.class})
-@ProvidedTags({StandardTags.StatementTag.class, StandardTags.CallTag.class, StandardTags.RootTag.class, DebuggerTags.AlwaysHalt.class})
+@ProvidedTags({StandardTags.StatementTag.class, StandardTags.CallTag.class, StandardTags.RootTag.class, StandardTags.RootBodyTag.class, DebuggerTags.AlwaysHalt.class})
 public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     static final String LLVM_BITCODE_MIME_TYPE = "application/x-llvm-ir-bitcode";
@@ -151,10 +151,9 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
         }
 
         env.registerService(new ToolchainImpl(activeConfiguration.getCapability(ToolchainConfig.class), this));
-        this.contextExtensions = activeConfiguration.createContextExtensions(env, this);
-
         LLVMContext context = new LLVMContext(this, env, getLanguageHome());
         this.nodeFactory = activeConfiguration.createNodeFactory(context);
+        this.contextExtensions = activeConfiguration.createContextExtensions(context);
         return context;
     }
 
