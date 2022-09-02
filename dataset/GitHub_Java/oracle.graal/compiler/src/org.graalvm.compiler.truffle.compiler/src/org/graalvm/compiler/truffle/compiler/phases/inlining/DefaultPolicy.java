@@ -24,69 +24,129 @@
  */
 package org.graalvm.compiler.truffle.compiler.phases.inlining;
 
-import java.util.ArrayList;
-import java.util.List;
+import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
 
-import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.PriorityQueue;
+
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
+import org.graalvm.options.OptionValues;
 
 final class DefaultPolicy implements InliningPolicy {
 
-    private final OptionValues optionValues;
-    private int expandedCount = 0;
+    private static final int MAX_DEPTH = 15;
+    private static final Comparator<CallNode> CALL_NODE_COMPARATOR = (o1, o2) -> Double.compare(o2.getRootRelativeFrequency(), o1.getRootRelativeFrequency());
+    private final OptionValues options;
+    private int expandedCount;
 
-    DefaultPolicy(OptionValues optionValues) {
-        this.optionValues = optionValues;
+    DefaultPolicy(OptionValues options) {
+        this.options = options;
     }
 
-    @Override
-    public void afterExpand(CallNode callNode) {
-        expandedCount += callNode.getIR().getNodeCount();
+    private static PriorityQueue<CallNode> getQueue(CallTree tree, CallNode.State state) {
+        PriorityQueue<CallNode> queue = new PriorityQueue<>(CALL_NODE_COMPARATOR);
+        for (CallNode child : tree.getRoot().getChildren()) {
+            if (child.getState() == state) {
+                queue.add(child);
+            }
+        }
+        return queue;
+    }
+
+    private static void updateQueue(CallNode candidate, PriorityQueue<CallNode> inlineQueue, CallNode.State expanded) {
+        for (CallNode child : candidate.getChildren()) {
+            if (child.getState() == expanded) {
+                inlineQueue.add(child);
+            }
+        }
     }
 
     @Override
     public void run(CallTree tree) {
-        while (expandedCount <= TruffleCompilerOptions.TruffleInliningExpansionBudget.getValue(optionValues)) {
-            final CallNode highestFrequencyNode = getNodeToExpand(tree);
-            if (highestFrequencyNode != null) {
-                highestFrequencyNode.expand();
-            } else {
-                break;
-            }
-        }
-        while (tree.getRoot().getIR().getNodeCount() <= TruffleCompilerOptions.TruffleInliningInliningBudget.getValue(optionValues)) {
-            final CallNode highestFrequencyNode = getNodeToInline(tree);
-            if (highestFrequencyNode != null) {
-                highestFrequencyNode.inline();
-            } else {
-                break;
-            }
-        }
+        expand(tree);
+        analyse(tree.getRoot());
+        inline(tree);
     }
 
-    private CallNode getNodeToInline(CallTree tree) {
-        List<CallNode> edge = new ArrayList<>();
-        gatherEdge(tree.getRoot(), edge, CallNode.State.Expanded, CallNode.State.Inlined, null);
-        edge.sort((o1, o2) -> Double.compare(o2.getRootRelativeFrequency(), o1.getRootRelativeFrequency()));
-        return edge.size() > 0 ? edge.get(0) : null;
-    }
-
-    private CallNode getNodeToExpand(CallTree tree) {
-        List<CallNode> edge = new ArrayList<>();
-        gatherEdge(tree.getRoot(), edge, CallNode.State.Cutoff, CallNode.State.Expanded, CallNode.State.Inlined);
-        edge.sort((o1, o2) -> Double.compare(o2.getRootRelativeFrequency(), o1.getRootRelativeFrequency()));
-        return edge.size() > 0 ? edge.get(0) : null;
-    }
-
-    private void gatherEdge(CallNode node, List<CallNode> edge, CallNode.State state, CallNode.State continueState1, CallNode.State continueState2) {
-        if (node.getState() == state) {
-            edge.add(node);
-            return;
+    private void analyse(CallNode node) {
+        for (CallNode child : node.getChildren()) {
+            analyse(child);
         }
-        if (node.getState() == continueState1 || node.getState() == continueState2) {
+        final Data data = data(node);
+        if (node.getState() == CallNode.State.Cutoff && node.getRecursionDepth() == 0) {
+            data.callDiff = node.getRootRelativeFrequency();
+        }
+        if (node.getState() == CallNode.State.Expanded) {
+            data.callDiff = -1 * node.getRootRelativeFrequency();
             for (CallNode child : node.getChildren()) {
-                gatherEdge(child, edge, state, continueState1, continueState2);
+                if (child.getState() != CallNode.State.Indirect && child.getState() != CallNode.State.Removed) {
+                    data.callDiff += data(child).callDiff;
+                }
+            }
+            if (data.callDiff > 0) {
+                data.callDiff = node.getRootRelativeFrequency();
             }
         }
+    }
+
+    private static Data data(CallNode node) {
+        return (Data) node.getPolicyData();
+    }
+
+    @Override
+    public Object newCallNodeData(CallNode callNode) {
+        return new Data();
+    }
+
+    private void inline(CallTree tree) {
+        final int inliningBudget = getPolyglotOptionValue(options, PolyglotCompilerOptions.InliningInliningBudget);
+        final PriorityQueue<CallNode> inlineQueue = getQueue(tree, CallNode.State.Expanded);
+        CallNode candidate;
+        while ((candidate = inlineQueue.poll()) != null) {
+            if (tree.getRoot().getIR().getNodeCount() + candidate.getIR().getNodeCount() > inliningBudget) {
+                break;
+            }
+            if (data(candidate).callDiff <= 0) {
+                candidate.inline();
+                updateQueue(candidate, inlineQueue, CallNode.State.Expanded);
+            }
+        }
+    }
+
+    private void expand(CallTree tree) {
+        final int expansionBudget = getPolyglotOptionValue(options, PolyglotCompilerOptions.InliningExpansionBudget);
+        final int maximumRecursiveInliningValue = getPolyglotOptionValue(options, PolyglotCompilerOptions.InliningRecursionDepth);
+        expandedCount = tree.getRoot().getIR().getNodeCount();
+        final PriorityQueue<CallNode> expandQueue = getQueue(tree, CallNode.State.Cutoff);
+        CallNode candidate;
+        while ((candidate = expandQueue.poll()) != null) {
+            if (expandedCount > expansionBudget) {
+                break;
+            }
+            if (candidate.isForced()) {
+                doExpand(candidate, expandQueue);
+                continue;
+            }
+            if (candidate.getRecursionDepth() > maximumRecursiveInliningValue || candidate.getDepth() > MAX_DEPTH) {
+                continue;
+            }
+            doExpand(candidate, expandQueue);
+        }
+    }
+
+    private void doExpand(CallNode candidate, PriorityQueue<CallNode> expandQueue) {
+        candidate.expand();
+        expandedCount += candidate.getIR().getNodeCount();
+        updateQueue(candidate, expandQueue, CallNode.State.Cutoff);
+    }
+
+    @Override
+    public void putProperties(CallNode callNode, Map<Object, Object> properties) {
+        properties.put("call diff", data(callNode).callDiff);
+    }
+
+    private static final class Data {
+        double callDiff;
     }
 }
