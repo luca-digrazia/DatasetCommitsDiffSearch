@@ -32,12 +32,12 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
+import com.oracle.truffle.tools.agentscript.impl.AgentScriptInstrument;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Value;
 import static org.junit.Assert.assertNotNull;
 import com.oracle.truffle.tools.agentscript.AgentScript;
-import org.graalvm.polyglot.Engine;
 import org.junit.Assert;
 
 final class AgentObjectFactory extends ProxyLanguage {
@@ -67,25 +67,17 @@ final class AgentObjectFactory extends ProxyLanguage {
         });
     }
 
-    public static Value createAgentObject(Context context) {
+    public static Value createAgentObject(Context c) {
         ProxyLanguage.setDelegate(new AgentObjectFactory());
-
-        // BEGIN: AgentObjectFactory#createAgentObject
-        final Engine engine = context.getEngine();
-        Instrument instrument = engine.getInstruments().get(AgentScript.ID);
+        Instrument instrument = c.getEngine().getInstruments().get(AgentScriptInstrument.ID);
         AgentScript access = instrument.lookup(AgentScript.class);
         assertNotNull("Accessor found", access);
-        Source agentSrc = createAgentSource();
+        Source agentSrc = Source.newBuilder(ProxyLanguage.ID, "", "agent.px").build();
         access.registerAgentScript(agentSrc);
-        // END: AgentObjectFactory#createAgentObject
-
         agentObject = null;
-        Value value = context.eval(ProxyLanguage.ID, "");
+        Value value = c.eval(ProxyLanguage.ID, "");
         assertNotNull("Agent object has been initialized", agentObject);
         return value;
     }
 
-    private static Source createAgentSource() {
-        return Source.newBuilder(ProxyLanguage.ID, "", "agent.px").build();
-    }
 }
