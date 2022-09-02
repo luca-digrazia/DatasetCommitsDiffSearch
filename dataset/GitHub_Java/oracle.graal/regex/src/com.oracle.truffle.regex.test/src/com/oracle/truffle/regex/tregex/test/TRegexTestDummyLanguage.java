@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -55,8 +55,7 @@ public class TRegexTestDummyLanguage extends TruffleLanguage<TRegexTestDummyLang
 
     @Override
     protected CallTarget parse(ParsingRequest parsingRequest) {
-        return getCurrentContext(TRegexTestDummyLanguage.class).getEnv().parseInternal(
-                        Source.newBuilder(RegexLanguage.ID, parsingRequest.getSource().getCharacters(), parsingRequest.getSource().getName()).internal(true).build());
+        return getCurrentContext(TRegexTestDummyLanguage.class).getEnv().parseInternal(Source.newBuilder(RegexLanguage.ID, "", "TRegex Engine Builder Request").internal(true).build());
     }
 
     @Override
@@ -67,11 +66,6 @@ public class TRegexTestDummyLanguage extends TruffleLanguage<TRegexTestDummyLang
     @Override
     protected boolean patchContext(DummyLanguageContext context, Env newEnv) {
         context.patchContext(newEnv);
-        return true;
-    }
-
-    @Override
-    protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
         return true;
     }
 
