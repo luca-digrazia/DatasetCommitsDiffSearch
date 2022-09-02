@@ -30,7 +30,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -43,14 +42,13 @@ import org.graalvm.nativeimage.impl.ProcessPropertiesSupport;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.BaseProcessPropertiesSupport;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.core.windows.headers.Process;
 import com.oracle.svm.core.windows.headers.WinBase;
 
 @Platforms(Platform.WINDOWS.class)
-public class WindowsProcessPropertiesSupport extends BaseProcessPropertiesSupport {
+public class WindowsProcessPropertiesSupport implements ProcessPropertiesSupport {
 
     @Override
     public String getExecutableName() {
