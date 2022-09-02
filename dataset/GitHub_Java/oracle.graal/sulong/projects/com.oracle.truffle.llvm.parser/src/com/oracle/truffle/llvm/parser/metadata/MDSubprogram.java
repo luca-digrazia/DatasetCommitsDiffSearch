@@ -31,8 +31,9 @@ package com.oracle.truffle.llvm.parser.metadata;
 
 import com.oracle.truffle.llvm.parser.listeners.Metadata;
 
-public final class MDSubprogram extends MDNamedLocation implements MDBaseNode {
+public final class MDSubprogram extends MDName implements MDBaseNode {
 
+    private final long line;
     private final boolean isLocalToUnit;
     private final boolean isDefinedInCompileUnit;
     private final long scopeLine;
@@ -41,8 +42,10 @@ public final class MDSubprogram extends MDNamedLocation implements MDBaseNode {
     private final long flags;
     private final boolean isOptimized;
 
+    private MDBaseNode scope;
     private MDBaseNode displayName;
     private MDBaseNode linkageName;
+    private MDBaseNode file;
     private MDBaseNode type;
     private MDBaseNode containingType;
     private MDBaseNode templateParams;
@@ -51,8 +54,7 @@ public final class MDSubprogram extends MDNamedLocation implements MDBaseNode {
     private MDBaseNode compileUnit;
 
     private MDSubprogram(long line, boolean isLocalToUnit, boolean isDefinedInCompileUnit, long scopeLine, long virtuality, long virtualIndex, long flags, boolean isOptimized) {
-        super(line);
-
+        this.line = line;
         this.isLocalToUnit = isLocalToUnit;
         this.isDefinedInCompileUnit = isDefinedInCompileUnit;
         this.scopeLine = scopeLine;
@@ -61,8 +63,10 @@ public final class MDSubprogram extends MDNamedLocation implements MDBaseNode {
         this.flags = flags;
         this.isOptimized = isOptimized;
 
+        this.scope = MDVoidNode.INSTANCE;
         this.displayName = MDVoidNode.INSTANCE;
         this.linkageName = MDVoidNode.INSTANCE;
+        this.file = MDVoidNode.INSTANCE;
         this.type = MDVoidNode.INSTANCE;
         this.containingType = MDVoidNode.INSTANCE;
         this.templateParams = MDVoidNode.INSTANCE;
@@ -82,6 +86,14 @@ public final class MDSubprogram extends MDNamedLocation implements MDBaseNode {
 
     public MDBaseNode getLinkageName() {
         return linkageName;
+    }
+
+    public MDBaseNode getFile() {
+        return file;
+    }
+
+    public long getLine() {
+        return line;
     }
 
     public MDBaseNode getType() {
@@ -128,6 +140,10 @@ public final class MDSubprogram extends MDNamedLocation implements MDBaseNode {
         return declaration;
     }
 
+    public MDBaseNode getScope() {
+        return scope;
+    }
+
     public void setFunction(MDBaseNode function) {
         this.function = function;
     }
@@ -147,11 +163,17 @@ public final class MDSubprogram extends MDNamedLocation implements MDBaseNode {
     @Override
     public void replace(MDBaseNode oldValue, MDBaseNode newValue) {
         super.replace(oldValue, newValue);
+        if (scope == oldValue) {
+            scope = newValue;
+        }
         if (displayName == oldValue) {
             displayName = newValue;
         }
         if (linkageName == oldValue) {
             linkageName = newValue;
+        }
+        if (file == oldValue) {
+            file = newValue;
         }
         if (type == oldValue) {
             type = newValue;
@@ -216,10 +238,10 @@ public final class MDSubprogram extends MDNamedLocation implements MDBaseNode {
 
         final MDSubprogram subprogram = new MDSubprogram(line, localToCompileUnit, definedInCompileUnit, scopeLine, virtuality, virtualIndex, flags, optimized);
 
-        subprogram.setScope(md.getNullable(args[1], subprogram));
+        subprogram.scope = md.getNullable(args[1], subprogram);
         subprogram.setName(md.getNullable(args[2], subprogram));
         subprogram.linkageName = md.getNullable(args[3], subprogram);
-        subprogram.setFile(md.getNullable(args[4], subprogram));
+        subprogram.file = md.getNullable(args[4], subprogram);
         subprogram.type = md.getNullable(args[6], subprogram);
         subprogram.containingType = md.getNullable(args[8 + offsetA], subprogram);
         subprogram.templateParams = md.getNullable(args[13 + offsetB], subprogram);
@@ -267,11 +289,11 @@ public final class MDSubprogram extends MDNamedLocation implements MDBaseNode {
 
         final MDSubprogram subprogram = new MDSubprogram(line, localToCompileUnit, definedInCompileUnit, scopeLine, virtuality, virtualIndex, flags, optimized);
 
-        subprogram.setScope(ParseUtil.resolveReference(args, ARGINDEX_32_SCOPE, subprogram, md));
+        subprogram.scope = ParseUtil.resolveReference(args, ARGINDEX_32_SCOPE, subprogram, md);
         subprogram.setName(ParseUtil.resolveReference(args, ARGINDEX_32_NAME, subprogram, md));
         subprogram.displayName = ParseUtil.resolveReference(args, ARGINDEX_32_DISPLAYNAME, subprogram, md);
         subprogram.linkageName = ParseUtil.resolveReference(args, ARGINDEX_32_LINKAGENAME, subprogram, md);
-        subprogram.setFile(ParseUtil.resolveReference(args, ARGINDEX_32_FILE, subprogram, md));
+        subprogram.file = ParseUtil.resolveReference(args, ARGINDEX_32_FILE, subprogram, md);
         subprogram.type = ParseUtil.resolveReference(args, ARGINDEX_32_TYPE, subprogram, md);
         subprogram.containingType = ParseUtil.resolveReference(args, ARGINDEX_32_CONTAININGTYPE, subprogram, md);
         subprogram.templateParams = ParseUtil.resolveReference(args, ARGINDEX_32_TEMPLATEPARAMS, subprogram, md);
