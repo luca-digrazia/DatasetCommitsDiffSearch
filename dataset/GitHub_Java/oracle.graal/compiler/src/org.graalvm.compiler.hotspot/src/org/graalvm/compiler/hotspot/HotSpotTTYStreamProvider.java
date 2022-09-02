@@ -44,7 +44,6 @@ import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.serviceprovider.IsolateUtil;
 import org.graalvm.compiler.serviceprovider.ServiceProvider;
-import org.graalvm.compiler.word.Word;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
@@ -71,10 +70,6 @@ public class HotSpotTTYStreamProvider implements TTYStreamProvider {
     @Override
     public PrintStream getStream() {
         return Options.LogFile.getStream();
-    }
-
-    static {
-        Word.ensureInitialized();
     }
 
     /**
