@@ -36,7 +36,6 @@ import java.util.Collection;
 import java.util.stream.Stream;
 
 import org.graalvm.polyglot.Context;
-import org.junit.AfterClass;
 import org.junit.AssumptionViolatedException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -47,10 +46,14 @@ import org.junit.runners.Parameterized.Parameters;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 
 @RunWith(Parameterized.class)
-public final class ParserTortureSuite extends GccSuiteBase {
+public final class ParserTortureSuite {
 
     public static final String TEST_DISTRIBUTION = "SULONG_PARSER_TORTURE";
     public static final String SOURCE = "GCC_SOURCE";
+
+    @Parameter(value = 0) public Path path;
+    @Parameter(value = 1) public String testName;
+    @Parameter(value = 2) public String excludeReason;
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
@@ -58,7 +61,6 @@ public final class ParserTortureSuite extends GccSuiteBase {
     }
 
     @Test
-    @Override
     public void test() throws IOException {
         assumeNotExcluded();
         try (Stream<Path> files = Files.walk(path)) {
@@ -75,8 +77,13 @@ public final class ParserTortureSuite extends GccSuiteBase {
         }
     }
 
-    @AfterClass
-    public static void printStatistics() {
-        printStatistics(GccFortranSuite.class, SOURCE);
+    protected void assumeNotExcluded() {
+        if (getExclusionReason() != null) {
+            throw new AssumptionViolatedException("Test excluded: " + getExclusionReason());
+        }
+    }
+
+    private String getExclusionReason() {
+        return excludeReason;
     }
 }

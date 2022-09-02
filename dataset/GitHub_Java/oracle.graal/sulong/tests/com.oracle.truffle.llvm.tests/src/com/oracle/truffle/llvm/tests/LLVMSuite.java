@@ -40,7 +40,6 @@ import org.junit.runners.Parameterized.Parameters;
 import com.oracle.truffle.llvm.tests.options.TestOptions;
 
 @RunWith(Parameterized.class)
-@Parameterized.UseParametersRunnerFactory(BaseSuiteHarness.ExcludingParametersFactory.class)
 public final class LLVMSuite extends BaseSuiteHarness {
 
     public static final String TEST_DISTRIBUTION = "SULONG_LLVM_TEST_SUITE";
@@ -48,7 +47,7 @@ public final class LLVMSuite extends BaseSuiteHarness {
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
-        Collection<Object[]> testlist = TestCaseCollector.collectTestCases(LLVMSuite.class, Paths.get(TestOptions.getTestDistribution(TEST_DISTRIBUTION)), CommonTestUtils.isSulong);
+        Collection<Object[]> testlist = ExternalTestCaseCollector.collectTestCases(LLVMSuite.class, TEST_DISTRIBUTION);
         return testlist;
     }
 

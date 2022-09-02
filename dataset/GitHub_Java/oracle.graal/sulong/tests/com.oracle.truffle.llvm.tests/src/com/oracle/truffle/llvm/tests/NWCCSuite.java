@@ -40,7 +40,6 @@ import org.junit.runners.Parameterized.Parameters;
 import com.oracle.truffle.llvm.tests.options.TestOptions;
 
 @RunWith(Parameterized.class)
-@Parameterized.UseParametersRunnerFactory(BaseSuiteHarness.ExcludingParametersFactory.class)
 public final class NWCCSuite extends BaseSuiteHarness {
 
     public static final String TEST_DISTRIBUTION = "SULONG_NWCC_TEST_SUITE";
@@ -48,7 +47,7 @@ public final class NWCCSuite extends BaseSuiteHarness {
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
-        return TestCaseCollector.collectTestCases(NWCCSuite.class, Paths.get(TestOptions.getTestDistribution(TEST_DISTRIBUTION)), CommonTestUtils.isSulong);
+        return ExternalTestCaseCollector.collectTestCases(NWCCSuite.class, TEST_DISTRIBUTION);
     }
 
     @AfterClass
