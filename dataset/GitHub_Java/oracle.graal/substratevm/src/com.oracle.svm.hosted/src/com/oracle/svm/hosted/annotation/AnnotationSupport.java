@@ -57,12 +57,17 @@ import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.java.ArrayLengthNode;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
+import org.graalvm.compiler.replacements.GraphKit;
 import org.graalvm.compiler.replacements.nodes.BasicObjectCloneNode;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.annotate.Substitute;
+import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.hub.AnnotationTypeSupport;
 import com.oracle.svm.core.jdk.AnnotationSupportConfig;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.util.VMError;
@@ -79,6 +84,7 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
+import sun.reflect.annotation.AnnotationType;
 import sun.reflect.annotation.TypeNotPresentExceptionProxy;
 
 public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitutionType> {
@@ -99,10 +105,10 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
      * class loader. It also has the advantage that it declares SOURCE retention policy, so this
      * interface should not be otherwise present in the bytecode and no other uses should interfere
      * with our mechanism.
-     *
+     * 
      * Note: Ideally we would use a custom marker interface. However, this is impossible as of JDK9
      * since the set of boot modules is fixed at JDK build time and cannot be extended at runtime.
-     *
+     * 
      * This allows us to create an optimized type for the ahead-of-time allocated annotation proxy
      * objects which removes the overhead of storing the annotation values in a HashMap. See
      * {@link AnnotationSupport#getSubstitution(ResolvedJavaType)} for the logic where this
@@ -111,7 +117,7 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
      * before runtime. See {@link AnnotationSubstitutionType#getInterfaces()}. Therefore the
      * annotation proxy objects only implement the annotation interface, together with
      * {@link java.lang.reflect.Proxy} and {@link java.lang.annotation.Annotation}, as expected.
-     *
+     * 
      * The run-time allocated annotations use the default JDK implementation.
      *
      * The downside of having a separate (more efficient) implementation for ahead-of-time allocated
@@ -237,8 +243,8 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
             HostedGraphKit kit = new HostedGraphKit(debug, providers, method);
             StructuredGraph graph = kit.getGraph();
             graph.addAfterFixed(graph.start(), graph.add(new FixedGuardNode(LogicConstantNode.forBoolean(true, graph), DeoptimizationReason.UnreachedCode, DeoptimizationAction.None, true)));
-
-            return kit.finalizeGraph();
+            assert graph.verify();
+            return graph;
         }
     }
 
@@ -293,6 +299,7 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
                 ResolvedJavaMethod generateExceptionMethod = kit.findMethod(TypeNotPresentExceptionProxy.class, "generateException", false);
                 ValueNode exception = kit.createJavaCallWithExceptionAndUnwind(InvokeKind.Virtual, generateExceptionMethod, casted);
                 kit.append(new UnwindNode(exception));
+                kit.mergeUnwinds();
 
                 kit.elsePart();
 
@@ -324,7 +331,8 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
             }
             kit.append(new ReturnNode(loadField));
 
-            return kit.finalizeGraph();
+            assert graph.verify();
+            return graph;
         }
     }
 
@@ -339,11 +347,11 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
             ResolvedJavaType annotationInterfaceType = findAnnotationInterfaceType(annotationType);
             JavaConstant returnValue = providers.getConstantReflection().asJavaClass(annotationInterfaceType);
 
-            HostedGraphKit kit = new HostedGraphKit(debug, providers, method);
+            GraphKit kit = new HostedGraphKit(debug, providers, method);
+            StructuredGraph graph = kit.getGraph();
             ValueNode returnConstant = kit.unique(ConstantNode.forConstant(returnValue, providers.getMetaAccess()));
             kit.append(new ReturnNode(returnConstant));
-
-            return kit.finalizeGraph();
+            return graph;
         }
     }
 
@@ -358,7 +366,7 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
             ResolvedJavaType annotationType = method.getDeclaringClass();
             ResolvedJavaType annotationInterfaceType = findAnnotationInterfaceType(annotationType);
 
-            HostedGraphKit kit = new HostedGraphKit(debug, providers, method);
+            GraphKit kit = new HostedGraphKit(debug, providers, method);
             StructuredGraph graph = kit.getGraph();
             FrameStateBuilder state = new FrameStateBuilder(null, method, graph);
             state.initializeForMethodStart(null, true, providers.getGraphBuilderPlugins());
@@ -430,7 +438,8 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
             }
             kit.append(new ReturnNode(trueValue));
 
-            return kit.finalizeGraph();
+            assert graph.verify();
+            return graph;
         }
 
     }
@@ -445,7 +454,7 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
             assert !Modifier.isStatic(method.getModifiers()) && method.getSignature().getParameterCount(false) == 0;
             ResolvedJavaType annotationType = method.getDeclaringClass();
 
-            HostedGraphKit kit = new HostedGraphKit(debug, providers, method);
+            GraphKit kit = new HostedGraphKit(debug, providers, method);
             StructuredGraph graph = kit.getGraph();
             FrameStateBuilder state = new FrameStateBuilder(null, method, graph);
             state.initializeForMethodStart(null, true, providers.getGraphBuilderPlugins());
@@ -490,7 +499,8 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
             }
             kit.append(new ReturnNode(result));
 
-            return kit.finalizeGraph();
+            assert graph.verify();
+            return graph;
         }
     }
 
@@ -506,7 +516,7 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
             ResolvedJavaType annotationType = method.getDeclaringClass();
             ResolvedJavaType annotationInterfaceType = findAnnotationInterfaceType(annotationType);
 
-            HostedGraphKit kit = new HostedGraphKit(debug, providers, method);
+            GraphKit kit = new HostedGraphKit(debug, providers, method);
             StructuredGraph graph = kit.getGraph();
 
             FrameStateBuilder state = new FrameStateBuilder(null, method, graph);
@@ -516,8 +526,7 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
             String returnValue = "@" + annotationInterfaceType.toJavaName(true);
             ValueNode returnConstant = kit.unique(ConstantNode.forConstant(SubstrateObjectConstant.forObject(returnValue), providers.getMetaAccess()));
             kit.append(new ReturnNode(returnConstant));
-
-            return kit.finalizeGraph();
+            return graph;
         }
     }
 
@@ -564,6 +573,25 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
 
 }
 
+@TargetClass(className = "sun.reflect.annotation.AnnotationType")
+final class Target_sun_reflect_annotation_AnnotationType {
+
+    /**
+     * In JDK this class lazily initializes AnnotationTypes as they are requested.
+     *
+     * In SVM we analyze only the types that are used as {@link java.lang.annotation.Repeatable}
+     * annotations and pre-initialize those.
+     *
+     * If this method fails, introduce missing pre-initialization rules in
+     * {@link AnnotationTypeFeature}.
+     */
+    @Substitute
+    public static AnnotationType getInstance(Class<? extends Annotation> annotationClass) {
+        return ImageSingletons.lookup(AnnotationTypeSupport.class).getInstance(annotationClass);
+    }
+
+}
+
 @AutomaticFeature
 class AnnotationSupportFeature implements Feature {
 
@@ -583,12 +611,12 @@ class AnnotationObjectReplacer implements Function<Object, Object> {
      * Cache the replaced objects to ensure that they are only replaced once. We are using a
      * concurrent hash map because replace() may be called from BigBang.finish(), which is
      * multi-threaded.
-     *
+     * 
      * A side effect of this caching is de-duplication of annotation instances. When running as a
      * native image two equal annotation instances are also identical. On HotSpot that is not true,
      * the two annotation instances, although equal, are actually two distinct objects. Although
      * this is a small deviation from HotSpot semantics it can improve the native image size.
-     *
+     * 
      * If de-duplication is not desired that can be achieved by replacing the ConcurrentHashMap with
      * an IdentityHashMap (and additional access synchronisation).
      */
