@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ package org.graalvm.compiler.replacements.gc;
 
 import static jdk.vm.ci.code.MemoryBarriers.STORE_LOAD;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.FREQUENT_PROBABILITY;
-import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.LIKELY_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.NOT_FREQUENT_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.probability;
 
@@ -49,7 +48,7 @@ import org.graalvm.compiler.nodes.gc.G1ArrayRangePreWriteBarrier;
 import org.graalvm.compiler.nodes.gc.G1PostWriteBarrier;
 import org.graalvm.compiler.nodes.gc.G1PreWriteBarrier;
 import org.graalvm.compiler.nodes.gc.G1ReferentFieldReadBarrier;
-import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode.Address;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
@@ -70,10 +69,25 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
+import jdk.vm.ci.meta.ResolvedJavaType;
+
+/**
+ * Implementation of the write barriers for the G1 garbage collector.
+ */
 public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implements Snippets {
 
     public static final LocationIdentity GC_LOG_LOCATION = NamedLocationIdentity.mutable("GC-Log");
     public static final LocationIdentity GC_INDEX_LOCATION = NamedLocationIdentity.mutable("GC-Index");
+    public static final LocationIdentity SATB_QUEUE_MARKING_LOCATION = NamedLocationIdentity.mutable("GC-Queue-Marking");
+    public static final LocationIdentity SATB_QUEUE_INDEX_LOCATION = NamedLocationIdentity.mutable("GC-Queue-Index");
+    public static final LocationIdentity SATB_QUEUE_BUFFER_LOCATION = NamedLocationIdentity.mutable("GC-Queue-Buffer");
+    public static final LocationIdentity CARD_QUEUE_INDEX_LOCATION = NamedLocationIdentity.mutable("GC-Card-Queue-Index");
+    public static final LocationIdentity CARD_QUEUE_BUFFER_LOCATION = NamedLocationIdentity.mutable("GC-Card-Queue-Buffer");
+
+    protected static final LocationIdentity[] KILLED_PRE_WRITE_BARRIER_STUB_LOCATIONS = new LocationIdentity[]{SATB_QUEUE_INDEX_LOCATION, SATB_QUEUE_BUFFER_LOCATION, GC_LOG_LOCATION,
+                    GC_INDEX_LOCATION};
+    protected static final LocationIdentity[] KILLED_POST_WRITE_BARRIER_STUB_LOCATIONS = new LocationIdentity[]{CARD_QUEUE_INDEX_LOCATION, CARD_QUEUE_BUFFER_LOCATION, GC_LOG_LOCATION,
+                    GC_INDEX_LOCATION, GC_CARD_LOCATION};
 
     public static class Counters {
         Counters(SnippetCounter.Group.Factory factory) {
@@ -101,23 +115,31 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
     @Snippet
     public void g1PreWriteBarrier(Address address, Object object, Object expectedObject, @ConstantParameter boolean doLoad, @ConstantParameter boolean nullCheck,
                     @ConstantParameter int traceStartCycle, @ConstantParameter Counters counters) {
+        satbBarrier(address, object, expectedObject, doLoad, nullCheck, traceStartCycle, counters);
+    }
+
+    @Snippet
+    public void g1ReferentReadBarrier(Address address, Object object, Object expectedObject, @ConstantParameter int traceStartCycle, @ConstantParameter Counters counters) {
+        satbBarrier(address, object, expectedObject, false, false, traceStartCycle, counters);
+    }
+
+    private void satbBarrier(Address address, Object object, Object expectedObject, boolean doLoad, boolean nullCheck,
+                    int traceStartCycle, Counters counters) {
         if (nullCheck) {
             NullCheckNode.nullCheck(address);
         }
         Word thread = getThread();
         verifyOop(object);
-        Object fixedExpectedObject = FixedValueAnchorNode.getObject(expectedObject);
         Word field = Word.fromAddress(address);
-        Pointer previousOop = Word.objectToTrackedPointer(fixedExpectedObject);
-        byte markingValue = thread.readByte(satbQueueMarkingOffset());
+        byte markingValue = thread.readByte(satbQueueMarkingOffset(), SATB_QUEUE_MARKING_LOCATION);
 
         boolean trace = isTracingActive(traceStartCycle);
         int gcCycle = 0;
         if (trace) {
             Pointer gcTotalCollectionsAddress = WordFactory.pointer(gcTotalCollectionsAddress());
-            gcCycle = (int) gcTotalCollectionsAddress.readLong(0);
+            gcCycle = gcTotalCollectionsAddress.readInt(0, LocationIdentity.any());
             log(trace, "[%d] G1-Pre Thread %p Object %p\n", gcCycle, thread.rawValue(), Word.objectToTrackedPointer(object).rawValue());
-            log(trace, "[%d] G1-Pre Thread %p Expected Object %p\n", gcCycle, thread.rawValue(), Word.objectToTrackedPointer(fixedExpectedObject).rawValue());
+            log(trace, "[%d] G1-Pre Thread %p Expected Object %p\n", gcCycle, thread.rawValue(), Word.objectToTrackedPointer(expectedObject).rawValue());
             log(trace, "[%d] G1-Pre Thread %p Field %p\n", gcCycle, thread.rawValue(), field.rawValue());
             log(trace, "[%d] G1-Pre Thread %p Marking %d\n", gcCycle, thread.rawValue(), markingValue);
             log(trace, "[%d] G1-Pre Thread %p DoLoad %d\n", gcCycle, thread.rawValue(), doLoad ? 1L : 0L);
@@ -128,30 +150,36 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
         if (probability(NOT_FREQUENT_PROBABILITY, markingValue != (byte) 0)) {
             // If the previous value has to be loaded (before the write), the load is issued.
             // The load is always issued except the cases of CAS and referent field.
-            if (probability(LIKELY_PROBABILITY, doLoad)) {
-                previousOop = Word.objectToTrackedPointer(field.readObject(0, BarrierType.NONE));
+            Object previousObject;
+            if (doLoad) {
+                previousObject = field.readObject(0, BarrierType.NONE, LocationIdentity.any());
                 if (trace) {
-                    log(trace, "[%d] G1-Pre Thread %p Previous Object %p\n ", gcCycle, thread.rawValue(), previousOop.rawValue());
-                    verifyOop(previousOop.toObject());
+                    log(trace, "[%d] G1-Pre Thread %p Previous Object %p\n ", gcCycle, thread.rawValue(), Word.objectToTrackedPointer(previousObject).rawValue());
+                    verifyOop(previousObject);
                 }
+            } else {
+                previousObject = FixedValueAnchorNode.getObject(expectedObject);
             }
+
             counters.g1EffectivePreWriteBarrierCounter.inc();
             // If the previous value is null the barrier should not be issued.
-            if (probability(FREQUENT_PROBABILITY, previousOop.notEqual(0))) {
+            if (probability(FREQUENT_PROBABILITY, previousObject != null)) {
                 counters.g1ExecutedPreWriteBarrierCounter.inc();
                 // If the thread-local SATB buffer is full issue a native call which will
                 // initialize a new one and add the entry.
                 Word indexAddress = thread.add(satbQueueIndexOffset());
-                Word indexValue = indexAddress.readWord(0);
+                Word indexValue = indexAddress.readWord(0, SATB_QUEUE_INDEX_LOCATION);
                 if (probability(FREQUENT_PROBABILITY, indexValue.notEqual(0))) {
-                    Word bufferAddress = thread.readWord(satbQueueBufferOffset());
+                    Word bufferAddress = thread.readWord(satbQueueBufferOffset(), SATB_QUEUE_BUFFER_LOCATION);
                     Word nextIndex = indexValue.subtract(wordSize());
                     Word logAddress = bufferAddress.add(nextIndex);
-                    // Log the object to be marked as well as update the SATB's buffer next index.
+                    // Log the object to be marked as well as update the SATB's buffer next
+                    // index.
+                    Word previousOop = Word.objectToTrackedPointer(previousObject);
                     logAddress.writeWord(0, previousOop, GC_LOG_LOCATION);
                     indexAddress.writeWord(0, nextIndex, GC_INDEX_LOCATION);
                 } else {
-                    g1PreBarrierStub(previousOop);
+                    g1PreBarrierStub(previousObject);
                 }
             }
         }
@@ -180,7 +208,7 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
         int gcCycle = 0;
         if (trace) {
             Pointer gcTotalCollectionsAddress = WordFactory.pointer(gcTotalCollectionsAddress());
-            gcCycle = (int) gcTotalCollectionsAddress.readLong(0);
+            gcCycle = gcTotalCollectionsAddress.readInt(0, LocationIdentity.any());
             log(trace, "[%d] G1-Post Thread: %p Object: %p\n", gcCycle, thread.rawValue(), Word.objectToTrackedPointer(object).rawValue());
             log(trace, "[%d] G1-Post Thread: %p Field: %p\n", gcCycle, thread.rawValue(), oop.rawValue());
         }
@@ -197,15 +225,7 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
             if (probability(FREQUENT_PROBABILITY, writtenValue.notEqual(0))) {
                 // Calculate the address of the card to be enqueued to the
                 // thread local card queue.
-                UnsignedWord cardBase = oop.unsignedShiftRight(cardTableShift());
-                final long startAddress = cardTableAddress();
-                int displacement = 0;
-                if (((int) startAddress) == startAddress && isCardTableAddressConstant()) {
-                    displacement = (int) startAddress;
-                } else {
-                    cardBase = cardBase.add(WordFactory.unsigned(startAddress));
-                }
-                Word cardAddress = (Word) cardBase.add(displacement);
+                Word cardAddress = cardTableAddress(oop);
 
                 byte cardByte = cardAddress.readByte(0, GC_CARD_LOCATION);
                 counters.g1EffectiveAfterNullPostWriteBarrierCounter.inc();
@@ -216,14 +236,14 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
                     byte cardByteReload = cardAddress.readByte(0, GC_CARD_LOCATION);
                     if (probability(NOT_FREQUENT_PROBABILITY, cardByteReload != dirtyCardValue())) {
                         log(trace, "[%d] G1-Post Thread: %p Card: %p \n", gcCycle, thread.rawValue(), WordFactory.unsigned((int) cardByte).rawValue());
-                        cardAddress.writeByte(0, (byte) 0, GC_CARD_LOCATION);
+                        cardAddress.writeByte(0, dirtyCardValue(), GC_CARD_LOCATION);
                         counters.g1ExecutedPostWriteBarrierCounter.inc();
 
                         // If the thread local card queue is full, issue a native call which will
                         // initialize a new one and add the card entry.
-                        Word indexValue = thread.readWord(cardQueueIndexOffset());
+                        Word indexValue = thread.readWord(cardQueueIndexOffset(), CARD_QUEUE_INDEX_LOCATION);
                         if (probability(FREQUENT_PROBABILITY, indexValue.notEqual(0))) {
-                            Word bufferAddress = thread.readWord(cardQueueBufferOffset());
+                            Word bufferAddress = thread.readWord(cardQueueBufferOffset(), CARD_QUEUE_BUFFER_LOCATION);
                             Word nextIndex = indexValue.subtract(wordSize());
                             Word logAddress = bufferAddress.add(nextIndex);
                             Word indexAddress = thread.add(cardQueueIndexOffset());
@@ -241,77 +261,78 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
     }
 
     @Snippet
-    public void g1ArrayRangePreWriteBarrier(Address address, int length, @ConstantParameter int elementStride) {
+    public void g1ArrayRangePreWriteBarrier(Address address, long length, @ConstantParameter int elementStride) {
         Word thread = getThread();
-        byte markingValue = thread.readByte(satbQueueMarkingOffset());
+        byte markingValue = thread.readByte(satbQueueMarkingOffset(), SATB_QUEUE_MARKING_LOCATION);
         // If the concurrent marker is not enabled or the vector length is zero, return.
-        if (markingValue == (byte) 0 || length == 0) {
+        if (probability(FREQUENT_PROBABILITY, markingValue == (byte) 0 || length == 0)) {
             return;
         }
-        Word bufferAddress = thread.readWord(satbQueueBufferOffset());
+
+        Word bufferAddress = thread.readWord(satbQueueBufferOffset(), SATB_QUEUE_BUFFER_LOCATION);
         Word indexAddress = thread.add(satbQueueIndexOffset());
-        long indexValue = indexAddress.readWord(0).rawValue();
-        final int scale = objectArrayIndexScale();
-        long start = getPointerToFirstArrayElement(address, length, elementStride);
+        long indexValue = indexAddress.readWord(0, SATB_QUEUE_INDEX_LOCATION).rawValue();
+        int scale = objectArrayIndexScale();
+        Word start = getPointerToFirstArrayElement(address, length, elementStride);
 
         for (int i = 0; i < length; i++) {
-            Word arrElemPtr = WordFactory.pointer(start + i * scale);
-            Pointer oop = Word.objectToTrackedPointer(arrElemPtr.readObject(0, BarrierType.NONE));
-            verifyOop(oop.toObject());
-            if (oop.notEqual(0)) {
-                if (indexValue != 0) {
+            Word arrElemPtr = start.add(i * scale);
+            Object previousObject = arrElemPtr.readObject(0, BarrierType.NONE, LocationIdentity.any());
+            verifyOop(previousObject);
+            if (probability(FREQUENT_PROBABILITY, previousObject != null)) {
+                if (probability(FREQUENT_PROBABILITY, indexValue != 0)) {
                     indexValue = indexValue - wordSize();
                     Word logAddress = bufferAddress.add(WordFactory.unsigned(indexValue));
                     // Log the object to be marked as well as update the SATB's buffer next index.
-                    logAddress.writeWord(0, oop, GC_LOG_LOCATION);
+                    Word previousOop = Word.objectToTrackedPointer(previousObject);
+                    logAddress.writeWord(0, previousOop, GC_LOG_LOCATION);
                     indexAddress.writeWord(0, WordFactory.unsigned(indexValue), GC_INDEX_LOCATION);
                 } else {
-                    g1PreBarrierStub(oop);
+                    g1PreBarrierStub(previousObject);
                 }
             }
         }
     }
 
     @Snippet
-    public void g1ArrayRangePostWriteBarrier(Address address, int length, @ConstantParameter int elementStride) {
-        if (length == 0) {
+    public void g1ArrayRangePostWriteBarrier(Address address, long length, @ConstantParameter int elementStride) {
+        if (probability(NOT_FREQUENT_PROBABILITY, length == 0)) {
             return;
         }
+
         Word thread = getThread();
-        Word bufferAddress = thread.readWord(cardQueueBufferOffset());
+        Word bufferAddress = thread.readWord(cardQueueBufferOffset(), CARD_QUEUE_BUFFER_LOCATION);
         Word indexAddress = thread.add(cardQueueIndexOffset());
-        long indexValue = thread.readWord(cardQueueIndexOffset()).rawValue();
+        long indexValue = thread.readWord(cardQueueIndexOffset(), CARD_QUEUE_INDEX_LOCATION).rawValue();
 
-        int cardShift = cardTableShift();
-        final long cardStart = cardTableAddress();
-        long start = getPointerToFirstArrayElement(address, length, elementStride) >>> cardShift;
-        long end = getPointerToLastArrayElement(address, length, elementStride) >>> cardShift;
-        long count = end - start + 1;
+        Word start = cardTableAddress(getPointerToFirstArrayElement(address, length, elementStride));
+        Word end = cardTableAddress(getPointerToLastArrayElement(address, length, elementStride));
 
-        while (count-- > 0) {
-            Word cardAddress = WordFactory.unsigned((start + cardStart) + count);
-            byte cardByte = cardAddress.readByte(0, GC_CARD_LOCATION);
+        Word cur = start;
+        do {
+            byte cardByte = cur.readByte(0, GC_CARD_LOCATION);
             // If the card is already dirty, (hence already enqueued) skip the insertion.
             if (probability(NOT_FREQUENT_PROBABILITY, cardByte != youngCardValue())) {
                 MembarNode.memoryBarrier(STORE_LOAD, GC_CARD_LOCATION);
-                byte cardByteReload = cardAddress.readByte(0, GC_CARD_LOCATION);
+                byte cardByteReload = cur.readByte(0, GC_CARD_LOCATION);
                 if (probability(NOT_FREQUENT_PROBABILITY, cardByteReload != dirtyCardValue())) {
-                    cardAddress.writeByte(0, (byte) 0, GC_CARD_LOCATION);
+                    cur.writeByte(0, dirtyCardValue(), GC_CARD_LOCATION);
                     // If the thread local card queue is full, issue a native call which will
                     // initialize a new one and add the card entry.
-                    if (indexValue != 0) {
+                    if (probability(FREQUENT_PROBABILITY, indexValue != 0)) {
                         indexValue = indexValue - wordSize();
                         Word logAddress = bufferAddress.add(WordFactory.unsigned(indexValue));
                         // Log the object to be scanned as well as update
                         // the card queue's next index.
-                        logAddress.writeWord(0, cardAddress, GC_LOG_LOCATION);
+                        logAddress.writeWord(0, cur, GC_LOG_LOCATION);
                         indexAddress.writeWord(0, WordFactory.unsigned(indexValue), GC_INDEX_LOCATION);
                     } else {
-                        g1PostBarrierStub(cardAddress);
+                        g1PostBarrierStub(cur);
                     }
                 }
             }
-        }
+            cur = cur.add(1);
+        } while (cur.belowOrEqual(end));
     }
 
     protected abstract Word getThread();
@@ -334,11 +355,7 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
 
     protected abstract byte youngCardValue();
 
-    protected abstract long cardTableAddress();
-
-    protected abstract boolean isCardTableAddressConstant();
-
-    protected abstract int cardTableShift();
+    protected abstract Word cardTableAddress(Pointer oop);
 
     protected abstract int logOfHeapRegionGrainBytes();
 
@@ -359,8 +376,12 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
 
     protected abstract ForeignCallDescriptor printfCallDescriptor();
 
+    protected abstract ResolvedJavaType referenceType();
+
+    protected abstract long referentOffset();
+
     private boolean isTracingActive(int traceStartCycle) {
-        return traceStartCycle > 0 && ((Pointer) WordFactory.pointer(gcTotalCollectionsAddress())).readLong(0) > traceStartCycle;
+        return traceStartCycle > 0 && ((Pointer) WordFactory.pointer(gcTotalCollectionsAddress())).readInt(0) > traceStartCycle;
     }
 
     private void log(boolean enabled, String format, long value1, long value2, long value3) {
@@ -380,7 +401,7 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
             Word parentWord = Word.objectToTrackedPointer(parent);
             Word childWord = Word.objectToTrackedPointer(child);
             boolean success = validateOop(validateObjectCallDescriptor(), parentWord, childWord);
-            AssertionNode.assertion(false, success, "Verification ERROR, Parent: %p Child: %p\n", parentWord.rawValue(), childWord.rawValue());
+            AssertionNode.dynamicAssert(success, "Verification ERROR, Parent: %p Child: %p\n", parentWord.rawValue(), childWord.rawValue());
         }
     }
 
@@ -390,8 +411,8 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
         }
     }
 
-    private void g1PreBarrierStub(Pointer previousOop) {
-        g1PreBarrierStub(preWriteBarrierCallDescriptor(), previousOop.toObject());
+    private void g1PreBarrierStub(Object previousObject) {
+        g1PreBarrierStub(preWriteBarrierCallDescriptor(), previousObject);
     }
 
     private void g1PostBarrierStub(Word cardAddress) {
@@ -441,18 +462,15 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
             args.addConst("traceStartCycle", traceStartCycle(barrier.graph()));
             args.addConst("counters", counters);
 
-            templates.template(barrier, args).instantiate(templates.getProviders().getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
+            templates.template(barrier, args).instantiate(templates.getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
         }
 
         public void lower(AbstractTemplates templates, SnippetInfo snippet, G1ReferentFieldReadBarrier barrier, LoweringTool tool) {
             Arguments args = new Arguments(snippet, barrier.graph().getGuardsStage(), tool.getLoweringStage());
-            AddressNode address = barrier.getAddress();
+            // This is expected to be lowered before address lowering
+            OffsetAddressNode address = (OffsetAddressNode) barrier.getAddress();
             args.add("address", address);
-            if (address instanceof OffsetAddressNode) {
-                args.add("object", ((OffsetAddressNode) address).getBase());
-            } else {
-                args.add("object", null);
-            }
+            args.add("object", address.getBase());
 
             ValueNode expected = barrier.getExpectedObject();
             if (expected != null && expected.stamp(NodeView.DEFAULT) instanceof NarrowOopStamp) {
@@ -460,12 +478,10 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
             }
 
             args.add("expectedObject", expected);
-            args.addConst("doLoad", barrier.doLoad());
-            args.addConst("nullCheck", false);
             args.addConst("traceStartCycle", traceStartCycle(barrier.graph()));
             args.addConst("counters", counters);
 
-            templates.template(barrier, args).instantiate(templates.getProviders().getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
+            templates.template(barrier, args).instantiate(templates.getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
         }
 
         public void lower(AbstractTemplates templates, SnippetInfo snippet, G1PostWriteBarrier barrier, LoweringTool tool) {
@@ -494,25 +510,25 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
             args.addConst("traceStartCycle", traceStartCycle(barrier.graph()));
             args.addConst("counters", counters);
 
-            templates.template(barrier, args).instantiate(templates.getProviders().getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
+            templates.template(barrier, args).instantiate(templates.getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
         }
 
         public void lower(AbstractTemplates templates, SnippetInfo snippet, G1ArrayRangePreWriteBarrier barrier, LoweringTool tool) {
             Arguments args = new Arguments(snippet, barrier.graph().getGuardsStage(), tool.getLoweringStage());
             args.add("address", barrier.getAddress());
-            args.add("length", barrier.getLength());
+            args.add("length", barrier.getLengthAsLong());
             args.addConst("elementStride", barrier.getElementStride());
 
-            templates.template(barrier, args).instantiate(templates.getProviders().getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
+            templates.template(barrier, args).instantiate(templates.getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
         }
 
         public void lower(AbstractTemplates templates, SnippetInfo snippet, G1ArrayRangePostWriteBarrier barrier, LoweringTool tool) {
             Arguments args = new Arguments(snippet, barrier.graph().getGuardsStage(), tool.getLoweringStage());
             args.add("address", barrier.getAddress());
-            args.add("length", barrier.getLength());
+            args.add("length", barrier.getLengthAsLong());
             args.addConst("elementStride", barrier.getElementStride());
 
-            templates.template(barrier, args).instantiate(templates.getProviders().getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
+            templates.template(barrier, args).instantiate(templates.getMetaAccess(), barrier, SnippetTemplate.DEFAULT_REPLACER, args);
         }
 
         private static int traceStartCycle(StructuredGraph graph) {
