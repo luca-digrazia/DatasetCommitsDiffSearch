@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,6 @@ import java.util.List;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.cfg.BlockMap;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -81,13 +80,13 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
      * This alias map exists only once and is not part of the block state, so that during iterative
      * loop processing the alias of a node may be changed to another value.
      */
-    protected NodeMap<ValueNode> aliases;
+    protected final NodeMap<ValueNode> aliases;
 
     /**
      * This set allows for a quick check whether a node has inputs that were replaced with "scalar"
      * values.
      */
-    private NodeBitMap hasScalarReplacedInputs;
+    private final NodeBitMap hasScalarReplacedInputs;
 
     /*
      * TODO: if it was possible to introduce your own subclasses of Block and Loop, these maps would
@@ -98,25 +97,24 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
      * The effects accumulated during analysis of nodes. They may be cleared and re-filled during
      * iterative loop processing.
      */
-    protected BlockMap<GraphEffectList> blockEffects;
+    protected final BlockMap<GraphEffectList> blockEffects;
 
     /**
      * Effects that can only be applied after the effects from within the loop have been applied and
      * that must be applied before any effect from after the loop is applied. E.g., updating phis.
      */
-    protected EconomicMap<Loop<Block>, GraphEffectList> loopMergeEffects = EconomicMap.create(Equivalence.IDENTITY);
+    protected final EconomicMap<Loop<Block>, GraphEffectList> loopMergeEffects = EconomicMap.create(Equivalence.IDENTITY);
 
     /**
      * The entry state of loops is needed when loop proxies are processed.
      */
-    private EconomicMap<LoopBeginNode, BlockT> loopEntryStates = EconomicMap.create(Equivalence.IDENTITY);
+    private final EconomicMap<LoopBeginNode, BlockT> loopEntryStates = EconomicMap.create(Equivalence.IDENTITY);
 
     // Intended to be used by read-eliminating phases based on the effects phase.
-    protected EconomicMap<Loop<Block>, LoopKillCache> loopLocationKillCache = EconomicMap.create(Equivalence.IDENTITY);
+    protected final EconomicMap<Loop<Block>, LoopKillCache> loopLocationKillCache = EconomicMap.create(Equivalence.IDENTITY);
 
     protected boolean changed;
     protected final DebugContext debug;
-    protected EffectsClosureMode currentMode;
 
     public EffectsClosure(ScheduleResult schedule, ControlFlowGraph cfg) {
         this.schedule = schedule;
@@ -128,7 +126,6 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
         for (Block block : cfg.getBlocks()) {
             blockEffects.put(block, new GraphEffectList(debug));
         }
-        this.currentMode = EffectsClosureMode.REGULAR_VIRTUALIZATION;
     }
 
     @Override
@@ -276,21 +273,6 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
         return !(node instanceof CommitAllocationNode || node instanceof AllocatedObjectNode || node instanceof BoxNode);
     }
 
-    enum EffectsClosureMode {
-        /**
-         * Regular processing of virtualizable nodes, i.e., try to virtualize them if possible.
-         */
-        REGULAR_VIRTUALIZATION,
-        /**
-         * Stop trying to virtualize allocations since the loop nesting level is reached.
-         */
-        STOP_NEW_VIRTUALIZATIONS_LOOP_NEST,
-        /**
-         * Stop escape analysis for the given loop altogether.
-         */
-        LOOP_NEST_OVERFLOW
-    }
-
     /**
      * Collects the effects of virtualizing the given node.
      *
@@ -333,147 +315,59 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
          * loops and do the first iteration with the (possible) changes from outer loops. If there
          * are no changes we only have to do 1 iteration and are done.
          *
-         * However, the stripping in the innermost loop(s) is only done for new allocations, i.e.
-         * every allocation reached after the loop depth filter is automatically materialized. If
-         * there is an outer allocation that is still virtual materialized in the inner case we
-         * throw an exception and re-do the iterations and materialize everything.
-         *
          */
         BlockT initialStateRemovedKilledLocations = stripKilledLoopLocations(loop, cloneState(initialState));
-        NodeMap<ValueNode> aliasesCopy = null;
-        NodeBitMap hasScalarReplacedInputsCopy = null;
-        BlockMap<GraphEffectList> blockEffectsCopy = null;
-        EconomicMap<Loop<Block>, GraphEffectList> loopMergeEffectsCopy = null;
-        EconomicMap<LoopBeginNode, BlockT> loopEntryStatesCopy = null;
-        EconomicMap<Loop<Block>, LoopKillCache> loopLocationKillCacheCopy = null;
-        BlockT initialStateRemovedKilledLocationsBackup = null;
+        BlockT loopEntryState = initialStateRemovedKilledLocations;
+        BlockT lastMergedState = cloneState(initialStateRemovedKilledLocations);
+        processInitialLoopState(loop, lastMergedState);
+        MergeProcessor mergeProcessor = createMergeProcessor(loop.getHeader());
+        /*
+         * Iterative loop processing: we take the predecessor state as the loop's starting state,
+         * processing the loop contents, merge the states of all loop ends, and check whether the
+         * resulting state is equal to the starting state. If it is, the loop processing has
+         * finished, if not, another iteration is needed.
+         *
+         * This processing converges because the merge processing always makes the starting state
+         * more generic, e.g., adding phis instead of non-phi values.
+         */
+        for (int iteration = 0; iteration < 10; iteration++) {
+            try (Indent i = debug.logAndIndent("================== Process Loop Effects Closure: block:%s begin node:%s", loop.getHeader(), loop.getHeader().getBeginNode())) {
+                LoopInfo<BlockT> info = ReentrantBlockIterator.processLoop(this, loop, cloneState(lastMergedState));
 
-        if (loop.getDepth() == 1) {
+                List<BlockT> states = new ArrayList<>();
+                states.add(initialStateRemovedKilledLocations);
+                states.addAll(info.endStates);
+                doMergeWithoutDead(mergeProcessor, states);
 
-            /*
-             * Find out if we will need the copy versions
-             */
-            boolean initBackUp = false;
-            for (Loop<Block> l : cfg.getLoops()) {
-                if (l.getDepth() > GraalOptions.EscapeAnalysisLoopCutoff.getValue(cfg.graph.getOptions())) {
-                    initBackUp = true;
-                    break;
-                }
-            }
-            if (initBackUp) {
-                initialStateRemovedKilledLocationsBackup = cloneState(initialStateRemovedKilledLocations);
-                aliasesCopy = new NodeMap<>(aliases);
-                hasScalarReplacedInputsCopy = hasScalarReplacedInputs.copy();
-                blockEffectsCopy = new BlockMap<>(cfg);
-                for (Block block : cfg.getBlocks()) {
-                    GraphEffectList copy = new GraphEffectList(debug);
-                    copy.addAll(blockEffects.get(block));
-                    blockEffectsCopy.put(block, copy);
-                }
-                loopMergeEffectsCopy = EconomicMap.create(Equivalence.IDENTITY);
-                loopMergeEffectsCopy.putAll(loopMergeEffects);
+                debug.log("MergeProcessor New State: %s", mergeProcessor.newState);
+                debug.log("===== vs.");
+                debug.log("Last Merged State: %s", lastMergedState);
 
-                loopEntryStatesCopy = EconomicMap.create(Equivalence.IDENTITY);
-                loopEntryStatesCopy.putAll(loopEntryStates);
+                if (mergeProcessor.newState.equivalentTo(lastMergedState)) {
+                    blockEffects.get(loop.getHeader()).insertAll(mergeProcessor.mergeEffects, 0);
+                    loopMergeEffects.put(loop, mergeProcessor.afterMergeEffects);
 
-                loopLocationKillCacheCopy = EconomicMap.create(Equivalence.IDENTITY);
-                loopLocationKillCacheCopy.putAll(loopLocationKillCache);
-            }
-        }
-        while (true) {
-            try {
-                BlockT loopEntryState = initialStateRemovedKilledLocations;
-                BlockT lastMergedState = cloneState(initialStateRemovedKilledLocations);
-                processInitialLoopState(loop, lastMergedState);
-                MergeProcessor mergeProcessor = createMergeProcessor(loop.getHeader());
-                /*
-                 * Iterative loop processing: we take the predecessor state as the loop's starting
-                 * state, processing the loop contents, merge the states of all loop ends, and check
-                 * whether the resulting state is equal to the starting state. If it is, the loop
-                 * processing has finished, if not, another iteration is needed.
-                 *
-                 * This processing converges because the merge processing always makes the starting
-                 * state more generic, e.g., adding phis instead of non-phi values.
-                 */
-                for (int iteration = 0; iteration < 10; iteration++) {
-                    try (Indent i = debug.logAndIndent("================== Process Loop Effects Closure: block:%s begin node:%s", loop.getHeader(), loop.getHeader().getBeginNode())) {
-                        LoopInfo<BlockT> info = ReentrantBlockIterator.processLoop(this, loop, cloneState(lastMergedState));
+                    assert info.exitStates.size() == loop.getLoopExits().size();
+                    loopEntryStates.put((LoopBeginNode) loop.getHeader().getBeginNode(), loopEntryState);
+                    assert assertExitStatesNonEmpty(loop, info);
 
-                        List<BlockT> states = new ArrayList<>();
-                        states.add(initialStateRemovedKilledLocations);
-                        states.addAll(info.endStates);
-                        doMergeWithoutDead(mergeProcessor, states);
-
-                        debug.log("MergeProcessor New State: %s", mergeProcessor.newState);
-                        debug.log("===== vs.");
-                        debug.log("Last Merged State: %s", lastMergedState);
-
-                        if (mergeProcessor.newState.equivalentTo(lastMergedState)) {
-                            blockEffects.get(loop.getHeader()).insertAll(mergeProcessor.mergeEffects, 0);
-                            loopMergeEffects.put(loop, mergeProcessor.afterMergeEffects);
-
-                            assert info.exitStates.size() == loop.getLoopExits().size();
-                            loopEntryStates.put((LoopBeginNode) loop.getHeader().getBeginNode(), loopEntryState);
-                            assert assertExitStatesNonEmpty(loop, info);
-
-                            processKilledLoopLocations(loop, initialStateRemovedKilledLocations, mergeProcessor.newState);
-
-                            if (currentMode == EffectsClosureMode.LOOP_NEST_OVERFLOW) {
-                                /*
-                                 * We are done processing the deep loop nest, reset to regular
-                                 * processing.
-                                 */
-                                currentMode = EffectsClosureMode.REGULAR_VIRTUALIZATION;
-                            }
-                            if (currentMode == EffectsClosureMode.STOP_NEW_VIRTUALIZATIONS_LOOP_NEST && loop.getDepth() == 1) {
-                                /*
-                                 * We are done processing the loop nest with limited EA for nested
-                                 * objects deeper > level, switch back to normal mode.
-                                 */
-                                currentMode = EffectsClosureMode.REGULAR_VIRTUALIZATION;
-                            }
-
-                            return info.exitStates;
-                        } else {
-                            lastMergedState = mergeProcessor.newState;
-                            for (Block block : loop.getBlocks()) {
-                                blockEffects.get(block).clear();
-                                if (block.isLoopHeader()) {
-                                    final GraphEffectList loopEffects = loopMergeEffects.get(block.getLoop());
-                                    if (loopEffects != null) {
-                                        loopEffects.clear();
-                                    }
-                                }
+                    processKilledLoopLocations(loop, initialStateRemovedKilledLocations, mergeProcessor.newState);
+                    return info.exitStates;
+                } else {
+                    lastMergedState = mergeProcessor.newState;
+                    for (Block block : loop.getBlocks()) {
+                        blockEffects.get(block).clear();
+                        if (block.isLoopHeader()) {
+                            final GraphEffectList loopEffects = loopMergeEffects.get(block.getLoop());
+                            if (loopEffects != null) {
+                                loopEffects.clear();
                             }
                         }
                     }
                 }
-            } catch (EffecsClosureOverflowException e) {
-                /*
-                 * We are not yet at the outermost loop, we rethrow the error to actually exit ALL
-                 * cases
-                 */
-                if (loop.getDepth() != 1) {
-                    throw e;
-                }
-
-                aliases = aliasesCopy;
-                hasScalarReplacedInputs = hasScalarReplacedInputsCopy;
-                blockEffects = blockEffectsCopy;
-                loopMergeEffects = loopMergeEffectsCopy;
-                loopEntryStates = loopEntryStatesCopy;
-                loopLocationKillCache = loopLocationKillCacheCopy;
-                initialStateRemovedKilledLocations = initialStateRemovedKilledLocationsBackup;
-                currentMode = EffectsClosureMode.STOP_NEW_VIRTUALIZATIONS_LOOP_NEST;
-                continue;
             }
-            throw new GraalError("too many iterations at %s", loop);
         }
-    }
-
-    static class EffecsClosureOverflowException extends RuntimeException {
-
-        private static final long serialVersionUID = 6449215372268666381L;
+        throw new GraalError("too many iterations at %s", loop);
     }
 
     @SuppressWarnings("unused")
