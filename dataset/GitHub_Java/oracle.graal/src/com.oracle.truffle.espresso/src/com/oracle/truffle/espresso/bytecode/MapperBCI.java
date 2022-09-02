@@ -22,13 +22,13 @@
  */
 package com.oracle.truffle.espresso.bytecode;
 
-import java.util.Arrays;
-
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.meta.EspressoError;
+
+import java.util.Arrays;
 
 /**
  * lightweight map from BCI to array index. The contract is easy, upon lookup, returns the index of
@@ -42,7 +42,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
  */
 public class MapperBCI extends Node {
     @CompilationFinal(dimensions = 1) //
-    private final int[] bcis;
+    private final int[] BCIs;
 
     private final int length;
 
@@ -50,7 +50,7 @@ public class MapperBCI extends Node {
 
     public MapperBCI(LineNumberTable lineNumberTable) {
         this.length = lineNumberTable.getEntries().length;
-        this.bcis = new int[length];
+        this.BCIs = new int[length];
         int i = 0;
         int prev = 0;
         boolean sort = false;
@@ -60,16 +60,16 @@ public class MapperBCI extends Node {
                 sort = true;
             }
             prev = bci;
-            bcis[i++] = bci;
+            BCIs[i++] = bci;
         }
         if (sort) {
-            Arrays.sort(bcis);
+            Arrays.sort(BCIs);
         }
         this.wasSorted = !sort;
     }
 
-    public int[] getBcis() {
-        return bcis;
+    public int[] getBCIs() {
+        return BCIs;
     }
 
     public int getLength() {
@@ -80,14 +80,14 @@ public class MapperBCI extends Node {
      * Use this when initializing the array supported by this Mapper.
      * 
      * @param curIndex loop index if initialization.
-     * @param bci Bci corresponding to current loop.
+     * @param BCI Bci corresponding to current loop.
      * @return The index at which to put the object, in the array supported by this mapper.
      */
-    public int initIndex(int curIndex, int bci) {
+    public int initIndex(int curIndex, int BCI) {
         if (wasSorted) {
             return curIndex;
         } else {
-            return lookup(bci);
+            return lookup(BCI);
         }
     }
 
@@ -118,7 +118,7 @@ public class MapperBCI extends Node {
     }
 
     public int checkNext(int curIndex, int targetBCI) {
-        if (curIndex < length - 1 && targetBCI >= bcis[curIndex + 1]) {
+        if (curIndex < length - 1 && targetBCI >= BCIs[curIndex + 1]) {
             return curIndex + 1;
         }
         return curIndex;
@@ -137,13 +137,13 @@ public class MapperBCI extends Node {
 
         while (low <= high) {
             int mid = (low + high) >>> 1;
-            int midVal = bcis[mid];
+            int midVal = BCIs[mid];
 
-            if (midVal < targetBCI) {
+            if (midVal < targetBCI)
                 low = mid + 1;
-            } else if (midVal > targetBCI) {
+            else if (midVal > targetBCI)
                 high = mid - 1;
-            } else {
+            else {
                 return mid;
             }
         }

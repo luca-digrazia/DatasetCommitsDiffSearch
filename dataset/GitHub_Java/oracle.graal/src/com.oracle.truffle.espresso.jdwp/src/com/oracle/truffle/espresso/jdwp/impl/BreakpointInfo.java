@@ -29,11 +29,9 @@ public interface BreakpointInfo {
 
     RequestFilter getFilter();
 
-    byte getEventKind();
+    void setBreakpoint(Breakpoint bp);
 
-    void addBreakpoint(Breakpoint bp);
-
-    Breakpoint[] getBreakpoints();
+    Breakpoint getBreakpoint();
 
     int getRequestId();
 

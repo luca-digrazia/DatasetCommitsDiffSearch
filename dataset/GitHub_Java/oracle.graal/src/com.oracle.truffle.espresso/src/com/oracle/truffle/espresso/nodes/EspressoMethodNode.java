@@ -27,10 +27,9 @@ import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
+import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 /**
@@ -61,10 +60,10 @@ public abstract class EspressoMethodNode extends EspressoInstrumentableNode impl
             return null;
         }
 
-        LineNumberTableAttribute lineNumberTable = method.getLineNumberTable();
+        LineNumberTable lineNumberTable = method.getLineNumberTable();
 
-        if (lineNumberTable != LineNumberTableAttribute.EMPTY) {
-            LineNumberTableAttribute.Entry[] entries = lineNumberTable.getEntries();
+        if (lineNumberTable != LineNumberTable.EMPTY) {
+            LineNumberTable.Entry[] entries = lineNumberTable.getEntries();
             int startLine = Integer.MAX_VALUE;
             int endLine = 0;
 
@@ -91,14 +90,6 @@ public abstract class EspressoMethodNode extends EspressoInstrumentableNode impl
     @Override
     public final EspressoContext getContext() {
         return method.getContext();
-    }
-
-    public boolean shouldSplit() {
-        return false;
-    }
-
-    public EspressoMethodNode split() {
-        throw EspressoError.shouldNotReachHere();
     }
 
 }

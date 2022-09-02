@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.api.debug.SuspendedEvent;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.jdwp.api.CallFrame;
 
 public class SuspendedInfo {
@@ -32,13 +31,11 @@ public class SuspendedInfo {
     private final CallFrame[] stackFrames;
     private final Object thread;
     private DebuggerCommand.Kind stepKind;
-    private final RootNode callerRootNode;
 
-    SuspendedInfo(SuspendedEvent event, CallFrame[] stackFrames, Object thread, RootNode callerRootNode) {
+    SuspendedInfo(SuspendedEvent event, CallFrame[] stackFrames, Object thread) {
         this.event = event;
         this.stackFrames = stackFrames;
         this.thread = thread;
-        this.callerRootNode = callerRootNode;
     }
 
     public SuspendedEvent getEvent() {
@@ -59,9 +56,5 @@ public class SuspendedInfo {
 
     public DebuggerCommand.Kind getStepKind() {
         return stepKind;
-    }
-
-    public RootNode getCallerRootNode() {
-        return callerRootNode;
     }
 }

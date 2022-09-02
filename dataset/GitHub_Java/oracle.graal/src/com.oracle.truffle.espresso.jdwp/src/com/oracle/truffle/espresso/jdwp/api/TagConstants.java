@@ -22,34 +22,36 @@
  */
 package com.oracle.truffle.espresso.jdwp.api;
 
-public class TagConstants {
+public final class TagConstants {
 
-    public static final byte ARRAY = 91;	        // '[' - an array object (objectID size).
-    public static final byte BYTE = 66;	            // 'B' - a byte value (1 byte).
-    public static final byte CHAR = 67;	            // 'C' - a character value (2 bytes).
-    public static final byte OBJECT = 76;	        // 'L' - an object (objectID size).
-    public static final byte FLOAT = 70;	        // 'F' - a float value (4 bytes).
-    public static final byte DOUBLE = 68;	        // 'D' - a double value (8 bytes).
-    public static final byte INT = 73;	            // 'I' - an int value (4 bytes).
-    public static final byte LONG = 74;	            // 'J' - a long value (8 bytes).
-    public static final byte SHORT = 83;	        // 'S' - a short value (2 bytes).
-    public static final byte VOID = 86;	            // 'V' - a void value (no bytes).
-    public static final byte BOOLEAN = 90;	        // 'Z' - a boolean value (1 byte).
-    public static final byte STRING = 115;	        // 's' - a String object (objectID size).
-    public static final byte THREAD = 116;	        // 't' - a Thread object (objectID size).
-    public static final byte THREAD_GROUP = 103;	// 'g' - a ThreadGroup object (objectID size).
-    public static final byte CLASS_LOADER = 108;	// 'l' - a ClassLoader object (objectID size).
-    public static final byte CLASS_OBJECT = 99;     // 'c' - a class object object (objectID size).
+    public static final byte ARRAY = '[';
+    public static final byte BYTE = 'B';
+    public static final byte CHAR = 'C';
+    public static final byte OBJECT = 'L';
+    public static final byte FLOAT = 'F';
+    public static final byte DOUBLE = 'D';
+    public static final byte INT = 'I';
+    public static final byte LONG = 'J';
+    public static final byte SHORT = 'S';
+    public static final byte VOID = 'V';
+    public static final byte BOOLEAN = 'Z';
+    public static final byte STRING = 's';
+    public static final byte THREAD = 't';
+    public static final byte THREAD_GROUP = 'g';
+    public static final byte CLASS_LOADER = 'l';
+    public static final byte CLASS_OBJECT = 'c';
+
+    private TagConstants() {
+    }
 
     public static boolean isPrimitive(byte tag) {
-        return
-                tag != OBJECT &&
-                tag != STRING &&
-                tag != ARRAY &&
-                tag != THREAD &&
-                tag != THREAD_GROUP &&
-                tag != CLASS_OBJECT &&
-                tag != CLASS_LOADER;
+        return tag != OBJECT &&
+                        tag != STRING &&
+                        tag != ARRAY &&
+                        tag != THREAD &&
+                        tag != THREAD_GROUP &&
+                        tag != CLASS_OBJECT &&
+                        tag != CLASS_LOADER;
     }
 
     public static byte getTagFromPrimitive(Object boxed) {

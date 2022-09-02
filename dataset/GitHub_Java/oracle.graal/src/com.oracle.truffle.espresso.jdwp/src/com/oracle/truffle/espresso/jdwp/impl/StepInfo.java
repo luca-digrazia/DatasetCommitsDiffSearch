@@ -22,16 +22,16 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-public final class StepInfo {
+public class StepInfo {
 
     private final int size;
     private final int depth;
-    private final Object thread;
+    private Object thread;
 
-    public StepInfo(int size, int depth, Object guestThread) {
+    public StepInfo(int size, int depth, Object thread) {
         this.size = size;
         this.depth = depth;
-        this.thread = guestThread;
+        this.thread = thread;
     }
 
     public int getSize() {
@@ -42,7 +42,7 @@ public final class StepInfo {
         return depth;
     }
 
-    public Object getGuestThread() {
+    public Object getThread() {
         return thread;
     }
 }

@@ -72,37 +72,21 @@ public final class DebuggerConnection implements Commands {
     public void stepInto(Object thread, RequestFilter filter) {
         DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.STEP_INTO, filter);
         controller.setCommandRequestId(thread, filter.getRequestId());
-        addBlocking(debuggerCommand);
+        queue.add(debuggerCommand);
     }
 
     @Override
     public void stepOver(Object thread, RequestFilter filter) {
         DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.STEP_OVER, filter);
         controller.setCommandRequestId(thread, filter.getRequestId());
-        addBlocking(debuggerCommand);
+        queue.add(debuggerCommand);
     }
 
     @Override
     public void stepOut(Object thread, RequestFilter filter) {
         DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.STEP_OUT, filter);
         controller.setCommandRequestId(thread, filter.getRequestId());
-        addBlocking(debuggerCommand);
-    }
-
-    // the suspended event instance is only valid while suspended, so
-    // to avoid a race, we have to block until we're sure that the debubgger
-    // command was prepared on the suspended event instance
-    private void addBlocking(DebuggerCommand command) {
-        queue.add(command);
-        synchronized (command) {
-            while (!command.isSubmitted()) {
-                try {
-                    command.wait();
-                } catch (InterruptedException e) {
-                    JDWPLogger.log("could not submit debugger command due to %s", JDWPLogger.LogLevel.ALL, e.getMessage());
-                }
-            }
-        }
+        queue.add(debuggerCommand);
     }
 
     @Override
@@ -159,10 +143,6 @@ public final class DebuggerConnection implements Commands {
                             controller.submitExceptionBreakpoint(debuggerCommand);
                             break;
                     }
-                    synchronized (debuggerCommand) {
-                        debuggerCommand.markSubmitted();
-                        debuggerCommand.notifyAll();
-                    }
                 }
             }
         }
@@ -180,7 +160,7 @@ public final class DebuggerConnection implements Commands {
 
     private class JDWPTransportThread implements Runnable {
 
-        private boolean started;
+        @CompilerDirectives.CompilationFinal private boolean started;
         private RequestedJDWPEvents requestedJDWPEvents = new RequestedJDWPEvents(connection, controller);
         // constant used to allow for initial startup sequence debugger commands to occur before
         // waking up the main Espresso startup thread
@@ -209,9 +189,9 @@ public final class DebuggerConnection implements Commands {
                             if (currentTime > limit) {
                                 started = true;
                                 // allow the main thread to continue starting up the program
-                                SimpleLock lock = controller.getInstrument().getSuspendStartupLock();
+                                Object lock = controller.getInstrument().getSuspendStartupLock();
                                 synchronized (lock) {
-                                    lock.release();
+                                    controller.getInstrument().setStarted();
                                     lock.notifyAll();
                                 }
                                 processPacket(Packet.fromByteArray(connection.readPacket()));

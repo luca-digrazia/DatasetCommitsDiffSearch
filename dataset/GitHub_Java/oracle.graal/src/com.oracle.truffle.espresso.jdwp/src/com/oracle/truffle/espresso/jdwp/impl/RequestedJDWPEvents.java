@@ -86,7 +86,7 @@ public final class RequestedJDWPEvents {
         switch (eventKind) {
             case SINGLE_STEP:
                 StepInfo stepInfo = filter.getStepInfo();
-                Object thread = stepInfo.getGuestThread();
+                Object thread = stepInfo.getThread();
                 switch (stepInfo.getDepth()) {
                     case SteppingConstants.INTO:
                         callback.stepInto(thread, filter);
@@ -267,7 +267,7 @@ public final class RequestedJDWPEvents {
                 int depth = input.readInt();
 
                 StepInfo stepInfo = new StepInfo(size, depth, thread);
-                filter.setStepInfo(stepInfo);
+                filter.addStepInfo(stepInfo);
 
                 JDWPLogger.log("Step command: size= %d, depth=%d", JDWPLogger.LogLevel.STEPPING, size, depth);
                 break;

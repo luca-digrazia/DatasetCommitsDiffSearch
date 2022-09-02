@@ -22,51 +22,44 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.api.CompilerDirectives;
-
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-public class EventFilters {
+public final class EventFilters {
 
-    private static final EventFilters DEFAULT = new EventFilters();
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
-    private ReadWriteLock lock = new ReentrantReadWriteLock();
-
-    // implement using a dynamic array that doesn't resize on each element insert
-    @CompilerDirectives.CompilationFinal(dimensions = 1)
     private RequestFilter[] requestFilters = new RequestFilter[0];
 
-    EventFilters() {}
-
-    public static EventFilters getDefault() {
-        return DEFAULT;
-    }
-
     public void addFilter(RequestFilter filter) {
-        lock.writeLock().lock();
-        RequestFilter[] temp = new RequestFilter[requestFilters.length + 1];
-        System.arraycopy(requestFilters, 0, temp, 0, requestFilters.length);
-        temp[requestFilters.length] = filter;
-        requestFilters = temp;
-        lock.writeLock().unlock();
+        try {
+            lock.writeLock().lock();
+            RequestFilter[] temp = new RequestFilter[requestFilters.length + 1];
+            System.arraycopy(requestFilters, 0, temp, 0, requestFilters.length);
+            temp[requestFilters.length] = filter;
+            requestFilters = temp;
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     public RequestFilter getRequestFilter(int requestId) {
-        lock.readLock().lock();
-        // likely the filters are required from last inserted
-        for (int i = requestFilters.length - 1; i > -1; i--) {
-            RequestFilter filter = requestFilters[i];
-            if (filter != null) {
-                if (filter.getRequestId() == requestId) {
-                    lock.readLock().unlock();
-                    return filter;
+        Lock readLock = lock.readLock();
+        try {
+            readLock.lock();
+            // likely the filters are required from last inserted
+            for (int i = requestFilters.length - 1; i > -1; i--) {
+                RequestFilter filter = requestFilters[i];
+                if (filter != null) {
+                    if (filter.getRequestId() == requestId) {
+                        return filter;
+                    }
                 }
             }
+            return null;
+        } finally {
+            readLock.unlock();
         }
-        lock.readLock().unlock();
-        return null;
     }
-
-
 }

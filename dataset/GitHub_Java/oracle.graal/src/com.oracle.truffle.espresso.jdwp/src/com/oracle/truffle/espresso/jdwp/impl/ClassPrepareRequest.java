@@ -46,8 +46,4 @@ public final class ClassPrepareRequest {
     public Object getThread() {
         return filter.getThread();
     }
-
-    public byte getSuspendPolicy() {
-        return filter.getSuspendPolicy();
-    }
 }

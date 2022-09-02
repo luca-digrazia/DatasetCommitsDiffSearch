@@ -31,40 +31,37 @@ public final class PacketStream {
 
     private final ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
 
-    public PacketStream() {
+    PacketStream() {
         packet = new Packet();
+
     }
 
-    public PacketStream(Packet packet) {
+    PacketStream(Packet packet) {
         this.packet = packet;
     }
 
-    public int getPacketId() {
-        return packet.id;
-    }
-
-    public PacketStream commandPacket() {
+    PacketStream commandPacket() {
         packet.id = Packet.uID;
         return this;
     }
 
-    public PacketStream command(int command) {
+    PacketStream command(int command) {
         packet.cmd = (short) command;
         return this;
     }
 
-    public PacketStream commandSet(int commandSet) {
+    PacketStream commandSet(int commandSet) {
         packet.cmdSet = (short) commandSet;
         return this;
     }
 
-    public PacketStream replyPacket() {
+    PacketStream replyPacket() {
         packet.flags = Packet.Reply;
         packet.errorCode = Packet.ReplyNoError;
         return this;
     }
 
-    public PacketStream id(int id) {
+    PacketStream id(int id) {
         packet.id = id;
         return this;
     }
@@ -74,7 +71,7 @@ public final class PacketStream {
         return this;
     }
 
-    public byte[] prepareForShipment() {
+    byte[] prepareForShipment() {
         packet.data = dataStream.toByteArray();
         return packet.toByteArray();
     }
@@ -128,7 +125,7 @@ public final class PacketStream {
         writeLong(Double.doubleToLongBits(data));
     }
 
-    public void writeByteArray(byte[] data) {
+    void writeByteArray(byte[] data) {
         dataStream.write(data, 0, data.length);
     }
 
@@ -142,18 +139,18 @@ public final class PacketStream {
         }
     }
 
-    public byte readByte() {
+    byte readByte() {
         byte ret = packet.data[readPosition];
         readPosition += 1;
         return ret;
     }
 
-    public boolean readBoolean() {
+    boolean readBoolean() {
         byte ret = readByte();
         return (ret != 0);
     }
 
-    public char readChar() {
+    char readChar() {
         int b1, b2;
 
         b1 = packet.data[readPosition++] & 0xff;
@@ -162,7 +159,7 @@ public final class PacketStream {
         return (char) ((b1 << 8) + b2);
     }
 
-    public short readShort() {
+    short readShort() {
         int b1, b2;
 
         b1 = packet.data[readPosition++] & 0xff;
@@ -171,7 +168,7 @@ public final class PacketStream {
         return (short) ((b1 << 8) + b2);
     }
 
-    public int readInt() {
+    int readInt() {
         int b1, b2, b3, b4;
 
         b1 = packet.data[readPosition++] & 0xff;
@@ -182,7 +179,7 @@ public final class PacketStream {
         return ((b1 << 24) + (b2 << 16) + (b3 << 8) + b4);
     }
 
-    public long readLong() {
+    long readLong() {
         long b1, b2, b3, b4;
         long b5, b6, b7, b8;
 
@@ -199,15 +196,15 @@ public final class PacketStream {
         return ((b1 << 56) + (b2 << 48) + (b3 << 40) + (b4 << 32) + (b5 << 24) + (b6 << 16) + (b7 << 8) + b8);
     }
 
-    public float readFloat() {
+    float readFloat() {
         return Float.intBitsToFloat(readInt());
     }
 
-    public double readDouble() {
+    double readDouble() {
         return Double.longBitsToDouble(readLong());
     }
 
-    public String readString() {
+    String readString() {
         String ret;
         int len = readInt();
 

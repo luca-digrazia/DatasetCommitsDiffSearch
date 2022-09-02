@@ -35,17 +35,18 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
 
     public static final String ID = "jdwp";
 
-    public final SimpleLock suspendStartupLock = new SimpleLock();
+    public final Object suspendStartupLock = new Object();
     private DebuggerController controller;
     private TruffleInstrument.Env env;
     private JDWPContext context;
     private DebuggerConnection connection;
     private Collection<Thread> activeThreads = new ArrayList<>();
+    private boolean isStarted;
 
     @Override
     protected void onCreate(TruffleInstrument.Env instrumentEnv) {
         assert controller == null;
-        controller = new DebuggerController(this);
+        controller = new Controller(this);
         this.env = instrumentEnv;
         this.env.registerService(controller);
     }
@@ -92,9 +93,13 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
             try {
                 doConnect();
             } catch (IOException e) {
-                JDWPLogger.log("Critical failure in establishing jdwp connection: %s", JDWPLogger.LogLevel.ALL, e.getLocalizedMessage());
+                throw new RuntimeException("Failed to prepare for a new JDWP connection", e);
             }
         }
+    }
+
+    public void setStarted() {
+        this.isStarted = true;
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -105,9 +110,8 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
                 doConnect();
                 // take all initial commands from the debugger before resuming to main thread
                 synchronized (suspendStartupLock) {
-                    suspendStartupLock.acquire();
                     try {
-                        while (suspendStartupLock.isLocked()) {
+                        while (!isStarted) {
                             suspendStartupLock.wait();
                         }
                     } catch (InterruptedException e) {
@@ -121,7 +125,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
                 handshakeThread.start();
             }
         } catch (IOException e) {
-            JDWPLogger.log("Critical failure in establishing jdwp connection: %s", JDWPLogger.LogLevel.ALL, e.getLocalizedMessage());
+            throw new RuntimeException("Failed JDWP transsport setup", e);
         }
     }
 
@@ -137,7 +141,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
         try {
             doConnect();
         } catch (IOException e) {
-            JDWPLogger.log("Critical failure in establishing jdwp connection: %s", JDWPLogger.LogLevel.ALL, e.getLocalizedMessage());
+            throw new RuntimeException("JDWP connection setup failed", e);
         }
     }
 
@@ -145,7 +149,14 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
         return context;
     }
 
-    public SimpleLock getSuspendStartupLock() {
+    public Object getSuspendStartupLock() {
         return suspendStartupLock;
+    }
+
+    private static final class Controller extends DebuggerController {
+
+        Controller(JDWPInstrument instrument) {
+            super(instrument);
+        }
     }
 }

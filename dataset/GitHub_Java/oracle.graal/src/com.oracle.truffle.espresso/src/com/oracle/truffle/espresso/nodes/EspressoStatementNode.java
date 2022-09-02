@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.nodes;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -32,14 +33,14 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 /**
  * Node that simulates espresso statements for debugging support.
  */
-public abstract class EspressoStatementNode extends EspressoInstrumentableNode {
+public final class EspressoStatementNode extends EspressoInstrumentableNode {
 
-    private final Source source;
+    private final int startBci;
     private final int lineNumber;
 
-    protected EspressoStatementNode(Source source, int lineNumber) {
-        this.source = source;
+    EspressoStatementNode(int startBci, int lineNumber) {
         this.lineNumber = lineNumber;
+        this.startBci = startBci;
     }
 
     @Override
@@ -49,11 +50,33 @@ public abstract class EspressoStatementNode extends EspressoInstrumentableNode {
 
     @Override
     public SourceSection getSourceSection() {
-        return source.createSection(lineNumber);
+        Source s = getBytecodesNode().getSource();
+        if (s != null) {
+            return s.createSection(lineNumber);
+        } else {
+            // TODO should this really happen? If there is a line number table
+            // shouldn't there also be a source file?
+            return null;
+        }
     }
 
     public boolean hasTag(Class<? extends Tag> tag) {
         return tag == StandardTags.StatementTag.class;
     }
 
+    public BytecodeNode getBytecodesNode() {
+        // parent is normally the BytecodesNode.InstrumentationSupport
+        // parents parent is normally the BytecodesNode
+        Node parent = getParent();
+
+        while (parent instanceof WrapperNode || parent instanceof BytecodeNode.InstrumentationSupport) {
+            parent = parent.getParent();
+        }
+        assert !(parent instanceof WrapperNode);
+        return (BytecodeNode) parent;
+    }
+
+    public int getBci() {
+        return startBci;
+    }
 }

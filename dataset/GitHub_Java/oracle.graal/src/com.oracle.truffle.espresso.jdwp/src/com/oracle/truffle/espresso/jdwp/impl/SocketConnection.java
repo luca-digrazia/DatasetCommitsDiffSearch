@@ -97,10 +97,7 @@ public final class SocketConnection implements Runnable {
             throw new ConnectionClosedException();
         }
         synchronized (receiveLock) {
-            int b1;
-            int b2;
-            int b3;
-            int b4;
+            int b1, b2, b3, b4;
 
             // length
             try {
@@ -131,7 +128,7 @@ public final class SocketConnection implements Runnable {
                 throw new IOException("protocol error - invalid length");
             }
 
-            byte[] b = new byte[len];
+            byte b[] = new byte[len];
             b[0] = (byte) b1;
             b[1] = (byte) b2;
             b[2] = (byte) b3;
@@ -162,7 +159,7 @@ public final class SocketConnection implements Runnable {
         }
     }
 
-    public void writePacket(byte[] b) throws IOException, ConnectionClosedException {
+    public void writePacket(byte b[]) throws IOException, ConnectionClosedException {
         if (!isOpen() || Thread.currentThread().isInterrupted()) {
             throw new ConnectionClosedException();
         }

@@ -49,12 +49,12 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
 
-public final class DebuggerController {
+public class DebuggerController {
 
     private static final StepConfig STEP_CONFIG = StepConfig.newBuilder().suspendAnchors(SourceElement.ROOT, SuspendAnchor.AFTER).build();
 
     // justification for all of the hash maps is that lookups only happen when at a breakpoint
-    private final Map<Object, SimpleLock> suspendLocks = new HashMap<>();
+    private final Map<Object, ThreadLock> suspendLocks = new HashMap<>();
     private final Map<Object, SuspendedInfo> suspendedInfos = new HashMap<>();
     private final Map<Object, Integer> commandRequestIds = new HashMap<>();
     private final Map<Object, ThreadJob> threadJobs = new HashMap<>();
@@ -251,7 +251,7 @@ public final class DebuggerController {
                 suspendedInfos.put(thread, null);
             }
 
-            SimpleLock lock = getSuspendLock(thread);
+            ThreadLock lock = getSuspendLock(thread);
             synchronized (lock) {
                 JDWPLogger.log("Waiking up thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
                 lock.release();
@@ -313,10 +313,10 @@ public final class DebuggerController {
         }
     }
 
-    private SimpleLock getSuspendLock(Object thread) {
-        SimpleLock lock = suspendLocks.get(thread);
+    private ThreadLock getSuspendLock(Object thread) {
+        ThreadLock lock = suspendLocks.get(thread);
         if (lock == null) {
-            lock = new SimpleLock();
+            lock = new ThreadLock();
             suspendLocks.put(thread, lock);
         }
         return lock;
@@ -419,12 +419,6 @@ public final class DebuggerController {
                     // get the specific exception type if any
                     KlassRef klass = info.getKlass();
                     Throwable exception = getRawException(event.getException());
-                    if (exception == null) {
-                        JDWPLogger.log("Unable to retrieve raw exception for %s", JDWPLogger.LogLevel.ALL, event.getException());
-                        // failed to get the raw exception, so don't suspend here.
-                        return;
-                    }
-
                     Object guestException = getContext().getGuestException(exception);
                     JDWPLogger.log("checking exception breakpoint for exception: %s", JDWPLogger.LogLevel.STEPPING, exception);
                     // TODO(Gregersen) - rewrite this when instanceof implementation in Truffle is
@@ -565,47 +559,44 @@ public final class DebuggerController {
                 }
 
                 RootNode root = findCurrentRoot(frame);
-                if (root == null) {
-                    // unable to find root object for this frame,
-                    // skip!
-                    continue;
-                }
                 MethodRef method = getContext().getMethodFromRootNode(root);
-                assert method != null;
 
-                KlassRef klass = method.getDeclaringKlass();
-                assert klass != null;
+                if (method != null) {
+                    KlassRef klass = method.getDeclaringKlass();
 
-                long klassId = ids.getIdAsLong(klass);
-                long methodId = ids.getIdAsLong(method);
-                byte typeTag = TypeTag.getKind(klass);
-                int line = frame.getSourceSection().getStartLine();
+                    long klassId = ids.getIdAsLong(klass);
+                    long methodId = ids.getIdAsLong(method);
+                    byte typeTag = TypeTag.getKind(klass);
+                    int line = frame.getSourceSection().getStartLine();
 
-                long codeIndex = method.getBCIFromLine(line);
+                    long codeIndex = method.getBCIFromLine(line);
 
-                DebugScope scope = frame.getScope();
+                    DebugScope scope = frame.getScope();
 
-                Object thisValue = null;
-                ArrayList<Object> realVariables = new ArrayList<>();
+                    Object thisValue = null;
+                    ArrayList<Object> realVariables = new ArrayList<>();
 
-                if (scope != null) {
-                    Iterator<DebugValue> variables = scope.getDeclaredValues().iterator();
-                    while (variables.hasNext()) {
-                        DebugValue var = variables.next();
-                        if ("this".equals(var.getName())) {
-                            // get the real object reference and register it with Id
-                            thisValue = getRealValue(var);
-                        } else {
-                            // add to variables list
-                            Object realValue = getRealValue(var);
-                            realVariables.add(realValue);
+                    if (scope != null) {
+                        Iterator<DebugValue> variables = scope.getDeclaredValues().iterator();
+                        while (variables.hasNext()) {
+                            DebugValue var = variables.next();
+                            if ("this".equals(var.getName())) {
+                                // get the real object reference and register it with Id
+                                thisValue = getRealValue(var);
+                            } else {
+                                // add to variables list
+                                Object realValue = getRealValue(var);
+                                realVariables.add(realValue);
+                            }
                         }
                     }
-                }
-                list.addLast(new CallFrame(threadId, typeTag, klassId, methodId, codeIndex, thisValue, realVariables.toArray(new Object[realVariables.size()])));
-                frameCount++;
-                if (frameLimit != -1 && frameCount >= frameLimit) {
-                    return list.toArray(new CallFrame[list.size()]);
+                    list.addLast(new CallFrame(threadId, typeTag, klassId, methodId, codeIndex, thisValue, realVariables.toArray(new Object[realVariables.size()])));
+                    frameCount++;
+                    if (frameLimit != -1 && frameCount >= frameLimit) {
+                        return list.toArray(new CallFrame[list.size()]);
+                    }
+                } else {
+                    throw new RuntimeException("stack walking not implemented for root node type! " + root);
                 }
             }
             return list.toArray(new CallFrame[list.size()]);
@@ -619,10 +610,8 @@ public final class DebuggerController {
                 java.lang.reflect.Method getMethod = DebugValue.class.getDeclaredMethod(DEBUG_VALUE_GET);
                 getMethod.setAccessible(true);
                 return getMethod.invoke(value);
-            } catch (Throwable e) {
-                // use a static object to signal that the value could not be retrieved
-                // callers will send appropriate jdwp error codes when discovered
-                return JDWP.INVALID_VALUE;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to call getRealValue reflectively", e);
             }
         }
 
@@ -634,9 +623,8 @@ public final class DebuggerController {
                 java.lang.reflect.Method getRoot = DebugStackFrame.class.getDeclaredMethod(DEBUG_STACK_FRAME_FIND_CURRENT_ROOT);
                 getRoot.setAccessible(true);
                 return (RootNode) getRoot.invoke(frame);
-            } catch (Throwable e) {
-                // null signals that we're unable to retrieve the current root instance
-                return null;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to call findCurrentRoot reflectively", e);
             }
         }
 
@@ -648,8 +636,7 @@ public final class DebuggerController {
                 method.setAccessible(true);
                 return (Throwable) method.invoke(exception);
             } catch (Exception e) {
-                // null signals that we're unable to retrieve the raw exception instance
-                return null;
+                throw new RuntimeException("Failed to call getRawException reflectively", e);
             }
         }
 
@@ -728,7 +715,7 @@ public final class DebuggerController {
     }
 
     private void lockThread(Object thread) {
-        SimpleLock lock = getSuspendLock(thread);
+        ThreadLock lock = getSuspendLock(thread);
 
         synchronized (lock) {
             try {
@@ -760,7 +747,7 @@ public final class DebuggerController {
 
     public void postJobForThread(ThreadJob job) {
         threadJobs.put(job.getThread(), job);
-        SimpleLock lock = getSuspendLock(job.getThread());
+        ThreadLock lock = getSuspendLock(job.getThread());
         synchronized (lock) {
             lock.release();
             lock.notifyAll();

@@ -30,7 +30,6 @@ public final class RequestFilter {
 
     private final int requestId;
     private final byte eventKind;
-    private final byte suspendPolicy;
     private Pattern[] classExcludePatterns = new Pattern[0];
     private final KlassRef[] klassRefPatterns;
     private int nextIndex;
@@ -41,10 +40,9 @@ public final class RequestFilter {
     private long thisFilterId = 0;
     private StepInfo stepInfo;
 
-    public RequestFilter(int requestId, byte eventKind, int modifiers, byte suspendPolicy) {
+    public RequestFilter(int requestId, byte eventKind, int modifiers) {
         this.requestId = requestId;
         this.eventKind = eventKind;
-        this.suspendPolicy = suspendPolicy;
         this.klassRefPatterns = new KlassRef[modifiers];
     }
 
@@ -63,7 +61,7 @@ public final class RequestFilter {
         classExcludePatterns = temp;
     }
 
-    public void setStepInfo(StepInfo info) {
+    public void addStepInfo(StepInfo info) {
         this.stepInfo = info;
     }
 
@@ -132,9 +130,5 @@ public final class RequestFilter {
 
     public long getThisFilterId() {
         return thisFilterId;
-    }
-
-    public byte getSuspendPolicy() {
-        return suspendPolicy;
     }
 }

@@ -30,9 +30,9 @@ public interface VMListener {
      * Fire a class prepare event on the listener.
      * 
      * @param klass the class that has just been prepared by the VM
-     * @param prepareThread the thread used when preparing the class
+     * @param currentThread the thread used when preparing the class
      */
-    void classPrepared(KlassRef klass, Object prepareThread, boolean alreadyPrepared);
+    void classPrepared(KlassRef klass, Object currentThread);
 
     /**
      * Fire a thread started event on the listener.
