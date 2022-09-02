@@ -25,7 +25,6 @@ package com.oracle.truffle.espresso.classfile;
 
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_ABSTRACT;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_INTERFACE;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_SYNTHETIC;
 import static com.oracle.truffle.espresso.classfile.Constants.APPEND_FRAME_BOUND;
 import static com.oracle.truffle.espresso.classfile.Constants.CHOP_BOUND;
 import static com.oracle.truffle.espresso.classfile.Constants.FULL_FRAME;
@@ -246,7 +245,7 @@ public final class ClassfileParser {
 
         // Update className which could be null previously
         // to reflect the name in the constant pool
-        className = "L" + pool.classAt(thisKlassIndex).getName(pool).toString() + ";";
+        // className = TypeDescriptor.slashified(typeDescriptor.toJavaName());
 
         // Checks if name in class file matches requested name
         if (requestedClassName != null && !requestedClassName.equals(className)) {
@@ -283,12 +282,6 @@ public final class ClassfileParser {
         int nameIndex = stream.readU2();
         int signatureIndex = stream.readU2();
         Attribute[] methodAttributes = parseAttributes();
-        for (Attribute attr : methodAttributes) {
-            if (attr.getName().equals(Name.Synthetic)) {
-                flags |= ACC_SYNTHETIC;
-                break;
-            }
-        }
         return new ParserMethod(flags, nameIndex, signatureIndex, methodAttributes);
     }
 
@@ -562,12 +555,6 @@ public final class ClassfileParser {
         int nameIndex = stream.readU2();
         int typeIndex = stream.readU2();
         Attribute[] fieldAttributes = parseAttributes();
-        for (Attribute attr : fieldAttributes) {
-            if (attr.getName().equals(Name.Synthetic)) {
-                flags |= ACC_SYNTHETIC;
-                break;
-            }
-        }
         return new ParserField(flags, pool.utf8At(nameIndex), pool.utf8At(typeIndex), typeIndex, fieldAttributes);
     }
 
