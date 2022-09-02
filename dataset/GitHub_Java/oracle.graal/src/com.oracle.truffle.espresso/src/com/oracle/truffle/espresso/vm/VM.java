@@ -134,6 +134,8 @@ import com.oracle.truffle.espresso.substitutions.Target_java_lang_System;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread.State;
 
+import sun.misc.GC;
+
 /**
  * Espresso implementation of the VM interface (libjvm).
  * <p>
@@ -992,14 +994,12 @@ public final class VM extends NativeEnv implements ContextAccess {
         setProperty.invokeWithConversions(properties, "java.ext.dirs", Utils.stringify(props.extDirs()));
 
         // Modules properties.
-        if (getJavaVersion().modulesEnabled()) {
-            setPropertyIfExists(properties, setProperty, "jdk.module.main", getModuleMain(options));
-            setPropertyIfExists(properties, setProperty, "jdk.module.path", Utils.stringify(options.get(EspressoOptions.ModulePath)));
-            setNumberedProperty(setProperty, properties, "jdk.module.addreads", options.get(EspressoOptions.AddReads));
-            setNumberedProperty(setProperty, properties, "jdk.module.addexports", options.get(EspressoOptions.AddExports));
-            setNumberedProperty(setProperty, properties, "jdk.module.addopens", options.get(EspressoOptions.AddOpens));
-            setNumberedProperty(setProperty, properties, "jdk.module.addmods", options.get(EspressoOptions.AddModules));
-        }
+        setPropertyIfExists(properties, setProperty, "jdk.module.main", getModuleMain(options));
+        setPropertyIfExists(properties, setProperty, "jdk.module.path", Utils.stringify(options.get(EspressoOptions.ModulePath)));
+        setNumberedProperty(setProperty, properties, "jdk.module.addreads", options.get(EspressoOptions.AddReads));
+        setNumberedProperty(setProperty, properties, "jdk.module.addexports", options.get(EspressoOptions.AddExports));
+        setNumberedProperty(setProperty, properties, "jdk.module.addopens", options.get(EspressoOptions.AddOpens));
+        setNumberedProperty(setProperty, properties, "jdk.module.addmods", options.get(EspressoOptions.AddModules));
 
         // Set VM information.
         setProperty.invokeWithConversions(properties, "java.vm.specification.version", EspressoLanguage.VM_SPECIFICATION_VERSION);
@@ -2696,8 +2696,10 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     @TruffleBoundary
     public static long JVM_MaxObjectInspectionAge() {
-        return 0;
-        // return GC.maxObjectInspectionAge();
+        if (EspressoOptions.RUNNING_ON_SVM) {
+            return 0;
+        }
+        return GC.maxObjectInspectionAge();
     }
 
     @VmImpl
