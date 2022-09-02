@@ -47,12 +47,13 @@ import java.util.function.Supplier;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Instrument;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractInstrumentImpl;
 
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.polyglot.PolyglotLocals.LocalLocation;
 
-class PolyglotInstrument implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
+class PolyglotInstrument extends AbstractInstrumentImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
     Instrument api;
     InstrumentInfo info;
@@ -66,16 +67,17 @@ class PolyglotInstrument implements com.oracle.truffle.polyglot.PolyglotImpl.VMO
     private volatile OptionValuesImpl optionValues;
     private volatile boolean initialized;
     private volatile boolean created;
-    private volatile boolean closed;
     int requestedAsyncStackDepth = 0;
     LocalLocation[] contextLocalLocations;
     LocalLocation[] contextThreadLocalLocations;
 
     PolyglotInstrument(PolyglotEngineImpl engine, InstrumentCache cache) {
+        super(engine.impl);
         this.engine = engine;
         this.cache = cache;
     }
 
+    @Override
     public OptionDescriptors getOptions() {
         try {
             engine.checkState();
@@ -120,7 +122,7 @@ class PolyglotInstrument implements com.oracle.truffle.polyglot.PolyglotImpl.VMO
         return engine;
     }
 
-    private void ensureInitialized() {
+    void ensureInitialized() {
         if (!initialized) {
             synchronized (instrumentLock) {
                 if (!initialized) {
@@ -174,9 +176,7 @@ class PolyglotInstrument implements com.oracle.truffle.polyglot.PolyglotImpl.VMO
                     }
                     if (contextLocalLocations.length > 0) {
                         // trigger initialization of locals under context lock.
-                        synchronized (engine.lock) {
-                            contexts = engine.collectAliveContexts().toArray(new PolyglotContextImpl[0]);
-                        }
+                        contexts = engine.collectAliveContexts().toArray(new PolyglotContextImpl[0]);
                     }
                     INSTRUMENT.createInstrument(engine.instrumentationHandler, this, cache.services(), getEngineOptionValues());
                     created = true;
@@ -185,7 +185,7 @@ class PolyglotInstrument implements com.oracle.truffle.polyglot.PolyglotImpl.VMO
             if (contexts != null) {
                 for (PolyglotContextImpl context : contexts) {
                     synchronized (context) {
-                        if (context.localsCleared) {
+                        if (context.closed || context.invalid) {
                             continue;
                         }
                         /*
@@ -204,9 +204,9 @@ class PolyglotInstrument implements com.oracle.truffle.polyglot.PolyglotImpl.VMO
     }
 
     void notifyClosing() {
-        if (created && !closed) {
+        if (created) {
             synchronized (instrumentLock) {
-                if (created && !closed) {
+                if (created) {
                     INSTRUMENT.finalizeInstrument(engine.instrumentationHandler, this);
                 }
             }
@@ -215,18 +215,20 @@ class PolyglotInstrument implements com.oracle.truffle.polyglot.PolyglotImpl.VMO
 
     void ensureClosed() {
         assert Thread.holdsLock(engine.lock);
-        if (created && !closed) {
+        if (created) {
             synchronized (instrumentLock) {
-                if (created && !closed) {
+                if (created) {
                     INSTRUMENT.disposeInstrument(engine.instrumentationHandler, this, false);
                 }
-                closed = true;
+                created = false;
+                initialized = false;
                 engineOptions = null;
                 optionValues = null;
             }
         }
     }
 
+    @Override
     public <T> T lookup(Class<T> serviceClass) {
         try {
             engine.checkState();
@@ -245,18 +247,21 @@ class PolyglotInstrument implements com.oracle.truffle.polyglot.PolyglotImpl.VMO
         }
     }
 
+    @Override
     public String getId() {
         return cache.getId();
     }
 
+    @Override
     public String getName() {
         return cache.getName();
     }
 
+    @Override
     public String getVersion() {
         final String version = cache.getVersion();
         if (version.equals("inherit")) {
-            return engine.getVersion();
+            return engine.creatorApi.getVersion();
         } else {
             return version;
         }
