@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.polyglot;
 
-import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -56,7 +55,6 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleOptions;
 
 final class HostClassCache {
 
@@ -189,28 +187,17 @@ final class HostClassCache {
 
     @TruffleBoundary
     boolean allowsAccess(Method m) {
-        return apiAccess.allowsAccess(hostAccess, m) || isGeneratedClassMember(m);
+        return apiAccess.allowsAccess(hostAccess, m);
     }
 
     @TruffleBoundary
     boolean allowsAccess(Constructor<?> m) {
-        return apiAccess.allowsAccess(hostAccess, m) || isGeneratedClassMember(m);
+        return apiAccess.allowsAccess(hostAccess, m);
     }
 
     @TruffleBoundary
     boolean allowsAccess(Field f) {
-        return apiAccess.allowsAccess(hostAccess, f) || isGeneratedClassMember(f);
-    }
-
-    /***
-     * Generated class members are always accessible, i.e., members of implementable interfaces and
-     * classes are implicitly exported through their implementations.
-     */
-    private static boolean isGeneratedClassMember(AnnotatedElement member) {
-        if (TruffleOptions.AOT) {
-            return false;
-        }
-        return member.isAnnotationPresent(HostAdapterServices.Export.class);
+        return apiAccess.allowsAccess(hostAccess, f);
     }
 
     boolean isArrayAccess() {
