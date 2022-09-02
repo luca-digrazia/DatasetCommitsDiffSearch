@@ -91,12 +91,9 @@ public final class TestCaseCollector {
      * @param suitesPath the path where the <em>compiled</em> test cases live
      * @param predicate a {@link Predicate} for identifying a test case
      *
-     * @return a collection of {@link Object} arrays, each with three elements: the absolute
-     *         {@link Path path} to the test, the {@link String test name}, and an {@link String
-     *         exclude reason} or {@code null} if there is none.
-     * @see #TEST_PATH_IDX
-     * @see #TEST_NAME_IDX
-     * @see #EXCLUDE_REASON_IDX
+     * @return a collection of {@link Object} arrays, each with three {@link String} elements: the
+     *         absolute path to the test, the test name, and an exclude reason or {@code null} if
+     *         there is none.
      */
     public static Collection<Object[]> collectTestCases(Class<?> testSuiteClass, Path suitesPath, Predicate<? super Path> predicate) {
         try {
@@ -112,17 +109,6 @@ public final class TestCaseCollector {
         }
     }
 
-    public static final int TEST_PATH_IDX = 0;
-    public static final int TEST_NAME_IDX = 1;
-    public static final int EXCLUDE_REASON_IDX = 2;
-
-    /**
-     * Gets the canonical configuration directory for a {@link Class}.
-     */
-    public static Path getConfigDirectory(Class<?> testSuiteClass) {
-        return Paths.get(TestOptions.CONFIG_ROOT, testSuiteClass.getSimpleName());
-    }
-
     private static String getTestCaseName(Path suitesPath, Path testPath) {
         return suitesPath.relativize(testPath).toString();
     }
@@ -130,9 +116,9 @@ public final class TestCaseCollector {
     /**
      * Returns a map from excluded test to the exclude file that caused the exclusion.
      */
-    public static Map<String, String> getExcludedTests(Class<?> testSuiteClass) {
+    private static Map<String, String> getExcludedTests(Class<?> testSuiteClass) {
         try {
-            Path excludeDirectory = getConfigDirectory(testSuiteClass);
+            Path excludeDirectory = Paths.get(TestOptions.CONFIG_ROOT, testSuiteClass.getSimpleName());
             Path osArchDirectory = excludeDirectory.resolve("os_arch");
             FileVisitors visitors = new FileVisitors(osArchDirectory);
 

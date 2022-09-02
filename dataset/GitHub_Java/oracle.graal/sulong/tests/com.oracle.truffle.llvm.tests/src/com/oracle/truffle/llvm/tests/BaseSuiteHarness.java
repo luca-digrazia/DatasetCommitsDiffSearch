@@ -36,7 +36,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +49,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.AssumptionViolatedException;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -98,7 +98,6 @@ public abstract class BaseSuiteHarness {
 
     private static final List<Path> passingTests = new ArrayList<>();
     private static final List<Path> failingTests = new ArrayList<>();
-    private static final Map<String, String> ignoredTests = new HashMap<>();
     private static Engine engine;
 
     /**
@@ -242,16 +241,12 @@ public abstract class BaseSuiteHarness {
 
     protected void assumeNotExcluded() {
         if (getExclusionReason() != null) {
-            ignoredTests.put(getTestName(), getExclusionReason());
             throw new AssumptionViolatedException("Test excluded: " + getExclusionReason());
         }
     }
 
     protected void assumeFalse(String message, boolean b) {
-        if (b) {
-            ignoredTests.put(getTestName(), getExclusionReason());
-            throw new AssumptionViolatedException(message);
-        }
+        Assume.assumeFalse(message, b);
     }
 
     protected Predicate<? super Path> getIsSulongFilter() {
@@ -358,7 +353,6 @@ public abstract class BaseSuiteHarness {
         } else {
             System.out.println("   No data available.");
         }
-        System.out.printf("\nIgnored %d tests\n\n", ignoredTests.size());
     }
 
     private static Set<Path> getListEntries(Path suiteDirectory, Path configDir, Predicate<? super Path> filter) {
