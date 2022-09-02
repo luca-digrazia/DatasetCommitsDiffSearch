@@ -62,14 +62,14 @@ public class RuntimeCodeInfoMemory {
     private NonmovableArray<UntetheredCodeInfo> table;
     private int count = 0;
 
-    public void add(CodeInfo info) {
+    public boolean add(CodeInfo info) {
         // It is fine that this method is interruptible as all the relevant work is done in the
         // uninterruptible method that is called below.
         assert !Heap.getHeap().isAllocationDisallowed();
         assert info.isNonNull();
         lock.lock();
         try {
-            add0(info);
+            return add0(info);
         } finally {
             lock.unlock();
         }
@@ -93,7 +93,7 @@ public class RuntimeCodeInfoMemory {
     }
 
     @Uninterruptible(reason = "Manipulate walkers list atomically with regard to GC.")
-    private void add0(CodeInfo info) {
+    private boolean add0(CodeInfo info) {
         if (table.isNull()) {
             table = NonmovableArrays.createWordArray(32);
         }
@@ -114,6 +114,7 @@ public class RuntimeCodeInfoMemory {
         } while (resized);
         NonmovableArrays.setWord(table, index, info);
         count++;
+        return true;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
