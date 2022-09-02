@@ -41,7 +41,6 @@
 package com.oracle.truffle.api.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -75,8 +74,7 @@ final class LegacyToLibraryNode extends Node {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            assert false;
-            return null;
+            throw new AssertionError();
         }
 
         LegacyToLibraryNode insertAccess(LegacyToLibraryNode node) {
@@ -101,8 +99,7 @@ final class LegacyToLibraryNode extends Node {
             return interop.readMember(receiver, (String) identifier);
         } else if (identifier instanceof Number) {
             try {
-                final long index = asLongIndex(identifier);
-                return interop.readArrayElement(receiver, index);
+                return interop.readArrayElement(receiver, ((Number) identifier).longValue());
             } catch (InvalidArrayIndexException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw UnknownIdentifierException.raise(String.valueOf(e.getInvalidIndex()));
@@ -126,24 +123,13 @@ final class LegacyToLibraryNode extends Node {
         }
     }
 
-    private static long asLongIndex(Object identifier) {
-        if (identifier instanceof Integer) {
-            return (int) identifier;
-        } else if (identifier instanceof Long) {
-            return (long) identifier;
-        } else {
-            return boundaryToLong(identifier);
-        }
-    }
-
     void sendWrite(TruffleObject receiver, Object identifier, Object value)
                     throws UnknownIdentifierException, UnsupportedTypeException, UnsupportedMessageException {
         if (identifier instanceof String) {
             interop.writeMember(receiver, (String) identifier, value);
         } else if (identifier instanceof Number) {
             try {
-                final long index = asLongIndex(identifier);
-                interop.writeArrayElement(receiver, index, value);
+                interop.writeArrayElement(receiver, ((Number) identifier).longValue(), value);
             } catch (InvalidArrayIndexException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw UnknownIdentifierException.raise(String.valueOf(e.getInvalidIndex()));
@@ -182,8 +168,8 @@ final class LegacyToLibraryNode extends Node {
                 if (receiver.getForeignAccess() != null) {
                     return LibraryToLegacy.sendRemove(legacyRemove, receiver, identifier);
                 }
-                final long index = asLongIndex(identifier);
-                interop.removeArrayElement(receiver, index);
+
+                interop.removeArrayElement(receiver, ((Number) identifier).longValue());
                 return true;
             } catch (InvalidArrayIndexException e) {
                 CompilerDirectives.transferToInterpreter();
@@ -333,13 +319,12 @@ final class LegacyToLibraryNode extends Node {
                 keyInfo |= KeyInfo.WRITE_SIDE_EFFECTS;
             }
         } else if (key instanceof Number) {
-            final long index = asLongIndex(key);
+            long index = ((Number) key).longValue();
             if (key instanceof Float || key instanceof Double) {
                 if (index != ((Number) key).doubleValue()) {
                     return KeyInfo.NONE;
                 }
             }
-
             if (interop.isArrayElementReadable(receiver, index)) {
                 keyInfo |= KeyInfo.READABLE;
             }
@@ -369,11 +354,6 @@ final class LegacyToLibraryNode extends Node {
             }
         }
         return keyInfo;
-    }
-
-    @TruffleBoundary
-    private static long boundaryToLong(Object key) {
-        return ((Number) key).longValue();
     }
 
     boolean sendHasKeys(TruffleObject receiver) {
