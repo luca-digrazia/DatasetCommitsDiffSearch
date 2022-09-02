@@ -355,11 +355,6 @@ public final class RegexObject extends AbstractConstantKeysObject {
             return execNode.execute(getCompiledRegexNode.execute(getRegexObject()), input, (int) fromIndex);
         }
 
-        @TruffleBoundary
-        @Override
-        public String toString() {
-            return "TRegexObjectExecMethod{" + "regex=" + regex + '}';
-        }
     }
 
     /**
@@ -405,11 +400,6 @@ public final class RegexObject extends AbstractConstantKeysObject {
             return execNode.execute(getCompiledRegexNode.execute(regexObj), input, (int) fromIndex);
         }
 
-        @TruffleBoundary
-        @Override
-        public String toString() {
-            return "TRegexObjectExecUTF8Method{" + "regex=" + regex + '}';
-        }
     }
 
     @GenerateUncached
@@ -463,11 +453,5 @@ public final class RegexObject extends AbstractConstantKeysObject {
                 throw Exceptions.shouldNotReachHere("fallback compiled regex does not have an invocable \"exec\" method");
             }
         }
-    }
-
-    @TruffleBoundary
-    @Override
-    public String toString() {
-        return "TRegexObject{source=" + source + '}';
     }
 }

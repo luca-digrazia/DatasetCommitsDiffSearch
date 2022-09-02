@@ -144,8 +144,4 @@ public final class RegexEngineBuilder extends AbstractRegexObject {
         }
     }
 
-    @Override
-    public String toString() {
-        return "TRegexEngineBuilder";
-    }
 }
