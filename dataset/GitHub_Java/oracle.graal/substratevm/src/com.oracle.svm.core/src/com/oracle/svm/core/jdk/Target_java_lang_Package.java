@@ -62,7 +62,8 @@ public final class Target_java_lang_Package {
             Package pkg = (Package) receiver;
             Integer val = jfrIdsMap.get(pkg);
             if (val == null) {
-                return Integer.valueOf(0);
+                // Why are some items not registered?
+                return Integer.valueOf(-1);
             } else {
                 return val;
             }

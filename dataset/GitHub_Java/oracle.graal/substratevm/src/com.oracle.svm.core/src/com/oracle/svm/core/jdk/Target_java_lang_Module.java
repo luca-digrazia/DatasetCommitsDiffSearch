@@ -62,7 +62,8 @@ public final class Target_java_lang_Module {
             Module mod = (Module) receiver;
             Integer val = jfrIdsMap.get(mod);
             if (val == null) {
-                return Integer.valueOf(0);
+                // Why are some items not registered?
+                return Integer.valueOf(-1);
             } else {
                 return val;
             }
