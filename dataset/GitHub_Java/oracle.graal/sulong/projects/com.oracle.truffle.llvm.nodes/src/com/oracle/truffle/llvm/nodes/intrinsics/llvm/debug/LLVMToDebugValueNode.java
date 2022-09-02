@@ -34,10 +34,10 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMBoxedPrimitive;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.debug.LLDBSupport;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMDebugGlobalVariable;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugTypeConstants;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
@@ -111,8 +111,9 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
         return ToPointer.create();
     }
 
-    @Specialization
-    protected LLVMDebugValue fromManagedPointer(LLVMManagedPointer value) {
+    @Specialization(limit = "3")
+    protected LLVMDebugValue fromManagedPointer(LLVMManagedPointer value,
+                    @CachedLibrary("value.getObject()") InteropLibrary interop) {
         final TruffleObject target = value.getObject();
 
         if (target instanceof LLVMGlobalContainer) {
@@ -120,11 +121,6 @@ public abstract class LLVMToDebugValueNode extends LLVMNode implements LLVMDebug
         }
 
         try {
-            /*
-             * We're using the uncached library here because this node is only used from the slow
-             * path, and usually not adopted in an AST.
-             */
-            InteropLibrary interop = InteropLibrary.getFactory().getUncached();
             if (interop.isNumber(target)) {
                 Object unboxedValue;
                 if (interop.fitsInLong(target)) {
