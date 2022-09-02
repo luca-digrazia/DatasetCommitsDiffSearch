@@ -50,7 +50,6 @@ import com.oracle.truffle.llvm.runtime.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.Function;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.LazyLLVMIRFunction;
-import com.oracle.truffle.llvm.runtime.LLVMLocalScope;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
@@ -65,12 +64,10 @@ public final class LLVMParser {
     private final LLVMParserRuntime runtime;
     private final LLVMContext context;
     private final ExternalLibrary library;
-    private final LLVMLocalScope localScope;
 
-    public LLVMParser(Source source, LLVMParserRuntime runtime, LLVMLocalScope localScope) {
+    public LLVMParser(Source source, LLVMParserRuntime runtime) {
         this.source = source;
         this.runtime = runtime;
-        this.localScope = localScope;
         this.context = runtime.getContext();
         this.library = runtime.getLibrary();
     }
@@ -165,16 +162,10 @@ public final class LLVMParser {
 
         // handle the global scope
         if (functionSymbol.isExported()) {
-
-            LLVMSymbol exportedDescriptor = localScope.get(functionSymbol.getName());
+            LLVMSymbol exportedDescriptor = runtime.getGlobalScope().get(functionSymbol.getName());
             if (exportedDescriptor == null) {
-                localScope.register(llvmFunction);
-            }
-
-            LLVMSymbol globalExportedDescriptor = runtime.getGlobalScope().get(functionSymbol.getName());
-            if (globalExportedDescriptor == null) {
                 runtime.getGlobalScope().register(llvmFunction);
-            } else if (globalExportedDescriptor.isFunction()) {
+            } else if (exportedDescriptor.isFunction()) {
                 importedSymbols.add(functionSymbol.getName());
             } else {
                 assert exportedDescriptor.isGlobalVariable();
