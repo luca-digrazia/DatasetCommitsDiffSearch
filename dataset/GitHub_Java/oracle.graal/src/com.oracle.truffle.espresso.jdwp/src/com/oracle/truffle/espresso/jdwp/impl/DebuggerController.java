@@ -28,7 +28,9 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.debug.Breakpoint;
+import com.oracle.truffle.api.debug.DebugScope;
 import com.oracle.truffle.api.debug.DebugStackFrame;
+import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
 import com.oracle.truffle.api.debug.SourceElement;
@@ -54,6 +56,7 @@ import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -618,14 +621,13 @@ public final class DebuggerController implements ContextsListener {
         }
     }
 
-    public ThreadJob<?> postJobForThread(ThreadJob<?> job) {
+    public void postJobForThread(ThreadJob<?> job) {
         threadJobs.put(job.getThread(), job);
         SimpleLock lock = getSuspendLock(job.getThread());
         synchronized (lock) {
             lock.release();
             lock.notifyAll();
         }
-        return job;
     }
 
     public CallFrame[] captureCallFramesBeforeBlocking(Object guestThread) {
@@ -633,37 +635,30 @@ public final class DebuggerController implements ContextsListener {
         Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Object>() {
             @Override
             public Object visitFrame(FrameInstance frameInstance) {
-                KlassRef klass = null;
-                MethodRef method = null;
                 RootNode root = getRootNode(frameInstance);
                 if (root == null) {
                     return null;
                 }
-                method = getContext().getMethodFromRootNode(root);
+                MethodRef method = getContext().getMethodFromRootNode(root);
                 if (method == null) {
                     return null;
                 }
 
-                klass = method.getDeclaringKlass();
+                KlassRef klass = method.getDeclaringKlass();
                 long klassId = ids.getIdAsLong(klass);
                 long methodId = ids.getIdAsLong(method);
                 byte typeTag = TypeTag.getKind(klass);
 
                 // for bytecode-based languages (Espresso) we can read the precise bci from the
                 // frame instance
-                long codeIndex = -1;
-                try {
-                    codeIndex = context.readBCIFromFrame(root, frameInstance.getFrame(FrameInstance.FrameAccess.MATERIALIZE).materialize());
-                } catch (Throwable t) {
-                    t.printStackTrace();
-                    JDWPLogger.log("Unable to read current BCI from frame in method: %s.%s", JDWPLogger.LogLevel.ALL, klass.getNameAsString(), method.getNameAsString());
-                }
+                long codeIndex = context.readBCIFromFrame(root, frameInstance.getFrame(FrameInstance.FrameAccess.MATERIALIZE).materialize());
+
                 if (codeIndex == -1) {
                     // fall back to start of the method then
                     codeIndex = 0;
                 }
                 MaterializedFrame materializedFrame = frameInstance.getFrame(FrameInstance.FrameAccess.MATERIALIZE).materialize();
-                callFrames.add(new CallFrame(context.getIds().getIdAsLong(guestThread), typeTag, klassId, methodId, codeIndex, materializedFrame, root, instrument.getEnv()));
+                callFrames.add(new CallFrame(context.getIds().getIdAsLong(guestThread), typeTag, klassId, methodId, codeIndex, materializedFrame, root, null, null));
                 return null;
             }
         });
@@ -950,7 +945,26 @@ public final class DebuggerController implements ContextsListener {
                     }
                 }
 
-                list.addLast(new CallFrame(threadId, typeTag, klassId, methodId, codeIndex, materializedFrame, root, instrument.getEnv()));
+                DebugScope scope = frame.getScope();
+
+                Object thisValue = null;
+                ArrayList<Object> realVariables = new ArrayList<>();
+
+                if (scope != null) {
+                    Iterator<DebugValue> variables = scope.getDeclaredValues().iterator();
+                    while (variables.hasNext()) {
+                        DebugValue var = variables.next();
+                        if ("this".equals(var.getName())) {
+                            // get the real object reference and register it with Id
+                            thisValue = var.getRawValue(context.getLanguageClass());
+                        } else {
+                            // add to variables list
+                            Object realValue = var.getRawValue(context.getLanguageClass());
+                            realVariables.add(realValue);
+                        }
+                    }
+                }
+                list.addLast(new CallFrame(threadId, typeTag, klassId, methodId, codeIndex, materializedFrame, root, thisValue, realVariables.toArray(new Object[realVariables.size()])));
                 frameCount++;
                 if (frameLimit != -1 && frameCount >= frameLimit) {
                     return list.toArray(new CallFrame[list.size()]);
