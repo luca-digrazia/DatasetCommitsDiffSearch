@@ -69,7 +69,6 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
-import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.verifier.MethodVerifier;
@@ -326,12 +325,8 @@ public final class ObjectKlass extends Klass {
                     } else {
                         throw e;
                     }
-                } catch (EspressoExitException e) {
-                    setErroneousInitialization();
-                    throw e;
                 } catch (Throwable e) {
-                    getContext().getLogger().log(Level.WARNING, "Host exception during class initialization: {0}", this.getNameAsString());
-                    e.printStackTrace();
+                    getContext().getLogger().log(Level.WARNING, "Host exception during class initialization: {0}", this.getName());
                     setErroneousInitialization();
                     throw e;
                 }
