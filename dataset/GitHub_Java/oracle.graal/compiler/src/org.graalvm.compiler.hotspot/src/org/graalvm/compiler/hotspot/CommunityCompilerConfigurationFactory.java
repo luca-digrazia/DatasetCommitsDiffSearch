@@ -25,7 +25,6 @@
 package org.graalvm.compiler.hotspot;
 
 import org.graalvm.compiler.core.phases.CommunityCompilerConfiguration;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.tiers.CompilerConfiguration;
 import org.graalvm.compiler.serviceprovider.ServiceProvider;
 
@@ -53,7 +52,7 @@ public class CommunityCompilerConfigurationFactory extends CompilerConfiguration
     }
 
     @Override
-    public Instrumentation createInstrumentation(OptionValues options) {
-        return new DefaultInstrumentation();
+    public InstrumentationFactory getInstrumentationFactory() {
+        return new DefaultInstrumentationFactory();
     }
 }
