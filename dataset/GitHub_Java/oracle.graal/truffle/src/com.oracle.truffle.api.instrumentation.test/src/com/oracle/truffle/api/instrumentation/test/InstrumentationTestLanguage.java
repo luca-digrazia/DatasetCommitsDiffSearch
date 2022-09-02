@@ -49,7 +49,6 @@ import java.util.AbstractSet;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -59,7 +58,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
-import java.util.concurrent.ConcurrentHashMap;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -215,6 +213,9 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
                     "VARIABLE", "ARGUMENT", "READ_VAR", "PRINT", "ALLOCATION", "SLEEP", "SPAWN", "JOIN", "INVALIDATE", "INTERNAL", "INNER_FRAME", "MATERIALIZE_CHILD_EXPRESSION",
                     "MATERIALIZE_CHILD_STMT_AND_EXPR", "MATERIALIZE_CHILD_STMT_AND_EXPR_NC", "MATERIALIZE_CHILD_STMT_AND_EXPR_SEPARATELY", "MATERIALIZE_CHILD_STATEMENT", "BLOCK_NO_SOURCE_SECTION",
                     "TRY", "CATCH", "THROW", "UNEXPECTED_RESULT", "MULTIPLE"};
+
+    // used to test that no getSourceSection calls happen in certain situations
+    private static int rootSourceSectionQueryCount;
 
     public InstrumentationTestLanguage() {
     }
@@ -643,6 +644,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
 
         @Override
         public SourceSection getSourceSection() {
+            rootSourceSectionQueryCount++;
             return sourceSection;
         }
 
@@ -1476,14 +1478,12 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         @TruffleBoundary
         private void defineFunction() {
             InstrumentContext context = lookupContextReference(InstrumentationTestLanguage.class).get();
-            synchronized (context.callFunctions.callTargets) {
-                if (context.callFunctions.callTargets.containsKey(identifier)) {
-                    if (context.callFunctions.callTargets.get(identifier) != target) {
-                        throw new IllegalArgumentException("Identifier redefinition not supported.");
-                    }
+            if (context.callFunctions.callTargets.containsKey(identifier)) {
+                if (context.callFunctions.callTargets.get(identifier) != target) {
+                    throw new IllegalArgumentException("Identifier redefinition not supported.");
                 }
-                context.callFunctions.callTargets.put(this.identifier, target);
             }
+            context.callFunctions.callTargets.put(this.identifier, target);
         }
 
         @Override
@@ -1495,9 +1495,6 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
 
     static class ContextNode extends BaseNode {
 
-        /**
-         * Children are only allowed because of the shared context policy.
-         */
         @Children private final BaseNode[] children;
 
         ContextNode(BaseNode[] children) {
@@ -2801,6 +2798,10 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         return new InstrumentationLanguageView(value);
     }
 
+    public static int getRootSourceSectionQueryCount() {
+        return rootSourceSectionQueryCount;
+    }
+
     @SuppressWarnings("static-method")
     @ExportLibrary(InteropLibrary.class)
     static final class Function implements TruffleObject {
@@ -2907,8 +2908,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
     @ExportLibrary(InteropLibrary.class)
     static class FunctionsObject implements TruffleObject {
 
-        final Map<String, CallTarget> callTargets = Collections.synchronizedMap(new LinkedHashMap<>());
-        final Map<String, TruffleObject> functions = new ConcurrentHashMap<>();
+        final Map<String, CallTarget> callTargets = new LinkedHashMap<>();
+        final Map<String, TruffleObject> functions = new HashMap<>();
 
         FunctionsObject() {
         }
@@ -2921,7 +2922,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
                     return null;
                 }
                 functionObject = new Function(ct);
-                functions.putIfAbsent(name, functionObject);
+                functions.put(name, functionObject);
             }
             return functionObject;
         }
@@ -2939,9 +2940,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         @ExportMessage
         @TruffleBoundary
         final Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-            synchronized (callTargets) {
-                return new KeysObject(callTargets.keySet().toArray(new String[0]));
-            }
+            return new KeysObject(callTargets.keySet().toArray(new String[0]));
         }
 
         @ExportMessage
