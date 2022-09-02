@@ -24,14 +24,20 @@
  */
 package org.graalvm.compiler.truffle.test;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 import org.graalvm.compiler.core.common.CompilationIdentifier;
+import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
+import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.compiler.nodes.InlineDecisionInjectNode;
 import org.graalvm.compiler.truffle.compiler.nodes.InlineDecisionNode;
@@ -50,6 +56,10 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.test.ReflectionUtils;
+
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import jdk.vm.ci.meta.SpeculationLog;
 
 public class AgnosticInliningPhaseTest extends PartialEvaluationTest {
 
@@ -62,7 +72,7 @@ public class AgnosticInliningPhaseTest extends PartialEvaluationTest {
     }
 
     @Test
-    public void testInInlinedNode() {
+    public void testInInlinedNode() throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
         final OptimizedCallTarget callTarget = (OptimizedCallTarget) runtime.createCallTarget(new CallsInnerNodeTwice(createDummyNode()));
         callTarget.call();
         final StructuredGraph graph = runLanguageAgnosticInliningPhase(callTarget);
@@ -88,7 +98,7 @@ public class AgnosticInliningPhaseTest extends PartialEvaluationTest {
         }
     }
 
-    protected StructuredGraph runLanguageAgnosticInliningPhase(OptimizedCallTarget callTarget) {
+    protected StructuredGraph runLanguageAgnosticInliningPhase(OptimizedCallTarget callTarget) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
         final TruffleInlining callNodeProvider = new TruffleInlining(callTarget, new NoInliningPolicy());
         final PartialEvaluator partialEvaluator = getTruffleCompiler(callTarget).getPartialEvaluator();
         final CompilationIdentifier compilationIdentifier = new CompilationIdentifier() {
@@ -97,9 +107,8 @@ public class AgnosticInliningPhaseTest extends PartialEvaluationTest {
                 return "";
             }
         };
-        final PartialEvaluator.Request request = partialEvaluator.new Request(callTarget.getOptionValues(), getDebugContext(), callTarget, partialEvaluator.rootForCallTarget(callTarget),
-                        callNodeProvider,
-                        StructuredGraph.AllowAssumptions.YES, compilationIdentifier, getSpeculationLog(), null);
+        final PartialEvaluator.Request request = partialEvaluator.new Request(callTarget.getOptionValues(), getDebugContext(), callTarget, partialEvaluator.rootForCallTarget(callTarget), callNodeProvider,
+                StructuredGraph.AllowAssumptions.YES, compilationIdentifier, getSpeculationLog(), null);
         final AgnosticInliningPhase agnosticInliningPhase = new AgnosticInliningPhase(partialEvaluator, request);
         agnosticInliningPhase.apply(request.graph, getTruffleCompiler(callTarget).getPartialEvaluator().getProviders());
         return request.graph;

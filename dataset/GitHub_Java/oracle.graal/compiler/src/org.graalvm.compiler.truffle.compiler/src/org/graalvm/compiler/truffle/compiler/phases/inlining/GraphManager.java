@@ -41,6 +41,7 @@ import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCallNode;
 import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
+import org.graalvm.options.OptionValues;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -64,10 +65,10 @@ final class GraphManager {
                             partialEvaluator.getCallIndirectMethod());
             final PartialEvaluator.Request request = partialEvaluator.new Request(rootRequest.options, rootRequest.debug, truffleAST, partialEvaluator.inlineRootForCallTargetAgnostic(truffleAST),
                             rootRequest.inliningPlan, rootRequest.allowAssumptions, rootRequest.compilationId, rootRequest.log, rootRequest.cancellable);
-            partialEvaluator.doGraphPE(request, plugin, graphCacheForInlining);
+            StructuredGraph graph = partialEvaluator.evaluate(request, plugin, graphCacheForInlining);
             final EconomicMap<TruffleCallNode, Invoke> truffleCallNodeToInvoke = plugin.getTruffleCallNodeToInvoke();
             final List<Invoke> indirectInvokes = plugin.getIndirectInvokes();
-            entry = new GraphManager.Entry(request.graph, truffleCallNodeToInvoke, indirectInvokes);
+            entry = new GraphManager.Entry(graph, truffleCallNodeToInvoke, indirectInvokes);
             irCache.put(truffleAST, entry);
         }
         return entry;
@@ -76,7 +77,7 @@ final class GraphManager {
     EconomicMap<TruffleCallNode, Invoke> peRoot() {
         final PEAgnosticInlineInvokePlugin plugin = new PEAgnosticInlineInvokePlugin(rootRequest.inliningPlan, partialEvaluator.getCallDirectMethod(), partialEvaluator.getCallBoundary(),
                         partialEvaluator.getCallIndirectMethod());
-        partialEvaluator.doGraphPE(rootRequest, plugin, graphCacheForInlining);
+        partialEvaluator.evaluate(rootRequest, plugin, graphCacheForInlining);
         return plugin.getTruffleCallNodeToInvoke();
     }
 

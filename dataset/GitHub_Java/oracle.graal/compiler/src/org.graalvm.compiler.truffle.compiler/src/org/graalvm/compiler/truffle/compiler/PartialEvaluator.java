@@ -633,7 +633,7 @@ public abstract class PartialEvaluator {
                         sourceLanguagePositionProvider, postParsingPhase, graphCache);
     }
 
-    public void doGraphPE(Request request, InlineInvokePlugin inlineInvokePlugin, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
+    protected void doGraphPE(Request request, InlineInvokePlugin inlineInvokePlugin, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
         LoopExplosionPlugin loopExplosionPlugin = new PELoopExplosionPlugin();
         ParameterPlugin parameterPlugin = new InterceptReceiverPlugin(request.compilable);
 

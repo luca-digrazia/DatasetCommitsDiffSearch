@@ -49,6 +49,7 @@ import org.graalvm.compiler.truffle.common.TruffleCallNode;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.compiler.nodes.InlineDecisionInjectNode;
 import org.graalvm.compiler.truffle.compiler.nodes.InlineDecisionNode;
+import org.graalvm.options.OptionValues;
 
 @NodeInfo(nameTemplate = "{p#truffleAST}", cycles = NodeCycles.CYCLES_IGNORED, size = NodeSize.SIZE_IGNORED)
 public final class CallNode extends Node {
@@ -58,6 +59,7 @@ public final class CallNode extends Node {
     private final CompilableTruffleAST truffleAST;
     private final TruffleCallNode[] truffleCallees;
     private final double rootRelativeFrequency;
+    private final OptionValues options;
     private Object data;
     private State state;
     @Successor private NodeSuccessorList<CallNode> children;
@@ -71,8 +73,9 @@ public final class CallNode extends Node {
     private EconomicMap<CallNode, Invoke> childInvokes;
 
     // Needs to be protected because of the @NodeInfo annotation
-    protected CallNode(TruffleCallNode truffleCallNode, CompilableTruffleAST truffleAST, StructuredGraph ir, double rootRelativeFrequency, int depth) {
+    protected CallNode(OptionValues options, TruffleCallNode truffleCallNode, CompilableTruffleAST truffleAST, StructuredGraph ir, double rootRelativeFrequency, int depth) {
         super(TYPE);
+        this.options = options;
         this.state = State.Cutoff;
         this.recursionDepth = -1;
         this.rootRelativeFrequency = rootRelativeFrequency;
@@ -91,7 +94,7 @@ public final class CallNode extends Node {
     static CallNode makeRoot(CallTree callTree, PartialEvaluator.Request request) {
         Objects.requireNonNull(callTree);
         Objects.requireNonNull(request);
-        final CallNode root = new CallNode(null, request.compilable, request.graph, 1, 0);
+        final CallNode root = new CallNode(request.options, null, request.compilable, request.graph, 1, 0);
         callTree.add(root);
         root.data = callTree.getPolicy().newCallNodeData(root);
         assert root.state == State.Cutoff : "Cannot expand a non-cutoff node. State is " + root.state;
@@ -105,27 +108,11 @@ public final class CallNode extends Node {
         return (double) Math.max(1, callNode.getCallCount()) / (double) Math.max(1, target.getCallCount());
     }
 
-    private static void handleInlineDecisionNode(Invoke invoke) {
-        final NodeInputList<ValueNode> arguments = invoke.callTarget().arguments();
-        final ValueNode argument = arguments.get(1);
-        if (!(argument instanceof InlineDecisionInjectNode)) {
-            GraalError.shouldNotReachHere("Agnostic inlining expectations not met by graph");
-        }
-        final InlineDecisionInjectNode injectNode = (InlineDecisionInjectNode) argument;
-        final ValueNode maybeDecision = injectNode.getDecision();
-        if (!(maybeDecision instanceof InlineDecisionNode)) {
-            GraalError.shouldNotReachHere("Agnostic inlining expectations not met by graph");
-        }
-        final InlineDecisionNode inlineDecisionNode = (InlineDecisionNode) maybeDecision;
-        inlineDecisionNode.inlined();
-        injectNode.resolve();
-    }
-
     public CompilableTruffleAST getTruffleAST() {
         return truffleAST;
     }
 
-    private void putProperties(Map<Object, Object> properties) {
+    void putProperties(Map<Object, Object> properties) {
         if (state == State.Indirect) {
             return;
         }
@@ -172,7 +159,7 @@ public final class CallNode extends Node {
         for (TruffleCallNode childCallNode : truffleCallees) {
             final double relativeFrequency = calculateFrequency(truffleAST, childCallNode);
             final double childFrequency = relativeFrequency * this.rootRelativeFrequency;
-            CallNode callNode = new CallNode(childCallNode, childCallNode.getCurrentCallTarget(), null, childFrequency, this.depth + 1);
+            CallNode callNode = new CallNode(options, childCallNode, childCallNode.getCurrentCallTarget(), null, childFrequency, this.depth + 1);
             getCallTree().add(callNode);
             this.children.add(callNode);
             callNode.data = getPolicy().newCallNodeData(callNode);
@@ -207,6 +194,7 @@ public final class CallNode extends Node {
         }
     }
 
+    @SuppressWarnings("unused")
     private void updateChildrenList(GraphManager.Entry entry) {
         for (CallNode child : children) {
             final Invoke childInvoke = entry.truffleCallNodeToInvoke.get(child.getTruffleCaller());
@@ -216,17 +204,15 @@ public final class CallNode extends Node {
             }
         }
         for (Invoke invoke : entry.indirectInvokes) {
-            if (invoke != null && invoke.isAlive()) {
-                final CallNode child = new CallNode(null, null, null, 0, depth + 1);
-                child.state = State.Indirect;
-                getCallTree().add(child);
-                children.add(child);
-            }
+            final CallNode child = new CallNode(options, null, null, null, 0, depth + 1);
+            child.state = State.Indirect;
+            getCallTree().add(child);
+            children.add(child);
         }
     }
 
     public void expand() {
-        assert state == State.Cutoff : "Cannot expand a non-cutoff node. Node is " + state;
+        assert state == State.Cutoff : "Cannot expand a non-cutoff node. Not is " + state;
         assert getParent() != null;
         this.state = State.Expanded;
         getCallTree().expanded++;
@@ -273,7 +259,7 @@ public final class CallNode extends Node {
             state = State.Removed;
             return;
         }
-        handleInlineDecisionNode(invoke);
+        handleIsAttachedInlinedNode(invoke);
         final UnmodifiableEconomicMap<Node, Node> replacements = getCallTree().getGraphManager().doInline(invoke, ir, truffleAST);
         for (CallNode child : childInvokes.getKeys()) {
             if (child.state != State.Removed) {
@@ -289,6 +275,22 @@ public final class CallNode extends Node {
         }
         state = State.Inlined;
         getCallTree().inlined++;
+    }
+
+    private static void handleIsAttachedInlinedNode(Invoke invoke) {
+        final NodeInputList<ValueNode> arguments = invoke.callTarget().arguments();
+        final ValueNode argument = arguments.get(1);
+        if (!(argument instanceof InlineDecisionInjectNode)) {
+            GraalError.shouldNotReachHere("Agnostic inlining expectations not met by graph");
+        }
+        final InlineDecisionInjectNode attachNode = (InlineDecisionInjectNode) argument;
+        final ValueNode maybeDecision = attachNode.getDecision();
+        if (!(maybeDecision instanceof InlineDecisionNode)) {
+            GraalError.shouldNotReachHere("Agnostic inlining expectations not met by graph");
+        }
+        final InlineDecisionNode inlineDecisionNode = (InlineDecisionNode) maybeDecision;
+        inlineDecisionNode.inlined();
+        attachNode.resolve();
     }
 
     /**
@@ -346,7 +348,7 @@ public final class CallNode extends Node {
         return (CallTree) graph();
     }
 
-    private TruffleCallNode getTruffleCaller() {
+    TruffleCallNode getTruffleCaller() {
         return truffleCaller;
     }
 
