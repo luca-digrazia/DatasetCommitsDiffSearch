@@ -28,8 +28,7 @@ import java.lang.management.MemoryMXBean;
 import java.util.List;
 
 import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.nodes.gc.BarrierSet;
-import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
+import org.graalvm.compiler.nodes.spi.GCProvider;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.Platform;
@@ -48,24 +47,11 @@ public abstract class Heap {
     protected Heap() {
     }
 
-    /**
-     * Notifies the heap that a new thread was attached to the VM. This allows to initialize
-     * heap-specific datastructures, e.g., the TLAB. This method is called for every thread except
-     * the main thread (i.e., the one that maps the image heap).
-     */
-    @Uninterruptible(reason = "Called during startup.")
-    public abstract void attachThread(IsolateThread isolateThread);
-
-    /**
-     * Notifies the heap that a thread will be detached from the VM. This allows to cleanup
-     * heap-specific resources, e.g., the TLAB. This method is called for every thread except the
-     * main thread (i.e., the one that maps the image heap).
-     */
-    public abstract void detachThread(IsolateThread isolateThread);
-
     public abstract void suspendAllocation();
 
     public abstract void resumeAllocation();
+
+    public abstract void disableAllocation(IsolateThread vmThread);
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public abstract boolean isAllocationDisallowed();
@@ -73,22 +59,10 @@ public abstract class Heap {
     public abstract GC getGC();
 
     /**
-     * Walk all the objects in the heap. Must only be executed as part of a VM operation that causes
-     * a safepoint.
+     * Walk all the Objects in the Heap, passing each to the visitor. Must only be executed as part
+     * of a VM operation that causes a safepoint.
      */
-    public abstract boolean walkObjects(ObjectVisitor visitor);
-
-    /**
-     * Walk all native image heap objects. Must only be executed as part of a VM operation that
-     * causes a safepoint.
-     */
-    public abstract boolean walkImageHeapObjects(ObjectVisitor visitor);
-
-    /**
-     * Walk all heap objects except the native image heap objects. Must only be executed as part of
-     * a VM operation that causes a safepoint.
-     */
-    public abstract boolean walkCollectedHeapObjects(ObjectVisitor visitor);
+    public abstract void walkObjects(ObjectVisitor visitor);
 
     /** Return a list of all the classes in the heap. */
     public abstract List<Class<?>> getClassList();
@@ -108,9 +82,8 @@ public abstract class Heap {
     /** Get the MemoryMXBean for this heap. */
     public abstract MemoryMXBean getMemoryMXBean();
 
-    /** Tear down the heap and free all allocated virtual memory chunks. */
-    @Uninterruptible(reason = "Tear-down in progress.")
-    public abstract boolean tearDown();
+    /** Tear down the heap, return all allocated virtual memory chunks to VirtualMemoryProvider. */
+    public abstract void tearDown();
 
     /** Prepare the heap for a safepoint. */
     public abstract void prepareForSafepoint();
@@ -119,16 +92,9 @@ public abstract class Heap {
     public abstract void endSafepoint();
 
     /**
-     * Returns a suitable {@link BarrierSet} for the garbage collector that is used for this heap.
+     * Returns a suitable {@link GCProvider} for the garbage collector that is used for this heap.
      */
-    public abstract PlatformConfigurationProvider getPlatformConfigurationProvider();
-
-    /**
-     * Returns the offset that the image heap should have when mapping the native image file to the
-     * address space in memory.
-     */
-    @Fold
-    public abstract int getImageHeapOffsetInAddressSpace();
+    public abstract GCProvider getGCProvider();
 
     /**
      * Returns true if the given object is located in the image heap.
