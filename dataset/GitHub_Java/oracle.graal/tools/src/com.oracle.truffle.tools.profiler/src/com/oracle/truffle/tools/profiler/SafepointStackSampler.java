@@ -112,7 +112,7 @@ final class SafepointStackSampler {
             long overhead = stackVisitor.endTime - stackVisitor.startTime;
             perThreadSamples.add(new StackSample(stackVisitor.thread, stackVisitor.createEntries(sourceSectionFilter),
                             bias, overhead, stackVisitor.overflowed));
-            stackVisitor.resetAndReturn();
+            stackVisitor.reset();
         }
         action.reset();
         cachedAction.set(action);
@@ -143,9 +143,6 @@ final class SafepointStackSampler {
     public void popSyntheticFrame() {
         Thread thread = Thread.currentThread();
         SyntheticFrame syntheticFrame = syntheticFrames.get(thread);
-        if (syntheticFrame == null) {
-            return;
-        }
         if (syntheticFrame.parent != null) {
             syntheticFrames.put(thread, syntheticFrame.parent);
         } else {
@@ -224,7 +221,7 @@ final class SafepointStackSampler {
             targets[nextFrameIndex] = topOfStackNode.getRootNode().getCallTarget();
         }
 
-        void resetAndReturn() {
+        void reset() {
             Arrays.fill(states, 0, nextFrameIndex, (byte) 0);
             Arrays.fill(targets, 0, nextFrameIndex, null);
             nextFrameIndex = 0;
@@ -282,7 +279,7 @@ final class SafepointStackSampler {
             stackOverflowed(visitor.overflowed);
             if (cancelled) {
                 // did not complete on time
-                visitor.resetAndReturn();
+                visitor.reset();
             } else {
                 completed.put(access.getThread(), visitor);
             }
@@ -309,7 +306,7 @@ final class SafepointStackSampler {
             StackVisitor visitor = fetchStackVisitor();
             Truffle.getRuntime().iterateFrames(visitor);
             stackSample = new StackSample(Thread.currentThread(), visitor.createEntries(sourceSectionFilter, message), 0, 0, visitor.overflowed);
-            visitor.resetAndReturn();
+            visitor.reset();
         }
     }
 }
