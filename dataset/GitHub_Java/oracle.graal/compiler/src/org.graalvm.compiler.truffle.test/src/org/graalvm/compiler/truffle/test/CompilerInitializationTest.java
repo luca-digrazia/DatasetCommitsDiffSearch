@@ -28,7 +28,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.polyglot.Context;
@@ -47,8 +46,8 @@ public class CompilerInitializationTest {
     public void resetCompiler() {
         Assume.assumeFalse("This test does not apply to SVM runtime where the compiler is initialized eagerly.", TruffleOptions.AOT);
         try {
-            Method m = Truffle.getRuntime().getClass().getMethod("resetCompiler");
-            m.invoke(Truffle.getRuntime());
+            Field f = compilerField();
+            f.set(Truffle.getRuntime(), null);
         } catch (Exception e) {
             throw new AssertionError(e);
         }
@@ -62,6 +61,7 @@ public class CompilerInitializationTest {
 
         // no compiler needed until the context is actually used
         assertTruffleCompilerInitialized(false);
+
         context.eval(InstrumentationTestLanguage.ID, "EXPRESSION");
         // since background compilation is off we can assume the compiler is initialized
         // afterwards. With background compilation on this would be racy and hard to test.
