@@ -300,17 +300,18 @@ public final class LLVMContext {
              */
             String[] sulongLibraryNames = language.getCapability(PlatformCapability.class).getSulongDefaultLibraries();
             for (int i = sulongLibraryNames.length - 1; i >= 0; i--) {
-                TruffleFile file = InternalLibraryLocator.INSTANCE.locateLibrary(this, sulongLibraryNames[i], "<default bitcode library>");
-                env.parseInternal(Source.newBuilder("llvm", file).internal(isInternalLibraryFile(file)).build());
+                ExternalLibrary library = addInternalLibrary(sulongLibraryNames[i], "<default bitcode library>", false);
+                TruffleFile file = library.hasFile() ? library.getFile() : env.getInternalTruffleFile(library.getPath().toUri());
+                env.parseInternal(Source.newBuilder("llvm", file).internal(library.isInternal()).build());
             }
 
             /*- TODO (PLi): after the default libraries have been loaded. The start function symbol,
              *   the sulong initialise context, and the sulong dispose context symbol could be setup
              *   here instead of being at findAndSetSulongSpecificFunctions in LoadModulesNode.
              */
-            CallTarget builtinsLibrary = env.parseInternal(Source.newBuilder("llvm",
-                            env.getInternalTruffleFile(internalLibraryPath.resolve(language.getCapability(PlatformCapability.class).getBuiltinsLibrary()).toUri())).internal(true).build());
-            builtinsLibrary.call();
+            CallTarget libpolyglotMock = env.parseInternal(Source.newBuilder("llvm",
+                            env.getInternalTruffleFile(internalLibraryPath.resolve(language.getCapability(PlatformCapability.class).getPolyglotMockLibrary()).toUri())).internal(true).build());
+            libpolyglotMock.call();
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
@@ -603,6 +604,9 @@ public final class LLVMContext {
         }
     }
 
+    /**
+     * @see #addExternalLibrary(String, Object, LibraryLocator)
+     */
     public ExternalLibrary addExternalLibraryDefaultLocator(String lib, Object reason) {
         return addExternalLibrary(lib, reason, DefaultLibraryLocator.INSTANCE);
     }
