@@ -58,19 +58,16 @@ import java.util.Properties;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.function.Supplier;
 
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.TruffleJDKServices;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
-import com.oracle.truffle.polyglot.EngineAccessor.AbstractClassLoaderSupplier;
-import com.oracle.truffle.polyglot.EngineAccessor.StrongClassLoaderSupplier;
 
 final class InstrumentCache {
 
     private static final List<InstrumentCache> nativeImageCache = TruffleOptions.AOT ? new ArrayList<>() : null;
-    private static Map<List<AbstractClassLoaderSupplier>, List<InstrumentCache>> runtimeCaches = new HashMap<>();
+    private static Map<List<ClassLoader>, List<InstrumentCache>> runtimeCaches = new HashMap<>();
 
     private final String className;
     private final String id;
@@ -89,7 +86,7 @@ final class InstrumentCache {
      */
     @SuppressWarnings("unused")
     private static void initializeNativeImageState(ClassLoader imageClassLoader) {
-        nativeImageCache.addAll(doLoad(Arrays.asList(new StrongClassLoaderSupplier(imageClassLoader))));
+        nativeImageCache.addAll(doLoad(Arrays.asList(imageClassLoader)));
     }
 
     /**
@@ -126,7 +123,7 @@ final class InstrumentCache {
             return nativeImageCache;
         }
         synchronized (InstrumentCache.class) {
-            List<AbstractClassLoaderSupplier> classLoaders = EngineAccessor.locatorOrDefaultLoaders();
+            List<ClassLoader> classLoaders = EngineAccessor.locatorOrDefaultLoaders();
             List<InstrumentCache> cache = runtimeCaches.get(classLoaders);
             if (cache == null) {
                 cache = doLoad(classLoaders);
@@ -136,11 +133,11 @@ final class InstrumentCache {
         }
     }
 
-    static List<InstrumentCache> doLoad(List<AbstractClassLoaderSupplier> suppliers) {
+    static List<InstrumentCache> doLoad(List<ClassLoader> loaders) {
         List<InstrumentCache> list = new ArrayList<>();
         Set<String> classNamesUsed = new HashSet<>();
-        for (Supplier<ClassLoader> supplier : suppliers) {
-            Loader.load(supplier.get(), list, classNamesUsed);
+        for (ClassLoader loader : loaders) {
+            Loader.load(loader, list, classNamesUsed);
         }
         Collections.sort(list, new Comparator<InstrumentCache>() {
             @Override
