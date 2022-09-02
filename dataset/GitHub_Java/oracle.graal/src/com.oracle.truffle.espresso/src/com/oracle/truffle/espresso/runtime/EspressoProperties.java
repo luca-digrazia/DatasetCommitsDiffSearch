@@ -275,7 +275,7 @@ abstract class PlatformBuilder extends EspressoProperties.Builder {
     // Note that os.arch may yield different values for the same architecture e.g. amd64 vs x86_64.
     static final String CPU_ARCH = System.getProperty("os.arch");
 
-    static final Path EXTENSIONS_DIR = Paths.get("lib", "ext");
+    static final Path EXTENSIONS_DIR = Paths.get("/lib/ext");
 
     @Override
     List<Path> defaultClasspath() {
@@ -371,17 +371,15 @@ final class LinuxBuilder extends PlatformBuilder {
     }
 }
 
-final class DarwinBuilder extends PlatformBuilder {
+final class MacOSBuilder extends PlatformBuilder {
 
-    private static final Path ROOT = Paths.get("/");
-
-    private static final Path SYS_EXTENSIONS_DIR = Paths.get("Library", "Java", "Extensions");
+    private static final Path SYS_EXTENSIONS_DIR = Paths.get("/Library/Java/Extensions");
 
     private static final List<Path> SYS_EXTENSIONS_DIRS = Collections.unmodifiableList(
                     Arrays.asList(
-                                    ROOT.resolve(SYS_EXTENSIONS_DIR),
-                                    Paths.get("/Network").resolve(SYS_EXTENSIONS_DIR),
-                                    Paths.get("/System").resolve(SYS_EXTENSIONS_DIR),
+                                    SYS_EXTENSIONS_DIR,
+                                    Paths.get("/Network" + SYS_EXTENSIONS_DIR),
+                                    Paths.get("/System" + SYS_EXTENSIONS_DIR),
                                     Paths.get("/usr/lib/java")));
 
     private static Path userHomeDir() {
@@ -391,7 +389,7 @@ final class DarwinBuilder extends PlatformBuilder {
     @Override
     List<Path> defaultJavaLibraryPath() {
         List<Path> paths = new ArrayList<>();
-        paths.add(userHomeDir().resolve(SYS_EXTENSIONS_DIR));
+        paths.add(Paths.get(userHomeDir().toString() + SYS_EXTENSIONS_DIR));
         paths.addAll(SYS_EXTENSIONS_DIRS);
         paths.add(Paths.get("."));
         return paths;
