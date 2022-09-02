@@ -237,13 +237,4 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
         }
         return false;
     }
-
-    public JNIObjectHandle filterGetClasses(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle array, WordSupplier<JNIObjectHandle> elementClass, boolean declaredOnly,
-                    JNIObjectHandle callerClass) {
-        if (shouldApproveWithoutChecks(env, clazz, callerClass)) {
-            return array;
-        }
-        WordPredicate<JNIObjectHandle> shouldRetain = c -> true;
-        return filterArray(env, array, elementClass, shouldRetain);
-    }
 }

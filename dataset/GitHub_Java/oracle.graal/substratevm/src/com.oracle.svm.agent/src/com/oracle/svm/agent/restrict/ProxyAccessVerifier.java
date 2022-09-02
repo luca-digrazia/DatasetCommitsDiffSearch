@@ -25,11 +25,8 @@
 package com.oracle.svm.agent.restrict;
 
 import static com.oracle.svm.configure.trace.LazyValueUtils.lazyNull;
-import static com.oracle.svm.configure.trace.LazyValueUtils.lazyValue;
 
 import java.util.Arrays;
-
-import org.graalvm.compiler.phases.common.LazyValue;
 
 import com.oracle.svm.configure.config.ProxyConfiguration;
 import com.oracle.svm.configure.trace.AccessAdvisor;
@@ -53,19 +50,9 @@ public class ProxyAccessVerifier extends AbstractAccessVerifier {
     }
 
     private boolean verifyProxyAccess(JNIEnvironment env, Object interfaceNames, JNIObjectHandle callerClass) {
-        LazyValue<String> lazyCallerClass = lazyClassNameOrNull(env, callerClass);
-        if (shouldApproveWithoutChecks(lazyNull(), lazyCallerClass)) {
+        if (shouldApproveWithoutChecks(lazyNull(), lazyClassNameOrNull(env, callerClass))) {
             return true;
         }
-        if (!(interfaceNames instanceof String[])) {
-            return false;
-        }
-        String[] interfaceNamesArray = (String[]) interfaceNames;
-        for (String name : interfaceNamesArray) {
-            if (shouldApproveWithoutChecks(lazyValue(name), lazyCallerClass)) {
-                return true;
-            }
-        }
-        return configuration.contains(Arrays.asList(interfaceNamesArray));
+        return (interfaceNames instanceof String[]) && configuration.contains(Arrays.asList((String[]) interfaceNames));
     }
 }

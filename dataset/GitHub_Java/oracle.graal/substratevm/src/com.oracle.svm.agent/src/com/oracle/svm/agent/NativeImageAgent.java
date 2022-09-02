@@ -27,7 +27,6 @@ package com.oracle.svm.agent;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.Reader;
 import java.net.URI;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileSystem;
@@ -55,8 +54,13 @@ import java.util.regex.Pattern;
 
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.nativeimage.ProcessProperties;
-import org.graalvm.nativeimage.hosted.Feature;
 
+import com.oracle.svm.jvmtiagentbase.JvmtiAgentBase;
+import com.oracle.svm.jvmtiagentbase.JNIHandleSet;
+import com.oracle.svm.jvmtiagentbase.Support;
+import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiEnv;
+import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiEventCallbacks;
+import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiInterface;
 import com.oracle.svm.agent.restrict.JniAccessVerifier;
 import com.oracle.svm.agent.restrict.ProxyAccessVerifier;
 import com.oracle.svm.agent.restrict.ReflectAccessVerifier;
@@ -76,12 +80,7 @@ import com.oracle.svm.driver.NativeImage;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIJavaVM;
 import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
-import com.oracle.svm.jvmtiagentbase.JNIHandleSet;
-import com.oracle.svm.jvmtiagentbase.JvmtiAgentBase;
-import com.oracle.svm.jvmtiagentbase.Support;
-import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiEnv;
-import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiEventCallbacks;
-import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiInterface;
+import org.graalvm.nativeimage.hosted.Feature;
 
 public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHandleSet> {
     private static final String AGENT_NAME = "native-image-agent";
@@ -130,15 +129,13 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
         boolean builtinCallerFilter = true;
         boolean builtinHeuristicFilter = true;
         List<String> callerFilterFiles = new ArrayList<>();
-        List<String> accessFilterFiles = new ArrayList<>();
         boolean experimentalClassLoaderSupport = true;
-        boolean methodHandleSupport = false;
         boolean build = false;
         int configWritePeriod = -1; // in seconds
         int configWritePeriodInitialDelay = 1; // in seconds
 
         if (options.length() == 0) {
-            System.err.println(MESSAGE_PREFIX + "invalid option string. Please read Configuration.md.");
+            System.err.println(MESSAGE_PREFIX + "invalid option string. Please read CONFIGURE.md.");
             return 1;
         }
         for (String token : options.split(",")) {
@@ -180,8 +177,6 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
                 builtinHeuristicFilter = builtinCallerFilter;
             } else if (token.startsWith("caller-filter-file=")) {
                 callerFilterFiles.add(getTokenValue(token));
-            } else if (token.startsWith("access-filter-file=")) {
-                accessFilterFiles.add(getTokenValue(token));
             } else if (token.equals("experimental-class-loader-support")) {
                 experimentalClassLoaderSupport = true;
             } else if (token.startsWith("experimental-class-loader-support=")) {
@@ -202,12 +197,8 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
                 build = true;
             } else if (token.startsWith("build=")) {
                 build = Boolean.parseBoolean(getTokenValue(token));
-            } else if (token.equals("method-handle-support")) {
-                methodHandleSupport = true;
-            } else if (token.startsWith("method-handle-support")) {
-                methodHandleSupport = Boolean.parseBoolean(getTokenValue(token));
             } else {
-                System.err.println(MESSAGE_PREFIX + "unsupported option: '" + token + "'. Please read Configuration.md.");
+                System.err.println(MESSAGE_PREFIX + "unsupported option: '" + token + "'. Please read CONFIGURE.md.");
                 return 1;
             }
         }
@@ -217,26 +208,25 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
             System.err.println(MESSAGE_PREFIX + "no output/restrict/build options provided, tracking dynamic accesses and writing configuration to directory: " + configOutputDir);
         }
 
-        RuleNode callerFilter = null;
+        RuleNode callersFilter = null;
         if (!builtinCallerFilter) {
-            callerFilter = RuleNode.createRoot();
-            callerFilter.addOrGetChildren("**", RuleNode.Inclusion.Include);
+            callersFilter = RuleNode.createRoot();
+            callersFilter.addOrGetChildren("**", RuleNode.Inclusion.Include);
         }
         if (!callerFilterFiles.isEmpty()) {
-            if (callerFilter == null) {
-                callerFilter = AccessAdvisor.copyBuiltinCallerFilterTree();
+            if (callersFilter == null) {
+                callersFilter = AccessAdvisor.copyBuiltinCallerFilterTree();
             }
-            if (!parseFilterFiles(callerFilter, callerFilterFiles)) {
-                return 1;
+            for (String path : callerFilterFiles) {
+                try {
+                    FilterConfigurationParser parser = new FilterConfigurationParser(callersFilter);
+                    parser.parseAndRegister(new FileReader(path));
+                } catch (Exception e) {
+                    System.err.println(MESSAGE_PREFIX + "cannot parse filter file " + path + ": " + e);
+                    return 1;
+                }
             }
-        }
-
-        RuleNode accessFilter = null;
-        if (!accessFilterFiles.isEmpty()) {
-            accessFilter = AccessAdvisor.copyBuiltinAccessFilterTree();
-            if (!parseFilterFiles(accessFilter, accessFilterFiles)) {
-                return 1;
-            }
+            callersFilter.removeRedundantNodes();
         }
 
         if (configOutputDir != null) {
@@ -256,12 +246,12 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
                     }
                     return e; // rethrow
                 };
-                // Note that we cannot share use the same advisor for generating the configuration
-                // from parsing events and for enforcing restrictions because they are stateful.
-                // They should use the same filter sets, however.
-                AccessAdvisor advisor = createAccessAdvisor(builtinHeuristicFilter, callerFilter, accessFilter);
-                TraceProcessor processor = new TraceProcessor(advisor, mergeConfigs.loadJniConfig(handler), mergeConfigs.loadReflectConfig(handler),
+                TraceProcessor processor = new TraceProcessor(mergeConfigs.loadJniConfig(handler), mergeConfigs.loadReflectConfig(handler),
                                 mergeConfigs.loadProxyConfig(handler), mergeConfigs.loadResourceConfig(handler));
+                processor.setHeuristicsEnabled(builtinHeuristicFilter);
+                if (callersFilter != null) {
+                    processor.setCallerFilterTree(callersFilter);
+                }
                 traceWriter = new TraceProcessorWriterAdapter(processor);
             } catch (Throwable t) {
                 System.err.println(MESSAGE_PREFIX + t);
@@ -287,7 +277,8 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
             return 2;
         }
 
-        accessAdvisor = createAccessAdvisor(builtinHeuristicFilter, callerFilter, accessFilter);
+        accessAdvisor = new AccessAdvisor();
+        accessAdvisor.setHeuristicsEnabled(builtinHeuristicFilter);
         TypeAccessChecker reflectAccessChecker = null;
         try {
             ReflectAccessVerifier verifier = null;
@@ -303,7 +294,7 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
             if (!restrictConfigs.getResourceConfigPaths().isEmpty()) {
                 resourceVerifier = new ResourceAccessVerifier(restrictConfigs.loadResourceConfig(ConfigurationSet.FAIL_ON_EXCEPTION), accessAdvisor);
             }
-            BreakpointInterceptor.onLoad(jvmti, callbacks, traceWriter, verifier, proxyVerifier, resourceVerifier, this, experimentalClassLoaderSupport, methodHandleSupport);
+            BreakpointInterceptor.onLoad(jvmti, callbacks, traceWriter, verifier, proxyVerifier, resourceVerifier, this, experimentalClassLoaderSupport);
         } catch (Throwable t) {
             System.err.println(MESSAGE_PREFIX + t);
             return 3;
@@ -333,37 +324,12 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
         return 0;
     }
 
-    private static AccessAdvisor createAccessAdvisor(boolean builtinHeuristicFilter, RuleNode callerFilter, RuleNode accessFilter) {
-        AccessAdvisor advisor = new AccessAdvisor();
-        advisor.setHeuristicsEnabled(builtinHeuristicFilter);
-        if (callerFilter != null) {
-            advisor.setCallerFilterTree(callerFilter);
-        }
-        if (accessFilter != null) {
-            advisor.setAccessFilterTree(accessFilter);
-        }
-        return advisor;
-    }
-
     private static int parseIntegerOrNegative(String number) {
         try {
             return Integer.parseInt(number);
         } catch (NumberFormatException ex) {
             return -1;
         }
-    }
-
-    private static boolean parseFilterFiles(RuleNode filter, List<String> filterFiles) {
-        for (String path : filterFiles) {
-            try (Reader reader = new FileReader(path)) {
-                new FilterConfigurationParser(filter).parseAndRegister(reader);
-            } catch (Exception e) {
-                System.err.println(MESSAGE_PREFIX + "cannot parse filter file " + path + ": " + e);
-                return false;
-            }
-        }
-        filter.removeRedundantNodes();
-        return true;
     }
 
     private void setupExecutorServiceForPeriodicConfigurationCapture(int writePeriod, int initialDelay) {
@@ -526,7 +492,6 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
     protected void onVMInitCallback(JvmtiEnv jvmti, JNIEnvironment jni, JNIObjectHandle thread) {
         accessAdvisor.setInLivePhase(true);
         BreakpointInterceptor.onVMInit(jvmti, jni);
-        JniCallInterceptor.onVMInit(jvmti, jni);
         if (traceWriter != null) {
             traceWriter.tracePhaseChange("live");
         }
