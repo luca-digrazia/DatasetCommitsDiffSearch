@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,8 +24,7 @@
  */
 package org.graalvm.compiler.truffle.compiler.hotspot.libgraal;
 
-import org.graalvm.libgraal.jni.HSObject;
-
+import static jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.runtime;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.FindCallNode;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.FindDecision;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetDescription;
@@ -52,7 +51,7 @@ import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleIn
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleInliningPlanGen.callGetURI;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleInliningPlanGen.callIsTargetStable;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSTruffleInliningPlanGen.callShouldInline;
-import static org.graalvm.libgraal.jni.JNIUtil.createString;
+import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNIUtil.createString;
 
 import java.net.URI;
 
@@ -60,23 +59,21 @@ import org.graalvm.compiler.truffle.common.TruffleCallNode;
 import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.common.TruffleSourceLanguagePosition;
 import org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot;
-import org.graalvm.libgraal.jni.HotSpotToSVMScope;
-import org.graalvm.libgraal.jni.JNI.JNIEnv;
-import org.graalvm.libgraal.jni.JNI.JObject;
-import org.graalvm.libgraal.jni.JNI.JString;
+import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JNIEnv;
+import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JObject;
+import org.graalvm.compiler.truffle.compiler.hotspot.libgraal.JNI.JString;
 import org.graalvm.libgraal.LibGraal;
 
 import jdk.vm.ci.meta.JavaConstant;
-import org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM;
 
 /**
  * Proxy for a {@link TruffleInliningPlan} object in the HotSpot heap.
  */
 class HSTruffleInliningPlan extends HSObject implements TruffleInliningPlan {
 
-    final HotSpotToSVMScope<HotSpotToSVM.Id> scope;
+    final HotSpotToSVMScope scope;
 
-    HSTruffleInliningPlan(HotSpotToSVMScope<HotSpotToSVM.Id> scope, JObject handle) {
+    HSTruffleInliningPlan(HotSpotToSVMScope scope, JObject handle) {
         super(scope, handle);
         this.scope = scope;
     }
@@ -84,7 +81,7 @@ class HSTruffleInliningPlan extends HSObject implements TruffleInliningPlan {
     @SVMToHotSpot(FindDecision)
     @Override
     public Decision findDecision(JavaConstant callNode) {
-        long callNodeHandle = LibGraal.translate(callNode);
+        long callNodeHandle = LibGraal.translate(runtime(), callNode);
         JNIEnv env = scope.getEnv();
         JObject res = callFindDecision(env, getHandle(), callNodeHandle);
         if (res.isNull()) {
@@ -96,7 +93,7 @@ class HSTruffleInliningPlan extends HSObject implements TruffleInliningPlan {
     @SVMToHotSpot(FindCallNode)
     @Override
     public TruffleCallNode findCallNode(JavaConstant callNode) {
-        long nodeHandle = LibGraal.translate(callNode);
+        long nodeHandle = LibGraal.translate(runtime(), callNode);
         JNIEnv env = scope.getEnv();
         JObject res = callFindCallNode(env, getHandle(), nodeHandle);
         if (res.isNull()) {
@@ -108,7 +105,7 @@ class HSTruffleInliningPlan extends HSObject implements TruffleInliningPlan {
     @SVMToHotSpot(GetPosition)
     @Override
     public TruffleSourceLanguagePosition getPosition(JavaConstant node) {
-        long nodeHandle = LibGraal.translate(node);
+        long nodeHandle = LibGraal.translate(runtime(), node);
         JNIEnv env = scope.getEnv();
         JObject res = callGetPosition(env, getHandle(), nodeHandle);
         if (res.isNull()) {
@@ -122,7 +119,7 @@ class HSTruffleInliningPlan extends HSObject implements TruffleInliningPlan {
      */
     private static final class HSDecision extends HSTruffleInliningPlan implements Decision {
 
-        HSDecision(HotSpotToSVMScope<HotSpotToSVM.Id> scope, JObject handle) {
+        HSDecision(HotSpotToSVMScope scope, JObject handle) {
             super(scope, handle);
         }
 
@@ -150,7 +147,7 @@ class HSTruffleInliningPlan extends HSObject implements TruffleInliningPlan {
         @Override
         public JavaConstant getNodeRewritingAssumption() {
             long javaConstantHandle = callGetNodeRewritingAssumption(scope.getEnv(), getHandle());
-            return LibGraal.unhand(JavaConstant.class, javaConstantHandle);
+            return LibGraal.unhand(runtime(), JavaConstant.class, javaConstantHandle);
         }
     }
 
@@ -159,7 +156,7 @@ class HSTruffleInliningPlan extends HSObject implements TruffleInliningPlan {
      */
     private static final class HSTruffleSourceLanguagePosition extends HSObject implements TruffleSourceLanguagePosition {
 
-        HSTruffleSourceLanguagePosition(HotSpotToSVMScope<HotSpotToSVM.Id> scope, JObject handle) {
+        HSTruffleSourceLanguagePosition(HotSpotToSVMScope scope, JObject handle) {
             super(scope, handle);
         }
 
