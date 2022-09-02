@@ -48,7 +48,6 @@ import java.lang.invoke.MethodHandle;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -228,8 +227,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
     @Substitution
     public static @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject resolve(
                     @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self,
-                    @Host(value = Class.class) StaticObject caller,
-                    @GuestCall DirectCallNode getSignature) {
+                    @Host(value = Class.class) StaticObject caller) {
         // TODO(Garcia) Perhaps perform access checks ?
         Klass mnKlass = self.getKlass();
         Meta meta = mnKlass.getContext().getMeta();
@@ -255,7 +253,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
                 throw meta.throwEx(NoSuchMethodException.class);
             }
         }
-        StaticObject type = (StaticObject) getSignature.call(self);
+        StaticObject type = (StaticObject) meta.getSignature.invokeDirect(self);
 
         if (defKlass == null) {
             return StaticObject.NULL;

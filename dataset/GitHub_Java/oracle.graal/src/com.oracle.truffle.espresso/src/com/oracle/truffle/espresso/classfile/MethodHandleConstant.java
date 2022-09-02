@@ -124,8 +124,7 @@ public interface MethodHandleConstant extends PoolConstant {
 
         @Override
         public void checkValidity(ConstantPool pool) {
-            Tag tag = pool.at(refIndex).tag();
-            if (tag != Tag.METHOD_REF && tag != Tag.INTERFACE_METHOD_REF) {
+            if (pool.at(refIndex).tag() != Tag.METHOD_REF) {
                 throw new VerifyError("Ill-formed constant: " + tag());
             }
             pool.at(refIndex).checkValidity(pool);
