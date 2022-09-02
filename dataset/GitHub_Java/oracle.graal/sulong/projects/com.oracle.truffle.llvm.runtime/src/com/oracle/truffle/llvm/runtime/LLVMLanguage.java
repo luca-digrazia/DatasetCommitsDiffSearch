@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.graalvm.collections.EconomicMap;
@@ -88,37 +87,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     @CompilationFinal private Configuration activeConfiguration = null;
 
-    private static final class ContextExtensionKey<C extends ContextExtension> extends ContextExtension.Key<C> {
-
-        private static final ContextExtensionKey<?>[] EMPTY = {};
-
-        private final Class<? extends C> clazz;
-        private final int index;
-
-        private final ContextExtension.Factory<C> factory;
-
-        ContextExtensionKey(Class<C> clazz, int index, ContextExtension.Factory<C> factory) {
-            this.clazz = clazz;
-            this.index = index;
-            this.factory = factory;
-        }
-
-        @Override
-        public C get(LLVMContext ctx) {
-            CompilerAsserts.compilationConstant(clazz);
-            return clazz.cast(ctx.getContextExtension(index));
-        }
-
-        @SuppressWarnings("unchecked")
-        private <U extends ContextExtension> ContextExtensionKey<U> cast(Class<U> target) {
-            Class<? extends U> c = clazz.asSubclass(target);
-            assert c == clazz;
-            return (ContextExtensionKey<U>) this;
-        }
-    }
-
-    private ContextExtensionKey<?>[] contextExtensions;
-
     @CompilationFinal private LLVMMemory cachedLLVMMemory;
 
     private final EconomicMap<String, LLVMScope> internalFileScopes = EconomicMap.create();
@@ -144,13 +112,7 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     @Override
     protected void initializeContext(LLVMContext context) {
-        ContextExtension[] ctxExts = new ContextExtension[contextExtensions.length];
-        for (int i = 0; i < contextExtensions.length; i++) {
-            ContextExtensionKey<?> key = contextExtensions[i];
-            ContextExtension ext = key.factory.create(context.getEnv());
-            ctxExts[i] = key.clazz.cast(ext); // fail early if the factory returns a wrong class
-        }
-        context.initialize(ctxExts);
+        context.initialize(activeConfiguration.createContextExtensions(context.getEnv()));
     }
 
     /**
@@ -241,24 +203,8 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     @Override
     protected LLVMContext createContext(Env env) {
         if (activeConfiguration == null) {
-            final ArrayList<ContextExtension.Key<?>> ctxExts = new ArrayList<>();
-            ContextExtension.Registry r = new ContextExtension.Registry() {
-
-                private int count;
-
-                @Override
-                public <C extends ContextExtension> ContextExtension.Key<C> register(Class<C> type, ContextExtension.Factory<C> factory) {
-                    ContextExtension.Key<C> key = new ContextExtensionKey<>(type, count++, factory);
-                    ctxExts.add(key);
-                    assert count == ctxExts.size();
-                    return key;
-                }
-            };
-
-            activeConfiguration = Configurations.createConfiguration(this, r, env.getOptions());
-
+            activeConfiguration = Configurations.createConfiguration(this, env.getOptions());
             cachedLLVMMemory = activeConfiguration.getCapability(LLVMMemory.class);
-            contextExtensions = ctxExts.toArray(ContextExtensionKey.EMPTY);
         }
 
         Toolchain toolchain = new ToolchainImpl(activeConfiguration.getCapability(ToolchainConfig.class), this);
@@ -266,21 +212,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
         LLVMContext context = new LLVMContext(this, env, toolchain);
         return context;
-    }
-
-    /**
-     * Find a context extension key, that can be used to retrieve a context extension instance. This
-     * method must not be called from the fast-path. The return value is safe to be cached across
-     * contexts in a single engine.
-     */
-    public <C extends ContextExtension> ContextExtension.Key<C> lookupContextExtension(Class<C> type) {
-        CompilerAsserts.neverPartOfCompilation();
-        for (ContextExtensionKey<?> key : contextExtensions) {
-            if (type == key.clazz) {
-                return key.cast(type);
-            }
-        }
-        return null;
     }
 
     @Override
