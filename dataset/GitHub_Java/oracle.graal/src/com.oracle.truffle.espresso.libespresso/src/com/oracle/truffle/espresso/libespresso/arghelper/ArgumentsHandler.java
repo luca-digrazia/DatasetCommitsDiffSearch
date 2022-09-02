@@ -25,9 +25,14 @@ package com.oracle.truffle.espresso.libespresso.arghelper;
 
 import static com.oracle.truffle.espresso.libespresso.Arguments.abort;
 
+import java.io.PrintStream;
+
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
+import org.graalvm.options.OptionCategory;
+import org.graalvm.options.OptionDescriptor;
+import org.graalvm.options.OptionType;
 import org.graalvm.polyglot.Context;
 import org.graalvm.word.Pointer;
 
@@ -35,19 +40,35 @@ import com.oracle.truffle.espresso.libespresso.Arguments;
 import com.oracle.truffle.espresso.libespresso.jniapi.JNIJavaVMInitArgs;
 import com.oracle.truffle.espresso.libespresso.jniapi.JNIJavaVMOption;
 
+/**
+ * A helper class that centralizes different ways of handling option parsing for the java -truffle
+ * launcher.
+ */
 public class ArgumentsHandler {
-    private final Context.Builder builder;
+    /**
+     * Default option description indentation.
+     */
+    public static final int LAUNCHER_OPTIONS_INDENT = 45;
 
-    private final Native nativeAccess = new Native();
+    private static final PrintStream out = System.out;
+
+    private final Native nativeAccess;
     private final PolyglotArgs polyglotAccess;
     private final ModulePropertyCounter modulePropertyCounter;
 
     private final boolean experimental;
 
+    private boolean helpVM = false;
+    private boolean helpTools = false;
+    private boolean helpLanguages = false;
+
+    private boolean helpExpert = false;
+    private boolean helpInternal = false;
+
     public ArgumentsHandler(Context.Builder builder, JNIJavaVMInitArgs args) {
-        this.builder = builder;
+        this.nativeAccess = new Native(this);
         this.modulePropertyCounter = new ModulePropertyCounter(builder);
-        this.polyglotAccess = new PolyglotArgs(builder);
+        this.polyglotAccess = new PolyglotArgs(builder, this);
         this.experimental = checkExperimental(args);
     }
 
@@ -91,6 +112,25 @@ public class ArgumentsHandler {
         modulePropertyCounter.addReads(option);
     }
 
+    /**
+     * <code>-XX:</code> arguments are handled specially: If there is an espresso option with the
+     * same name as the option passed, it will set it for the guest VM. Otherwise, it is forwarded
+     * to the host vm.
+     *
+     * As such,
+     * <ul>
+     * <li>Specifying <code>-XX:+InlineFieldAccessors</code> will match with the InlineFieldAccessor
+     * option in EspressoOptions, and set it to true.</li>
+     * <li>Specifying <code>--vm.XX:MaxDirectMemorySize=1024k</code> will pass the
+     * <code>-XX:MaxDirectMemorySize</code> option to the host VM, and bypass the matching option in
+     * espresso</li>
+     * <li>Specifying <code>-XX:MaxDirectMemorySize=1024k</code> will match with the
+     * MaxDirectMemorySize option in EspressoOptions, and set it accordingly, but will NOT set this
+     * flag for the host VM.</li>
+     * <li>Specifying <code>-XX:+PrintGC</code> will pass it directly to the host VM, as it does not
+     * match with any of the Espresso options.</li>
+     * </ul>
+     */
     public void handleXXArg(String optionString) {
         String toPolyglot = optionString.substring("-XX:".length());
         if (toPolyglot.length() >= 1 && (toPolyglot.charAt(0) == '+' || toPolyglot.charAt(0) == '-')) {
@@ -113,16 +153,128 @@ public class ArgumentsHandler {
         nativeAccess.setNativeOption(optionString.substring(1));
     }
 
+    public void parsePolyglotOption(String optionString) {
+        polyglotAccess.parsePolyglotOption(optionString, experimental);
+    }
+
     public void handleVMOption(String optionString) {
         nativeAccess.init(false);
         nativeAccess.setNativeOption(optionString.substring("--vm.".length()));
     }
 
-    public void parsePolyglotOption(String optionString) {
-        polyglotAccess.parsePolyglotOption(optionString, experimental);
+    public void argumentProcessingDone() {
+        printHelp();
+        polyglotAccess.argumentProcessingDone();
     }
 
-    public void argumentProcessingDone() {
-        polyglotAccess.argumentProcessingDone();
+    public void help(String arg) {
+        switch (arg) {
+            case "--help:vm":
+                helpVM = true;
+                break;
+            case "--help:tools":
+                helpTools = true;
+                break;
+            case "--help:languages":
+                helpLanguages = true;
+                break;
+            case "--help:internal":
+                helpInternal = true;
+                break;
+            case "--help:expert":
+                helpExpert = true;
+                break;
+            default:
+                abort("Unrecognized option: '" + arg + "'.");
+        }
+    }
+
+    void printRaw(String category) {
+        out.println(category);
+    }
+
+    void printLauncherOption(String option, String description) {
+        out.println(getHelpLine(option, description));
+    }
+
+    void printLauncherOption(String option, String description, int indentation) {
+        out.println(getHelpLine(option, description, indentation, LAUNCHER_OPTIONS_INDENT));
+    }
+
+    static boolean isBooleanOption(OptionDescriptor descriptor) {
+        return descriptor.getKey().getType().equals(OptionType.defaultType(Boolean.class));
+    }
+
+    private void printHelp() {
+        boolean help = false;
+        if (helpVM) {
+            nativeAccess.printNativeHelp();
+            help = true;
+        }
+        if (helpTools) {
+            polyglotAccess.printToolsHelp(getHelpCategory());
+            help = true;
+        }
+        if (helpLanguages) {
+            polyglotAccess.printLanguageHelp(getHelpCategory());
+            help = true;
+        }
+        if (help) {
+            System.exit(0);
+        }
+    }
+
+    private static String getHelpLine(String option, String description) {
+        return getHelpLine(option, description, 2, LAUNCHER_OPTIONS_INDENT);
+    }
+
+    private static String getHelpLine(String option, String description, int indentStart, int optionWidth) {
+        String indent = spaces(indentStart);
+        String desc = wrap(description != null ? description : "");
+        String nl = System.lineSeparator();
+        String[] descLines = desc.split(nl);
+        StringBuilder toPrint = new StringBuilder();
+        if (option.length() >= optionWidth && description != null) {
+            toPrint.append(indent).append(option).append(nl).append(indent).append(spaces(optionWidth)).append(descLines[0]);
+        } else {
+            toPrint.append(indent).append(option).append(spaces(optionWidth - option.length())).append(descLines[0]);
+        }
+        for (int i = 1; i < descLines.length; i++) {
+            toPrint.append('\n').append(indent).append(spaces(optionWidth)).append(descLines[i]);
+        }
+        return toPrint.toString();
+    }
+
+    private static String spaces(int length) {
+        return new String(new char[length]).replace('\0', ' ');
+    }
+
+    private static String wrap(String s) {
+        final int width = 120;
+        StringBuilder sb = new StringBuilder(s);
+        int cursor = 0;
+        while (cursor + width < sb.length()) {
+            int i = sb.lastIndexOf(" ", cursor + width);
+            if (i == -1 || i < cursor) {
+                i = sb.indexOf(" ", cursor + width);
+            }
+            if (i != -1) {
+                sb.replace(i, i + 1, System.lineSeparator());
+                cursor = i;
+            } else {
+                break;
+            }
+        }
+        return sb.toString();
+    }
+
+    private OptionCategory getHelpCategory() {
+        if (helpInternal) {
+            return OptionCategory.INTERNAL;
+        } else if (helpExpert) {
+            return OptionCategory.EXPERT;
+        } else {
+            return OptionCategory.USER;
+        }
     }
 }

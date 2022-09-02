@@ -25,18 +25,25 @@ package com.oracle.truffle.espresso.libespresso;
 import static com.oracle.truffle.espresso.libespresso.jniapi.JNIErrors.JNI_ERR;
 
 import java.io.File;
+import java.io.PrintStream;
 
+import org.graalvm.nativeimage.RuntimeOptions;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.polyglot.Context;
 import org.graalvm.word.Pointer;
 
+import com.oracle.truffle.espresso.libespresso.arghelper.ArgumentsHandler;
 import com.oracle.truffle.espresso.libespresso.jniapi.JNIErrors;
 import com.oracle.truffle.espresso.libespresso.jniapi.JNIJavaVMInitArgs;
 import com.oracle.truffle.espresso.libespresso.jniapi.JNIJavaVMOption;
 
 public final class Arguments {
+    private static final PrintStream STDERR = System.err;
+
+    public static final String JAVA_PROPS = "java.Properties.";
+
     private Arguments() {
     }
 
@@ -46,57 +53,109 @@ public final class Arguments {
         String classpath = null;
         String bootClasspathPrepend = null;
         String bootClasspathAppend = null;
+
+        ArgumentsHandler handler = new ArgumentsHandler(builder, args);
+
+        boolean ignoreUnrecognized = false;
+
         for (int i = 0; i < count; i++) {
             JNIJavaVMOption option = (JNIJavaVMOption) p.add(i * SizeOf.get(JNIJavaVMOption.class));
             CCharPointer str = option.getOptionString();
-            if (str.isNonNull()) {
-                String optionString = CTypeConversion.toJavaString(option.getOptionString());
-                if (optionString.startsWith("-Xbootclasspath:")) {
-                    bootClasspathPrepend = null;
-                    bootClasspathAppend = null;
-                    builder.option("java.BootClasspath", optionString.substring("-Xbootclasspath:".length()));
-                } else if (optionString.startsWith("-Xbootclasspath/a:")) {
-                    bootClasspathAppend = appendPath(bootClasspathAppend, optionString.substring("-Xbootclasspath/a:".length()));
-                } else if (optionString.startsWith("-Xbootclasspath/p:")) {
-                    bootClasspathPrepend = prependPath(optionString.substring("-Xbootclasspath/p:".length()), bootClasspathPrepend);
-                } else if (optionString.startsWith("-Xverify:")) {
-                    String mode = optionString.substring("-Xverify:".length());
-                    builder.option("java.Verify", mode);
-                } else if (optionString.startsWith("-Xrunjdwp:")) {
-                    String value = optionString.substring("-Xrunjdwp:".length());
-                    builder.option("java.JDWPOptions", value);
-                } else if (optionString.startsWith("-D")) {
-                    String key = optionString.substring("-D".length());
-                    int splitAt = key.indexOf("=");
-                    String value = "";
-                    if (splitAt >= 0) {
-                        value = key.substring(splitAt + 1);
-                        key = key.substring(0, splitAt);
+            try {
+                if (str.isNonNull()) {
+                    String optionString = CTypeConversion.toJavaString(option.getOptionString());
+                    if (optionString.startsWith("-Xbootclasspath:")) {
+                        bootClasspathPrepend = null;
+                        bootClasspathAppend = null;
+                        builder.option("java.BootClasspath", optionString.substring("-Xbootclasspath:".length()));
+                    } else if (optionString.startsWith("-Xbootclasspath/a:")) {
+                        bootClasspathAppend = appendPath(bootClasspathAppend, optionString.substring("-Xbootclasspath/a:".length()));
+                    } else if (optionString.startsWith("-Xbootclasspath/p:")) {
+                        bootClasspathPrepend = prependPath(optionString.substring("-Xbootclasspath/p:".length()), bootClasspathPrepend);
+                    } else if (optionString.startsWith("-Xverify:")) {
+                        String mode = optionString.substring("-Xverify:".length());
+                        builder.option("java.Verify", mode);
+                    } else if (optionString.startsWith("-Xrunjdwp:")) {
+                        String value = optionString.substring("-Xrunjdwp:".length());
+                        builder.option("java.JDWPOptions", value);
+                    } else if (optionString.startsWith("-agentlib:jdwp=")) {
+                        String value = optionString.substring("-agentlib:jdwp=".length());
+                        builder.option("java.JDWPOptions", value);
+                    } else if (optionString.startsWith("-D")) {
+                        String key = optionString.substring("-D".length());
+                        int splitAt = key.indexOf("=");
+                        String value = "";
+                        if (splitAt >= 0) {
+                            value = key.substring(splitAt + 1);
+                            key = key.substring(0, splitAt);
+                        }
+                        if (handler.isModulesOption(key)) {
+                            warn("Ignoring system property -D" + key + " that is reserved for internal use.");
+                            continue;
+                        }
+                        switch (key) {
+                            case "espresso.library.path":
+                                builder.option("java.EspressoLibraryPath", value);
+                                break;
+                            case "java.library.path":
+                                builder.option("java.JavaLibraryPath", value);
+                                break;
+                            case "java.class.path":
+                                classpath = value;
+                                break;
+                            case "java.ext.dirs":
+                                builder.option("java.ExtDirs", value);
+                                break;
+                            case "sun.boot.class.path":
+                                builder.option("java.BootClasspath", value);
+                                break;
+                            case "sun.boot.library.path":
+                                builder.option("java.BootLibraryPath", value);
+                                break;
+                        }
+                        builder.option(JAVA_PROPS + key, value);
+                    } else if (optionString.equals("-ea") || optionString.equals("-enableassertions")) {
+                        builder.option("java.EnableAssertions", "true");
+                    } else if (optionString.equals("-esa") || optionString.equals("-enablesystemassertions")) {
+                        builder.option("java.EnableSystemAssertions", "true");
+                    } else if (optionString.startsWith("--add-reads=")) {
+                        handler.addReads(optionString.substring("--add-reads=".length()));
+                    } else if (optionString.startsWith("--add-exports=")) {
+                        handler.addExports(optionString.substring("--add-exports=".length()));
+                    } else if (optionString.startsWith("--add-opens=")) {
+                        handler.addOpens(optionString.substring("--add-opens=".length()));
+                    } else if (optionString.startsWith("--add-modules=")) {
+                        handler.addModules(optionString.substring("--add-modules=".length()));
+                    } else if (optionString.startsWith("--module-path=")) {
+                        builder.option(JAVA_PROPS + "jdk.module.path", optionString.substring("--module-path=".length()));
+                    } else if (optionString.startsWith("--upgrade-module-path=")) {
+                        builder.option(JAVA_PROPS + "jdk.module.upgrade.path", optionString.substring("--upgrade-module-path=".length()));
+                    } else if (optionString.startsWith("--limit-modules=")) {
+                        builder.option(JAVA_PROPS + "jdk.module.limitmods", optionString.substring("--limit-modules=".length()));
+                    } else if (isXOption(optionString)) {
+                        RuntimeOptions.set(optionString.substring("-X".length()), null);
+                    } else if (optionString.equals("-XX:+IgnoreUnrecognizedVMOptions")) {
+                        ignoreUnrecognized = true;
+                    } else if (optionString.equals("-XX:-IgnoreUnrecognizedVMOptions")) {
+                        ignoreUnrecognized = false;
+                    } else if (optionString.startsWith("--vm.")) {
+                        handler.handleVMOption(optionString);
+                    } else if (optionString.startsWith("-XX:")) {
+                        handler.handleXXArg(optionString);
+                    } else if (optionString.startsWith("--help:")) {
+                        handler.help(optionString);
+                    } else if (isExperimentalFlag(optionString)) {
+                        // skip: previously handled
+                    } else if (optionString.equals("--polyglot")) {
+                        // skip: handled by mokapot
+                    } else {
+                        handler.parsePolyglotOption(optionString);
                     }
-                    switch (key) {
-                        case "espresso.library.path":
-                            builder.option("java.EspressoLibraryPath", value);
-                            break;
-                        case "java.library.path":
-                            builder.option("java.JavaLibraryPath", value);
-                            break;
-                        case "java.class.path":
-                            classpath = value;
-                            break;
-                        case "java.ext.dirs":
-                            builder.option("java.ExtDirs", value);
-                            break;
-                        case "sun.boot.class.path":
-                            builder.option("java.BootClasspath", value);
-                            break;
-                        case "sun.boot.library.path":
-                            builder.option("java.BootLibraryPath", value);
-                            break;
-                    }
-
-                    builder.option("java.Properties." + key, value);
-                } else {
-                    // TODO XX: and X options
+                }
+            } catch (ArgumentException e) {
+                if (!ignoreUnrecognized) {
+                    // Failed to parse
+                    warn(e.getMessage());
                     return JNI_ERR();
                 }
             }
@@ -121,7 +180,18 @@ public final class Arguments {
         }
 
         builder.option("java.Classpath", classpath);
+
+        handler.argumentProcessingDone();
         return JNIErrors.JNI_OK();
+    }
+
+    private static boolean isExperimentalFlag(String optionString) {
+        // return false for "--experimental-options=[garbage]
+        return optionString.equals("--experimental-options") || optionString.equals("--experimental-options=true") || optionString.equals("--experimental-options=false");
+    }
+
+    private static boolean isXOption(String optionString) {
+        return optionString.startsWith("-Xms") || optionString.startsWith("-Xmx") || optionString.startsWith("-Xmn") || optionString.startsWith("-Xss");
     }
 
     private static String appendPath(String paths, String toAppend) {
@@ -138,5 +208,37 @@ public final class Arguments {
         } else {
             return toPrepend;
         }
+    }
+
+    public static class ArgumentException extends RuntimeException {
+        private static final long serialVersionUID = 5430103471994299046L;
+
+        private final boolean isExperimental;
+
+        ArgumentException(String message, boolean isExperimental) {
+            super(message);
+            this.isExperimental = isExperimental;
+        }
+
+        public boolean isExperimental() {
+            return isExperimental;
+        }
+
+        @Override
+        public synchronized Throwable fillInStackTrace() {
+            return this;
+        }
+    }
+
+    public static ArgumentException abort(String message) {
+        throw new Arguments.ArgumentException(message, false);
+    }
+
+    public static ArgumentException abortExperimental(String message) {
+        throw new Arguments.ArgumentException(message, true);
+    }
+
+    public static void warn(String message) {
+        STDERR.println(message);
     }
 }
