@@ -41,7 +41,6 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVM80BitFloatDirectLoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMIVarBitDirectLoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMPointerDirectLoadNodeGen;
@@ -52,7 +51,7 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 public abstract class LLVMDirectLoadNode {
 
     @NodeField(name = "bitWidth", type = int.class)
-    public abstract static class LLVMIVarBitDirectLoadNode extends LLVMLoadNode {
+    public abstract static class LLVMIVarBitDirectLoadNode extends LLVMAbstractLoadNode {
 
         protected abstract LLVMIVarBit executeManaged(LLVMManagedPointer addr);
 
@@ -61,7 +60,7 @@ public abstract class LLVMDirectLoadNode {
         @Specialization(guards = "!isAutoDerefHandle(language, addr)")
         protected LLVMIVarBit doIVarBitNative(LLVMNativePointer addr,
                         @CachedLanguage LLVMLanguage language) {
-            return language.getLLVMMemory().getIVarBit(this, addr, getBitWidth());
+            return language.getLLVMMemory().getIVarBit(addr, getBitWidth());
         }
 
         LLVMIVarBitDirectLoadNode createRecursive() {
@@ -94,7 +93,7 @@ public abstract class LLVMDirectLoadNode {
         }
     }
 
-    public abstract static class LLVM80BitFloatDirectLoadNode extends LLVMLoadNode {
+    public abstract static class LLVM80BitFloatDirectLoadNode extends LLVMAbstractLoadNode {
 
         static LLVM80BitFloatDirectLoadNode create() {
             return LLVM80BitFloatDirectLoadNodeGen.create((LLVMExpressionNode) null);
@@ -105,7 +104,7 @@ public abstract class LLVMDirectLoadNode {
         @Specialization(guards = "!isAutoDerefHandle(language, addr)")
         protected LLVM80BitFloat do80BitFloatNative(LLVMNativePointer addr,
                         @CachedLanguage LLVMLanguage language) {
-            return language.getLLVMMemory().get80BitFloat(this, addr);
+            return language.getLLVMMemory().get80BitFloat(addr);
         }
 
         @Specialization(guards = "isAutoDerefHandle(language, addr)")
@@ -131,7 +130,7 @@ public abstract class LLVMDirectLoadNode {
     }
 
     @GenerateUncached
-    public abstract static class LLVMPointerDirectLoadNode extends LLVMLoadNode {
+    public abstract static class LLVMPointerDirectLoadNode extends LLVMAbstractLoadNode {
 
         public static LLVMPointerDirectLoadNode create() {
             return LLVMPointerDirectLoadNodeGen.create((LLVMExpressionNode) null);
@@ -140,7 +139,7 @@ public abstract class LLVMDirectLoadNode {
         @Specialization(guards = "!isAutoDerefHandle(language, addr)")
         protected LLVMNativePointer doNativePointer(LLVMNativePointer addr,
                         @CachedLanguage LLVMLanguage language) {
-            return language.getLLVMMemory().getPointer(this, addr);
+            return language.getLLVMMemory().getPointer(addr);
         }
 
         @Specialization(guards = "isAutoDerefHandle(language, addr)")
@@ -158,7 +157,7 @@ public abstract class LLVMDirectLoadNode {
         }
     }
 
-    public abstract static class LLVMStructDirectLoadNode extends LLVMLoadNode {
+    public abstract static class LLVMStructDirectLoadNode extends LLVMAbstractLoadNode {
 
         @Specialization
         protected LLVMPointer doPointer(LLVMPointer addr) {

@@ -38,12 +38,11 @@ import com.oracle.truffle.api.profiles.DoubleValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @GenerateUncached
-public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
+public abstract class LLVMDoubleLoadNode extends LLVMAbstractLoadNode {
 
     public static LLVMDoubleLoadNode create() {
         return LLVMDoubleLoadNodeGen.create((LLVMExpressionNode) null);
@@ -53,7 +52,7 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
     protected double doDoubleNative(LLVMNativePointer addr,
                     @Cached("createRawIdentityProfile()") DoubleValueProfile profile,
                     @CachedLanguage LLVMLanguage language) {
-        return profile.profile(language.getLLVMMemory().getDouble(this, addr));
+        return profile.profile(language.getLLVMMemory().getDouble(addr));
     }
 
     @Specialization(guards = "isAutoDerefHandle(language, addr)")

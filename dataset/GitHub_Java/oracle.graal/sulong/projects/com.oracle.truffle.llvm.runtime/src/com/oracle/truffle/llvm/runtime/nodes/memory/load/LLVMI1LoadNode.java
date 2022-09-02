@@ -37,12 +37,11 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @GenerateUncached
-public abstract class LLVMI1LoadNode extends LLVMLoadNode {
+public abstract class LLVMI1LoadNode extends LLVMAbstractLoadNode {
 
     public static LLVMI1LoadNode create() {
         return LLVMI1LoadNodeGen.create((LLVMExpressionNode) null);
@@ -51,7 +50,7 @@ public abstract class LLVMI1LoadNode extends LLVMLoadNode {
     @Specialization(guards = "!isAutoDerefHandle(language, addr)")
     protected boolean doI1Native(LLVMNativePointer addr,
                     @CachedLanguage LLVMLanguage language) {
-        return language.getLLVMMemory().getI1(this, addr);
+        return language.getLLVMMemory().getI1(addr);
     }
 
     @Specialization(guards = "isAutoDerefHandle(language, addr)")

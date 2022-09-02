@@ -38,12 +38,11 @@ import com.oracle.truffle.api.profiles.FloatValueProfile;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @GenerateUncached
-public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
+public abstract class LLVMFloatLoadNode extends LLVMAbstractLoadNode {
 
     public static LLVMFloatLoadNode create() {
         return LLVMFloatLoadNodeGen.create((LLVMExpressionNode) null);
@@ -53,7 +52,7 @@ public abstract class LLVMFloatLoadNode extends LLVMLoadNode {
     protected float doFloatNative(LLVMNativePointer addr,
                     @Cached("createRawIdentityProfile()") FloatValueProfile profile,
                     @CachedLanguage LLVMLanguage language) {
-        return profile.profile(language.getLLVMMemory().getFloat(this, addr));
+        return profile.profile(language.getLLVMMemory().getFloat(addr));
     }
 
     @Specialization(guards = "isAutoDerefHandle(language, addr)")
