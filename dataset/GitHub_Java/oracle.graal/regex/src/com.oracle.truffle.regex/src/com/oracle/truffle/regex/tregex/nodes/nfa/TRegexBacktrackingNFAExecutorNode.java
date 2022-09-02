@@ -66,6 +66,7 @@ import com.oracle.truffle.regex.tregex.parser.ast.InnerLiteral;
 import com.oracle.truffle.regex.tregex.parser.ast.LookBehindAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexASTSubtreeRootNode;
 import com.oracle.truffle.regex.tregex.parser.flavors.RubyFlavor;
+import com.oracle.truffle.regex.util.TBitSet;
 
 /**
  * This regex executor uses a backtracking algorithm on the NFA. It is used for all expressions that
@@ -85,7 +86,6 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
     private final boolean unicode;
     private final boolean backrefWithNullTargetSucceeds;
     private final boolean monitorCaptureGroupsInEmptyCheck;
-    private final boolean transitionMatchesStepByStep;
     private final boolean loneSurrogates;
     private final boolean loopbackInitialState;
     private final InnerLiteral innerLiteral;
@@ -105,7 +105,6 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
         this.unicode = nfaMap.getAst().getFlags().isUnicode();
         this.backrefWithNullTargetSucceeds = nfaMap.getAst().getOptions().getFlavor() != RubyFlavor.INSTANCE;
         this.monitorCaptureGroupsInEmptyCheck = nfaMap.getAst().getOptions().getFlavor() == RubyFlavor.INSTANCE;
-        this.transitionMatchesStepByStep = nfaMap.getAst().getOptions().getFlavor() == RubyFlavor.INSTANCE;
         this.loneSurrogates = nfaMap.getAst().getProperties().hasLoneSurrogates();
         this.nQuantifiers = nfaMap.getAst().getQuantifierCount().getCount();
         this.nZeroWidthQuantifiers = nfaMap.getAst().getZeroWidthQuantifierCount().getCount();
@@ -482,7 +481,6 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
 
     @ExplodeLoop
     protected boolean transitionMatches(TRegexBacktrackingNFAExecutorLocals locals, boolean compactString, PureNFATransition transition, int index, boolean atEnd, int c) {
-        TRegexBacktrackingNFAExecutorLocals localsForMatching = transitionMatchesStepByStep ? locals.createSubNFALocals() : locals;
         PureNFAState target = transition.getTarget(isForward());
         CompilerDirectives.isPartialEvaluationConstant(target);
         if (transition.hasCaretGuard() && index != 0) {
@@ -492,76 +490,46 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
             return false;
         }
         int nGuards = transition.getQuantifierGuards().length;
+        TBitSet enteredZeroWidthQuantifier = new TBitSet(nZeroWidthQuantifiers);
+        int[] extraQuantifierPasses = new int[nQuantifiers];
         for (int i = isForward() ? 0 : nGuards - 1; isForward() ? i < nGuards : i >= 0; i = inputIncRaw(i)) {
             QuantifierGuard guard = transition.getQuantifierGuards()[i];
             CompilerDirectives.isPartialEvaluationConstant(guard);
             Quantifier q = guard.getQuantifier();
             CompilerDirectives.isPartialEvaluationConstant(q);
             switch (isForward() ? guard.getKind() : guard.getKindReverse()) {
-                case enter:
-                case loopInc:
-                    if (transitionMatchesStepByStep) {
-                        localsForMatching.incQuantifierCount(q);
-                    }
-                    break;
                 case loop:
                     // retreat if quantifier count is at maximum
-                    if (localsForMatching.getQuantifierCount(q) == q.getMax()) {
+                    if (locals.getQuantifierCount(q) + extraQuantifierPasses[q.getIndex()] == q.getMax()) {
                         return false;
                     }
-                    if (transitionMatchesStepByStep) {
-                        localsForMatching.incQuantifierCount(q);
-                    }
+                    extraQuantifierPasses[q.getIndex()]++;
                     break;
                 case exit:
                     // retreat if quantifier count is less than minimum
-                    if (localsForMatching.getQuantifierCount(q) < q.getMin()) {
+                    if (locals.getQuantifierCount(q) + extraQuantifierPasses[q.getIndex()] < q.getMin()) {
                         return false;
-                    }
-                    if (transitionMatchesStepByStep) {
-                        localsForMatching.resetQuantifierCount(q);
-                    }
-                    break;
-                case exitReset:
-                    if (transitionMatchesStepByStep) {
-                        localsForMatching.resetQuantifierCount(q);
                     }
                     break;
                 case updateCG:
-                    if (transitionMatchesStepByStep) {
-                        localsForMatching.setCaptureGroupBoundary(guard.getIndex(), index);
+                    if (locals.getCaptureGroupBoundary(guard.getIndex()) != locals.getIndex()) {
+                        enteredZeroWidthQuantifier.clear();
                     }
                     break;
                 case enterZeroWidth:
-                    if (transitionMatchesStepByStep) {
-                        localsForMatching.setZeroWidthQuantifierGuardIndex(q);
-                        localsForMatching.setZeroWidthQuantifierResults(q);
-                    }
+                    enteredZeroWidthQuantifier.set(q.getZeroWidthIndex());
                     break;
                 case exitZeroWidth:
-                    if (localsForMatching.getZeroWidthQuantifierGuardIndex(q) == index &&
-                                    (!monitorCaptureGroupsInEmptyCheck || localsForMatching.isResultUnmodifiedByZeroWidthQuantifier(q)) &&
-                                    (!q.hasIndex() || localsForMatching.getQuantifierCount(q) > q.getMin())) {
-                        return false;
-                    }
-                    break;
-                case escapeZeroWidth:
-                    if (localsForMatching.getZeroWidthQuantifierGuardIndex(q) != index ||
-                                    (monitorCaptureGroupsInEmptyCheck && !localsForMatching.isResultUnmodifiedByZeroWidthQuantifier(q))) {
+                    if (enteredZeroWidthQuantifier.get(q.getZeroWidthIndex()) || (locals.getZeroWidthQuantifierGuardIndex(q) == index &&
+                                    (!monitorCaptureGroupsInEmptyCheck || locals.isResultUnmodifiedByZeroWidthQuantifier(q, transition, index)) &&
+                                    (!q.hasIndex() || locals.getQuantifierCount(q) + extraQuantifierPasses[q.getIndex()] > q.getMin()))) {
                         return false;
                     }
                     break;
                 case enterEmptyMatch:
                     // retreat if quantifier count is greater or equal to minimum
-                    if (localsForMatching.getQuantifierCount(q) >= q.getMin()) {
+                    if (locals.getQuantifierCount(q) + extraQuantifierPasses[q.getIndex()] >= q.getMin()) {
                         return false;
-                    }
-                    if (transitionMatchesStepByStep) {
-                        if (!transition.hasCaretGuard() && !transition.hasDollarGuard()) {
-                            localsForMatching.setQuantifierCount(q, q.getMin());
-                        } else {
-                            localsForMatching.incQuantifierCount(q);
-                        }
                     }
                     break;
                 default:
