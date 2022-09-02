@@ -39,8 +39,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.graalvm.compiler.truffle.common.TruffleDebugContext;
-import org.graalvm.compiler.truffle.common.TruffleSourceLanguagePosition;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.graphio.GraphBlocks;
 import org.graalvm.graphio.GraphOutput;
 import org.graalvm.graphio.GraphStructure;
@@ -54,6 +52,7 @@ import com.oracle.truffle.api.nodes.NodeClass;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 
 public final class TruffleTreeDumper {
 
@@ -68,24 +67,24 @@ public final class TruffleTreeDumper {
     public static void dump(TruffleDebugContext debug, OptimizedCallTarget callTarget, TruffleInlining inliningDecision) {
         if (getValue(PrintGraph) != Disable) {
             try {
-                dumpASTAndCallTrees(debug, callTarget, inliningDecision, inliningDecision.getTruffleNodeSources());
+                dumpASTAndCallTrees(debug, callTarget, inliningDecision);
             } catch (IOException ex) {
                 throw rethrowSilently(RuntimeException.class, ex);
             }
         }
     }
 
-    private static void dumpASTAndCallTrees(TruffleDebugContext debug, OptimizedCallTarget callTarget, TruffleInlining inlining, TruffleNodeSources nodeSources) throws IOException {
+    private static void dumpASTAndCallTrees(TruffleDebugContext debug, OptimizedCallTarget callTarget, TruffleInlining inlining) throws IOException {
         if (callTarget.getRootNode() != null) {
-            AST ast = new AST(callTarget, nodeSources);
-            final GraphOutput<AST, ?> astOutput = debug.buildOutput(GraphOutput.newBuilder(AST_DUMP_STRUCTURE).blocks(AST_DUMP_STRUCTURE));
+            AST ast = new AST(callTarget);
+            final GraphOutput<AST, ?> astOutput = debug.buildOutput(GraphOutput.newBuilder(AST_DUMP_STRUCTURE).blocks(AST_DUMP_STRUCTURE).protocolVersion(7, 0));
 
             astOutput.beginGroup(ast, "AST", "AST", null, 0, debug.getVersionProperties());
 
             astOutput.print(ast, Collections.emptyMap(), 0, AFTER_PROFILING);
             if (inlining.countInlinedCalls() > 0) {
-                dumpInlinedTrees(debug, astOutput, callTarget, inlining, nodeSources, new ArrayList<>());
-                ast.inline(inlining, nodeSources);
+                dumpInlinedTrees(debug, astOutput, callTarget, inlining, new ArrayList<>());
+                ast.inline(inlining);
                 astOutput.print(ast, null, 1, AFTER_INLINING);
             }
             astOutput.endGroup(); // AST
@@ -95,7 +94,7 @@ public final class TruffleTreeDumper {
                 return;
             }
             CallTree callTree = new CallTree(callTarget, null);
-            final GraphOutput<CallTree, ?> callTreeOutput = debug.buildOutput(GraphOutput.newBuilder(CALL_GRAPH_DUMP_STRUCTURE).blocks(CALL_GRAPH_DUMP_STRUCTURE));
+            final GraphOutput<CallTree, ?> callTreeOutput = debug.buildOutput(GraphOutput.newBuilder(CALL_GRAPH_DUMP_STRUCTURE).blocks(CALL_GRAPH_DUMP_STRUCTURE).protocolVersion(7, 0));
             callTreeOutput.beginGroup(null, "Call Tree", "Call Tree", null, 0, debug.getVersionProperties());
             callTreeOutput.print(callTree, null, 0, AFTER_PROFILING);
             if (inlining.countInlinedCalls() > 0) {
@@ -107,8 +106,7 @@ public final class TruffleTreeDumper {
         }
     }
 
-    private static void dumpInlinedTrees(TruffleDebugContext debug, GraphOutput<AST, ?> output, final RootCallTarget callTarget, TruffleInlining inlining, TruffleNodeSources nodeSources,
-                    List<RootCallTarget> dumped)
+    private static void dumpInlinedTrees(TruffleDebugContext debug, GraphOutput<AST, ?> output, final RootCallTarget callTarget, TruffleInlining inlining, List<RootCallTarget> dumped)
                     throws IOException {
         for (DirectCallNode callNode : NodeUtil.findAllNodeInstances(callTarget.getRootNode(), DirectCallNode.class)) {
             CallTarget inlinedCallTarget = callNode.getCurrentCallTarget();
@@ -117,12 +115,12 @@ public final class TruffleTreeDumper {
                 if (decision != null && decision.shouldInline()) {
                     final RootCallTarget rootCallTarget = (RootCallTarget) inlinedCallTarget;
                     if (!dumped.contains(rootCallTarget)) {
-                        AST ast = new AST(rootCallTarget, nodeSources);
+                        AST ast = new AST(rootCallTarget);
                         output.beginGroup(ast, inlinedCallTarget.toString(), rootCallTarget.getRootNode().getName(), null, 0, debug.getVersionProperties());
                         output.print(ast, Collections.emptyMap(), 0, AFTER_PROFILING);
                         output.endGroup();
                         dumped.add(rootCallTarget);
-                        dumpInlinedTrees(debug, output, (OptimizedCallTarget) inlinedCallTarget, decision, nodeSources, dumped);
+                        dumpInlinedTrees(debug, output, (OptimizedCallTarget) inlinedCallTarget, decision, dumped);
                     }
                 }
             }
@@ -220,16 +218,16 @@ public final class TruffleTreeDumper {
         final List<ASTNode> nodes = new ArrayList<>();
         final List<ASTBlock> blocks = new ArrayList<>();
 
-        AST(RootCallTarget target, TruffleNodeSources nodeSources) {
+        AST(RootCallTarget target) {
             final ASTBlock astBlock = makeASTBlock();
             final RootNode rootNode = target.getRootNode();
-            root = makeASTNode(rootNode, nodeSources);
+            root = makeASTNode(rootNode);
             astBlock.nodes.add(root);
-            traverseNodes(rootNode, root, this, null, nodeSources, astBlock);
+            traverseNodes(rootNode, root, this, null, astBlock);
         }
 
-        ASTNode makeASTNode(Node source, TruffleNodeSources nodeSources) {
-            final ASTNode astNode = new ASTNode(source, nodeSources.getSourceLocation(source));
+        ASTNode makeASTNode(Node source) {
+            final ASTNode astNode = new ASTNode(source, nodes.size());
             nodes.add(astNode);
             return astNode;
         }
@@ -249,41 +247,41 @@ public final class TruffleTreeDumper {
             return astBlock;
         }
 
-        void inline(TruffleInlining inliningDecisions, TruffleNodeSources nodeSources) {
-            traverseSeenNodes(root.source, root, this, inliningDecisions, nodeSources, blocks.get(0));
+        void inline(TruffleInlining inliningDecisions) {
+            traverseSeenNodes(root.source, root, this, inliningDecisions, blocks.get(0));
         }
 
-        private static void traverseSeenNodes(Node parent, ASTNode astParent, AST ast, TruffleInlining inliningDecisions, TruffleNodeSources nodeSources, ASTBlock currentBlock) {
+        private static void traverseSeenNodes(Node parent, ASTNode astParent, AST ast, TruffleInlining inliningDecisions, ASTBlock currentBlock) {
             for (Map.Entry<String, Node> entry : findNamedNodeChildren(parent).entrySet()) {
                 final String label = entry.getKey();
                 final Node node = entry.getValue();
                 final ASTNode seenAstNode = ast.findASTNode(node);
                 if (seenAstNode == null) {
-                    final ASTNode astNode = ast.makeASTNode(node, nodeSources);
+                    final ASTNode astNode = ast.makeASTNode(node);
                     currentBlock.nodes.add(astNode);
                     astParent.edges.add(new ASTEdge(astNode, label));
-                    handleCallNodes(ast, inliningDecisions, nodeSources, node, astNode, currentBlock);
-                    traverseSeenNodes(node, astNode, ast, inliningDecisions, nodeSources, currentBlock);
+                    handleCallNodes(ast, inliningDecisions, node, astNode, currentBlock);
+                    traverseSeenNodes(node, astNode, ast, inliningDecisions, currentBlock);
                 } else {
-                    handleCallNodes(ast, inliningDecisions, nodeSources, node, seenAstNode, currentBlock);
-                    traverseSeenNodes(node, seenAstNode, ast, inliningDecisions, nodeSources, currentBlock);
+                    handleCallNodes(ast, inliningDecisions, node, seenAstNode, currentBlock);
+                    traverseSeenNodes(node, seenAstNode, ast, inliningDecisions, currentBlock);
                 }
             }
         }
 
-        private static void traverseNodes(Node parent, ASTNode astParent, AST ast, TruffleInlining inliningDecisions, TruffleNodeSources nodeSources, ASTBlock currentBlock) {
+        private static void traverseNodes(Node parent, ASTNode astParent, AST ast, TruffleInlining inliningDecisions, ASTBlock currentBlock) {
             for (Map.Entry<String, Node> entry : findNamedNodeChildren(parent).entrySet()) {
                 final String label = entry.getKey();
                 final Node node = entry.getValue();
-                final ASTNode astNode = ast.makeASTNode(node, nodeSources);
+                final ASTNode astNode = ast.makeASTNode(node);
                 currentBlock.nodes.add(astNode);
                 astParent.edges.add(new ASTEdge(astNode, label));
-                handleCallNodes(ast, inliningDecisions, nodeSources, node, astNode, currentBlock);
-                traverseNodes(node, astNode, ast, inliningDecisions, nodeSources, currentBlock);
+                handleCallNodes(ast, inliningDecisions, node, astNode, currentBlock);
+                traverseNodes(node, astNode, ast, inliningDecisions, currentBlock);
             }
         }
 
-        private static void handleCallNodes(AST ast, TruffleInlining inliningDecisions, TruffleNodeSources nodeSources, Node node, ASTNode astNode, ASTBlock currentBlock) {
+        private static void handleCallNodes(AST ast, TruffleInlining inliningDecisions, Node node, ASTNode astNode, ASTBlock currentBlock) {
             // Has this call node been handled already?
             if (astNode.edges.size() > 0) {
                 return;
@@ -296,7 +294,7 @@ public final class TruffleTreeDumper {
                         TruffleInliningDecision decision = inliningDecisions.findByCall((OptimizedDirectCallNode) callNode);
                         if (decision != null && decision.shouldInline()) {
                             final RootNode targetRootNode = ((OptimizedCallTarget) inlinedCallTarget).getRootNode();
-                            final ASTNode astTargetRootNode = ast.makeASTNode(targetRootNode, nodeSources);
+                            final ASTNode astTargetRootNode = ast.makeASTNode(targetRootNode);
                             astNode.edges.add(new ASTEdge(astTargetRootNode, inlinedCallTarget.toString()));
                             astNode.setNewClass();
                             final ASTBlock newBlock = ast.makeASTBlock();
@@ -304,7 +302,7 @@ public final class TruffleTreeDumper {
                                 currentBlock.successors.add(newBlock);
                             }
                             newBlock.nodes.add(astTargetRootNode);
-                            traverseNodes(targetRootNode, astTargetRootNode, ast, decision, nodeSources, newBlock);
+                            traverseNodes(targetRootNode, astTargetRootNode, ast, decision, newBlock);
                         }
                     }
                 }
@@ -319,9 +317,9 @@ public final class TruffleTreeDumper {
         Map<String, ? super Object> properties = new LinkedHashMap<>();
         ASTNodeClass nodeClass;
 
-        ASTNode(Node source, TruffleSourceLanguagePosition sourcePosition) {
+        ASTNode(Node source, int id) {
             this.source = source;
-            this.id = sourcePosition.getNodeId();
+            this.id = id;
             setNewClass();
 
             setBasicProperties(properties, source);
