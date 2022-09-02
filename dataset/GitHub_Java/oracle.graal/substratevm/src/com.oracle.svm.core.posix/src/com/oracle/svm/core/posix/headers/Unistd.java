@@ -113,6 +113,9 @@ public class Unistd {
     public static native int getpagesize();
 
     @CFunction
+    public static native int getdtablesize();
+
+    @CFunction
     public static native int sleep(int seconds);
 
     public static class NoTransitions {
