@@ -38,10 +38,6 @@ public interface UContextRegisterDumper extends RegisterDumper {
 
     PointerBase getThreadPointer(ucontext_t uContext);
 
-    PointerBase getSP(ucontext_t uContext);
-
-    PointerBase getIP(ucontext_t uContext);
-
     @Override
     default void dumpRegisters(Log log, Context context) {
         dumpRegisters(log, (ucontext_t) context);
@@ -57,15 +53,5 @@ public interface UContextRegisterDumper extends RegisterDumper {
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     default PointerBase getThreadPointer(Context context) {
         return getThreadPointer((ucontext_t) context);
-    }
-
-    @Override
-    default PointerBase getSP(Context context) {
-        return getSP((ucontext_t) context);
-    }
-
-    @Override
-    default PointerBase getIP(Context context) {
-        return getIP((ucontext_t) context);
     }
 }

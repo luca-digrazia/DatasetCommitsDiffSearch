@@ -32,6 +32,7 @@ import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.RegisterDumper;
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.graal.amd64.SubstrateAMD64RegisterConfig;
@@ -59,6 +60,12 @@ class AMD64UContextRegisterDumper implements UContextRegisterDumper {
     @Override
     public void dumpRegisters(Log log, ucontext_t uContext) {
         GregsPointer gregs = uContext.uc_mcontext_gregs();
+        long spValue = gregs.read(GregEnum.REG_RSP.getCValue());
+        long ipValue = gregs.read(GregEnum.REG_RIP.getCValue());
+
+        log.newline().string("General Purpose Register Set Values: ").newline();
+
+        log.indent(true);
         log.string("RAX ").zhex(gregs.read(GregEnum.REG_RAX.getCValue())).newline();
         log.string("RBX ").zhex(gregs.read(GregEnum.REG_RBX.getCValue())).newline();
         log.string("RCX ").zhex(gregs.read(GregEnum.REG_RCX.getCValue())).newline();
@@ -66,9 +73,9 @@ class AMD64UContextRegisterDumper implements UContextRegisterDumper {
         log.string("RBP ").zhex(gregs.read(GregEnum.REG_RBP.getCValue())).newline();
         log.string("RSI ").zhex(gregs.read(GregEnum.REG_RSI.getCValue())).newline();
         log.string("RDI ").zhex(gregs.read(GregEnum.REG_RDI.getCValue())).newline();
-        log.string("RSP ").zhex(gregs.read(GregEnum.REG_RSP.getCValue())).newline();
-        log.string("R8  ").zhex(gregs.read(GregEnum.REG_R8.getCValue())).newline();
-        log.string("R9  ").zhex(gregs.read(GregEnum.REG_R9.getCValue())).newline();
+        log.string("RSP ").zhex(spValue).newline();
+        log.string("R8 ").zhex(gregs.read(GregEnum.REG_R8.getCValue())).newline();
+        log.string("R9 ").zhex(gregs.read(GregEnum.REG_R9.getCValue())).newline();
         log.string("R10 ").zhex(gregs.read(GregEnum.REG_R10.getCValue())).newline();
         log.string("R11 ").zhex(gregs.read(GregEnum.REG_R11.getCValue())).newline();
         log.string("R12 ").zhex(gregs.read(GregEnum.REG_R12.getCValue())).newline();
@@ -76,7 +83,10 @@ class AMD64UContextRegisterDumper implements UContextRegisterDumper {
         log.string("R14 ").zhex(gregs.read(GregEnum.REG_R14.getCValue())).newline();
         log.string("R15 ").zhex(gregs.read(GregEnum.REG_R15.getCValue())).newline();
         log.string("EFL ").zhex(gregs.read(GregEnum.REG_EFL.getCValue())).newline();
-        log.string("RIP ").zhex(gregs.read(GregEnum.REG_RIP.getCValue())).newline();
+        log.string("RIP ").zhex(ipValue).newline();
+        log.indent(false);
+
+        SubstrateUtil.printDiagnostics(log, WordFactory.pointer(spValue), WordFactory.pointer(ipValue));
     }
 
     @Override
@@ -91,17 +101,5 @@ class AMD64UContextRegisterDumper implements UContextRegisterDumper {
     public PointerBase getThreadPointer(ucontext_t uContext) {
         GregsPointer gregs = uContext.uc_mcontext_gregs();
         return WordFactory.pointer(gregs.read(GregEnum.REG_R15.getCValue()));
-    }
-
-    @Override
-    public PointerBase getSP(ucontext_t uContext) {
-        GregsPointer gregs = uContext.uc_mcontext_gregs();
-        return WordFactory.pointer(gregs.read(GregEnum.REG_RSP.getCValue()));
-    }
-
-    @Override
-    public PointerBase getIP(ucontext_t uContext) {
-        GregsPointer gregs = uContext.uc_mcontext_gregs();
-        return WordFactory.pointer(gregs.read(GregEnum.REG_RIP.getCValue()));
     }
 }

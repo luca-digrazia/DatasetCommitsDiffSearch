@@ -48,8 +48,4 @@ public interface RegisterDumper {
     PointerBase getHeapBase(Context context);
 
     PointerBase getThreadPointer(Context context);
-
-    PointerBase getSP(Context context);
-
-    PointerBase getIP(Context context);
 }
