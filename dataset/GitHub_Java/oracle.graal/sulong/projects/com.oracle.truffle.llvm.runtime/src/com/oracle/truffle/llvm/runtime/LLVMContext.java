@@ -67,7 +67,6 @@ import com.oracle.truffle.llvm.api.Toolchain;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.llvm.instruments.trace.LLVMTracerInstrument;
 import com.oracle.truffle.llvm.runtime.LLVMArgumentBuffer.LLVMArgumentArray;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage.Loader;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
@@ -278,8 +277,6 @@ public final class LLVMContext {
             // add internal library location also to the external library lookup path
             addLibraryPath(internalLibraryPath.toString());
         }
-        Loader loader = getLanguage().getCapability(Loader.class);
-        loader.loadDefaults(this, internalLibraryPath);
         if (env.getOptions().get(SulongEngineOption.PRINT_TOOLCHAIN_PATH)) {
             LLVMFunctionDescriptor functionDescriptor = createFunctionDescriptor(LLVMPrintToolchainPath.NAME, new FunctionType(VoidType.INSTANCE, new Type[0], false),
                             new LLVMFunctionDescriptor.UnresolvedFunction(), null);

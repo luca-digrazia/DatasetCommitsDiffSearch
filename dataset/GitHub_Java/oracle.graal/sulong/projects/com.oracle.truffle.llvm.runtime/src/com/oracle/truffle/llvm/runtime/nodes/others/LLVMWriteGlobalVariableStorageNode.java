@@ -90,7 +90,7 @@ public abstract class LLVMWriteGlobalVariableStorageNode extends LLVMNode {
                         @Cached("getLocationOrNull(cachedShape.getProperty(descriptor))") Location loc) {
             CompilerAsserts.partialEvaluationConstant(descriptor);
             try {
-                synchronized (loc) {
+                synchronized (object) {
                     loc.set(object, value);
                 }
             } catch (IncompatibleLocationException | FinalLocationException e) {
@@ -120,7 +120,7 @@ public abstract class LLVMWriteGlobalVariableStorageNode extends LLVMNode {
                         @Cached("getLocationOrNull(newShape.getProperty(descriptor))") Location newLoc) {
             CompilerAsserts.partialEvaluationConstant(descriptor);
             try {
-                synchronized (newLoc) {
+                synchronized (object) {
                     newLoc.set(object, value, cachedShape, newShape);
                 }
             } catch (IncompatibleLocationException e) {
