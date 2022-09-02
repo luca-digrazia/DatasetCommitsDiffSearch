@@ -1,4 +1,30 @@
+/*
+ * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.svm.core.genscavenge.remset;
+
+import java.util.List;
 
 import org.graalvm.compiler.nodes.gc.BarrierSet;
 import org.graalvm.nativeimage.Platform;
@@ -6,7 +32,6 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.annotate.AlwaysInline;
-import com.oracle.svm.core.genscavenge.AlignedHeapChunk;
 import com.oracle.svm.core.genscavenge.AlignedHeapChunk.AlignedHeader;
 import com.oracle.svm.core.genscavenge.GCImpl;
 import com.oracle.svm.core.genscavenge.GreyToBlackObjectVisitor;
@@ -15,13 +40,18 @@ import com.oracle.svm.core.genscavenge.HeapImpl;
 import com.oracle.svm.core.genscavenge.HeapPolicy;
 import com.oracle.svm.core.genscavenge.ObjectHeaderImpl;
 import com.oracle.svm.core.genscavenge.Space;
-import com.oracle.svm.core.genscavenge.UnalignedHeapChunk;
 import com.oracle.svm.core.genscavenge.UnalignedHeapChunk.UnalignedHeader;
-import com.oracle.svm.core.log.Log;
+import com.oracle.svm.core.genscavenge.graal.SubstrateCardTableBarrierSet;
+import com.oracle.svm.core.image.ImageHeapObject;
+import com.oracle.svm.core.util.HostedByteBufferPointer;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
+/**
+ * A card table based remembered set where the {@link CardTable} and the {@link FirstObjectTable}
+ * are placed in the individual {@link HeapChunk}s.
+ */
 public class CardTableBasedRememberedSet implements RememberedSet {
     @Platforms(Platform.HOSTED_ONLY.class)
     public CardTableBasedRememberedSet() {
@@ -44,18 +74,40 @@ public class CardTableBasedRememberedSet implements RememberedSet {
     }
 
     @Override
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public void enableRememberedSetForAlignedChunk(HostedByteBufferPointer chunk, int chunkPosition, List<ImageHeapObject> objects) {
+        AlignedChunkRememberedSet.enableRememberedSet(chunk, chunkPosition, objects);
+    }
+
+    @Override
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public void enableRememberedSetForUnalignedChunk(HostedByteBufferPointer chunk) {
+        UnalignedChunkRememberedSet.enableRememberedSet(chunk);
+    }
+
+    @Override
+    public void enableRememberedSetForChunk(AlignedHeader chunk) {
+        AlignedChunkRememberedSet.enableRememberedSet(chunk);
+    }
+
+    @Override
+    public void enableRememberedSetForChunk(UnalignedHeader chunk) {
+        UnalignedChunkRememberedSet.enableRememberedSet(chunk);
+    }
+
+    @Override
     public void enableRememberedSetForObject(AlignedHeader chunk, Object obj) {
         AlignedChunkRememberedSet.enableRememberedSetForObject(chunk, obj);
     }
 
     @Override
-    public void enableRememberedSetForChunk(AlignedHeader chunk) {
-        AlignedChunkRememberedSet.enableRememberedSetForChunk(chunk);
+    public void clearRememberedSet(AlignedHeader chunk) {
+        AlignedChunkRememberedSet.clearRememberedSet(chunk);
     }
 
     @Override
-    public void enableRememberedSetForChunk(UnalignedHeader chunk) {
-        UnalignedChunkRememberedSet.enableRememberedSetForChunk(chunk);
+    public void clearRememberedSet(UnalignedHeader chunk) {
+        UnalignedChunkRememberedSet.clearRememberedSet(chunk);
     }
 
     @Override
@@ -85,7 +137,7 @@ public class CardTableBasedRememberedSet implements RememberedSet {
         }
 
         UnsignedWord objectHeader = ObjectHeaderImpl.readHeaderFromObject(holderObject);
-        if (ObjectHeaderImpl.hasRememberedSet(objectHeader)) {
+        if (hasRememberedSet(objectHeader)) {
             if (ObjectHeaderImpl.isAlignedObject(holderObject)) {
                 AlignedChunkRememberedSet.dirtyCardForObject(holderObject, false);
             } else {
@@ -96,109 +148,49 @@ public class CardTableBasedRememberedSet implements RememberedSet {
     }
 
     @Override
-    public void cleanCardTable(AlignedHeader chunk) {
-        AlignedChunkRememberedSet.cleanCardTable(chunk);
+    public void walkDirtyObjects(AlignedHeader chunk, GreyToBlackObjectVisitor visitor) {
+        AlignedChunkRememberedSet.walkDirtyObjects(chunk, visitor);
     }
 
     @Override
-    public void cleanCardTable(UnalignedHeader chunk) {
-        UnalignedChunkRememberedSet.cleanCardTable(chunk);
+    public void walkDirtyObjects(UnalignedHeader chunk, GreyToBlackObjectVisitor visitor) {
+        UnalignedChunkRememberedSet.walkDirtyObjects(chunk, visitor);
     }
 
     @Override
-    public void cleanCardTable(Space space) {
-        cleanAlignedHeapChunks(space);
-        cleanUnalignedHeapChunks(space);
-    }
-
-    @Override
-    public boolean walkDirtyObjects(AlignedHeader chunk, GreyToBlackObjectVisitor visitor, boolean clean) {
-        return AlignedChunkRememberedSet.walkDirtyObjects(chunk, visitor, clean);
-    }
-
-    @Override
-    public boolean walkDirtyObjects(UnalignedHeader chunk, GreyToBlackObjectVisitor visitor, boolean clean) {
-        return UnalignedChunkRememberedSet.walkDirtyObjects(chunk, visitor, clean);
-    }
-
-    @Override
-    public boolean walkDirtyObjects(Space space, GreyToBlackObjectVisitor visitor, boolean clean) {
-        Log trace = Log.noopLog().string("[walkDirtyObjects:  space: ").string(space.getName()).string("  clean: ").bool(clean);
-        AlignedHeapChunk.AlignedHeader aChunk = space.getFirstAlignedHeapChunk();
+    public void walkDirtyObjects(Space space, GreyToBlackObjectVisitor visitor) {
+        AlignedHeader aChunk = space.getFirstAlignedHeapChunk();
         while (aChunk.isNonNull()) {
-            trace.newline().string("  aChunk: ").hex(aChunk);
-            if (!walkDirtyObjects(aChunk, visitor, clean)) {
-                Log failureLog = Log.log().string("[Space.walkDirtyObjects:");
-                failureLog.string("  aChunk.walkDirtyObjects fails").string("]").newline();
-                return false;
-            }
+            walkDirtyObjects(aChunk, visitor);
             aChunk = HeapChunk.getNext(aChunk);
         }
-        UnalignedHeapChunk.UnalignedHeader uChunk = space.getFirstUnalignedHeapChunk();
+
+        UnalignedHeader uChunk = space.getFirstUnalignedHeapChunk();
         while (uChunk.isNonNull()) {
-            trace.newline().string("  uChunk: ").hex(uChunk);
-            if (!walkDirtyObjects(uChunk, visitor, clean)) {
-                Log failureLog = Log.log().string("[Space.walkDirtyObjects:");
-                failureLog.string("  uChunk.walkDirtyObjects fails").string("]").newline();
-                return false;
-            }
+            walkDirtyObjects(uChunk, visitor);
             uChunk = HeapChunk.getNext(uChunk);
         }
-        trace.string("]").newline();
-        return true;
     }
 
-    private static void cleanAlignedHeapChunks(Space space) {
-        Log trace = Log.noopLog().string("[Space.cleanRememberedSetAlignedHeapChunks:").string("  space: ").string(space.getName());
-        AlignedHeapChunk.AlignedHeader aChunk = space.getFirstAlignedHeapChunk();
+    @Override
+    public boolean verify(AlignedHeader firstAlignedHeapChunk) {
+        boolean success = true;
+        AlignedHeader aChunk = firstAlignedHeapChunk;
         while (aChunk.isNonNull()) {
-            trace.newline().string("  aChunk: ").hex(aChunk);
-            AlignedChunkRememberedSet.cleanCardTable(aChunk);
+            success &= AlignedChunkRememberedSet.verify(aChunk);
             aChunk = HeapChunk.getNext(aChunk);
         }
-        trace.string("]").newline();
+        return success;
     }
 
-    private static void cleanUnalignedHeapChunks(Space space) {
-        Log trace = Log.noopLog().string("[Space.cleanRememberedSetUnalignedHeapChunks:").string("  space: ").string(space.getName());
-        UnalignedHeapChunk.UnalignedHeader uChunk = space.getFirstUnalignedHeapChunk();
+    @Override
+    public boolean verify(UnalignedHeader firstUnalignedHeapChunk) {
+        boolean success = true;
+        UnalignedHeader uChunk = firstUnalignedHeapChunk;
         while (uChunk.isNonNull()) {
-            trace.newline().string("  uChunk: ").hex(uChunk);
-            UnalignedChunkRememberedSet.cleanCardTable(uChunk);
+            success &= UnalignedChunkRememberedSet.verify(uChunk);
             uChunk = HeapChunk.getNext(uChunk);
         }
-        trace.string("]").newline();
-    }
-
-    @Override
-    public boolean verify(AlignedHeader chunk) {
-        return AlignedChunkRememberedSet.verify(chunk);
-    }
-
-    @Override
-    public boolean verify(UnalignedHeader chunk) {
-        return UnalignedChunkRememberedSet.verify(chunk);
-    }
-
-    @Override
-    public boolean verifyOnlyCleanCards(AlignedHeader chunk) {
-        return AlignedChunkRememberedSet.verifyOnlyCleanCards(chunk);
-    }
-
-    @Override
-    public boolean verifyOnlyCleanCards(UnalignedHeader chunk) {
-        return UnalignedChunkRememberedSet.verifyOnlyCleanCards(chunk);
-    }
-
-    @Override
-    public boolean verifyDirtyCards(Space space) {
-        AlignedHeapChunk.AlignedHeader aChunk = space.getFirstAlignedHeapChunk();
-        while (aChunk.isNonNull()) {
-            if (!verify(aChunk)) {
-                return false;
-            }
-            aChunk = HeapChunk.getNext(aChunk);
-        }
-        return true;
+        return success;
     }
 }
