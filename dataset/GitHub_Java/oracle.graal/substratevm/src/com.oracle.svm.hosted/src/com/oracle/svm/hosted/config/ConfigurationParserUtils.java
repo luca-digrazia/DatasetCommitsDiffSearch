@@ -94,7 +94,7 @@ public final class ConfigurationParserUtils {
             try {
                 urls = classLoader.findResourcesByName(s);
             } catch (IOException e) {
-                throw UserError.abort(e, "Error while looking for " + s + " in " + classLoader);
+                throw UserError.abort("Error while looking for " + s + " in " + classLoader, e);
             }
             if (!urls.hasMoreElements()) {
                 throw UserError.abort("Could not find " + featureName + " configuration resource \"" + s + "\".");

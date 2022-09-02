@@ -52,7 +52,7 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.configure.ConfigurationFiles;
 import com.oracle.svm.core.configure.ResourceConfigurationParser;
 import com.oracle.svm.core.configure.ResourcesRegistry;
-import com.oracle.svm.core.jdk.LocalizationFeature;
+import com.oracle.svm.core.jdk.LocalizationSupport;
 import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.UserError;
@@ -75,13 +75,13 @@ public final class ResourcesFeature implements Feature {
     private class ResourcesRegistryImpl implements ResourcesRegistry {
         @Override
         public void addResources(String pattern) {
-            UserError.guarantee(!sealed, "Resources added too late: %s", pattern);
+            UserError.guarantee(!sealed, "Resources added too late");
             newResources.add(pattern);
         }
 
         @Override
         public void addResourceBundles(String name) {
-            ImageSingletons.lookup(LocalizationFeature.class).addBundleToCache(name);
+            ImageSingletons.lookup(LocalizationSupport.class).addBundleToCache(name);
         }
     }
 
