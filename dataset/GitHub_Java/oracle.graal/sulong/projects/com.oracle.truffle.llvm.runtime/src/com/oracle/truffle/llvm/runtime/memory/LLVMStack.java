@@ -112,10 +112,6 @@ public final class LLVMStack {
         public String toString() {
             return String.format("StackPointer 0x%x (Bounds: 0x%x - 0x%x%s)", stackPointer, lowerBounds, upperBounds, isAllocated ? "" : " not allocated");
         }
-
-        public LLVMStack getLLVMStack() {
-            return LLVMStack.this;
-        }
     }
 
     /**
@@ -246,10 +242,9 @@ public final class LLVMStack {
             throw new LLVMStackOverflowError(String.format(String.format("Stack allocation of %s bytes exceeds limit of %s",
                             Long.toUnsignedString(size), Long.toUnsignedString(MAX_ALLOCATION_SIZE))));
         }
-        long alignedSize = (size + Long.BYTES - 1) & -Long.BYTES; // align allocation size
-        assert alignedSize >= 0;
+        assert size >= 0;
         assert alignment != 0 && powerOfTwo(alignment);
-        long alignedAllocation = (address - alignedSize) & -alignment; // align allocated address
+        long alignedAllocation = (address - size) & -alignment;
         assert alignedAllocation <= address;
         return alignedAllocation;
     }

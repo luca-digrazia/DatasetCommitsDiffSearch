@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.nodes.memory.store;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -39,12 +38,9 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMPointerStoreNode.LLVMPointerOffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -55,11 +51,11 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 @NodeField(name = "vectorLength", type = int.class)
-public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
+public abstract class LLVMStoreVectorNode extends LLVMStoreNodeCommon {
 
     public abstract int getVectorLength();
 
-    public abstract void executeWithTarget(LLVMPointer address, Object value);
+    protected abstract void executeManaged(LLVMManagedPointer address, Object vector);
 
     @Specialization(guards = "!isAutoDerefHandle(language, address)")
     @ExplodeLoop
@@ -83,7 +79,7 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
                     @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
                     @Cached LLVMDerefHandleGetReceiverNode getReceiver,
                     @Cached("createRecursive()") LLVMStoreVectorNode store) {
-        store.executeWithTarget(getReceiver.execute(address), value);
+        store.executeManaged(getReceiver.execute(address), value);
     }
 
     @Specialization(guards = "!isAutoDerefHandle(language, address)")
@@ -175,18 +171,17 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
     @ExplodeLoop
     protected void writeVector(LLVMNativePointer address, LLVMPointerVector value,
                     @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
-                    @Cached LLVMPointerOffsetStoreNode write) {
+                    @Cached("createPointerStore()") LLVMPointerStoreNode write) {
         assert value.getLength() == getVectorLength();
-        long offset = 0;
+        long currentPtr = address.asNative();
         for (int i = 0; i < getVectorLength(); i++) {
-            write.executeWithTarget(address, offset, value.getValue(i));
-            offset += ADDRESS_SIZE_IN_BYTES;
+            write.executeWithTarget(currentPtr, value.getValue(i));
+            currentPtr += ADDRESS_SIZE_IN_BYTES;
         }
     }
 
     @Specialization(limit = "3")
     @ExplodeLoop
-    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI1Vector value,
                     @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
@@ -199,7 +194,6 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
     @Specialization(limit = "3")
     @ExplodeLoop
-    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI8Vector value,
                     @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
@@ -212,7 +206,6 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
     @Specialization(limit = "3")
     @ExplodeLoop
-    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI16Vector value,
                     @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
@@ -225,7 +218,6 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
     @Specialization(limit = "3")
     @ExplodeLoop
-    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI32Vector value,
                     @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
@@ -238,7 +230,6 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
     @Specialization(limit = "3")
     @ExplodeLoop
-    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMFloatVector value,
                     @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
@@ -251,7 +242,6 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
     @Specialization(limit = "3")
     @ExplodeLoop
-    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMDoubleVector value,
                     @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
@@ -264,7 +254,6 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
     @Specialization(limit = "3")
     @ExplodeLoop
-    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI64Vector value,
                     @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
@@ -277,7 +266,6 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
 
     @Specialization(limit = "3")
     @ExplodeLoop
-    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMPointerVector value,
                     @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
@@ -286,5 +274,9 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
             nativeWrite.writePointer(address.getObject(), curOffset, value.getValue(i));
             curOffset += ADDRESS_SIZE_IN_BYTES;
         }
+    }
+
+    protected static LLVMPointerStoreNode createPointerStore() {
+        return LLVMPointerStoreNodeGen.create(null, null);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,10 +32,12 @@ package com.oracle.truffle.llvm.runtime.nodes.intrinsics.rust;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMExitException;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
@@ -48,6 +50,7 @@ import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMPanic extends LLVMIntrinsic {
@@ -62,9 +65,9 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
     protected Object doOp(LLVMPointer panicLocVar,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
                     @Cached("createPanicLocation()") PanicLocType panicLoc,
-                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+                    @CachedLanguage LLVMLanguage language) {
         LLVMNativePointer pointer = toNative.executeWithTarget(panicLocVar);
-        throw panicLoc.read(memory, pointer.asNative(), this);
+        throw panicLoc.read(language.getLLVMMemory(), pointer.asNative(), this);
     }
 
     static final class PanicLocType {
@@ -77,15 +80,20 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
         private PanicLocType(DataLayout dataLayout, Type type, StrSliceType strslice) {
             this.strslice = strslice;
             StructureType structureType = (StructureType) ((PointerType) type).getElementType(0);
-            this.offsetFilename = structureType.getOffsetOf(1, dataLayout);
-            this.offsetLineNr = structureType.getOffsetOf(2, dataLayout);
+            try {
+                this.offsetFilename = structureType.getOffsetOf(1, dataLayout);
+                this.offsetLineNr = structureType.getOffsetOf(2, dataLayout);
+            } catch (TypeOverflowException e) {
+                // should not reach here
+                throw new AssertionError(e);
+            }
         }
 
         @TruffleBoundary
         LLVMExitException read(LLVMMemory memory, long address, Node location) {
             String desc = strslice.read(memory, address);
             String filename = strslice.read(memory, address + offsetFilename);
-            int linenr = memory.getI32(address + offsetLineNr);
+            int linenr = memory.getI32(null, address + offsetLineNr);
             System.err.printf("thread '%s' panicked at '%s', %s:%d%n", Thread.currentThread().getName(), desc, filename, linenr);
             System.err.print("note: No backtrace available");
             return LLVMExitException.exit(EXIT_CODE_PANIC, location);
@@ -94,7 +102,7 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
         static PanicLocType create(DataLayout dataLayout) {
             CompilerAsserts.neverPartOfCompilation();
             StrSliceType strslice = StrSliceType.create(dataLayout);
-            Type type = new PointerType((new StructureType(false, new Type[]{strslice.getType(), strslice.getType(), PrimitiveType.I32})));
+            Type type = new PointerType((StructureType.createUnnamedByCopy(false, new Type[]{strslice.getType(), strslice.getType(), PrimitiveType.I32})));
             return new PanicLocType(dataLayout, type, strslice);
         }
     }
@@ -105,17 +113,22 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
         private final Type type;
 
         private StrSliceType(DataLayout dataLayout, Type type) {
-            this.lengthOffset = ((StructureType) type).getOffsetOf(1, dataLayout);
+            try {
+                this.lengthOffset = ((StructureType) type).getOffsetOf(1, dataLayout);
+            } catch (TypeOverflowException e) {
+                // should not reach here
+                throw new AssertionError(e);
+            }
             this.type = type;
         }
 
         @TruffleBoundary
         String read(LLVMMemory memory, long address) {
-            long strAddr = memory.getPointer(address).asNative();
-            int strLen = memory.getI32(address + lengthOffset);
+            long strAddr = memory.getPointer(null, address).asNative();
+            int strLen = memory.getI32(null, address + lengthOffset);
             StringBuilder strBuilder = new StringBuilder();
             for (int i = 0; i < strLen; i++) {
-                strBuilder.append((char) Byte.toUnsignedInt(memory.getI8(strAddr)));
+                strBuilder.append((char) Byte.toUnsignedInt(memory.getI8(null, strAddr)));
                 strAddr += Byte.BYTES;
             }
             return strBuilder.toString();
@@ -126,7 +139,7 @@ public abstract class LLVMPanic extends LLVMIntrinsic {
         }
 
         static StrSliceType create(DataLayout dataLayout) {
-            Type type = new StructureType(false, new Type[]{new PointerType(PrimitiveType.I8), PrimitiveType.I64});
+            Type type = StructureType.createUnnamedByCopy(false, new Type[]{new PointerType(PrimitiveType.I8), PrimitiveType.I64});
             return new StrSliceType(dataLayout, type);
         }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug;
 import java.math.BigInteger;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
@@ -40,6 +41,7 @@ import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugTypeConstants;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -358,17 +360,34 @@ abstract class LLDBConstant implements LLVMDebugValue {
                 Object foreign = null;
 
                 if (LLVMNativePointer.isInstance(pointer)) {
-                    foreign = LLVMLanguage.getLLVMContextReference().get().getManagedObjectForHandle(LLVMNativePointer.cast(pointer));
-
+                    long address = LLVMNativePointer.cast(pointer).asNative();
+                    foreign = getHandleValue(address);
                 } else if (LLVMManagedPointer.isInstance(pointer)) {
                     foreign = LLVMManagedPointer.cast(pointer).getObject();
                 }
 
-                if (foreign instanceof LLVMTypedForeignObject) {
-                    return ((LLVMTypedForeignObject) foreign).getForeign();
+                if (LLVMAsForeignLibrary.getFactory().getUncached().isForeign(foreign)) {
+                    return LLVMAsForeignLibrary.getFactory().getUncached().asForeign(foreign);
                 }
             }
             return super.asInteropValue();
+        }
+
+        private static Object getHandleValue(long address) {
+            LLVMContext context = LLVMLanguage.getContext();
+            if (context.getHandleContainer().isHandle(address)) {
+                LLVMManagedPointer value = context.getHandleContainer().getValue(null, address);
+                if (value != null) {
+                    return value.getObject();
+                }
+            }
+            if (context.getDerefHandleContainer().isHandle(address)) {
+                LLVMManagedPointer value = context.getDerefHandleContainer().getValue(null, address);
+                if (value != null) {
+                    return value.getObject();
+                }
+            }
+            return null;
         }
 
         @Override
@@ -378,7 +397,7 @@ abstract class LLDBConstant implements LLVMDebugValue {
                 return false;
 
             } else if (LLVMNativePointer.isInstance(pointer)) {
-                return LLVMLanguage.getLLVMContextReference().get().isHandle(LLVMNativePointer.cast(pointer));
+                return getHandleValue(LLVMNativePointer.cast(pointer).asNative()) != null;
 
             } else if (LLVMManagedPointer.isInstance(pointer)) {
                 final Object target = LLVMManagedPointer.cast(pointer).getObject();
@@ -390,6 +409,7 @@ abstract class LLDBConstant implements LLVMDebugValue {
                     return false;
 
                 } else {
+                    // Not sure how to replace this LLVMTypedForeignObject occurrence
                     return !(target instanceof LLVMTypedForeignObject);
                 }
             } else {
@@ -671,8 +691,8 @@ abstract class LLDBConstant implements LLVMDebugValue {
 
         @Override
         public Object asInteropValue() {
-            if (value instanceof LLVMTypedForeignObject) {
-                return ((LLVMTypedForeignObject) value).getForeign();
+            if (LLVMAsForeignLibrary.getFactory().getUncached().isForeign(value)) {
+                return LLVMAsForeignLibrary.getFactory().getUncached().asForeign(value);
             }
             return value;
         }

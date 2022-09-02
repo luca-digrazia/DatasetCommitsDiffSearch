@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,37 +30,55 @@
 package com.oracle.truffle.llvm.runtime.memory;
 
 import java.lang.reflect.Field;
-import java.util.function.BinaryOperator;
+import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.function.IntBinaryOperator;
 import java.util.function.LongBinaryOperator;
+
+import org.graalvm.collections.EconomicMap;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.except.LLVMMemoryException;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 import sun.misc.Unsafe;
 
 public final class LLVMNativeMemory extends LLVMMemory {
-    /* must be a power of 2 */
-    private static final long DEREF_HANDLE_OBJECT_SIZE = 1L << 20;
+    private static final int HANDLE_OBJECT_SIZE_BITS = 30;
+    private static final long HANDLE_OBJECT_SIZE = 1L << HANDLE_OBJECT_SIZE_BITS; // 0.5 GB
+    private static final int HANDLE_OBJECT_ADDRESS_BITS = Integer.SIZE; // use int cast as mask
+    private static final long HANDLE_HEADER_MASK = -1L << (HANDLE_OBJECT_SIZE_BITS + HANDLE_OBJECT_ADDRESS_BITS);
+    private static final long HANDLE_OFFSET_MASK = HANDLE_OBJECT_SIZE - 1;
 
-    private static final long DEREF_HANDLE_SPACE_START = 0x8000000000000000L;
-    public static final long DEREF_HANDLE_SPACE_END = 0xC000000000000000L;
-    private static final long HANDLE_SPACE_START = DEREF_HANDLE_SPACE_END;
-    private static final long HANDLE_SPACE_END = 0;
+    private static final long HANDLE_SPACE_START = 0x8000000000000000L;
+    private static final long HANDLE_SPACE_END = 0xC000000000000000L;
+    private static final long DEREF_HANDLE_SPACE_START = HANDLE_SPACE_END;
+    private static final long DEREF_HANDLE_SPACE_END = 0x0000000000000000L;
+
+    static {
+        assert (DEREF_HANDLE_SPACE_START & HANDLE_HEADER_MASK) != (DEREF_HANDLE_SPACE_END & HANDLE_HEADER_MASK);
+        assert (HANDLE_SPACE_START & HANDLE_HEADER_MASK) != (HANDLE_SPACE_END & HANDLE_HEADER_MASK);
+        assert (DEREF_HANDLE_SPACE_START & HANDLE_HEADER_MASK) != 0;
+        assert (HANDLE_SPACE_START & HANDLE_HEADER_MASK) != 0;
+
+        // (using temporary variable to avoid warnings)
+        long tmp = HANDLE_HEADER_MASK;
+        // for efficient checks for deref handles in compiled code
+        assert DEREF_HANDLE_SPACE_START == tmp;
+        tmp = HANDLE_SPACE_START;
+        // for efficient checks for any handle in compiled code
+        assert (DEREF_HANDLE_SPACE_START & tmp) == HANDLE_SPACE_START;
+    }
 
     private static final Unsafe unsafe = getUnsafe();
-
-    private final HandleContainer derefHandleContainer = new DerefHandleContainer(DEREF_HANDLE_SPACE_START, DEREF_HANDLE_SPACE_END, DEREF_HANDLE_OBJECT_SIZE);
-    private final HandleContainer handleContainer = new CommonHandleContainer(HANDLE_SPACE_START, HANDLE_SPACE_END, Long.BYTES);
-
-    private final Assumption noDerefHandleAssumption = Truffle.getRuntime().createAssumption("no deref handle assumption");
 
     private static Unsafe getUnsafe() {
         CompilerAsserts.neverPartOfCompilation();
@@ -77,7 +95,7 @@ public final class LLVMNativeMemory extends LLVMMemory {
 
     /**
      * @deprecated "This method should not be called directly. Use
-     *             {@link LLVMLanguage#getCapability(Class)} instead."
+     *             {@link LLVMLanguage#getLLVMMemory() } instead."
      */
     @Deprecated
     public static LLVMNativeMemory getInstance() {
@@ -87,12 +105,27 @@ public final class LLVMNativeMemory extends LLVMMemory {
     private LLVMNativeMemory() {
     }
 
+    /**
+     * Checks for pointers that are in the negative range or below 1mb, to detect common invalid
+     * addresses before they cause a segmentation fault.
+     */
+    private static boolean checkPointer(long ptr) {
+        assert ptr > 0x100000 : "trying to access invalid address: " + ptr + " 0x" + Long.toHexString(ptr);
+        return true;
+    }
+
+    @TruffleBoundary
+    private static void memsetBoundary(long address, long size, byte value) {
+        unsafe.setMemory(address, size, value);
+    }
+
     @Override
     @Deprecated
     @SuppressWarnings("deprecation")
-    public void memset(LLVMNativePointer address, long size, byte value) {
+    public void memset(Node location, LLVMNativePointer address, long size, byte value) {
+        assert size == 0 || checkPointer(address.asNative());
         try {
-            unsafe.setMemory(address.asNative(), size, value);
+            memsetBoundary(address.asNative(), size, value);
         } catch (Throwable e) {
             // this avoids unnecessary exception edges in the compiled code
             CompilerDirectives.transferToInterpreter();
@@ -100,54 +133,64 @@ public final class LLVMNativeMemory extends LLVMMemory {
         }
     }
 
-    @Override
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public void copyMemory(long sourceAddress, long targetAddress, long length) {
+    @TruffleBoundary
+    private static void copyMemoryBoundary(long sourceAddress, long targetAddress, long length) {
         unsafe.copyMemory(sourceAddress, targetAddress, length);
     }
 
     @Override
-    public void free(LLVMNativePointer address) {
-        free(address.asNative());
+    @Deprecated
+    @SuppressWarnings("deprecation")
+    @TruffleBoundary
+    public void copyMemory(Node location, long sourceAddress, long targetAddress, long length) {
+        assert length == 0 || checkPointer(sourceAddress) && checkPointer(targetAddress);
+        copyMemoryBoundary(sourceAddress, targetAddress, length);
+    }
+
+    @TruffleBoundary
+    private static void freeBoundary(long address) {
+        unsafe.freeMemory(address);
     }
 
     @Override
-    public void free(long address) {
-        if (!noDerefHandleAssumption.isValid() && derefHandleContainer.accept(address)) {
-            derefHandleContainer.free(address);
-        } else if (handleContainer.accept(address)) {
-            handleContainer.free(address);
-        } else {
-            try {
-                unsafe.freeMemory(address);
-            } catch (Throwable e) {
-                // this avoids unnecessary exception edges in the compiled code
-                CompilerDirectives.transferToInterpreter();
-                throw e;
-            }
-        }
-
-    }
-
-    @Override
-    public LLVMNativePointer allocateMemory(long size) {
+    public void free(Node location, long address) {
         try {
-            return LLVMNativePointer.create(unsafe.allocateMemory(size));
+            freeBoundary(address);
         } catch (Throwable e) {
             // this avoids unnecessary exception edges in the compiled code
             CompilerDirectives.transferToInterpreter();
             throw e;
         }
+    }
+
+    @TruffleBoundary
+    private static long allocateMemoryBoundary(long size) {
+        return unsafe.allocateMemory(size);
+    }
+
+    @Override
+    public LLVMNativePointer allocateMemory(Node location, long size) {
+        try {
+            return LLVMNativePointer.create(allocateMemoryBoundary(size));
+        } catch (Throwable e) {
+            // this avoids unnecessary exception edges in the compiled code
+            CompilerDirectives.transferToInterpreter();
+            throw e;
+        }
+    }
+
+    @TruffleBoundary
+    private static long reallocateMemoryBoundary(long addr, long size) {
+        return unsafe.reallocateMemory(addr, size);
     }
 
     @Override
     @Deprecated
     @SuppressWarnings("deprecation")
-    public LLVMNativePointer reallocateMemory(LLVMNativePointer addr, long size) {
+    public LLVMNativePointer reallocateMemory(Node location, LLVMNativePointer addr, long size) {
         // a null pointer is a valid argument
         try {
-            return LLVMNativePointer.create(unsafe.reallocateMemory(addr.asNative(), size));
+            return LLVMNativePointer.create(reallocateMemoryBoundary(addr.asNative(), size));
         } catch (Throwable e) {
             // this avoids unnecessary exception edges in the compiled code
             CompilerDirectives.transferToInterpreter();
@@ -156,60 +199,31 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     @Override
-    public long allocateHandle(boolean autoDeref) {
-        if (autoDeref) {
-            noDerefHandleAssumption.invalidate();
-            return derefHandleContainer.allocate();
-        }
-        return handleContainer.allocate();
-    }
-
-    @Override
-    public boolean getI1(LLVMNativePointer addr) {
-        return getI1(addr.asNative());
-    }
-
-    @Override
-    public boolean getI1(long ptr) {
-        assert ptr != 0;
+    public boolean getI1(Node location, long ptr) {
+        assert checkPointer(ptr);
         return unsafe.getByte(ptr) != 0;
     }
 
     @Override
-    public byte getI8(LLVMNativePointer addr) {
-        return getI8(addr.asNative());
-    }
-
-    @Override
-    public byte getI8(long ptr) {
-        assert ptr != 0;
+    public byte getI8(Node location, long ptr) {
+        assert checkPointer(ptr);
         return unsafe.getByte(ptr);
     }
 
     @Override
-    public short getI16(LLVMNativePointer addr) {
-        return getI16(addr.asNative());
-    }
-
-    @Override
-    public short getI16(long ptr) {
-        assert ptr != 0;
+    public short getI16(Node location, long ptr) {
+        assert checkPointer(ptr);
         return unsafe.getShort(ptr);
     }
 
     @Override
-    public int getI32(LLVMNativePointer addr) {
-        return getI32(addr.asNative());
-    }
-
-    @Override
-    public int getI32(long ptr) {
-        assert ptr != 0;
+    public int getI32(Node location, long ptr) {
+        assert checkPointer(ptr);
         return unsafe.getInt(ptr);
     }
 
     @Override
-    public LLVMIVarBit getIVarBit(LLVMNativePointer addr, int bitWidth) {
+    public LLVMIVarBit getIVarBit(Node location, LLVMNativePointer addr, int bitWidth) {
         if (bitWidth % Byte.SIZE != 0) {
             CompilerDirectives.transferToInterpreter();
             throw new AssertionError();
@@ -218,201 +232,122 @@ public final class LLVMNativeMemory extends LLVMMemory {
         byte[] loadedBytes = new byte[bytes];
         long currentAddressPtr = addr.asNative();
         for (int i = loadedBytes.length - 1; i >= 0; i--) {
-            loadedBytes[i] = getI8(currentAddressPtr);
+            loadedBytes[i] = getI8(location, currentAddressPtr);
             currentAddressPtr += Byte.BYTES;
         }
         return LLVMIVarBit.create(bitWidth, loadedBytes, bitWidth, false);
     }
 
     @Override
-    public long getI64(LLVMNativePointer addr) {
-        return getI64(addr.asNative());
-    }
-
-    @Override
-    public long getI64(long ptr) {
-        assert ptr != 0;
+    public long getI64(Node location, long ptr) {
+        assert checkPointer(ptr);
         return unsafe.getLong(ptr);
     }
 
     @Override
-    public float getFloat(LLVMNativePointer addr) {
-        return getFloat(addr.asNative());
-    }
-
-    @Override
-    public float getFloat(long ptr) {
-        assert ptr != 0;
+    public float getFloat(Node location, long ptr) {
+        assert checkPointer(ptr);
         return unsafe.getFloat(ptr);
     }
 
     @Override
-    public double getDouble(LLVMNativePointer addr) {
-        return getDouble(addr.asNative());
-    }
-
-    @Override
-    public double getDouble(long ptr) {
-        assert ptr != 0;
+    public double getDouble(Node location, long ptr) {
+        assert checkPointer(ptr);
         return unsafe.getDouble(ptr);
     }
 
     @Override
-    public LLVM80BitFloat get80BitFloat(LLVMNativePointer addr) {
+    public LLVM80BitFloat get80BitFloat(Node location, LLVMNativePointer addr) {
         byte[] bytes = new byte[LLVM80BitFloat.BYTE_WIDTH];
         long currentPtr = addr.asNative();
         for (int i = 0; i < bytes.length; i++) {
-            bytes[i] = getI8(currentPtr);
+            bytes[i] = getI8(location, currentPtr);
             currentPtr += Byte.BYTES;
         }
         return LLVM80BitFloat.fromBytes(bytes);
     }
 
     @Override
-    public LLVMNativePointer getPointer(LLVMNativePointer addr) {
-        return getPointer(addr.asNative());
-    }
-
-    @Override
-    public LLVMNativePointer getPointer(long ptr) {
-        assert ptr != 0;
+    public LLVMNativePointer getPointer(Node location, long ptr) {
+        assert checkPointer(ptr);
         return LLVMNativePointer.create(unsafe.getAddress(ptr));
     }
 
     @Override
-    public void putI1(LLVMNativePointer addr, boolean value) {
-        putI1(addr.asNative(), value);
-    }
-
-    @Override
-    public void putI1(long ptr, boolean value) {
-        assert ptr != 0;
+    public void putI1(Node location, long ptr, boolean value) {
+        assert checkPointer(ptr);
         unsafe.putByte(ptr, (byte) (value ? 1 : 0));
     }
 
     @Override
-    public void putI8(LLVMNativePointer addr, byte value) {
-        putI8(addr.asNative(), value);
-    }
-
-    @Override
-    public void putI8(long ptr, byte value) {
-        assert ptr != 0;
+    public void putI8(Node location, long ptr, byte value) {
+        assert checkPointer(ptr);
         unsafe.putByte(ptr, value);
     }
 
     @Override
-    public void putI16(LLVMNativePointer addr, short value) {
-        putI16(addr.asNative(), value);
-    }
-
-    @Override
-    public void putI16(long ptr, short value) {
-        assert ptr != 0;
+    public void putI16(Node location, long ptr, short value) {
+        assert checkPointer(ptr);
         unsafe.putShort(ptr, value);
     }
 
     @Override
-    public void putI32(LLVMNativePointer addr, int value) {
-        putI32(addr.asNative(), value);
-    }
-
-    @Override
-    public void putI32(long ptr, int value) {
-        assert ptr != 0;
+    public void putI32(Node location, long ptr, int value) {
+        assert checkPointer(ptr);
         unsafe.putInt(ptr, value);
     }
 
     @Override
-    public void putI64(LLVMNativePointer addr, long value) {
-        putI64(addr.asNative(), value);
-    }
-
-    @Override
-    public void putI64(long ptr, long value) {
-        assert ptr != 0;
+    public void putI64(Node location, long ptr, long value) {
+        assert checkPointer(ptr);
         unsafe.putLong(ptr, value);
     }
 
     @Override
-    public void putIVarBit(LLVMNativePointer addr, LLVMIVarBit value) {
+    public void putIVarBit(Node location, LLVMNativePointer addr, LLVMIVarBit value) {
         byte[] bytes = value.getBytes();
         long currentptr = addr.asNative();
         for (int i = bytes.length - 1; i >= 0; i--) {
-            putI8(currentptr, bytes[i]);
+            putI8(location, currentptr, bytes[i]);
             currentptr += Byte.BYTES;
         }
     }
 
     @Override
-    public void putByteArray(LLVMNativePointer addr, byte[] bytes) {
-        putByteArray(addr.asNative(), bytes);
-    }
-
-    @Override
-    public void putByteArray(long ptr, byte[] bytes) {
+    public void putByteArray(Node location, long ptr, byte[] bytes) {
         long currentptr = ptr;
         for (int i = 0; i < bytes.length; i++) {
-            putI8(currentptr, bytes[i]);
+            putI8(location, currentptr, bytes[i]);
             currentptr += Byte.BYTES;
         }
     }
 
     @Override
-    public void putFloat(LLVMNativePointer addr, float value) {
-        putFloat(addr.asNative(), value);
-    }
-
-    @Override
-    public void putFloat(long ptr, float value) {
-        assert ptr != 0;
+    public void putFloat(Node location, long ptr, float value) {
+        assert checkPointer(ptr);
         unsafe.putFloat(ptr, value);
     }
 
     @Override
-    public void putDouble(LLVMNativePointer addr, double value) {
-        putDouble(addr.asNative(), value);
-    }
-
-    @Override
-    public void putDouble(long ptr, double value) {
-        assert ptr != 0;
+    public void putDouble(Node location, long ptr, double value) {
+        assert checkPointer(ptr);
         unsafe.putDouble(ptr, value);
     }
 
     @Override
-    public void put80BitFloat(LLVMNativePointer addr, LLVM80BitFloat value) {
-        putByteArray(addr, value.getBytes());
+    public void put80BitFloat(Node location, long ptr, LLVM80BitFloat value) {
+        putByteArray(location, ptr, value.getBytes());
     }
 
     @Override
-    public void put80BitFloat(long ptr, LLVM80BitFloat value) {
-        putByteArray(ptr, value.getBytes());
-    }
-
-    @Override
-    public void putPointer(LLVMNativePointer addr, LLVMNativePointer value) {
-        putPointer(addr.asNative(), value);
-    }
-
-    @Override
-    public void putPointer(LLVMNativePointer addr, long ptrValue) {
-        putPointer(addr.asNative(), ptrValue);
-    }
-
-    @Override
-    public void putPointer(long ptr, LLVMNativePointer value) {
-        putPointer(ptr, value.asNative());
-    }
-
-    @Override
-    public void putPointer(long ptr, long ptrValue) {
+    public void putPointer(Node location, long ptr, long ptrValue) {
         assert ptr != 0;
         unsafe.putAddress(ptr, ptrValue);
     }
 
     @Override
-    public CMPXCHGI32 compareAndSwapI32(LLVMNativePointer p, int comparisonValue, int newValue) {
+    public CMPXCHGI32 compareAndSwapI32(Node location, LLVMNativePointer p, int comparisonValue, int newValue) {
+        assert checkPointer(p.asNative());
         while (true) {
             boolean b = unsafe.compareAndSwapInt(null, p.asNative(), comparisonValue, newValue);
             if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, b)) {
@@ -429,7 +364,8 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     @Override
-    public CMPXCHGI64 compareAndSwapI64(LLVMNativePointer p, long comparisonValue, long newValue) {
+    public CMPXCHGI64 compareAndSwapI64(Node location, LLVMNativePointer p, long comparisonValue, long newValue) {
+        assert checkPointer(p.asNative());
         while (true) {
             boolean b = unsafe.compareAndSwapLong(null, p.asNative(), comparisonValue, newValue);
             if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, b)) {
@@ -464,7 +400,8 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     @Override
-    public CMPXCHGI8 compareAndSwapI8(LLVMNativePointer p, byte comparisonValue, byte newValue) {
+    public CMPXCHGI8 compareAndSwapI8(Node location, LLVMNativePointer p, byte comparisonValue, byte newValue) {
+        assert checkPointer(p.asNative());
         int byteIndex = getI8Index(p.asNative());
         long address = alignToI32(p.asNative());
         while (true) {
@@ -498,7 +435,8 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     @Override
-    public CMPXCHGI16 compareAndSwapI16(LLVMNativePointer p, short comparisonValue, short newValue) {
+    public CMPXCHGI16 compareAndSwapI16(Node location, LLVMNativePointer p, short comparisonValue, short newValue) {
+        assert checkPointer(p.asNative());
         int idx = getI16Index(p.asNative());
         long address = alignToI32(p.asNative());
         while (true) {
@@ -519,89 +457,97 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     @Override
-    public long getAndSetI64(LLVMNativePointer address, long value) {
+    public long getAndSetI64(Node location, LLVMNativePointer address, long value) {
+        assert checkPointer(address.asNative());
         return unsafe.getAndSetLong(null, address.asNative(), value);
     }
 
     @Override
-    public long getAndAddI64(LLVMNativePointer address, long value) {
+    public long getAndAddI64(Node location, LLVMNativePointer address, long value) {
+        assert checkPointer(address.asNative());
         return unsafe.getAndAddLong(null, address.asNative(), value);
     }
 
     @Override
-    public long getAndSubI64(LLVMNativePointer address, long value) {
+    public long getAndSubI64(Node location, LLVMNativePointer address, long value) {
+        assert checkPointer(address.asNative());
         return unsafe.getAndAddLong(null, address.asNative(), -value);
     }
 
     @Override
-    public long getAndOpI64(LLVMNativePointer address, long value, LongBinaryOperator f) {
+    public long getAndOpI64(Node location, LLVMNativePointer address, long value, LongBinaryOperator f) {
+        assert checkPointer(address.asNative());
         long addr = address.asNative();
         long old;
         long nevv;
         do {
-            old = getI64(address);
+            old = getI64(location, address);
             nevv = f.applyAsLong(old, value);
         } while (!unsafe.compareAndSwapLong(null, addr, old, nevv));
         return old;
     }
 
     @Override
-    public int getAndSetI32(LLVMNativePointer address, int value) {
+    public int getAndSetI32(Node location, LLVMNativePointer address, int value) {
+        assert checkPointer(address.asNative());
         return unsafe.getAndSetInt(null, address.asNative(), value);
     }
 
     @Override
-    public int getAndAddI32(LLVMNativePointer address, int value) {
+    public int getAndAddI32(Node location, LLVMNativePointer address, int value) {
+        assert checkPointer(address.asNative());
         return unsafe.getAndAddInt(null, address.asNative(), value);
     }
 
     @Override
-    public int getAndSubI32(LLVMNativePointer address, int value) {
+    public int getAndSubI32(Node location, LLVMNativePointer address, int value) {
+        assert checkPointer(address.asNative());
         return unsafe.getAndAddInt(null, address.asNative(), -value);
     }
 
     @Override
-    public int getAndOpI32(LLVMNativePointer address, int value, IntBinaryOperator f) {
+    public int getAndOpI32(Node location, LLVMNativePointer address, int value, IntBinaryOperator f) {
+        assert checkPointer(address.asNative());
         long addr = address.asNative();
         int old;
         int nevv;
         do {
-            old = getI32(address);
+            old = getI32(location, address);
             nevv = f.applyAsInt(old, value);
         } while (!unsafe.compareAndSwapInt(null, addr, old, nevv));
         return old;
     }
 
     @Override
-    public short getAndOpI16(LLVMNativePointer address, short value, BinaryOperator<Short> f) {
+    public short getAndOpI16(Node location, LLVMNativePointer address, short value, ShortBinaryOperator f) {
         short old;
         short nevv;
         do {
-            old = getI16(address);
+            old = getI16(location, address);
             nevv = f.apply(old, value);
-        } while (!compareAndSwapI16(address, old, nevv).isSwap());
+        } while (!compareAndSwapI16(location, address, old, nevv).isSwap());
         return old;
     }
 
     @Override
-    public byte getAndOpI8(LLVMNativePointer address, byte value, BinaryOperator<Byte> f) {
+    public byte getAndOpI8(Node location, LLVMNativePointer address, byte value, ByteBinaryOperator f) {
         byte old;
         byte nevv;
         do {
-            old = getI8(address);
+            old = getI8(location, address);
             nevv = f.apply(old, value);
-        } while (!compareAndSwapI8(address, old, nevv).isSwap());
+        } while (!compareAndSwapI8(location, address, old, nevv).isSwap());
         return old;
     }
 
     @Override
-    public boolean getAndOpI1(LLVMNativePointer address, boolean value, BinaryOperator<Boolean> f) {
+    public boolean getAndOpI1(Node location, LLVMNativePointer address, boolean value, BooleanBinaryOperator f) {
         byte old;
         boolean nevv;
         do {
-            old = getI8(address);
+            old = getI8(location, address);
             nevv = f.apply(old != 0, value);
-        } while (!compareAndSwapI8(address, old, (byte) (nevv ? 1 : 0)).isSwap());
+        } while (!compareAndSwapI8(location, address, old, (byte) (nevv ? 1 : 0)).isSwap());
         return old != 0;
     }
 
@@ -611,141 +557,164 @@ public final class LLVMNativeMemory extends LLVMMemory {
     }
 
     /**
-     * A fast check if the provided address is within the handle space.
+     * A fast bit-check if the provided address is within the handle space.
      */
-    @Override
-    public boolean isHandleMemory(long addr) {
-        return addr < HANDLE_SPACE_END;
+    public static boolean isHandleMemory(long address) {
+        return (address & HANDLE_SPACE_START) != 0;
     }
 
     /**
-     * A fast check if the provided address is within the auto-deref handle space.
+     * A fast bit-check if the provided address is within the normal handle space.
      */
+    public static boolean isCommonHandleMemory(long address) {
+        return ((address & HANDLE_HEADER_MASK) == HANDLE_SPACE_START);
+    }
+
+    /**
+     * A fast bit-check if the provided address is within the auto-deref handle space.
+     */
+    public static boolean isDerefHandleMemory(long address) {
+        return ((address & HANDLE_HEADER_MASK) == DEREF_HANDLE_SPACE_START);
+    }
+
     @Override
-    public boolean isDerefHandleMemory(long addr) {
-        return derefHandleContainer.accept(addr);
+    public HandleContainer createHandleContainer(boolean deref, Assumption noHandleAssumption) {
+        return deref ? new DerefHandleContainer(noHandleAssumption) : new CommonHandleContainer(noHandleAssumption);
     }
 
-    public static long getDerefHandleObjectMask() {
-        return DEREF_HANDLE_OBJECT_SIZE - 1;
-    }
+    private abstract static class AbstractHandleContainer extends HandleContainer {
 
-    private abstract static class HandleContainer {
-        protected final long rangeStart;
-        protected final long rangeEnd;
-        protected final long objectSize;
+        private final Assumption noHandleAssumption;
+        private final ArrayDeque<Long> freeList = new ArrayDeque<>();
+        private final EconomicMap<Object, Handle> handleFromManaged = EconomicMap.create();
+        private Handle[] handleFromPointer = new Handle[1024];
+        private long top = getStart(); // address of the next handle
 
-        private long top;
-        private FreeListNode freeList;
-
-        private final Object freeListLock = new Object();
-        private final Object topLock = new Object();
-
-        HandleContainer(long startAddr, long endAddr, long objectSize) {
-            this.rangeStart = startAddr;
-            this.rangeEnd = endAddr;
-            this.top = startAddr;
-
-            assert isPowerOfTwo(objectSize);
-            this.objectSize = objectSize;
+        AbstractHandleContainer(Assumption noHandleAssumption) {
+            this.noHandleAssumption = noHandleAssumption;
         }
 
-        protected static final class FreeListNode {
-            protected FreeListNode(long address, FreeListNode next) {
-                this.address = address;
-                this.next = next;
-            }
+        protected abstract long getStart();
 
-            private final long address;
-            private final FreeListNode next;
+        protected abstract long getEnd();
+
+        private int indexFromPointer(long address) {
+            return (int) (((address - getStart()) >> HANDLE_OBJECT_SIZE_BITS));
         }
 
-        abstract boolean accept(long address);
-
-        long allocate() {
-
-            // preferably consume from free list
-            synchronized (freeListLock) {
-                if (freeList != null) {
-                    FreeListNode n = freeList;
-                    freeList = n.next;
-                    return n.address;
-                }
-            }
-
-            synchronized (topLock) {
-                long addr = top;
-                assert top >= rangeStart;
-                top += objectSize;
-                if (!accept(top)) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw new OutOfMemoryError();
-                }
-                return addr;
-            }
-        }
-
-        boolean isAllocated(long address) {
-            synchronized (topLock) {
-                if (!(address >= rangeStart && address < top)) {
-                    return false;
-                }
-            }
-
-            synchronized (freeListLock) {
-                for (FreeListNode cur = freeList; cur != null; cur = cur.next) {
-                    if (cur.address == address) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        }
-
+        @Override
         @TruffleBoundary
-        void free(long address) {
-            if (!isAllocated(address)) {
-                throw new IllegalStateException("double-free of " + Long.toHexString(address));
+        public synchronized LLVMNativePointer allocate(Node location, Object value) {
+            Handle handle = handleFromManaged.get(value);
+            if (handle == null) {
+                Long free = freeList.pollFirst();
+                long address;
+                if (free != null) {
+                    address = free;
+                } else {
+                    noHandleAssumption.invalidate();
+                    if (top >= getEnd()) {
+                        throw new LLVMMemoryException(location, new OutOfMemoryError("handle space exhausted"));
+                    }
+                    address = top;
+                    top += HANDLE_OBJECT_SIZE;
+                }
+                handle = new Handle(LLVMNativePointer.create(address), value);
+                int index = indexFromPointer(address);
+                if (handleFromPointer.length <= index) {
+                    handleFromPointer = Arrays.copyOf(handleFromPointer, handleFromPointer.length * 2);
+                }
+                handleFromPointer[index] = handle;
+                handleFromManaged.put(value, handle);
             }
-            synchronized (freeListLock) {
-                // We need to mask because we allow creating handles with an offset.
-                freeList = new FreeListNode(address & ~getObjectMask(), freeList);
-            }
-        }
-
-        private long getObjectMask() {
-            return objectSize - 1;
-        }
-
-        static boolean isPowerOfTwo(long x) {
-            return x > 0 && (x & (x - 1)) == 0;
-        }
-    }
-
-    private static final class DerefHandleContainer extends HandleContainer {
-
-        DerefHandleContainer(long startAddr, long endAddr, long objectSize) {
-            super(startAddr, endAddr, objectSize);
+            handle.refcnt++;
+            return handle.pointer;
         }
 
         @Override
-        boolean accept(long address) {
-            return address < rangeEnd;
-        }
-
-    }
-
-    private static final class CommonHandleContainer extends HandleContainer {
-
-        CommonHandleContainer(long startAddr, long endAddr, long objectSize) {
-            super(startAddr, endAddr, objectSize);
+        @TruffleBoundary
+        public synchronized void free(Node location, long address) {
+            if ((address & HANDLE_OFFSET_MASK) != 0) {
+                throw new LLVMMemoryException(location, new UnsupportedOperationException("Cannot resolve invalid native handle: " + address));
+            }
+            if ((address & HANDLE_HEADER_MASK) != getStart()) {
+                throw new LLVMMemoryException(location, new UnsupportedOperationException("Cannot resolve invalid native handle: " + address));
+            }
+            int index = indexFromPointer(address);
+            if (index < 0 || index >= handleFromPointer.length) {
+                throw new LLVMMemoryException(location, new UnsupportedOperationException("Cannot resolve native handle: " + address));
+            }
+            Handle handle = handleFromPointer[index];
+            if (handle == null) {
+                throw new LLVMMemoryException(location, new UnsupportedOperationException("Cannot resolve native handle (double-free?): " + address));
+            }
+            if (--handle.refcnt == 0) {
+                handleFromPointer[index] = null;
+                handleFromManaged.removeKey(handle.managed);
+                freeList.addLast(address);
+            }
         }
 
         @Override
-        boolean accept(long address) {
-            return rangeStart <= address && address < rangeEnd;
+        public boolean isHandle(long address) {
+            if ((address & HANDLE_HEADER_MASK) != getStart()) {
+                return false;
+            }
+            int index = indexFromPointer(address);
+            Handle[] array = handleFromPointer;
+            return index >= 0 && index < array.length && array[index] != null;
         }
 
+        @Override
+        public LLVMManagedPointer getValue(Node location, long address) {
+            return LLVMManagedPointer.create(handleFromPointer[indexFromPointer(address)].managed, address & HANDLE_OFFSET_MASK);
+        }
     }
 
+    private static final class Handle {
+
+        private int refcnt;
+        private final LLVMNativePointer pointer;
+        private final Object managed;
+
+        private Handle(LLVMNativePointer pointer, Object managed) {
+            this.refcnt = 0;
+            this.pointer = pointer;
+            this.managed = managed;
+        }
+    }
+
+    private static final class CommonHandleContainer extends AbstractHandleContainer {
+
+        CommonHandleContainer(Assumption noHandleAssumption) {
+            super(noHandleAssumption);
+        }
+
+        @Override
+        protected long getStart() {
+            return HANDLE_SPACE_START;
+        }
+
+        @Override
+        protected long getEnd() {
+            return HANDLE_SPACE_END;
+        }
+    }
+
+    private static final class DerefHandleContainer extends AbstractHandleContainer {
+
+        DerefHandleContainer(Assumption noHandleAssumption) {
+            super(noHandleAssumption);
+        }
+
+        @Override
+        protected long getStart() {
+            return DEREF_HANDLE_SPACE_START;
+        }
+
+        @Override
+        protected long getEnd() {
+            return DEREF_HANDLE_SPACE_END;
+        }
+    }
 }

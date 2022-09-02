@@ -64,13 +64,10 @@ public abstract class LLVM80BitFloatStoreNode extends LLVMStoreNodeCommon {
     }
 
     // TODO (chaeubl): we could store this in a more efficient way (short + long)
-    // TODO (fredmorcos) When GR-26485 is fixed, use limit = "3" here.
-    @Specialization
+    @Specialization(limit = "3")
     @ExplodeLoop
     protected void doForeign(LLVMManagedPointer address, LLVM80BitFloat value,
-                    // TODO (fredmorcos) When GR-26485 is fixed, use
-                    // @CachedLibrary("address.getObject()") here.
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         byte[] bytes = value.getBytes();
         assert bytes.length == LLVM80BitFloat.BYTE_WIDTH;
         long curOffset = address.getOffset();

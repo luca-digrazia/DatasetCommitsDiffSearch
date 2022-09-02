@@ -27,39 +27,22 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.runtime.nodes.memory.store;
+package com.oracle.truffle.llvm.runtime.nodes.asm.support;
 
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateUncached;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@GenerateUncached
-public abstract class LLVMI32StoreNode extends LLVMStoreNodeCommon {
-
-    @Specialization(guards = "!isAutoDerefHandle(language, addr)")
-    protected void doOp(LLVMNativePointer addr, int value,
-                    @CachedLanguage LLVMLanguage language) {
-        language.getLLVMMemory().putI32(this, addr, value);
+// All methods can be used without @TruffleBoundary
+public class LLVMString {
+    public static void strcpy(LLVMMemory memory, LLVMNativePointer dst, String src) {
+        memory.putByteArray(null, dst, getBytes(src));
+        LLVMNativePointer zero = dst.increment(src.length());
+        memory.putI8(null, zero, (byte) 0);
     }
 
-    @Specialization(guards = "isAutoDerefHandle(language, addr)")
-    protected void doOpDerefHandle(LLVMNativePointer addr, int value,
-                    @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
-                    @Cached LLVMDerefHandleGetReceiverNode getReceiver,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
-        doOpManaged(getReceiver.execute(addr), value, nativeWrite);
-    }
-
-    @Specialization(limit = "3")
-    protected void doOpManaged(LLVMManagedPointer address, int value,
-                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
-        nativeWrite.writeI32(address.getObject(), address.getOffset(), value);
+    @TruffleBoundary
+    private static byte[] getBytes(String str) {
+        return str.getBytes();
     }
 }

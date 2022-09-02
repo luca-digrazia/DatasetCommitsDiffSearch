@@ -27,39 +27,28 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.runtime.nodes.memory.store;
+package com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop;
 
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateUncached;
+import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-@GenerateUncached
-public abstract class LLVMI32StoreNode extends LLVMStoreNodeCommon {
+@NodeChild(type = LLVMExpressionNode.class)
+public abstract class LLVMTruffleDerefHandleToManaged extends LLVMIntrinsic {
 
-    @Specialization(guards = "!isAutoDerefHandle(language, addr)")
-    protected void doOp(LLVMNativePointer addr, int value,
-                    @CachedLanguage LLVMLanguage language) {
-        language.getLLVMMemory().putI32(this, addr, value);
-    }
-
-    @Specialization(guards = "isAutoDerefHandle(language, addr)")
-    protected void doOpDerefHandle(LLVMNativePointer addr, int value,
-                    @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
-                    @Cached LLVMDerefHandleGetReceiverNode getReceiver,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
-        doOpManaged(getReceiver.execute(addr), value, nativeWrite);
-    }
-
-    @Specialization(limit = "3")
-    protected void doOpManaged(LLVMManagedPointer address, int value,
-                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
-        nativeWrite.writeI32(address.getObject(), address.getOffset(), value);
+    @Specialization
+    protected LLVMNativePointer doIntrinsic(LLVMManagedPointer value,
+                    @CachedContext(LLVMLanguage.class) LLVMContext context) {
+        LLVMNativePointer handle = context.getDerefHandleContainer().allocate(this, value.getObject());
+        if (value.getOffset() != 0) {
+            return handle.increment(value.getOffset());
+        }
+        return handle;
     }
 }

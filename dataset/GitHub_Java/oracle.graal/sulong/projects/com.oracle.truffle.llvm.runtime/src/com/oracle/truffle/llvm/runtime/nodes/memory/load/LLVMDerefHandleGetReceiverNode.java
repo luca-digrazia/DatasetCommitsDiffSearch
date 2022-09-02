@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -27,39 +27,33 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.runtime.nodes.memory.store;
+package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 @GenerateUncached
-public abstract class LLVMI32StoreNode extends LLVMStoreNodeCommon {
+public abstract class LLVMDerefHandleGetReceiverNode extends LLVMNode {
 
-    @Specialization(guards = "!isAutoDerefHandle(language, addr)")
-    protected void doOp(LLVMNativePointer addr, int value,
-                    @CachedLanguage LLVMLanguage language) {
-        language.getLLVMMemory().putI32(this, addr, value);
+    public abstract LLVMManagedPointer execute(LLVMNativePointer addr);
+
+    public abstract LLVMManagedPointer execute(long addr);
+
+    @Specialization
+    public LLVMManagedPointer doPointer(LLVMNativePointer addr,
+                    @CachedContext(LLVMLanguage.class) LLVMContext context) {
+        return doLong(addr.asNative(), context);
     }
 
-    @Specialization(guards = "isAutoDerefHandle(language, addr)")
-    protected void doOpDerefHandle(LLVMNativePointer addr, int value,
-                    @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
-                    @Cached LLVMDerefHandleGetReceiverNode getReceiver,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
-        doOpManaged(getReceiver.execute(addr), value, nativeWrite);
-    }
-
-    @Specialization(limit = "3")
-    protected void doOpManaged(LLVMManagedPointer address, int value,
-                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
-        nativeWrite.writeI32(address.getObject(), address.getOffset(), value);
+    @Specialization
+    public LLVMManagedPointer doLong(long address,
+                    @CachedContext(LLVMLanguage.class) LLVMContext context) {
+        return context.getDerefHandleContainer().getValue(this, address).copy();
     }
 }

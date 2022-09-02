@@ -76,14 +76,8 @@ public abstract class LLVMStart extends LLVMIntrinsic {
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMLangStart extends LLVMStart {
 
-        /**
-         * @param stackPointer
-         * @param main
-         * @param argc
-         * @param argv
-         * @see LLVMLangStart
-         */
         @Specialization
+        @SuppressWarnings("unused")
         protected long doOp(StackPointer stackPointer, LLVMPointer main, long argc, LLVMPointer argv,
                         @Cached("createClosureDispatchNode()") LLVMClosureDispatchNode dispatchNode) {
             dispatchNode.executeDispatch(main, new Object[]{stackPointer});
@@ -99,34 +93,25 @@ public abstract class LLVMStart extends LLVMIntrinsic {
     public abstract static class LLVMLangStartInternal extends LLVMStart {
 
         @TruffleBoundary
-        protected LangStartVtableType createLangStartVtable(LLVMGlobal vtableGlobal) throws TypeOverflowException {
-            Type vtableType = vtableGlobal.getPointeeType();
+        protected LangStartVtableType createLangStartVtable(Type vtableType) throws TypeOverflowException {
             LLVMFunctionStartNode startNode = (LLVMFunctionStartNode) getRootNode();
             DataLayout dataSpecConverter = startNode.getDatalayout();
             return LangStartVtableType.create(dataSpecConverter, vtableType);
         }
 
-        /**
-         * @param stackPointer
-         * @param mainPointer
-         * @param vtable
-         * @param argc
-         * @param argv
-         * @param ctx
-         * @see LLVMLangStartInternal
-         */
         @Specialization
+        @SuppressWarnings("unused")
         protected long doOp(StackPointer stackPointer, LLVMNativePointer mainPointer, LLVMNativePointer vtable, long argc, LLVMPointer argv,
                         @CachedContext(LLVMLanguage.class) LLVMContext ctx,
                         @CachedLanguage LLVMLanguage language,
-                        @Cached("createToNativeWithTarget()") @SuppressWarnings("unused") LLVMToNativeNode toNative,
+                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
                         @Cached("createClosureDispatchNode()") LLVMClosureDispatchNode fnDispatchNode,
                         @Cached("createClosureDispatchNode()") LLVMClosureDispatchNode dropInPlaceDispatchNode) {
             LLVMMemory memory = language.getLLVMMemory();
             LLVMGlobal vtableGlobal = ctx.findGlobal(vtable);
             assert vtableGlobal != null;
             try {
-                LangStartVtableType langStartVtable = createLangStartVtable(vtableGlobal);
+                LangStartVtableType langStartVtable = createLangStartVtable(vtableGlobal.getPointeeType());
                 LLVMNativePointer fn = readFn(memory, vtable, langStartVtable);
                 LLVMNativePointer dropInPlace = readDropInPlace(memory, vtable, langStartVtable);
                 LLVMNativePointer main = coerceMainForFn(memory, langStartVtable, mainPointer);
