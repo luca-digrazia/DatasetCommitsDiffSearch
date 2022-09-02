@@ -37,6 +37,8 @@ import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeVirtual;
 
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.function.Function;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
@@ -69,6 +71,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
+import com.oracle.truffle.espresso.jdwp.api.MethodBreakpoint;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jni.Mangle;
 import com.oracle.truffle.espresso.jni.NativeLibrary;
@@ -78,8 +81,8 @@ import com.oracle.truffle.espresso.meta.LocalVariableTable;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
+import com.oracle.truffle.espresso.nodes.EspressoMethodNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
-import com.oracle.truffle.espresso.nodes.MethodHandleIntrinsicNode;
 import com.oracle.truffle.espresso.nodes.NativeRootNode;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -188,34 +191,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         this.isLeaf = method.isLeaf;
     }
 
-    private Method(Method method, CodeAttribute split) {
-        super(method.getRawSignature(), method.getName());
-        this.declaringKlass = method.declaringKlass;
-        // TODO(peterssen): Custom constant pool for methods is not supported.
-        this.pool = (RuntimeConstantPool) method.getConstantPool();
-
-        this.linkedMethod = method.linkedMethod;
-
-        try {
-            this.parsedSignature = getSignatures().parsed(this.getRawSignature());
-        } catch (IllegalArgumentException | ClassFormatError e) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw getMeta().throwExWithMessage(ClassFormatError.class, e.getMessage());
-        }
-
-        this.codeAttribute = split;
-        this.callTarget = null;
-
-        this.exceptionsAttribute = (ExceptionsAttribute) getAttribute(ExceptionsAttribute.NAME);
-
-        initRefKind();
-        // Proxy the method, so that we have the same callTarget if it is not yet initialized.
-        // Allows for not duplicating the codeAttribute
-        this.proxy = method.proxy == null ? method : method.proxy;
-        this.poisonPill = method.poisonPill;
-        this.isLeaf = method.isLeaf;
-    }
-
     Method(ObjectKlass declaringKlass, LinkedMethod linkedMethod) {
         this(declaringKlass, linkedMethod, linkedMethod.getRawSignature());
     }
@@ -285,6 +260,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return codeAttribute.getCode();
     }
 
+    public byte[] getOriginalCode() {
+        return codeAttribute.getOriginalCode();
+    }
+
     public CodeAttribute getCodeAttribute() {
         return codeAttribute;
     }
@@ -325,17 +304,13 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return res;
     }
 
-    public static NativeSimpleType word() {
-        return NativeSimpleType.SINT64; // or SINT32
-    }
-
     private static String buildJniNativeSignature(Method method) {
         // Prepend JNIEnv*.
-        StringBuilder sb = new StringBuilder("(").append(word());
+        StringBuilder sb = new StringBuilder("(").append(NativeSimpleType.SINT64);
         final Symbol<Type>[] signature = method.getParsedSignature();
 
         // Receiver for instance methods, class for static methods.
-        sb.append(", ").append(word());
+        sb.append(", ").append(NativeSimpleType.NULLABLE);
 
         int argCount = Signatures.parameterCount(signature, false);
         for (int i = 0; i < argCount; ++i) {
@@ -437,7 +412,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                                  *
                                  * Redundant callTarget assignment. Better sure than sorry.
                                  */
-                                this.callTarget = declaringKlass.lookupPolysigMethod(getName(), getRawSignature()).getCallTarget();
+                                this.callTarget = declaringKlass.lookupPolysigMethod(getName(), getRawSignature(), declaringKlass).getCallTarget();
                             } else {
                                 System.err.println("Failed to link native method: " + getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
                                 throw getMeta().throwEx(UnsatisfiedLinkError.class);
@@ -695,8 +670,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     // Polymorphic signature method 'creation'
 
-    Method findIntrinsic(Symbol<Signature> signature, MethodHandleIntrinsics.PolySigIntrinsics id) {
-        return getContext().getMethodHandleIntrinsics().findIntrinsic(this, signature, id);
+    Method findIntrinsic(Symbol<Signature> signature, Function<Method, EspressoMethodNode> baseNodeFactory, MethodHandleIntrinsics.PolySigIntrinsics id) {
+        return getContext().getMethodHandleIntrinsics().findIntrinsic(this, signature, baseNodeFactory, id);
     }
 
     void setVTableIndex(int i) {
@@ -727,6 +702,14 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     public boolean isVirtualCall() {
         return !isStatic() && !isConstructor() && !isPrivate() && !getDeclaringKlass().isInterface();
+    }
+
+    public Method createIntrinsic(Symbol<Signature> polymorphicRawSignature, Function<Method, EspressoMethodNode> baseNodeFactory) {
+        assert (declaringKlass == getMeta().MethodHandle);
+        Method method = new Method(declaringKlass, linkedMethod, polymorphicRawSignature);
+        EspressoRootNode rootNode = EspressoRootNode.create(null, baseNodeFactory.apply(method));
+        method.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
+        return method;
     }
 
     public void setPoisonPill() {
@@ -874,31 +857,27 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         }
     }
 
-    // Spawns a placeholder method for MH intrinsics
-    public Method createIntrinsic(Symbol<Signature> polymorphicRawSignature) {
-        assert isMethodHandleIntrinsic();
-        return new Method(declaringKlass, linkedMethod, polymorphicRawSignature);
-    }
-
-    public MethodHandleIntrinsicNode spawnIntrinsicNode(Klass accessingKlass, Symbol<Name> mname, Symbol<Signature> signature) {
-        assert isMethodHandleIntrinsic();
-        return getContext().getMethodHandleIntrinsics().createIntrinsicNode(this, accessingKlass, mname, signature);
-    }
-
-    public Method forceSplit() {
-        assert isMethodHandleIntrinsic();
-        Method result = new Method(this, getCodeAttribute().forceSplit());
-        FrameDescriptor frameDescriptor = initFrameDescriptor(result.getMaxLocals() + result.getMaxStackSize());
-        FrameSlot monitorSlot = null;
-        if (usesMonitors()) {
-            monitorSlot = frameDescriptor.addFrameSlot("monitor", FrameSlotKind.Object);
+    public int getCatchLocation(int bci, StaticObject ex) {
+        ExceptionHandler[] handlers = getExceptionHandlers();
+        ExceptionHandler resolved = null;
+        for (ExceptionHandler toCheck : handlers) {
+            if (bci >= toCheck.getStartBCI() && bci < toCheck.getEndBCI()) {
+                Klass catchType = null;
+                if (!toCheck.isCatchAll()) {
+                    catchType = getRuntimeConstantPool().resolvedKlassAt(getDeclaringKlass(), toCheck.catchTypeCPI());
+                }
+                if (catchType == null || InterpreterToVM.instanceOf(ex, catchType)) {
+                    // the first found exception handler is our exception handler
+                    resolved = toCheck;
+                    break;
+                }
+            }
         }
-        // BCI slot is always the latest.
-        FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
-        EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result, frameDescriptor, monitorSlot, bciSlot));
-        result.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
-
-        return result;
+        if (resolved != null) {
+            return resolved.getHandlerBCI();
+        } else {
+            return -1;
+        }
     }
 
     // region jdwp-specific
@@ -951,6 +930,11 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return lastLine == lineAt;
     }
 
+    @Override
+    public int getFirstLine() {
+        return getLineNumberTable().getFirstLine();
+    }
+
     public String getGenericSignatureAsString() {
         if (genericSignature == null) {
             SignatureAttribute attr = (SignatureAttribute) linkedMethod.getAttribute(SignatureAttribute.NAME);
@@ -961,6 +945,56 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             }
         }
         return genericSignature;
+    }
+
+    private final Field.StableBoolean hasActiveBreakpoints = new Field.StableBoolean(false);
+
+    private MethodBreakpoint[] infos = new MethodBreakpoint[0];
+
+    @Override
+    public boolean hasActiveBreakpoint() {
+        return hasActiveBreakpoints.get();
+    }
+
+    @Override
+    public MethodBreakpoint[] getMethodBreakpointInfos() {
+        return infos;
+    }
+
+    @Override
+    public void addMethodBreakpointInfo(MethodBreakpoint info) {
+        hasActiveBreakpoints.set(true);
+        if (infos.length == 0) {
+            infos = new MethodBreakpoint[]{info};
+            return;
+        }
+
+        infos = Arrays.copyOf(infos, infos.length + 1);
+        infos[infos.length - 1] = info;
+    }
+
+    @Override
+    public void removeMethodBreakpointInfo(int requestId) {
+        // shrink the array to avoid null values
+        if (infos.length == 0) {
+            throw new RuntimeException("Method: " + getNameAsString() + " should contain method breakpoint info");
+        } else if (infos.length == 1) {
+            infos = new MethodBreakpoint[0];
+            hasActiveBreakpoints.set(false);
+        } else {
+            int removeIndex = -1;
+            for (int i = 0; i < infos.length; i++) {
+                if (infos[i].getRequestId() == requestId) {
+                    removeIndex = i;
+                    break;
+                }
+            }
+            MethodBreakpoint[] temp = new MethodBreakpoint[infos.length - 1];
+            for (int i = 0; i < temp.length; i++) {
+                temp[i] = i < removeIndex ? infos[i] : infos[i +1];
+            }
+            infos = temp;
+        }
     }
 
     // endregion jdwp-specific
