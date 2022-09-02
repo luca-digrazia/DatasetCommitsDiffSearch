@@ -1361,7 +1361,7 @@ public class BasicNodeFactory implements NodeFactory {
 
     @Override
     public LLVMExpressionNode createTypedElementPointer(LLVMExpressionNode aggregateAddress, LLVMExpressionNode index, long indexedTypeLength, Type targetType) {
-        return LLVMGetElementPtrNodeGen.create(aggregateAddress, index, indexedTypeLength, targetType);
+        return LLVMGetElementPtrNodeGen.create(aggregateAddress, index, indexedTypeLength);
     }
 
     @Override
@@ -2352,6 +2352,15 @@ public class BasicNodeFactory implements NodeFactory {
     @Override
     public LLVMMemoryOpNode createProtectGlobalsBlock() {
         return new ProtectReadOnlyGlobalsBlockNode(context);
+    }
+
+    @Override
+    public LLVMMemoryOpNode createFreeGlobalsBlock(boolean readOnly) {
+        if (readOnly) {
+            return new FreeReadOnlyGlobalsBlockNode(context);
+        } else {
+            return LLVMFreeNodeGen.create(null);
+        }
     }
 
     @Override
