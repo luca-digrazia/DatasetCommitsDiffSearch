@@ -29,9 +29,9 @@
  */
 package com.oracle.truffle.wasm.binary;
 
-import static com.oracle.truffle.wasm.binary.ValueTypes.VOID_TYPE;
-
 import com.oracle.truffle.api.frame.VirtualFrame;
+
+import static com.oracle.truffle.wasm.binary.ValueTypes.VOID_TYPE;
 
 public class WasmEmptyNode extends WasmNode {
 
@@ -40,9 +40,8 @@ public class WasmEmptyNode extends WasmNode {
     }
 
     @Override
-    public int execute(WasmContext context, VirtualFrame frame) {
-        // A return value of -1 means no branch to be taken.
-        return -1;
+    public int execute(VirtualFrame frame) {
+        return 0;
     }
 
     @Override

@@ -35,24 +35,20 @@ import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 
 public class WasmCodeEntry {
-    @CompilationFinal private int functionIndex;
     @CompilationFinal(dimensions = 1) private byte[] data;
     @CompilationFinal(dimensions = 1) private FrameSlot[] localSlots;
     @CompilationFinal(dimensions = 1) private FrameSlot[] stackSlots;
     @CompilationFinal(dimensions = 1) private byte[] localTypes;
     @CompilationFinal(dimensions = 1) private byte[] byteConstants;
     @CompilationFinal(dimensions = 1) private int[] intConstants;
-    @CompilationFinal(dimensions = 1) private long[] numericLiterals;
 
-    public WasmCodeEntry(int functionIndex, byte[] data) {
-        this.functionIndex = functionIndex;
+    public WasmCodeEntry(byte[] data) {
         this.data = data;
         this.localSlots = null;
         this.stackSlots = null;
         this.localTypes = null;
         this.byteConstants = null;
         this.intConstants = null;
-        this.numericLiterals = null;
     }
 
     public byte[] data() {
@@ -70,8 +66,8 @@ public class WasmCodeEntry {
     public void initLocalSlots(FrameDescriptor frameDescriptor) {
         localSlots = new FrameSlot[localTypes.length];
         for (int i = 0; i != localTypes.length; ++i) {
-            FrameSlot localSlot = frameDescriptor.addFrameSlot(i, frameSlotKind(localTypes[i]));
-            localSlots[i] = localSlot;
+            FrameSlot stackSlot = frameDescriptor.addFrameSlot(i, frameSlotKind(localTypes[i]));
+            localSlots[i] = stackSlot;
         }
     }
 
@@ -123,36 +119,7 @@ public class WasmCodeEntry {
         this.intConstants = intConstants;
     }
 
-    public long numericLiteral(int index) {
-        return numericLiterals[index];
-    }
-
-    public int numericLiteralAsInt(int index) {
-        return (int) numericLiterals[index];
-    }
-
-    public float numericLiteralAsFloat(int index) {
-        return Float.intBitsToFloat(numericLiteralAsInt(index));
-    }
-
-    public double numericLiteralAsDouble(int index) {
-        return Double.longBitsToDouble(numericLiterals[index]);
-    }
-
-    public void setNumericLiterals(long[] numericLiterals) {
-        this.numericLiterals = numericLiterals;
-    }
-
     public int numLocals() {
         return localTypes.length;
-    }
-
-    public int functionIndex() {
-        return functionIndex;
-    }
-
-    @Override
-    public String toString() {
-        return "wasm-code-entry-" + functionIndex;
     }
 }

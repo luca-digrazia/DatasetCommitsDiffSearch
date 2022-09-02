@@ -52,11 +52,6 @@ public class ExecutionState {
         maxStackSize = Math.max(stackSize, maxStackSize);
     }
 
-    public void push(int n) {
-        stackSize += n;
-        maxStackSize = Math.max(stackSize, maxStackSize);
-    }
-
     public void pop() {
         stackSize--;
     }
