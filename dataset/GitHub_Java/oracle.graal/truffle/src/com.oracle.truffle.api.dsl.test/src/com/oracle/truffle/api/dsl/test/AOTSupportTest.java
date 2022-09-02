@@ -69,7 +69,6 @@ import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.AOTAutoLibraryNodeGen;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.AOTManualLibraryNodeGen;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.AOTManualLibrarySingleLimitNodeGen;
-import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.AOTRecursiveErrorNodeGen;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.NoSpecializationTestNodeGen;
 import com.oracle.truffle.api.dsl.test.AOTSupportTestFactory.TestNodeGen;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -558,7 +557,8 @@ public class AOTSupportTest extends AbstractPolyglotTest {
                             @Cached("createRawIdentityProfile()") DoubleValueProfile doubleValue,
                             @Cached("createEqualityProfile()") PrimitiveValueProfile primitiveValue,
                             @Cached("createClassProfile()") ValueProfile classValue,
-                            @Cached("createIdentityProfile()") ValueProfile identityValue) {
+                            @Cached("createIdentityProfile()") ValueProfile identityValue,
+                            @Cached("createEqualityProfile()") ValueProfile equalityValue) {
 
                 branch.enter();
                 binaryCondition.profile(true);
@@ -600,6 +600,7 @@ public class AOTSupportTest extends AbstractPolyglotTest {
 
                 classValue.profile(Integer.class);
                 identityValue.profile(receiver);
+                equalityValue.profile(receiver);
 
                 return arg;
             }
@@ -622,36 +623,6 @@ public class AOTSupportTest extends AbstractPolyglotTest {
                 return 42;
             }
 
-        }
-
-    }
-
-    @Test
-    public void testRecursionError() {
-        TestRootNode root = setup(AOTRecursiveErrorNodeGen.create());
-        AbstractPolyglotTest.assertFails(() -> AOTSupport.prepareForAOT(root), AssertionError.class, (e) -> {
-            assertTrue(e.getMessage(), e.getMessage().contains("<-recursion-detected->"));
-        });
-    }
-
-    @SuppressWarnings("unused")
-    @GenerateAOT
-    public abstract static class AOTRecursiveErrorNode extends BaseNode {
-
-        @Specialization
-        int doDefault(Object receiver, int arg1, @Cached AOTIndirectRecursiveErrorNode cachedValue) {
-            return arg1;
-        }
-
-    }
-
-    @SuppressWarnings("unused")
-    @GenerateAOT
-    public abstract static class AOTIndirectRecursiveErrorNode extends BaseNode {
-
-        @Specialization
-        int doDefault(Object receiver, int arg1, @Cached AOTRecursiveErrorNode asdf) {
-            return arg1;
         }
 
     }

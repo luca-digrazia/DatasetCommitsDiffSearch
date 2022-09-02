@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -53,11 +53,11 @@ import java.util.Map;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
 
-import com.oracle.truffle.api.library.DynamicDispatchLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.dsl.processor.ProcessorContext;
+import com.oracle.truffle.dsl.processor.expression.DSLExpression;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import com.oracle.truffle.dsl.processor.model.CacheExpression;
 import com.oracle.truffle.dsl.processor.model.MessageContainer;
@@ -69,17 +69,47 @@ public final class ExportsLibrary extends Template {
 
     private final ExportsData exports;
     private final LibraryData library;
-    private final TypeMirror receiverClass;
+    private final TypeMirror receiverType;
     private final boolean explicitReceiver;
+    private int defaultExportPriority;
     private Map<CacheExpression, String> sharedExpressions;
+    private VariableElement delegationVariable;
+    private DSLExpression transitionLimit;
+    private final List<TypeElement> declaringTypes = new ArrayList<>();
+    private boolean useForAOT;
+    private int useForAOTPriority;
 
-    public ExportsLibrary(ProcessorContext context, TypeElement templateType, AnnotationMirror annotation, ExportsData exports, LibraryData library, TypeMirror receiverClass,
+    public ExportsLibrary(ProcessorContext context, TypeElement templateType, AnnotationMirror annotation, ExportsData exports, LibraryData library, TypeMirror receiverType,
                     boolean explicitReceiver) {
         super(context, templateType, annotation);
         this.exports = exports;
-        this.receiverClass = receiverClass;
+        this.receiverType = receiverType;
         this.library = library;
         this.explicitReceiver = explicitReceiver;
+    }
+
+    public boolean isUseForAOT() {
+        return useForAOT;
+    }
+
+    public void setUseForAOT(boolean useForAOT) {
+        this.useForAOT = useForAOT;
+    }
+
+    public int getUseForAOTPriority() {
+        return useForAOTPriority;
+    }
+
+    public void setUseForAOTPriority(int useForAOTPriority) {
+        this.useForAOTPriority = useForAOTPriority;
+    }
+
+    public ExportsData getExports() {
+        return exports;
+    }
+
+    public void setDefaultExportPriority(int defaultExportPriority) {
+        this.defaultExportPriority = defaultExportPriority;
     }
 
     public void setSharedExpressions(Map<CacheExpression, String> sharedExpressions) {
@@ -90,8 +120,18 @@ public final class ExportsLibrary extends Template {
         return sharedExpressions;
     }
 
+    public boolean needsDefaultExportProvider() {
+        return isExplicitReceiver()//
+                        && getLibrary().isDefaultExportLookupEnabled()//
+                        && !isBuiltinDefaultExport();
+    }
+
+    public boolean needsEagerExportProvider() {
+        return isUseForAOT() && getLibrary().isGenerateAOT();
+    }
+
     public boolean isFinalReceiver() {
-        TypeElement type = ElementUtils.castTypeElement(receiverClass);
+        TypeElement type = ElementUtils.castTypeElement(receiverType);
         if (type == null) {
             return true;
         }
@@ -99,18 +139,21 @@ public final class ExportsLibrary extends Template {
     }
 
     public boolean isDynamicDispatchTarget() {
-        return isExplicitReceiver() && !isDefaultExport() && isReceiverDynamicDispatched();
+        return getLibrary().isDynamicDispatchEnabled() && isExplicitReceiver() && !isBuiltinDefaultExport() && isReceiverDynamicDispatched();
     }
 
     public boolean needsDynamicDispatch() {
-        TypeElement type = ElementUtils.castTypeElement(receiverClass);
+        if (!getLibrary().isDynamicDispatchEnabled()) {
+            return false;
+        }
+        TypeElement type = ElementUtils.castTypeElement(receiverType);
         if (type == null) {
             return false;
         }
         if (getLibrary().isDynamicDispatch()) {
             return false;
         }
-        if (type.getKind().isInterface() || ElementUtils.isObject(receiverClass)) {
+        if (type.getKind().isInterface() || ElementUtils.isObject(receiverType)) {
             return true;
         }
         for (ExportsLibrary otherLibrary : exports.getExportedLibraries().values()) {
@@ -127,7 +170,7 @@ public final class ExportsLibrary extends Template {
         return false;
     }
 
-    public boolean isDefaultExport() {
+    public boolean isBuiltinDefaultExport() {
         for (LibraryDefaultExportData defaultExport : getLibrary().getDefaultExports()) {
             if (typeEquals(defaultExport.getImplType(), getTemplateType().asType())) {
                 return true;
@@ -137,35 +180,38 @@ public final class ExportsLibrary extends Template {
     }
 
     private boolean isReceiverDynamicDispatched() {
-        TypeElement receiverTypeElement = ElementUtils.castTypeElement(receiverClass);
+        if (getReceiverDynamicDispatchExport() != null) {
+            return true;
+        }
+        if (ElementUtils.typeEquals(receiverType, types.DynamicObject)) {
+            // GR-24700: DynamicObject may be dispatched via DynamicObjectImpl
+            // which we cannot use as @ExportLibrary receiverType.
+            return true;
+        }
+        return false;
+    }
+
+    public AnnotationMirror getReceiverDynamicDispatchExport() {
+        TypeElement receiverTypeElement = ElementUtils.castTypeElement(receiverType);
         while (receiverTypeElement != null) {
-            List<AnnotationMirror> exportLibrary = getRepeatedAnnotation(receiverTypeElement.getAnnotationMirrors(), ExportLibrary.class);
+            List<AnnotationMirror> exportLibrary = getRepeatedAnnotation(receiverTypeElement.getAnnotationMirrors(), types.ExportLibrary);
             for (AnnotationMirror export : exportLibrary) {
                 TypeMirror exportedLibrary = getAnnotationValue(TypeMirror.class, export, "value");
-                if (ElementUtils.typeEquals(exportedLibrary, ProcessorContext.getInstance().getType(DynamicDispatchLibrary.class))) {
-                    return true;
+                if (ElementUtils.typeEquals(exportedLibrary, types.DynamicDispatchLibrary)) {
+                    return export;
                 }
             }
             receiverTypeElement = getSuperType(receiverTypeElement);
         }
-        return false;
+        return null;
     }
 
     public boolean needsRewrites() {
         for (ExportMessageData message : exportedMessages.values()) {
-            if (needsRewrites(message.getExportedClass())) {
-                return true;
-            } else if (message.getExportedClass() == null && needsRewrites(message.getExportedMethod())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean needsRewrites(ExportMessageElement clazz) {
-        if (clazz != null && clazz.getSpecializedNode() != null) {
-            if (clazz.getSpecializedNode().needsRewrites(ProcessorContext.getInstance())) {
-                return true;
+            if (message.getSpecializedNode() != null) {
+                if (message.getSpecializedNode().needsRewrites(ProcessorContext.getInstance())) {
+                    return true;
+                }
             }
         }
         return false;
@@ -190,15 +236,55 @@ public final class ExportsLibrary extends Template {
     }
 
     public TypeMirror getExplicitReceiver() {
-        return isExplicitReceiver() ? getReceiverClass() : null;
+        return isExplicitReceiver() ? getReceiverType() : null;
     }
 
-    public TypeMirror getReceiverClass() {
-        return receiverClass;
+    public TypeMirror getReceiverType() {
+        return receiverType;
     }
 
     public boolean isExplicitReceiver() {
         return explicitReceiver;
+    }
+
+    public boolean hasExportDelegation() {
+        return getDelegationVariable() != null;
+    }
+
+    public void setDelegationVariable(VariableElement delegateVar) {
+        this.delegationVariable = delegateVar;
+    }
+
+    public VariableElement getDelegationVariable() {
+        return delegationVariable;
+    }
+
+    public int getDefaultExportPriority() {
+        return defaultExportPriority;
+    }
+
+    public void setTransitionLimit(DSLExpression allowTransition) {
+        this.transitionLimit = allowTransition;
+    }
+
+    public DSLExpression getTransitionLimit() {
+        return transitionLimit;
+    }
+
+    public boolean isAllowTransition() {
+        return transitionLimit != null;
+    }
+
+    public boolean isDeclaredInTemplate() {
+        return ElementUtils.elementEquals(getDeclaringType(), getTemplateType());
+    }
+
+    public List<TypeElement> getDeclaringTypes() {
+        return declaringTypes;
+    }
+
+    public TypeElement getDeclaringType() {
+        return declaringTypes.get(0);
     }
 
 }
