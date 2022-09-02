@@ -45,7 +45,6 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.regex.RegexFlags;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
@@ -55,6 +54,7 @@ import com.oracle.truffle.regex.charset.CodePointSetAccumulator;
 import com.oracle.truffle.regex.charset.Constants;
 import com.oracle.truffle.regex.charset.UnicodeProperties;
 import com.oracle.truffle.regex.tregex.string.Encodings.Encoding;
+import com.oracle.truffle.regex.tregex.util.Exceptions;
 import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 public final class RegexLexer {
@@ -580,7 +580,7 @@ public final class RegexLexer {
         } else if (flags.isUnicode() && (c == 'p' || c == 'P')) {
             return parseUnicodeCharacterProperty(c == 'P');
         } else {
-            throw CompilerDirectives.shouldNotReachHere();
+            throw Exceptions.shouldNotReachHere();
         }
     }
 
@@ -617,7 +617,7 @@ public final class RegexLexer {
                     return Constants.NON_WORD_CHARS;
                 }
             default:
-                throw CompilerDirectives.shouldNotReachHere();
+                throw Exceptions.shouldNotReachHere();
         }
     }
 

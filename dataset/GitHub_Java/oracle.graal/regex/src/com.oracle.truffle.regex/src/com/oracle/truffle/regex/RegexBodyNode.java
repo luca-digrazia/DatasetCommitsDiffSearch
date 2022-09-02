@@ -101,7 +101,7 @@ public abstract class RegexBodyNode extends ExecutableNode implements Instrument
     @Override
     @CompilerDirectives.TruffleBoundary
     public final String toString() {
-        return "regex " + getEngineLabel() + ": " + source.toStringEscaped();
+        return "regex " + getEngineLabel() + ": " + source;
     }
 
     protected String getEngineLabel() {
