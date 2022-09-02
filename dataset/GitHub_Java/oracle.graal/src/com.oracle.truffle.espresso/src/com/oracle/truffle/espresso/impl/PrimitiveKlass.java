@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,193 +26,61 @@ package com.oracle.truffle.espresso.impl;
 import java.lang.reflect.Modifier;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool;
-import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
+import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
+import com.oracle.truffle.espresso.impl.PackageTable.PackageEntry;
+import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.substitutions.Host;
 
 /**
- * Implementation of {@link Klass} for primitive types.
+ * Implementation of {@link Klass} for primitive types. Primitive classes don't have a .class
+ * representation, so the associated LinkedKlass is null.
  */
 public final class PrimitiveKlass extends Klass {
-    private final JavaKind kind;
-    private final EspressoContext context;
+    private final JavaKind primitiveKind;
 
     /**
      * Creates Espresso type for a primitive {@link JavaKind}.
      *
-     * @param kind the kind to create the type for
+     * @param primitiveKind the kind to create the type for
      */
-    public PrimitiveKlass(EspressoContext context, JavaKind kind) {
-        super(String.valueOf(kind.getTypeChar()));
-        this.kind = kind;
-        this.context = context;
-        assert kind.isPrimitive() : kind + " not a primitive type";
+    public PrimitiveKlass(EspressoContext context, JavaKind primitiveKind) {
+        super(context, primitiveKind.getPrimitiveBinaryName(), primitiveKind.getType(), null, ObjectKlass.EMPTY_ARRAY,
+                        Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC);
+        assert primitiveKind.isPrimitive() : primitiveKind + " not a primitive kind";
+        this.primitiveKind = primitiveKind;
+    }
+
+    public JavaKind getPrimitiveJavaKind() {
+        return primitiveKind;
     }
 
     @Override
-    public int getModifiers() {
-        return Modifier.ABSTRACT | Modifier.FINAL | Modifier.PUBLIC;
-    }
-
-    @Override
-    public ArrayKlass getArrayClass() {
-        if (kind == JavaKind.Void) {
+    protected ArrayKlass createArrayKlass() {
+        if (getJavaKind() == JavaKind.Void) {
             return null;
         }
-        return super.getArrayClass();
+        return super.createArrayKlass();
     }
 
+    @Override
     public Klass getElementalType() {
         return this;
     }
 
     @Override
-    public Klass getComponentType() {
-        return null;
-    }
-
-    @Override
-    public Klass getSuperclass() {
-        return null;
-    }
-
-    @Override
-    public Klass[] getInterfaces() {
-        return Klass.EMPTY_ARRAY;
-    }
-
-    @Override
-    public Klass findLeastCommonAncestor(Klass otherType) {
-        return null;
-    }
-
-    @Override
-    public boolean hasFinalizer() {
-        return false;
-    }
-
-    @Override
-    public boolean isArray() {
-        return false;
-    }
-
-    @Override
-    public Object getClassLoader() {
-        return null; // BCL
-    }
-
-    @Override
-    public boolean isPrimitive() {
-        return true;
-    }
-
-    @Override
-    public boolean isInitialized() {
-        return true;
-    }
-
-    public boolean isLinked() {
-        return true;
-    }
-
-    @Override
-    public boolean isInstanceClass() {
-        return false;
-    }
-
-    @Override
-    public boolean isInterface() {
-        return false;
-    }
-
-    @Override
-    public boolean isAssignableFrom(Klass other) {
-        assert other != null;
-        // TODO(peterssen): Reference equality should be enough per context.
-        return other.equals(this);
-    }
-
-    @Override
-    public Klass getHostClass() {
-        return null;
-    }
-
-    @Override
-    public JavaKind getJavaKind() {
-        return kind;
-    }
-
-    @Override
-    public boolean isJavaLangObject() {
-        return false;
-    }
-
-    @Override
-    public MethodInfo resolveMethod(MethodInfo method, Klass callerType) {
-        return null;
-    }
-
-    @Override
-    public String toString() {
-        return "PrimitiveKlass<" + kind + ">";
-    }
-
-    @Override
-    public FieldInfo[] getInstanceFields(boolean includeSuperclasses) {
-        return FieldInfo.EMPTY_ARRAY;
-    }
-
-    @Override
-    public FieldInfo[] getStaticFields() {
-        return FieldInfo.EMPTY_ARRAY;
-    }
-
-    /**
-     * Performs a fast-path check that this type is resolved in the context of a given accessing
-     * class. A negative result does not mean this type is not resolved with respect to
-     * {@code accessingClass}. That can only be determined by re-resolving the type.
-     */
-    public boolean isDefinitelyResolvedWithRespectTo(Klass accessingClass) {
-        assert accessingClass != null;
-        Klass elementType = getElementalType();
-        if (elementType.isPrimitive()) {
-            // Primitive type resolution is context free.
-            return true;
-        }
-
-        throw EspressoError.unimplemented();
-
-// if (elementType.getName().startsWith("Ljava/")) {
-// // Classes in a java.* package can only be defined by the
-// // boot class loader. This is enforced by ClassLoader.preDefineClass()
-// assert mirror().getClassLoader() == null;
-// return true;
-// }
-
-// ClassLoader thisCl = mirror().getClassLoader();
-// ClassLoader accessingClassCl = ((HotSpotResolvedObjectTypeImpl)
-// accessingClass).mirror().getClassLoader();
-// return thisCl == accessingClassCl;
-    }
-
-    @Override
-    public void initialize() {
-        // nop
-    }
-
-    @Override
-    public FieldInfo findInstanceFieldWithOffset(long offset, JavaKind expectedType) {
-        return null;
+    public @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
+        return StaticObject.NULL; // BCL
     }
 
     @Override
     public ConstantPool getConstantPool() {
         return null;
-    }
-
-    @Override
-    public EspressoContext getContext() {
-        return context;
     }
 
     @Override
@@ -231,22 +99,52 @@ public final class PrimitiveKlass extends Klass {
     }
 
     @Override
-    public MethodInfo[] getDeclaredConstructors() {
-        return MethodInfo.EMPTY_ARRAY;
+    public Method[] getDeclaredConstructors() {
+        return Method.EMPTY_ARRAY;
     }
 
     @Override
-    public MethodInfo[] getDeclaredMethods() {
-        return MethodInfo.EMPTY_ARRAY;
+    public Method[] getDeclaredMethods() {
+        return Method.EMPTY_ARRAY;
     }
 
     @Override
-    public FieldInfo[] getDeclaredFields() {
-        return FieldInfo.EMPTY_ARRAY;
+    public MethodRef[] getDeclaredMethodRefs() {
+        return Method.EMPTY_VERSION_ARRAY;
     }
 
     @Override
-    public MethodInfo getClassInitializer() {
+    public Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass) {
         return null;
+    }
+
+    @Override
+    public Field[] getDeclaredFields() {
+        return Field.EMPTY_ARRAY;
+    }
+
+    @Override
+    public ModuleEntry module() {
+        return getRegistries().getJavaBaseModule();
+    }
+
+    @Override
+    public PackageEntry packageEntry() {
+        return null;
+    }
+
+    @Override
+    public Method getClassInitializer() {
+        return null;
+    }
+
+    @Override
+    public String toString() {
+        return "PrimitiveKlass<" + getJavaKind() + ">";
+    }
+
+    @Override
+    public int getClassModifiers() {
+        return getModifiers();
     }
 }

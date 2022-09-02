@@ -219,26 +219,6 @@ public final class Types {
         }
     }
 
-    public static boolean isPrimitive(String type) {
-        if (type.length() != 1) {
-            return false;
-        }
-        switch (type.charAt(0)) {
-            case 'B': // byte
-            case 'C': // char
-            case 'D': // double
-            case 'F': // float
-            case 'I': // int
-            case 'J': // long
-            case 'S': // short
-            case 'V': // void
-            case 'Z': // boolean
-                return true;
-            default:
-                return false;
-        }
-    }
-
     /**
      * Gets the kind denoted by this type descriptor.
      *
@@ -364,11 +344,7 @@ public final class Types {
         return getRuntimePackage(typeString);
     }
 
-    private static String getRuntimePackage(String typeString) {
-        if (!typeString.startsWith("L")) {
-            assert isPrimitive(typeString);
-            return "";
-        }
+    public static String getRuntimePackage(String typeString) {
         int lastSlash = typeString.lastIndexOf('/');
         if (lastSlash < 0) {
             return "";

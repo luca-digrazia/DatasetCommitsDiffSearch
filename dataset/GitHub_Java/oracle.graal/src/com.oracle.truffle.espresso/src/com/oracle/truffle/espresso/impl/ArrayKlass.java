@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,139 +23,58 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import java.lang.reflect.Modifier;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_ABSTRACT;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_PRIVATE;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_PROTECTED;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_PUBLIC;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
+import com.oracle.truffle.espresso.descriptors.Types;
+import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
+import com.oracle.truffle.espresso.impl.PackageTable.PackageEntry;
+import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
-import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.substitutions.Host;
 
 public final class ArrayKlass extends Klass {
+
     private final Klass componentType;
+    private final Klass elementalType;
+    private final int dimension;
 
     ArrayKlass(Klass componentType) {
-        super("[" + componentType.getName());
+        super(componentType.getContext(),
+                        null, // TODO(peterssen): Internal, , or / name?
+                        componentType.getTypes().arrayOf(componentType.getType()),
+                        componentType.getMeta().java_lang_Object,
+                        componentType.getMeta().ARRAY_SUPERINTERFACES,
+                        // Arrays (of static inner class) may have protected access.
+                        (componentType.getElementalType().getModifiers() & (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED)) | ACC_FINAL | ACC_ABSTRACT);
+        EspressoError.guarantee(componentType.getJavaKind() != JavaKind.Void, "Invalid void[] class.");
         this.componentType = componentType;
+        this.elementalType = componentType.getElementalType();
+        this.dimension = Types.getArrayDimensions(getType());
     }
 
     @Override
-    public ConstantPool getConstantPool() {
-        return getComponentType().getConstantPool();
+    public int getClassModifiers() {
+        // Arrays (of static inner class) may have protected access.
+        return (getElementalType().getClassModifiers() & (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED)) | ACC_FINAL | ACC_ABSTRACT;
     }
 
     @Override
-    public EspressoContext getContext() {
-        return getComponentType().getContext();
+    public Klass getElementalType() {
+        return elementalType;
     }
 
-    @Override
-    public boolean hasFinalizer() {
-        return false;
-    }
-
-    @Override
-    public int getModifiers() {
-        return (getElementalType().getModifiers() & (Modifier.PUBLIC | Modifier.PRIVATE | Modifier.PROTECTED)) | Modifier.FINAL | Modifier.ABSTRACT;
-    }
-
-    @Override
-    public boolean isInterface() {
-        return false;
-    }
-
-    @Override
-    public boolean isInstanceClass() {
-        return false;
-    }
-
-    @Override
-    public boolean isPrimitive() {
-        return false;
-    }
-
-    @Override
-    public boolean isInitialized() {
-        return getComponentType().isInitialized();
-    }
-
-    @Override
-    public void initialize() {
-        getComponentType().initialize();
-    }
-
-    @Override
-    public boolean isLinked() {
-        return getComponentType().isLinked();
-    }
-
-    @Override
-    public boolean isAssignableFrom(Klass other) {
-        throw EspressoError.unimplemented();
-    }
-
-    @Override
-    public Klass getHostClass() {
-        return null;
-    }
-
-    @Override
-    public Klass getSuperclass() {
-        Object classLoader = null; // BCL
-        if (getConstantPool() != null) {
-            classLoader = getConstantPool().getClassLoader();
-        }
-        return getContext().getRegistries().resolve(getContext().getTypeDescriptors().OBJECT, classLoader);
-    }
-
-    @Override
-    public Klass[] getInterfaces() {
-        return Klass.EMPTY_ARRAY;
-    }
-
-    @Override
-    public Klass findLeastCommonAncestor(Klass otherType) {
-        throw EspressoError.unimplemented();
-    }
-
-    @Override
     public Klass getComponentType() {
         return componentType;
-    }
-
-    @Override
-    public MethodInfo resolveMethod(MethodInfo method, Klass callerType) {
-        return null;
-    }
-
-    @Override
-    public JavaKind getJavaKind() {
-        return JavaKind.Object;
-    }
-
-    @Override
-    public boolean isArray() {
-        return true;
-    }
-
-    @Override
-    public Object getClassLoader() {
-        return getComponentType().getClassLoader();
-    }
-
-    @Override
-    public FieldInfo[] getInstanceFields(boolean includeSuperclasses) {
-        return FieldInfo.EMPTY_ARRAY;
-    }
-
-    @Override
-    public FieldInfo[] getStaticFields() {
-        return FieldInfo.EMPTY_ARRAY;
-    }
-
-    @Override
-    public FieldInfo findInstanceFieldWithOffset(long offset, JavaKind expectedKind) {
-        throw EspressoError.unimplemented();
     }
 
     @Override
@@ -174,23 +93,86 @@ public final class ArrayKlass extends Klass {
     }
 
     @Override
-    public MethodInfo[] getDeclaredConstructors() {
-        throw EspressoError.unimplemented();
+    public Method[] getDeclaredConstructors() {
+        return Method.EMPTY_ARRAY;
     }
 
     @Override
-    public MethodInfo[] getDeclaredMethods() {
-        return MethodInfo.EMPTY_ARRAY;
+    public Method[] getDeclaredMethods() {
+        return Method.EMPTY_ARRAY;
     }
 
     @Override
-    public FieldInfo[] getDeclaredFields() {
-        return FieldInfo.EMPTY_ARRAY;
+    public MethodRef[] getDeclaredMethodRefs() {
+        return Method.EMPTY_VERSION_ARRAY;
     }
 
     @Override
-    public MethodInfo getClassInitializer() {
-        return null;
+    public Field[] getDeclaredFields() {
+        return Field.EMPTY_ARRAY;
     }
 
+    @Override
+    public Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass) {
+        KLASS_LOOKUP_METHOD_COUNT.inc();
+        return getSuperKlass().lookupMethod(methodName, signature, accessingKlass);
+    }
+
+    @Override
+    public @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
+        return elementalType.getDefiningClassLoader();
+    }
+
+    @Override
+    public ConstantPool getConstantPool() {
+        return getElementalType().getConstantPool();
+    }
+
+    public int getDimension() {
+        return dimension;
+    }
+
+    boolean arrayTypeChecks(ArrayKlass other) {
+        assert isArray();
+        int thisDim = getDimension();
+        int otherDim = other.getDimension();
+        if (otherDim > thisDim) {
+            Klass thisElemental = this.getElementalType();
+            return thisElemental == getMeta().java_lang_Object || thisElemental == getMeta().java_io_Serializable || thisElemental == getMeta().java_lang_Cloneable;
+        } else if (thisDim == otherDim) {
+            Klass klass = getElementalType();
+            Klass other1 = other.getElementalType();
+            if (klass == other1) {
+                return true;
+            }
+            if (klass.isPrimitive() || other1.isPrimitive()) {
+                // Reference equality is enough within the same context.
+                assert klass.getContext() == other1.getContext();
+                return klass == other1;
+            }
+            if (klass.isInterface()) {
+                return klass.checkInterfaceSubclassing(other1);
+            }
+            int depth = klass.getHierarchyDepth();
+            return other1.getHierarchyDepth() >= depth && other1.getSuperTypes()[depth] == klass;
+        } else {
+            assert thisDim > otherDim;
+            return false;
+        }
+    }
+
+    @Override
+    public ModuleEntry module() {
+        return getElementalType().module();
+    }
+
+    @Override
+    public PackageEntry packageEntry() {
+        return getElementalType().packageEntry();
+    }
+
+    @Override
+    public String getNameAsString() {
+        return "[" + componentType.getNameAsString();
+    }
 }

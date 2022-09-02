@@ -723,11 +723,11 @@ public final class ObjectKlass extends Klass {
                     try {
                         verifyImpl();
                     } catch (EspressoException e) {
-                        setErroneous();
+                        setVerificationStatus(ERRONEOUS);
                         verificationError = e;
                         throw e;
                     } catch (Throwable e) {
-                        setErroneous();
+                        setVerificationStatus(ERRONEOUS);
                         throw e;
                     }
                     setVerificationStatus(VERIFIED);

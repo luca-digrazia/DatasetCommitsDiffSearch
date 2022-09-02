@@ -25,6 +25,10 @@ package com.oracle.truffle.espresso.impl;
 
 import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.InvokeBasic;
 import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.InvokeGeneric;
+import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.LinkToInterface;
+import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.LinkToSpecial;
+import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.LinkToStatic;
+import static com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics.PolySigIntrinsics.LinkToVirtual;
 import static com.oracle.truffle.espresso.runtime.StaticObject.CLASS_TO_STATIC;
 import static com.oracle.truffle.espresso.substitutions.Target_java_lang_invoke_MethodHandleNatives.toBasic;
 
@@ -48,7 +52,6 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
-import com.oracle.truffle.espresso.descriptors.ByteSequence;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -836,33 +839,34 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     public Method lookupPolysigMethod(Symbol<Name> methodName, Symbol<Signature> signature) {
-        Method m = lookupPolysignatureDeclaredMethod(methodName);
-        if (m != null) {
-            return findMethodHandleIntrinsic(m, methodName, signature, MethodHandleIntrinsics.getId(m));
+        if (methodName == Name.invoke || methodName == Name.invokeExact) {
+            return findMethodHandleIntrinsic(methodName, signature, InvokeGeneric);
+        } else if (methodName == Name.invokeBasic) {
+            return findMethodHandleIntrinsic(methodName, signature, InvokeBasic);
+        } else if (methodName == Name.linkToInterface) {
+            return findMethodHandleIntrinsic(methodName, signature, LinkToInterface);
+        } else if (methodName == Name.linkToSpecial) {
+            return findMethodHandleIntrinsic(methodName, signature, LinkToSpecial);
+        } else if (methodName == Name.linkToStatic) {
+            return findMethodHandleIntrinsic(methodName, signature, LinkToStatic);
+        } else if (methodName == Name.linkToVirtual) {
+            return findMethodHandleIntrinsic(methodName, signature, LinkToVirtual);
         }
-        return null;
-    }
-
-    public Method lookupPolysignatureDeclaredMethod(Symbol<Name> methodName) {
         for (Method m : getDeclaredMethods()) {
-            if (m.getName() == methodName && m.isSignaturePolymorphicDeclared()) {
-                return m;
+            if (m.isNative() && m.isVarargs() && m.getName() == methodName) {
+                // check signature?
+                throw EspressoError.unimplemented("New method handle invoke method? ", methodName);
             }
         }
         return null;
     }
 
     @TruffleBoundary
-    private Method findMethodHandleIntrinsic(Method m,
-                    Symbol<Name> methodName,
+    private Method findMethodHandleIntrinsic(Symbol<Name> methodName,
                     Symbol<Signature> signature,
                     MethodHandleIntrinsics.PolySigIntrinsics methodHandleId) {
         if (methodHandleId == InvokeGeneric) {
-            if (methodName == Name.invoke) {
-                return getMeta().java_lang_invoke_MethodHandle_invoke.findIntrinsic(signature, methodHandleId);
-            } else {
-                return m.findIntrinsic(signature, methodHandleId);
-            }
+            return (methodName == Name.invoke ? getMeta().java_lang_invoke_MethodHandle_invoke : getMeta().java_lang_invoke_MethodHandle_invokeExact).findIntrinsic(signature, methodHandleId);
         } else if (methodHandleId == InvokeBasic) {
             return getMeta().java_lang_invoke_MethodHandle_invokeBasic.findIntrinsic(signature, methodHandleId);
         } else {
@@ -918,7 +922,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     private Symbol<Name> initRuntimePackage() {
-        ByteSequence hostPkgName = Types.getRuntimePackage(getType());
+        String hostPkgName = Types.getRuntimePackage(getType());
+        assert !hostPkgName.endsWith(";");
         if (hostPkgName.length() == 0) {
             return null;
         }

@@ -67,6 +67,7 @@ import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.meta.StringUtil;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.NativeMethodNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -1580,7 +1581,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public void GetStringRegion(@Host(String.class) StaticObject str, int start, int len, @Pointer TruffleObject bufPtr) {
         char[] chars;
         if (getContext().getJavaVersion() >= 9) {
-            chars = Meta.toHostString(str).toCharArray();
+            byte[] bytes = ((StaticObject) getMeta().java_lang_String_value.get(str)).unwrap();
+            chars = StringUtil.toChars(bytes);
         } else {
             chars = ((StaticObject) getMeta().java_lang_String_value.get(str)).unwrap();
         }
