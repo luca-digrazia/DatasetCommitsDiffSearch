@@ -96,7 +96,6 @@ import com.oracle.truffle.dsl.processor.java.model.CodeTreeBuilder;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeElement;
 import com.oracle.truffle.dsl.processor.java.model.CodeTypeMirror;
 import com.oracle.truffle.dsl.processor.java.model.CodeVariableElement;
-import com.oracle.truffle.dsl.processor.java.model.GeneratedTypeMirror;
 import com.oracle.truffle.dsl.processor.model.CacheExpression;
 import com.oracle.truffle.dsl.processor.model.NodeData;
 import com.oracle.truffle.dsl.processor.model.SpecializationData;
@@ -243,10 +242,9 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
 
         CodeVariableElement uncachedSingleton = null;
         if (useSingleton(library, false)) {
-            GeneratedTypeMirror uncachedType = new GeneratedTypeMirror("", uncachedClass.getSimpleName().toString());
-            uncachedSingleton = exportsClass.add(new CodeVariableElement(modifiers(PRIVATE, STATIC, FINAL), uncachedType, "UNCACHED"));
+            uncachedSingleton = exportsClass.add(new CodeVariableElement(modifiers(PRIVATE, STATIC, FINAL), uncachedClass.asType(), "UNCACHED"));
             builder = uncachedSingleton.createInitBuilder();
-            builder.startNew(uncachedType).end();
+            builder.startNew(uncachedClass.asType()).end();
         }
 
         CodeExecutableElement createUncached = CodeExecutableElement.clone(ElementUtils.findExecutableElement(context.getDeclaredType(LibraryExport.class), "createUncached"));
@@ -277,10 +275,9 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
 
         CodeVariableElement cacheSingleton = null;
         if (useSingleton(library, true)) {
-            GeneratedTypeMirror cachedType = new GeneratedTypeMirror("", cacheClass.getSimpleName().toString());
-            cacheSingleton = exportsClass.add(new CodeVariableElement(modifiers(PRIVATE, STATIC, FINAL), cachedType, "CACHE"));
+            cacheSingleton = exportsClass.add(new CodeVariableElement(modifiers(PRIVATE, STATIC, FINAL), cacheClass.asType(), "CACHE"));
             builder = cacheSingleton.createInitBuilder();
-            builder.startNew(cachedType).end();
+            builder.startNew(cacheClass.asType()).end();
         }
 
         CodeExecutableElement createCached = CodeExecutableElement.clone(ElementUtils.findExecutableElement(context.getDeclaredType(LibraryExport.class), "createCached"));
@@ -540,7 +537,7 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
         if ((!cached || libraryExports.isFinalReceiver()) && ElementUtils.needsCastTo(castMethod.getParameters().get(0).asType(), exportReceiverType)) {
             GeneratorUtils.mergeSupressWarnings(castMethod, "cast");
         }
-        if (!cached && ElementUtils.findAnnotationMirror(castMethod, TruffleBoundary.class) == null) {
+        if (ElementUtils.findAnnotationMirror(castMethod, TruffleBoundary.class) == null) {
             castMethod.getAnnotationMirrors().add(new CodeAnnotationMirror(context.getDeclaredType(TruffleBoundary.class)));
         }
         builder.startReturn().tree(createReceiverCast(libraryExports, castMethod.getParameters().get(0).asType(), exportReceiverType, CodeTreeBuilder.singleString("receiver"), cached)).end();

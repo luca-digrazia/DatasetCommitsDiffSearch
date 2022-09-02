@@ -49,6 +49,7 @@ import java.util.Map;
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
@@ -60,7 +61,6 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
-import com.oracle.truffle.api.library.GenerateLibrary.Ignore;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.dsl.processor.java.ElementUtils;
 import com.oracle.truffle.dsl.processor.java.compiler.CompilerFactory;
@@ -69,7 +69,7 @@ import com.oracle.truffle.dsl.processor.parser.AbstractParser;
 public class LibraryParser extends AbstractParser<LibraryData> {
 
     public static final List<Class<? extends Annotation>> ANNOTATIONS = Arrays.asList(GenerateLibrary.class, GenerateLibrary.DefaultExport.class,
-                    GenerateLibrary.Abstract.class, GenerateLibrary.Ignore.class);
+                    GenerateLibrary.Abstract.class);
 
     @Override
     public boolean isDelegateToRootDeclaredType() {
@@ -86,13 +86,17 @@ public class LibraryParser extends AbstractParser<LibraryData> {
 
         LibraryData model = new LibraryData((TypeElement) element, mirror);
 
-        if (!ElementUtils.isSubtype(element.asType(), context.getType(Library.class))) {
-            model.addError("Declared library classes must extend the type %s.", ElementUtils.getQualifiedName(context.getType(Library.class)));
+        if (!ElementUtils.typeEquals(type.getSuperclass(), context.getType(Library.class))) {
+            model.addError("Declared library classes must exactly extend the type %s.", ElementUtils.getQualifiedName(context.getType(Library.class)));
             return model;
         }
 
         if (!element.getModifiers().contains(Modifier.ABSTRACT)) {
             model.addError("Declared library classes must be abstract.");
+            return model;
+        }
+        if (element.getEnclosingElement().getKind() != ElementKind.PACKAGE && !element.getModifiers().contains(Modifier.STATIC)) {
+            model.addError("Declared inner library classes must be static.");
             return model;
         }
 
@@ -125,7 +129,6 @@ public class LibraryParser extends AbstractParser<LibraryData> {
 
         List<ExecutableElement> allMethods = ElementFilter.methodsIn(CompilerFactory.getCompiler(type).getEnclosedElementsInDeclarationOrder(type));
         allMethods.add(ElementUtils.findExecutableElement(context.getDeclaredType(Library.class), "accepts"));
-        String ignoreName = String.format("%s.%s", GenerateLibrary.class.getSimpleName(), Ignore.class.getSimpleName());
 
         TypeMirror inferredReceiverType = null;
         Map<String, LibraryMessage> messages = new HashMap<>();
@@ -137,7 +140,9 @@ public class LibraryParser extends AbstractParser<LibraryData> {
                 continue;
             } else if (executable.getModifiers().contains(Modifier.STATIC)) {
                 continue;
-            } else if (ElementUtils.findAnnotationMirror(executable.getAnnotationMirrors(), context.getType(Ignore.class)) != null) {
+            } else if (model.isDynamicDispatch() && executable.getSimpleName().toString().equals("cast")) {
+                // the cast method is abstract but ignore in the dynamic dispatch library.
+                // it is automatically implemented.
                 continue;
             }
             String messageName = executable.getSimpleName().toString();
@@ -147,7 +152,7 @@ public class LibraryParser extends AbstractParser<LibraryData> {
                 message = new LibraryMessage(model, messageName, executable);
             } else {
                 message.addError("Library message must have a unique name. Two methods with the same name found." +
-                                "If this method is not intended to be a library message annotate it with @%s.", ignoreName);
+                                "If this method is not intended to be a library message then add the private or final modifier to ignore it.");
                 continue;
             }
 
@@ -159,8 +164,7 @@ public class LibraryParser extends AbstractParser<LibraryData> {
                 message.addError("Not enough arguments specified for a library message. " +
                                 "The first argument of a library method must be of type Object. " +
                                 "Add a receiver argument with type Object resolve this." +
-                                "If this method is not intended to be a library message annotate it with @%s.",
-                                ignoreName);
+                                "If this method is not intended to be a library message then add the private or final modifier to ignore it.");
             } else {
                 TypeMirror methodReceiverType = executable.getParameters().get(0).asType();
                 if (inferredReceiverType == null) {
@@ -169,9 +173,8 @@ public class LibraryParser extends AbstractParser<LibraryData> {
                     if (!message.getName().equals("accepts")) {
                         message.addError(String.format("Invalid first argument type %s specified. " +
                                         "The first argument of a library method must be of the same type for all methods. " +
-                                        "If this method is not intended to be a library message annotate it with @%s.",
-                                        ElementUtils.getSimpleName(methodReceiverType),
-                                        ignoreName));
+                                        "If this method is not intended to be a library message then add the private or final modifier to ignore it.",
+                                        ElementUtils.getSimpleName(methodReceiverType)));
                     }
                 }
             }
@@ -237,14 +240,13 @@ public class LibraryParser extends AbstractParser<LibraryData> {
         if (defaultExportReachable) {
             model.getDefaultExports().add(new LibraryDefaultExportData(null, context.getType(Object.class)));
             ExportsData exports = new ExportsData(context, type, mirror);
-            ExportsLibrary objectExports = new ExportsLibrary(context, type, mirror, exports, model, context.getType(Object.class), true);
+            ExportsLibrary objectExports = new ExportsLibrary(context, type, mirror, exports, model, model.getSignatureReceiverType(), true);
 
             for (LibraryMessage message : objectExports.getLibrary().getMethods()) {
                 if (message.getName().equals("accepts")) {
                     continue;
                 }
-                ExportMessageData exportMessage = new ExportMessageData(objectExports, message);
-                exportMessage.setExportedMethod(new ExportMessageElement(exportMessage, null, null));
+                ExportMessageData exportMessage = new ExportMessageData(objectExports, message, null, null);
                 objectExports.getExportedMessages().put(message.getName(), exportMessage);
             }
 
@@ -309,9 +311,9 @@ public class LibraryParser extends AbstractParser<LibraryData> {
         for (AnnotationMirror exportedLibrary : exportedLibraries) {
             TypeMirror exportedLib = ElementUtils.getAnnotationValue(TypeMirror.class, exportedLibrary, "value");
             if (ElementUtils.typeEquals(model.getTemplateType().asType(), exportedLib)) {
-                receiverClass = ElementUtils.getAnnotationValue(TypeMirror.class, exportedLibrary, "receiverClass", false);
+                receiverClass = ElementUtils.getAnnotationValue(TypeMirror.class, exportedLibrary, "receiverType", false);
                 if (receiverClass == null) {
-                    model.addError(exportAnnotation, typeValue, "Default export '%s' must specify a receiverClass.", ElementUtils.getSimpleName(exportedLib));
+                    model.addError(exportAnnotation, typeValue, "Default export '%s' must specify a receiverType.", ElementUtils.getSimpleName(exportedLib));
                     return null;
                 }
                 break;
