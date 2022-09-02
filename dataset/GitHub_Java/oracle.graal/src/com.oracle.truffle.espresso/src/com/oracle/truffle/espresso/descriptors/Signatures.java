@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -64,7 +64,7 @@ public final class Signatures {
         return symbols.symbolify(ByteSequence.create(signatureString));
     }
 
-    public Types getTypes() {
+    public final Types getTypes() {
         return types;
     }
 
@@ -219,7 +219,7 @@ public final class Signatures {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public Symbol<Signature> makeRaw(Class<?> returnClass, Class<?>... parameterClasses) {
+    public final Symbol<Signature> makeRaw(Class<?> returnClass, Class<?>... parameterClasses) {
         Symbol<Type>[] parameterTypes = new Symbol[parameterClasses.length];
         for (int i = 0; i < parameterClasses.length; ++i) {
             parameterTypes[i] = getTypes().fromClass(parameterClasses[i]);
