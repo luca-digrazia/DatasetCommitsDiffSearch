@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
@@ -98,7 +99,9 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                 try {
                     List<String> exportedSymbols = new ArrayList<>();
                     exportedSymbols.add("{");
-                    codeCache.getGlobalSymbols(getOrCreateDebugObjectFile()).stream()
+                    StreamSupport.stream(getOrCreateDebugObjectFile().getSymbolTable().spliterator(), false)
+                                    .filter(ObjectFile.Symbol::isGlobal)
+                                    .filter(ObjectFile.Symbol::isDefined)
                                     .map(symbol -> "\"" + symbol.getName() + "\";")
                                     .forEachOrdered(exportedSymbols::add);
                     exportedSymbols.add("};");
@@ -151,11 +154,13 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
              * as global symbols in the dynamic symbol table of the image.
              */
             try {
-                List<ObjectFile.Symbol> exportedSymbols = codeCache.getGlobalSymbols(getOrCreateDebugObjectFile());
-                Path exportedSymbolsPath = nativeLibs.tempDirectory.resolve("exported_symbols.list");
-                Files.write(exportedSymbolsPath, exportedSymbols.stream()
+                List<String> exportedSymbols = StreamSupport.stream(getOrCreateDebugObjectFile().getSymbolTable().spliterator(), false)
+                                .filter(ObjectFile.Symbol::isGlobal)
+                                .filter(ObjectFile.Symbol::isDefined)
                                 .map(symbol -> ((MachOSymtab.Entry) symbol).getNameInObject())
-                                .collect(Collectors.toList()));
+                                .collect(Collectors.toList());
+                Path exportedSymbolsPath = nativeLibs.tempDirectory.resolve("exported_symbols.list");
+                Files.write(exportedSymbolsPath, exportedSymbols);
                 additionalPreOptions.add("-Wl,-exported_symbols_list");
                 additionalPreOptions.add("-Wl," + exportedSymbolsPath.toAbsolutePath());
             } catch (IOException e) {
