@@ -49,7 +49,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.net.URI;
 import java.nio.file.FileSystemNotFoundException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -57,7 +56,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.Supplier;
 import java.util.logging.Level;
 
 import org.graalvm.options.OptionCategory;
@@ -88,6 +86,7 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
+import java.nio.file.Path;
 
 /**
  * A Truffle language implementation contains all the services a language should provide to make it
@@ -229,7 +228,6 @@ public abstract class TruffleLanguage<C> {
     // get and isFinal are frequent operations -> cache the engine access call
     @CompilationFinal private LanguageInfo languageInfo;
     @CompilationFinal private ContextReference<C> reference;
-    @CompilationFinal private Object vmObject; // PolyglotLanguageInstance
 
     /**
      * Constructor to be called by subclasses.
@@ -1195,6 +1193,11 @@ public abstract class TruffleLanguage<C> {
         return reference;
     }
 
+    void initialize(LanguageInfo language, Object vmObject) {
+        this.languageInfo = language;
+        this.reference = new ContextReference<>(vmObject);
+    }
+
     CallTarget parse(Source source, String... argumentNames) {
         ParsingRequest request = new ParsingRequest(source, argumentNames);
         CallTarget target;
@@ -1227,16 +1230,14 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * Returns the current language instance for the current {@link Thread thread}. If a {@link Node
-     * node} is accessible then {@link Node#getContextSupplier(Class)} should be used instead.
-     * Throws an {@link IllegalStateException} if the language is not yet initialized or not
-     * executing on this thread. If invoked on the fast-path then <code>languageClass</code> must be
-     * a compilation final value.
+     * Returns the current language instance for the current {@link Thread thread}. If a root node
+     * is accessible then {@link RootNode#getLanguage(Class)} should be used instead. Throws an
+     * {@link IllegalStateException} if the language is not yet initialized or not executing on this
+     * thread. If invoked on the fast-path then <code>languageClass</code> must be a compilation
+     * final value.
      *
      * @param <T> the language type
      * @param languageClass the exact language class needs to be provided for the lookup.
-     * @see Node#getLanguageSupplier(Class)
-     * @see com.oracle.truffle.api.dsl.CachedLanguage
      * @since 0.27
      */
     protected static <T extends TruffleLanguage<?>> T getCurrentLanguage(Class<T> languageClass) {
@@ -1244,17 +1245,17 @@ public abstract class TruffleLanguage<C> {
     }
 
     /**
-     * Returns the current language context entered on the current thread. If a {@link Node node} is
-     * accessible then {@link Node#getLanguageSupplier(Class)} should be used instead. An
-     * {@link IllegalStateException} is thrown if the language is not yet initialized or not
-     * executing on this thread. If invoked on the fast-path then <code>languageClass</code> must be
-     * a compilation final value.
+     * Returns the current language context entered on the current thread. If a
+     * {@link TruffleLanguage language} instance is available, a
+     * {@link TruffleLanguage#getContextReference() context reference} should be used instead for
+     * performance reasons. An {@link IllegalStateException} is thrown if the language is not yet
+     * initialized or not executing on this thread. If invoked on the fast-path then
+     * <code>languageClass</code> must be a compilation final value.
      *
      * @param <C> the context type
      * @param <T> the language type
      * @param languageClass the exact language class needs to be provided for the lookup.
-     * @see Node#getContextSupplier(Class)
-     * @see com.oracle.truffle.api.dsl.CachedContext
+     * @see TruffleLanguage#getContextReference()
      * @since 0.27
      */
     protected static <C, T extends TruffleLanguage<C>> C getCurrentContext(Class<T> languageClass) {
@@ -1942,14 +1943,7 @@ public abstract class TruffleLanguage<C> {
          */
         @TruffleBoundary
         public TruffleFile getTruffleFile(String path) {
-            checkDisposed();
-            try {
-                return new TruffleFile(fileSystem, fileSystem.parsePath(path));
-            } catch (UnsupportedOperationException e) {
-                throw e;
-            } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystem);
-            }
+            return new TruffleFile(fileSystem, fileSystem.parsePath(path));
         }
 
         /**
@@ -1966,8 +1960,6 @@ public abstract class TruffleLanguage<C> {
                 return new TruffleFile(fileSystem, fileSystem.parsePath(uri));
             } catch (UnsupportedOperationException e) {
                 throw new FileSystemNotFoundException("FileSystem for: " + uri.getScheme() + " scheme is not supported.");
-            } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystem);
             }
         }
 
@@ -1999,7 +1991,6 @@ public abstract class TruffleLanguage<C> {
          */
         @TruffleBoundary
         public void setCurrentWorkingDirectory(TruffleFile currentWorkingDirectory) {
-            checkDisposed();
             Objects.requireNonNull(currentWorkingDirectory, "Current working directory must be non null.");
             if (!currentWorkingDirectory.isAbsolute()) {
                 throw new IllegalArgumentException("Current working directory must be absolute.");
@@ -2007,29 +1998,7 @@ public abstract class TruffleLanguage<C> {
             if (!currentWorkingDirectory.isDirectory()) {
                 throw new IllegalArgumentException("Current working directory must be directory.");
             }
-            try {
-                fileSystem.setCurrentWorkingDirectory(currentWorkingDirectory.getSPIPath());
-            } catch (UnsupportedOperationException | IllegalArgumentException | SecurityException e) {
-                throw e;
-            } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystem);
-            }
-        }
-
-        /**
-         * Returns the name separator used to separate names in {@link TruffleFile}'s path string.
-         *
-         * @return the name separator
-         * @since 1.0
-         */
-        @TruffleBoundary
-        public String getFileNameSeparator() {
-            checkDisposed();
-            try {
-                return fileSystem.getSeparator();
-            } catch (Throwable t) {
-                throw TruffleFile.wrapHostException(t, fileSystem);
-            }
+            fileSystem.setCurrentWorkingDirectory(currentWorkingDirectory.getSPIPath());
         }
 
         /**
@@ -2197,10 +2166,10 @@ public abstract class TruffleLanguage<C> {
      */
     public static final class ContextReference<C> {
 
-        private final Supplier<Object> supplier;
+        private final Object languageShared;
 
         private ContextReference(Object languageShared) {
-            this.supplier = AccessAPI.engineAccess().getCurrentContextSupplier(languageShared);
+            this.languageShared = languageShared;
         }
 
         /**
@@ -2217,8 +2186,9 @@ public abstract class TruffleLanguage<C> {
          */
         @SuppressWarnings("unchecked")
         public C get() {
-            return (C) supplier.get();
+            return (C) AccessAPI.engineAccess().getCurrentContext(languageShared);
         }
+
     }
 
     /**
@@ -2382,10 +2352,8 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public void initializeLanguage(TruffleLanguage<?> impl, LanguageInfo language, Object languageVmObject, Object languageInstanceVMObject) {
-            impl.languageInfo = language;
-            impl.reference = new ContextReference<>(languageVmObject);
-            impl.vmObject = languageInstanceVMObject;
+        public void initializeLanguage(TruffleLanguage<?> impl, LanguageInfo language, Object vmObject) {
+            impl.initialize(language, vmObject);
         }
 
         @Override
@@ -2526,8 +2494,17 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public Object getVMObject(TruffleLanguage<?> language) {
-            return language.vmObject;
+        @SuppressWarnings("rawtypes")
+        public LanguageInfo getLegacyLanguageInfo(Object vm, Class<? extends TruffleLanguage> languageClass) {
+            if (vm == null) {
+                return null;
+            }
+            Env env = AccessAPI.engineAccess().findEnv(vm, languageClass, false);
+            if (env != null) {
+                return env.getSpi().languageInfo;
+            } else {
+                return null;
+            }
         }
 
         @Override
@@ -2623,14 +2600,6 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public Object getLanguageInstance(TruffleLanguage<?> language) {
-            if (language == null) {
-                return null;
-            }
-            return language.vmObject;
-        }
-
-        @Override
         public void configureLoggers(Object polyglotContext, Map<String, Level> logLevels) {
             if (logLevels == null) {
                 TruffleLogger.LoggerCache.getInstance().removeLogLevelsForContext(polyglotContext);
@@ -2652,26 +2621,6 @@ public abstract class TruffleLanguage<C> {
         @Override
         public TruffleFile getTruffleFile(FileSystem fs, String path) {
             return new TruffleFile(fs, fs.parsePath(path));
-        }
-
-        @Override
-        public Object getDefaultLoggers() {
-            return TruffleLogger.LoggerCache.getInstance();
-        }
-
-        @Override
-        public Object createEngineLoggers(Object polyglotEngine, Map<String, Level> logLevels) {
-            return TruffleLogger.createLoggerCache(polyglotEngine, logLevels);
-        }
-
-        @Override
-        public void closeEngineLoggers(Object loggers) {
-            ((TruffleLogger.LoggerCache) loggers).close();
-        }
-
-        @Override
-        public TruffleLogger getLogger(String id, String loggerName, Object loggers) {
-            return TruffleLogger.getLogger(id, loggerName, (TruffleLogger.LoggerCache) loggers);
         }
     }
 }

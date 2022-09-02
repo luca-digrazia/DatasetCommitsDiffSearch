@@ -44,7 +44,6 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.code.CodeInfoTable;
@@ -54,7 +53,6 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.stack.JavaStackWalker;
 import com.oracle.svm.core.stack.StackFrameVisitor;
 import com.oracle.svm.core.stack.StackOverflowCheck;
-import com.oracle.svm.core.thread.VMThreads;
 import com.oracle.svm.core.threadlocal.FastThreadLocalFactory;
 import com.oracle.svm.core.threadlocal.FastThreadLocalObject;
 import com.oracle.svm.core.util.VMError;
@@ -64,6 +62,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class SnippetRuntime {
 
+    public static final SubstrateForeignCallDescriptor REPORT_TYPE_ASSERTION_ERROR = findForeignCall(SnippetRuntime.class, "reportTypeAssertionError", true, LocationIdentity.any());
     public static final SubstrateForeignCallDescriptor UNREACHED_CODE = findForeignCall(SnippetRuntime.class, "unreachedCode", true, LocationIdentity.any());
     public static final SubstrateForeignCallDescriptor UNRESOLVED = findForeignCall(SnippetRuntime.class, "unresolved", true, LocationIdentity.any());
 
@@ -166,6 +165,13 @@ public class SnippetRuntime {
         }
     }
 
+    /** Foreign call: {@link #REPORT_TYPE_ASSERTION_ERROR}. */
+    @SubstrateForeignCallTarget
+    private static void reportTypeAssertionError(byte[] msg, Object object) {
+        Log.log().string(msg).string(object == null ? "null" : object.getClass().getName()).newline();
+        throw VMError.shouldNotReachHere("type assertion error");
+    }
+
     /** Foreign call: {@link #UNREACHED_CODE}. */
     @SubstrateForeignCallTarget
     private static void unreachedCode() {
@@ -228,16 +234,6 @@ public class SnippetRuntime {
         return currentException.get() != null;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible callers.", mayBeInlined = true)
-    static boolean exceptionsAreFatal() {
-        /*
-         * If an exception is thrown while the thread is not in the Java state, most likely
-         * something went wrong in our state transition code. We cannot reliably unwind the stack,
-         * so exiting quickly is better.
-         */
-        return SubstrateOptions.MultiThreaded.getValue() && !VMThreads.StatusSupport.isStatusJava();
-    }
-
     /** Foreign call: {@link #UNWIND_EXCEPTION}. */
     @SubstrateForeignCallTarget
     @Uninterruptible(reason = "Set currentException atomically with regard to the safepoint mechanism", calleeMustBe = false)
@@ -258,11 +254,6 @@ public class SnippetRuntime {
         }
         currentException.set(exception);
 
-        if (exceptionsAreFatal()) {
-            Log.log().string("Fatal error: exception unwind while thread is not in Java state: ").string(exception.getClass().getName());
-            ImageSingletons.lookup(LogHandler.class).fatalError();
-            return;
-        }
         /*
          * callerSP and callerIP identify already the caller of the frame that wants to unwind an
          * exception. So we can start looking for the exception handler immediately in that frame,
