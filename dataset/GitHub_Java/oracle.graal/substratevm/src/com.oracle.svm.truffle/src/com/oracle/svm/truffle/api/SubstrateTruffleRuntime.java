@@ -412,7 +412,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     }
 
     @Override
-    protected OutputStream getDefaultLogStream() {
+    protected OutputStream getLogStream() {
         return TTY.out;
     }
 }

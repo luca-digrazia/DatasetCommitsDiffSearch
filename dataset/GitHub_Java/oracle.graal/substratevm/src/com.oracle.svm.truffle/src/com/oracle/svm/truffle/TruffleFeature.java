@@ -247,11 +247,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         public CompilableTruffleAST asCompilableTruffleAST(JavaConstant constant) {
             return (CompilableTruffleAST) KnownIntrinsics.convertUnknownValue(SubstrateObjectConstant.asObject(OptimizedCallTarget.class, constant), Object.class);
         }
-
-        @SuppressWarnings("unused")
-        public boolean tryLog(SubstrateTruffleRuntime runtime, CompilableTruffleAST compilable, String message) {
-            return false;
-        }
     }
 
     private Support support;
@@ -625,13 +620,12 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
     }
 
     private boolean includeCallee(ResolvedJavaMethod implementationMethod, GraalFeature.CallTreeNode calleeNode, List<AnalysisMethod> implementationMethods) {
-        Uninterruptible uninterruptibleAnnotation = implementationMethod.getAnnotation(Uninterruptible.class);
         if (implementationMethod.getAnnotation(CompilerDirectives.TruffleBoundary.class) != null) {
             return false;
         } else if (SubstrateUtil.NativeImageLoadingShield.isNeverInline(implementationMethod)) {
             /* Ensure that NeverInline methods are also never inlined during Truffle compilation. */
             return false;
-        } else if (uninterruptibleAnnotation != null && !uninterruptibleAnnotation.mayBeInlined()) {
+        } else if (implementationMethod.getAnnotation(Uninterruptible.class) != null) {
             /* The semantics of Uninterruptible would get lost during partial evaluation. */
             return false;
         } else if (implementationMethod.getAnnotation(TruffleCallBoundary.class) != null) {
@@ -710,7 +704,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         blacklistAllMethods(metaAccess, ListIterator.class);
         blacklistAllMethods(metaAccess, ReentrantLock.class);
 
-        whitelistMethod(metaAccess, BigInteger.class, "signum");
         whitelistMethod(metaAccess, ReentrantLock.class, "isLocked");
         whitelistMethod(metaAccess, ReentrantLock.class, "isHeldByCurrentThread");
 
@@ -898,19 +891,15 @@ final class Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget {
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
     long initializedTimestamp;
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
-    Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget_ArgumentsProfile argumentsProfile;
+    Class<?>[] profiledArgumentTypes;
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
-    Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget_ReturnProfile returnProfile;
+    OptimizedAssumption profiledArgumentTypesAssumption;
+    @Alias @RecomputeFieldValue(kind = Kind.Reset) //
+    Class<?> profiledReturnType;
+    @Alias @RecomputeFieldValue(kind = Kind.Reset) //
+    OptimizedAssumption profiledReturnTypeAssumption;
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
     Class<? extends Throwable> profiledExceptionType;
-}
-
-@TargetClass(className = "org.graalvm.compiler.truffle.runtime.OptimizedCallTarget$ArgumentsProfile", onlyWith = TruffleFeature.IsEnabled.class)
-final class Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget_ArgumentsProfile {
-}
-
-@TargetClass(className = "org.graalvm.compiler.truffle.runtime.OptimizedCallTarget$ReturnProfile", onlyWith = TruffleFeature.IsEnabled.class)
-final class Target_org_graalvm_compiler_truffle_runtime_OptimizedCallTarget_ReturnProfile {
 }
 
 // Checkstyle: stop
