@@ -167,7 +167,7 @@ public final class Target_java_lang_Class {
         // sun.reflect.misc.ReflectUtil#isVMAnonymousClass(Class<?>).
         if (klass.isAnonymous()) {
             // A small improvement over HotSpot here, which uses the class identity hash code.
-            externalName += "/" + klass.getId(); // VM.JVM_IHashCode(self);
+            externalName += "/" + klass.getID(); // VM.JVM_IHashCode(self);
         }
 
         // Class names must be interned.
@@ -598,9 +598,8 @@ public final class Target_java_lang_Class {
                     }
                 }
             }
-            if (found) {
+            if (found)
                 break;
-            }
         }
 
         // TODO(peterssen): Follow HotSpot implementation described below.
@@ -677,7 +676,7 @@ public final class Target_java_lang_Class {
 
     @TruffleBoundary
     @Substitution(hasReceiver = true)
-    public static @Host(typeName = "Lsun/reflect/ConstantPool;") StaticObject getConstantPool(@Host(Class.class) StaticObject self) {
+    public static @Host(sun.reflect.ConstantPool.class) StaticObject getConstantPool(@Host(Class.class) StaticObject self) {
         Klass klass = self.getMirrorKlass();
         if (klass.isArray() || klass.isPrimitive()) {
             // No constant pool for arrays and primitives.
