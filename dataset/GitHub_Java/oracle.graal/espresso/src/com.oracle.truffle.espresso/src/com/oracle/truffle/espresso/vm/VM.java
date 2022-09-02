@@ -1578,12 +1578,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     static private class PrivilegedStack {
-        public static Supplier<PrivilegedStack> supplier = new Supplier<PrivilegedStack>() {
-            @Override
-            public PrivilegedStack get() {
-                return new PrivilegedStack();
-            }
-        };
+        public static Supplier<PrivilegedStack> supplier=new Supplier<PrivilegedStack>(){@Override public PrivilegedStack get(){return new PrivilegedStack();}};
 
         private Element top;
 
