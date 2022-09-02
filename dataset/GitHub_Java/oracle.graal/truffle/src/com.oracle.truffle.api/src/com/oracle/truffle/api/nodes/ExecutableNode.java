@@ -152,7 +152,7 @@ public abstract class ExecutableNode extends Node {
         return (C) spi;
     }
 
-    static final class ReferenceCache {
+    static class ReferenceCache {
 
         final Class<?> languageClass;
         final LanguageReference<?> languageReference;
@@ -173,7 +173,6 @@ public abstract class ExecutableNode extends Node {
             }
             this.next = next;
         }
-
     }
 
     @ExplodeLoop(kind = LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN)
