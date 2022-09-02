@@ -578,15 +578,10 @@ public final class Version implements Comparable<Version> {
             GREATER,
 
             /**
-             * Dependency check. Reverse of {@link #INSTALLABLE}, accepts <b>future</b> versions.
-             */
-            SATISFIES,
-
-            /**
              * Dependency check. The tested install version must be the same, and the patchlevel
              * must be lower or equal.
              */
-            SATISFIES_COMPATIBLE,
+            SATISFIES,
         }
 
         private final Type matchType;
@@ -618,21 +613,12 @@ public final class Version implements Comparable<Version> {
                 case COMPATIBLE:
                     return version.installVersion().equals(t.installVersion());
 
-                case SATISFIES_COMPATIBLE: {
-                    int a = version.installVersion().compareTo(t.installVersion());
-                    if (a != 0) {
-                        return false;
-                    }
-                    return version.onlyVersion().compareTo(t.onlyVersion()) >= 0;
-                }
-
-                case SATISFIES: {
+                case SATISFIES:
                     int a = version.installVersion().compareTo(t.installVersion());
                     if (a < 0) {
                         return true;
                     }
                     return version.onlyVersion().compareTo(t.onlyVersion()) >= 0;
-                }
             }
             return false;
         }
@@ -686,7 +672,6 @@ public final class Version implements Comparable<Version> {
                     }
 
                 case SATISFIES:
-                case SATISFIES_COMPATIBLE:
                 case INSTALLABLE:
                 case GREATER:
                     // the lowest possible matching version

@@ -183,7 +183,7 @@ public class Verifier {
                     addOrThrow(new DependencyException.Conflict(
                                     existing.getId(), componentInfo.getVersionString(), existing.getVersionString(),
                                     feedback.l10n("VERIFY_ComponentExists",
-                                                    existing.getName(), existing, existing.getVersionString())));
+                                                    existing.getName(), catalog.shortenComponentId(existing), existing.getVersionString())));
                 }
             }
         }
@@ -192,9 +192,8 @@ public class Verifier {
         }
         Map<String, String> requiredCaps = componentInfo.getRequiredGraalValues();
         Map<String, String> graalCaps = localRegistry.getGraalCapabilities();
-        boolean verbose = feedback.verboseOutput(null);
-        if (!isSilent() && verbose) {
-            feedback.verboseOutput("VERIFY_VerboseCheckRequirements", catalog.shortenComponentId(componentInfo), componentInfo.getName(), componentInfo.getVersionString());
+
+        if (!isSilent() && feedback.verboseOutput("VERIFY_VerboseCheckRequirements", catalog.shortenComponentId(componentInfo), componentInfo.getName(), componentInfo.getVersionString())) {
             List<String> keys = new ArrayList<>(requiredCaps.keySet());
             Collections.sort(keys);
             String none = feedback.l10n("VERIFY_VerboseCapabilityNone");
@@ -223,13 +222,11 @@ public class Verifier {
                     Version gv = localRegistry.getGraalVersion();
                     int n = gv.compareTo(rq);
                     if (n > 0) {
-                        if (!gv.installVersion().equals(rq.installVersion())) {
-                            addOrThrow(new DependencyException.Mismatch(
-                                            GRAALVM_CAPABILITY,
-                                            s, reqVal, graalVal,
-                                            feedback.l10n("VERIFY_ObsoleteGraalVM",
-                                                            componentInfo.getName(), reqVal, gv.displayString())));
-                        }
+                        addOrThrow(new DependencyException.Mismatch(
+                                        GRAALVM_CAPABILITY,
+                                        s, reqVal, graalVal,
+                                        feedback.l10n("VERIFY_ObsoleteGraalVM",
+                                                        componentInfo.getName(), reqVal, gv.displayString())));
                     } else if (collectVersion) {
                         minVersion = rq;
                     } else {
@@ -247,7 +244,7 @@ public class Verifier {
             if (!matches) {
                 String val = graalVal != null ? graalVal : feedback.l10n("VERIFY_CapabilityMissing");
                 addOrThrow(new DependencyException.Mismatch(
-                                componentInfo.getId(),
+                                GRAALVM_CAPABILITY,
                                 s, reqVal, graalVal,
                                 feedback.l10n("VERIFY_Dependency_Failed",
                                                 componentInfo.getName(), localRegistry.localizeCapabilityName(s), reqVal, val)));
