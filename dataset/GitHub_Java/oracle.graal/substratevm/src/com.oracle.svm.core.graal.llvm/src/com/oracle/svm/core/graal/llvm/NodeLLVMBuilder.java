@@ -140,7 +140,7 @@ public class NodeLLVMBuilder implements NodeLIRBuilderTool, SubstrateNodeLIRBuil
         this.gen = gen;
         this.builder = gen.getBuilder();
         this.runtimeConfiguration = runtimeConfiguration;
-        this.debugInfoBuilder = new SubstrateDebugInfoBuilder(graph, gen.getProviders().getMetaAccessExtensionProvider(), this);
+        this.debugInfoBuilder = new SubstrateDebugInfoBuilder(graph, this);
         setCompilationResultMethod(gen.getCompilationResult(), graph);
 
         for (Block block : graph.getLastSchedule().getCFG().getBlocks()) {
@@ -711,7 +711,7 @@ public class NodeLLVMBuilder implements NodeLIRBuilderTool, SubstrateNodeLIRBuil
             state = ((DeoptimizingNode.DeoptAfter) deopt).stateAfter();
         }
         assert state != null;
-        return debugInfoBuilder.build(deopt, state, null, null, null);
+        return debugInfoBuilder.build(deopt, state, null);
     }
 
     /* Unsupported */
