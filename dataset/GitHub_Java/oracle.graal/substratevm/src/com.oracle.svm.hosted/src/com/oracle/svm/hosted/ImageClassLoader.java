@@ -69,7 +69,6 @@ import org.graalvm.nativeimage.Platforms;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.util.ModuleSupport;
-import com.oracle.truffle.api.Truffle;
 
 public final class ImageClassLoader {
 
@@ -142,10 +141,6 @@ public final class ImageClassLoader {
                 } catch (IOException e) {
                     throw shouldNotReachHere(e);
                 }
-            }
-            if (!"com.oracle.svm.truffle.api.SubstrateTruffleRuntime".equals(System.getProperty("truffle.TruffleRuntime"))) {
-                /* Only load Truffle with NativeImageClassLoader if building Truffle images */
-                modules.remove(ModuleSupport.getModuleName(Truffle.class));
             }
             for (String moduleResource : ModuleSupport.getModuleResources(modules)) {
                 if (moduleResource.endsWith(CLASS_EXTENSION)) {
