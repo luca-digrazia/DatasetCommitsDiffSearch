@@ -2271,12 +2271,7 @@ abstract class PolyglotValue extends AbstractValueImpl {
                         if (index >= size()) {
                             throw new NoSuchElementException();
                         }
-                        Value arrayElement = keys.getArrayElement(index++);
-                        if (arrayElement.isString()) {
-                            return arrayElement.asString();
-                        } else {
-                            return null;
-                        }
+                        return keys.getArrayElement(index++).asString();
                     }
                 };
             }

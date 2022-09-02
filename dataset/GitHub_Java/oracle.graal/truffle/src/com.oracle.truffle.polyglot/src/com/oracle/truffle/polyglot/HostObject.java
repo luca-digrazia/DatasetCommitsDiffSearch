@@ -432,12 +432,7 @@ final class HostObject implements TruffleObject {
     static class IsArrayElementRemovable {
         @Specialization(guards = "receiver.isList()")
         static boolean doList(HostObject receiver, long index) {
-            return index >= 0 && index < callSize(receiver);
-        }
-
-        @TruffleBoundary
-        private static int callSize(HostObject receiver) {
-            return ((List<?>) receiver.obj).size();
+            return index >= 0 && index < ((List<?>) receiver.obj).size();
         }
 
         @Specialization(guards = "!receiver.isList()")
@@ -448,22 +443,17 @@ final class HostObject implements TruffleObject {
 
     @ExportMessage
     static class RemoveArrayElement {
+        @SuppressWarnings("unchecked")
         @Specialization(guards = "receiver.isList()")
         static void doList(HostObject receiver, long index) throws InvalidArrayIndexException {
             if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
-                boundaryRemove(receiver, index);
+                ((List<Object>) receiver.obj).remove((int) index);
             } catch (IndexOutOfBoundsException outOfBounds) {
                 throw InvalidArrayIndexException.create(index);
             }
-        }
-
-        @TruffleBoundary
-        @SuppressWarnings("unchecked")
-        private static Object boundaryRemove(HostObject receiver, long index) throws IndexOutOfBoundsException {
-            return ((List<Object>) receiver.obj).remove((int) index);
         }
 
         @Specialization(guards = "!receiver.isList()")
@@ -950,7 +940,6 @@ final class HostObject implements TruffleObject {
         }
 
         @Specialization(replaces = "doCached")
-        @TruffleBoundary
         static HostMethodDesc doUncached(Class<?> clazz) {
             return HostClassDesc.forClass(clazz).lookupConstructor();
         }
@@ -977,7 +966,6 @@ final class HostObject implements TruffleObject {
         }
 
         @Specialization(replaces = "doCached")
-        @TruffleBoundary
         static HostFieldDesc doUncached(Class<?> clazz, String name, boolean onlyStatic) {
             return HostInteropReflect.findField(clazz, name, onlyStatic);
         }
@@ -1002,7 +990,6 @@ final class HostObject implements TruffleObject {
         }
 
         @Specialization(replaces = "doCached")
-        @TruffleBoundary
         static HostMethodDesc doUncached(Class<?> clazz) {
             return HostClassDesc.forClass(clazz).getFunctionalMethod();
         }
@@ -1028,7 +1015,6 @@ final class HostObject implements TruffleObject {
         }
 
         @Specialization(replaces = "doCached")
-        @TruffleBoundary
         static Class<?> doUncached(Class<?> clazz, String name) {
             return HostInteropReflect.findInnerClass(clazz, name);
         }
@@ -1055,7 +1041,6 @@ final class HostObject implements TruffleObject {
         }
 
         @Specialization(replaces = "doCached")
-        @TruffleBoundary
         static HostMethodDesc doUncached(Class<?> clazz, String name, boolean onlyStatic) {
             return HostInteropReflect.findMethod(clazz, name, onlyStatic);
         }
@@ -1080,7 +1065,6 @@ final class HostObject implements TruffleObject {
         }
 
         @Specialization(replaces = "doCached")
-        @TruffleBoundary
         static Object doUncached(HostFieldDesc field, HostObject object,
                         @Cached ToGuestValueNode toGuest) {
             Object val = field.get(object.obj);
@@ -1107,7 +1091,6 @@ final class HostObject implements TruffleObject {
         }
 
         @Specialization(replaces = "doCached")
-        @TruffleBoundary
         static void doUncached(HostFieldDesc field, HostObject object, Object rawValue,
                         @Cached ToHostNode toHost) throws UnsupportedTypeException, UnknownIdentifierException {
             Object val = toHost.execute(rawValue, field.getType(), field.getGenericType(), object.languageContext);

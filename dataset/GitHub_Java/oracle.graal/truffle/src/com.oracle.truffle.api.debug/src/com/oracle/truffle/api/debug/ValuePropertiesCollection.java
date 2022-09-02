@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -61,39 +61,30 @@ final class ValuePropertiesCollection extends AbstractCollection<DebugValue> {
     private final Object object;
     private final DebugScope scope;
     private final Object keys;
-    private final String receiverName;
 
-    ValuePropertiesCollection(DebuggerSession session, LanguageInfo language, Object object, Object keys, String receiverName, DebugScope scope) {
+    ValuePropertiesCollection(DebuggerSession session, LanguageInfo language, Object object, Object keys, DebugScope scope) {
         this.session = session;
         this.language = language;
         this.object = object;
         this.keys = keys;
         this.scope = scope;
-        this.receiverName = receiverName;
     }
 
     @Override
     public Iterator<DebugValue> iterator() {
-        return new PropertiesIterator(receiverName);
+        return new PropertiesIterator();
     }
 
     @Override
     public int size() {
         try {
-            int size = (int) INTEROP.getArraySize(keys);
-            if (receiverName != null) { // Filter out the receiver
-                size--;
-            }
-            return size;
+            return (int) INTEROP.getArraySize(keys);
         } catch (UnsupportedMessageException e) {
             return 0;
         }
     }
 
     DebugValue get(String name) {
-        if (name.equals(receiverName)) {
-            return null;
-        }
         if (INTEROP.isMemberExisting(object, name)) {
             return new DebugValue.ObjectMemberValue(session, language, scope, object, name);
         }
@@ -102,43 +93,11 @@ final class ValuePropertiesCollection extends AbstractCollection<DebugValue> {
 
     private final class PropertiesIterator implements Iterator<DebugValue> {
 
-        private final String ignoredName;
-        private long currentIndex = 0L;
-        private String nextMember;
-
-        PropertiesIterator(String ignoredName) {
-            this.ignoredName = ignoredName;
-        }
+        private long currentIndex;
 
         @Override
         public boolean hasNext() {
-            if (ignoredName == null) {
-                return INTEROP.isArrayElementExisting(keys, currentIndex);
-            } else {
-                if (nextMember != null) {
-                    return true;
-                }
-                while (INTEROP.isArrayElementExisting(keys, currentIndex)) {
-                    nextMember = readNext();
-                    if (!ignoredName.equals(nextMember)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-        }
-
-        private String readNext() {
-            try {
-                Object key = INTEROP.readArrayElement(keys, currentIndex);
-                String member = INTEROP.asString(key);
-                this.currentIndex++;
-                return member;
-            } catch (ThreadDeath td) {
-                throw td;
-            } catch (Throwable ex) {
-                throw DebugException.create(session, ex, language);
-            }
+            return INTEROP.isArrayElementExisting(keys, currentIndex);
         }
 
         @Override
@@ -146,14 +105,16 @@ final class ValuePropertiesCollection extends AbstractCollection<DebugValue> {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
-            String member;
-            if (nextMember != null) {
-                member = nextMember;
-                nextMember = null;
-            } else {
-                member = readNext();
+            try {
+                Object key = INTEROP.readArrayElement(keys, currentIndex);
+                String member = INTEROP.asString(key);
+                this.currentIndex++;
+                return new DebugValue.ObjectMemberValue(session, language, scope, object, member);
+            } catch (ThreadDeath td) {
+                throw td;
+            } catch (Throwable ex) {
+                throw new DebugException(session, ex, language, null, true, null);
             }
-            return new DebugValue.ObjectMemberValue(session, language, scope, object, member);
         }
 
         @Override

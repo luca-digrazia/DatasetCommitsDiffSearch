@@ -322,7 +322,7 @@ public abstract class DebugValue {
             try {
                 obj = env.findMetaObject(languageInfo, obj);
                 if (obj != null) {
-                    return new HeapValue(getSession(), languageInfo, null, obj, true);
+                    return new HeapValue(getSession(), languageInfo, null, obj);
                 }
             } catch (ThreadDeath td) {
                 throw td;
@@ -455,16 +455,12 @@ public abstract class DebugValue {
             try {
                 if (clazz == String.class) {
                     Object val = get();
+                    LanguageInfo languageInfo = resolveLanguage();
                     String stringValue;
-                    if (isMeta() && val instanceof String) {
-                        stringValue = (String) val;
+                    if (languageInfo == null) {
+                        stringValue = val.toString();
                     } else {
-                        LanguageInfo languageInfo = resolveLanguage();
-                        if (languageInfo == null) {
-                            stringValue = val.toString();
-                        } else {
-                            stringValue = getDebugger().getEnv().toString(languageInfo, val);
-                        }
+                        stringValue = getDebugger().getEnv().toString(languageInfo, val);
                     }
                     return clazz.cast(stringValue);
                 } else if (clazz == Number.class || clazz == Boolean.class) {
@@ -476,10 +472,6 @@ public abstract class DebugValue {
                 throw new DebugException(getSession(), ex, resolveLanguage(), null, true, null);
             }
             throw new UnsupportedOperationException();
-        }
-
-        protected boolean isMeta() {
-            return false;
         }
 
         private <T> T convertToPrimitive(Class<T> clazz) {
@@ -499,7 +491,6 @@ public abstract class DebugValue {
     static class HeapValue extends AbstractDebugValue {
 
         private final String name;
-        private final boolean isMeta;
         private Object value;
 
         HeapValue(DebuggerSession session, String name, Object value) {
@@ -507,19 +498,9 @@ public abstract class DebugValue {
         }
 
         HeapValue(DebuggerSession session, LanguageInfo preferredLanguage, String name, Object value) {
-            this(session, null, name, value, false);
-        }
-
-        HeapValue(DebuggerSession session, LanguageInfo preferredLanguage, String name, Object value, boolean isMeta) {
             super(session, preferredLanguage);
             this.name = name;
-            this.isMeta = isMeta;
             this.value = value;
-        }
-
-        @Override
-        protected boolean isMeta() {
-            return this.isMeta;
         }
 
         @Override
@@ -570,7 +551,7 @@ public abstract class DebugValue {
 
         @Override
         DebugValue createAsInLanguage(LanguageInfo language) {
-            return new HeapValue(session, language, name, value, isMeta);
+            return new HeapValue(session, language, name, value);
         }
 
     }
