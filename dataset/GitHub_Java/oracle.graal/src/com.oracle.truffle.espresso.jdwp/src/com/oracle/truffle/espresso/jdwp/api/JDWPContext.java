@@ -274,6 +274,4 @@ public interface JDWPContext {
      * @return an array of the call frames for the thread
      */
     JDWPCallFrame[] getStackTrace(Object thread);
-
-    boolean isInstanceOf(Object object, KlassRef klass);
 }
