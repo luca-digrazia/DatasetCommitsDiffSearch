@@ -78,7 +78,7 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
                             NativeSignature.create(NativeType.VOID, NativeType.POINTER, NativeType.INT, NativeType.POINTER));
         }
 
-        public synchronized TruffleObject create(int version) {
+        public TruffleObject create(int version) {
             if (!isSupportedJvmtiVersion(version)) {
                 return null;
             }
@@ -87,19 +87,22 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
             return jvmti.jvmtiEnvPtr;
         }
 
-        public synchronized void dispose() {
+        public void dispose() {
             for (JVMTI jvmti : created) {
                 jvmti.dispose(disposeJvmtiContext);
             }
-            created.clear();
         }
     }
 
-    private JVMTI(EspressoContext context, TruffleObject initializeJvmtiContext, int version) {
+    public JVMTI(EspressoContext context, TruffleObject initializeJvmtiContext, int version) {
         this.context = context;
-        jvmtiEnvPtr = initializeAndGetEnv(initializeJvmtiContext, version);
-        jvmtiVersion = version;
-        assert getUncached().isPointer(jvmtiEnvPtr);
+        try {
+            jvmtiEnvPtr = (TruffleObject) getUncached().execute(initializeJvmtiContext, getLookupCallback(), version);
+            jvmtiVersion = version;
+            assert getUncached().isPointer(jvmtiEnvPtr);
+        } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
         assert jvmtiEnvPtr != null && !getUncached().isNull(jvmtiEnvPtr);
     }
 
@@ -107,11 +110,11 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
         return JvmtiVersion.isJvmtiVersion(version);
     }
 
-    private static boolean isSupportedJvmtiVersion(int version) {
+    public static boolean isSupportedJvmtiVersion(int version) {
         return JvmtiVersion.isSupportedJvmtiVersion(version);
     }
 
-    private void dispose(TruffleObject disposeJvmtiContext) {
+    public void dispose(TruffleObject disposeJvmtiContext) {
         if (jvmtiEnvPtr != null) {
             try {
                 getUncached().execute(disposeJvmtiContext, jvmtiEnvPtr, jvmtiVersion);
@@ -132,8 +135,6 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
     public EspressoContext getContext() {
         return context;
     }
-
-    // Checkstyle: stop method name check
 
     @JvmtiImpl
     @JniImpl
@@ -168,6 +169,4 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
         buf.put(jvmtiVersion);
         return JVMTI_OK;
     }
-
-    // Checkstyle: resume method name check
 }
