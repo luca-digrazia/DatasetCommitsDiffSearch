@@ -112,7 +112,6 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
         StackIntrospection stackIntrospection;
 
         Lazy(AbstractHotSpotTruffleRuntime runtime) {
-            super(runtime);
             runtime.installDefaultListeners();
         }
     }
@@ -527,8 +526,7 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
             OptimizedCallTarget callTarget = (OptimizedCallTarget) runtime.getCurrentFrame().getCallTarget();
             final int limit = callTarget.getOptionValue(PolyglotCompilerOptions.TraceStackTraceLimit);
 
-            StringBuilder messageBuilder = new StringBuilder();
-            messageBuilder.append("transferToInterpreter at\n");
+            runtime.log("[truffle] transferToInterpreter at");
             runtime.iterateFrames(new FrameInstanceVisitor<Object>() {
                 int frameIndex = 0;
 
@@ -539,24 +537,24 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
                     if (frameIndex > 0) {
                         line.append("  ");
                     }
-                    line.append(formatStackFrame(frameInstance, target)).append("\n");
+                    line.append(formatStackFrame(frameInstance, target));
                     frameIndex++;
 
-                    messageBuilder.append(line);
+                    runtime.log(line.toString());
                     if (frameIndex < limit) {
                         return null;
                     } else {
-                        messageBuilder.append("    ...\n");
+                        runtime.log("    ...");
                         return frameInstance;
                     }
                 }
 
             });
             final int skip = 3;
+
             StackTraceElement[] stackTrace = new Throwable().getStackTrace();
             String suffix = stackTrace.length > skip + limit ? "\n    ..." : "";
-            messageBuilder.append(Arrays.stream(stackTrace).skip(skip).limit(limit).map(StackTraceElement::toString).collect(Collectors.joining("\n    ", "  ", suffix)));
-            runtime.log(callTarget, messageBuilder.toString());
+            runtime.log(Arrays.stream(stackTrace).skip(skip).limit(limit).map(StackTraceElement::toString).collect(Collectors.joining("\n    ", "  ", suffix)));
         }
     }
 }
