@@ -483,8 +483,11 @@ public class GCImpl implements GC {
     private boolean checkIfOutOfMemory() {
         final UnsignedWord allowed = HeapPolicy.getMaximumHeapSize();
         /* The old generation and the survivor spaces have objects */
-        UnsignedWord survivorUsedBytes = HeapImpl.getHeapImpl().getYoungGeneration().getSurvivorChunkUsedBytes();
-        UnsignedWord inUse = getAccounting().getOldGenerationAfterChunkBytes().add(survivorUsedBytes);
+        final UnsignedWord inUse = getAccounting().getOldGenerationAfterChunkBytes();
+        final HeapImpl heap = HeapImpl.getHeapImpl();
+        final YoungGeneration youngGen = heap.getYoungGeneration();
+        final UnsignedWord survivorUsedBytes = youngGen.getSurvivorChunkUsedBytes();
+        inUse.add(survivorUsedBytes);
         return allowed.belowThan(inUse);
     }
 
