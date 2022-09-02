@@ -56,8 +56,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     private int threadStartedRequestId;
     private int threadDeathRequestId;
-    private byte threadStartSuspendPolicy;
-    private byte threadDeathSuspendPolicy;
     private int vmDeathRequestId;
     private int vmStartRequestId;
     private List<PacketStream> heldEvents = new ArrayList<>();
@@ -427,6 +425,7 @@ public final class VMEventListenerImpl implements VMEventListener {
     public void stepCompleted(int commandRequestId, CallFrame currentFrame) {
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
+        // TODO(Gregersen) - implemented suspend policies
         // tracked by /browse/GR-19816
         stream.writeByte(SuspendStrategy.EVENT_THREAD);
         stream.writeInt(1); // # events in reply
@@ -458,8 +457,7 @@ public final class VMEventListenerImpl implements VMEventListener {
             return;
         }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
-        stream.writeByte(threadStartSuspendPolicy);
-        suspend(threadStartSuspendPolicy, thread);
+        stream.writeByte(SuspendStrategy.NONE);
         stream.writeInt(1); // # events in reply
         stream.writeByte(RequestedJDWPEvents.THREAD_START);
         stream.writeInt(threadStartedRequestId);
@@ -478,8 +476,7 @@ public final class VMEventListenerImpl implements VMEventListener {
             return;
         }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
-        stream.writeByte(threadDeathSuspendPolicy);
-        suspend(threadDeathSuspendPolicy, thread);
+        stream.writeByte(SuspendStrategy.NONE);
         stream.writeInt(1); // # events in reply
         stream.writeByte(RequestedJDWPEvents.THREAD_DEATH);
         stream.writeInt(threadDeathRequestId);
@@ -530,29 +527,15 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    public void addThreadStartedRequestId(int id, byte suspendPolicy) {
+    public void addThreadStartedRequestId(int id) {
         JDWPLogger.log("Adding thread start listener", JDWPLogger.LogLevel.THREAD);
         this.threadStartedRequestId = id;
-        this.threadStartSuspendPolicy = suspendPolicy;
     }
 
     @Override
-    public void addThreadDiedRequestId(int id, byte suspendPolicy) {
+    public void addThreadDiedRequestId(int id) {
         JDWPLogger.log("Adding thread death listener", JDWPLogger.LogLevel.THREAD);
         this.threadDeathRequestId = id;
-        this.threadDeathSuspendPolicy = suspendPolicy;
-    }
-
-    @Override
-    public void removeThreadStartedRequestId() {
-        this.threadStartSuspendPolicy = 0;
-        this.threadStartedRequestId = 0;
-    }
-
-    @Override
-    public void removeThreadDiedRequestId() {
-        this.threadDeathSuspendPolicy = 0;
-        this.threadDeathRequestId = 0;
     }
 
     @Override
@@ -576,19 +559,6 @@ public final class VMEventListenerImpl implements VMEventListener {
         // queue all held events for sending
         for (PacketStream heldEvent : heldEvents) {
             connection.queuePacket(heldEvent);
-        }
-    }
-
-    private void suspend(byte suspendPolicy, Object... thread) {
-        switch(suspendPolicy) {
-            case SuspendStrategy.NONE:
-                return;
-            case SuspendStrategy.EVENT_THREAD:
-                debuggerController.suspend(thread);
-                return;
-            case SuspendStrategy.ALL:
-                debuggerController.suspendAll();
-                return;
         }
     }
 }

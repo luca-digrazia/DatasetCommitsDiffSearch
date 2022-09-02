@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
-import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.VMListener;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
@@ -56,21 +55,6 @@ public final class EmptyListener implements VMListener {
 
     @Override
     public boolean hasFieldAccessBreakpoint(FieldRef field, Object receiver) {
-        return false;
-    }
-
-    @Override
-    public boolean hasMethodBreakpoint(MethodRef method, Object returnValue) {
-        return false;
-    }
-
-    @Override
-    public boolean prepareMonitorContended(Object monitor) {
-        return false;
-    }
-
-    @Override
-    public boolean prepareMonitorContendedEntered(Object monitor) {
         return false;
     }
 
