@@ -47,14 +47,12 @@ public final class FarReturnNode extends ControlSinkNode implements LIRLowerable
     @Input protected ValueNode result;
     @Input protected ValueNode sp;
     @Input protected ValueNode ip;
-    private final boolean fromMethodWithCalleeSavedRegisters;
 
-    public FarReturnNode(ValueNode result, ValueNode sp, ValueNode ip, boolean fromMethodWithCalleeSavedRegisters) {
+    public FarReturnNode(ValueNode result, ValueNode sp, ValueNode ip) {
         super(TYPE, StampFactory.forVoid());
         this.result = result;
         this.sp = sp;
         this.ip = ip;
-        this.fromMethodWithCalleeSavedRegisters = fromMethodWithCalleeSavedRegisters;
     }
 
     @Override
@@ -63,6 +61,6 @@ public final class FarReturnNode extends ControlSinkNode implements LIRLowerable
         AllocatableValue resultOperand = lirGenTool.resultOperandFor(result.getStackKind(), LIRKind.fromJavaKind(lirGenTool.target().arch, result.getStackKind()));
         lirGenTool.emitMove(resultOperand, gen.operand(result));
 
-        ((SubstrateLIRGenerator) lirGenTool).emitFarReturn(resultOperand, gen.operand(sp), gen.operand(ip), fromMethodWithCalleeSavedRegisters);
+        ((SubstrateLIRGenerator) lirGenTool).emitFarReturn(resultOperand, gen.operand(sp), gen.operand(ip));
     }
 }
