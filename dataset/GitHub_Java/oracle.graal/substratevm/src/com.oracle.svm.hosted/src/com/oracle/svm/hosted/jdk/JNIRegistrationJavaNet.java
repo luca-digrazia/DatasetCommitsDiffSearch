@@ -73,9 +73,10 @@ class JNIRegistrationJavaNet extends JNIRegistrationUtil implements Feature {
             if (hasExtendedOptionsImpl) {
                 rerunClassInit(a, "sun.net.ExtendedOptionsImpl");
             }
-
-            rerunClassInit(a, "java.net.AbstractPlainDatagramSocketImpl", "java.net.AbstractPlainSocketImpl");
-
+            if (JavaVersionUtil.JAVA_SPEC >= 11) {
+                /* These two classes cache whether SO_REUSEPORT, added in Java 9, is supported. */
+                rerunClassInit(a, "java.net.AbstractPlainDatagramSocketImpl", "java.net.AbstractPlainSocketImpl");
+            }
             if (hasPlatformSocketOptions) {
                 /*
                  * The libextnet was actually introduced in Java 9, but the support for Linux and
