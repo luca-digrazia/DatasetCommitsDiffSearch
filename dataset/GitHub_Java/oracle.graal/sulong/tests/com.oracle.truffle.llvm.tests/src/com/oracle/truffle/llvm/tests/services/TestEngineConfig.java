@@ -29,12 +29,8 @@
  */
 package com.oracle.truffle.llvm.tests.services;
 
-import com.oracle.truffle.llvm.tests.pipe.CaptureOutput;
-import org.graalvm.polyglot.Context;
-
 import java.nio.file.Path;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * Configuration for an engine used for running unit tests.
@@ -81,5 +77,4 @@ public interface TestEngineConfig extends Comparable<TestEngineConfig> {
      */
     boolean canExecute(Path path);
 
-    Function<Context.Builder, CaptureOutput> getCaptureOutput();
 }
