@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,6 +29,26 @@
  */
 package com.oracle.truffle.llvm.tests.interop;
 
+import com.oracle.truffle.api.TruffleOptions;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.interop.ArityException;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.NFIContextExtension;
+import com.oracle.truffle.llvm.tests.SulongSuite;
+import com.oracle.truffle.llvm.tests.interop.values.ArrayObject;
+import com.oracle.truffle.llvm.tests.interop.values.BoxedIntValue;
+import com.oracle.truffle.llvm.tests.options.TestOptions;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -46,41 +66,17 @@ import org.junit.Assume;
 import org.junit.Ignore;
 import org.junit.Test;
 
-import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.NFIContextExtension;
-import com.oracle.truffle.llvm.runtime.except.LLVMNativePointerException;
-import com.oracle.truffle.llvm.tests.SulongSuite;
-import com.oracle.truffle.llvm.tests.interop.values.ArrayObject;
-import com.oracle.truffle.llvm.tests.interop.values.BoxedIntValue;
-import com.oracle.truffle.llvm.tests.interop.values.NullValue;
-import com.oracle.truffle.llvm.tests.options.TestOptions;
-
-import static com.oracle.truffle.llvm.tests.interop.InteropTestBase.TEST_DIR_EXT;
-
 public class LLVMInteropTest {
     @Test
     public void test001() {
-        try (Runner runner = new Runner("interop001.c")) {
+        try (Runner runner = new Runner("interop001")) {
             Assert.assertEquals(42, runner.run());
         }
     }
 
     @Test
     public void test002() {
-        try (Runner runner = new Runner("interop002.c")) {
+        try (Runner runner = new Runner("interop002")) {
             runner.export(ProxyObject.fromMap(makeObjectA()), "foreign");
             Assert.assertEquals(42, runner.run());
         }
@@ -88,7 +84,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test003() {
-        try (Runner runner = new Runner("interop003.c")) {
+        try (Runner runner = new Runner("interop003")) {
             runner.export(ProxyObject.fromMap(makeObjectA()), "foreign");
             Assert.assertEquals(215, runner.run());
         }
@@ -96,7 +92,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test004() {
-        try (Runner runner = new Runner("interop004.c")) {
+        try (Runner runner = new Runner("interop004")) {
             Map<String, Object> a = makeObjectB();
             runner.export(ProxyObject.fromMap(a), "foreign");
             Assert.assertEquals(73, runner.run());
@@ -105,7 +101,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test005() {
-        try (Runner runner = new Runner("interop005.c")) {
+        try (Runner runner = new Runner("interop005")) {
             Map<String, Object> a = makeObjectA();
             runner.export(ProxyObject.fromMap(a), "foreign");
             runner.run();
@@ -120,7 +116,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test006() {
-        try (Runner runner = new Runner("interop006.c")) {
+        try (Runner runner = new Runner("interop006")) {
             Map<String, Object> a = makeObjectB();
             runner.export(ProxyObject.fromMap(a), "foreign");
             runner.run();
@@ -145,7 +141,7 @@ public class LLVMInteropTest {
     @Test
     public void testInvoke() {
         Assume.assumeFalse("JavaInterop not supported", TruffleOptions.AOT);
-        try (Runner runner = new Runner("invoke.c")) {
+        try (Runner runner = new Runner("invoke")) {
             ClassC a = new ClassC();
             runner.export(a, "foreign");
             Assert.assertEquals(36, runner.run());
@@ -161,7 +157,7 @@ public class LLVMInteropTest {
     @Test
     public void testReadExecute() {
         Assume.assumeFalse("JavaInterop not supported", TruffleOptions.AOT);
-        try (Runner runner = new Runner("readExecute.c")) {
+        try (Runner runner = new Runner("readExecute")) {
             ClassC a = new ClassC();
             runner.export(a, "foreign");
             Assert.assertEquals(36, runner.run());
@@ -176,7 +172,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test008() {
-        try (Runner runner = new Runner("interop008.c")) {
+        try (Runner runner = new Runner("interop008")) {
             runner.export(new ProxyExecutable() {
 
                 @Override
@@ -190,7 +186,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test009() {
-        try (Runner runner = new Runner("interop009.c")) {
+        try (Runner runner = new Runner("interop009")) {
             runner.export(new ProxyExecutable() {
 
                 @Override
@@ -204,7 +200,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test010() {
-        try (Runner runner = new Runner("interop010.c")) {
+        try (Runner runner = new Runner("interop010")) {
             runner.export(new ProxyExecutable() {
 
                 @Override
@@ -218,7 +214,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test011() {
-        try (Runner runner = new Runner("interop011.c")) {
+        try (Runner runner = new Runner("interop011")) {
             runner.export(new ProxyExecutable() {
 
                 @Override
@@ -232,7 +228,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test012() {
-        try (Runner runner = new Runner("interop012.c")) {
+        try (Runner runner = new Runner("interop012")) {
             runner.export(new ProxyExecutable() {
 
                 @Override
@@ -247,7 +243,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test013() {
-        try (Runner runner = new Runner("interop013.c")) {
+        try (Runner runner = new Runner("interop013")) {
             runner.export(new BoxedIntValue(42), "foreign");
             Assert.assertEquals(42, runner.run());
         }
@@ -255,7 +251,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test014() {
-        try (Runner runner = new Runner("interop014.c")) {
+        try (Runner runner = new Runner("interop014")) {
             runner.export(new BoxedIntValue(42), "foreign");
             Assert.assertEquals(42, runner.run(), 0.1);
         }
@@ -263,7 +259,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test015() {
-        try (Runner runner = new Runner("interop015.c")) {
+        try (Runner runner = new Runner("interop015")) {
             runner.export(new ProxyExecutable() {
 
                 @Override
@@ -278,7 +274,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test016() {
-        try (Runner runner = new Runner("interop016.c")) {
+        try (Runner runner = new Runner("interop016")) {
             runner.export(null, "foreign");
             Assert.assertEquals(42, runner.run(), 0.1);
         }
@@ -286,7 +282,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test017() {
-        try (Runner runner = new Runner("interop017.c")) {
+        try (Runner runner = new Runner("interop017")) {
             runner.export(new int[]{1, 2, 3}, "foreign");
             Assert.assertEquals(42, runner.run(), 0.1);
         }
@@ -294,7 +290,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test018() {
-        try (Runner runner = new Runner("interop018.c")) {
+        try (Runner runner = new Runner("interop018")) {
             runner.export(new int[]{1, 2, 3}, "foreign");
             Assert.assertEquals(3, runner.run());
         }
@@ -302,7 +298,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test019() {
-        try (Runner runner = new Runner("interop019.c")) {
+        try (Runner runner = new Runner("interop019")) {
             runner.export(new int[]{40, 41, 42, 43, 44}, "foreign");
             Assert.assertEquals(210, runner.run());
         }
@@ -310,7 +306,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test020() {
-        try (Runner runner = new Runner("interop020.c")) {
+        try (Runner runner = new Runner("interop020")) {
             int[] arr = new int[]{40, 41, 42, 43, 44};
             runner.export(arr, "foreign");
             runner.run();
@@ -320,7 +316,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test021() {
-        try (Runner runner = new Runner("interop021.c")) {
+        try (Runner runner = new Runner("interop021")) {
             runner.export(new double[]{40, 41, 42, 43, 44}, "foreign");
             Assert.assertEquals(210, runner.run());
         }
@@ -328,7 +324,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test022() {
-        try (Runner runner = new Runner("interop022.c")) {
+        try (Runner runner = new Runner("interop022")) {
             double[] arr = new double[]{40, 41, 42, 43, 44};
             runner.export(arr, "foreign");
             runner.run();
@@ -338,7 +334,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test023() {
-        try (Runner runner = new Runner("interop023.c")) {
+        try (Runner runner = new Runner("interop023")) {
             Map<String, Object> a = makeObjectA();
             Map<String, Object> b = makeObjectA();
             runner.export(ProxyObject.fromMap(a), "foreign");
@@ -349,7 +345,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test024() {
-        try (Runner runner = new Runner("interop024.c")) {
+        try (Runner runner = new Runner("interop024")) {
             Map<String, Object> a = makeObjectA();
             Map<String, Object> b = makeObjectA();
             b.put("valueI", 55);
@@ -361,7 +357,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test025() {
-        try (Runner runner = new Runner("interop025.c")) {
+        try (Runner runner = new Runner("interop025")) {
             Map<String, Object> a = makeObjectA();
             Map<String, Object> b = makeObjectA();
             Map<String, Object> c = makeObjectA();
@@ -376,7 +372,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test026() {
-        try (Runner runner = new Runner("interop026.c")) {
+        try (Runner runner = new Runner("interop026")) {
             ReturnObject result = new ReturnObject();
             runner.export(result, "foo");
             Assert.assertEquals(14, runner.run());
@@ -386,7 +382,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test027() {
-        try (Runner runner = new Runner("interop027.c")) {
+        try (Runner runner = new Runner("interop027")) {
             ReturnObject result = new ReturnObject();
             runner.export(result, "foo");
             Assert.assertEquals(14, runner.run());
@@ -404,7 +400,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test028() {
-        try (Runner runner = new Runner("interop028.c")) {
+        try (Runner runner = new Runner("interop028")) {
             ReturnObject result = new ReturnObject();
             runner.export(result, "foo");
             Assert.assertEquals(72, runner.run());
@@ -416,7 +412,7 @@ public class LLVMInteropTest {
     // structs not yet implemented
     @Test
     public void test030() {
-        try (Runner runner = new Runner("interop030.c")) {
+        try (Runner runner = new Runner("interop030")) {
             runner.run();
             Value get = runner.findGlobalSymbol("getValueI");
             int result = get.execute(ProxyObject.fromMap(makeObjectA())).asInt();
@@ -427,7 +423,7 @@ public class LLVMInteropTest {
     @Test
     @Ignore
     public void test031() {
-        try (Runner runner = new Runner("interop031.c")) {
+        try (Runner runner = new Runner("interop031")) {
             runner.run();
             Value apply = runner.findGlobalSymbol("complexAdd");
 
@@ -444,7 +440,7 @@ public class LLVMInteropTest {
     // arrays: foreign array to llvm
     @Test
     public void test032() {
-        try (Runner runner = new Runner("interop032.c")) {
+        try (Runner runner = new Runner("interop032")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             int[] a = new int[]{1, 2, 3, 4, 5};
@@ -455,7 +451,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test033() {
-        try (Runner runner = new Runner("interop033.c")) {
+        try (Runner runner = new Runner("interop033")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             short[] a = new short[]{1, 2, 3, 4, 5};
@@ -466,7 +462,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test034() {
-        try (Runner runner = new Runner("interop034.c")) {
+        try (Runner runner = new Runner("interop034")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             byte[] a = new byte[]{1, 2, 3, 4, 5};
@@ -477,7 +473,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test035() {
-        try (Runner runner = new Runner("interop035.c")) {
+        try (Runner runner = new Runner("interop035")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             long[] a = new long[]{1, 2, 3, 4, 5};
@@ -488,7 +484,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test036() {
-        try (Runner runner = new Runner("interop036.c")) {
+        try (Runner runner = new Runner("interop036")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             float[] a = new float[]{1, 2, 3, 4, 5};
@@ -499,7 +495,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test037() {
-        try (Runner runner = new Runner("interop037.c")) {
+        try (Runner runner = new Runner("interop037")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             double[] a = new double[]{1, 2, 3, 4, 5};
@@ -511,7 +507,7 @@ public class LLVMInteropTest {
     // foreign array with different type
     @Test
     public void test038() {
-        try (Runner runner = new Runner("interop038.c")) {
+        try (Runner runner = new Runner("interop038")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             long[] a = new long[]{1, 2, 3, 4, 5};
@@ -522,7 +518,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test039() {
-        try (Runner runner = new Runner("interop039.c")) {
+        try (Runner runner = new Runner("interop039")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             byte[] a = new byte[]{1, 2, 3, 4, 5};
@@ -534,7 +530,7 @@ public class LLVMInteropTest {
     @Test
     @Ignore(value = "test semantics not clear")
     public void test040() {
-        try (Runner runner = new Runner("interop040.c")) {
+        try (Runner runner = new Runner("interop040")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             Value value = get.execute();
@@ -545,7 +541,7 @@ public class LLVMInteropTest {
     @Test
     @Ignore(value = "test semantics not clear")
     public void test041() {
-        try (Runner runner = new Runner("interop041.c")) {
+        try (Runner runner = new Runner("interop041")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             Value getval = runner.findGlobalSymbol("getval");
@@ -557,7 +553,7 @@ public class LLVMInteropTest {
 
     @Test(expected = UnsupportedOperationException.class)
     public void test042() {
-        try (Runner runner = new Runner("interop042.c")) {
+        try (Runner runner = new Runner("interop042")) {
             runner.run();
             Value get = runner.findGlobalSymbol("get");
             get.execute().getArraySize();
@@ -566,7 +562,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test043() {
-        try (Runner runner = new Runner("interop043.c")) {
+        try (Runner runner = new Runner("interop043")) {
             runner.export(ProxyObject.fromMap(makeObjectA()), "foreign");
             Assert.assertEquals(0, runner.run());
         }
@@ -574,7 +570,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test044() {
-        try (Runner runner = new Runner("interop044.c")) {
+        try (Runner runner = new Runner("interop044")) {
             runner.export(new Object(), "a");
             runner.export(14, "b");
             runner.export(14.5, "c");
@@ -584,7 +580,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test045a() {
-        try (Runner runner = new Runner("interop045.c")) {
+        try (Runner runner = new Runner("interop045")) {
             runner.export(14, "a");
             runner.export(15, "b");
             Assert.assertEquals(1, runner.run());
@@ -593,7 +589,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test046a() {
-        try (Runner runner = new Runner("interop046.c")) {
+        try (Runner runner = new Runner("interop046")) {
             runner.export(14, "a");
             runner.export(14, "b");
             Assert.assertEquals(1, runner.run());
@@ -602,7 +598,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test046b() {
-        try (Runner runner = new Runner("interop046.c")) {
+        try (Runner runner = new Runner("interop046")) {
             runner.export(14, "a");
             runner.export(15, "b");
             Assert.assertEquals(1, runner.run());
@@ -611,7 +607,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test047a() {
-        try (Runner runner = new Runner("interop047.c")) {
+        try (Runner runner = new Runner("interop047")) {
             runner.export(14, "a");
             runner.export(15, "b");
             Assert.assertEquals(0, runner.run());
@@ -620,7 +616,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test048a() {
-        try (Runner runner = new Runner("interop048.c")) {
+        try (Runner runner = new Runner("interop048")) {
             runner.export(14, "a");
             runner.export(15, "b");
             Assert.assertEquals(0, runner.run());
@@ -629,7 +625,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test048b() {
-        try (Runner runner = new Runner("interop048.c")) {
+        try (Runner runner = new Runner("interop048")) {
             runner.export(14, "a");
             runner.export(14, "b");
             Assert.assertEquals(1, runner.run());
@@ -638,7 +634,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test049a() {
-        try (Runner runner = new Runner("interop049.c")) {
+        try (Runner runner = new Runner("interop049")) {
             runner.export(14, "a");
             runner.export(14, "b");
             Assert.assertEquals(0, runner.run());
@@ -647,7 +643,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test049b() {
-        try (Runner runner = new Runner("interop049.c")) {
+        try (Runner runner = new Runner("interop049")) {
             Object object = new Object();
             runner.export(object, "a");
             runner.export(object, "b");
@@ -657,7 +653,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test050a() {
-        try (Runner runner = new Runner("interop050.c")) {
+        try (Runner runner = new Runner("interop050")) {
             runner.export(14, "a");
             runner.export(14, "b");
             Assert.assertEquals(1, runner.run());
@@ -666,7 +662,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test050b() {
-        try (Runner runner = new Runner("interop050.c")) {
+        try (Runner runner = new Runner("interop050")) {
             Object object = new Object();
             runner.export(object, "a");
             runner.export(object, "b");
@@ -694,42 +690,42 @@ public class LLVMInteropTest {
 
     @Test
     public void test051a() {
-        try (Runner runner = new Runner("interop051.c")) {
+        try (Runner runner = new Runner("interop051")) {
             testGlobal(runner);
         }
     }
 
     @Test
     public void test052a() {
-        try (Runner runner = new Runner("interop052.c")) {
+        try (Runner runner = new Runner("interop052")) {
             testGlobal(runner);
         }
     }
 
     @Test
     public void test053a() {
-        try (Runner runner = new Runner("interop053.c")) {
+        try (Runner runner = new Runner("interop053")) {
             testGlobal(runner);
         }
     }
 
     @Test
     public void test054a() {
-        try (Runner runner = new Runner("interop054.c")) {
+        try (Runner runner = new Runner("interop054")) {
             testGlobal(runner);
         }
     }
 
     @Test
     public void test055a() {
-        try (Runner runner = new Runner("interop055.c")) {
+        try (Runner runner = new Runner("interop055")) {
             testGlobal(runner);
         }
     }
 
     @Test
     public void test056a() {
-        try (Runner runner = new Runner("interop056.c")) {
+        try (Runner runner = new Runner("interop056")) {
             testGlobal(runner);
         }
     }
@@ -745,7 +741,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test057() {
-        try (Runner runner = new Runner("interop057.c")) {
+        try (Runner runner = new Runner("interop057")) {
             Map<String, Object> a = new HashMap<>();
             a.put("a", 0);
             a.put("b", 1);
@@ -758,7 +754,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test058() {
-        try (Runner runner = new Runner("interop058.c")) {
+        try (Runner runner = new Runner("interop058")) {
             Object[] a = new Object[]{0, 1, 2, 3, 4, 5, 6, 7, 8};
             runner.export(a, "foreign");
             Assert.assertEquals(0, runner.run());
@@ -770,7 +766,7 @@ public class LLVMInteropTest {
     @Ignore
     @Test
     public void test059() {
-        try (Runner runner = new Runner("interop059.c")) {
+        try (Runner runner = new Runner("interop059")) {
             Object[] a = new Object[]{0, 1, 2, 3, 4, 5, 6, 7, 8};
             runner.export(a, "foreign");
             Assert.assertEquals(0, runner.run());
@@ -781,7 +777,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testForeignImport() {
-        try (Runner runner = new Runner("foreignImport.c")) {
+        try (Runner runner = new Runner("foreignImport")) {
             Map<String, Object> a = new HashMap<>();
             a.put("a", 0);
             a.put("b", 1);
@@ -806,14 +802,14 @@ public class LLVMInteropTest {
 
     @Test
     public void test061() {
-        try (Runner runner = new Runner("interop061.c")) {
+        try (Runner runner = new Runner("interop061")) {
             Assert.assertEquals(0, runner.run());
         }
     }
 
     @Test
     public void test062() {
-        try (Runner runner = new Runner("interop062.c")) {
+        try (Runner runner = new Runner("interop062")) {
             Object a = new Object();
             runner.export(a, "object");
             Assert.assertEquals(0, runner.run());
@@ -822,7 +818,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test063() {
-        try (Runner runner = new Runner("interop063.c")) {
+        try (Runner runner = new Runner("interop063")) {
             Object a = new Object();
             runner.export(a, "object");
             Assert.assertEquals(0, runner.run());
@@ -831,7 +827,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test064() {
-        try (Runner runner = new Runner("interop064.c")) {
+        try (Runner runner = new Runner("interop064")) {
             Object a = new Object();
             runner.export(a, "object");
             Assert.assertEquals(0, runner.run());
@@ -840,7 +836,7 @@ public class LLVMInteropTest {
 
     @Test(expected = PolyglotException.class)
     public void test065() {
-        try (Runner runner = new Runner("interop065.c")) {
+        try (Runner runner = new Runner("interop065")) {
             Object a = new Object();
             runner.export(a, "object");
             Assert.assertEquals(0, runner.run());
@@ -849,7 +845,7 @@ public class LLVMInteropTest {
 
     @Test(expected = PolyglotException.class)
     public void test066() throws Throwable {
-        try (Runner runner = new Runner("interop066.c")) {
+        try (Runner runner = new Runner("interop066")) {
             Object a = new Object();
             runner.export(a, "object");
             Assert.assertEquals(0, runner.run());
@@ -858,7 +854,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test067() {
-        try (Runner runner = new Runner("interop067.c")) {
+        try (Runner runner = new Runner("interop067")) {
             Object a = new Object();
             runner.export(a, "object");
             Assert.assertEquals(0, runner.run());
@@ -867,7 +863,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testBoxedboolean() {
-        try (Runner runner = new Runner("interop_conditionalWithBoxedBoolean.c")) {
+        try (Runner runner = new Runner("interop_conditionalWithBoxedBoolean")) {
             runner.export(true, "boxed_true");
             runner.export(false, "boxed_false");
             Assert.assertEquals(0, runner.run());
@@ -876,7 +872,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testUnboxedboolean() {
-        try (Runner runner = new Runner("interop_conditionalWithUnboxedBoolean.c")) {
+        try (Runner runner = new Runner("interop_conditionalWithUnboxedBoolean")) {
             runner.export(true, "boxed_true");
             runner.export(false, "boxed_false");
             Assert.assertEquals(0, runner.run());
@@ -885,7 +881,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test069() {
-        try (Runner runner = new Runner("interop069.c")) {
+        try (Runner runner = new Runner("interop069")) {
             runner.export(42, "a");
             runner.run();
             try {
@@ -900,7 +896,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test070() {
-        try (Runner runner = new Runner("interop070.c")) {
+        try (Runner runner = new Runner("interop070")) {
             runner.run();
             try {
                 Value pointer = runner.findGlobalSymbol("returnPointerToGlobal").execute();
@@ -916,7 +912,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test071() {
-        try (Runner runner = new Runner("interop071.c")) {
+        try (Runner runner = new Runner("interop071")) {
             runner.run();
             try {
                 Object obj = new Object();
@@ -933,7 +929,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test072() {
-        try (Runner runner = new Runner("interop072.c")) {
+        try (Runner runner = new Runner("interop072")) {
             runner.run();
             try {
                 Object obj = new Object();
@@ -953,7 +949,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test072a() {
-        try (Runner runner = new Runner("interop072.c")) {
+        try (Runner runner = new Runner("interop072")) {
             runner.run();
             try {
                 Value pointer = runner.findGlobalSymbol("returnPointerToGlobal");
@@ -973,7 +969,7 @@ public class LLVMInteropTest {
 
     @Test
     public void test072b() {
-        try (Runner runner = new Runner("interop072.c")) {
+        try (Runner runner = new Runner("interop072")) {
             runner.run();
             try {
                 Value pointer = runner.findGlobalSymbol("returnPointerToGlobal");
@@ -998,29 +994,29 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testPolyglotGetArg() {
-        try (Runner runner = new Runner("polyglotGetArg.c")) {
+    public void test073() {
+        try (Runner runner = new Runner("interop073")) {
             Assert.assertEquals(42, runner.run());
         }
     }
 
     @Test
     public void test074() {
-        try (Runner runner = new Runner("interop074.c")) {
+        try (Runner runner = new Runner("interop074")) {
             testGlobal(runner);
         }
     }
 
     @Test
     public void test076() {
-        try (Runner runner = new Runner("interop076.c")) {
+        try (Runner runner = new Runner("interop076")) {
             Assert.assertEquals(0, runner.run());
         }
     }
 
     @Test
     public void test077() {
-        try (Runner runner = new Runner("interop077.c")) {
+        try (Runner runner = new Runner("interop077")) {
             final String testString = "this is a test";
             runner.export((ProxyExecutable) (Value... t) -> testString, "getstring");
             Assert.assertEquals(testString.length(), runner.run());
@@ -1028,24 +1024,8 @@ public class LLVMInteropTest {
     }
 
     @Test
-    public void testNullFunctionPointerCall() {
-        try (Runner runner = new Runner("nullFunctionPointerCall.c")) {
-            try {
-                runner.run();
-            } catch (LLVMNativePointerException e) {
-                // This is expected
-            } catch (PolyglotException e) {
-                final String expected = "Invalid native function pointer";
-                Assert.assertEquals(String.format("Expected '%s'", expected), expected, e.getMessage());
-            } catch (Exception e) {
-                throw new AssertionError(e);
-            }
-        }
-    }
-
-    @Test
     public void testTypeCheckNative() {
-        try (Runner runner = new Runner("typeCheck.c")) {
+        try (Runner runner = new Runner("typeCheck")) {
             runner.load();
             int ret = runner.findGlobalSymbol("check_types_nativeptr").execute().asInt();
             Assert.assertEquals(0, ret);
@@ -1054,7 +1034,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testFitsInNative() {
-        try (Runner runner = new Runner("fitsIn.c")) {
+        try (Runner runner = new Runner("fitsIn")) {
             runner.load();
             int ret = runner.findGlobalSymbol("test_fits_in_nativeptr").execute().asInt();
             Assert.assertEquals(0, ret);
@@ -1063,7 +1043,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testIsHandle() {
-        try (Runner runner = new Runner("isHandle.c")) {
+        try (Runner runner = new Runner("isHandle")) {
             Object a = new Object();
             runner.export(a, "object");
             Assert.assertEquals(0, runner.run());
@@ -1072,7 +1052,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testReleaseHandle() {
-        try (Runner runner = new Runner("releaseHandle.c")) {
+        try (Runner runner = new Runner("releaseHandle")) {
             Object a = new Object();
             runner.export(a, "object");
             Assert.assertEquals(0, runner.run());
@@ -1148,7 +1128,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testRegisterHandle() {
-        try (Runner runner = new Runner("registerHandle.c")) {
+        try (Runner runner = new Runner("registerHandle")) {
             runner.export(new ForeignObject(1), "global_object");
             Assert.assertEquals(0, runner.run());
         }
@@ -1156,7 +1136,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testStrlen() {
-        try (Runner runner = new Runner("strlen.c")) {
+        try (Runner runner = new Runner("strlen")) {
             runner.run();
             Value strlenFunction = runner.findGlobalSymbol("func");
             Value nullString = strlenFunction.execute(new char[]{});
@@ -1172,7 +1152,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testStrcmp() {
-        try (Runner runner = new Runner("strcmp.c")) {
+        try (Runner runner = new Runner("strcmp")) {
             runner.run();
             Value strcmpFunction = runner.findGlobalSymbol("func");
             Value test1 = strcmpFunction.execute(new char[]{}, new char[]{});
@@ -1209,7 +1189,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testHandleFromNativeCallback() {
-        try (Runner runner = new Runner("handleFromNativeCallback.c")) {
+        try (Runner runner = new Runner("handleFromNativeCallback")) {
             runner.run();
             Value testHandleFromNativeCallback = runner.findGlobalSymbol("testHandleFromNativeCallback");
             Value ret = testHandleFromNativeCallback.execute(ProxyObject.fromMap(makeObjectA()));
@@ -1219,7 +1199,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testAutoDerefHandle() {
-        try (Runner runner = new Runner("autoDerefHandle.c")) {
+        try (Runner runner = new Runner("autoDerefHandle")) {
             runner.run();
             Value testHandleFromNativeCallback = runner.findGlobalSymbol("testAutoDerefHandle");
             ProxyExecutable proxyExecutable = new ProxyExecutable() {
@@ -1237,7 +1217,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testPointerThroughNativeCallback() {
-        try (Runner runner = new Runner("pointerThroughNativeCallback.c")) {
+        try (Runner runner = new Runner("pointerThroughNativeCallback")) {
             int result = runner.run();
             Assert.assertEquals(42, result);
         }
@@ -1245,14 +1225,14 @@ public class LLVMInteropTest {
 
     @Test
     public void testManagedMallocMemSet() {
-        try (Runner runner = new Runner("managedMallocMemset.c")) {
+        try (Runner runner = new Runner("managedMallocMemset")) {
             Assert.assertEquals(0, runner.run());
         }
     }
 
     @Test
     public void testVirtualMallocArray() {
-        try (Runner runner = new Runner("virtualMallocArray.cpp")) {
+        try (Runner runner = new Runner("virtualMallocArray")) {
             runner.load();
             Value test = runner.findGlobalSymbol("test");
             Assert.assertEquals(test.execute().asInt(), 42);
@@ -1261,7 +1241,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testVirtualMallocArray2() {
-        try (Runner runner = new Runner("virtualMallocArray2.cpp")) {
+        try (Runner runner = new Runner("virtualMallocArray2")) {
             runner.load();
             Value test = runner.findGlobalSymbol("test");
             Assert.assertEquals(test.execute().asInt(), 42);
@@ -1270,7 +1250,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testVirtualMallocArrayPointer() {
-        try (Runner runner = new Runner("virtualMallocArrayPointer.cpp")) {
+        try (Runner runner = new Runner("virtualMallocArrayPointer")) {
             runner.load();
             Value test1 = runner.findGlobalSymbol("test1");
             Value test2 = runner.findGlobalSymbol("test2");
@@ -1281,7 +1261,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testVirtualMallocGlobal() {
-        try (Runner runner = new Runner("virtualMallocGlobal.cpp")) {
+        try (Runner runner = new Runner("virtualMallocGlobal")) {
             runner.load();
             Value test = runner.findGlobalSymbol("test");
             Assert.assertEquals(test.execute().asLong(), 42);
@@ -1290,7 +1270,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testVirtualMallocGlobaAssignl() {
-        try (Runner runner = new Runner("virtualMallocGlobalAssign.cpp")) {
+        try (Runner runner = new Runner("virtualMallocGlobalAssign")) {
             runner.load();
             Value test = runner.findGlobalSymbol("test");
             Assert.assertEquals(test.execute().asLong(), 42);
@@ -1299,7 +1279,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testVirtualMallocObject() {
-        try (Runner runner = new Runner("virtualMallocObject.cpp")) {
+        try (Runner runner = new Runner("virtualMallocObject")) {
             runner.load();
             Value setA = runner.findGlobalSymbol("testGetA");
             Value setB = runner.findGlobalSymbol("testGetB");
@@ -1318,7 +1298,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testVirtualMallocObjectCopy() {
-        try (Runner runner = new Runner("virtualMallocObjectCopy.cpp")) {
+        try (Runner runner = new Runner("virtualMallocObjectCopy")) {
             runner.load();
             Value setA = runner.findGlobalSymbol("testGetA");
             Value setB = runner.findGlobalSymbol("testGetB");
@@ -1337,7 +1317,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testVirtualMallocCompare1() {
-        try (Runner runner = new Runner("virtualMallocCompare1.cpp")) {
+        try (Runner runner = new Runner("virtualMallocCompare1")) {
             runner.load();
             Value test1 = runner.findGlobalSymbol("test1");
             Value test2 = runner.findGlobalSymbol("test2");
@@ -1357,7 +1337,7 @@ public class LLVMInteropTest {
     @Test
     public void testConstruct001() {
         final StringBuilder buf;
-        try (Runner runner = new Runner("construct001.c")) {
+        try (Runner runner = new Runner("construct001")) {
             buf = new StringBuilder();
             runner.export(new ProxyExecutable() {
                 @Override
@@ -1379,7 +1359,7 @@ public class LLVMInteropTest {
 
     @Test
     public void testScaleVector() {
-        try (Runner runner = new Runner("scaleVector.c")) {
+        try (Runner runner = new Runner("scaleVector")) {
             runner.load();
             Value fn = runner.findGlobalSymbol("scale_vector");
 
@@ -1397,7 +1377,7 @@ public class LLVMInteropTest {
     @Test
     public void testConstruct002() {
         final StringBuilder buf;
-        try (Runner runner = new Runner("construct002.c")) {
+        try (Runner runner = new Runner("construct002")) {
             buf = new StringBuilder();
             runner.export(new ProxyExecutable() {
                 @Override
@@ -1428,44 +1408,6 @@ public class LLVMInteropTest {
             Assert.assertTrue("construct\natexit\ndestruct\n".equals(actual) || "construct\ndestruct\natexit\n".equals(actual));
         } else {
             Assert.assertEquals("construct\natexit\ndestruct\n", buf.toString());
-        }
-    }
-
-    @Test
-    public void testInteropUndefinedToIntConvInt() {
-        try (Runner runner = new Runner("interopUndefinedToIntConv.c")) {
-            runner.export(new ProxyExecutable() {
-                @Override
-                public Object execute(Value... t) {
-                    try {
-                        /*
-                         * This will always fail because the C code is passing a pointer rather than
-                         * a polyglot object and that's expected here.
-                         */
-                        return t[0].getMember("price");
-                    } catch (UnsupportedOperationException e) {
-                        return -1;
-                    }
-                }
-            }, "getPrice");
-            Assert.assertEquals(-1, runner.run());
-        }
-    }
-
-    @Test
-    public void testInteropUndefinedToIntNull() {
-        try (Runner runner = new Runner("interopUndefinedToIntConv.c")) {
-            runner.export(new ProxyExecutable() {
-                @Override
-                public Object execute(Value... t) {
-                    return new NullValue();
-                }
-            }, "getPrice");
-            try {
-                runner.run();
-            } catch (PolyglotException e) {
-                Assert.assertEquals(e.getMessage(), "Polyglot object null cannot be converted to i32");
-            }
         }
     }
 
@@ -1547,7 +1489,7 @@ public class LLVMInteropTest {
     }
 
     private static final Path TEST_DIR = new File(TestOptions.TEST_SUITE_PATH, "interop").toPath();
-    public static final String FILENAME = "O1." + NFIContextExtension.getNativeLibrarySuffix();
+    public static final String FILENAME = "O0_MEM2REG." + NFIContextExtension.getNativeLibrarySuffix();
 
     protected static Map<String, String> getSulongTestLibContextOptions() {
         Map<String, String> map = new HashMap<>();
@@ -1567,7 +1509,7 @@ public class LLVMInteropTest {
         }
 
         Runner(String testName, Map<String, String> options) {
-            this.testName = testName + TEST_DIR_EXT;
+            this.testName = testName;
             this.context = Context.newBuilder().options(options).allowAllAccess(true).build();
             this.library = null;
         }
