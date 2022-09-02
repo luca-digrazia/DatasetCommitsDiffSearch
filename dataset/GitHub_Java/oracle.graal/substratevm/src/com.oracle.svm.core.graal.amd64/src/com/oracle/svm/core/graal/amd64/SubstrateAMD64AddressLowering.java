@@ -50,7 +50,8 @@ public class SubstrateAMD64AddressLowering extends AMD64CompressAddressLowering 
         assert SubstrateOptions.SpawnIsolates.getValue();
 
         CompressEncoding encoding = compression.getEncoding();
-        if (!Scale.isScaleShiftSupported(encoding.getShift())) {
+        Scale scale = Scale.fromShift(encoding.getShift());
+        if (scale == null) {
             return false;
         }
 
@@ -67,7 +68,6 @@ public class SubstrateAMD64AddressLowering extends AMD64CompressAddressLowering 
             }
         }
 
-        Scale scale = Scale.fromShift(encoding.getShift());
         addr.setBase(base);
         addr.setScale(scale);
         addr.setUncompressionScale(scale);
