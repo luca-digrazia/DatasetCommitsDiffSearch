@@ -34,10 +34,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.compiler.api.runtime.GraalJVMCICompiler;
+import org.graalvm.compiler.bytecode.Bytecode;
+import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecode;
+import org.graalvm.compiler.core.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugContext.Builder;
+import org.graalvm.compiler.debug.DebugContext.Description;
+import org.graalvm.compiler.debug.Indent;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.graph.NodeBitMap;
@@ -70,6 +78,9 @@ import org.graalvm.compiler.nodes.extended.ForeignCall;
 import org.graalvm.compiler.nodes.extended.GetClassNode;
 import org.graalvm.compiler.nodes.extended.RawLoadNode;
 import org.graalvm.compiler.nodes.extended.RawStoreNode;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.java.AtomicReadAndWriteNode;
 import org.graalvm.compiler.nodes.java.DynamicNewArrayNode;
 import org.graalvm.compiler.nodes.java.DynamicNewInstanceNode;
@@ -88,6 +99,8 @@ import org.graalvm.compiler.nodes.java.UnsafeCompareAndExchangeNode;
 import org.graalvm.compiler.nodes.java.UnsafeCompareAndSwapNode;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
+import org.graalvm.compiler.options.OptionValues;
+import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.graph.MergeableState;
 import org.graalvm.compiler.phases.graph.PostOrderNodeIterator;
@@ -100,6 +113,7 @@ import org.graalvm.compiler.word.WordCastNode;
 import org.graalvm.util.GuardedAnnotationAccess;
 
 import com.oracle.graal.pointsto.BigBang;
+import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.flow.LoadFieldTypeFlow.LoadInstanceFieldTypeFlow;
 import com.oracle.graal.pointsto.flow.LoadFieldTypeFlow.LoadStaticFieldTypeFlow;
 import com.oracle.graal.pointsto.flow.OffsetLoadTypeFlow.AtomicReadTypeFlow;
@@ -116,6 +130,7 @@ import com.oracle.graal.pointsto.flow.StoreFieldTypeFlow.StoreStaticFieldTypeFlo
 import com.oracle.graal.pointsto.flow.builder.TypeFlowBuilder;
 import com.oracle.graal.pointsto.flow.builder.TypeFlowGraphBuilder;
 import com.oracle.graal.pointsto.flow.context.BytecodeLocation;
+import com.oracle.graal.pointsto.infrastructure.GraphProvider.Purpose;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
@@ -123,12 +138,14 @@ import com.oracle.graal.pointsto.nodes.AnalysisArraysCopyOfNode;
 import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionLoadNode;
 import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionStoreNode;
 import com.oracle.graal.pointsto.nodes.ConvertUnknownValueNode;
+import com.oracle.graal.pointsto.phases.SubstrateIntrinsicGraphBuilder;
 import com.oracle.graal.pointsto.typestate.TypeState;
 
 import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.runtime.JVMCI;
 
 public class MethodTypeFlowBuilder {
 
@@ -158,32 +175,70 @@ public class MethodTypeFlowBuilder {
 
     @SuppressWarnings("try")
     private boolean parse() {
-        AnalysisParsedGraph analysisParsedGraph = method.ensureGraphParsed(bb, true);
+        OptionValues options = bb.getOptions();
+        GraalJVMCICompiler compiler = (GraalJVMCICompiler) JVMCI.getRuntime().getCompiler();
+        SnippetReflectionProvider snippetReflection = compiler.getGraalRuntime().getRequiredCapability(SnippetReflectionProvider.class);
+        // Use the real SnippetReflectionProvider for dumping
+        Description description = new Description(method, toString());
+        DebugContext debug = new Builder(options, new GraalDebugHandlersFactory(snippetReflection)).description(description).build();
+        try (Indent indent = debug.logAndIndent("parse graph %s", method)) {
 
-        if (analysisParsedGraph.isIntrinsic()) {
-            method.registerAsIntrinsicMethod();
+            boolean needParsing = false;
+            graph = method.buildGraph(debug, method, bb.getProviders(), Purpose.ANALYSIS);
+            if (graph == null) {
+                InvocationPlugin plugin = bb.getProviders().getGraphBuilderPlugins().getInvocationPlugins().lookupInvocation(method);
+                if (plugin != null && !plugin.inlineOnly()) {
+                    Bytecode code = new ResolvedJavaMethodBytecode(method);
+                    graph = new SubstrateIntrinsicGraphBuilder(options, debug, bb.getProviders(), code).buildGraph(plugin);
+                    if (graph != null) {
+                        method.registerAsIntrinsicMethod();
+                    }
+                }
+            }
+            if (graph == null) {
+                if (!method.hasBytecodes()) {
+                    return false;
+                }
+                needParsing = true;
+                graph = new StructuredGraph.Builder(options, debug).method(method).build();
+            }
+
+            try (DebugContext.Scope s = debug.scope("ClosedWorldAnalysis", graph, method, this)) {
+
+                // enable this logging to get log output in compilation passes
+                try (Indent indent2 = debug.logAndIndent("parse graph phases")) {
+
+                    if (needParsing) {
+                        GraphBuilderConfiguration config = GraphBuilderConfiguration.getDefault(bb.getProviders().getGraphBuilderPlugins()).withEagerResolving(true)
+                                        .withUnresolvedIsError(PointstoOptions.UnresolvedIsError.getValue(bb.getOptions()))
+                                        .withNodeSourcePosition(true).withBytecodeExceptionMode(BytecodeExceptionMode.CheckAll);
+
+                        /*
+                         * We want to always disable the liveness analysis, since we want the
+                         * points-to analysis to be as conservative as possible. The analysis
+                         * results can then be used with the liveness analysis enabled or disabled.
+                         */
+                        config = config.withRetainLocalVariables(true);
+
+                        bb.getHostVM().createGraphBuilderPhase(bb.getProviders(), config, OptimisticOptimizations.NONE, null).apply(graph);
+                    }
+                } catch (PermanentBailoutException ex) {
+                    bb.getUnsupportedFeatures().addMessage(method.format("%H.%n(%p)"), method, ex.getLocalizedMessage(), null, ex);
+                    return false;
+                }
+
+                // Register used types and fields before canonicalization can optimize them.
+                registerUsedElements(false);
+
+                CanonicalizerPhase.create().apply(graph, bb.getProviders());
+
+                // Do it again after canonicalization changed type checks and field accesses.
+                registerUsedElements(true);
+
+            } catch (Throwable e) {
+                throw debug.handle(e);
+            }
         }
-
-        graph = analysisParsedGraph.getGraph();
-        if (graph == null) {
-            return false;
-        }
-
-        /*
-         * Need a debug context for the current thread, parsing can have happened in a different
-         * thread.
-         */
-        DebugContext.Description description = new DebugContext.Description(method, method.getClass().getSimpleName() + ":" + method.getId());
-        graph.resetDebug(new DebugContext.Builder(bb.getOptions(), new GraalDebugHandlersFactory(bb.getProviders().getSnippetReflection())).description(description).build());
-
-        // Register used types and fields before canonicalization can optimize them.
-        registerUsedElements(false);
-
-        CanonicalizerPhase.create().apply(graph, bb.getProviders());
-
-        // Do it again after canonicalization changed type checks and field accesses.
-        registerUsedElements(true);
-
         return true;
     }
 
@@ -303,7 +358,7 @@ public class MethodTypeFlowBuilder {
             return;
         }
 
-        bb.getHostVM().methodBeforeTypeFlowCreationHook(bb, method, graph);
+        bb.getHostVM().checkMethod(bb, method, graph);
 
         processedNodes = new NodeBitMap(graph);
 
@@ -1236,9 +1291,7 @@ public class MethodTypeFlowBuilder {
             } else if (n instanceof InvokeNode || n instanceof InvokeWithExceptionNode) {
                 Invoke invoke = (Invoke) n;
                 if (invoke.callTarget() instanceof MethodCallTargetNode) {
-                    guarantee(invoke.stateAfter().outerFrameState() == null,
-                                    "Outer FrameState of %s must be null, but was %s. A non-null outer FrameState indicates that a method inlining has happened, but inlining should only happen after analysis.",
-                                    invoke.stateAfter(), invoke.stateAfter().outerFrameState());
+                    guarantee(invoke.stateAfter().outerFrameState() == null, "Outer FrameState must be null.");
                     MethodCallTargetNode target = (MethodCallTargetNode) invoke.callTarget();
 
                     // check if the call is allowed
