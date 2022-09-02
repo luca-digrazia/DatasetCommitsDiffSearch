@@ -91,6 +91,8 @@ import sun.misc.Unsafe;
 @ExportLibrary(InteropLibrary.class)
 public final class StaticObject implements TruffleObject {
 
+    private static final ZoneId UTC = ZoneId.of("UTC");
+
     private static final Unsafe UNSAFE = UnsafeAccess.get();
 
     public static final StaticObject[] EMPTY_ARRAY = new StaticObject[0];
@@ -1228,7 +1230,7 @@ public final class StaticObject implements TruffleObject {
                 return zoneId.asTimeZone(error);
             } else if (instanceOf(this, meta.java_time_Instant) ||
                             instanceOf(this, meta.java_util_Date)) {
-                return ZoneId.of("UTC");
+                return UTC;
             }
         }
         error.enter();
