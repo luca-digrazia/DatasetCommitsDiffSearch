@@ -30,8 +30,9 @@ import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -416,12 +417,12 @@ public final class GraalServices {
         return Math.fma(a, b, c);
     }
 
-    static final Method virtualObjectGetMethod;
+    static final MethodHandle virtualObjectGetMethod;
 
     static {
-        Method virtualObjectGet = null;
+        MethodHandle virtualObjectGet = null;
         try {
-            virtualObjectGet = VirtualObject.class.getDeclaredMethod("get", ResolvedJavaType.class, Integer.TYPE, Boolean.TYPE);
+            virtualObjectGet = MethodHandles.lookup().unreflect(VirtualObject.class.getDeclaredMethod("get", ResolvedJavaType.class, Integer.TYPE, Boolean.TYPE));
         } catch (Exception e) {
             // VirtualObject.get that understands autobox isn't available
         }
@@ -431,9 +432,9 @@ public final class GraalServices {
     public static VirtualObject createVirtualObject(ResolvedJavaType type, int id, boolean isAutoBox) {
         if (virtualObjectGetMethod != null) {
             try {
-                return (VirtualObject) virtualObjectGetMethod.invoke(null, type, id, isAutoBox);
+                return (VirtualObject) virtualObjectGetMethod.invoke(type, id, isAutoBox);
             } catch (Throwable throwable) {
-                throw new InternalError(throwable);
+                throw new InternalError();
             }
         }
         return VirtualObject.get(type, id);
