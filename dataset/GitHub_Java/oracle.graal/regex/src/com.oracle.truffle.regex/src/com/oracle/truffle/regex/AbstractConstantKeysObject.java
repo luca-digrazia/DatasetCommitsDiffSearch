@@ -46,7 +46,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.profiles.ValueProfile;
 import com.oracle.truffle.regex.util.TruffleReadOnlyKeysArray;
 
 @ExportLibrary(InteropLibrary.class)
@@ -97,22 +96,19 @@ public abstract class AbstractConstantKeysObject extends AbstractRegexObject {
 
         @Specialization(guards = "symbol == cachedSymbol", limit = "8")
         public static Object readIdentity(AbstractConstantKeysObject receiver, @SuppressWarnings("unused") String symbol,
-                        @Cached("symbol") String cachedSymbol,
-                        @Cached("createClassProfile()") ValueProfile classProfile) throws UnknownIdentifierException {
-            return read(receiver, cachedSymbol, classProfile);
+                        @Cached("symbol") String cachedSymbol) throws UnknownIdentifierException {
+            return read(receiver, cachedSymbol);
         }
 
         @Specialization(guards = "symbol.equals(cachedSymbol)", limit = "8", replaces = "readIdentity")
         public static Object readEquals(AbstractConstantKeysObject receiver, @SuppressWarnings("unused") String symbol,
-                        @Cached("symbol") String cachedSymbol,
-                        @Cached("createClassProfile()") ValueProfile classProfile) throws UnknownIdentifierException {
-            return read(receiver, cachedSymbol, classProfile);
+                        @Cached("symbol") String cachedSymbol) throws UnknownIdentifierException {
+            return read(receiver, cachedSymbol);
         }
 
         @Specialization(replaces = "readEquals")
-        public static Object read(AbstractConstantKeysObject receiver, String symbol,
-                        @Cached("createClassProfile()") ValueProfile classProfile) throws UnknownIdentifierException {
-            return classProfile.profile(receiver).readMemberImpl(symbol);
+        public static Object read(AbstractConstantKeysObject receiver, String symbol) throws UnknownIdentifierException {
+            return receiver.readMemberImpl(symbol);
         }
     }
 }

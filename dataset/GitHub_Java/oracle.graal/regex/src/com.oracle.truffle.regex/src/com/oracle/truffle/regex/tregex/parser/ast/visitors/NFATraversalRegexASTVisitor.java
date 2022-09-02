@@ -66,7 +66,7 @@ import com.oracle.truffle.regex.tregex.parser.ast.RegexASTNode;
 import com.oracle.truffle.regex.tregex.parser.ast.Sequence;
 import com.oracle.truffle.regex.tregex.parser.ast.Term;
 import com.oracle.truffle.regex.tregex.parser.flavors.RubyFlavor;
-import com.oracle.truffle.regex.util.TBitSet;
+import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 /**
  * Special AST visitor that will find all immediate successors of a given Term when the AST is seen
@@ -136,7 +136,7 @@ public abstract class NFATraversalRegexASTVisitor {
      * traverse the inner loop, {@code (|[a])*}, without hitting any CharacterClass node by choosing
      * the first alternative and we will then arrive back at the outer loop. There, we detect an
      * infinite loop, which causes us to backtrack and choose the second alternative in the inner
-     * loop, leading us to the CharacterClass node {@code [a]}.
+     * loop, leading us to the CharacterClass node [a].
      */
     private final StateSet<RegexAST, Group> insideLoops;
     /**
@@ -163,13 +163,13 @@ public abstract class NFATraversalRegexASTVisitor {
     private final int[] nodeVisitCount;
     private int deduplicatedTargets = 0;
 
-    private final TBitSet captureGroupUpdates;
-    private final TBitSet captureGroupClears;
+    private final CompilationFinalBitSet captureGroupUpdates;
+    private final CompilationFinalBitSet captureGroupClears;
 
     private final ObjectArrayBuffer<QuantifierGuard> quantifierGuards = new ObjectArrayBuffer<>();
     private QuantifierGuard[] quantifierGuardsResult = null;
-    private final TBitSet quantifierGuardsLoop;
-    private final TBitSet quantifierGuardsExited;
+    private final CompilationFinalBitSet quantifierGuardsLoop;
+    private final CompilationFinalBitSet quantifierGuardsExited;
 
     protected NFATraversalRegexASTVisitor(RegexAST ast) {
         this.ast = ast;
@@ -179,10 +179,10 @@ public abstract class NFATraversalRegexASTVisitor {
         this.lookAroundsOnPath = StateSet.create(ast);
         this.dollarsOnPath = StateSet.create(ast);
         this.nodeVisitCount = new int[ast.getNumberOfStates()];
-        this.captureGroupUpdates = new TBitSet(ast.getNumberOfCaptureGroups() * 2);
-        this.captureGroupClears = new TBitSet(ast.getNumberOfCaptureGroups() * 2);
-        this.quantifierGuardsLoop = new TBitSet(ast.getQuantifierCount().getCount());
-        this.quantifierGuardsExited = new TBitSet(ast.getQuantifierCount().getCount());
+        this.captureGroupUpdates = new CompilationFinalBitSet(ast.getNumberOfCaptureGroups() * 2);
+        this.captureGroupClears = new CompilationFinalBitSet(ast.getNumberOfCaptureGroups() * 2);
+        this.quantifierGuardsLoop = new CompilationFinalBitSet(ast.getQuantifierCount().getCount());
+        this.quantifierGuardsExited = new CompilationFinalBitSet(ast.getQuantifierCount().getCount());
     }
 
     public Set<LookBehindAssertion> getTraversableLookBehindAssertions() {

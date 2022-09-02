@@ -55,7 +55,7 @@ import com.oracle.truffle.regex.tregex.nfa.PureNFAMap;
 import com.oracle.truffle.regex.tregex.nfa.PureNFAState;
 import com.oracle.truffle.regex.tregex.nfa.PureNFATransition;
 import com.oracle.truffle.regex.tregex.nfa.QuantifierGuard;
-import com.oracle.truffle.regex.tregex.nodes.TRegexExecNode;
+import com.oracle.truffle.regex.tregex.nodes.TRegexExecRootNode;
 import com.oracle.truffle.regex.tregex.nodes.TRegexExecutorLocals;
 import com.oracle.truffle.regex.tregex.nodes.TRegexExecutorNode;
 import com.oracle.truffle.regex.tregex.nodes.input.InputIndexOfStringNode;
@@ -127,7 +127,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
         this.maxNTransitions = maxTransitions;
     }
 
-    public void initialize(TRegexExecNode rootNode) {
+    public void initialize(TRegexExecRootNode rootNode) {
         for (TRegexExecutorNode executor : lookAroundExecutors) {
             executor.setRoot(rootNode);
             insert(executor);
@@ -636,7 +636,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
         assert !(ignoreCase || loneSurrogates);
         if (regionMatchesNode == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            regionMatchesNode = insert(InputRegionMatchesNode.create());
+            regionMatchesNode = InputRegionMatchesNode.create();
         }
         int inputLength = locals.getMaxIndex();
         int backrefLength = backrefEnd - backrefStart;
@@ -687,7 +687,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
     private int findInnerLiteral(TRegexBacktrackingNFAExecutorLocals locals) {
         if (indexOfNode == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            indexOfNode = insert(InputIndexOfStringNode.create());
+            indexOfNode = InputIndexOfStringNode.create();
         }
         return indexOfNode.execute(locals.getInput(), locals.getIndex(), locals.getMaxIndex(), innerLiteral.getLiteral().content(), innerLiteral.getMaskContent());
     }

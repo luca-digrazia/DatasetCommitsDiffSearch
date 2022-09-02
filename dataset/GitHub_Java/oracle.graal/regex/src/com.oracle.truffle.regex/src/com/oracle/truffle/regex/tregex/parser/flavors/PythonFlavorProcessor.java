@@ -51,7 +51,7 @@ import java.util.function.Predicate;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.regex.AbstractRegexObject;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
 import com.oracle.truffle.regex.UnsupportedRegexException;
@@ -61,7 +61,7 @@ import com.oracle.truffle.regex.charset.Range;
 import com.oracle.truffle.regex.charset.UnicodeProperties;
 import com.oracle.truffle.regex.tregex.parser.CaseFoldTable;
 import com.oracle.truffle.regex.tregex.string.Encodings;
-import com.oracle.truffle.regex.util.TBitSet;
+import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 /**
  * Implements the parsing and translating of Python regular expressions to ECMAScript regular
@@ -78,11 +78,11 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
      * Characters that are considered special in ECMAScript regexes. To match these characters, they
      * need to be escaped using a backslash.
      */
-    private static final TBitSet SYNTAX_CHARACTERS = TBitSet.valueOf('^', '$', '\\', '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|');
+    private static final CompilationFinalBitSet SYNTAX_CHARACTERS = CompilationFinalBitSet.valueOf('^', '$', '\\', '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|');
     /**
      * Characters that are considered special in ECMAScript regex character classes.
      */
-    private static final TBitSet CHAR_CLASS_SYNTAX_CHARACTERS = TBitSet.valueOf('\\', ']', '-', '^');
+    private static final CompilationFinalBitSet CHAR_CLASS_SYNTAX_CHARACTERS = CompilationFinalBitSet.valueOf('\\', ']', '-', '^');
 
     /**
      * Maps Python's predefined Unicode character classes (d, D, s, S, w, W) to equivalent
@@ -235,7 +235,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
     /**
      * Characters considered as whitespace in Python's regex verbose mode.
      */
-    private static final TBitSet WHITESPACE = TBitSet.valueOf(' ', '\t', '\n', '\r', '\u000b', '\f');
+    private static final CompilationFinalBitSet WHITESPACE = CompilationFinalBitSet.valueOf(' ', '\t', '\n', '\r', '\u000b', '\f');
 
     /**
      * The (slightly modified) version of the XID_Start Unicode property used to check names of
@@ -328,7 +328,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         this.inSource = source;
         this.inPattern = source.getPattern();
         this.inFlags = source.getFlags();
-        this.mode = mode == PythonREMode.None ? PythonREMode.fromEncoding(source.getEncoding()) : mode;
+        this.mode = mode;
         this.position = 0;
         this.outPattern = new StringBuilder(inPattern.length());
         this.globalFlags = new PythonFlags(inFlags);
@@ -352,7 +352,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
     }
 
     @Override
-    public AbstractRegexObject getFlags() {
+    public TruffleObject getFlags() {
         return getGlobalFlags();
     }
 
@@ -383,8 +383,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         // actually want to match on the individual code points of the Unicode string. In 'bytes'
         // patterns, all characters are in the range 0-255 and so the Unicode flag does not
         // interfere with the matching (no surrogates).
-        return new RegexSource(outPattern.toString(), getGlobalFlags().isSticky() ? "suy" : "su",
-                        inSource.getOptions().withEncoding(mode == PythonREMode.Bytes ? Encodings.LATIN_1 : Encodings.UTF_16), inSource.getSource());
+        return new RegexSource(outPattern.toString(), getGlobalFlags().isSticky() ? "suy" : "su", mode == PythonREMode.Bytes ? Encodings.LATIN_1 : Encodings.UTF_16);
     }
 
     private PythonFlags getLocalFlags() {
@@ -508,7 +507,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
      */
     private void emitCharNoCasing(int codepoint, boolean inCharClass) {
         if (!silent) {
-            TBitSet syntaxChars = inCharClass ? CHAR_CLASS_SYNTAX_CHARACTERS : SYNTAX_CHARACTERS;
+            CompilationFinalBitSet syntaxChars = inCharClass ? CHAR_CLASS_SYNTAX_CHARACTERS : SYNTAX_CHARACTERS;
             if (syntaxChars.get(codepoint)) {
                 emitSnippet("\\");
             }
@@ -630,7 +629,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
     }
 
     private RegexSyntaxException syntaxError(String message, int atPosition) {
-        return RegexSyntaxException.createPattern(inSource, message, atPosition);
+        return new RegexSyntaxException(inSource, message, atPosition);
     }
 
     // Character predicates
@@ -655,7 +654,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
 
     private void parse() {
         PythonFlags startFlags;
-        globalFlags = globalFlags.fixFlags(inSource, mode);
+        globalFlags = globalFlags.fixFlags(mode);
 
         // The pattern can contain inline switches for global flags. However, these inline switches
         // need to be taken into account when processing whatever came before them too. Therefore,
@@ -665,7 +664,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
 
             disjunction();
 
-            globalFlags = globalFlags.fixFlags(inSource, mode);
+            globalFlags = globalFlags.fixFlags(mode);
         } while (!globalFlags.equals(startFlags));
 
         if (!atEnd()) {

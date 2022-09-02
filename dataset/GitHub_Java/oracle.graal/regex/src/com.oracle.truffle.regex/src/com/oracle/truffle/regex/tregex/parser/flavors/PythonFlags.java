@@ -42,19 +42,16 @@ package com.oracle.truffle.regex.tregex.parser.flavors;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.regex.AbstractConstantKeysObject;
-import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
+import com.oracle.truffle.regex.tregex.util.Exceptions;
 import com.oracle.truffle.regex.util.TruffleReadOnlyKeysArray;
 
 /**
  * An immutable representation of a set of Python regular expression flags.
  */
-@ExportLibrary(InteropLibrary.class)
 public final class PythonFlags extends AbstractConstantKeysObject {
 
     private static final TruffleReadOnlyKeysArray KEYS = new TruffleReadOnlyKeysArray("ASCII", "DOTALL", "IGNORECASE", "LOCALE", "MULTILINE", "TEMPLATE", "UNICODE", "VERBOSE");
@@ -148,14 +145,14 @@ public final class PythonFlags extends AbstractConstantKeysObject {
      * chosen regular expression mode. If a string pattern is used, ensures that the unicode flag is
      * set by default.
      */
-    public PythonFlags fixFlags(RegexSource source, PythonREMode mode) {
+    public PythonFlags fixFlags(PythonREMode mode) {
         switch (mode) {
             case Str:
                 if (hasFlag('L')) {
-                    throw RegexSyntaxException.createFlags(source, "cannot use LOCALE flag with a str pattern");
+                    throw new RegexSyntaxException("cannot use LOCALE flag with a str pattern");
                 }
                 if (hasFlag('a') && hasFlag('u')) {
-                    throw RegexSyntaxException.createFlags(source, "ASCII and UNICODE flags are incompatible");
+                    throw new RegexSyntaxException("ASCII and UNICODE flags are incompatible");
                 }
                 if (!hasFlag('a')) {
                     return addFlag('u');
@@ -164,14 +161,14 @@ public final class PythonFlags extends AbstractConstantKeysObject {
                 }
             case Bytes:
                 if (hasFlag('u')) {
-                    throw RegexSyntaxException.createFlags(source, "cannot use UNICODE flag with a bytes pattern");
+                    throw new RegexSyntaxException("cannot use UNICODE flag with a bytes pattern");
                 }
                 if (hasFlag('a') && hasFlag('L')) {
-                    throw RegexSyntaxException.createFlags(source, "ASCII and LOCALE flags are incompatible");
+                    throw new RegexSyntaxException("ASCII and LOCALE flags are incompatible");
                 }
                 return this;
             default:
-                throw CompilerDirectives.shouldNotReachHere();
+                throw Exceptions.shouldNotReachHere();
         }
     }
 
@@ -225,9 +222,8 @@ public final class PythonFlags extends AbstractConstantKeysObject {
         return out.toString();
     }
 
-    @TruffleBoundary
     @ExportMessage
-    @Override
+    @TruffleBoundary
     public Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
         return "TRegexPythonFlags{flags=" + toString() + '}';
     }
