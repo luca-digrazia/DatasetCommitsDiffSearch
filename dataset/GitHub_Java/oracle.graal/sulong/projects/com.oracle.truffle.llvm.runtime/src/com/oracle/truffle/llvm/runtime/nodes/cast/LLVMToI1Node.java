@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,12 +30,17 @@
 package com.oracle.truffle.llvm.runtime.nodes.cast;
 
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
@@ -45,10 +50,13 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToI1Node extends LLVMExpressionNode {
 
-    @Specialization(guards = {"isForeign(from)"})
+    @Specialization(guards = {"isForeignNumber(from, foreigns, interop)"})
+    @GenerateAOT.Exclude
     protected boolean doManagedPointer(LLVMManagedPointer from,
-                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM) {
-        return (boolean) toLLVM.executeWithTarget(from.getObject());
+                    @Cached("createForeignToLLVM()") ForeignToLLVM toLLVM,
+                    @CachedLibrary(limit = "1") LLVMAsForeignLibrary foreigns,
+                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") InteropLibrary interop) {
+        return (boolean) toLLVM.executeWithTarget(foreigns.asForeign(from.getObject()));
     }
 
     @Specialization
@@ -58,57 +66,57 @@ public abstract class LLVMToI1Node extends LLVMExpressionNode {
     }
 
     protected ForeignToLLVM createForeignToLLVM() {
-        return getNodeFactory().createForeignToLLVM(ForeignToLLVMType.I1);
+        return CommonNodeFactory.createForeignToLLVM(ForeignToLLVMType.I1);
     }
 
-    protected boolean isForeign(LLVMManagedPointer pointer) {
-        return pointer.getOffset() == 0 && notLLVM(pointer);
+    protected static boolean isForeignNumber(LLVMManagedPointer pointer, LLVMAsForeignLibrary foreigns, InteropLibrary interop) {
+        return foreigns.isForeign(pointer) && interop.isNumber(pointer.getObject());
     }
 
     public abstract static class LLVMSignedCastToI1Node extends LLVMToI1Node {
         @Specialization
-        protected boolean doI1(boolean from) {
+        protected boolean doBoolean(boolean from) {
             return from;
         }
 
         @Specialization
-        protected boolean doI1(byte from) {
+        protected boolean doByte(byte from) {
             return (from & 1) != 0;
         }
 
         @Specialization
-        protected boolean doI1(short from) {
+        protected boolean doShort(short from) {
             return (from & 1) != 0;
         }
 
         @Specialization
-        protected boolean doI1(int from) {
+        protected boolean doInt(int from) {
             return (from & 1) != 0;
         }
 
         @Specialization
-        protected boolean doI1(long from) {
+        protected boolean doLong(long from) {
             return (from & 1) != 0;
         }
 
         @Specialization
-        protected boolean doI1(LLVMIVarBit from) {
-            return doI1(from.getByteValue());
+        protected boolean doLLVMIVarBit(LLVMIVarBit from) {
+            return doByte(from.getByteValue());
         }
 
         @Specialization
-        protected boolean doI1(float from) {
-            return from != 0;
+        protected boolean doFloat(float from) {
+            return ((int) from & 1) != 0;
         }
 
         @Specialization
-        protected boolean doI1(double from) {
-            return from != 0;
+        protected boolean doDouble(double from) {
+            return ((long) from & 1) != 0;
         }
 
         @Specialization
         protected boolean doLLVM80BitFloat(LLVM80BitFloat from) {
-            return from.getLongValue() != 0;
+            return (from.getLongValue() & 1) != 0;
         }
     }
 

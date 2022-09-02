@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,15 +34,19 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
+import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
+import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
@@ -58,6 +62,7 @@ import com.oracle.truffle.llvm.runtime.types.FunctionType;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
 import com.oracle.truffle.llvm.runtime.types.StructureType;
 import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
 public abstract class LLVMStart extends LLVMIntrinsic {
 
@@ -72,11 +77,17 @@ public abstract class LLVMStart extends LLVMIntrinsic {
     @NodeChild(type = LLVMExpressionNode.class)
     public abstract static class LLVMLangStart extends LLVMStart {
 
+        /**
+         * @param stack @NodeChild
+         * @param main @NodeChild
+         * @param argc @NodeChild
+         * @param argv @NodeChild
+         * @see LLVMLangStart
+         */
         @Specialization
-        @SuppressWarnings("unused")
-        protected long doOp(StackPointer stackPointer, LLVMPointer main, long argc, LLVMPointer argv,
+        protected long doOp(LLVMStack stack, LLVMPointer main, long argc, LLVMPointer argv,
                         @Cached("createClosureDispatchNode()") LLVMClosureDispatchNode dispatchNode) {
-            dispatchNode.executeDispatch(main, new Object[]{stackPointer});
+            dispatchNode.executeDispatch(main, new Object[]{stack});
             return 0;
         }
     }
@@ -89,28 +100,43 @@ public abstract class LLVMStart extends LLVMIntrinsic {
     public abstract static class LLVMLangStartInternal extends LLVMStart {
 
         @TruffleBoundary
-        protected LangStartVtableType createLangStartVtable(Type vtableType) {
+        protected LangStartVtableType createLangStartVtable(LLVMGlobal vtableGlobal) throws TypeOverflowException {
+            Type vtableType = vtableGlobal.getPointeeType();
             LLVMFunctionStartNode startNode = (LLVMFunctionStartNode) getRootNode();
             DataLayout dataSpecConverter = startNode.getDatalayout();
             return LangStartVtableType.create(dataSpecConverter, vtableType);
         }
 
+        /**
+         * @param stack @NodeChild
+         * @param mainPointer @NodeChild
+         * @param vtable @NodeChild
+         * @param argc @NodeChild
+         * @param argv @NodeChild
+         * @see LLVMLangStartInternal
+         */
         @Specialization
-        @SuppressWarnings("unused")
-        protected long doOp(StackPointer stackPointer, LLVMNativePointer mainPointer, LLVMNativePointer vtable, long argc, LLVMPointer argv,
+        protected long doOp(LLVMStack stack, LLVMNativePointer mainPointer, LLVMNativePointer vtable, long argc, LLVMPointer argv,
                         @CachedContext(LLVMLanguage.class) LLVMContext ctx,
-                        @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
+                        @CachedLanguage LLVMLanguage language,
+                        @Cached("createToNativeWithTarget()") @SuppressWarnings("unused") LLVMToNativeNode toNative,
                         @Cached("createClosureDispatchNode()") LLVMClosureDispatchNode fnDispatchNode,
                         @Cached("createClosureDispatchNode()") LLVMClosureDispatchNode dropInPlaceDispatchNode) {
-            LLVMMemory memory = getLLVMMemory();
+            LLVMMemory memory = language.getLLVMMemory();
             LLVMGlobal vtableGlobal = ctx.findGlobal(vtable);
-            LangStartVtableType langStartVtable = createLangStartVtable(vtableGlobal.getPointeeType());
-            LLVMNativePointer fn = readFn(memory, vtable, langStartVtable);
-            LLVMNativePointer dropInPlace = readDropInPlace(memory, vtable, langStartVtable);
-            LLVMNativePointer main = coerceMainForFn(memory, langStartVtable, mainPointer);
-            Integer exitCode = (Integer) fnDispatchNode.executeDispatch(fn, new Object[]{stackPointer, main});
-            dropInPlaceDispatchNode.executeDispatch(dropInPlace, new Object[]{stackPointer, mainPointer});
-            return exitCode.longValue();
+            assert vtableGlobal != null;
+            try {
+                LangStartVtableType langStartVtable = createLangStartVtable(vtableGlobal);
+                LLVMNativePointer fn = readFn(memory, vtable, langStartVtable);
+                LLVMNativePointer dropInPlace = readDropInPlace(memory, vtable, langStartVtable);
+                LLVMNativePointer main = coerceMainForFn(memory, langStartVtable, mainPointer);
+                Integer exitCode = (Integer) fnDispatchNode.executeDispatch(fn, new Object[]{stack, main});
+                dropInPlaceDispatchNode.executeDispatch(dropInPlace, new Object[]{stack, mainPointer});
+                return exitCode.longValue();
+            } catch (TypeOverflowException e) {
+                CompilerDirectives.transferToInterpreter();
+                throw new LLVMUnsupportedException(this, UnsupportedReason.UNSUPPORTED_VALUE_RANGE, e);
+            }
         }
 
         protected LLVMNativePointer readFn(LLVMMemory memory, LLVMNativePointer vtablePointer, LangStartVtableType langStartVtable) {
@@ -129,29 +155,29 @@ public abstract class LLVMStart extends LLVMIntrinsic {
             private final long offsetFn;
             private final boolean fnExpectsCoercedMain;
 
-            private LangStartVtableType(DataLayout datalayout, StructureType type, FunctionType fnType) {
+            private LangStartVtableType(DataLayout datalayout, StructureType type, FunctionType fnType) throws TypeOverflowException {
                 this.offsetFn = type.getOffsetOf(5, datalayout);
-                this.fnExpectsCoercedMain = !(((PointerType) fnType.getArgumentTypes()[0]).getPointeeType() instanceof PointerType);
+                this.fnExpectsCoercedMain = !(((PointerType) fnType.getArgumentType(0)).getPointeeType() instanceof PointerType);
             }
 
             long readFn(LLVMMemory memory, long address) {
-                return memory.getPointer(address + offsetFn).asNative();
+                return memory.getPointer(null, address + offsetFn).asNative();
             }
 
             long coerceMainForFn(LLVMMemory memory, long mainAddress) {
                 if (fnExpectsCoercedMain) {
-                    return memory.getPointer(mainAddress).asNative();
+                    return memory.getPointer(null, mainAddress).asNative();
                 }
                 return mainAddress;
             }
 
             @SuppressWarnings("static-method")
             long readDropInPlace(LLVMMemory memory, long address) {
-                return memory.getPointer(address).asNative();
+                return memory.getPointer(null, address).asNative();
             }
 
-            static LangStartVtableType create(DataLayout datalayout, Type vtableType) {
-                FunctionType fnType = (FunctionType) ((PointerType) ((StructureType) vtableType).getElementTypes()[5]).getPointeeType();
+            static LangStartVtableType create(DataLayout datalayout, Type vtableType) throws TypeOverflowException {
+                FunctionType fnType = (FunctionType) ((PointerType) ((StructureType) vtableType).getElementType(5)).getPointeeType();
                 return new LangStartVtableType(datalayout, (StructureType) vtableType, fnType);
             }
 
@@ -162,6 +188,7 @@ public abstract class LLVMStart extends LLVMIntrinsic {
         public abstract Object executeDispatch(Object closure, Object[] arguments);
 
         @Specialization(guards = "pointer.asNative() == cachedAddress")
+        @GenerateAOT.Exclude
         protected Object doHandleCached(@SuppressWarnings("unused") LLVMNativePointer pointer, Object[] arguments,
                         @Cached("pointer.asNative()") @SuppressWarnings("unused") long cachedAddress,
                         @Cached("getFunctionDescriptor(pointer)") LLVMFunctionDescriptor cachedDescriptor,
@@ -170,6 +197,7 @@ public abstract class LLVMStart extends LLVMIntrinsic {
         }
 
         @Specialization(guards = {"isSameObject(pointer.getObject(), cachedDescriptor)", "cachedDescriptor != null", "pointer.getOffset() == 0"})
+        @GenerateAOT.Exclude
         protected Object doDirectCached(@SuppressWarnings("unused") LLVMManagedPointer pointer, Object[] arguments,
                         @Cached("asFunctionDescriptor(pointer.getObject())") LLVMFunctionDescriptor cachedDescriptor,
                         @Cached("getDispatchNode(cachedDescriptor)") LLVMDispatchNode dispatchNode) {
@@ -177,6 +205,7 @@ public abstract class LLVMStart extends LLVMIntrinsic {
         }
 
         @Specialization
+        @GenerateAOT.Exclude
         protected Object doOther(@SuppressWarnings("unused") LLVMManagedPointer pointer, @SuppressWarnings("unused") Object[] arguments) {
             // based on the usage of this node, we can safely assume that the inline cache is always
             // big enough - so we don't have a fallback implementation
@@ -191,7 +220,7 @@ public abstract class LLVMStart extends LLVMIntrinsic {
 
         @TruffleBoundary
         protected LLVMDispatchNode getDispatchNode(LLVMFunctionDescriptor fd) {
-            return LLVMDispatchNodeGen.create(fd.getType());
+            return LLVMDispatchNodeGen.create(fd.getLLVMFunction().getType(), fd.getLLVMFunction());
         }
     }
 }

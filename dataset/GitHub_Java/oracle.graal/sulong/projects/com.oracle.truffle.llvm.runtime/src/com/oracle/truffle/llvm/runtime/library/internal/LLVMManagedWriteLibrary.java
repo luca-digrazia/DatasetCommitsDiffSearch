@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,16 +29,20 @@
  */
 package com.oracle.truffle.llvm.runtime.library.internal;
 
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
+import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 /**
  * Library for container objects that behave like raw memory that can be written.
  */
 @GenerateLibrary
+@GenerateAOT
+@DefaultExport(LLVMManagedAccessDefaults.VirtualAlloc.class)
 @DefaultExport(LLVMManagedAccessDefaults.FallbackWrite.class)
 public abstract class LLVMManagedWriteLibrary extends Library {
 
@@ -93,5 +97,11 @@ public abstract class LLVMManagedWriteLibrary extends Library {
      */
     public void writePointer(Object receiver, long offset, LLVMPointer value) {
         writeGenericI64(receiver, offset, value);
+    }
+
+    private static final LibraryFactory<LLVMManagedWriteLibrary> FACTORY = LibraryFactory.resolve(LLVMManagedWriteLibrary.class);
+
+    public static LibraryFactory<LLVMManagedWriteLibrary> getFactory() {
+        return FACTORY;
     }
 }

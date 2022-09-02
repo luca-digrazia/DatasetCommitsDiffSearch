@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -75,10 +74,9 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
             return doDoubleManaged(getReceiver.execute(addr), offset, nativeRead);
         }
 
-        @Specialization(limit = "3")
-        @GenerateAOT.Exclude
+        @Specialization
         protected static double doDoubleManaged(LLVMManagedPointer addr, long offset,
-                        @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
+                        @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
             return nativeRead.readDouble(addr.getObject(), addr.getOffset() + offset);
         }
     }
@@ -97,10 +95,9 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
         return doDoubleManaged(getReceiver.execute(addr), nativeRead);
     }
 
-    @Specialization(limit = "3")
-    @GenerateAOT.Exclude
+    @Specialization
     protected static double doDoubleManaged(LLVMManagedPointer addr,
-                    @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
+                    @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
         return nativeRead.readDouble(addr.getObject(), addr.getOffset());
     }
 }

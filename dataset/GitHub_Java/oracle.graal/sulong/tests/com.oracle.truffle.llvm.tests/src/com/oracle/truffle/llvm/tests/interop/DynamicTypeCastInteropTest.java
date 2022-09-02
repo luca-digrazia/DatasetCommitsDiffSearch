@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -50,29 +50,25 @@ import com.oracle.truffle.llvm.tests.interop.values.ArrayObject;
 
 public class DynamicTypeCastInteropTest extends InteropTestBase {
 
-    private static TruffleObject testLibraryInternal;
+    private static Object testLibraryInternal;
     private static Value testLibrary;
     private static Value test;
 
     @BeforeClass
     public static void loadTestBitcode() {
-        testLibraryInternal = InteropTestBase.loadTestBitcodeInternal("polyglotRegisterDynamicCast");
+        testLibraryInternal = loadTestBitcodeInternal("polyglotRegisterDynamicCast.c");
         testLibrary = runWithPolyglot.getPolyglotContext().asValue(testLibraryInternal);
         test = testLibrary.getMember("test_dynamic_cast");
     }
 
     @ExportLibrary(InteropLibrary.class)
-    @ExportLibrary(NativeTypeLibrary.class)
+    @ExportLibrary(value = NativeTypeLibrary.class, useForAOT = false)
     static class DynamicStructlikeObject implements TruffleObject {
         final HashMap<String, Object> map = new HashMap<>();
 
         DynamicStructlikeObject(HashMap<String, Object> map2) {
             map.putAll(map2);
             map.put("base", this);
-        }
-
-        public static boolean isInstance(TruffleObject obj) {
-            return obj instanceof DynamicStructlikeObject;
         }
 
         @ExportMessage

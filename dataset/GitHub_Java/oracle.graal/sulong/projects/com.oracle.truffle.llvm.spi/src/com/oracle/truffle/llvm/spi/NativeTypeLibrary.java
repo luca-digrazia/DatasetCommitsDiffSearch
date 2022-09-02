@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,23 +29,33 @@
  */
 package com.oracle.truffle.llvm.spi;
 
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
-import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
+import com.oracle.truffle.api.library.LibraryFactory;
 
 /**
  * Library for objects that want to simulate the behavior of native memory. If an object implements
  * this interface, raw memory access to this object will simulate the layout of the given type.
  */
 @GenerateLibrary
-@DefaultExport(LegacyLibrary.class)
+@GenerateAOT
 public abstract class NativeTypeLibrary extends Library {
 
     @Abstract
-    public boolean hasNativeType(Object receiver) {
+    public boolean hasNativeType(@SuppressWarnings("unused") Object receiver) {
         return false;
     }
 
-    public abstract Object getNativeType(Object receiver);
+    @Abstract
+    public Object getNativeType(@SuppressWarnings("unused") Object receiver) {
+        return null;
+    }
+
+    private static final LibraryFactory<NativeTypeLibrary> FACTORY = LibraryFactory.resolve(NativeTypeLibrary.class);
+
+    public static LibraryFactory<NativeTypeLibrary> getFactory() {
+        return FACTORY;
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,82 +29,146 @@
  */
 package com.oracle.truffle.llvm.runtime.pointer;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateAOT;
+import com.oracle.truffle.api.dsl.GenerateUncached;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.library.DynamicDispatchLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.llvm.runtime.library.LLVMNativeLibrary;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
-@ExportLibrary(value = LLVMNativeLibrary.class, receiverType = LLVMPointerImpl.class)
 @ExportLibrary(value = InteropLibrary.class, receiverType = LLVMPointerImpl.class)
+@ExportLibrary(value = LLVMAsForeignLibrary.class, receiverType = LLVMPointerImpl.class, useForAOT = false)
+@SuppressWarnings("deprecation") // needed because the superclass implements ReferenceLibrary
 abstract class ManagedPointerLibraries extends CommonPointerLibraries {
 
-    @ExportMessage(limit = "5")
+    @ExportMessage
     static boolean isNull(LLVMPointerImpl receiver,
-                    @CachedLibrary("receiver.getObject()") InteropLibrary interop) {
+                    @CachedLibrary("receiver.object") InteropLibrary interop) {
         if (receiver.getOffset() == 0) {
-            return interop.isNull(receiver.getObject());
+            return interop.isNull(receiver.object);
         } else {
             return false;
         }
     }
 
-    @ExportMessage(limit = "5")
+    @ExportMessage
     static boolean isExecutable(LLVMPointerImpl receiver,
-                    @CachedLibrary("receiver.getObject()") InteropLibrary interop) {
+                    @CachedLibrary("receiver.object") InteropLibrary interop) {
         if (receiver.getOffset() == 0) {
-            return interop.isExecutable(receiver.getObject());
+            return interop.isExecutable(receiver.object);
         } else {
             return false;
         }
     }
 
-    @ExportMessage(limit = "5")
+    @ExportMessage
     static Object execute(LLVMPointerImpl receiver, Object[] args,
-                    @CachedLibrary("receiver.getObject()") InteropLibrary interop) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
+                    @CachedLibrary("receiver.object") InteropLibrary interop) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
         if (receiver.getOffset() == 0) {
-            return interop.execute(receiver.getObject(), args);
+            return interop.execute(receiver.object, args);
         } else {
             throw UnsupportedMessageException.create();
         }
     }
 
-    @ExportMessage(library = LLVMNativeLibrary.class, limit = "1")
-    static boolean accepts(LLVMPointerImpl receiver,
-                    @CachedLibrary("receiver.getObject()") DynamicDispatchLibrary dispatch,
-                    @Cached(value = "dispatch.dispatch(receiver.getObject())", allowUncached = true) Class<?> dispatchClass) {
-        // TODO better solution?
-        return dispatchClass == dispatch.dispatch(receiver.getObject());
-    }
-
-    @ExportMessage(library = LLVMNativeLibrary.class, limit = "1")
-    @ExportMessage(library = InteropLibrary.class, limit = "5")
+    @ExportMessage(library = InteropLibrary.class)
     static boolean isPointer(LLVMPointerImpl receiver,
-                    @CachedLibrary("receiver.getObject()") LLVMNativeLibrary natives) {
-        return natives.isPointer(receiver.getObject());
+                    @CachedLibrary(limit = "1") LLVMNativeLibrary natives) {
+        return natives.isPointer(receiver.object);
     }
 
-    @ExportMessage(library = LLVMNativeLibrary.class, limit = "1")
-    @ExportMessage(library = InteropLibrary.class, limit = "5")
+    @ExportMessage(library = InteropLibrary.class)
     static long asPointer(LLVMPointerImpl receiver,
-                    @CachedLibrary("receiver.getObject()") LLVMNativeLibrary natives) throws UnsupportedMessageException {
-        return natives.asPointer(receiver.getObject()) + receiver.getOffset();
+                    @CachedLibrary(limit = "1") LLVMNativeLibrary natives) throws UnsupportedMessageException {
+        return natives.asPointer(receiver.object) + receiver.getOffset();
     }
 
-    @ExportMessage(limit = "5")
+    @ExportMessage
     static void toNative(LLVMPointerImpl receiver,
-                    @CachedLibrary("receiver.getObject()") InteropLibrary interop) {
-        interop.toNative(receiver.getObject());
+                    @CachedLibrary(limit = "1") InteropLibrary interop) {
+        interop.toNative(receiver.object);
     }
 
-    @ExportMessage(limit = "1")
-    static LLVMNativePointer toNativePointer(LLVMPointerImpl receiver,
-                    @CachedLibrary("receiver.getObject()") LLVMNativeLibrary natives) {
-        return natives.toNativePointer(receiver.getObject()).increment(receiver.getOffset());
+    @ExportMessage
+    static boolean isForeign(LLVMPointerImpl receiver,
+                    @CachedLibrary(limit = "1") LLVMAsForeignLibrary foreigns) {
+        return isForeignTest(receiver, foreigns);
+    }
+
+    @ExportMessage
+    static Object asForeign(LLVMPointerImpl receiver,
+                    @CachedLibrary(limit = "1") LLVMAsForeignLibrary foreigns) {
+        return foreigns.asForeign(receiver.object);
+    }
+
+    static boolean isForeignTest(LLVMPointerImpl receiver, LLVMAsForeignLibrary foreigns) {
+        return receiver.getOffset() == 0 && foreigns.isForeign(receiver.object);
+    }
+
+    @ExportMessage
+    static class IdentityHashCode {
+
+        @Specialization(guards = "!foreigns.isForeign(receiver.object)")
+        @TruffleBoundary
+        static int doInternal(LLVMPointerImpl receiver,
+                        @SuppressWarnings("unused") @CachedLibrary("receiver.object") LLVMAsForeignLibrary foreigns) {
+            return hash(System.identityHashCode(receiver.getObject()), receiver.getOffset());
+        }
+
+        @Specialization(guards = "foreigns.isForeign(receiver.object)")
+        static int doForeign(LLVMPointerImpl receiver,
+                        @CachedLibrary("receiver.object") LLVMAsForeignLibrary foreigns,
+                        @Cached ForeignIdentityHashNode hashForeign) {
+            Object foreign = foreigns.asForeign(receiver.getObject());
+            return hash(hashForeign.execute(foreign), receiver.getOffset());
+        }
+
+        private static int hash(int objHash, long offset) {
+            int ret = 0;
+            ret = ret * 31 + objHash;
+            ret = ret * 31 + Long.hashCode(offset);
+            return ret;
+        }
+    }
+
+    @GenerateUncached
+    abstract static class ForeignIdentityHashNode extends LLVMNode {
+
+        abstract int execute(Object obj);
+
+        @Specialization(limit = "3", rewriteOn = UnsupportedMessageException.class)
+        @GenerateAOT.Exclude
+        int doUnchecked(Object obj,
+                        @CachedLibrary("obj") InteropLibrary interop) throws UnsupportedMessageException {
+            return interop.identityHashCode(obj);
+        }
+
+        @Specialization(limit = "3", guards = "!interop.hasIdentity(obj)", replaces = "doUnchecked")
+        @TruffleBoundary
+        @GenerateAOT.Exclude
+        int doNoIdentity(Object obj,
+                        @SuppressWarnings("unused") @CachedLibrary("obj") InteropLibrary interop) {
+            return System.identityHashCode(obj);
+        }
+
+        @Specialization(limit = "3", replaces = "doNoIdentity")
+        @GenerateAOT.Exclude
+        int doChecked(Object obj,
+                        @CachedLibrary("obj") InteropLibrary interop) {
+            try {
+                return interop.identityHashCode(obj);
+            } catch (UnsupportedMessageException ex) {
+                return doNoIdentity(obj, interop);
+            }
+        }
     }
 }

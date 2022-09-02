@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -79,11 +78,10 @@ public abstract class LLVM80BitFloatLoadNode extends LLVMLoadNode {
         return load.executeWithTarget(getReceiver.execute(addr));
     }
 
-    @Specialization(limit = "3")
+    @Specialization
     @ExplodeLoop
-    @GenerateAOT.Exclude
     protected LLVM80BitFloat doForeign(LLVMManagedPointer addr,
-                    @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
+                    @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
         byte[] result = new byte[LLVM80BitFloat.BYTE_WIDTH];
         long curOffset = addr.getOffset();
         for (int i = 0; i < result.length; i++) {

@@ -83,37 +83,37 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
         }
 
         @ExportMessage
-        static boolean hasNativeType(@SuppressWarnings("unused") ManagedMallocObject receiver) {
+        boolean hasNativeType() {
             return true;
         }
 
         @ExportMessage
-        static Object getNativeType(@SuppressWarnings("unused") ManagedMallocObject receiver) {
+        Object getNativeType() {
             return NATIVE_TYPE;
         }
 
         @ExportMessage
-        static boolean hasArrayElements(@SuppressWarnings("unused") ManagedMallocObject receiver) {
+        boolean hasArrayElements() {
             return true;
         }
 
         @ExportMessage
-        static long getArraySize(@SuppressWarnings("unused") ManagedMallocObject receiver) {
-            return receiver.contents.length;
+        long getArraySize() {
+            return contents.length;
         }
 
         @ExportMessage(name = "isArrayElementReadable")
         @ExportMessage(name = "isArrayElementModifiable")
         @ExportMessage(name = "isArrayElementInsertable")
-        static boolean isArrayElementValid(ManagedMallocObject receiver, long index) {
-            return 0 <= index && index < getArraySize(receiver);
+        boolean isArrayElementValid(long index) {
+            return 0 <= index && index < getArraySize();
         }
 
         @ExportMessage
-        static Object readArrayElement(ManagedMallocObject receiver, long index,
+        Object readArrayElement(long index,
                         @Shared("exception") @Cached BranchProfile exception) throws InvalidArrayIndexException {
-            if (isArrayElementValid(receiver, index)) {
-                return receiver.get((int) index);
+            if (isArrayElementValid(index)) {
+                return get((int) index);
             } else {
                 exception.enter();
                 throw InvalidArrayIndexException.create(index);
@@ -121,11 +121,11 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
         }
 
         @ExportMessage
-        static void writeArrayElement(ManagedMallocObject receiver, long index, Object value,
+        void writeArrayElement(long index, Object value,
                         @Cached LLVMToPointerNode toPointer,
                         @Shared("exception") @Cached BranchProfile exception) throws InvalidArrayIndexException {
-            if (isArrayElementValid(receiver, index)) {
-                receiver.set((int) index, toPointer.executeWithTarget(value));
+            if (isArrayElementValid(index)) {
+                set((int) index, toPointer.executeWithTarget(value));
             } else {
                 exception.enter();
                 throw InvalidArrayIndexException.create(index);
@@ -134,42 +134,42 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
 
         @ExportMessage(name = "isReadable")
         @ExportMessage(name = "isWritable")
-        static boolean isAccessible(@SuppressWarnings("unused") ManagedMallocObject receiver) {
+        boolean isAccessible() {
             return true;
         }
 
         @ExportMessage
-        static byte readI8(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset,
-                        @CachedLibrary("receiver") LLVMManagedReadLibrary read) {
+        byte readI8(long offset,
+                        @CachedLibrary("this") LLVMManagedReadLibrary read) {
             throw new LLVMPolyglotException(read, "Can't read I8 from managed malloc object at offset %d.", offset);
         }
 
         @ExportMessage
-        static short readI16(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset,
-                        @CachedLibrary("receiver") LLVMManagedReadLibrary read) {
+        short readI16(long offset,
+                        @CachedLibrary("this") LLVMManagedReadLibrary read) {
             throw new LLVMPolyglotException(read, "Can't read I16 from managed malloc object at offset %d.", offset);
         }
 
         @ExportMessage
-        static int readI32(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset,
-                        @CachedLibrary("receiver") LLVMManagedReadLibrary read) {
+        int readI32(long offset,
+                        @CachedLibrary("this") LLVMManagedReadLibrary read) {
             throw new LLVMPolyglotException(read, "Can't read I32 from managed malloc object at offset %d.", offset);
         }
 
         @ExportMessage
-        static double readDouble(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset,
-                        @CachedLibrary("receiver") LLVMManagedReadLibrary read) {
+        double readDouble(long offset,
+                        @CachedLibrary("this") LLVMManagedReadLibrary read) {
             throw new LLVMPolyglotException(read, "Can't read double from managed malloc object at offset %d.", offset);
         }
 
         @ExportMessage
-        static LLVMPointer readPointer(ManagedMallocObject receiver, long offset,
+        LLVMPointer readPointer(long offset,
                         @Cached BranchProfile exception,
-                        @CachedLibrary("receiver") LLVMManagedReadLibrary read) {
+                        @CachedLibrary("this") LLVMManagedReadLibrary read) {
             if (offset % LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES == 0) {
                 long idx = offset / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
                 if (idx == (int) idx) {
-                    return receiver.get((int) idx);
+                    return get((int) idx);
                 }
             }
 
@@ -178,37 +178,37 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
         }
 
         @ExportMessage
-        static LLVMPointer readGenericI64(ManagedMallocObject receiver, long offset,
-                        @CachedLibrary("receiver") LLVMManagedReadLibrary read) {
-            return read.readPointer(receiver, offset);
+        LLVMPointer readGenericI64(long offset,
+                        @CachedLibrary("this") LLVMManagedReadLibrary read) {
+            return read.readPointer(this, offset);
         }
 
         @ExportMessage
-        static void writeI8(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset, @SuppressWarnings("unused") byte value,
-                        @CachedLibrary("receiver") LLVMManagedWriteLibrary write) {
+        void writeI8(long offset, @SuppressWarnings("unused") byte value,
+                        @CachedLibrary("this") LLVMManagedWriteLibrary write) {
             throw new LLVMPolyglotException(write, "Can't write I8 to managed malloc object at offset %d.", offset);
         }
 
         @ExportMessage
-        static void writeI16(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset, @SuppressWarnings("unused") short value,
-                        @CachedLibrary("receiver") LLVMManagedWriteLibrary write) {
+        void writeI16(long offset, @SuppressWarnings("unused") short value,
+                        @CachedLibrary("this") LLVMManagedWriteLibrary write) {
             throw new LLVMPolyglotException(write, "Can't write I16 to managed malloc object at offset %d.", offset);
         }
 
         @ExportMessage
-        static void writeI32(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset, @SuppressWarnings("unused") int value,
-                        @CachedLibrary("receiver") LLVMManagedWriteLibrary write) {
+        void writeI32(long offset, @SuppressWarnings("unused") int value,
+                        @CachedLibrary("this") LLVMManagedWriteLibrary write) {
             throw new LLVMPolyglotException(write, "Can't write I32 to managed malloc object at offset %d.", offset);
         }
 
         @ExportMessage
-        static void writePointer(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset, LLVMPointer value,
+        void writePointer(long offset, LLVMPointer value,
                         @Cached BranchProfile exception,
-                        @CachedLibrary("receiver") LLVMManagedWriteLibrary write) {
+                        @CachedLibrary("this") LLVMManagedWriteLibrary write) {
             if (offset % LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES == 0) {
                 long idx = offset / LLVMExpressionNode.ADDRESS_SIZE_IN_BYTES;
                 if (idx == (int) idx) {
-                    receiver.set((int) idx, value);
+                    set((int) idx, value);
                     return;
                 }
             }
@@ -218,20 +218,20 @@ public abstract class LLVMTruffleManagedMalloc extends LLVMIntrinsic {
         }
 
         @ExportMessage
-        static void writeI64(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset, long value,
-                        @CachedLibrary("receiver") LLVMManagedWriteLibrary write) {
-            write.writePointer(receiver, offset, LLVMNativePointer.create(value));
+        void writeI64(long offset, long value,
+                        @CachedLibrary("this") LLVMManagedWriteLibrary write) {
+            write.writePointer(this, offset, LLVMNativePointer.create(value));
         }
 
         @ExportMessage
-        static void writeGenericI64(@SuppressWarnings("unused") ManagedMallocObject receiver, long offset, Object value,
+        void writeGenericI64(long offset, Object value,
                         @Cached LLVMToPointerNode toPointer,
-                        @CachedLibrary("receiver") LLVMManagedWriteLibrary write) {
-            write.writePointer(receiver, offset, toPointer.executeWithTarget(value));
+                        @CachedLibrary("this") LLVMManagedWriteLibrary write) {
+            write.writePointer(this, offset, toPointer.executeWithTarget(value));
         }
 
         @ExportMessage
-        static boolean isForeign(@SuppressWarnings("unused") ManagedMallocObject receiver) {
+        public static boolean isForeign(@SuppressWarnings("unused") ManagedMallocObject receiver) {
             return false;
         }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.runtime.pointer;
 
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
@@ -43,10 +44,11 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.library.LLVMNativeLibrary;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 
-@ExportLibrary(value = LLVMNativeLibrary.class, receiverType = LLVMPointerImpl.class)
 @ExportLibrary(value = InteropLibrary.class, receiverType = LLVMPointerImpl.class)
+@ExportLibrary(value = LLVMAsForeignLibrary.class, receiverType = LLVMPointerImpl.class, useForAOT = true, useForAOTPriority = 1)
+@SuppressWarnings("deprecation") // needed because the superclass implements ReferenceLibrary
 abstract class NativePointerLibraries extends CommonPointerLibraries {
 
     @ExportMessage
@@ -55,13 +57,18 @@ abstract class NativePointerLibraries extends CommonPointerLibraries {
     }
 
     @ExportMessage
+    static boolean isForeign(@SuppressWarnings("unused") LLVMPointerImpl receiver) {
+        return false;
+    }
+
+    @ExportMessage
     @ImportStatic(LLVMLanguage.class)
     static class IsExecutable {
 
         @Specialization
         static boolean doNative(LLVMPointerImpl receiver,
-                        @Cached(value = "getLLVMContextReference()", allowUncached = true) ContextReference<LLVMContext> ctxRef) {
-            return ctxRef.get().getFunctionDescriptor(receiver) != null;
+                        @CachedContext(LLVMLanguage.class) LLVMContext context) {
+            return context.getFunctionDescriptor(receiver) != null;
         }
     }
 
@@ -69,10 +76,10 @@ abstract class NativePointerLibraries extends CommonPointerLibraries {
     @ImportStatic(LLVMLanguage.class)
     static class Execute {
 
-        @Specialization(guards = {"value.asNative() == cachedAddress", "cachedDescriptor != null"})
+        @Specialization(limit = "5", guards = {"value.asNative() == cachedAddress", "cachedDescriptor != null"}, assumptions = "getLanguage().singleContextAssumption")
         static Object doNativeCached(@SuppressWarnings("unused") LLVMPointerImpl value, Object[] args,
                         @Cached("value.asNative()") @SuppressWarnings("unused") long cachedAddress,
-                        @Cached(value = "getLLVMContextReference()") ContextReference<LLVMContext> ctxRef,
+                        @CachedContext(LLVMLanguage.class) @SuppressWarnings("unused") ContextReference<LLVMContext> ctxRef,
                         @Cached("getDescriptor(ctxRef, value)") LLVMFunctionDescriptor cachedDescriptor,
                         @CachedLibrary("cachedDescriptor") InteropLibrary interop) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
             return interop.execute(cachedDescriptor, args);
@@ -80,9 +87,9 @@ abstract class NativePointerLibraries extends CommonPointerLibraries {
 
         @Specialization(replaces = "doNativeCached")
         static Object doNative(LLVMPointerImpl value, Object[] args,
-                        @Cached(value = "getLLVMContextReference()", allowUncached = true) ContextReference<LLVMContext> ctxRef,
+                        @CachedContext(LLVMLanguage.class) LLVMContext context,
                         @CachedLibrary(limit = "5") InteropLibrary interop) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
-            LLVMFunctionDescriptor descriptor = getDescriptor(ctxRef, value);
+            LLVMFunctionDescriptor descriptor = context.getFunctionDescriptor(value);
             if (descriptor != null) {
                 return interop.execute(descriptor, args);
             } else {
@@ -95,20 +102,22 @@ abstract class NativePointerLibraries extends CommonPointerLibraries {
         }
     }
 
-    @ExportMessage(library = LLVMNativeLibrary.class)
-    @ExportMessage(library = InteropLibrary.class, limit = "5")
+    /**
+     * @param receiver
+     * @see InteropLibrary#isPointer(Object)
+     */
+    @ExportMessage(library = InteropLibrary.class)
     static boolean isPointer(LLVMPointerImpl receiver) {
         return true;
     }
 
-    @ExportMessage(library = LLVMNativeLibrary.class)
-    @ExportMessage(library = InteropLibrary.class, limit = "5")
+    @ExportMessage(library = InteropLibrary.class)
     static long asPointer(LLVMPointerImpl receiver) {
         return receiver.asNative();
     }
 
     @ExportMessage
-    static LLVMNativePointer toNativePointer(LLVMPointerImpl receiver) {
-        return receiver;
+    static int identityHashCode(LLVMPointerImpl receiver) {
+        return Long.hashCode(receiver.asNative());
     }
 }

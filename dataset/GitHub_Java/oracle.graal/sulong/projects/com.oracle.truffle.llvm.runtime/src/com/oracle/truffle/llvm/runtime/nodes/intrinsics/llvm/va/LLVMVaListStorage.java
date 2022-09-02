@@ -30,35 +30,39 @@
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.frame.FrameInstance.FrameAccess;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.profiles.ConditionProfile;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMVarArgCompoundValue;
+import com.oracle.truffle.llvm.runtime.PlatformCapability;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode.LLVMPointerDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Array;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.LLVMStackAccess;
+import com.oracle.truffle.llvm.runtime.memory.VarargsAreaStackAllocationNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMHasDatalayoutNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVaListStorageFactory.ByteConversionHelperNodeGen;
@@ -66,8 +70,7 @@ import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVaListStorag
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVaListStorageFactory.LongConversionHelperNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVaListStorageFactory.PointerConversionHelperNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVaListStorageFactory.ShortConversionHelperNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativeVarargsAreaStackAllocationNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativeVarargsAreaStackAllocationNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativePointerSupport;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI32LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI64LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI8LoadNode;
@@ -203,10 +206,9 @@ public class LLVMVaListStorage implements TruffleObject {
         return ((ArrayType) type).getElementType();
     }
 
-    protected static DataLayout getDataLayout() {
+    protected static DataLayout findDataLayoutFromCurrentFrame() {
         RootCallTarget rootCallTarget = (RootCallTarget) Truffle.getRuntime().getCurrentFrame().getCallTarget();
-        DataLayout dataLayout = (((LLVMHasDatalayoutNode) rootCallTarget.getRootNode())).getDatalayout();
-        return dataLayout;
+        return (((LLVMHasDatalayoutNode) rootCallTarget.getRootNode())).getDatalayout();
     }
 
     public static long storeArgument(LLVMPointer ptr, long offset, LLVMMemMoveNode memmove, LLVMI64OffsetStoreNode storeI64Node,
@@ -267,7 +269,7 @@ public class LLVMVaListStorage implements TruffleObject {
     protected Object[] realArguments;
     protected int numberOfExplicitArguments;
 
-    protected LLVMNativePointer nativized;
+    protected LLVMPointer nativized;
 
     // InteropLibrary implementation
 
@@ -334,7 +336,7 @@ public class LLVMVaListStorage implements TruffleObject {
 
     @ExportMessage
     public Object invokeMember(String member, Object[] arguments,
-                    @Cached LLVMPointerDataEscapeNode pointerEscapeNode) throws ArityException, UnknownIdentifierException, UnsupportedTypeException {
+                    @Cached.Shared("escapeNode") @Cached LLVMPointerDataEscapeNode pointerEscapeNode) throws ArityException, UnknownIdentifierException, UnsupportedTypeException {
         if (GET_MEMBER.equals(member)) {
             if (arguments.length == 2) {
                 if (!(arguments[0] instanceof Integer)) {
@@ -364,7 +366,7 @@ public class LLVMVaListStorage implements TruffleObject {
                 return pointerEscapeNode.executeWithType(ptrArg, type);
 
             } else {
-                throw ArityException.create(2, arguments.length);
+                throw ArityException.create(2, 2, arguments.length);
             }
         }
         throw UnknownIdentifierException.create(member);
@@ -387,8 +389,9 @@ public class LLVMVaListStorage implements TruffleObject {
     }
 
     @ExportMessage
-    public Object readArrayElement(long index) {
-        return realArguments[(int) index + numberOfExplicitArguments];
+    public Object readArrayElement(long index, @Cached.Shared("escapeNode") @Cached LLVMPointerDataEscapeNode pointerEscapeNode) {
+        Object arg = realArguments[(int) index + numberOfExplicitArguments];
+        return pointerEscapeNode.executeWithTarget(arg);
     }
 
     @ExportMessage
@@ -397,8 +400,71 @@ public class LLVMVaListStorage implements TruffleObject {
     }
 
     @ExportMessage
-    public long asPointer() {
-        return nativized == null ? 0L : nativized.asNative();
+    public long asPointer() throws UnsupportedMessageException {
+        if (isPointer()) {
+            return LLVMNativePointer.cast(nativized).asNative();
+        }
+        throw UnsupportedMessageException.create();
+    }
+
+    @GenerateUncached
+    public abstract static class VAListPointerWrapperFactory extends LLVMNode {
+
+        public abstract Object execute(LLVMPointer pointer);
+    }
+
+    @GenerateUncached
+    public abstract static class VAListPointerWrapperFactoryDelegate extends LLVMNode {
+
+        public abstract Object execute(Object pointer);
+
+        @Specialization
+        Object createWrapper(LLVMPointer pointer,
+                        @SuppressWarnings("unused") @CachedLanguage LLVMLanguage language,
+                        @Cached(value = "createVAListPointerWrapperFactoryCached(language)", uncached = "createVAListPointerWrapperFactoryUncached(language)") VAListPointerWrapperFactory wrapperFactory) {
+            return wrapperFactory.execute(pointer);
+        }
+
+        @Fallback
+        Object createWrapper(Object o) {
+            return o;
+        }
+
+        public static VAListPointerWrapperFactory createVAListPointerWrapperFactoryCached(@CachedLanguage LLVMLanguage language) {
+            return language.getCapability(PlatformCapability.class).createNativeVAListWrapper(true);
+        }
+
+        public static VAListPointerWrapperFactory createVAListPointerWrapperFactoryUncached(@CachedLanguage LLVMLanguage language) {
+            return language.getCapability(PlatformCapability.class).createNativeVAListWrapper(false);
+        }
+
+    }
+
+    @GenerateUncached
+    public abstract static class StackAllocationNode extends LLVMNode {
+
+        public abstract LLVMPointer executeWithTarget(long size);
+
+        @Specialization
+        LLVMPointer allocate(long size,
+                        @SuppressWarnings("unused") @CachedLanguage LLVMLanguage language,
+                        @Cached(value = "createVarargsAreaStackAllocationNode(language)", allowUncached = true) VarargsAreaStackAllocationNode allocNode) {
+            // N.B. Using FrameAccess.READ_WRITE may lead to throwing NPE, nevertheless using the
+            // safe
+            // FrameAccess.READ_ONLY is not sufficient as some nodes below need to write to the
+            // frame.
+            // Therefore toNative is put behind the Truffle boundary and FrameAccess.MATERIALIZE is
+            // used as a workaround.
+            VirtualFrame frame = (VirtualFrame) Truffle.getRuntime().getCurrentFrame().getFrame(FrameAccess.MATERIALIZE);
+            return allocNode.executeWithTarget(frame, size);
+        }
+
+        @SuppressWarnings("static-method")
+        VarargsAreaStackAllocationNode createVarargsAreaStackAllocationNode(LLVMLanguage lang) {
+            DataLayout dataLayout = getDataLayout();
+            return lang.getActiveConfiguration().createNodeFactory(lang, dataLayout).createVarargsAreaStackAllocation();
+        }
+
     }
 
     /**
@@ -408,7 +474,7 @@ public class LLVMVaListStorage implements TruffleObject {
      * <code>offsetToIndex</code> method, which is called from the common implementation of
      * {@link LLVMManagedReadLibrary}.
      */
-    @ExportLibrary(LLVMManagedReadLibrary.class)
+    @ExportLibrary(value = LLVMManagedReadLibrary.class, useForAOT = false)
     public abstract static class ArgsArea implements TruffleObject {
         public final Object[] args;
 
@@ -729,11 +795,11 @@ public class LLVMVaListStorage implements TruffleObject {
 
         @Specialization(guards = "!isNativePointer(x)")
         byte managedPointerObjectConversion(LLVMManagedPointer x, int offset,
-                        @CachedLibrary(limit = "1") LLVMNativeLibrary nativeLib,
+                        @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile1,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile2,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile3) {
-            LLVMNativePointer nativePointer = nativeLib.toNativePointer(x.getObject());
+            LLVMNativePointer nativePointer = toNativePointer.execute(x.getObject());
             return nativePointerObjectConversion(nativePointer, offset, conditionProfile1, conditionProfile2, conditionProfile3);
         }
 
@@ -816,10 +882,10 @@ public class LLVMVaListStorage implements TruffleObject {
 
         @Specialization(guards = "!isNativePointer(x)")
         short managedPointerObjectConversion(LLVMManagedPointer x, int offset,
-                        @CachedLibrary(limit = "1") LLVMNativeLibrary nativeLib,
+                        @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile1,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile2) {
-            LLVMNativePointer nativePointer = nativeLib.toNativePointer(x.getObject());
+            LLVMNativePointer nativePointer = toNativePointer.execute(x.getObject());
             return nativePointerObjectConversion(nativePointer, offset, conditionProfile1, conditionProfile2);
         }
 
@@ -900,9 +966,9 @@ public class LLVMVaListStorage implements TruffleObject {
 
         @Specialization(guards = "!isNativePointer(x)")
         int managedPointerObjectConversion(LLVMManagedPointer x, int offset,
-                        @CachedLibrary(limit = "1") LLVMNativeLibrary nativeLib,
+                        @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
                         @Cached("createBinaryProfile()") ConditionProfile conditionProfile) {
-            LLVMNativePointer nativePointer = nativeLib.toNativePointer(x.getObject());
+            LLVMNativePointer nativePointer = toNativePointer.execute(x.getObject());
             return nativePointerObjectConversion(nativePointer, offset, conditionProfile);
         }
 
@@ -1039,44 +1105,5 @@ public class LLVMVaListStorage implements TruffleObject {
         public static PointerConversionHelperNode create() {
             return PointerConversionHelperNodeGen.create();
         }
-    }
-
-    public abstract static class NativeAllocaInstruction extends LLVMNode {
-
-        public static NativeAllocaInstruction create() {
-            return new NativeAllocaInstructionCached();
-        }
-
-        public static NativeAllocaInstruction getUncached() {
-            return NativeAllocaInstructionUncached.UNCACHED;
-        }
-
-        public abstract LLVMPointer executeWithTarget(VirtualFrame frame, long sizeInBytes, LLVMStackAccess stackAccess);
-
-    }
-
-    public static final class NativeAllocaInstructionCached extends NativeAllocaInstruction {
-
-        @Child private LLVMNativeVarargsAreaStackAllocationNode nativeAllocaNode = LLVMNativeVarargsAreaStackAllocationNodeGen.create();
-
-        @Override
-        public LLVMPointer executeWithTarget(VirtualFrame frame, long sizeInBytes, LLVMStackAccess stackAccess) {
-            return nativeAllocaNode.executeWithTarget(frame, sizeInBytes);
-        }
-
-    }
-
-    public static final class NativeAllocaInstructionUncached extends NativeAllocaInstruction {
-
-        private static final long size = 1;
-        private static final int alignment = 8;
-
-        static final NativeAllocaInstructionUncached UNCACHED = new NativeAllocaInstructionUncached();
-
-        @Override
-        public LLVMPointer executeWithTarget(VirtualFrame frame, long sizeInBytes, LLVMStackAccess stackAccess) {
-            return stackAccess.executeAllocate(frame, size * sizeInBytes, alignment);
-        }
-
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -67,6 +68,7 @@ public final class LLVMPolyglotWrite {
         }
 
         @Specialization
+        @GenerateAOT.Exclude
         protected void doIntrinsic(LLVMManagedPointer target, Object id, Object value,
                         @Cached LLVMAsForeignNode asForeign,
                         @CachedLibrary(limit = "3") InteropLibrary foreignWrite,
@@ -79,7 +81,7 @@ public final class LLVMPolyglotWrite {
                 foreignWrite.writeMember(foreign, name, escapedValue);
             } catch (UnsupportedMessageException e) {
                 exception.enter();
-                throw new LLVMPolyglotException(foreignWrite, "Can not write member '%s' to polyglot value.", name);
+                throw new LLVMPolyglotException(foreignWrite, "Cannot write member '%s' to polyglot value.", name);
             } catch (UnknownIdentifierException e) {
                 exception.enter();
                 throw new LLVMPolyglotException(foreignWrite, "Member '%s' does not exist.", e.getUnknownIdentifier());
@@ -89,9 +91,14 @@ public final class LLVMPolyglotWrite {
             }
         }
 
+        /**
+         * @param value @NodeChild
+         * @param id @NodeChild
+         * @param v @NodeChild
+         * @see LLVMPolyglotPutMember
+         */
         @Fallback
         @TruffleBoundary
-        @SuppressWarnings("unused")
         public Object fallback(Object value, Object id, Object v) {
             throw new LLVMPolyglotException(this, "Invalid argument to polyglot builtin.");
         }
@@ -112,6 +119,7 @@ public final class LLVMPolyglotWrite {
         }
 
         @Specialization
+        @GenerateAOT.Exclude
         protected Object doIntrinsic(LLVMManagedPointer target, int id, Object value,
                         @Cached LLVMAsForeignNode asForeign,
                         @CachedLibrary(limit = "3") InteropLibrary foreignWrite) {
@@ -121,7 +129,7 @@ public final class LLVMPolyglotWrite {
                 foreignWrite.writeArrayElement(foreign, id, escapedValue);
             } catch (UnsupportedMessageException e) {
                 CompilerDirectives.transferToInterpreter();
-                throw new LLVMPolyglotException(foreignWrite, "Can not write to index %d of polyglot value.", id);
+                throw new LLVMPolyglotException(foreignWrite, "Cannot write to index %d of polyglot value.", id);
             } catch (InvalidArrayIndexException e) {
                 CompilerDirectives.transferToInterpreter();
                 throw new LLVMPolyglotException(foreignWrite, "Index %d does not exist.", id);
@@ -132,9 +140,14 @@ public final class LLVMPolyglotWrite {
             return null;
         }
 
+        /**
+         * @param value @NodeChild
+         * @param id @NodeChild
+         * @param v @NodeChild
+         * @see LLVMPolyglotSetArrayElement
+         */
         @Fallback
         @TruffleBoundary
-        @SuppressWarnings("unused")
         public Object fallback(Object value, Object id, Object v) {
             throw new LLVMPolyglotException(this, "Invalid argument to polyglot builtin.");
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,20 +29,20 @@
  */
 package com.oracle.truffle.llvm.runtime.interop.export;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
+import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.interop.LLVMDataEscapeNode;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMOffsetLoadNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 @GenerateUncached
+@ImportStatic(CommonNodeFactory.class)
 public abstract class LLVMForeignReadNode extends LLVMNode {
 
     static final int VALUE_KIND_COUNT = LLVMInteropType.ValueKind.values().length;
@@ -55,17 +55,13 @@ public abstract class LLVMForeignReadNode extends LLVMNode {
         return ptr;
     }
 
-    @Specialization(guards = "type.getKind() == cachedKind", limit = "VALUE_KIND_COUNT")
+    @Specialization(guards = "type.kind == cachedKind", limit = "VALUE_KIND_COUNT")
+    @GenerateAOT.Exclude
     static Object doValue(LLVMPointer ptr, LLVMInteropType.Value type,
-                    @Cached(value = "type.getKind()", allowUncached = true) @SuppressWarnings(value = "unused") LLVMInteropType.ValueKind cachedKind,
-                    @Cached(value = "createLoadNode(cachedKind)", allowUncached = true) LLVMLoadNode load, @Cached LLVMDataEscapeNode dataEscape) {
-        Object ret = load.executeWithTarget(ptr);
-        return dataEscape.executeWithType(ret, type.getBaseType());
-    }
-
-    LLVMLoadNode createLoadNode(LLVMInteropType.ValueKind kind) {
-        CompilerAsserts.neverPartOfCompilation();
-        TruffleLanguage.ContextReference<LLVMContext> ctxRef = LLVMLanguage.getLLVMContextReference();
-        return ctxRef.get().getNodeFactory().createLoadNode(kind);
+                    @Cached(value = "type.kind", allowUncached = true) @SuppressWarnings(value = "unused") LLVMInteropType.ValueKind cachedKind,
+                    @Cached(parameters = "cachedKind") LLVMOffsetLoadNode load,
+                    @Cached(parameters = "cachedKind.foreignToLLVMType") LLVMDataEscapeNode dataEscape) {
+        Object ret = load.executeWithTargetGeneric(ptr, 0);
+        return dataEscape.executeWithType(ret, type.baseType);
     }
 }

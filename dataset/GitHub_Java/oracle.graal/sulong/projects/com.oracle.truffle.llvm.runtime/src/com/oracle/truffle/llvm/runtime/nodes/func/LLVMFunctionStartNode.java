@@ -144,8 +144,9 @@ public final class LLVMFunctionStartNode extends LLVMRootNode implements LLVMHas
 
     @Override
     protected ExecutionSignature prepareForAOT() {
-        super.prepareForAOT();
+        System.err.println("AOT being prepared: " + name);
         AOTSupport.prepareForAOT(this);
+        System.err.println("AOT prepared: " + name);
         // TODO: use the FunctionDefinition to prepare the right signature
         return ExecutionSignature.GENERIC;
     }

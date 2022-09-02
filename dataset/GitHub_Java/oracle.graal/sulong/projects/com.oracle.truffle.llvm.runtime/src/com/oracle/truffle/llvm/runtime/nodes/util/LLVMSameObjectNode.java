@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,7 +30,7 @@
 package com.oracle.truffle.llvm.runtime.nodes.util;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -39,7 +39,6 @@ import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.op.LLVMAddressEqualsNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.spi.ReferenceLibrary;
 
 /**
  * Helper node to determine whether two managed objects are reference equal.
@@ -66,16 +65,24 @@ public abstract class LLVMSameObjectNode extends LLVMNode {
         return true;
     }
 
-    @Specialization(limit = "3", guards = {"aForeigns.isForeign(a)", "bForeigns.isForeign(b)"})
+    @Specialization(limit = "3", guards = "a != b")
+    @GenerateAOT.Exclude
     boolean doForeign(Object a, Object b,
                     @CachedLibrary("a") LLVMAsForeignLibrary aForeigns,
                     @CachedLibrary("b") LLVMAsForeignLibrary bForeigns,
                     @Cached CompareForeignNode compare) {
-        return compare.execute(aForeigns.asForeign(a), bForeigns.asForeign(b));
+        return aForeigns.isForeign(a) && bForeigns.isForeign(b) && compare.execute(aForeigns.asForeign(a), bForeigns.asForeign(b));
     }
 
-    @Fallback
-    boolean doNotSame(Object a, Object b) {
+    static boolean fallbackGuard(Object a, Object b, LLVMAsForeignLibrary aForeigns, LLVMAsForeignLibrary bForeigns) {
+        return a != b && !(aForeigns.isForeign(a) && bForeigns.isForeign(b));
+    }
+
+    @Specialization(limit = "3", guards = "fallbackGuard(a, b, aForeigns, bForeigns)")
+    @GenerateAOT.Exclude
+    boolean doNotSame(Object a, Object b,
+                    @SuppressWarnings("unused") @CachedLibrary("a") LLVMAsForeignLibrary aForeigns,
+                    @SuppressWarnings("unused") @CachedLibrary("b") LLVMAsForeignLibrary bForeigns) {
         assert a != b;
         return false;
     }
@@ -107,15 +114,17 @@ public abstract class LLVMSameObjectNode extends LLVMNode {
 
         // for backwards compatibility
         @Specialization(limit = "3", guards = {"a != b", "references.isSame(a, b)"})
+        @GenerateAOT.Exclude
         boolean doReferenceLibrary(Object a, Object b,
-                        @CachedLibrary("a") ReferenceLibrary references) {
+                        @CachedLibrary("a") com.oracle.truffle.llvm.spi.ReferenceLibrary references) {
             assert references.isSame(a, b);
             return true;
         }
 
         @Specialization(limit = "3", guards = {"a != b", "!references.isSame(a, b)"})
+        @GenerateAOT.Exclude
         boolean doIdentical(Object a, Object b,
-                        @CachedLibrary("a") ReferenceLibrary references,
+                        @CachedLibrary("a") com.oracle.truffle.llvm.spi.ReferenceLibrary references,
                         @CachedLibrary("a") InteropLibrary aInterop,
                         @CachedLibrary("b") InteropLibrary bInterop) {
             assert !references.isSame(a, b);

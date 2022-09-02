@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -84,17 +83,15 @@ public abstract class LLVMI64LoadNode extends LLVMLoadNode {
             return doGenericI64Managed(getReceiver.execute(addr), offset, nativeRead);
         }
 
-        @Specialization(limit = "3", rewriteOn = UnexpectedResultException.class)
-        @GenerateAOT.Exclude
+        @Specialization(rewriteOn = UnexpectedResultException.class)
         protected long doI64Managed(LLVMManagedPointer addr, long offset,
-                        @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) throws UnexpectedResultException {
+                        @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) throws UnexpectedResultException {
             return nativeRead.readI64(addr.getObject(), addr.getOffset() + offset);
         }
 
-        @Specialization(limit = "3", replaces = "doI64Managed")
-        @GenerateAOT.Exclude
+        @Specialization(replaces = "doI64Managed")
         protected Object doGenericI64Managed(LLVMManagedPointer addr, long offset,
-                        @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
+                        @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
             return nativeRead.readGenericI64(addr.getObject(), addr.getOffset() + offset);
         }
     }
@@ -121,17 +118,15 @@ public abstract class LLVMI64LoadNode extends LLVMLoadNode {
         return doGenericI64Managed(getReceiver.execute(addr), nativeRead);
     }
 
-    @Specialization(limit = "3", rewriteOn = UnexpectedResultException.class)
-    @GenerateAOT.Exclude
+    @Specialization(rewriteOn = UnexpectedResultException.class)
     protected long doI64Managed(LLVMManagedPointer addr,
-                    @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) throws UnexpectedResultException {
+                    @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) throws UnexpectedResultException {
         return nativeRead.readI64(addr.getObject(), addr.getOffset());
     }
 
-    @Specialization(limit = "3", replaces = "doI64Managed")
-    @GenerateAOT.Exclude
+    @Specialization(replaces = "doI64Managed")
     protected Object doGenericI64Managed(LLVMManagedPointer addr,
-                    @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
+                    @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
         return nativeRead.readGenericI64(addr.getObject(), addr.getOffset());
     }
 }
