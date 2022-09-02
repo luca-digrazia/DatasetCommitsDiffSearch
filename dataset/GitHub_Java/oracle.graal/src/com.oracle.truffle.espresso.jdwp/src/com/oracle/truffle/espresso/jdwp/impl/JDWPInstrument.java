@@ -25,33 +25,41 @@ package com.oracle.truffle.espresso.jdwp.impl;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
-import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
-import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.concurrent.Callable;
 
-@TruffleInstrument.Registration(id = JDWPInstrument.ID, name = "Java debug wire protocol", services = JDWPDebuggerController.class)
-public class JDWPInstrument extends TruffleInstrument implements Runnable {
+@TruffleInstrument.Registration(id = JDWPInstrument.ID, name = "Java debug wire protocol", services = DebuggerController.class)
+public final class JDWPInstrument extends TruffleInstrument implements Runnable {
 
     public static final String ID = "jdwp";
 
-    private JDWPDebuggerController controller;
-    TruffleInstrument.Env env;
+    private DebuggerController controller;
+    private TruffleInstrument.Env env;
     private JDWPContext context;
     private DebuggerConnection connection;
     private Collection<Thread> activeThreads = new ArrayList<>();
+    private PrintStream err;
 
     @Override
-    protected void onCreate(TruffleInstrument.Env env) {
+    protected void onCreate(TruffleInstrument.Env instrumentEnv) {
         assert controller == null;
-        this.env = env;
-        controller = new JDWPController(this);
-        env.registerService(controller);
+        controller = new DebuggerController(this);
+        this.env = instrumentEnv;
+        this.env.registerService(controller);
+        this.env.getInstrumenter().attachContextsListener(controller, false);
+        this.err = new PrintStream(env.err());
     }
 
-    public void reset() {
+    public void reset(boolean prepareForReconnect) {
+        // close the connection to the debugger
+        if (connection != null) {
+            connection.close();
+        }
+
         // stop all running jdwp threads in an orderly fashion
         for (Thread activeThread : activeThreads) {
             activeThread.interrupt();
@@ -72,73 +80,73 @@ public class JDWPInstrument extends TruffleInstrument implements Runnable {
             }
         }
 
-        // close the connection to the debugger
-        connection.close();
-
         // re-enable GC for all objects
-        GCPrevention.clearAll();
+        controller.getGCPrevention().clearAll();
 
         // end the current debugger session to avoid hitting any further breakpoints
         // when resuming all threads
         controller.endSession();
 
-        // clear all suspension counts on threads
-        // and resume all
-        ThreadSuspension.resumeAll();
-        controller.resume();
+        // resume all threads
+        controller.resumeAll(true);
 
-        // replace the controller instance
-        JDWPOptions options = controller.getOptions();
-        controller = new JDWPController(this);
-        controller.initialize(options, context, true);
-
-        // prepare to accept a new debugger connection
-        try {
-            doConnect();
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to prepare for a new JDWP connection", e);
+        if (prepareForReconnect) {
+            // replace the controller instance
+            controller.reInitialize();
         }
     }
 
+    public void printStackTrace(Throwable e) {
+        e.printStackTrace(err);
+    }
+
+    public void printError(String message) {
+        err.println(message);
+    }
+
     @CompilerDirectives.TruffleBoundary
-    public void init(JDWPContext context) {
-        this.context = context;
+    public void init(JDWPContext jdwpContext) {
+        this.context = jdwpContext;
         try {
-            if (controller.shouldWaitForAttach()) {
-                doConnect();
-                // take all initial commands from the debugger before resuming to main thread
-                synchronized (JDWP.suspendStartupLock) {
-                    try {
-                        JDWP.suspendStartupLock.wait();
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException("JDWP connection interrupted");
-                    }
-                }
-            }
-            else {
+            if (controller.isServer() || controller.shouldWaitForAttach()) {
+                doConnect(true, controller.isServer());
+            } else {
                 // don't suspend until debugger attaches, so fire up deamon thread
                 Thread handshakeThread = new Thread(this, "jdwp-handshake-thread");
                 handshakeThread.setDaemon(true);
                 handshakeThread.start();
             }
         } catch (IOException e) {
-            throw new RuntimeException("Failed JDWP transsport setup", e);
+            printError("Critical failure in establishing jdwp connection: " + e.getLocalizedMessage());
+            printStackTrace(e);
         }
     }
 
-    void doConnect() throws IOException {
-        SocketConnection socketConnection = JDWPHandshakeController.createSocketConnection(controller.getListeningPort(), activeThreads);
+    void doConnect(boolean suspend, boolean server) throws IOException {
+        SocketConnection socketConnection = HandshakeController.createSocketConnection(server, controller.getHost(), controller.getListeningPort(), activeThreads);
         // connection established with handshake. Prepare to process commands from debugger
         connection = new DebuggerConnection(socketConnection, controller);
-        connection.doProcessCommands(controller.shouldWaitForAttach(), activeThreads);
+        controller.getEventListener().setConnection(socketConnection);
+        // The VM started event must be sent when we're ready to process commands
+        // doProcessCommands method will control when events can be fired without
+        // causing races, so pass on a Callable
+        Callable<Void> vmStartedJob = new Callable<Void>() {
+            @Override
+            public Void call() {
+                controller.getEventListener().vmStarted(suspend);
+                return null;
+            }
+        };
+        connection.doProcessCommands(suspend, activeThreads, vmStartedJob);
     }
 
     @Override
     public void run() {
         try {
-            doConnect();
+            doConnect(false, false);
         } catch (IOException e) {
-            throw new RuntimeException("JDWP connection setup failed" , e);
+            printError("Critical failure in establishing jdwp connection: " + e.getLocalizedMessage());
+            printStackTrace(e);
         }
     }
 
@@ -146,10 +154,7 @@ public class JDWPInstrument extends TruffleInstrument implements Runnable {
         return context;
     }
 
-    private static final class JDWPController extends JDWPDebuggerController {
-
-        JDWPController(JDWPInstrument instrument) {
-            super(instrument);
-        }
+    TruffleInstrument.Env getEnv() {
+        return env;
     }
 }

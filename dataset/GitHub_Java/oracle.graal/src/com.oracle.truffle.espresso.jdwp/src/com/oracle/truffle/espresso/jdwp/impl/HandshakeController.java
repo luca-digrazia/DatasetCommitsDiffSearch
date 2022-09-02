@@ -57,7 +57,7 @@ public final class HandshakeController {
                 serverSocket.bind(new InetSocketAddress((InetAddress) null, port));
             } else {
                 // allow specific host to bind
-                serverSocket.bind(new InetSocketAddress(connectionHost, port));
+                serverSocket.bind(new InetSocketAddress(host, port));
             }
             // print to console that we're listening
             String address = host != null ? host + ":" + port : "" + port;

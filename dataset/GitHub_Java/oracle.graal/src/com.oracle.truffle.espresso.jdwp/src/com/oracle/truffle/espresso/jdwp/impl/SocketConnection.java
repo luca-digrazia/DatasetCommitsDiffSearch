@@ -30,17 +30,17 @@ import java.net.Socket;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-public class SocketConnection implements Runnable {
-    private Socket socket;
-    private ServerSocket serverSocket;
+public final class SocketConnection implements Runnable {
+    private final Socket socket;
+    private final ServerSocket serverSocket;
     private boolean closed = false;
-    private OutputStream socketOutput;
-    private InputStream socketInput;
-    private Object receiveLock = new Object();
-    private Object sendLock = new Object();
-    private Object closeLock = new Object();
+    private final OutputStream socketOutput;
+    private final InputStream socketInput;
+    private final Object receiveLock = new Object();
+    private final Object sendLock = new Object();
+    private final Object closeLock = new Object();
 
-    private BlockingQueue<PacketStream> queue = new ArrayBlockingQueue<>(512);
+    private final BlockingQueue<PacketStream> queue = new ArrayBlockingQueue<>(512);
 
     SocketConnection(Socket socket, ServerSocket serverSocket) throws IOException {
         this.socket = socket;
@@ -55,10 +55,13 @@ public class SocketConnection implements Runnable {
             if (closed) {
                 return;
             }
-            serverSocket.close();
+            if (serverSocket != null) {
+                serverSocket.close();
+            }
             socketOutput.close();
             socketInput.close();
             socket.close();
+            queue.clear();
             closed = true;
         }
     }
@@ -79,26 +82,32 @@ public class SocketConnection implements Runnable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } catch (IOException ex) {
-                // TODO(Gregersen) - we should add a retry mechanism or verification of communication
-                throw new RuntimeException("Failed sending packet to debugger instance", ex);
-            } catch (ConnectionClosedException e) {
-                if (!Thread.currentThread().isInterrupted()) {
-                    throw new RuntimeException("connection closed for an unknown reason", e.getCause());
+                if (isOpen()) {
+                    throw new RuntimeException("Failed sending packet to debugger instance", ex);
+                } else {
+                    Thread.currentThread().interrupt();
                 }
+            } catch (ConnectionClosedException e) {
+                Thread.currentThread().interrupt();
             }
         }
     }
 
     public void queuePacket(PacketStream stream) {
-        queue.add(stream);
+        if (isOpen()) {
+            queue.add(stream);
+        }
     }
 
     public byte[] readPacket() throws IOException, ConnectionClosedException {
-        if (!isOpen()) {
+        if (!isOpen() || Thread.currentThread().isInterrupted()) {
             throw new ConnectionClosedException();
         }
         synchronized (receiveLock) {
-            int b1,b2,b3,b4;
+            int b1;
+            int b2;
+            int b3;
+            int b4;
 
             // length
             try {
@@ -107,7 +116,7 @@ public class SocketConnection implements Runnable {
                 b3 = socketInput.read();
                 b4 = socketInput.read();
             } catch (IOException ioe) {
-                if (!isOpen()) {
+                if (!isOpen() || Thread.currentThread().isInterrupted()) {
                     throw new ConnectionClosedException();
                 } else {
                     throw ioe;
@@ -115,11 +124,11 @@ public class SocketConnection implements Runnable {
             }
 
             // EOF
-            if (b1<0) {
+            if (b1 < 0) {
                 return new byte[0];
             }
 
-            if (b2<0 || b3<0 || b4<0) {
+            if (b2 < 0 || b3 < 0 || b4 < 0) {
                 throw new IOException("protocol error - premature EOF");
             }
 
@@ -129,11 +138,11 @@ public class SocketConnection implements Runnable {
                 throw new IOException("protocol error - invalid length");
             }
 
-            byte b[] = new byte[len];
-            b[0] = (byte)b1;
-            b[1] = (byte)b2;
-            b[2] = (byte)b3;
-            b[3] = (byte)b4;
+            byte[] b = new byte[len];
+            b[0] = (byte) b1;
+            b[1] = (byte) b2;
+            b[2] = (byte) b3;
+            b[3] = (byte) b4;
 
             int off = 4;
             len -= off;
@@ -143,7 +152,7 @@ public class SocketConnection implements Runnable {
                 try {
                     count = socketInput.read(b, off, len);
                 } catch (IOException ioe) {
-                    if (!isOpen()) {
+                    if (!isOpen() || Thread.currentThread().isInterrupted()) {
                         throw new ConnectionClosedException();
                     } else {
                         throw ioe;
@@ -160,8 +169,8 @@ public class SocketConnection implements Runnable {
         }
     }
 
-    public void writePacket(byte b[]) throws IOException, ConnectionClosedException {
-        if (!isOpen()) {
+    public void writePacket(byte[] b) throws IOException, ConnectionClosedException {
+        if (!isOpen() || Thread.currentThread().isInterrupted()) {
             throw new ConnectionClosedException();
         }
 
@@ -190,12 +199,11 @@ public class SocketConnection implements Runnable {
         synchronized (sendLock) {
             try {
                 /*
-                 * Send the packet (ignoring any bytes that follow
-                 * the packet in the byte array).
+                 * Send the packet (ignoring any bytes that follow the packet in the byte array).
                  */
                 socketOutput.write(b, 0, len);
             } catch (IOException ioe) {
-                if (!isOpen()) {
+                if (!isOpen() || Thread.currentThread().isInterrupted()) {
                     throw new ConnectionClosedException();
                 } else {
                     throw ioe;
