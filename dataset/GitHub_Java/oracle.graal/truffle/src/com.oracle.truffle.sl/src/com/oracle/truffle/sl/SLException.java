@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,42 +40,30 @@
  */
 package com.oracle.truffle.sl;
 
-import java.math.BigInteger;
+import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.source.SourceSection;
-import com.oracle.truffle.sl.runtime.SLContext;
-import com.oracle.truffle.sl.runtime.SLFunction;
-import com.oracle.truffle.sl.runtime.SLNull;
+import com.oracle.truffle.sl.runtime.SLLanguageView;
 
 /**
  * SL does not need a sophisticated error checking and reporting mechanism, so all unexpected
  * conditions just abort execution. This exception class is used when we abort from within the SL
  * implementation.
  */
-public class SLException extends RuntimeException implements TruffleException {
+public class SLException extends AbstractTruffleException {
 
     private static final long serialVersionUID = -6799734410727348507L;
-
-    private final Node location;
+    private static final InteropLibrary UNCACHED_LIB = InteropLibrary.getFactory().getUncached();
 
     @TruffleBoundary
     public SLException(String message, Node location) {
-        super(message);
-        this.location = location;
-    }
-
-    @SuppressWarnings("sync-override")
-    @Override
-    public Throwable fillInStackTrace() {
-        return null;
-    }
-
-    public Node getLocation() {
-        return location;
+        super(message, location);
     }
 
     /**
@@ -96,7 +84,7 @@ public class SLException extends RuntimeException implements TruffleException {
 
         result.append(": operation");
         if (operation != null) {
-            NodeInfo nodeInfo = SLContext.lookupNodeInfo(operation.getClass());
+            NodeInfo nodeInfo = SLLanguage.lookupNodeInfo(operation.getClass());
             if (nodeInfo != null) {
                 result.append(" \"").append(nodeInfo.shortName()).append("\"");
             }
@@ -106,24 +94,38 @@ public class SLException extends RuntimeException implements TruffleException {
 
         String sep = " ";
         for (int i = 0; i < values.length; i++) {
-            Object value = values[i];
+            /*
+             * For primitive or foreign values we request a language view so the values are printed
+             * from the perspective of simple language and not another language. Since this is a
+             * rather rarely invoked exceptional method, we can just create the language view for
+             * primitive values and then conveniently request the meta-object and display strings.
+             * Using the language view for core builtins like the typeOf builtin might not be a good
+             * idea for performance reasons.
+             */
+            Object value = SLLanguageView.forValue(values[i]);
             result.append(sep);
             sep = ", ";
-            if (value instanceof Long || value instanceof BigInteger) {
-                result.append("Number ").append(value);
-            } else if (value instanceof Boolean) {
-                result.append("Boolean ").append(value);
-            } else if (value instanceof String) {
-                result.append("String \"").append(value).append("\"");
-            } else if (value instanceof SLFunction) {
-                result.append("Function ").append(value);
-            } else if (value == SLNull.SINGLETON) {
-                result.append("NULL");
-            } else if (value == null) {
-                // value is not evaluated because of short circuit evaluation
+            if (value == null) {
                 result.append("ANY");
             } else {
-                result.append(value);
+                InteropLibrary valueLib = InteropLibrary.getFactory().getUncached(value);
+                if (valueLib.hasMetaObject(value) && !valueLib.isNull(value)) {
+                    String qualifiedName;
+                    try {
+                        qualifiedName = UNCACHED_LIB.asString(UNCACHED_LIB.getMetaQualifiedName(valueLib.getMetaObject(value)));
+                    } catch (UnsupportedMessageException e) {
+                        throw shouldNotReachHere(e);
+                    }
+                    result.append(qualifiedName);
+                    result.append(" ");
+                }
+                if (valueLib.isString(value)) {
+                    result.append("\"");
+                }
+                result.append(valueLib.toDisplayString(value));
+                if (valueLib.isString(value)) {
+                    result.append("\"");
+                }
             }
         }
         return new SLException(result.toString(), operation);
