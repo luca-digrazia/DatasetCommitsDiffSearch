@@ -94,14 +94,11 @@ public class SlowPathException extends Exception {
     /**
      * For performance reasons, this exception does not record any stack trace information.
      *
-     * @deprecated the method will become final in future releases.
-     *
      * @since 0.8 or earlier
      */
-    @Deprecated
     @SuppressWarnings("sync-override")
     @Override
-    public Throwable fillInStackTrace() {
+    public final Throwable fillInStackTrace() {
         return this;
     }
 }

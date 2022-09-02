@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,7 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -43,23 +43,22 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
 
     @Test
     public void testTruffleException() {
-        NodeFactory nodeFactory = new NodeFactoryImpl();
-        assertPartialEvalEquals("constant42", createCallerChain(0, 0, nodeFactory));
-        assertPartialEvalEquals("constant42", createCallerChain(3, 0, nodeFactory));
-        assertPartialEvalEquals("constant42", createCallerChain(0, 3, nodeFactory));
-        assertPartialEvalEquals("constant42", createCallerChain(4, 4, nodeFactory));
+        assertPartialEvalEquals("constant42", createCallerChain(0, 0));
+        assertPartialEvalEquals("constant42", createCallerChain(3, 0));
+        assertPartialEvalEquals("constant42", createCallerChain(0, 3));
+        assertPartialEvalEquals("constant42", createCallerChain(4, 4));
     }
 
-    static RootTestNode createCallerChain(int framesAbove, int framesBelow, NodeFactory factory) {
+    private static RootTestNode createCallerChain(int framesAbove, int framesBelow) {
         FrameDescriptor fd = new FrameDescriptor();
-        AbstractTestNode calleeNode = factory.createThrowNode(-1, true);
+        AbstractTestNode calleeNode = new ThrowTruffleExceptionTestNode(-1, true);
         RootTestNode calleeRoot = new RootTestNode(fd, "testTruffleException", calleeNode);
         for (int i = 0; i < framesAbove; i++) {
             AbstractTestNode call = new CallTestNode(Truffle.getRuntime().createCallTarget(calleeRoot));
             calleeRoot = new RootTestNode(fd, "testTruffleException", call);
         }
         AbstractTestNode callerNode = new CallTestNode(Truffle.getRuntime().createCallTarget(calleeRoot));
-        AbstractTestNode catchNode = factory.createCatchNode(callerNode);
+        AbstractTestNode catchNode = new CatchTruffleExceptionTestNode(callerNode);
         RootTestNode callerRoot = new RootTestNode(fd, "testTruffleException", catchNode);
         for (int i = 0; i < framesBelow; i++) {
             AbstractTestNode call = new CallTestNode(Truffle.getRuntime().createCallTarget(callerRoot));
@@ -68,37 +67,38 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
         return callerRoot;
     }
 
-    private static final class TestTruffleException extends AbstractTruffleException {
+    private static final class TestTruffleException extends RuntimeException implements TruffleException {
 
         private static final long serialVersionUID = -6105288741119318027L;
 
+        private final int stackTraceElementLimit;
+        private final Node location;
         private final boolean property;
 
         TestTruffleException(int stackTraceElementLimit, Node location, boolean property) {
-            super(null, null, stackTraceElementLimit, location);
+            this.stackTraceElementLimit = stackTraceElementLimit;
+            this.location = location;
             this.property = property;
         }
-    }
 
-    interface NodeFactory {
-        AbstractTestNode createThrowNode(int stackTraceElementLimit, boolean property);
-        AbstractTestNode createCatchNode(AbstractTestNode child);
-    }
-
-    private static final class NodeFactoryImpl implements NodeFactory {
-
+        @SuppressWarnings("sync-override")
         @Override
-        public AbstractTestNode createThrowNode(int stackTraceElementLimit, boolean property) {
-            return new ThrowTruffleExceptionTestNode(stackTraceElementLimit, property);
+        public Throwable fillInStackTrace() {
+            return this;
         }
 
         @Override
-        public AbstractTestNode createCatchNode(AbstractTestNode child) {
-            return new CatchTruffleExceptionTestNode(child);
+        public Node getLocation() {
+            return location;
+        }
+
+        @Override
+        public int getStackTraceElementLimit() {
+            return stackTraceElementLimit;
         }
     }
 
-    private static class CatchTruffleExceptionTestNode extends AbstractTestNode {
+    public static class CatchTruffleExceptionTestNode extends AbstractTestNode {
 
         @Child private AbstractTestNode child;
 
@@ -119,7 +119,7 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
         }
     }
 
-    private static class ThrowTruffleExceptionTestNode extends AbstractTestNode {
+    public static class ThrowTruffleExceptionTestNode extends AbstractTestNode {
 
         private final int limit;
         private final boolean property;
@@ -135,7 +135,7 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
         }
     }
 
-    private static class CallTestNode extends AbstractTestNode {
+    public static class CallTestNode extends AbstractTestNode {
         @Child private DirectCallNode callNode;
 
         public CallTestNode(CallTarget callTarget) {

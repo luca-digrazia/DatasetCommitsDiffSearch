@@ -877,8 +877,7 @@ public abstract class Launcher {
     enum OS {
         Darwin,
         Linux,
-        Solaris,
-        Windows;
+        Solaris;
 
         private static OS findCurrent() {
             final String name = System.getProperty("os.name");
@@ -890,9 +889,6 @@ public abstract class Launcher {
             }
             if (name.equals("Mac OS X") || name.equals("Darwin")) {
                 return Darwin;
-            }
-            if (name.startsWith("Windows")) {
-                return Windows;
             }
             throw new IllegalArgumentException("unknown OS: " + name);
         }

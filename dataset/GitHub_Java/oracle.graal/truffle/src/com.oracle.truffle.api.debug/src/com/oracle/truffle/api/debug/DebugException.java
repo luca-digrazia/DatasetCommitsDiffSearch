@@ -47,7 +47,6 @@ import java.util.Collections;
 import java.util.List;
 
 import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.TruffleStackTraceElement;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -170,8 +169,8 @@ public final class DebugException extends RuntimeException {
     public List<DebugStackTraceElement> getDebugStackTrace() {
         if (debugStackTrace == null) {
             if (exception != null) {
-                TruffleStackTrace.fillIn(exception);
-                List<TruffleStackTraceElement> stackTrace = TruffleStackTrace.getStacktrace(exception);
+                TruffleStackTraceElement.fillIn(exception);
+                List<TruffleStackTraceElement> stackTrace = TruffleStackTraceElement.getStackTrace(exception);
                 int n = stackTrace.size();
                 List<DebugStackTraceElement> debugStack = new ArrayList<>(n);
                 for (int i = 0; i < n; i++) {

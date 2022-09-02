@@ -40,7 +40,6 @@ import org.graalvm.compiler.nodes.virtual.AllocatedObjectNode;
 import org.graalvm.compiler.nodes.virtual.CommitAllocationNode;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.schedule.SchedulePhase;
-import org.graalvm.compiler.test.SubprocessUtil;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -414,11 +413,8 @@ public class EscapeAnalysisTest extends EATestBase {
      */
     @Test
     public void testNewNode() {
-        // Tracking of creation interferes with escape analysis
+        // Trackking of creation interferes with escape analysis
         Assume.assumeFalse(Node.TRACK_CREATION_POSITION);
-        // JaCoco can add escaping allocations (e.g. allocation of coverage recording data
-        // structures)
-        Assume.assumeFalse("JaCoCo found -> skipping", SubprocessUtil.isJaCoCoAttached());
         testEscapeAnalysis("testNewNodeSnippet", null, false);
     }
 
