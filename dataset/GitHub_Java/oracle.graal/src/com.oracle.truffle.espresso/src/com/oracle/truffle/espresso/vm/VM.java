@@ -2100,11 +2100,12 @@ public final class VM extends NativeEnv implements ContextAccess {
                 return daemonCount;
 
             case JMM_THREAD_PEAK_COUNT:
-                return getContext().getPeakThreadCount();
+                return getContext().getManagementStats().getThreadPeakCount();
             case JMM_THREAD_LIVE_COUNT:
                 return getContext().getActiveThreads().length;
+
             case JMM_THREAD_TOTAL_COUNT:
-                return getContext().getCreatedThreadCount();
+                return getContext().getManagementStats().getThreadTotalCount();
         }
         throw EspressoError.unimplemented("GetLongAttribute " + att);
     }
