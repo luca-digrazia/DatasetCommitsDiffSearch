@@ -43,7 +43,7 @@ public final class TruffleOutputGroup implements Closeable {
 
     private final GraphOutput<Void, ?> output;
 
-    private TruffleOutputGroup(TruffleDebugContext debug, CompilableTruffleAST compilable, Map<Object, Object> properties) throws IOException {
+    private TruffleOutputGroup(TruffleDebugContext debug, CompilableTruffleAST compilable, Map<Object, Object> properties) {
         String name = "Truffle::" + compilable.getName();
         GraphOutput<Void, ?> out = null;
         try {
@@ -58,13 +58,9 @@ public final class TruffleOutputGroup implements Closeable {
             out.beginGroup(null, name, name, null, 0, effectiveProperties);
         } catch (Throwable e) {
             if (out != null) {
-                try {
-                    out.close();
-                } catch (Throwable closeException) {
-                    e.addSuppressed(closeException);
-                }
+                out.close();
+                out = null;
             }
-            throw e;
         }
         this.output = out;
     }
@@ -85,9 +81,8 @@ public final class TruffleOutputGroup implements Closeable {
      * @param compilable the compiled AST
      * @param properties additional group properties or {@code null}
      * @return the opened {@link TruffleOutputGroup}
-     * @throws IOException in case of IO error
      */
-    public static TruffleOutputGroup open(TruffleDebugContext debug, CompilableTruffleAST compilable, Map<Object, Object> properties) throws IOException {
+    public static TruffleOutputGroup open(TruffleDebugContext debug, CompilableTruffleAST compilable, Map<Object, Object> properties) {
         if (debug != null && debug.isDumpEnabled()) {
             return new TruffleOutputGroup(debug, compilable, properties);
         }

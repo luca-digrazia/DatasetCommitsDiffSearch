@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,7 +27,6 @@ package org.graalvm.compiler.truffle.runtime;
 import com.oracle.truffle.api.dsl.Introspection;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.graphio.GraphOutput;
 import org.graalvm.graphio.GraphStructure;
 
@@ -35,26 +36,28 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-
-import static org.graalvm.compiler.truffle.common.TruffleCompilerOptions.getOptions;
+import org.graalvm.compiler.truffle.common.TruffleDebugContext;
 
 class PolymorphicSpecializeDump {
 
-    public static void dumpPolymorphicSpecialize(List<Node> toDump, List<OptimizedDirectCallNode> knownCallNodes) {
+    public static void dumpPolymorphicSpecialize(OptimizedCallTarget callTarget, List<Node> toDump) {
         assert toDump.size() > 0;
-        assert knownCallNodes.size() > 0;
-        final DebugContext debugContext = DebugContext.create(getOptions(), Collections.emptyList());
-        try {
+        try (TruffleDebugContext debugContext = openDebugContext(callTarget)) {
             Collections.reverse(toDump);
-            PolymorphicSpecializeDump.PolymorphicSpecializeGraph graph = new PolymorphicSpecializeDump.PolymorphicSpecializeGraph(knownCallNodes, toDump);
-            final GraphOutput<PolymorphicSpecializeGraph, ?> output = debugContext.buildOutput(GraphOutput.newBuilder(new PolymorphicSpecializeDump.PolymorphicSpecializeGraphStructure()));
-            output.beginGroup(graph, "Polymorphic Specialize [" + knownCallNodes.get(0).getCurrentCallTarget() + "]", "Polymorphic Specialize", null, 0, null);
+            PolymorphicSpecializeDump.PolymorphicSpecializeGraph graph = new PolymorphicSpecializeDump.PolymorphicSpecializeGraph(toDump);
+            final GraphOutput<PolymorphicSpecializeGraph, ?> output = debugContext.buildOutput(
+                            GraphOutput.newBuilder(new PolymorphicSpecializeDump.PolymorphicSpecializeGraphStructure()));
+            output.beginGroup(graph, "Polymorphic Specialize [" + callTarget + "]", "Polymorphic Specialize", null, 0, null);
             output.print(graph, null, 0, toDump.get(toDump.size() - 1).toString());
             output.endGroup();
             output.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    private static TruffleDebugContext openDebugContext(OptimizedCallTarget callTarget) {
+        return GraalTruffleRuntime.getRuntime().getTruffleCompiler(callTarget).openDebugContext(TruffleRuntimeOptions.getOptionsForCompiler(callTarget), null);
     }
 
     static class PolymorphicSpecializeGraph {
@@ -68,8 +71,22 @@ class PolymorphicSpecializeDump {
             }
 
             final Node node;
+
             final int id = idCounter++;
             DumpEdge edge;
+            DumpNodeClass nodeClass;
+
+            void setNewClass() {
+                nodeClass = new DumpNodeClass(this);
+            }
+        }
+
+        static class DumpNodeClass {
+            final DumpNode node;
+
+            DumpNodeClass(DumpNode node) {
+                this.node = node;
+            }
         }
 
         class DumpEdge {
@@ -86,22 +103,23 @@ class PolymorphicSpecializeDump {
 
         DumpNode makeNode(Node node) {
             DumpNode n = new DumpNode(node);
+            n.setNewClass();
             nodes.add(n);
             return n;
         }
 
-        PolymorphicSpecializeGraph(List<OptimizedDirectCallNode> needsSplitCallNodes, List<Node> nodeChain) {
+        PolymorphicSpecializeGraph(List<Node> nodeChain) {
             DumpNode last = null;
             for (int i = 0; i < nodeChain.size(); i++) {
                 if (i == 0) {
-                    for (OptimizedDirectCallNode callNode : needsSplitCallNodes) {
-                        makeNode(callNode);
-                    }
                     last = makeNode(nodeChain.get(i));
                     for (DumpNode dumpNode : nodes) {
                         dumpNode.edge = new DumpEdge(last);
                     }
                 } else {
+                    // Fortify: Suppress Null Dereference false positive
+                    assert last != null;
+
                     DumpNode n = makeNode(nodeChain.get(i));
                     last.edge = new DumpEdge(n);
                     last = n;
@@ -111,7 +129,7 @@ class PolymorphicSpecializeDump {
     }
 
     static class PolymorphicSpecializeGraphStructure
-                    implements GraphStructure<PolymorphicSpecializeGraph, PolymorphicSpecializeGraph.DumpNode, PolymorphicSpecializeGraph.DumpNode, PolymorphicSpecializeGraph.DumpEdge> {
+                    implements GraphStructure<PolymorphicSpecializeGraph, PolymorphicSpecializeGraph.DumpNode, PolymorphicSpecializeGraph.DumpNodeClass, PolymorphicSpecializeGraph.DumpEdge> {
 
         @Override
         public PolymorphicSpecializeGraph graph(PolymorphicSpecializeGraph currentGraph, Object obj) {
@@ -162,34 +180,34 @@ class PolymorphicSpecializeDump {
         }
 
         @Override
-        public PolymorphicSpecializeGraph.DumpNode nodeClass(Object obj) {
-            return (obj instanceof PolymorphicSpecializeGraph.DumpNode) ? (PolymorphicSpecializeGraph.DumpNode) obj : null;
+        public PolymorphicSpecializeGraph.DumpNodeClass nodeClass(Object obj) {
+            return (obj instanceof PolymorphicSpecializeGraph.DumpNodeClass) ? (PolymorphicSpecializeGraph.DumpNodeClass) obj : null;
 
         }
 
         @Override
-        public PolymorphicSpecializeGraph.DumpNode classForNode(PolymorphicSpecializeGraph.DumpNode node) {
-            return node;
+        public PolymorphicSpecializeGraph.DumpNodeClass classForNode(PolymorphicSpecializeGraph.DumpNode node) {
+            return node.nodeClass;
         }
 
         @Override
-        public String nameTemplate(PolymorphicSpecializeGraph.DumpNode nodeClass) {
+        public String nameTemplate(PolymorphicSpecializeGraph.DumpNodeClass nodeClass) {
             return "{p#label}";
         }
 
         @Override
-        public Object nodeClassType(PolymorphicSpecializeGraph.DumpNode nodeClass) {
+        public Object nodeClassType(PolymorphicSpecializeGraph.DumpNodeClass nodeClass) {
             return nodeClass.getClass();
         }
 
         @Override
-        public PolymorphicSpecializeGraph.DumpEdge portInputs(PolymorphicSpecializeGraph.DumpNode nodeClass) {
+        public PolymorphicSpecializeGraph.DumpEdge portInputs(PolymorphicSpecializeGraph.DumpNodeClass nodeClass) {
             return null;
         }
 
         @Override
-        public PolymorphicSpecializeGraph.DumpEdge portOutputs(PolymorphicSpecializeGraph.DumpNode nodeClass) {
-            return nodeClass.edge;
+        public PolymorphicSpecializeGraph.DumpEdge portOutputs(PolymorphicSpecializeGraph.DumpNodeClass nodeClass) {
+            return nodeClass.node.edge;
         }
 
         @Override
