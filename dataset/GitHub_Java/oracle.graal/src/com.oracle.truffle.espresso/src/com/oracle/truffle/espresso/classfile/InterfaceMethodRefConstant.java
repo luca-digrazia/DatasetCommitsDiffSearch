@@ -22,7 +22,7 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.espresso.nodes.BytecodesNode.resolveMethodCount;
+import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
 
 import java.util.Objects;
 
@@ -113,8 +113,6 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
             Symbol<Name> name = getName(pool);
 
             Meta meta = context.getMeta();
-            // 1. If C is not an interface, interface method resolution throws an
-            // IncompatibleClassChangeError.
             if (!holderInterface.isInterface()) {
                 throw meta.throwExWithMessage(meta.IncompatibleClassChangeError, meta.toGuestString(name));
             }
