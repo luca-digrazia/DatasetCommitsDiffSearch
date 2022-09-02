@@ -118,10 +118,10 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
         hostedOptions.values().forEach(o -> extractOption(NativeImage.oH, o, apiOptions, groupDefaults));
         runtimeOptions.values().forEach(o -> extractOption(NativeImage.oR, o, apiOptions, groupDefaults));
         groupDefaults.forEach((groupName, defaults) -> {
-            if (defaults.size() > 1) {
-                VMError.shouldNotReachHere(String.format("APIOptionGroup %s must only have a single default (but has: %s)",
-                                groupName, String.join(", ", defaults)));
-            }
+            VMError.guarantee(defaults.size() <= 1,
+                            String.format("APIOptionGroup %s must only have a single default (but has: %s)",
+                                            groupName, String.join(", ", defaults)));
+
         });
         return apiOptions;
     }
@@ -134,9 +134,9 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
 
             for (APIOption apiAnnotation : apiAnnotations) {
                 String builderOption = optionPrefix;
-                if (apiAnnotation.name().length <= 0) {
-                    VMError.shouldNotReachHere(String.format("APIOption for %s does not provide a name entry", optionDescriptor.getLocation()));
-                }
+
+                VMError.guarantee(apiAnnotation.name().length > 0,
+                                String.format("APIOption for %s does not provide a name entry", optionDescriptor.getLocation()));
                 String apiOptionName = APIOption.Utils.optionName(apiAnnotation.name()[0]);
                 String rawOptionName = optionDescriptor.getName();
                 APIOptionGroup group = null;
@@ -149,9 +149,8 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                             Class<? extends APIOptionGroup> groupClass = apiAnnotation.group();
                             group = ReflectionUtil.newInstance(groupClass);
                             String groupName = APIOption.Utils.groupName(group);
-                            if (group.helpText() == null || group.helpText().isEmpty()) {
-                                VMError.shouldNotReachHere(String.format("APIOptionGroup %s(%s) needs to provide help text", groupClass.getName(), group.name()));
-                            }
+                            VMError.guarantee(group.helpText() != null && !group.helpText().isEmpty(),
+                                            String.format("APIOptionGroup %s(%s) needs to provide help text", groupClass.getName(), group.name()));
                             String groupMember = apiAnnotation.name()[0];
                             apiOptionName = groupName + groupMember;
                             Boolean isEnabled = (Boolean) optionDescriptor.getOptionKey().getDefaultValue();
@@ -165,34 +164,28 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                                             "Class specified as group for @APIOption " + apiOptionName + " cannot be loaded or instantiated: " + apiAnnotation.group().getTypeName(), ex.getCause());
                         }
                     }
-                    if (apiAnnotation.kind().equals(APIOptionKind.Paths)) {
-                        VMError.shouldNotReachHere(String.format("Boolean APIOption %s(%s) cannot use APIOptionKind.Paths", apiOptionName, rawOptionName));
-                    }
-                    if (apiAnnotation.defaultValue().length > 0) {
-                        VMError.shouldNotReachHere(String.format("Boolean APIOption %s(%s) cannot use APIOption.defaultValue", apiOptionName, rawOptionName));
-                    }
-                    if (apiAnnotation.fixedValue().length > 0) {
-                        VMError.shouldNotReachHere(String.format("Boolean APIOption %s(%s) cannot use APIOption.fixedValue", apiOptionName, rawOptionName));
-                    }
+                    VMError.guarantee(!apiAnnotation.kind().equals(APIOptionKind.Paths),
+                                    String.format("Boolean APIOption %s(%s) cannot use APIOptionKind.Paths", apiOptionName, rawOptionName));
+                    VMError.guarantee(apiAnnotation.defaultValue().length == 0,
+                                    String.format("Boolean APIOption %s(%s) cannot use APIOption.defaultValue", apiOptionName, rawOptionName));
+                    VMError.guarantee(apiAnnotation.fixedValue().length == 0,
+                                    String.format("Boolean APIOption %s(%s) cannot use APIOption.fixedValue", apiOptionName, rawOptionName));
                     builderOption += apiAnnotation.kind().equals(APIOptionKind.Negated) ? "-" : "+";
                     builderOption += rawOptionName;
                     booleanOption = true;
                 } else {
-                    if (!apiAnnotation.group().equals(APIOption.NullGroup.class)) {
-                        VMError.shouldNotReachHere(String.format("Using @APIOption.group not supported for non-boolean APIOption %s(%s)", apiOptionName, rawOptionName));
-                    }
-                    if (apiAnnotation.kind().equals(APIOptionKind.Negated)) {
-                        VMError.shouldNotReachHere(String.format("Non-boolean APIOption %s(%s) cannot use APIOptionKind.Negated", apiOptionName, rawOptionName));
-                    }
-                    if (apiAnnotation.defaultValue().length > 1) {
-                        VMError.shouldNotReachHere(String.format("APIOption %s(%s) cannot have more than one APIOption.defaultValue", apiOptionName, rawOptionName));
-                    }
-                    if (apiAnnotation.fixedValue().length > 1) {
-                        VMError.shouldNotReachHere(String.format("APIOption %s(%s) cannot have more than one APIOption.fixedValue", apiOptionName, rawOptionName));
-                    }
-                    if (apiAnnotation.fixedValue().length > 0 && apiAnnotation.defaultValue().length > 0) {
-                        VMError.shouldNotReachHere(String.format("APIOption %s(%s) APIOption.defaultValue and APIOption.fixedValue cannot be combined", apiOptionName, rawOptionName));
-                    }
+                    VMError.guarantee(apiAnnotation.group().equals(APIOption.NullGroup.class),
+                                    String.format("Using @APIOption.group not supported for non-boolean APIOption %s(%s)", apiOptionName, rawOptionName));
+                    VMError.guarantee(!apiAnnotation.kind().equals(APIOptionKind.Negated),
+                                    String.format("Non-boolean APIOption %s(%s) cannot use APIOptionKind.Negated", apiOptionName, rawOptionName));
+                    VMError.guarantee(apiAnnotation.defaultValue().length <= 1,
+                                    String.format("APIOption %s(%s) cannot have more than one APIOption.defaultValue", apiOptionName, rawOptionName));
+                    VMError.guarantee(apiAnnotation.fixedValue().length <= 1,
+                                    String.format("APIOption %s(%s) cannot have more than one APIOption.fixedValue", apiOptionName, rawOptionName));
+                    VMError.guarantee(apiAnnotation.fixedValue().length == 0 && apiAnnotation.defaultValue().length == 0 ||
+                                    (apiAnnotation.fixedValue().length > 0) ^ (apiAnnotation.defaultValue().length > 0),
+                                    String.format("APIOption %s(%s) APIOption.defaultValue and APIOption.fixedValue cannot be combined", apiOptionName, rawOptionName));
+
                     if (apiAnnotation.defaultValue().length > 0) {
                         defaultValue = apiAnnotation.defaultValue()[0];
                     }
@@ -208,9 +201,8 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                 if (!apiAnnotation.customHelp().isEmpty()) {
                     helpText = apiAnnotation.customHelp();
                 }
-                if (helpText == null || helpText.isEmpty()) {
-                    VMError.shouldNotReachHere(String.format("APIOption %s(%s) needs to provide help text", apiOptionName, rawOptionName));
-                }
+                VMError.guarantee(helpText != null && !helpText.isEmpty(),
+                                String.format("APIOption %s(%s) needs to provide help text", apiOptionName, rawOptionName));
                 if (group == null) {
                     /* Regular help text needs to start with lower-case letter */
                     helpText = startLowerCase(helpText);
