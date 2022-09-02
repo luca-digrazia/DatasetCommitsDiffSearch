@@ -341,7 +341,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return sb.toString();
     }
 
-    public static TruffleObject bind(TruffleObject library, Method m, String mangledName) throws UnknownIdentifierException {
+    private static TruffleObject bind(TruffleObject library, Method m, String mangledName) throws UnknownIdentifierException {
         String signature = buildJniNativeSignature(m);
         return NativeLibrary.lookupAndBind(library, mangledName, signature);
     }
@@ -1140,12 +1140,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                                     } catch (UnknownIdentifierException e) {
                                         // native method not found in libjava, safe to ignore
                                     }
-                                    // Look in agents
-                                    TruffleObject nativeMethod = getContext().bindToAgent(getMethod(), mangledName);
-                                    if (nativeMethod != null) {
-                                        callTarget = Truffle.getRuntime().createCallTarget(EspressoRootNode.create(null, new NativeMethodNode(nativeMethod, this, true)));
-                                        return callTarget;
-                                    }
                                 }
                             }
 
@@ -1260,7 +1254,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
         @Override
         public byte[] getOriginalCode() {
-            return getCodeAttribute().getOriginalCode();
+            return getMethod().getOriginalCode();
         }
 
         @Override
