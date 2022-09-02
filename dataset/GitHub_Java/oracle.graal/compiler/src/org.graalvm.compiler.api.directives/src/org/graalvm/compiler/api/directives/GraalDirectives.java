@@ -81,13 +81,6 @@ public final class GraalDirectives {
     }
 
     /**
-     * A call to this method will never result in the enclosing loop be strip mined.
-     */
-    public static void iterationRangeIntegrity() {
-
-    }
-
-    /**
      * A call to this method will assume a stable dimension array if {@code t} is a constant array
      * and {@code i} a constant integer.
      */

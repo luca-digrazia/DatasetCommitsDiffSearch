@@ -93,7 +93,6 @@ import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
 import org.graalvm.compiler.nodes.debug.BindToRegisterNode;
 import org.graalvm.compiler.nodes.debug.BlackholeNode;
 import org.graalvm.compiler.nodes.debug.ControlFlowAnchorNode;
-import org.graalvm.compiler.nodes.debug.NeverStripMineNode;
 import org.graalvm.compiler.nodes.debug.SideEffectNode;
 import org.graalvm.compiler.nodes.debug.SpillRegistersNode;
 import org.graalvm.compiler.nodes.extended.BoxNode;
@@ -1099,6 +1098,7 @@ public class StandardGraphBuilderPlugins {
             } else {
                 b.add(node);
             }
+            b.processInstruction(node);
         }
 
         protected final void createUnsafeAccess(ValueNode value, GraphBuilderContext b, UnsafeNodeConstructor nodeConstructor) {
@@ -1158,6 +1158,7 @@ public class StandardGraphBuilderPlugins {
                     b.push(unsafeAccessKind, graph.addOrUnique(phi));
                 }
                 b.setStateAfter(merge);
+                b.processInstruction(merge);
             }
         }
     }
@@ -1418,18 +1419,6 @@ public class StandardGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 b.add(new ControlFlowAnchorNode());
-                return true;
-            }
-        });
-        r.register0("iterationRangeIntegrity", new InvocationPlugin() {
-            @Override
-            public boolean inlineOnly() {
-                return true;
-            }
-
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                b.add(new NeverStripMineNode());
                 return true;
             }
         });
