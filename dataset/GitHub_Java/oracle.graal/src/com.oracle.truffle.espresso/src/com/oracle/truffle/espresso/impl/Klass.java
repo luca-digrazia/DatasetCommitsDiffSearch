@@ -1224,7 +1224,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     public boolean sameRuntimePackage(Klass other) {
-        if (getDefiningClassLoader() != other.getDefiningClassLoader()) {
+        if (this.getDefiningClassLoader() != other.getDefiningClassLoader()) {
             return false;
         }
         if (getJavaVersion().modulesEnabled()) {
