@@ -80,7 +80,6 @@ import org.graalvm.options.OptionStability;
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
 import org.junit.Assert;
@@ -104,9 +103,9 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
@@ -115,6 +114,9 @@ import com.oracle.truffle.api.test.polyglot.LanguageSPITest.ServiceTestLanguage.
 import com.oracle.truffle.api.test.polyglot.LanguageSPITest.ServiceTestLanguage.LanguageSPITestLanguageService3;
 import com.oracle.truffle.api.test.polyglot.LanguageSPITest.ServiceTestLanguage.LanguageSPITestLanguageService4;
 import com.oracle.truffle.api.test.polyglot.LanguageSPITestLanguage.LanguageContext;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import org.graalvm.polyglot.HostAccessPolicy;
 
 public class LanguageSPITest {
 
@@ -384,7 +386,7 @@ public class LanguageSPITest {
 
     @Test
     public void testLookupHost() {
-        Context context = Context.newBuilder().allowHostAccess(HostAccess.ALL).allowHostClassLookup((String s) -> true).build();
+        Context context = Context.newBuilder().allowHostAccess(HostAccessPolicy.ALL).allowHostClassLookup((String s) -> true).build();
         Value value = eval(context, new Function<Env, Object>() {
             public Object apply(Env t) {
                 return t.lookupHostSymbol("java.util.HashMap");
@@ -398,7 +400,7 @@ public class LanguageSPITest {
 
     @Test
     public void testLookupHostArray() {
-        Context context = Context.newBuilder().allowHostAccess(HostAccess.ALL).allowHostClassLookup((String s) -> true).build();
+        Context context = Context.newBuilder().allowHostAccess(HostAccessPolicy.ALL).allowHostClassLookup((String s) -> true).build();
         Value value = eval(context, new Function<Env, Object>() {
             public Object apply(Env t) {
                 return t.lookupHostSymbol("java.lang.String[]");
@@ -412,7 +414,7 @@ public class LanguageSPITest {
 
     @Test
     public void testLookupHostDisabled() {
-        Context context = Context.newBuilder().allowHostAccess(HostAccess.ALL).allowHostClassLookup((String s) -> false).build();
+        Context context = Context.newBuilder().allowHostAccess(HostAccessPolicy.ALL).allowHostClassLookup((String s) -> false).build();
         try {
             eval(context, new Function<Env, Object>() {
                 public Object apply(Env t) {
@@ -432,7 +434,7 @@ public class LanguageSPITest {
         assertTrue(!eval(context, env -> env.isHostLookupAllowed()).asBoolean());
         context.close();
 
-        context = Context.newBuilder().allowHostAccess(HostAccess.ALL).allowHostClassLookup((String s) -> true).build();
+        context = Context.newBuilder().allowHostAccess(HostAccessPolicy.ALL).allowHostClassLookup((String s) -> true).build();
         assertTrue(eval(context, env -> env.isHostLookupAllowed()).asBoolean());
         context.close();
     }
