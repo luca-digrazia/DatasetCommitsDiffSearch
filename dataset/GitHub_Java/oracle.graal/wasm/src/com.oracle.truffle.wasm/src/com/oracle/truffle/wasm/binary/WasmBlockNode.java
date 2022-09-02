@@ -34,9 +34,7 @@ import static com.oracle.truffle.wasm.binary.Assert.format;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.BLOCK;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.BR;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.BR_IF;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.BR_TABLE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.CALL;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.CALL_INDIRECT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.DROP;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.ELSE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.END;
@@ -197,10 +195,7 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.LOCAL_GET;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.LOCAL_SET;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.LOCAL_TEE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.LOOP;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.MEMORY_GROW;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.MEMORY_SIZE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.NOP;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.RETURN;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.SELECT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.UNREACHABLE;
 
@@ -208,8 +203,6 @@ import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.IndirectCallNode;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.wasm.binary.exception.WasmException;
 import com.oracle.truffle.wasm.binary.exception.WasmTrap;
@@ -224,13 +217,11 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private final int initialByteConstantOffset;
     @CompilationFinal private final int initialIntConstantOffset;
     @CompilationFinal private final int initialNumericLiteralOffset;
-    @CompilationFinal private final int initialBranchTableOffset;
     @CompilationFinal private ContextReference<WasmContext> rawContextReference;
     @Children WasmNode[] nestedControlTable;
-    @Children Node[] callNodeTable;
+    @Children DirectCallNode[] callNodeTable;
 
-    public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer,
-                         int initialByteConstantOffset, int initialIntConstantOffset, int initialNumericLiteralOffset, int initialBranchTableOffset) {
+    public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialByteConstantOffset, int initialIntConstantOffset, int initialNumericLiteralOffset) {
         super(wasmModule, codeEntry, -1, -1, -1);
         this.startOffset = startOffset;
         this.returnTypeId = returnTypeId;
@@ -238,7 +229,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
         this.initialByteConstantOffset = initialByteConstantOffset;
         this.initialIntConstantOffset = initialIntConstantOffset;
         this.initialNumericLiteralOffset = initialNumericLiteralOffset;
-        this.initialBranchTableOffset = initialBranchTableOffset;
         this.nestedControlTable = null;
         this.callNodeTable = null;
     }
@@ -257,7 +247,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
         int byteConstantOffset = initialByteConstantOffset;
         int intConstantOffset = initialIntConstantOffset;
         int numericLiteralOffset = initialNumericLiteralOffset;
-        int branchTableOffset = initialBranchTableOffset;
         int stackPointer = initialStackPointer;
         int offset = startOffset;
         while (offset < startOffset + byteLength()) {
@@ -284,7 +273,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byteConstantOffset += block.byteConstantLength();
                     intConstantOffset += block.intConstantLength();
                     numericLiteralOffset += block.numericLiteralLength();
-                    branchTableOffset += block.branchTableLength();
                     break;
                 }
                 case LOOP: {
@@ -310,7 +298,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byteConstantOffset += loopNode.byteConstantLength();
                     intConstantOffset += loopNode.intConstantLength();
                     numericLiteralOffset += loopNode.numericLiteralLength();
-                    branchTableOffset += loopNode.branchTableLength();
                     break;
                 }
                 case IF: {
@@ -326,7 +313,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byteConstantOffset += ifNode.byteConstantLength();
                     intConstantOffset += ifNode.intConstantLength();
                     numericLiteralOffset += ifNode.numericLiteralLength();
-                    branchTableOffset += ifNode.branchTableLength();
                     break;
                 }
                 case ELSE:
@@ -338,12 +324,11 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
 
                     // Reset the stack pointer to the target block stack pointer.
                     int continuationStackPointer = codeEntry().intConstant(intConstantOffset);
-                    int targetBlockReturnLength = codeEntry().intConstant(intConstantOffset + 1);
                     // Technically, we should increment the intConstantOffset and numericLiteralOffset at this point,
                     // but since we are returning, it does not really matter.
 
                     // Populate the stack with the return values of the current block (the one we are escaping from).
-                    unwindStack(frame, stackPointer, continuationStackPointer, targetBlockReturnLength);
+                    unwindStack(frame, stackPointer, continuationStackPointer);
 
                     return unwindCounter;
                 }
@@ -355,12 +340,11 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
 
                         // Reset the stack pointer to the target block stack pointer.
                         int continuationStackPointer = codeEntry().intConstant(intConstantOffset);
-                        int targetBlockReturnLength = codeEntry().intConstant(intConstantOffset + 1);
                         // Technically, we should increment the intConstantOffset and numericLiteralOffset at this point,
                         // but since we are returning, it does not really matter.
 
                         // Populate the stack with the return values of the current block (the one we are escaping from).
-                        unwindStack(frame, stackPointer, continuationStackPointer, targetBlockReturnLength);
+                        unwindStack(frame, stackPointer, continuationStackPointer);
 
                         return unwindCounter;
                     }
@@ -369,28 +353,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byteConstantOffset++;
                     offset += constantLength;
                     break;
-                }
-                case BR_TABLE: {
-                    stackPointer--;
-                    int index = popInt(frame, stackPointer);
-                    int[] table = codeEntry().branchTable(branchTableOffset);
-                    int[] continuationStackPointers = codeEntry().branchTable(branchTableOffset + 1);
-                    int[] targetBlocksReturnLengths = codeEntry().branchTable(branchTableOffset + 2);
-                    index = index >= table.length ? table.length - 1 : index;
-                    // Technically, we should increment the branchTableOffset at this point,
-                    // but since we are returning, it does not really matter.
-
-                    // Populate the stack with the return values of the current block (the one we are escaping from).
-                    unwindStack(frame, stackPointer, continuationStackPointers[index], targetBlocksReturnLengths[index]);
-
-                    return table[index];
-                }
-                case RETURN: {
-                    // A return statement causes the termination of the current function, i.e. causes the execution
-                    // to resume after the instruction that invoked the current frame.
-                    int rootBlockReturnLength = codeEntry().intConstant(intConstantOffset);
-                    unwindStack(frame, stackPointer, 0, rootBlockReturnLength);
-                    return Integer.MAX_VALUE;
                 }
                 case CALL: {
                     int functionIndex = codeEntry().numericLiteralAsInt(numericLiteralOffset);
@@ -403,7 +365,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byte returnType = function.returnType();
                     int numArgs = function.numArguments();
 
-                    DirectCallNode callNode = (DirectCallNode) callNodeTable[callNodeOffset];
+                    DirectCallNode callNode = callNodeTable[callNodeOffset];
                     callNodeOffset++;
 
                     Object[] args = createArgumentsForCall(frame, function, numArgs, stackPointer);
@@ -437,93 +399,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                             // Void return type - do nothing.
                             break;
                         }
-                    }
-
-                    break;
-                }
-                case CALL_INDIRECT: {
-                    // Extract the function object.
-                    stackPointer--;
-                    int tableIndex = popInt(frame, stackPointer);
-                    if (!wasmModule().table().validateIndex(tableIndex)) {
-                        throw new WasmTrap("CALL_INDIRECT: Invalid table index", this);
-                    }
-                    int functionIndex = wasmModule().table().functionIndex(tableIndex);
-                    WasmFunction function = wasmModule().symbolTable().function(functionIndex);
-
-                    // Extract the function type index.
-                    int expectedFunctionTypeIndex = codeEntry().numericLiteralAsInt(numericLiteralOffset);
-                    numericLiteralOffset++;
-                    byte constantLength = codeEntry().byteConstant(byteConstantOffset);
-                    byteConstantOffset++;
-                    offset += constantLength;
-                    offset += 1;  // For the 0x00 constant at the end of the CALL_INDIRECT instruction.
-
-                    // Validate that the function type matches the expected type.
-                    int expectedNumArgs = wasmModule().symbolTable().getFunctionTypeNumArguments(expectedFunctionTypeIndex);
-                    int expectedReturnLength = wasmModule().symbolTable().getFunctionTypeReturnTypeLength(expectedFunctionTypeIndex);
-
-                    boolean valid = true;
-                    valid = valid && (expectedNumArgs == function.numArguments());
-                    valid = valid && (expectedReturnLength == function.returnTypeLength());
-
-                    if (!valid) {
-                        throw new WasmTrap("CALL_INDIRECT: Actual and expected function types differ", this);
-                    }
-                    // At this point, the expected and actual number of arguments and return length match.
-
-                    // Validate the argument types.
-                    for (int i = 0; i != expectedNumArgs; ++i) {
-                        byte actualType = function.argumentTypeAt(i);
-                        byte expectedType = wasmModule().symbolTable().getFunctionTypeArgumentTypeAt(expectedFunctionTypeIndex, i);
-                        valid = valid && (actualType == expectedType);
-                    }
-
-                    // Validate the return types.
-                    for (int i = 0; i != expectedReturnLength; ++i) {
-                        byte actualType = function.returnTypeAt(i);
-                        byte expectedType = wasmModule().symbolTable().getFunctionTypeReturnTypeAt(expectedFunctionTypeIndex, i);
-                        valid = valid && (actualType == expectedType);
-                    }
-
-                    if (!valid) {
-                        throw new WasmTrap("CALL_INDIRECT: Actual and expected function types differ", this);
-                    }
-
-                    // Invoke the resolved function.
-                    IndirectCallNode callNode = (IndirectCallNode) callNodeTable[callNodeOffset];
-                    callNodeOffset++;
-
-                    Object[] args = createArgumentsForCall(frame, function, function.numArguments(), stackPointer);
-                    stackPointer -= args.length;
-
-                    Object result = callNode.call(function.getCallTarget(), args);
-                    // At the moment, WebAssembly functions may return up to one value.
-                    // As per the WebAssembly specification, this restriction may be lifted in the future.
-                    switch (function.returnType()) {
-                        case ValueTypes.I32_TYPE: {
-                            pushInt(frame, stackPointer, (int) result);
-                            stackPointer++;
-                            break;
-                        }
-                        case ValueTypes.I64_TYPE: {
-                            push(frame, stackPointer, (long) result);
-                            stackPointer++;
-                            break;
-                        }
-                        case ValueTypes.F32_TYPE: {
-                            pushFloat(frame, stackPointer, (float) result);
-                            stackPointer++;
-                            break;
-                        }
-                        case ValueTypes.F64_TYPE: {
-                            pushDouble(frame, stackPointer, (double) result);
-                            stackPointer++;
-                            break;
-                        }
-                        default:
-                            // Void return type - do nothing.
-                            break;
                     }
 
                     break;
@@ -968,14 +843,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                         throw new WasmTrap("memory address out-of-bounds", this);
                     }
 
-                    break;
-                }
-                case MEMORY_SIZE: {
-                    offset++;  // 0x00
-                    break;
-                }
-                case MEMORY_GROW: {
-                    offset++;  // 0x00
                     break;
                 }
                 case I32_CONST: {
@@ -1983,8 +1850,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @ExplodeLoop
-    private void unwindStack(VirtualFrame frame, int stackPointer, int continuationStackPointer, int targetBlockReturnLength) {
-        for (int i = 0; i != targetBlockReturnLength; ++i) {
+    private void unwindStack(VirtualFrame frame, int stackPointer, int continuationStackPointer) {
+        for (int i = 0; i != returnTypeLength(); ++i) {
             stackPointer--;
             long value = pop(frame, stackPointer);
             push(frame, continuationStackPointer, value);
