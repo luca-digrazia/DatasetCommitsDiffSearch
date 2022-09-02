@@ -41,6 +41,7 @@ import com.oracle.truffle.llvm.parser.model.functions.FunctionSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.CastConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalAlias;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
+import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
 import com.oracle.truffle.llvm.runtime.GetStackSpaceFactory;
 import com.oracle.truffle.llvm.runtime.LLVMAlias;
@@ -73,7 +74,7 @@ public final class LLVMParser {
     }
 
     public LLVMParserResult parse(ModelModule module, DataLayout targetDataLayout, NodeFactory nodeFactory) {
-        List<GlobalVariable> externalGlobals = new ArrayList<>();
+          List<GlobalVariable> externalGlobals = new ArrayList<>();
         List<GlobalVariable> definedGlobals = new ArrayList<>();
         List<FunctionSymbol> externalFunctions = new ArrayList<>();
         List<String> importedSymbols = new ArrayList<>();
