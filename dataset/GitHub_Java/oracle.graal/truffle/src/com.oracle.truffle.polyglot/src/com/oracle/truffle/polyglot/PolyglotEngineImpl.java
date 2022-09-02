@@ -152,7 +152,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     // Data used by the runtime to enable "global" state per Engine
     volatile Object runtimeData;
     Map<String, Level> logLevels;    // effectively final
-    private volatile Object engineLoggers;
 
     PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, Map<String, String> options,
                     boolean allowExperimentalOptions, boolean useSystemProperties, ClassLoader contextClassLoader, boolean boundEngine,
@@ -802,10 +801,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             // don't commit to the close if still running as this might cause races in the executing
             // context.
             if (!stillRunning) {
-                Object engineLoggers = getEngineLoggers();
-                if (engineLoggers != null) {
-                    LANGUAGE.closeEngineLoggers(engineLoggers);
-                }
                 if (logHandler != null) {
                     logHandler.close();
                 }
@@ -1092,9 +1087,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
 
         Handler useHandler = PolyglotLogHandler.asHandler(logHandlerOrStream);
         useHandler = useHandler != null ? useHandler : logHandler;
-        useHandler = useHandler != null ? useHandler : PolyglotLogHandler.createStreamHandler(
-                        configErr == null ? INSTRUMENT.getOut(this.err) : configErr,
-                        false, true);
+        useHandler = useHandler != null ? useHandler : PolyglotLogHandler.createStreamHandler(useErr, false, true);
 
         final InputStream useIn = configIn == null ? this.in : configIn;
 
@@ -1140,30 +1133,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
             }
         }
         return context;
-    }
-
-    Object getOrCreateEngineLoggers() {
-        Object res = engineLoggers;
-        if (res == null) {
-            synchronized (this) {
-                res = engineLoggers;
-                if (res == null) {
-                    res = LANGUAGE.createEngineLoggers(this, logLevels);
-                    for (ContextWeakReference contextRef : contexts) {
-                        PolyglotContextImpl context = contextRef.get();
-                        if (context != null && !context.config.logLevels.isEmpty()) {
-                            LANGUAGE.configureLoggers(context, context.config.logLevels, res);
-                        }
-                    }
-                    engineLoggers = res;
-                }
-            }
-        }
-        return res;
-    }
-
-    Object getEngineLoggers() {
-        return engineLoggers;
     }
 
 }
