@@ -56,7 +56,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.function.BiConsumer;
@@ -98,6 +97,8 @@ public class NativeImage {
     static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
 
     static final String platform = getPlatform();
+    // resources.jar packs resources files needed for some jdk services such as xml serialization
+    private static final Path RESOURCES_JAR_PATH_JAVA8 = Paths.get("jre", "lib", "resources.jar");
 
     private static String getPlatform() {
         return (OS.getCurrent().className + "-" + SubstrateUtil.getArchitectureName()).toLowerCase();
@@ -397,16 +398,6 @@ public class NativeImage {
         default Path getAgentJAR() {
             return null;
         }
-
-        /**
-         * ResourcesJar packs resources files needed for some jdk services such as xml
-         * serialization.
-         * 
-         * @return the path to the resources.jar file
-         */
-        default Optional<Path> getResourcesJar() {
-            return Optional.empty();
-        }
     }
 
     private static class DefaultBuildConfiguration implements BuildConfiguration {
@@ -560,10 +551,6 @@ public class NativeImage {
             return rootDir.resolve(Paths.get("lib", "svm", "builder", "svm.jar"));
         }
 
-        @Override
-        public Optional<Path> getResourcesJar() {
-            return Optional.of(rootDir.resolve(Paths.get("lib", "resources.jar")));
-        }
     }
 
     private ArrayList<String> createFallbackBuildArgs() {
@@ -753,7 +740,7 @@ public class NativeImage {
             }
 
             config.getBuilderBootClasspath().forEach((Consumer<? super Path>) this::addImageBuilderBootClasspath);
-            config.getResourcesJar().ifPresent(this::addImageBuilderClasspath);
+            addCustomImageClasspath(config.getJavaHome().resolve(RESOURCES_JAR_PATH_JAVA8));
         }
 
         config.getImageClasspath().forEach(this::addCustomImageClasspath);
