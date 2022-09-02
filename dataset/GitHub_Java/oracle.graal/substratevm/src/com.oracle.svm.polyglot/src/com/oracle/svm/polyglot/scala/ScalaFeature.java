@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,25 +27,27 @@ package com.oracle.svm.polyglot.scala;
 // Checkstyle: stop
 
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Objects;
+import java.util.Arrays;
 import java.util.function.BooleanSupplier;
-import java.util.stream.Stream;
 
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
+import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.hosted.RuntimeClassInitialization;
+import org.graalvm.nativeimage.hosted.RuntimeReflection;
 
+import com.oracle.svm.core.ParsingReason;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 
-import jdk.vm.ci.meta.MetaAccessProvider;
-
 // Checkstyle: resume
 @AutomaticFeature
 public class ScalaFeature implements GraalFeature {
+
+    public static final String UNSUPPORTED_SCALA_VERSION = "This is not a supported Scala version. native-image supports Scala 2.11.x and onwards.";
 
     static class IsEnabled implements BooleanSupplier {
         @Override
@@ -52,76 +56,59 @@ public class ScalaFeature implements GraalFeature {
         }
     }
 
-    static class HasMangledPopulateNamesMapMethod implements BooleanSupplier {
-        @Override
-        public boolean getAsBoolean() {
-            return ImageSingletons.contains(ScalaFeature.class) && ImageSingletons.lookup(ScalaFeature.class).hasMangledPopulatesNameMapMethod;
-        }
-    }
-
-    static class HasPopulateNamesMapMethod implements BooleanSupplier {
-        @Override
-        public boolean getAsBoolean() {
-            return ImageSingletons.contains(ScalaFeature.class) && !ImageSingletons.lookup(ScalaFeature.class).hasMangledPopulatesNameMapMethod;
-        }
-    }
-
-    private boolean hasMangledPopulatesNameMapMethod;
-
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
         return access.findClassByName("scala.Predef") != null;
     }
 
     @Override
-    public void afterRegistration(AfterRegistrationAccess access) {
-        Class<?> scalaEnum = access.findClassByName("scala.Enumeration");
-        try {
-            hasMangledPopulatesNameMapMethod = scalaEnum.getMethod("scala$Enumeration$$populateNameMap") != null;
-        } catch (NoSuchMethodException e) {
-            /* ignore, does not have a method */
-        }
-    }
-
-    @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
         initializeScalaEnumerations(access);
+        RuntimeClassInitialization.initializeAtBuildTime("scala.Symbol");
     }
 
     @Override
-    public void registerNodePlugins(MetaAccessProvider metaAccess, Plugins plugins, boolean analysis, boolean hosted) {
-        if (hosted && analysis) {
+    public void registerGraphBuilderPlugins(Providers providers, Plugins plugins, ParsingReason reason) {
+        if (reason == ParsingReason.PointsToAnalysis) {
             plugins.appendNodePlugin(new ScalaAnalysisPlugin());
         }
     }
 
-    private void initializeScalaEnumerations(BeforeAnalysisAccess a) {
-        BeforeAnalysisAccessImpl access = (BeforeAnalysisAccessImpl) a;
-        if (hasMangledPopulatesNameMapMethod) {
-            Class<?> scalaEnum = access.findClassByName("scala.Enumeration");
-            Stream<Field> scalaModuleFields = access.findSubclasses(scalaEnum).stream().map(ScalaFeature::getModuleField).filter(Objects::nonNull);
-            scalaModuleFields.forEach(ScalaFeature::preInitializeEnum);
-        }
+    private static boolean isValDef(Field[] fields, Method m) {
+        return Arrays.stream(fields).anyMatch(fd -> fd.getName().equals(m.getName()) && fd.getType().equals(m.getReturnType()));
     }
 
-    private static void preInitializeEnum(Field enumField) {
-        /* initialize the enumeration */
-        try {
-            Object instance = enumField.get(null);
-            Method populateNameMapMethod = enumField.getDeclaringClass().getMethod("scala$Enumeration$$populateNameMap");
-            populateNameMapMethod.setAccessible(true);
-            populateNameMapMethod.invoke(instance);
-            populateNameMapMethod.setAccessible(false);
-        } catch (IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
-            throw UserError.abort("scala.Enumeration does not have a method populateNameMap. Check that you are using a compatible version of Scala.");
-        }
+    /**
+     * Not all Scala enumerations can be pre-initialized. For that reason we support the Scala's
+     * original mechanism for initializing enumerations reflectively.
+     */
+    private static void initializeScalaEnumerations(BeforeAnalysisAccess beforeAnalysisAccess) {
+        BeforeAnalysisAccessImpl access = (BeforeAnalysisAccessImpl) beforeAnalysisAccess;
+
+        Class<?> scalaEnum = access.findClassByName("scala.Enumeration");
+        UserError.guarantee(scalaEnum != null, "%s", UNSUPPORTED_SCALA_VERSION);
+        Class<?> scalaEnumVal = access.findClassByName("scala.Enumeration$Val");
+        UserError.guarantee(scalaEnumVal != null, "%s", UNSUPPORTED_SCALA_VERSION);
+        Class<?> valueClass = access.findClassByName("scala.Enumeration$Value");
+        UserError.guarantee(valueClass != null, "%s", UNSUPPORTED_SCALA_VERSION);
+
+        access.findSubclasses(scalaEnum).forEach(enumClass -> {
+            /* this is based on implementation of scala.Enumeration.populateNamesMap */
+            RuntimeReflection.register(enumClass.getDeclaredFields());
+            // all method relevant for Enums
+            Method[] relevantMethods = Arrays.stream(enumClass.getDeclaredMethods())
+                            .filter(m -> m.getParameterTypes().length == 0 &&
+                                            m.getDeclaringClass() != scalaEnum &&
+                                            valueClass.isAssignableFrom(m.getReturnType()) &&
+                                            isValDef(enumClass.getDeclaredFields(), m))
+                            .toArray(Method[]::new);
+            RuntimeReflection.register(relevantMethods);
+            try {
+                RuntimeReflection.register(scalaEnumVal.getDeclaredMethod("id"));
+            } catch (NoSuchMethodException e) {
+                throw UserError.abort("%s", UNSUPPORTED_SCALA_VERSION);
+            }
+        });
     }
 
-    private static Field getModuleField(Class<?> clazz) {
-        try {
-            return clazz.getField("MODULE$");
-        } catch (NoSuchFieldException e1) {
-            return null; // not a module
-        }
-    }
 }

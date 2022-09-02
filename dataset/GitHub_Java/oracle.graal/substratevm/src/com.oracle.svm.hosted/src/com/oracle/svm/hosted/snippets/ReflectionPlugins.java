@@ -47,7 +47,6 @@ import java.util.stream.Stream;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.graphbuilderconf.ClassInitializationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
@@ -66,7 +65,9 @@ import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.ExceptionSynthesizer;
 import com.oracle.svm.hosted.ImageClassLoader;
+import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.c.GraalAccess;
+import com.oracle.svm.hosted.phases.SubstrateClassInitializationPlugin;
 import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
 import com.oracle.svm.hosted.substitute.DeletedElementException;
 import com.oracle.svm.util.ReflectionUtil;
@@ -111,22 +112,22 @@ public final class ReflectionPlugins {
     private final ImageClassLoader imageClassLoader;
     private final SnippetReflectionProvider snippetReflection;
     private final AnnotationSubstitutionProcessor annotationSubstitutions;
-    private final ClassInitializationPlugin classInitializationPlugin;
+    private final SVMHost hostVM;
     private final AnalysisUniverse aUniverse;
     private final ParsingReason reason;
 
-    private ReflectionPlugins(ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions,
-                    ClassInitializationPlugin classInitializationPlugin, AnalysisUniverse aUniverse, ParsingReason reason) {
+    private ReflectionPlugins(ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions, SVMHost hostVM,
+                    AnalysisUniverse aUniverse, ParsingReason reason) {
         this.imageClassLoader = imageClassLoader;
         this.snippetReflection = snippetReflection;
         this.annotationSubstitutions = annotationSubstitutions;
-        this.classInitializationPlugin = classInitializationPlugin;
+        this.hostVM = hostVM;
         this.aUniverse = aUniverse;
         this.reason = reason;
     }
 
     public static void registerInvocationPlugins(ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions,
-                    ClassInitializationPlugin classInitializationPlugin, InvocationPlugins plugins, AnalysisUniverse aUniverse, ParsingReason reason) {
+                    InvocationPlugins plugins, SVMHost hostVM, AnalysisUniverse aUniverse, ParsingReason reason) {
         /*
          * Initialize the registry if we are during analysis. If hosted is false, i.e., we are
          * analyzing the static initializers, then we always intrinsify, so don't need a registry.
@@ -137,7 +138,7 @@ public final class ReflectionPlugins {
             }
         }
 
-        ReflectionPlugins rp = new ReflectionPlugins(imageClassLoader, snippetReflection, annotationSubstitutions, classInitializationPlugin, aUniverse, reason);
+        ReflectionPlugins rp = new ReflectionPlugins(imageClassLoader, snippetReflection, annotationSubstitutions, hostVM, aUniverse, reason);
         rp.registerMethodHandlesPlugins(plugins);
         rp.registerClassPlugins(plugins);
     }
@@ -160,7 +161,7 @@ public final class ReflectionPlugins {
 
     static {
         ALLOWED_CONSTANT_CLASSES = new HashSet<>(Arrays.asList(
-                        Class.class, String.class, ClassLoader.class,
+                        Class.class, String.class,
                         Method.class, Constructor.class, Field.class,
                         MethodHandle.class, MethodHandles.Lookup.class, MethodType.class,
                         ByteOrder.class));
@@ -205,7 +206,6 @@ public final class ReflectionPlugins {
 
     private void registerClassPlugins(InvocationPlugins plugins) {
         registerFoldInvocationPlugins(plugins, Class.class,
-                        "getClassLoader",
                         "getField", "getMethod", "getConstructor",
                         "getDeclaredField", "getDeclaredMethod", "getDeclaredConstructor");
 
@@ -281,8 +281,8 @@ public final class ReflectionPlugins {
             return false;
         }
 
-        if (initialize) {
-            classInitializationPlugin.apply(b, b.getMetaAccess().lookupJavaType(clazz), null, null);
+        if (initialize && hostVM.getClassInitializationSupport().shouldInitializeAtRuntime(clazz)) {
+            SubstrateClassInitializationPlugin.emitEnsureClassInitialized(b, classConstant);
         }
         return true;
     }
@@ -441,7 +441,7 @@ public final class ReflectionPlugins {
      * compilation, not a lossy copy of it.
      */
     private <T> T getIntrinsic(GraphBuilderContext context, T element) {
-        if (reason == ParsingReason.UnsafeSubstitutionAnalysis || reason == ParsingReason.EarlyClassInitializerAnalysis) {
+        if (reason == ParsingReason.UnsafeSubstitutionAnalysis) {
             /* We are analyzing the static initializers and should always intrinsify. */
             return element;
         }
