@@ -29,15 +29,34 @@
  */
 package com.oracle.truffle.llvm.tests.services;
 
+import com.oracle.truffle.llvm.tests.pipe.CaptureOutput;
+import org.graalvm.polyglot.Context;
+
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.function.Function;
 
+/**
+ * Configuration for an engine used for running unit tests.
+ */
 public interface TestEngineConfig extends Comparable<TestEngineConfig> {
 
+    String TEST_ENGINE_CONFIG_PROPERTY_NAME = "sulongtest.config";
+
+    /**
+     * Gets the single global {@link TestEngineConfig} instance. Available configurations are
+     * discovered using {@link java.util.ServiceLoader#load}. The
+     * {@link #TEST_ENGINE_CONFIG_PROPERTY_NAME} property can be used to select a configuration
+     * based on its {@link #getName() name}. If the property is not set, the config with the
+     * <em>lowest</em> {@link #getPriority() priority} is selected.
+     */
     static TestEngineConfig getInstance() {
         return TestEngineConfigBase.getInstance();
     }
 
+    /**
+     * Name of the current test engine configuration.
+     */
     String getName();
 
     /**
@@ -45,10 +64,22 @@ public interface TestEngineConfig extends Comparable<TestEngineConfig> {
      */
     int getPriority();
 
+    /**
+     * Suffix for mx distributions that can be used with this configuration.
+     * 
+     * @see com.oracle.truffle.llvm.tests.options.TestOptions#getTestDistribution
+     */
     String getDistributionSuffix();
 
+    /**
+     * Context options required by this test engine configuration.
+     */
     Map<String, String> getContextOptions();
 
+    /**
+     * A filter to decide whether this configuration can execute the given test case.
+     */
     boolean canExecute(Path path);
 
+    Function<Context.Builder, CaptureOutput> getCaptureOutput();
 }
