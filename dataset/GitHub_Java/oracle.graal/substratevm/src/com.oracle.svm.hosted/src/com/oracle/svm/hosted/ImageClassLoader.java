@@ -37,14 +37,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import org.graalvm.collections.EconomicSet;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.word.Word;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -416,14 +414,6 @@ public final class ImageClassLoader {
 
     public Class<?> loadClassFromModule(Object module, String className) throws ClassNotFoundException {
         return classLoaderSupport.loadClassFromModule(module, className);
-    }
-
-    public Optional<Object> findModule(String moduleName) {
-        return classLoaderSupport.findModule(moduleName);
-    }
-
-    public void processAddExportsAndAddOpens(OptionValues parsedHostedOptions) {
-        classLoaderSupport.processAddExportsAndAddOpens(parsedHostedOptions);
     }
 }
 
