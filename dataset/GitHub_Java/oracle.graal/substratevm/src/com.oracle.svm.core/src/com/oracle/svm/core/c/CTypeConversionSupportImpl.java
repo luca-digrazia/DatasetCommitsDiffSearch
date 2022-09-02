@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,20 +24,25 @@
  */
 package com.oracle.svm.core.c;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.Arrays;
 
-import org.graalvm.nativeimage.Feature;
+import com.oracle.svm.core.jdk.Target_java_nio_DirectByteBuffer;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.impl.CTypeConversionSupport;
 import org.graalvm.word.Pointer;
+import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.config.ConfigurationValues;
 
 class CTypeConversionSupportImpl implements CTypeConversionSupport {
 
@@ -69,6 +76,23 @@ class CTypeConversionSupportImpl implements CTypeConversionSupport {
         }
     }
 
+    @Override
+    public String toJavaString(CCharPointer cString, UnsignedWord length, Charset charset) {
+        if (cString.isNull()) {
+            return null;
+        } else {
+            return toJavaStringWithCharset(cString, length, charset);
+        }
+    }
+
+    private static String toJavaStringWithCharset(CCharPointer cString, UnsignedWord length, Charset charset) {
+        byte[] bytes = new byte[(int) length.rawValue()];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = ((Pointer) cString).readByte(i);
+        }
+        return new String(bytes, charset);
+    }
+
     private static String toJavaStringUnchecked(CCharPointer cString, UnsignedWord length) {
         byte[] bytes = new byte[(int) length.rawValue()];
         for (int i = 0; i < bytes.length; i++) {
@@ -78,12 +102,17 @@ class CTypeConversionSupportImpl implements CTypeConversionSupport {
     }
 
     @Override
-    public CCharPointer toCString(CharSequence javaString, CCharPointer buffer, UnsignedWord bufferSize) {
+    public UnsignedWord toCString(CharSequence javaString, CCharPointer buffer, UnsignedWord bufferSize) {
+        return toCString(javaString, Charset.defaultCharset(), buffer, bufferSize);
+    }
+
+    @Override
+    public UnsignedWord toCString(CharSequence javaString, Charset charset, CCharPointer buffer, UnsignedWord bufferSize) {
         if (javaString == null || bufferSize.equal(0)) {
-            return WordFactory.nullPointer();
+            return WordFactory.zero();
         }
 
-        byte[] baseString = javaString.toString().getBytes();
+        byte[] baseString = javaString.toString().getBytes(charset);
 
         /*
          * The array length is always an int, so the truncation of the buffer size to int can never
@@ -95,7 +124,7 @@ class CTypeConversionSupportImpl implements CTypeConversionSupport {
             buffer.write(i, baseString[i]);
         }
 
-        return buffer;
+        return WordFactory.unsigned(len);
     }
 
     @Override
@@ -104,6 +133,12 @@ class CTypeConversionSupportImpl implements CTypeConversionSupport {
             return NULL_HOLDER;
         }
         return new CCharPointerHolderImpl(javaString);
+    }
+
+    @Override
+    public ByteBuffer asByteBuffer(PointerBase address, int size) {
+        ByteBuffer byteBuffer = SubstrateUtil.cast(new Target_java_nio_DirectByteBuffer(address.rawValue(), size), ByteBuffer.class);
+        return byteBuffer.order(ConfigurationValues.getTarget().arch.getByteOrder());
     }
 }
 
