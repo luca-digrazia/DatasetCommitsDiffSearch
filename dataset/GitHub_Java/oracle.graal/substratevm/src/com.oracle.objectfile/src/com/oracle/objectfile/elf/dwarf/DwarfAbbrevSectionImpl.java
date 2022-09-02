@@ -27,37 +27,35 @@
 package com.oracle.objectfile.elf.dwarf;
 
 import com.oracle.objectfile.LayoutDecision;
-import org.graalvm.compiler.debug.DebugContext;
 
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_ABBREV_CODE_compile_unit;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_ABBREV_CODE_subprogram;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_ABBREV_SECTION_NAME;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_AT_comp_dir;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_AT_external;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_AT_hi_pc;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_AT_language;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_AT_low_pc;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_AT_name;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_AT_null;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_AT_stmt_list;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CHILDREN_no;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CHILDREN_yes;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_FORM_addr;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_FORM_data1;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_FORM_data4;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_FORM_flag;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_FORM_null;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_FORM_strp;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_FRAME_SECTION_NAME;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_TAG_compile_unit;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_TAG_subprogram;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_ABBREV_CODE_compile_unit;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_ABBREV_CODE_subprogram;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_ABBREV_SECTION_NAME;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_AT_external;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_AT_hi_pc;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_AT_language;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_AT_low_pc;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_AT_name;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_AT_null;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_AT_stmt_list;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CHILDREN_no;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CHILDREN_yes;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_FORM_addr;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_FORM_data1;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_FORM_data4;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_FORM_flag;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_FORM_null;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_FORM_strp;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_FRAME_SECTION_NAME;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_TAG_compile_unit;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_TAG_subprogram;
 
 /**
  * Section generator for debug_abbrev section.
  */
 public class DwarfAbbrevSectionImpl extends DwarfSectionImpl {
 
-    public DwarfAbbrevSectionImpl(DwarfDebugInfo dwarfSections) {
+    public DwarfAbbrevSectionImpl(DwarfSections dwarfSections) {
         super(dwarfSections);
     }
 
@@ -70,94 +68,68 @@ public class DwarfAbbrevSectionImpl extends DwarfSectionImpl {
     public void createContent() {
         int pos = 0;
         /*
-         * An abbrev table contains abbrev entries for one or more CUs. the table includes a
-         * sequence of abbrev entries each of which defines a specific DIE layout employed to
-         * describe some DIE in a CU. a table is terminated by a null entry.
+         * an abbrev table contains abbrev entries for one or
+         * more CUs. the table includes a sequence of abbrev
+         * entries each of which defines a specific DIE layout
+         * employed to describe some DIE in a CU. a table is
+         * terminated by a null entry
          *
-         * A null entry has consists of just a 0 abbrev code.
+         * a null entry has consists of just a 0 abbrev code
+         * LEB128 abbrev_code; ...... == 0
          *
-         * <ul>
-         *
-         * <li><code>LEB128 abbrev_code; ...... == 0</code>
-         *
-         * </ul>
-         *
-         * Mon-null entries have the following format.
-         *
-         * <ul>
-         *
-         * <li><code>LEB128 abbrev_code; ......unique noncode for this layout != 0</code>
-         *
-         * <li><code>LEB128 tag; .............. defines the type of the DIE (class, subprogram, var
-         * etc)</code>
-         *
-         * <li><code>uint8 has_chldren; ....... is the DIE followed by child DIEs or a sibling
-         * DIE</code>
-         *
-         * <li><code>attribute_spec* .......... zero or more attributes</code>
-         *
-         * <li><code>null_attribute_spec ...... terminator</code> </ul>
+         * non-null entries have the following format
+         * LEB128 abbrev_code; ...... unique noncode for this layout != 0
+         * LEB128 tag; .............. defines the type of the DIE (class, subprogram, var etc)
+         * uint8 has_chldren; ....... is the DIE followed by child DIEs or a sibling DIE
+         * <attribute_spec>* ........ zero or more attributes
+         * <null_attribute_spec> .... terminator
          *
          * An attribute_spec consists of an attribute name and form
+         * LEB128 attr_name; ........ 0 for the null attribute name
+         * LEB128 attr_form; ........ 0 for the null attribute form
          *
-         * <ul>
-         *
-         * <li><code>LEB128 attr_name; ........ 0 for the null attribute name</code>
-         *
-         * <li><code>LEB128 attr_form; ........ 0 for the null attribute form</code>
-         *
-         * </ul>
-         *
-         * For the moment we only use one abbrev table for all CUs. It contains two DIEs, the first
-         * to describe the compilation unit itself and the second to describe each method within
+         * For the moment we only use one abbrev table for all CUs.
+         * It contains two DIEs, the first to describe the compilation
+         * unit itself and the second to describe each method within
          * that compilation unit.
          *
          * The DIE layouts are as follows:
          *
-         * <ul> <li><code>abbrev_code == 1, tag == DW_TAG_compilation_unit, has_children</code>
+         * abbrev_code == 1, tag == DW_TAG_compilation_unit, has_children
+         * DW_AT_language : ... DW_FORM_data1
+         * DW_AT_name : ....... DW_FORM_strp
+         * DW_AT_low_pc : ..... DW_FORM_address
+         * DW_AT_hi_pc : ...... DW_FORM_address
+         * DW_AT_stmt_list : .. DW_FORM_data4
          *
-         * <li><code>DW_AT_language : ... DW_FORM_data1</code>
-         *
-         * <li><code>DW_AT_name : ....... DW_FORM_strp</code>
-         *
-         * <li><code>DW_AT_low_pc : ..... DW_FORM_address</code>
-         *
-         * <li><code>DW_AT_hi_pc : ...... DW_FORM_address</code>
-         *
-         * <li><code>DW_AT_stmt_list : .. DW_FORM_data4</code> </ul>
-         *
-         * <ul> <li><code>abbrev_code == 2, tag == DW_TAG_subprogram, no_children</code>
-         *
-         * <li><code>DW_AT_name : ....... DW_FORM_strp</code>
-         *
-         * <li><code>DW_AT_hi_pc : ...... DW_FORM_addr</code>
-         *
-         * <li><code>DW_AT_external : ... DW_FORM_flag</code>
-         *
-         * </ul>
+         * abbrev_code == 2, tag == DW_TAG_subprogram, no_children
+         * DW_AT_name : ....... DW_FORM_strp
+         * DW_AT_low_pc : ..... DW_FORM_addr
+         * DW_AT_hi_pc : ...... DW_FORM_addr
+         * DW_AT_external : ... DW_FORM_flag
          */
 
-        pos = writeAbbrev1(null, null, pos);
-        pos = writeAbbrev2(null, null, pos);
+        pos = writeAbbrev1(null, pos);
+        pos = writeAbbrev2(null, pos);
 
         byte[] buffer = new byte[pos];
         super.setContent(buffer);
     }
 
     @Override
-    public void writeContent(DebugContext context) {
+    public void writeContent() {
         byte[] buffer = getContent();
         int size = buffer.length;
         int pos = 0;
 
-        enableLog(context, pos);
+        checkDebug(pos);
 
-        pos = writeAbbrev1(context, buffer, pos);
-        pos = writeAbbrev2(context, buffer, pos);
+        pos = writeAbbrev1(buffer, pos);
+        pos = writeAbbrev2(buffer, pos);
         assert pos == size;
     }
 
-    private int writeAttrType(long code, byte[] buffer, int pos) {
+    public int writeAttrType(long code, byte[] buffer, int pos) {
         if (buffer == null) {
             return pos + putSLEB(code, scratch, 0);
         } else {
@@ -165,7 +137,7 @@ public class DwarfAbbrevSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    private int writeAttrForm(long code, byte[] buffer, int pos) {
+    public int writeAttrForm(long code, byte[] buffer, int pos) {
         if (buffer == null) {
             return pos + putSLEB(code, scratch, 0);
         } else {
@@ -173,11 +145,10 @@ public class DwarfAbbrevSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    @SuppressWarnings("unused")
-    private int writeAbbrev1(DebugContext context, byte[] buffer, int p) {
+    public int writeAbbrev1(byte[] buffer, int p) {
         int pos = p;
         /*
-         * Abbrev 1 compile unit.
+         * abbrev 1 compile unit
          */
         pos = writeAbbrevCode(DW_ABBREV_CODE_compile_unit, buffer, pos);
         pos = writeTag(DW_TAG_compile_unit, buffer, pos);
@@ -186,8 +157,6 @@ public class DwarfAbbrevSectionImpl extends DwarfSectionImpl {
         pos = writeAttrForm(DW_FORM_data1, buffer, pos);
         pos = writeAttrType(DW_AT_name, buffer, pos);
         pos = writeAttrForm(DW_FORM_strp, buffer, pos);
-        pos = writeAttrType(DW_AT_comp_dir, buffer, pos);
-        pos = writeAttrForm(DW_FORM_strp, buffer, pos);
         pos = writeAttrType(DW_AT_low_pc, buffer, pos);
         pos = writeAttrForm(DW_FORM_addr, buffer, pos);
         pos = writeAttrType(DW_AT_hi_pc, buffer, pos);
@@ -195,18 +164,17 @@ public class DwarfAbbrevSectionImpl extends DwarfSectionImpl {
         pos = writeAttrType(DW_AT_stmt_list, buffer, pos);
         pos = writeAttrForm(DW_FORM_data4, buffer, pos);
         /*
-         * Now terminate.
+         * now terminate
          */
         pos = writeAttrType(DW_AT_null, buffer, pos);
         pos = writeAttrForm(DW_FORM_null, buffer, pos);
         return pos;
     }
 
-    @SuppressWarnings("unused")
-    private int writeAbbrev2(DebugContext context, byte[] buffer, int p) {
+    public int writeAbbrev2(byte[] buffer, int p) {
         int pos = p;
         /*
-         * Abbrev 2 compile unit.
+         * abbrev 2 compile unit
          */
         pos = writeAbbrevCode(DW_ABBREV_CODE_subprogram, buffer, pos);
         pos = writeTag(DW_TAG_subprogram, buffer, pos);
@@ -220,26 +188,31 @@ public class DwarfAbbrevSectionImpl extends DwarfSectionImpl {
         pos = writeAttrType(DW_AT_external, buffer, pos);
         pos = writeAttrForm(DW_FORM_flag, buffer, pos);
         /*
-         * Now terminate.
+         * now terminate
          */
         pos = writeAttrType(DW_AT_null, buffer, pos);
         pos = writeAttrForm(DW_FORM_null, buffer, pos);
         return pos;
     }
 
+    @Override
+    protected void debug(String format, Object... args) {
+        super.debug(format, args);
+    }
+
     /**
-     * The debug_abbrev section content depends on debug_frame section content and offset.
+     * debug_abbrev section content depends on debug_frame section content and offset.
      */
-    private static final String TARGET_SECTION_NAME = DW_FRAME_SECTION_NAME;
+    public static final String TARGET_SECTION_NAME = DW_FRAME_SECTION_NAME;
 
     @Override
     public String targetSectionName() {
         return TARGET_SECTION_NAME;
     }
 
-    private final LayoutDecision.Kind[] targetSectionKinds = {
-                    LayoutDecision.Kind.CONTENT,
-                    LayoutDecision.Kind.OFFSET
+    public final LayoutDecision.Kind[] targetSectionKinds = {
+            LayoutDecision.Kind.CONTENT,
+            LayoutDecision.Kind.OFFSET
     };
 
     @Override

@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -40,6 +42,14 @@ import com.oracle.objectfile.LayoutDecisionMap;
 import com.oracle.objectfile.ObjectFile;
 import com.oracle.objectfile.StringTable;
 import com.oracle.objectfile.SymbolTable;
+import com.oracle.objectfile.debuginfo.DebugInfoProvider;
+import com.oracle.objectfile.elf.dwarf.DwarfARangesSectionImpl;
+import com.oracle.objectfile.elf.dwarf.DwarfAbbrevSectionImpl;
+import com.oracle.objectfile.elf.dwarf.DwarfFrameSectionImpl;
+import com.oracle.objectfile.elf.dwarf.DwarfInfoSectionImpl;
+import com.oracle.objectfile.elf.dwarf.DwarfLineSectionImpl;
+import com.oracle.objectfile.elf.dwarf.DwarfSections;
+import com.oracle.objectfile.elf.dwarf.DwarfStrSectionImpl;
 import com.oracle.objectfile.io.AssemblyBuffer;
 import com.oracle.objectfile.io.OutputAssembler;
 
@@ -66,23 +76,33 @@ public class ELFObjectFile extends ObjectFile {
     private ELFOsAbi osabi = ELFOsAbi.getSystemNativeValue();
     private char abiVersion;
     private ELFClass fileClass = ELFClass.getSystemNativeValue();
-    private ELFMachine machine = ELFMachine.getSystemNativeValue();
+    private ELFMachine machine;
     private long processorSpecificFlags; // FIXME: to encapsulate (EF_* in elf.h)
     private final boolean runtimeDebugInfoGeneration;
 
-    public ELFObjectFile(boolean runtimeDebugInfoGeneration) {
+    private ELFObjectFile(int pageSize, ELFMachine machine, boolean runtimeDebugInfoGeneration) {
+        super(pageSize);
         this.runtimeDebugInfoGeneration = runtimeDebugInfoGeneration;
         // Create the elements of an empty ELF file:
         // 1. create header
         header = new ELFHeader("ELFHeader");
+        this.machine = machine;
         // 2. create shstrtab
         shstrtab = new SectionHeaderStrtab();
         // 3. create section header table
         sht = new SectionHeaderTable(/* shstrtab */);
     }
 
-    public ELFObjectFile() {
-        this(false);
+    public ELFObjectFile(int pageSize, ELFMachine machine) {
+        this(pageSize, machine, false);
+    }
+
+    public ELFObjectFile(int pageSize) {
+        this(pageSize, false);
+    }
+
+    public ELFObjectFile(int pageSize, boolean runtimeDebugInfoGeneration) {
+        this(pageSize, System.getProperty("svm.targetArch") == null ? ELFMachine.getSystemNativeValue() : ELFMachine.from(System.getProperty("svm.targetArch")), runtimeDebugInfoGeneration);
     }
 
     @Override
@@ -158,7 +178,7 @@ public class ELFObjectFile extends ObjectFile {
     }
 
     @Override
-    public Symbol createDefinedSymbol(String name, Element baseSection, int position, int size, boolean isCode, boolean isGlobal) {
+    public Symbol createDefinedSymbol(String name, Element baseSection, long position, int size, boolean isCode, boolean isGlobal) {
         ELFSymtab symtab = createSymbolTable();
         return symtab.newDefinedEntry(name, (Section) baseSection, position, size, isGlobal, isCode);
     }
@@ -561,8 +581,6 @@ public class ELFObjectFile extends ObjectFile {
 
         public ELFHeader(String name) { // create an "empty" default ELF header
             super(name);
-            // FIXME: is it really appropriate to initialize the owning ELFObjectFile's fields here?
-            ELFObjectFile.this.machine = ELFMachine.X86_64;
             ELFObjectFile.this.version = 1;
             ELFObjectFile.this.processorSpecificFlags = 0;
         }
@@ -1145,5 +1163,41 @@ public class ELFObjectFile extends ObjectFile {
     @Override
     protected int getMinimumFileSize() {
         return 0;
+    }
+
+    @Override
+    public void installDebugInfo(DebugInfoProvider debugInfoProvider) {
+        DwarfSections dwarfSections = new DwarfSections(getMachine(), getByteOrder());
+        // we need an implementation for each section
+        DwarfStrSectionImpl elfStrSectionImpl = dwarfSections.getStrSectionImpl();
+        DwarfAbbrevSectionImpl elfAbbrevSectionImpl = dwarfSections.getAbbrevSectionImpl();
+        DwarfFrameSectionImpl frameSectionImpl = dwarfSections.getFrameSectionImpl();
+        DwarfInfoSectionImpl elfInfoSectionImpl = dwarfSections.getInfoSectionImpl();
+        DwarfARangesSectionImpl elfARangesSectionImpl = dwarfSections.getARangesSectionImpl();
+        DwarfLineSectionImpl elfLineSectionImpl = dwarfSections.getLineSectionImpl();
+        // now we can create the section elements with empty content
+        newUserDefinedSection(elfStrSectionImpl.getSectionName(), elfStrSectionImpl);
+        newUserDefinedSection(elfAbbrevSectionImpl.getSectionName(), elfAbbrevSectionImpl);
+        newUserDefinedSection(frameSectionImpl.getSectionName(), frameSectionImpl);
+        newUserDefinedSection(elfInfoSectionImpl.getSectionName(), elfInfoSectionImpl);
+        newUserDefinedSection(elfARangesSectionImpl.getSectionName(), elfARangesSectionImpl);
+        newUserDefinedSection(elfLineSectionImpl.getSectionName(), elfLineSectionImpl);
+        // the byte[] for each implementation's content are created and
+        // written under getOrDecideContent. doing that ensures that all
+        // dependent sections are filled in and then sized according to the
+        // declared dependencies. however, if we leave it at that then
+        // associated reloc sections only get created when the first reloc
+        // is inserted during content write that's too late for them to have
+        // layout constraints included in the layout decision set and causes
+        // an NPE during reloc section write. so we need to create the relevant
+        // reloc sections here in advance
+        elfStrSectionImpl.getOrCreateRelocationElement(false);
+        elfAbbrevSectionImpl.getOrCreateRelocationElement(false);
+        frameSectionImpl.getOrCreateRelocationElement(false);
+        elfInfoSectionImpl.getOrCreateRelocationElement(false);
+        elfARangesSectionImpl.getOrCreateRelocationElement(false);
+        elfLineSectionImpl.getOrCreateRelocationElement(false);
+        // ok now we can populate the implementations
+        dwarfSections.installDebugInfo(debugInfoProvider);
     }
 }

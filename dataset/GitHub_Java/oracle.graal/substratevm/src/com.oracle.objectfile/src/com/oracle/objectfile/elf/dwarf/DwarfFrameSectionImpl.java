@@ -25,35 +25,28 @@
  */
 
 package com.oracle.objectfile.elf.dwarf;
-
 import com.oracle.objectfile.LayoutDecision;
-import com.oracle.objectfile.debugentry.ClassEntry;
-import com.oracle.objectfile.debugentry.PrimaryEntry;
 import com.oracle.objectfile.debuginfo.DebugInfoProvider;
-import org.graalvm.compiler.debug.DebugContext;
 
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_CIE_id;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_CIE_version;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_advance_loc;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_advance_loc1;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_advance_loc2;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_advance_loc4;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_def_cfa;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_def_cfa_offset;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_nop;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_offset;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_CFA_register;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_FRAME_SECTION_NAME;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_LINE_SECTION_NAME;
-
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_CIE_id;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_CIE_version;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_advance_loc;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_advance_loc1;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_advance_loc2;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_advance_loc4;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_def_cfa;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_def_cfa_offset;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_nop;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_offset;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_CFA_register;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_FRAME_SECTION_NAME;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_LINE_SECTION_NAME;
 /**
  * Section generic generator for debug_frame section.
  */
 public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
 
-    private static final int PADDING_NOPS_ALIGNMENT = 8;
-
-    public DwarfFrameSectionImpl(DwarfDebugInfo dwarfSections) {
+    public DwarfFrameSectionImpl(DwarfSections dwarfSections) {
         super(dwarfSections);
     }
 
@@ -67,7 +60,8 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         int pos = 0;
 
         /*
-         * The frame section contains one CIE at offset 0 followed by an FIE for each method.
+         * the frame section contains one CIE at offset 0
+         * followed by an FIE for each method
          */
         pos = writeCIE(null, pos);
         pos = writeMethodFrames(null, pos);
@@ -77,17 +71,18 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
     }
 
     @Override
-    public void writeContent(DebugContext context) {
+    public void writeContent() {
         byte[] buffer = getContent();
         int size = buffer.length;
         int pos = 0;
 
-        enableLog(context, pos);
+        checkDebug(pos);
 
         /*
-         * There are entries for the prologue region where the stack is being built, the method body
-         * region(s) where the code executes with a fixed size frame and the epilogue region(s)
-         * where the stack is torn down.
+         * there are entries for the prologue region where the
+         * stack is being built, the method body region(s) where
+         * the code executes with a fixed size frame and the
+         * epilogue region(s) where the stack is torn down
          */
         pos = writeCIE(buffer, pos);
         pos = writeMethodFrames(buffer, pos);
@@ -98,30 +93,20 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         assert pos == size;
     }
 
-    private int writeCIE(byte[] buffer, int p) {
+    public int writeCIE(byte[] buffer, int p) {
         /*
-         * We only need a vanilla CIE with default fields because we have to have at least one the
-         * layout is:
+         * we only need a vanilla CIE with default fields
+         * because we have to have at least one
+         * the layout is
          *
-         * <ul>
-         *
-         * <li><code>uint32 : length ............... length of remaining fields in this CIE</code>
-         *
-         * <li><code>uint32 : CIE_id ................ unique id for CIE == 0xffffff</code>
-         *
-         * <li><code>uint8 : version ................ == 1</code>
-         *
-         * <li><code>uint8[] : augmentation ......... == "" so always 1 byte</code>
-         *
-         * <li><code>ULEB : code_alignment_factor ... == 1 (could use 4 for Aarch64)</code>
-         *
-         * <li><code>ULEB : data_alignment_factor ... == -8</code>
-         *
-         * <li><code>byte : ret_addr reg id ......... x86_64 => 16 AArch64 => 30</code>
-         *
-         * <li><code>byte[] : initial_instructions .. includes pad to 8-byte boundary</code>
-         *
-         * </ul>
+         * uint32 : length ............... length of remaining fields in this CIE
+         * uint32 : CIE_id ................ unique id for CIE == 0xffffff
+         * uint8 : version ................ == 1
+         * uint8[] : augmentation ......... == "" so always 1 byte
+         * ULEB : code_alignment_factor ... == 1 (could use 4 for Aarch64)
+         * ULEB : data_alignment_factor ... == -8
+         * byte : ret_addr reg id ......... x86_64 => 16 AArch64 => 32
+         * byte[] : initial_instructions .. includes pad to 8-byte boundary
          */
         int pos = p;
         if (buffer == null) {
@@ -131,17 +116,17 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
             pos += putAsciiStringBytes("", scratch, 0);
             pos += putULEB(1, scratch, 0);
             pos += putSLEB(-8, scratch, 0);
-            pos += putByte((byte) getReturnPCIdx(), scratch, 0);
+            pos += putByte((byte) getPCIdx(), scratch, 0);
             /*
-             * Write insns to set up empty frame.
+             * write insns to set up empty frame
              */
             pos = writeInitialInstructions(buffer, pos);
             /*
-             * Pad to word alignment.
+             * pad to word alignment
              */
-            pos = writePaddingNops(buffer, pos);
+            pos = writePaddingNops(8, buffer, pos);
             /*
-             * No need to write length.
+             * no need to write length
              */
             return pos;
         } else {
@@ -152,21 +137,21 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
             pos = putAsciiStringBytes("", buffer, pos);
             pos = putULEB(1, buffer, pos);
             pos = putSLEB(-8, buffer, pos);
-            pos = putByte((byte) getReturnPCIdx(), buffer, pos);
+            pos = putByte((byte) getPCIdx(), buffer, pos);
             /*
              * write insns to set up empty frame
              */
             pos = writeInitialInstructions(buffer, pos);
             /*
-             * Pad to word alignment.
+             * pad to word alignment
              */
-            pos = writePaddingNops(buffer, pos);
+            pos = writePaddingNops(8, buffer, pos);
             patchLength(lengthPos, buffer, pos);
             return pos;
         }
     }
 
-    private int writeMethodFrames(byte[] buffer, int p) {
+    public int writeMethodFrames(byte[] buffer, int p) {
         int pos = p;
         for (ClassEntry classEntry : getPrimaryClasses()) {
             for (PrimaryEntry primaryEntry : classEntry.getPrimaryEntries()) {
@@ -182,68 +167,61 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
                     pos = writeAdvanceLoc(advance, buffer, pos);
                     if (debugFrameSizeInfo.getType() == DebugInfoProvider.DebugFrameSizeChange.Type.EXTEND) {
                         /*
-                         * SP has been extended so rebase CFA using full frame.
+                         * SP has been extended so rebase CFA using full frame
                          */
                         pos = writeDefCFAOffset(frameSize, buffer, pos);
                     } else {
                         /*
-                         * SP has been contracted so rebase CFA using empty frame.
+                         * SP has been contracted so rebase CFA using empty frame
                          */
                         pos = writeDefCFAOffset(8, buffer, pos);
                     }
                 }
-                pos = writePaddingNops(buffer, pos);
+                pos = writePaddingNops(8, buffer, pos);
                 patchLength(lengthPos, buffer, pos);
             }
         }
         return pos;
     }
 
-    private int writeFDEHeader(int lo, int hi, byte[] buffer, int p) {
+    public int writeFDEHeader(int lo, int hi, byte[] buffer, int p) {
         /*
-         * We only need a vanilla FDE header with default fields the layout is:
+         * we only need a vanilla FDE header with default fields
+         * the layout is
          *
-         * <ul>
-         *
-         * <li><code>uint32 : length ............ length of remaining fields in this FDE</code>
-         *
-         * <li><code>uint32 : CIE_offset ........ always 0 i.e. identifies our only CIE
-         * header</code>
-         *
-         * <li><code>uint64 : initial_location .. i.e. method lo address</code>
-         *
-         * <li><code>uint64 : address_range ..... i.e. method hi - lo</code>
-         *
-         * <li><code>byte[] : instructions ...... includes pad to 8-byte boundary</code>
-         *
-         * </ul>
+         * uint32 : length ........... length of remaining fields in this FDE
+         * uint32 : CIE_offset ........ always 0 i.e. identifies our only CIE header
+         * uint64 : initial_location .. i.e. method lo address
+         * uint64 : address_range ..... i.e. method hi - lo
+         * byte[] : instructions ...... includes pad to 8-byte boundary
          */
 
         int pos = p;
         if (buffer == null) {
-            /* Dummy length. */
+            /* dummy length */
             pos += putInt(0, scratch, 0);
             /* CIE_offset */
             pos += putInt(0, scratch, 0);
-            /* Initial address. */
+            /* initial address */
             pos += putLong(lo, scratch, 0);
-            /* Address range. */
+            /* address range */
             return pos + putLong(hi - lo, scratch, 0);
         } else {
-            /* Dummy length. */
+            /* dummy length */
             pos = putInt(0, buffer, pos);
             /* CIE_offset */
             pos = putInt(0, buffer, pos);
-            /* Initial address. */
+            /* initial address */
             pos = putRelocatableCodeOffset(lo, buffer, pos);
-            /* Address range. */
+            /* address range */
             return putLong(hi - lo, buffer, pos);
         }
     }
 
-    private int writePaddingNops(byte[] buffer, int p) {
+    public int writePaddingNops(int alignment, byte[] buffer, int p) {
         int pos = p;
-        while ((pos & (PADDING_NOPS_ALIGNMENT - 1)) != 0) {
+        assert (alignment & (alignment - 1)) == 0;
+        while ((pos & (alignment - 1)) != 0) {
             if (buffer == null) {
                 pos++;
             } else {
@@ -253,7 +231,7 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         return pos;
     }
 
-    protected int writeDefCFA(int register, int offset, byte[] buffer, int p) {
+    public int writeDefCFA(int register, int offset, byte[] buffer, int p) {
         int pos = p;
         if (buffer == null) {
             pos += putByte(DW_CFA_def_cfa, scratch, 0);
@@ -266,7 +244,7 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    protected int writeDefCFAOffset(int offset, byte[] buffer, int p) {
+    public int writeDefCFAOffset(int offset, byte[] buffer, int p) {
         int pos = p;
         if (buffer == null) {
             pos += putByte(DW_CFA_def_cfa_offset, scratch, 0);
@@ -277,7 +255,7 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    protected int writeAdvanceLoc(int offset, byte[] buffer, int pos) {
+    public int writeAdvanceLoc(int offset, byte[] buffer, int pos) {
         if (offset <= 0x3f) {
             return writeAdvanceLoc0((byte) offset, buffer, pos);
         } else if (offset <= 0xff) {
@@ -289,7 +267,7 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    protected int writeAdvanceLoc0(byte offset, byte[] buffer, int pos) {
+    public int writeAdvanceLoc0(byte offset, byte[] buffer, int pos) {
         byte op = advanceLoc0Op(offset);
         if (buffer == null) {
             return pos + putByte(op, scratch, 0);
@@ -298,7 +276,7 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    protected int writeAdvanceLoc1(byte offset, byte[] buffer, int p) {
+    public int writeAdvanceLoc1(byte offset, byte[] buffer, int p) {
         int pos = p;
         byte op = DW_CFA_advance_loc1;
         if (buffer == null) {
@@ -310,7 +288,7 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    protected int writeAdvanceLoc2(short offset, byte[] buffer, int p) {
+    public int writeAdvanceLoc2(short offset, byte[] buffer, int p) {
         byte op = DW_CFA_advance_loc2;
         int pos = p;
         if (buffer == null) {
@@ -322,7 +300,7 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    protected int writeAdvanceLoc4(int offset, byte[] buffer, int p) {
+    public int writeAdvanceLoc4(int offset, byte[] buffer, int p) {
         byte op = DW_CFA_advance_loc4;
         int pos = p;
         if (buffer == null) {
@@ -334,7 +312,7 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    protected int writeOffset(int register, int offset, byte[] buffer, int p) {
+    public int writeOffset(int register, int offset, byte[] buffer, int p) {
         byte op = offsetOp(register);
         int pos = p;
         if (buffer == null) {
@@ -346,7 +324,7 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    protected int writeRegister(int savedReg, int savedToReg, byte[] buffer, int p) {
+    public int writeRegister(int savedReg, int savedToReg, byte[] buffer, int p) {
         int pos = p;
         if (buffer == null) {
             pos += putByte(DW_CFA_register, scratch, 0);
@@ -359,26 +337,30 @@ public abstract class DwarfFrameSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    protected abstract int getReturnPCIdx();
+    public abstract int getPCIdx();
 
-    @SuppressWarnings("unused")
-    protected abstract int getSPIdx();
+    public abstract int getSPIdx();
 
-    protected abstract int writeInitialInstructions(byte[] buffer, int pos);
+    public abstract int writeInitialInstructions(byte[] buffer, int pos);
+
+    @Override
+    protected void debug(String format, Object... args) {
+        super.debug(format, args);
+    }
 
     /**
-     * The debug_frame section content depends on debug_line section content and offset.
+     * debug_frame section content depends on debug_line section content and offset.
      */
-    private static final String TARGET_SECTION_NAME = DW_LINE_SECTION_NAME;
+    public static final String TARGET_SECTION_NAME = DW_LINE_SECTION_NAME;
 
     @Override
     public String targetSectionName() {
         return TARGET_SECTION_NAME;
     }
 
-    private final LayoutDecision.Kind[] targetSectionKinds = {
-                    LayoutDecision.Kind.CONTENT,
-                    LayoutDecision.Kind.OFFSET
+    public final LayoutDecision.Kind[] targetSectionKinds = {
+            LayoutDecision.Kind.CONTENT,
+            LayoutDecision.Kind.OFFSET
     };
 
     @Override

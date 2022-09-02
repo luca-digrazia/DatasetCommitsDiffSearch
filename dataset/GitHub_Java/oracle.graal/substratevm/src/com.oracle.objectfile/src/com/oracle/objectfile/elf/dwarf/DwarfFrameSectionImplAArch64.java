@@ -27,22 +27,22 @@
 package com.oracle.objectfile.elf.dwarf;
 
 /**
- * AArch64-specific section generator for debug_frame section that knows details of AArch64
- * registers and frame layout.
+ * AArch64-specific section generator for debug_frame section
+ * that knows details of AArch64 registers and frame layout.
  */
 public class DwarfFrameSectionImplAArch64 extends DwarfFrameSectionImpl {
-    // public static final int DW_CFA_FP_IDX = 29;
-    private static final int DW_CFA_LR_IDX = 30;
-    private static final int DW_CFA_SP_IDX = 31;
-    // private static final int DW_CFA_PC_IDX = 32;
+    public static final int DW_CFA_FP_IDX = 29;
+    public static final int DW_CFA_LR_IDX = 30;
+    public static final int DW_CFA_SP_IDX = 31;
+    public static final int DW_CFA_PC_IDX = 32;
 
-    public DwarfFrameSectionImplAArch64(DwarfDebugInfo dwarfSections) {
+    public DwarfFrameSectionImplAArch64(DwarfSections dwarfSections) {
         super(dwarfSections);
     }
 
     @Override
-    public int getReturnPCIdx() {
-        return DW_CFA_LR_IDX;
+    public int getPCIdx() {
+        return DW_CFA_PC_IDX;
     }
 
     @Override
@@ -54,15 +54,12 @@ public class DwarfFrameSectionImplAArch64 extends DwarfFrameSectionImpl {
     public int writeInitialInstructions(byte[] buffer, int p) {
         int pos = p;
         /*
-         * Register rsp points at the frame base so cfa is at rsp + 0:
-         *
-         * <ul>
-         *
-         * <li><code>def_cfa r31 (sp) offset 0</code>
-         *
-         * </ul>
+         * rsp has not been updated
+         * caller pc is in lr
+         * register r32 (rpc), r30 (lr)
          */
-        pos = writeDefCFA(DW_CFA_SP_IDX, 0, buffer, pos);
+        pos = writeRegister(DW_CFA_PC_IDX, DW_CFA_LR_IDX, buffer, pos);
         return pos;
     }
 }
+

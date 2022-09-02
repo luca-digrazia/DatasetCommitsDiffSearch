@@ -27,32 +27,30 @@
 package com.oracle.objectfile.elf.dwarf;
 
 import com.oracle.objectfile.LayoutDecision;
-import com.oracle.objectfile.debugentry.StringEntry;
-import org.graalvm.compiler.debug.DebugContext;
 
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_STR_SECTION_NAME;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.TEXT_SECTION_NAME;
 /**
- * Generator for debug_str section.
+ * generator for debug_str section.
  */
 public class DwarfStrSectionImpl extends DwarfSectionImpl {
-    public DwarfStrSectionImpl(DwarfDebugInfo dwarfSections) {
+    public DwarfStrSectionImpl(DwarfSections dwarfSections) {
         super(dwarfSections);
     }
 
     @Override
     public String getSectionName() {
-        return DwarfDebugInfo.DW_STR_SECTION_NAME;
+        return DW_STR_SECTION_NAME;
     }
 
     @Override
     public void createContent() {
-        assert !contentByteArrayCreated();
-
         int pos = 0;
         for (StringEntry stringEntry : dwarfSections.getStringTable()) {
             if (stringEntry.isAddToStrSection()) {
                 stringEntry.setOffset(pos);
                 String string = stringEntry.getString();
-                pos += countUTF8Bytes(string) + 1;
+                pos += string.length() + 1;
             }
         }
         byte[] buffer = new byte[pos];
@@ -60,40 +58,46 @@ public class DwarfStrSectionImpl extends DwarfSectionImpl {
     }
 
     @Override
-    public void writeContent(DebugContext context) {
-        assert contentByteArrayCreated();
-
+    public void writeContent() {
         byte[] buffer = getContent();
         int size = buffer.length;
         int pos = 0;
 
-        enableLog(context, pos);
+        checkDebug(pos);
 
-        verboseLog(context, " [0x%08x] DEBUG_STR", pos);
         for (StringEntry stringEntry : dwarfSections.getStringTable()) {
             if (stringEntry.isAddToStrSection()) {
                 assert stringEntry.getOffset() == pos;
                 String string = stringEntry.getString();
-                pos = putUTF8StringBytes(string, buffer, pos);
-                verboseLog(context, " [0x%08x] string = %s", pos, string);
+                pos = putAsciiStringBytes(string, buffer, pos);
             }
         }
         assert pos == size;
     }
 
+    @Override
+    protected void debug(String format, Object... args) {
+        super.debug(format, args);
+    }
+
     /**
-     * The debug_str section depends on info section.
+     * debug_str section content depends on text section content and offset.
      */
-    private static final String TARGET_SECTION_NAME = DwarfDebugInfo.DW_INFO_SECTION_NAME;
+    public static final String TARGET_SECTION_NAME = TEXT_SECTION_NAME;
 
     @Override
     public String targetSectionName() {
         return TARGET_SECTION_NAME;
     }
 
-    private final LayoutDecision.Kind[] targetSectionKinds = {
-                    LayoutDecision.Kind.CONTENT,
-                    LayoutDecision.Kind.SIZE,
+    /**
+     * debug_str section content depends on text section content and offset.
+     */
+    public final LayoutDecision.Kind[] targetSectionKinds = {
+            LayoutDecision.Kind.CONTENT,
+            LayoutDecision.Kind.OFFSET,
+            /* add this so we can use the text section base address for debug */
+            LayoutDecision.Kind.VADDR,
     };
 
     @Override

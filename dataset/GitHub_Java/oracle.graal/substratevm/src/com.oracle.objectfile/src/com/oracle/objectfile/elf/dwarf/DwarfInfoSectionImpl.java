@@ -27,21 +27,16 @@
 package com.oracle.objectfile.elf.dwarf;
 
 import com.oracle.objectfile.LayoutDecision;
-import com.oracle.objectfile.debugentry.ClassEntry;
-import com.oracle.objectfile.debugentry.PrimaryEntry;
-import com.oracle.objectfile.debugentry.Range;
-import org.graalvm.compiler.debug.DebugContext;
 
 import java.util.LinkedList;
 
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_ABBREV_CODE_compile_unit;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_ABBREV_CODE_subprogram;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_ABBREV_SECTION_NAME;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_FLAG_true;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_INFO_SECTION_NAME;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_LANG_Java;
-import static com.oracle.objectfile.elf.dwarf.DwarfDebugInfo.DW_VERSION_2;
-
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_ABBREV_CODE_compile_unit;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_ABBREV_CODE_subprogram;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_ABBREV_SECTION_NAME;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_FLAG_true;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_INFO_SECTION_NAME;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_LANG_Java;
+import static com.oracle.objectfile.elf.dwarf.DwarfSections.DW_VERSION_2;
 /**
  * Section generator for debug_info section.
  */
@@ -51,7 +46,7 @@ public class DwarfInfoSectionImpl extends DwarfSectionImpl {
      */
     private static final int DW_DIE_HEADER_SIZE = 11;
 
-    public DwarfInfoSectionImpl(DwarfDebugInfo dwarfSections) {
+    public DwarfInfoSectionImpl(DwarfSections dwarfSections) {
         super(dwarfSections);
     }
 
@@ -63,242 +58,145 @@ public class DwarfInfoSectionImpl extends DwarfSectionImpl {
     @Override
     public void createContent() {
         /*
-         * We need a single level 0 DIE for each compilation unit (CU). Each CU's Level 0 DIE is
-         * preceded by a fixed header and terminated by a null DIE:
+         * we need a single level 0 DIE for each compilation unit (CU)
+         * Each CU's Level 0 DIE is preceded by a fixed header:
+         * and terminated by a null DIE
+         * uint32 length ......... excluding this length field
+         * uint16 dwarf_version .. always 2 ??
+         * uint32 abbrev offset .. always 0 ??
+         * uint8 address_size .... always 8
+         * <DIE>* ................ sequence of top-level and nested child entries
+         * <null_DIE> ............ == 0
          *
-         * <ul>
+         * a DIE is a recursively defined structure
+         * it starts with a code for the associated
+         * abbrev entry followed by a series of attribute
+         * values as determined by the entry terminated by
+         * a null value and followed by zero or more child
+         * DIEs (zero iff has_children == no_children)
          *
-         * <li><code>uint32 length ......... excluding this length field</code>
+         * LEB128 abbrev_code != 0 .. non-zero value indexes tag + attr layout of DIE
+         * <attribute_value>* ....... value sequence as determined by abbrev entry
+         * <DIE>* ................... sequence of child DIEs (if appropriate)
+         * <null_value> ............. == 0
          *
-         * <li><code>uint16 dwarf_version .. always 2 ??</code>
-         *
-         * <li><code>uint32 abbrev offset .. always 0 ??</code>
-         *
-         * <li><code>uint8 address_size .... always 8</code>
-         *
-         * <li><code>DIE* .................. sequence of top-level and nested child entries</code>
-         *
-         * <li><code>null_DIE .............. == 0</code>
-         *
-         * </ul>
-         *
-         * A DIE is a recursively defined structure. it starts with a code for the associated abbrev
-         * entry followed by a series of attribute values, as determined by the entry, terminated by
-         * a null value and followed by zero or more child DIEs (zero iff has_children ==
-         * no_children).
-         *
-         * <ul>
-         *
-         * <li><code>LEB128 abbrev_code != 0 .. non-zero value indexes tag + attr layout of
-         * DIE</code>
-         *
-         * <li><code>attribute_value* ......... value sequence as determined by abbrev entry</code>
-         *
-         * <li><code>DIE* ..................... sequence of child DIEs (if appropriate)</code>
-         * <li><code>
-         *
-         * <li><code>null_value ............... == 0</code>
-         *
-         * </ul>
-         *
-         * Note that a null_DIE looks like:
-         *
-         * <ul>
-         *
-         * <li><code>LEB128 abbrev_code ....... == 0</code>
-         *
-         * </ul>
-         *
-         * i.e. it also looks like a null_value.
+         * note that a null_DIE looks like
+         * LEB128 abbrev_code ....... == 0
+         * i.e. it also looks like a null_value
          */
 
         byte[] buffer = null;
         int pos = 0;
 
-        /* CUs for normal methods */
         for (ClassEntry classEntry : getPrimaryClasses()) {
             int lengthPos = pos;
             pos = writeCUHeader(buffer, pos);
             assert pos == lengthPos + DW_DIE_HEADER_SIZE;
-            pos = writeCU(null, classEntry, false, buffer, pos);
+            pos = writeCU(classEntry, buffer, pos);
             /*
-             * No need to backpatch length at lengthPos.
+             * no need to backpatch length at lengthPos
              */
-        }
-        /* CUs for deopt targets */
-        for (ClassEntry classEntry : getPrimaryClasses()) {
-            if (classEntry.includesDeoptTarget()) {
-                int lengthPos = pos;
-                pos = writeCUHeader(buffer, pos);
-                assert pos == lengthPos + DW_DIE_HEADER_SIZE;
-                pos = writeCU(null, classEntry, true, buffer, pos);
-                /*
-                 * No need to backpatch length at lengthPos.
-                 */
-            }
         }
         buffer = new byte[pos];
         super.setContent(buffer);
     }
 
     @Override
-    public void writeContent(DebugContext context) {
+    public void writeContent() {
         byte[] buffer = getContent();
         int size = buffer.length;
         int pos = 0;
 
-        enableLog(context, pos);
+        checkDebug(pos);
 
-        log(context, "  [0x%08x] DEBUG_INFO", pos);
-        log(context, "  [0x%08x] size = 0x%08x", pos, size);
-        /* write CUs for normal methods */
+        debug("  [0x%08x] DEBUG_INFO\n", pos);
+        debug("  [0x%08x] size = 0x%08x\n", pos, size);
         for (ClassEntry classEntry : getPrimaryClasses()) {
             /*
-             * Save the offset of this file's CU so it can be used when writing the aranges section.
+             * save the offset of this file's CU so it can
+             * be used when writing the aranges section
              */
             classEntry.setCUIndex(pos);
             int lengthPos = pos;
             pos = writeCUHeader(buffer, pos);
-            log(context, "  [0x%08x] Compilation Unit", pos, size);
+            debug("  [0x%08x] Compilation Unit\n", pos, size);
             assert pos == lengthPos + DW_DIE_HEADER_SIZE;
-            pos = writeCU(context, classEntry, false, buffer, pos);
+            pos = writeCU(classEntry, buffer, pos);
             /*
-             * Backpatch length at lengthPos (excluding length field).
+             * backpatch length at lengthPos (excluding length field)
              */
             patchLength(lengthPos, buffer, pos);
-        }
-        /* write CUs for deopt targets */
-        for (ClassEntry classEntry : getPrimaryClasses()) {
-            if (classEntry.includesDeoptTarget()) {
-                /*
-                 * Save the offset of this file's CU so it can be used when writing the aranges
-                 * section.
-                 */
-                classEntry.setDeoptCUIndex(pos);
-                int lengthPos = pos;
-                pos = writeCUHeader(buffer, pos);
-                log(context, "  [0x%08x] Compilation Unit (deopt targets)", pos, size);
-                assert pos == lengthPos + DW_DIE_HEADER_SIZE;
-                pos = writeCU(context, classEntry, true, buffer, pos);
-                /*
-                 * Backpatch length at lengthPos (excluding length field).
-                 */
-                patchLength(lengthPos, buffer, pos);
-            }
         }
         assert pos == size;
     }
 
-    private int writeCUHeader(byte[] buffer, int p) {
+    public int writeCUHeader(byte[] buffer, int p) {
         int pos = p;
         if (buffer == null) {
-            /* CU length. */
+            /* CU length */
             pos += putInt(0, scratch, 0);
-            /* DWARF version. */
+            /* dwarf version */
             pos += putShort(DW_VERSION_2, scratch, 0);
-            /* Abbrev offset. */
+            /* abbrev offset */
             pos += putInt(0, scratch, 0);
-            /* Address size. */
+            /* address size */
             return pos + putByte((byte) 8, scratch, 0);
         } else {
-            /* CU length. */
+            /* CU length */
             pos = putInt(0, buffer, pos);
-            /* DWARF version. */
+            /* dwarf version */
             pos = putShort(DW_VERSION_2, buffer, pos);
-            /* Abbrev offset. */
+            /* abbrev offset */
             pos = putInt(0, buffer, pos);
-            /* Address size. */
+            /* address size */
             return putByte((byte) 8, buffer, pos);
         }
     }
 
-    private int findLo(LinkedList<PrimaryEntry> classPrimaryEntries, boolean isDeoptTargetCU) {
-        if (!isDeoptTargetCU) {
-            /* First entry is the one we want. */
-            return classPrimaryEntries.getFirst().getPrimary().getLo();
-        } else {
-            /* Need the first entry which is a deopt target. */
-            for (PrimaryEntry primaryEntry : classPrimaryEntries) {
-                Range range = primaryEntry.getPrimary();
-                if (range.isDeoptTarget()) {
-                    return range.getLo();
-                }
-            }
-        }
-        // we should never get here
-        assert false;
-        return 0;
-    }
-
-    private int findHi(LinkedList<PrimaryEntry> classPrimaryEntries, boolean includesDeoptTarget, boolean isDeoptTargetCU) {
-        if (isDeoptTargetCU || !includesDeoptTarget) {
-            /* Either way the last entry is the one we want. */
-            return classPrimaryEntries.getLast().getPrimary().getHi();
-        } else {
-            /* Need the last entry which is not a deopt target. */
-            int hi = 0;
-            for (PrimaryEntry primaryEntry : classPrimaryEntries) {
-                Range range = primaryEntry.getPrimary();
-                if (!range.isDeoptTarget()) {
-                    hi = range.getHi();
-                } else {
-                    return hi;
-                }
-            }
-        }
-        // should never get here
-        assert false;
-        return 0;
-    }
-
-    private int writeCU(DebugContext context, ClassEntry classEntry, boolean isDeoptTargetCU, byte[] buffer, int p) {
+    public int writeCU(ClassEntry classEntry, byte[] buffer, int p) {
         int pos = p;
         LinkedList<PrimaryEntry> classPrimaryEntries = classEntry.getPrimaryEntries();
-        log(context, "  [0x%08x] <0> Abbrev Number %d", pos, DW_ABBREV_CODE_compile_unit);
+        debug("  [0x%08x] <0> Abbrev Number %d\n", pos, DW_ABBREV_CODE_compile_unit);
         pos = writeAbbrevCode(DW_ABBREV_CODE_compile_unit, buffer, pos);
-        log(context, "  [0x%08x]     language  %s", pos, "DW_LANG_Java");
+        debug("  [0x%08x]     language  %s\n", pos, "DW_LANG_Java");
         pos = writeAttrData1(DW_LANG_Java, buffer, pos);
-        log(context, "  [0x%08x]     name  0x%x (%s)", pos, debugStringIndex(classEntry.getFileName()), classEntry.getFileName());
+        debug("  [0x%08x]     name  0x%x (%s)\n", pos, debugStringIndex(classEntry.getFileName()), classEntry.getFileName());
         pos = writeAttrStrp(classEntry.getFileName(), buffer, pos);
-        int lo = findLo(classPrimaryEntries, isDeoptTargetCU);
-        int hi = findHi(classPrimaryEntries, classEntry.includesDeoptTarget(), isDeoptTargetCU);
-        log(context, "  [0x%08x]     lo_pc  0x%08x", pos, lo);
-        pos = writeAttrAddress(lo, buffer, pos);
-        log(context, "  [0x%08x]     hi_pc  0x%08x", pos, hi);
-        pos = writeAttrAddress(hi, buffer, pos);
-        log(context, "  [0x%08x]     stmt_list  0x%08x", pos, classEntry.getLineIndex());
+        debug("  [0x%08x]     low_pc  0x%08x\n", pos, classPrimaryEntries.getFirst().getPrimary().getLo());
+        pos = writeAttrAddress(classPrimaryEntries.getFirst().getPrimary().getLo(), buffer, pos);
+        debug("  [0x%08x]     hi_pc  0x%08x\n", pos, classPrimaryEntries.getLast().getPrimary().getHi());
+        pos = writeAttrAddress(classPrimaryEntries.getLast().getPrimary().getHi(), buffer, pos);
+        debug("  [0x%08x]     stmt_list  0x%08x\n", pos, classEntry.getLineIndex());
         pos = writeAttrData4(classEntry.getLineIndex(), buffer, pos);
         for (PrimaryEntry primaryEntry : classPrimaryEntries) {
-            Range range = primaryEntry.getPrimary();
-            if (isDeoptTargetCU == range.isDeoptTarget()) {
-                pos = writePrimary(context, range, buffer, pos);
-            }
+            pos = writePrimary(primaryEntry, buffer, pos);
         }
         /*
-         * Write a terminating null attribute for the the level 2 primaries.
+         * write a terminating null attribute for the the level 2 primaries
          */
         return writeAttrNull(buffer, pos);
 
     }
 
-    private int writePrimary(DebugContext context, Range range, byte[] buffer, int p) {
+    public int writePrimary(PrimaryEntry primaryEntry, byte[] buffer, int p) {
         int pos = p;
-        verboseLog(context, "  [0x%08x] <1> Abbrev Number  %d", pos, DW_ABBREV_CODE_subprogram);
+        Range primary = primaryEntry.getPrimary();
+        debug("  [0x%08x] <1> Abbrev Number  %d\n", pos, DW_ABBREV_CODE_subprogram);
         pos = writeAbbrevCode(DW_ABBREV_CODE_subprogram, buffer, pos);
-        verboseLog(context, "  [0x%08x]     name  0x%X (%s)", pos, debugStringIndex(range.getFullMethodName()), range.getFullMethodName());
-        pos = writeAttrStrp(range.getFullMethodName(), buffer, pos);
-        verboseLog(context, "  [0x%08x]     lo_pc  0x%08x", pos, range.getLo());
-        pos = writeAttrAddress(range.getLo(), buffer, pos);
-        verboseLog(context, "  [0x%08x]     hi_pc  0x%08x", pos, range.getHi());
-        pos = writeAttrAddress(range.getHi(), buffer, pos);
+        debug("  [0x%08x]     name  0x%X (%s)\n", pos, debugStringIndex(primary.getFullMethodName()), primary.getFullMethodName());
+        pos = writeAttrStrp(primary.getFullMethodName(), buffer, pos);
+        debug("  [0x%08x]     low_pc  0x%08x\n", pos, primary.getLo());
+        pos = writeAttrAddress(primary.getLo(), buffer, pos);
+        debug("  [0x%08x]     high_pc  0x%08x\n", pos, primary.getHi());
+        pos = writeAttrAddress(primary.getHi(), buffer, pos);
         /*
-         * Need to pass true only if method is public.
+         * need to pass true only if method is public
          */
-        verboseLog(context, "  [0x%08x]     external  true", pos);
+        debug("  [0x%08x]     external  true\n", pos);
         return writeFlag(DW_FLAG_true, buffer, pos);
     }
 
-    private int writeAttrStrp(String value, byte[] buffer, int p) {
+    public int writeAttrStrp(String value, byte[] buffer, int p) {
         int pos = p;
         if (buffer == null) {
             return pos + putInt(0, scratch, 0);
@@ -308,7 +206,6 @@ public class DwarfInfoSectionImpl extends DwarfSectionImpl {
         }
     }
 
-    @SuppressWarnings("unused")
     public int writeAttrString(String value, byte[] buffer, int p) {
         int pos = p;
         if (buffer == null) {
@@ -318,19 +215,28 @@ public class DwarfInfoSectionImpl extends DwarfSectionImpl {
         }
     }
 
+    @Override
+    protected void debug(String format, Object... args) {
+        if (((int) args[0] - debugBase) < 0x100000) {
+            super.debug(format, args);
+        } else if (format.startsWith("  [0x%08x] primary file")) {
+            super.debug(format, args);
+        }
+    }
+
     /**
-     * The debug_info section content depends on abbrev section content and offset.
+     * debug_info section content depends on abbrev section content and offset.
      */
-    private static final String TARGET_SECTION_NAME = DW_ABBREV_SECTION_NAME;
+    public static final String TARGET_SECTION_NAME = DW_ABBREV_SECTION_NAME;
 
     @Override
     public String targetSectionName() {
         return TARGET_SECTION_NAME;
     }
 
-    private final LayoutDecision.Kind[] targetSectionKinds = {
-                    LayoutDecision.Kind.CONTENT,
-                    LayoutDecision.Kind.OFFSET
+    public final LayoutDecision.Kind[] targetSectionKinds = {
+            LayoutDecision.Kind.CONTENT,
+            LayoutDecision.Kind.OFFSET
     };
 
     @Override
@@ -338,3 +244,4 @@ public class DwarfInfoSectionImpl extends DwarfSectionImpl {
         return targetSectionKinds;
     }
 }
+

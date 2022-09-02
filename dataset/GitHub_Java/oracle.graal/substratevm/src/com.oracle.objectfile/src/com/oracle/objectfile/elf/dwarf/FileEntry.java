@@ -30,32 +30,34 @@ package com.oracle.objectfile.elf.dwarf;
  * Tracks debug info associated with a Java source file.
  */
 public class FileEntry {
+    /**
+     * The name of the associated file including path
+     */
     private String fileName;
-    private DirEntry dirEntry;
+    /**
+     * The name of the associated file excluding path
+     */
+    private String baseName;
+    /**
+     * The directory entry associated with this file entry
+     */
+    DirEntry dirEntry;
 
-    public FileEntry(String fileName, DirEntry dirEntry) {
+    public FileEntry(String fileName, String baseName, DirEntry dirEntry) {
         this.fileName = fileName;
+        this.baseName = baseName;
         this.dirEntry = dirEntry;
     }
 
-    /**
-     * The name of the associated file excluding path elements.
-     */
     public String getFileName() {
         return fileName;
     }
 
-    public String getPathName() {
-        return getDirEntry().getPathString();
+    public String getBaseName() {
+        return baseName;
     }
 
-    public String getFullName() {
-        return getDirEntry().getPath().resolve(getFileName()).toString();
-    }
-    /**
-     * The directory entry associated with this file entry.
-     */
-    public DirEntry getDirEntry() {
-        return dirEntry;
+    String getDirName() {
+        return (dirEntry != null ? dirEntry.getPath() : "");
     }
 }

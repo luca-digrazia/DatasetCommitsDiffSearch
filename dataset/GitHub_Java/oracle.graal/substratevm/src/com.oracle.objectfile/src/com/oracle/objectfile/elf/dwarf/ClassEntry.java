@@ -106,7 +106,7 @@ public class ClassEntry {
         this.localDirsIndex = new HashMap<>();
         localFiles.add(fileEntry);
         localFilesIndex.put(fileEntry, localFiles.size());
-        DirEntry dirEntry = fileEntry.getDirEntry();
+        DirEntry dirEntry = fileEntry.dirEntry;
         if (dirEntry != null) {
             localDirs.add(dirEntry);
             localDirsIndex.put(dirEntry, localDirs.size());
@@ -144,7 +144,7 @@ public class ClassEntry {
             localFiles.add(subFileEntry);
             localFilesIndex.put(subFileEntry, localFiles.size());
         }
-        DirEntry dirEntry = subFileEntry.getDirEntry();
+        DirEntry dirEntry = subFileEntry.dirEntry;
         if (dirEntry != null && localDirsIndex.get(dirEntry) == null) {
             localDirs.add(dirEntry);
             localDirsIndex.put(dirEntry, localDirs.size());
@@ -167,12 +167,8 @@ public class ClassEntry {
         return fileEntry.getFileName();
     }
 
-    String getFullFileName() {
-        return fileEntry.getFullName();
-    }
-
     String getDirName() {
-        return fileEntry.getPathName();
+        return fileEntry.getDirName();
     }
 
     void setCUIndex(int cuIndex) {

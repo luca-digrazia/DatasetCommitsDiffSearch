@@ -36,7 +36,6 @@ import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugLineInfo;
 import com.oracle.objectfile.elf.ELFMachine;
 
 import java.nio.ByteOrder;
-import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -235,7 +234,7 @@ public class DwarfSections {
     /**
      * index of already seen dirs.
      */
-    private Map<Path, DirEntry> dirsIndex = new HashMap<>();
+    private Map<String, DirEntry> dirsIndex = new HashMap<>();
 
     /*
      * The obvious traversal structure for debug records is:
@@ -285,7 +284,7 @@ public class DwarfSections {
     /**
      * index of already seen files.
      */
-    private Map<Path, FileEntry> filesIndex = new HashMap<>();
+    private Map<String, FileEntry> filesIndex = new HashMap<>();
 
     /**
      * indirects this call to the string table.
@@ -343,16 +342,14 @@ public class DwarfSections {
              * primary file name and full method name need to be written to the debug_str section
              */
             String fileName = debugCodeInfo.fileName();
-            Path filePath = debugCodeInfo.filePath();
-            // switch '$' in class names for '.'
-            String className = debugCodeInfo.className().replaceAll("\\$", ".");
+            String className = debugCodeInfo.className();
             String methodName = debugCodeInfo.methodName();
             String paramNames = debugCodeInfo.paramNames();
             String returnTypeName = debugCodeInfo.returnTypeName();
             int lo = debugCodeInfo.addressLo();
             int hi = debugCodeInfo.addressHi();
             int primaryLine = debugCodeInfo.line();
-            Range primaryRange = new Range(fileName, filePath, className, methodName, paramNames, returnTypeName, stringTable, lo, hi, primaryLine);
+            Range primaryRange = new Range(fileName, className, methodName, paramNames, returnTypeName, stringTable, lo, hi, primaryLine);
             /*
              * System.out.format("arange: [0x%08x,0x%08x) %s %s::%s(%s) %s\n", lo, hi,
              * returnTypeName, className, methodName, paramNames, fileName);
@@ -361,9 +358,7 @@ public class DwarfSections {
             addRange(primaryRange, debugCodeInfo.getFrameSizeChanges(), debugCodeInfo.getFrameSize());
             for (DebugLineInfo debugLineInfo : debugCodeInfo.lineInfoProvider()) {
                 String fileNameAtLine = debugLineInfo.fileName();
-                Path filePathAtLine = debugLineInfo.filePath();
-                // switch '$' in class names for '.'
-                String classNameAtLine = debugLineInfo.className().replaceAll("\\$", ".");
+                String classNameAtLine = debugLineInfo.className();
                 String methodNameAtLine = debugLineInfo.methodName();
                 int loAtLine = lo + debugLineInfo.addressLo();
                 int hiAtLine = lo + debugLineInfo.addressHi();
@@ -372,7 +367,7 @@ public class DwarfSections {
                  * record all subranges even if they have no line or file so we at least get a
                  * symbol for them
                  */
-                Range subRange = new Range(fileNameAtLine, filePathAtLine, classNameAtLine, methodNameAtLine, "", "", stringTable, loAtLine, hiAtLine, line, primaryRange);
+                Range subRange = new Range(fileNameAtLine, classNameAtLine, methodNameAtLine, "", "", stringTable, loAtLine, hiAtLine, line, primaryRange);
                 addSubRange(primaryRange, subRange);
             }
         }
@@ -406,17 +401,18 @@ public class DwarfSections {
 
     public FileEntry ensureFileEntry(Range range) {
         String fileName = range.getFileName();
-        Path filePath = range.getFilePath();
-        Path fileAsPath = range.getFileAsPath();
         /*
          * ensure we have an entry
          */
-        FileEntry fileEntry = filesIndex.get(fileAsPath);
+        FileEntry fileEntry = filesIndex.get(fileName);
         if (fileEntry == null) {
-            DirEntry dirEntry = ensureDirEntry(filePath);
-            fileEntry = new FileEntry(fileName, dirEntry);
+            DirEntry dirEntry = ensureDirEntry(fileName);
+            String baseName = (dirEntry == null ? fileName : fileName.substring(dirEntry.getPath().length() + 1));
+            fileEntry = new FileEntry(stringTable.uniqueDebugString(fileName),
+                            stringTable.uniqueString(baseName),
+                            dirEntry);
             files.add(fileEntry);
-            filesIndex.put(fileAsPath, fileEntry);
+            filesIndex.put(fileName, fileEntry);
             /*
              * if this is a primary entry then add it to the primary list
              */
@@ -424,7 +420,7 @@ public class DwarfSections {
                 primaryFiles.add(fileEntry);
             } else {
                 Range primaryRange = range.getPrimary();
-                FileEntry primaryEntry = filesIndex.get(primaryRange.getFileAsPath());
+                FileEntry primaryEntry = filesIndex.get(primaryRange.getFileName());
                 assert primaryEntry != null;
             }
         }
@@ -451,13 +447,18 @@ public class DwarfSections {
         classEntry.addSubRange(subrange, subrangeEntry);
     }
 
-    public DirEntry ensureDirEntry(Path filePath) {
-        if (filePath == null) {
+    public DirEntry ensureDirEntry(String file) {
+        int pathLength = file.lastIndexOf('/');
+        if (pathLength < 0) {
+            /*
+             * no path/package means use dir entry 0
+             */
             return null;
         }
+        String filePath = file.substring(0, pathLength);
         DirEntry dirEntry = dirsIndex.get(filePath);
         if (dirEntry == null) {
-            dirEntry = new DirEntry(filePath);
+            dirEntry = new DirEntry(stringTable.uniqueString(filePath));
             dirsIndex.put(filePath, dirEntry);
             dirs.add(dirEntry);
         }
