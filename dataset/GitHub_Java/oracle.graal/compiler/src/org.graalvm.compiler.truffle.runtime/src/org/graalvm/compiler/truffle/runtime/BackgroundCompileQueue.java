@@ -109,9 +109,8 @@ public class BackgroundCompileQueue {
     }
 
     public CancellableCompileTask submitTask(Priority priority, OptimizedCallTarget target, Request request) {
-        final WeakReference<OptimizedCallTarget> targetReference = new WeakReference<>(target);
-        CancellableCompileTask cancellable = new CancellableCompileTask(targetReference, priority == Priority.LAST_TIER);
-        RequestImpl<Void> requestImpl = new RequestImpl<>(nextId(), priority, targetReference, cancellable, request);
+        CancellableCompileTask cancellable = new CancellableCompileTask(target, priority == Priority.LAST_TIER);
+        RequestImpl<Void> requestImpl = new RequestImpl<>(nextId(), priority, target, cancellable, request);
         cancellable.setFuture(getExecutorService(target).submit(requestImpl));
         return cancellable;
     }
@@ -175,10 +174,10 @@ public class BackgroundCompileQueue {
         private final WeakReference<OptimizedCallTarget> targetRef;
         private final Request request;
 
-        RequestImpl(long id, Priority priority, WeakReference<OptimizedCallTarget> targetRef, CancellableCompileTask task, Request request) {
+        RequestImpl(long id, Priority priority, OptimizedCallTarget callTarget, CancellableCompileTask task, Request request) {
             this.id = id;
             this.priority = priority;
-            this.targetRef = targetRef;
+            this.targetRef = new WeakReference<>(callTarget);
             this.task = task;
             this.request = request;
         }
