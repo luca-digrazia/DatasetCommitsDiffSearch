@@ -72,7 +72,6 @@ import com.oracle.truffle.api.impl.DispatchOutputStream;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
-import org.graalvm.polyglot.io.FileSystem;
 
 /*
  * This class is exported to the GraalVM SDK. Keep that in mind when changing its class or package name.
@@ -198,7 +197,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             DispatchOutputStream dispatchOut = INSTRUMENT.createDispatchOutput(resolvedOut);
             DispatchOutputStream dispatchErr = INSTRUMENT.createDispatchOutput(resolvedErr);
             Handler logHandler = PolyglotLoggers.asHandler(logHandlerOrStream);
-            logHandler = logHandler != null ? logHandler : PolyglotLoggers.createDefaultHandler(resolvedErr);
+            logHandler = logHandler != null ? logHandler : PolyglotLoggers.createStreamHandler(resolvedErr, false, true);
             ClassLoader contextClassLoader = TruffleOptions.AOT ? null : Thread.currentThread().getContextClassLoader();
 
             impl = boundEngine ? preInitializedEngineRef.getAndSet(null) : null;
@@ -325,7 +324,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             if (hostValue instanceof TruffleObject) {
                 guestValue = hostValue;
             } else if (hostValue instanceof Proxy) {
-                guestValue = PolyglotProxy.toProxyGuestObject((Proxy) hostValue);
+                guestValue = PolyglotProxy.toProxyGuestObject(null, (Proxy) hostValue);
             } else if (hostValue instanceof Class) {
                 guestValue = HostObject.forClass((Class<?>) hostValue, null);
             } else {
@@ -344,11 +343,6 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         } catch (Throwable t) {
             throw PolyglotImpl.guestToHostException(this, t);
         }
-    }
-
-    @Override
-    public FileSystem newDefaultFileSystem() {
-        return FileSystems.newDefaultFileSystem();
     }
 
     org.graalvm.polyglot.Source getPolyglotSource(Source source) {
