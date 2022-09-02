@@ -86,11 +86,12 @@ public final class LambdaUtils {
 
     public static boolean isLambdaType(ResolvedJavaType type) {
         String typeName = type.getName();
-        final boolean isFinal = type.isFinalFlagSet();
-        final boolean containsSlash = typeName.contains("/");
-        final boolean lamdaInName = typeName.contains("$$Lambda$");
-        final boolean matchesLamda = lambdaMatcher(type.getName()).find();
-        return isFinal && containsSlash && lamdaInName && matchesLamda;
+        return type.isFinalFlagSet() && typeName.contains("/") && /* isVMAnonymousClass */ typeName.contains("$$Lambda$") && /*
+                                                                                                                              * shortcut
+                                                                                                                              * to
+                                                                                                                              * avoid
+                                                                                                                              * regex
+                                                                                                                              */ lambdaMatcher(type.getName()).find();
     }
 
     private static String createStableLambdaName(ResolvedJavaType lambdaType, ResolvedJavaMethod targetMethod) {
