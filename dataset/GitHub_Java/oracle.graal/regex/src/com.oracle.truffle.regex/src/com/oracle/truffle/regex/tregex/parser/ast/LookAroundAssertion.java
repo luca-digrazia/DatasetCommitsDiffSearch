@@ -80,14 +80,14 @@ public abstract class LookAroundAssertion extends RegexASTSubtreeRootNode {
         if (getGroup().size() != 1 || getGroup().getFirstAlternative().isEmpty()) {
             return false;
         }
-        return getGroup().getFirstAlternative().getFirstTerm().isCharacterClass();
+        return getGroup().getFirstAlternative().getFirstTerm() instanceof CharacterClass;
     }
 
     public boolean endsWithCharClass() {
         if (getGroup().size() != 1 || getGroup().getFirstAlternative().isEmpty()) {
             return false;
         }
-        return getGroup().getFirstAlternative().getLastTerm().isCharacterClass();
+        return getGroup().getFirstAlternative().getLastTerm() instanceof CharacterClass;
     }
 
     /**
@@ -101,7 +101,7 @@ public abstract class LookAroundAssertion extends RegexASTSubtreeRootNode {
             return false;
         }
         for (Term t : getGroup().getFirstAlternative().getTerms()) {
-            if (!(t.isCharacterClass())) {
+            if (!(t instanceof CharacterClass)) {
                 return false;
             }
         }
@@ -126,6 +126,6 @@ public abstract class LookAroundAssertion extends RegexASTSubtreeRootNode {
      * size} 1, without any capturing groups.
      */
     public boolean isSingleCCNonCapturingLiteral() {
-        return getGroup().size() == 1 && getGroup().getFirstAlternative().size() == 1 && getGroup().getFirstAlternative().getFirstTerm().isCharacterClass() && !getGroup().isCapturing();
+        return getGroup().size() == 1 && getGroup().getFirstAlternative().size() == 1 && getGroup().getFirstAlternative().getFirstTerm() instanceof CharacterClass && !getGroup().isCapturing();
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -57,7 +57,7 @@ import com.oracle.truffle.regex.tregex.nodes.dfa.TRegexDFAExecutorNode;
  * expression is executed {@link TRegexOptions#TRegexGenerateDFAThreshold} times, in order to avoid
  * the costly DFA generation on all expressions that are not on any hot code paths.
  */
-public final class TRegexNFAExecutorNode extends TRegexExecutorNode {
+public class TRegexNFAExecutorNode extends TRegexExecutorNode {
 
     private final NFA nfa;
     private final boolean searching;
@@ -78,11 +78,6 @@ public final class TRegexNFAExecutorNode extends TRegexExecutorNode {
     }
 
     @Override
-    public boolean isForward() {
-        return true;
-    }
-
-    @Override
     public boolean writesCaptureGroups() {
         return true;
     }
@@ -97,10 +92,11 @@ public final class TRegexNFAExecutorNode extends TRegexExecutorNode {
         TRegexNFAExecutorLocals locals = (TRegexNFAExecutorLocals) abstractLocals;
         CompilerDirectives.ensureVirtualized(locals);
 
-        final int offset = rewindUpTo(locals, 0, nfa.getAnchoredEntry().length - 1);
+        final int offset = Math.min(locals.getIndex(), nfa.getAnchoredEntry().length - 1);
+        locals.setIndex(locals.getIndex() - offset);
         int anchoredInitialState = nfa.getAnchoredEntry()[offset].getTarget().getId();
         int unAnchoredInitialState = nfa.getUnAnchoredEntry()[offset].getTarget().getId();
-        if (unAnchoredInitialState != anchoredInitialState && inputAtBegin(locals)) {
+        if (unAnchoredInitialState != anchoredInitialState && locals.getIndex() == 0) {
             locals.addInitialState(anchoredInitialState);
         }
         if (nfa.getState(unAnchoredInitialState) != null) {
@@ -113,7 +109,7 @@ public final class TRegexNFAExecutorNode extends TRegexExecutorNode {
             if (CompilerDirectives.inInterpreter()) {
                 RegexRootNode.checkThreadInterrupted();
             }
-            if (inputHasNext(locals)) {
+            if (locals.getIndex() < getInputLength(locals)) {
                 findNextStates(locals);
                 // If locals.successorsEmpty() is true, then all of our paths have either been
                 // finished, discarded due to priority or failed to match. If we managed to finish
@@ -130,13 +126,12 @@ public final class TRegexNFAExecutorNode extends TRegexExecutorNode {
                 findNextStatesAtEnd(locals);
                 return locals.getResult();
             }
-            locals.nextState();
-            inputAdvance(locals);
+            locals.nextChar();
         }
     }
 
     private void findNextStates(TRegexNFAExecutorLocals locals) {
-        int c = inputReadAndDecode(locals);
+        char c = getChar(locals);
         while (locals.hasNext()) {
             expandState(locals, locals.next(), c, false);
             // If we have found a path to a final state, then we will trim all paths with lower
@@ -156,7 +151,7 @@ public final class TRegexNFAExecutorNode extends TRegexExecutorNode {
         }
     }
 
-    private void expandState(TRegexNFAExecutorLocals locals, int stateId, int c, boolean isLoopBack) {
+    private void expandState(TRegexNFAExecutorLocals locals, int stateId, char c, boolean isLoopBack) {
         NFAState state = nfa.getState(stateId);
         // If we manage to find a path to the (unanchored) final state, then we will trim all other
         // paths leading from the current state as they all have lower priority. We do this by

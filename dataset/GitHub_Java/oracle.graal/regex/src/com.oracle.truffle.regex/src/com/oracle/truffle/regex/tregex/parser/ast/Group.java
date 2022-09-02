@@ -73,9 +73,9 @@ public final class Group extends QuantifiableTerm implements RegexASTVisitorIter
 
     private ArrayList<Sequence> alternatives = new ArrayList<>();
     private short visitorIterationIndex = 0;
-    private short groupNumber = -1;
-    private short enclosedCaptureGroupsLow;
-    private short enclosedCaptureGroupsHigh;
+    private byte groupNumber = -1;
+    private byte enclosedCaptureGroupsLow;
+    private byte enclosedCaptureGroupsHigh;
 
     /**
      * Creates an empty non-capturing group.
@@ -188,7 +188,7 @@ public final class Group extends QuantifiableTerm implements RegexASTVisitorIter
      */
     public void setGroupNumber(int groupNumber) {
         assert groupNumber <= TRegexOptions.TRegexMaxNumberOfCaptureGroups;
-        this.groupNumber = (short) groupNumber;
+        this.groupNumber = (byte) groupNumber;
     }
 
     /**
@@ -203,7 +203,7 @@ public final class Group extends QuantifiableTerm implements RegexASTVisitorIter
      */
     public void setEnclosedCaptureGroupsLow(int enclosedCaptureGroupsLow) {
         assert enclosedCaptureGroupsLow <= TRegexOptions.TRegexMaxNumberOfCaptureGroups;
-        this.enclosedCaptureGroupsLow = (short) enclosedCaptureGroupsLow;
+        this.enclosedCaptureGroupsLow = (byte) enclosedCaptureGroupsLow;
     }
 
     /**
@@ -218,7 +218,7 @@ public final class Group extends QuantifiableTerm implements RegexASTVisitorIter
      */
     public void setEnclosedCaptureGroupsHigh(int enclosedCaptureGroupsHigh) {
         assert enclosedCaptureGroupsHigh <= TRegexOptions.TRegexMaxNumberOfCaptureGroups;
-        this.enclosedCaptureGroupsHigh = (short) enclosedCaptureGroupsHigh;
+        this.enclosedCaptureGroupsHigh = (byte) enclosedCaptureGroupsHigh;
     }
 
     public boolean hasEnclosedCaptureGroups() {
@@ -237,11 +237,6 @@ public final class Group extends QuantifiableTerm implements RegexASTVisitorIter
             }
         }
         return true;
-    }
-
-    @Override
-    public boolean isUnrollingCandidate() {
-        return hasQuantifier() && getQuantifier().isWithinThreshold(TRegexOptions.TRegexQuantifierUnrollThresholdGroup);
     }
 
     /**

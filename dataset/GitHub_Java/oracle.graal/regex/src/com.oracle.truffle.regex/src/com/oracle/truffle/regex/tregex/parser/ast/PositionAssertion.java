@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,10 +40,9 @@
  */
 package com.oracle.truffle.regex.tregex.parser.ast;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
-import com.oracle.truffle.regex.tregex.util.Exceptions;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
+
+import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 /**
  * An assertion that succeeds when encountered at the beginning or at the end of the string we are
@@ -94,13 +93,8 @@ public class PositionAssertion extends Term {
     }
 
     @Override
-    public PositionAssertion copy(RegexAST ast) {
+    public PositionAssertion copy(RegexAST ast, boolean recursive) {
         return ast.register(new PositionAssertion(this));
-    }
-
-    @Override
-    public Term copyRecursive(RegexAST ast, CompilationBuffer compilationBuffer) {
-        return copy(ast);
     }
 
     public RegexASTNode getNext() {
@@ -135,7 +129,7 @@ public class PositionAssertion extends Term {
             case DOLLAR:
                 return "$";
         }
-        throw Exceptions.shouldNotReachHere();
+        throw new IllegalStateException();
     }
 
     @TruffleBoundary
