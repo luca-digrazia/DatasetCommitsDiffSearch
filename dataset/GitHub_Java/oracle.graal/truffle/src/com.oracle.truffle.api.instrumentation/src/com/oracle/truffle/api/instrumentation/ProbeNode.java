@@ -130,12 +130,12 @@ public final class ProbeNode extends Node {
     // returned from chain nodes whose bindings ignore the unwind
     private static final Object UNWIND_ACTION_IGNORED = new Object();
 
-    static class RetiredNodeReference {
+    static class OldNodeReference {
         private final WeakReference<Node> node;
         private final Set<Class<? extends Tag>> materializeTags;
-        private final RetiredNodeReference next;
+        private final OldNodeReference next;
 
-        RetiredNodeReference(Node node, Set<Class<? extends Tag>> materializeTags, RetiredNodeReference next) {
+        OldNodeReference(Node node, Set<Class<? extends Tag>> materializeTags, OldNodeReference next) {
             this.node = new WeakReference<>(node);
             this.materializeTags = materializeTags;
             this.next = next;
@@ -145,14 +145,14 @@ public final class ProbeNode extends Node {
             return node.get();
         }
 
-        public RetiredNodeReference getNext() {
+        public OldNodeReference getNext() {
             return next;
         }
     }
 
     private final InstrumentationHandler handler;
-    private volatile RetiredNodeReference retiredNodeReference;
-    private Set<Class<? extends Tag>> allSeenMaterializeTags;
+    private volatile OldNodeReference oldNodeReference;
+    private Set<Class<? extends Tag>> allSeenMaterializatinTags;
     @CompilationFinal private volatile EventContext context;
 
     @Child private volatile ProbeNode.EventChainNode chain;
@@ -170,35 +170,33 @@ public final class ProbeNode extends Node {
         this.context = new EventContext(this, sourceSection);
     }
 
-    RetiredNodeReference getRetiredNodeReference() {
-        return retiredNodeReference;
+    OldNodeReference getOldNodeReference() {
+        return oldNodeReference;
     }
 
-    void clearRetiredNodeReference() {
-        retiredNodeReference = null;
+    void clearOldNodeReference() {
+        oldNodeReference = null;
     }
 
     @SuppressWarnings("AssertWithSideEffects")
-    void setRetiredNode(Node retiredNode, Set<Class<? extends Tag>> materializeTags) {
-        if (retiredNodeReference == null) {
-            retiredNodeReference = new RetiredNodeReference(retiredNode, materializeTags, null);
-            assert !(allSeenMaterializeTags = new HashSet<>(materializeTags)).isEmpty() : "Materialize tags must not be empty!";
+    void setOldNode(Node oldNode, Set<Class<? extends Tag>> materializeTags) {
+        if (oldNodeReference == null) {
+            oldNodeReference = new OldNodeReference(oldNode, materializeTags, null);
+            assert !(allSeenMaterializatinTags = new HashSet<>(materializeTags)).isEmpty() : "Materialization tags must not be empty!";
         } else {
-            RetiredNodeReference nodeRef = retiredNodeReference;
-            /*
-             * The following check does not check all illegal materializations, because seen
-             * materialize tags are not recorded before the AST is first executed.
-             */
-            assert !allSeenMaterializeTags.containsAll(materializeTags) : "There should always be some new materialize tag!";
+            OldNodeReference nodeRef = oldNodeReference;
+            // The following check does not check all illegal materializations, because seen
+            // materialization tags are not recorded before the AST is first executed.
+            assert !allSeenMaterializatinTags.containsAll(materializeTags) : "There should always be some new materialization tag!";
             while (nodeRef != null) {
                 Node nodeRefNode = nodeRef.getNode();
-                assert nodeRefNode == null || nodeRefNode != retiredNode : "The same retired node must not be set more than once!";
-                assert !nodeRef.materializeTags.equals(materializeTags) : "Retired node must be set at most once for the same set of tags!";
+                assert nodeRefNode == null || nodeRefNode != oldNode : "The same old node must not be set more than once!";
+                assert !nodeRef.materializeTags.equals(materializeTags) : "Old node must be set at most once for the same set of tags!";
                 nodeRef = nodeRef.next;
             }
-            RetiredNodeReference previousRetiredNodeReference = retiredNodeReference;
-            RetiredNodeReference newRetiredNodeReference = new RetiredNodeReference(retiredNode, materializeTags, previousRetiredNodeReference);
-            retiredNodeReference = newRetiredNodeReference;
+            OldNodeReference previousOldNodeReference = oldNodeReference;
+            OldNodeReference newOldNodeReference = new OldNodeReference(oldNode, materializeTags, previousOldNodeReference);
+            oldNodeReference = newOldNodeReference;
         }
     }
 
@@ -373,7 +371,7 @@ public final class ProbeNode extends Node {
             if (nextChain == null) {
                 // chain is null -> remove wrapper;
                 // Note: never set child nodes to null, can cause races
-                if (retiredNodeReference == null) {
+                if (oldNodeReference == null) {
                     InstrumentationHandler.removeWrapper(ProbeNode.this);
                     return null;
                 } else {

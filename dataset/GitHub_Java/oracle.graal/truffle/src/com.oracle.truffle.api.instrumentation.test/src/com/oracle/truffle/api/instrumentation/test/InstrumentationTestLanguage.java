@@ -802,8 +802,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new ExpressionNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new ExpressionNode(cloneUninitialized(children));
         }
 
         @Override
@@ -833,8 +833,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new BlockNoSourceSectionNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new BlockNoSourceSectionNode(cloneUninitialized(children));
         }
     }
 
@@ -954,8 +954,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new BlockNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new BlockNode(cloneUninitialized(children));
         }
 
         @Override
@@ -1028,8 +1028,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new TryCatchNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new TryCatchNode(cloneUninitialized(children));
         }
     }
 
@@ -1095,8 +1095,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new TryNode(cloneUninitialized(children, materializedTags), cloneUninitialized(((CatchesInfoObject) catchesInfoNode).catches, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new TryNode(cloneUninitialized(children), cloneUninitialized(((CatchesInfoObject) catchesInfoNode).catches));
         }
     }
 
@@ -1125,8 +1125,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new CatchNode(exceptionName, cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new CatchNode(exceptionName, cloneUninitialized(children));
         }
     }
 
@@ -1170,8 +1170,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MultipleNode(cloneUninitialized(children, materializedTags), resolvedTags);
+        protected BaseNode copyUninitialized() {
+            return new MultipleNode(cloneUninitialized(children), resolvedTags);
         }
     }
 
@@ -1225,7 +1225,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
+        protected BaseNode copyUninitialized() {
             return new ThrowNode(type, message);
         }
     }
@@ -1258,8 +1258,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new FunctionRootNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new FunctionRootNode(cloneUninitialized(children));
         }
     }
 
@@ -1270,8 +1270,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new FunctionBodyNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new FunctionBodyNode(cloneUninitialized(children));
         }
     }
 
@@ -1287,24 +1287,28 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new StatementNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new StatementNode(cloneUninitialized(children));
         }
     }
 
     static class DefineNode extends InstrumentedNode {
-        private final InstrumentationTestLanguage language;
+
         private final String identifier;
-        private final RootCallTarget target;
+        private final CallTarget target;
 
         DefineNode(InstrumentationTestLanguage lang, String identifier, SourceSection source, BaseNode[] children) {
-            this.language = lang;
             this.identifier = identifier;
             String code = source.getCharacters().toString();
             int index = code.indexOf('(') + 1;
             index = code.indexOf(',', index) + 1;
             SourceSection functionSection = source.getSource().createSection(source.getCharIndex() + index, source.getCharLength() - index - 1);
             this.target = Truffle.getRuntime().createCallTarget(new InstrumentationTestRootNode(lang, identifier, functionSection, children));
+        }
+
+        private DefineNode(String identifier, CallTarget target) {
+            this.identifier = identifier;
+            this.target = target;
         }
 
         @Override
@@ -1330,9 +1334,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            InstrumentationTestRootNode rootNode = (InstrumentationTestRootNode) target.getRootNode();
-            return new DefineNode(language, identifier, rootNode.getSourceSection(), new BaseNode[]{cloneUninitialized(rootNode.functionRoot, materializedTags)});
+        protected BaseNode copyUninitialized() {
+            return new DefineNode(identifier, target);
         }
     }
 
@@ -1364,8 +1367,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new ContextNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new ContextNode(cloneUninitialized(children));
         }
 
         @TruffleBoundary
@@ -1397,8 +1400,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new CallNode(identifier, cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new CallNode(identifier, cloneUninitialized(children));
         }
     }
 
@@ -1440,8 +1443,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new SpawnNode(identifier, cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new SpawnNode(identifier, cloneUninitialized(children));
         }
     }
 
@@ -1481,8 +1484,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new JoinNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new JoinNode(cloneUninitialized(children));
         }
     }
 
@@ -1518,8 +1521,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new RecursiveCallNode(identifier, depth, cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new RecursiveCallNode(identifier, depth, cloneUninitialized(children));
         }
     }
 
@@ -1557,8 +1560,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new CallWithNode(identifier, ((ThisArg) thisArg[0]).thisElement, cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new CallWithNode(identifier, ((ThisArg) thisArg[0]).thisElement, cloneUninitialized(children));
         }
     }
 
@@ -1614,8 +1617,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new AllocationNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new AllocationNode(cloneUninitialized(children));
         }
     }
 
@@ -1644,8 +1647,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new SleepNode(timeToSleep, cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new SleepNode(timeToSleep, cloneUninitialized(children));
         }
     }
 
@@ -1669,8 +1672,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new ConstantNode(constant, cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new ConstantNode(constant, cloneUninitialized(children));
         }
 
         @Override
@@ -1694,8 +1697,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new InvalidateNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new InvalidateNode(cloneUninitialized(children));
         }
     }
 
@@ -1743,7 +1746,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
+        protected BaseNode copyUninitialized() {
             return new TypeSpecializedNode(value);
         }
     }
@@ -1776,8 +1779,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new UnexpectedResultNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new UnexpectedResultNode(cloneUninitialized(children));
         }
     }
 
@@ -1789,7 +1792,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
 
         public InstrumentableNode materializeInstrumentableNodes(Set<Class<? extends Tag>> materializedTags) {
             if (materializedTags.contains(StandardTags.ExpressionTag.class)) {
-                MaterializedChildExpressionNode materializedNode = new MaterializedChildExpressionNode(getSourceSection(), cloneUninitialized(children, materializedTags));
+                MaterializedChildExpressionNode materializedNode = new MaterializedChildExpressionNode(getSourceSection(), cloneUninitialized(children));
                 materializedNode.setSourceSection(getSourceSection());
                 return materializedNode;
             }
@@ -1797,8 +1800,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializeChildExpressionNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializeChildExpressionNode(cloneUninitialized(children));
         }
     }
 
@@ -1824,8 +1827,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializedChildExpressionNode(cloneUninitialized(expressionNode, materializedTags), cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializedChildExpressionNode(cloneUninitialized(expressionNode), cloneUninitialized(children));
         }
     }
 
@@ -1837,7 +1840,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
 
         public InstrumentableNode materializeInstrumentableNodes(Set<Class<? extends Tag>> materializedTags) {
             if (materializedTags.contains(StandardTags.StatementTag.class)) {
-                MaterializedChildStatementNode materializedNode = new MaterializedChildStatementNode(getSourceSection(), cloneUninitialized(children, materializedTags));
+                MaterializedChildStatementNode materializedNode = new MaterializedChildStatementNode(getSourceSection(), cloneUninitialized(children));
                 materializedNode.setSourceSection(getSourceSection());
                 return materializedNode;
             }
@@ -1845,8 +1848,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializeChildStatementNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializeChildStatementNode(cloneUninitialized(children));
         }
     }
 
@@ -1872,8 +1875,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializedChildStatementNode(cloneUninitialized(statementNode, materializedTags), cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializedChildStatementNode(cloneUninitialized(statementNode), cloneUninitialized(children));
         }
     }
 
@@ -1886,11 +1889,11 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         public InstrumentableNode materializeInstrumentableNodes(Set<Class<? extends Tag>> materializedTags) {
             InstrumentedNode materializedNode = this;
             if (materializedTags.contains(StandardTags.StatementTag.class) && materializedTags.contains(StandardTags.ExpressionTag.class)) {
-                materializedNode = new MaterializedChildStatementAndExpressionSeparatelyNode(getSourceSection(), cloneUninitialized(children, materializedTags));
+                materializedNode = new MaterializedChildStatementAndExpressionSeparatelyNode(getSourceSection(), cloneUninitialized(children));
             } else if (materializedTags.contains(StandardTags.StatementTag.class)) {
-                materializedNode = new MaterializedChildStatementMaterializeChildExpressionNode(getSourceSection(), cloneUninitialized(children, materializedTags));
+                materializedNode = new MaterializedChildStatementMaterializeChildExpressionNode(getSourceSection(), cloneUninitialized(children));
             } else if (materializedTags.contains(StandardTags.ExpressionTag.class)) {
-                materializedNode = new MaterializedChildExpressionMaterializeChildStatementNode(getSourceSection(), cloneUninitialized(children, materializedTags));
+                materializedNode = new MaterializedChildExpressionMaterializeChildStatementNode(getSourceSection(), cloneUninitialized(children));
             }
             if (materializedNode != this) {
                 materializedNode.setSourceSection(getSourceSection());
@@ -1899,8 +1902,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializeChildExpressionNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializeChildExpressionNode(cloneUninitialized(children));
         }
     }
 
@@ -1923,7 +1926,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         public InstrumentableNode materializeInstrumentableNodes(Set<Class<? extends Tag>> materializedTags) {
             if (materializedTags.contains(StandardTags.ExpressionTag.class)) {
                 MaterializedChildStatementAndExpressionSeparatelyNode materializedNode = new MaterializedChildStatementAndExpressionSeparatelyNode(getSourceSection(), statementNode, true,
-                                cloneUninitialized(children, materializedTags));
+                                cloneUninitialized(children));
                 materializedNode.setSourceSection(getSourceSection());
                 return materializedNode;
             }
@@ -1937,8 +1940,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializedChildStatementMaterializeChildExpressionNode(cloneUninitialized(statementNode, materializedTags), cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializedChildStatementMaterializeChildExpressionNode(cloneUninitialized(statementNode), cloneUninitialized(children));
         }
     }
 
@@ -1961,7 +1964,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         public InstrumentableNode materializeInstrumentableNodes(Set<Class<? extends Tag>> materializedTags) {
             if (materializedTags.contains(StandardTags.StatementTag.class)) {
                 MaterializedChildStatementAndExpressionSeparatelyNode materializedNode = new MaterializedChildStatementAndExpressionSeparatelyNode(getSourceSection(), expressionNode, false,
-                                cloneUninitialized(children, materializedTags));
+                                cloneUninitialized(children));
                 materializedNode.setSourceSection(getSourceSection());
                 return materializedNode;
             }
@@ -1975,8 +1978,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializedChildExpressionMaterializeChildStatementNode(cloneUninitialized(expressionNode, materializedTags), cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializedChildExpressionMaterializeChildStatementNode(cloneUninitialized(expressionNode), cloneUninitialized(children));
         }
     }
 
@@ -2020,9 +2023,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializedChildStatementAndExpressionSeparatelyNode(cloneUninitialized(statementNode, materializedTags), cloneUninitialized(expressionNode, materializedTags),
-                            cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializedChildStatementAndExpressionSeparatelyNode(cloneUninitialized(statementNode), cloneUninitialized(expressionNode), cloneUninitialized(children));
         }
     }
 
@@ -2062,7 +2064,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
                     replacementForSkippedExpressions[i].setSourceSection(getSourceSection());
                 }
                 MaterializedChildStatementAndExpressionNode materializedNode = new MaterializedChildStatementAndExpressionNode(getSourceSection(), replacementForSkippedExpressions,
-                                cloneSubTreeOnMaterialization ? cloneUninitialized(newChildren, materializedTags) : newChildren);
+                                cloneSubTreeOnMaterialization ? cloneUninitialized(newChildren) : newChildren);
                 materializedNode.setSourceSection(getSourceSection());
                 return materializedNode;
             }
@@ -2070,8 +2072,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializeChildStatementAndExpressionNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializeChildStatementAndExpressionNode(cloneUninitialized(children));
         }
     }
 
@@ -2097,8 +2099,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new MaterializedChildStatementAndExpressionNode(cloneUninitialized(statementNode, materializedTags), cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new MaterializedChildStatementAndExpressionNode(cloneUninitialized(statementNode), cloneUninitialized(children));
         }
     }
 
@@ -2121,8 +2123,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new InnerFrameNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new InnerFrameNode(cloneUninitialized(children));
         }
     }
 
@@ -2198,8 +2200,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new VariableNode(name, value, cloneUninitialized(children, materializedTags), allocationReporter);
+        protected BaseNode copyUninitialized() {
+            return new VariableNode(name, value, cloneUninitialized(children), allocationReporter);
         }
     }
 
@@ -2238,8 +2240,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new ArgumentNode(name, cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new ArgumentNode(name, cloneUninitialized(children));
         }
     }
 
@@ -2305,9 +2307,9 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
+        protected BaseNode copyUninitialized() {
             LoopConditionNode repeatingNode = (LoopConditionNode) loop.getRepeatingNode();
-            return new WhileLoopNode(repeatingNode.loopCount, repeatingNode.infinite, cloneUninitialized(repeatingNode.children, materializedTags));
+            return new WhileLoopNode(repeatingNode.loopCount, repeatingNode.infinite, cloneUninitialized(repeatingNode.children));
         }
 
         final class LoopConditionNode extends InstrumentedNode implements RepeatingNode {
@@ -2379,8 +2381,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new InternalNode(cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new InternalNode(cloneUninitialized(children));
         }
     }
 
@@ -2439,8 +2441,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @Override
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
-            return new PrintNode(where, what, cloneUninitialized(children, materializedTags));
+        protected BaseNode copyUninitialized() {
+            return new PrintNode(where, what, cloneUninitialized(children));
         }
     }
 
@@ -2468,39 +2470,35 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
             return "BS";
         }
 
-        protected BaseNode copyUninitialized(Set<Class<? extends Tag>> materializedTags) {
+        protected BaseNode copyUninitialized() {
             if (this instanceof InstrumentableNode.WrapperNode) {
                 InstrumentableNode.WrapperNode wrapperNode = (InstrumentableNode.WrapperNode) this;
-                return cloneUninitialized((BaseNode) wrapperNode.getDelegateNode(), materializedTags);
+                return cloneUninitialized((BaseNode) wrapperNode.getDelegateNode());
             }
 
             throw new UnsupportedOperationException();
         }
 
         @SuppressWarnings("unchecked")
-        public static <T extends BaseNode> T cloneUninitialized(T node, Set<Class<? extends Tag>> materializedTags) {
+        public static <T extends BaseNode> T cloneUninitialized(T node) {
             if (node == null) {
                 return null;
             } else {
-                T copy = (T) node.copyUninitialized(null);
+                T copy = (T) node.copyUninitialized();
                 if (copy.getSourceSection() == null && node.getSourceSection() != null) {
                     copy.setSourceSection(node.getSourceSection());
                 }
-                if (copy instanceof InstrumentableNode && materializedTags != null) {
-                    return (T) ((InstrumentableNode) copy).materializeInstrumentableNodes(materializedTags);
-                } else {
-                    return copy;
-                }
+                return copy;
             }
         }
 
-        public static <T extends BaseNode> T[] cloneUninitialized(T[] nodeArray, Set<Class<? extends Tag>> materializedTags) {
+        public static <T extends BaseNode> T[] cloneUninitialized(T[] nodeArray) {
             if (nodeArray == null) {
                 return null;
             } else {
                 T[] copy = nodeArray.clone();
                 for (int i = 0; i < copy.length; i++) {
-                    copy[i] = cloneUninitialized(copy[i], materializedTags);
+                    copy[i] = cloneUninitialized(copy[i]);
                 }
                 return copy;
             }
