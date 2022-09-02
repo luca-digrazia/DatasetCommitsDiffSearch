@@ -78,7 +78,6 @@ public final class FunctionType extends Type {
     }
 
     public void setArgumentType(int idx, Type type) {
-        verifyCycleFree(type);
         argumentTypes[idx] = type;
     }
 
@@ -103,7 +102,6 @@ public final class FunctionType extends Type {
 
     public void setReturnType(Type returnType) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        verifyCycleFree(returnType);
         this.returnTypeAssumption.invalidate();
         this.returnType = returnType;
         this.returnTypeAssumption = Truffle.getRuntime().createAssumption("FunctionType.returnType");

@@ -106,7 +106,6 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
             this.wrapperCallNode.forceInlining();
         }
 
-        @SuppressWarnings("try")
         @Override
         public Object execute(VirtualFrame frame) {
             Object[] arguments = frame.getArguments();
@@ -136,7 +135,6 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
             this.wrapperCallNode.cloneCallTarget();
         }
 
-        @SuppressWarnings("try")
         @Override
         public Object execute(VirtualFrame frame) {
             Object[] arguments = frame.getArguments();
