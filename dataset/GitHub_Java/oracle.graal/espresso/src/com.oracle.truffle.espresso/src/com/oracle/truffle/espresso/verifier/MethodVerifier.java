@@ -256,6 +256,8 @@ import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
+import com.oracle.truffle.espresso.classfile.StackMapFrame;
+import com.oracle.truffle.espresso.classfile.VerificationTypeInfo;
 import com.oracle.truffle.espresso.classfile.attributes.CodeAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.StackMapTableAttribute;
 import com.oracle.truffle.espresso.classfile.constantpool.ClassConstant;
@@ -696,26 +698,36 @@ public final class MethodVerifier implements ContextAccess {
         StackFrame previous = new StackFrame(this);
         assert stackFrames.length > 0;
         int bci = 0;
-        registerStackMapFrame(bci, previous);
+        boolean first = true;
+        stackFrames[bci] = previous;
         if (!useStackMaps || stackMapTableAttribute == null) {
             return;
         }
-        StackMapFrameParser.parse(this, stackMapTableAttribute, previous);
-    }
-
-    /**
-     * Registers a stack frame from the stack map frame parser to the given BCI.
-     */
-    void registerStackMapFrame(int bci, StackFrame frame) {
-        validateFrameBCI(bci);
-        stackFrames[bci] = frame;
+        StackMapFrame[] entries = stackMapTableAttribute.getEntries();
+        for (StackMapFrame smf : entries) {
+            StackFrame frame = getStackFrame(smf, previous);
+            bci = bci + smf.getOffset() + 1;
+            if (first) {
+                bci--;
+                first = false;
+            }
+            validateFrameBCI(bci);
+            stackFrames[bci] = frame;
+            previous = frame;
+        }
+        // GR-19627 HotSpot's ad-hoc behavior: StackMapTable indices are range-checked first,
+        // possibly throwing VerifyError. Then, ClassFormatError is thrown if the attribute was
+        // truncated.
+        if (stackMapTableAttribute.isTruncated()) {
+            throw new ClassFormatError("Truncated StackMap attribute in " + getThisKlass() + "." + getMethodName());
+        }
     }
 
     /**
      * Constructs a StackFrame object for the verifier from a StackMapFrame obtained from the
      * parser.
      */
-    public StackFrame getStackFrame(StackMapFrame smf, StackFrame previous) {
+    private StackFrame getStackFrame(StackMapFrame smf, StackFrame previous) {
         int frameType = smf.getFrameType();
         if (frameType < SAME_FRAME_BOUND) {
             if (previous.top == 0) {
@@ -803,6 +815,7 @@ public final class MethodVerifier implements ContextAccess {
             StackFrame res = new StackFrame(fullStack, locals);
             res.lastLocal = pos;
             return res;
+
         }
         throw EspressoError.shouldNotReachHere();
     }
