@@ -247,7 +247,7 @@ public class MethodTypeFlowBuilder {
             if (n instanceof InstanceOfNode) {
                 InstanceOfNode node = (InstanceOfNode) n;
                 AnalysisType type = (AnalysisType) node.type().getType();
-                type.registerAsReachable();
+                type.registerAsInTypeCheck();
 
             } else if (n instanceof NewInstanceNode) {
                 NewInstanceNode node = (NewInstanceNode) n;
@@ -287,7 +287,7 @@ public class MethodTypeFlowBuilder {
                 AnalysisType arrayType = (AnalysisType) StampTool.typeOrNull(node.array());
                 if (arrayType != null) {
                     assert arrayType.isArray();
-                    arrayType.getComponentType().registerAsReachable();
+                    arrayType.getComponentType().registerAsInTypeCheck();
                 }
 
             } else if (n instanceof ConstantNode) {
