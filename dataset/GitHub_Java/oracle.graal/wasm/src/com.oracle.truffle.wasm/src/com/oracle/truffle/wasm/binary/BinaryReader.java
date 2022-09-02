@@ -51,9 +51,6 @@ import static com.oracle.truffle.wasm.binary.Instructions.I32_MUL;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_OR;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_REM_S;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_REM_U;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_SHL;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_S;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_SHR_U;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SUB;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_XOR;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_CONST;
@@ -292,9 +289,6 @@ public class BinaryReader extends BinaryStreamReader {
                 case I32_AND:
                 case I32_OR:
                 case I32_XOR:
-                case I32_SHL:
-                case I32_SHR_S:
-                case I32_SHR_U:
                 case F32_ADD:
                     state.pop();
                     state.pop();
