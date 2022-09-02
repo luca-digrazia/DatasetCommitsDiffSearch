@@ -38,8 +38,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.truffle.common.TruffleDebugContext;
 import org.graalvm.compiler.truffle.common.TruffleSourceLanguagePosition;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
@@ -219,7 +217,7 @@ public final class TruffleTreeDumper {
 
     static class AST {
         final ASTNode root;
-        final EconomicMap<Node, ASTNode> nodes = EconomicMap.create(Equivalence.IDENTITY_WITH_SYSTEM_HASHCODE);
+        final List<ASTNode> nodes = new ArrayList<>();
         final List<ASTBlock> blocks = new ArrayList<>();
 
         AST(RootCallTarget target, TruffleNodeSources nodeSources) {
@@ -231,17 +229,18 @@ public final class TruffleTreeDumper {
         }
 
         ASTNode makeASTNode(Node source, TruffleNodeSources nodeSources) {
-            ASTNode seen = nodes.get(source);
-            if (seen != null) {
-                return seen;
-            }
             final ASTNode astNode = new ASTNode(source, nodeSources.getSourceLocation(source));
-            nodes.put(source, astNode);
+            nodes.add(astNode);
             return astNode;
         }
 
         ASTNode findASTNode(Node source) {
-            return nodes.get(source);
+            for (ASTNode node : nodes) {
+                if (node.source == source) {
+                    return node;
+                }
+            }
+            return null;
         }
 
         ASTBlock makeASTBlock() {
@@ -424,7 +423,7 @@ public final class TruffleTreeDumper {
 
         @Override
         public Iterable<? extends ASTNode> nodes(AST graph) {
-            return graph.nodes.getValues();
+            return graph.nodes;
         }
 
         @Override
