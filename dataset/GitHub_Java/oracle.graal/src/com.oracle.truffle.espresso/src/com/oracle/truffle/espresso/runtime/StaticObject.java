@@ -125,9 +125,8 @@ public final class StaticObject implements TruffleObject {
         assert !(array instanceof StaticObject);
         assert array.getClass().isArray();
         this.fields = array;
-        this.primitiveFields = null;
-        // this.primitiveFields = new byte[JavaKind.Int.getByteCount()];
-        // U.putInt(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET, Array.getLength(array));
+        this.primitiveFields = new byte[JavaKind.Int.getByteCount()];
+        U.putInt(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET, Array.getLength(array));
     }
 
     private final Klass klass;
@@ -546,8 +545,7 @@ public final class StaticObject implements TruffleObject {
 
     public int length() {
         assert isArray();
-        return Array.getLength(fields);
-        //return U.getInt(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET);
+        return U.getInt(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET);
     }
 
     private Object cloneWrapped() {
