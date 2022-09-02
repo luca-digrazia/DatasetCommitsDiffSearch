@@ -69,7 +69,7 @@ public final class LLVMFunctionRootNode extends LLVMExpressionNode {
         if (tag == StandardTags.StatementTag.class) {
             return false;
         } else if (tag == StandardTags.RootTag.class) {
-            return true;
+            return isSourceInstrumentationEnabled();
         } else {
             return super.hasTag(tag);
         }

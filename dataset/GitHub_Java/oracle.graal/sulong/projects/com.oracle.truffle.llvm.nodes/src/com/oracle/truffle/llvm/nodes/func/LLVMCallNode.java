@@ -75,8 +75,8 @@ public final class LLVMCallNode extends LLVMExpressionNode {
 
     @Override
     public boolean hasTag(Class<? extends Tag> tag) {
-        if (tag == StandardTags.CallTag.class) {
-            return getSourceLocation() != null;
+        if (tag == StandardTags.CallTag.class || tag == StandardTags.StatementTag.class) {
+            return isSourceInstrumentationEnabled();
         } else {
             return super.hasTag(tag);
         }
