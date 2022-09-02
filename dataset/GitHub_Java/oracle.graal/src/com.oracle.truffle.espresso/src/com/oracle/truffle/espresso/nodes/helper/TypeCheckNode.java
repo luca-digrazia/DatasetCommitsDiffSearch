@@ -147,7 +147,7 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
     }
 
     protected static boolean isFinal(Klass k) {
-        return k.isFinalFlagSet();
+        return k.isFinal();
     }
 
     protected static boolean isPrimitive(Klass k) {
