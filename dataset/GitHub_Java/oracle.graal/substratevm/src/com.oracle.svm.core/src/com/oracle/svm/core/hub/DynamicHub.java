@@ -656,11 +656,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     }
 
     @Substitute
-    private boolean isArray() {
-        throw VMError.shouldNotReachHere("Intrinsified in StandardGraphBuilderPlugins.");
-    }
-
-    public boolean hubIsArray() {
+    public boolean isArray() {
         return HubType.isArray(hubType);
     }
 
@@ -1310,7 +1306,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private String computePackageName() {
         String pn = null;
         DynamicHub me = this;
-        while (me.hubIsArray()) {
+        while (me.isArray()) {
             me = (DynamicHub) me.getComponentType();
         }
         if (me.isPrimitive()) {
