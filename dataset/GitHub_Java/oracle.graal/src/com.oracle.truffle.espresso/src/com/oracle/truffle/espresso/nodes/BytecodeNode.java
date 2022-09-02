@@ -274,7 +274,7 @@ import com.oracle.truffle.object.DebugCounter;
 /**
  * Bytecode interpreter loop.
  *
- *
+ * 
  * Calling convention uses strict Java primitive types although internally the VM basic types are
  * used with conversions at the boundaries.
  *
@@ -285,7 +285,7 @@ import com.oracle.truffle.object.DebugCounter;
  * bytecode is first processed/executed without growing or shinking the stack and only then the
  * {@code top} of the stack index is adjusted depending on the bytecode stack offset.
  */
-public class BytecodeNode extends EspressoBaseNode {
+public final class BytecodeNode extends EspressoRootNode {
 
     public static final DebugCounter bcCount = DebugCounter.create("Bytecodes executed");
 
@@ -306,17 +306,21 @@ public class BytecodeNode extends EspressoBaseNode {
     private final BytecodeStream bs;
 
     @TruffleBoundary
-    public BytecodeNode(Method method, FrameDescriptor frameDescriptor) {
-        super(method);
+    public BytecodeNode(Method method) {
+        super(method, initFrameDescriptor(method.getMaxLocals() + method.getMaxStackSize()));
         CompilerAsserts.neverPartOfCompilation();
         this.bs = new BytecodeStream(method.getCode());
-        FrameSlot[] slots = frameDescriptor.getSlots().toArray(new FrameSlot[0]);
+        FrameSlot[] slots = getFrameDescriptor().getSlots().toArray(new FrameSlot[0]);
         this.locals = Arrays.copyOfRange(slots, 0, method.getMaxLocals());
         this.stackSlots = Arrays.copyOfRange(slots, method.getMaxLocals(), method.getMaxLocals() + method.getMaxStackSize());
     }
 
-    public BytecodeNode(BytecodeNode copy) {
-        this(copy.getMethod(), copy.getRootNode().getFrameDescriptor());
+    private static FrameDescriptor initFrameDescriptor(int slotCount) {
+        FrameDescriptor descriptor = new FrameDescriptor();
+        for (int i = 0; i < slotCount; ++i) {
+            descriptor.addFrameSlot(i);
+        }
+        return descriptor;
     }
 
     @ExplodeLoop
@@ -484,7 +488,7 @@ public class BytecodeNode extends EspressoBaseNode {
 
     @Override
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.MERGE_EXPLODE)
-    public Object executeNaked(VirtualFrame frame) {
+    public Object execute(VirtualFrame frame) {
         int curBCI = 0;
         int top = 0;
 
@@ -1445,7 +1449,7 @@ public class BytecodeNode extends EspressoBaseNode {
 
     @Override
     public String toString() {
-        return getRootNode().getName();
+        return getName();
     }
 
     @ExplodeLoop
@@ -1534,5 +1538,4 @@ public class BytecodeNode extends EspressoBaseNode {
         int skipSlots = Signatures.slotsForParameters(m.getParsedSignature());
         return peekObject(frame, top - skipSlots - 1);
     }
-
 }
