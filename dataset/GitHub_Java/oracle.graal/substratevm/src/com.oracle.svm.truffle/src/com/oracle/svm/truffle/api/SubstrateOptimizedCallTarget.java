@@ -24,36 +24,33 @@
  */
 package com.oracle.svm.truffle.api;
 
-import org.graalvm.compiler.nodes.extended.MembarNode;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
+import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.InvokeJavaFunctionPointer;
+import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.code.CodeInfoTable;
+import com.oracle.svm.core.code.UntetheredCodeInfo;
+import com.oracle.svm.core.code.UntetheredCodeInfoAccess;
+import com.oracle.svm.core.deopt.SubstrateInstalledCode;
 import com.oracle.svm.core.deopt.SubstrateSpeculationLog;
-import com.oracle.svm.core.thread.VMOperation;
-import com.oracle.svm.truffle.TruffleFeature;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.truffle.api.nodes.RootNode;
 
 import jdk.vm.ci.code.InstalledCode;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.SpeculationLog;
 
-public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements SubstrateCompilableTruffleAST, OptimizedAssumptionDependency {
+public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements SubstrateCompilableTruffleAST, SubstrateInstalledCode, OptimizedAssumptionDependency {
 
-    /**
-     * Stores the most recently installed code, which is the only entry point for this call target
-     * at one point in time (or not an entry point, if invalid). Must never be {@code null}.
-     * <p>
-     * Does not need to be volatile because it is modified only in safepoint operations. Reads of
-     * this field must be done carefully placed so they cannot float across safepoint checks.
-     */
-    protected SubstrateOptimizedCallTargetInstalledCode installedCode;
+    protected long address;
 
     public SubstrateOptimizedCallTarget(OptimizedCallTarget sourceCallTarget, RootNode rootNode) {
         super(sourceCallTarget, rootNode);
-        this.installedCode = createInitializationInstalledCode();
-        assert this.installedCode != null : "Must never be null";
     }
 
     @SuppressWarnings("sync-override")
@@ -78,39 +75,90 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
     }
 
     @Override
+    public SubstrateInstalledCode getSubstrateInstalledCode() {
+        return this;
+    }
+
+    @Override
     public OptimizedAssumptionDependency getDependency() {
         return this;
     }
 
     @Override
     public void invalidateCode() {
-        installedCode.invalidate();
+        CodeInfoTable.invalidateInstalledCode(this);
     }
 
     @Override
     public boolean isValid() {
-        return installedCode.isValid();
+        return address != 0;
     }
 
+    /**
+     * When SVM invalidates code, it immediately deoptimizes all frames. So isValid and isAlive are
+     * the same.
+     */
     @Override
     public boolean isAlive() {
-        return installedCode.isAlive();
+        return address != 0;
     }
 
     @Override
     public boolean isValidLastTier() {
-        return installedCode.isValidLastTier();
+        long address0 = getAddress();
+        return (address0 != 0) && isValidLastTier0(address0);
+    }
+
+    @Uninterruptible(reason = "Prevent the GC from freeing the CodeInfo object.")
+    private static boolean isValidLastTier0(long address0) {
+        UntetheredCodeInfo info = CodeInfoTable.lookupCodeInfo(WordFactory.pointer(address0));
+        if (info.isNonNull() && info.notEqual(CodeInfoTable.getImageCodeInfo())) {
+            return UntetheredCodeInfoAccess.getTier(info) == TruffleCompiler.LAST_TIER_INDEX;
+        }
+        return false;
+    }
+
+    @Override
+    public long getAddress() {
+        return address;
     }
 
     @Override
     public long getCodeAddress() {
-        return installedCode.getAddress();
+        return getAddress();
+    }
+
+    @Override
+    public ResolvedJavaMethod getMethod() {
+        return null;
+    }
+
+    @Override
+    public void setAddress(long address, ResolvedJavaMethod method) {
+        this.address = address;
+    }
+
+    @Override
+    public void clearAddress() {
+        this.address = 0;
     }
 
     @Override
     public Object doInvoke(Object[] args) {
-        MembarNode.memoryBarrier(0); // prevent installedCode read from floating across safepoint
-        return SubstrateOptimizedCallTargetInstalledCode.doInvoke(this, installedCode, args);
+        /*
+         * We have to be very careful that the calling code is uninterruptible, i.e., has no
+         * safepoint between the read of the compiled code address and the indirect call to this
+         * address. Otherwise, the code can be invalidated concurrently and we invoke an address
+         * that no longer contains executable code.
+         */
+        long start = address;
+        // The call below is not a safepoint as it is intrinsified in TruffleGraphBuilderPlugins.
+        if (start != 0) {
+            CallBoundaryFunctionPointer target = WordFactory.pointer(start);
+            return KnownIntrinsics.convertUnknownValue(target.invoke(this, args), Object.class);
+        } else {
+            return callBoundary(args);
+        }
     }
 
     @Override
@@ -122,37 +170,8 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
     }
 
     @Override
-    public InstalledCode createPreliminaryInstalledCode() {
-        return createInstalledCode();
-    }
-
-    public Object invokeCallBoundary(Object[] args) {
-        return callBoundary(args);
-    }
-
-    @Override
-    public SubstrateOptimizedCallTargetInstalledCode createSubstrateInstalledCode() {
-        assert TruffleFeature.Support.isIsolatedCompilation() : "Must be called only with isolated compilation";
-        return createInstalledCode();
-    }
-
-    void setInstalledCode(SubstrateOptimizedCallTargetInstalledCode code) {
-        VMOperation.guaranteeInProgressAtSafepoint("Must be at a safepoint");
-        assert code != null : "Must never become null";
-        if (code == installedCode) {
-            return;
-        }
-        invalidateCode();
-        this.installedCode = code;
-    }
-
-    /** Creates the instance for initializing {@link #installedCode} so it is never {@code null}. */
-    protected SubstrateOptimizedCallTargetInstalledCode createInitializationInstalledCode() {
-        return createInstalledCode();
-    }
-
-    private SubstrateOptimizedCallTargetInstalledCode createInstalledCode() {
-        return new SubstrateOptimizedCallTargetInstalledCode(this);
+    public InstalledCode createInstalledCode() {
+        return new SubstrateTruffleInstalledCodeBridge(this);
     }
 
     interface CallBoundaryFunctionPointer extends CFunctionPointer {

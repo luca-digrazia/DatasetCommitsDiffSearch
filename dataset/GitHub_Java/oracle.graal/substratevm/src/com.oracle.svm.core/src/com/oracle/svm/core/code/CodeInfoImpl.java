@@ -247,8 +247,8 @@ interface CodeInfoImpl extends CodeInfo {
     Word getGCData();
 
     @RawField
-    void setAllObjectsAreInImageHeap(boolean value);
+    void setFreeArraysOnRelease(boolean value);
 
     @RawField
-    boolean getAllObjectsAreInImageHeap();
+    boolean getFreeArraysOnRelease();
 }
