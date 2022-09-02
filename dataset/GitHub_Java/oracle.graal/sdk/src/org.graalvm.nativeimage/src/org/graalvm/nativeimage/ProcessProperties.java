@@ -163,8 +163,7 @@ public final class ProcessProperties {
      * If the running image is an executable the program name that is stored in the argument vector
      * of the running process gets returned.
      *
-     * @throws UnsupportedOperationException if called from a platform that does not support
-     *             argument vector manipulation (Windows) or if called from a shared library image.
+     * @throws UnsupportedOperationException if called from a shared library image.
      *
      * @since 20.1
      */
@@ -179,8 +178,7 @@ public final class ProcessProperties {
      * argument vector does not get corrupted.
      *
      * @return true, if given name had to be truncated to fit in the argument vector
-     * @throws UnsupportedOperationException if called from a platform that does not support
-     *             argument vector manipulation (Windows) or if called from a shared library image.
+     * @throws UnsupportedOperationException if called from a shared library image.
      *
      * @since 20.1
      */
@@ -192,8 +190,7 @@ public final class ProcessProperties {
      * If the running image is an executable the total size of the argument vector of the running
      * process gets returned.
      *
-     * @return the total size of the argument vector. Returns -1 if not supported on platform or
-     *         called from a shared library image.
+     * @throws UnsupportedOperationException if called from a shared library image.
      *
      * @since 20.1
      */

@@ -58,7 +58,7 @@ public final class WasmContext {
     private final GlobalRegistry globals;
     private final TableRegistry tableRegistry;
     private final Linker linker;
-    private Map<String, WasmInstance> moduleInstances;
+    private Map<String, WasmModule> modules;
 
     public static WasmContext getCurrent() {
         return WasmLanguage.getCurrentContext();
@@ -70,9 +70,9 @@ public final class WasmContext {
         this.globals = new GlobalRegistry();
         this.tableRegistry = new TableRegistry();
         this.memoryRegistry = new MemoryRegistry();
-        this.moduleInstances = new LinkedHashMap<>();
+        this.modules = new LinkedHashMap<>();
         this.linker = new Linker(language);
-        instantiateBuiltinModules();
+        initializeBuiltinModules();
     }
 
     public CallTarget parse(Source source) {
@@ -107,7 +107,7 @@ public final class WasmContext {
     public Iterable<Scope> getTopScopes() {
         // Go through all WasmModules parsed with this context, and create a Scope for each of them.
         ArrayList<Scope> scopes = new ArrayList<>();
-        for (Map.Entry<String, WasmInstance> entry : moduleInstances.entrySet()) {
+        for (Map.Entry<String, WasmModule> entry : modules.entrySet()) {
             Scope scope = Scope.newBuilder(entry.getKey(), entry.getValue()).build();
             scopes.add(scope);
         }
@@ -117,18 +117,18 @@ public final class WasmContext {
     /**
      * Returns the map with all the modules that have been parsed.
      */
-    public Map<String, WasmInstance> moduleInstances() {
-        return moduleInstances;
+    public Map<String, WasmModule> modules() {
+        return modules;
     }
 
-    void registerModule(WasmInstance module) {
-        if (moduleInstances.containsKey(module.name())) {
+    void registerModule(WasmModule module) {
+        if (modules.containsKey(module.name())) {
             throw new RuntimeException("Context already contains a module named '" + module.name() + "'.");
         }
-        moduleInstances.put(module.name(), module);
+        modules.put(module.name(), module);
     }
 
-    private void instantiateBuiltinModules() {
+    private void initializeBuiltinModules() {
         final String extraModuleValue = WasmOptions.Builtins.getValue(env.getOptions());
         if (extraModuleValue.equals("")) {
             return;
@@ -141,8 +141,8 @@ public final class WasmContext {
             }
             final String name = parts[0];
             final String key = parts.length == 2 ? parts[1] : parts[0];
-            final WasmInstance module = BuiltinModule.createBuiltinModule(language, this, name, key);
-            moduleInstances.put(name, module);
+            final WasmModule module = BuiltinModule.createBuiltinModule(language, this, name, key);
+            modules.put(name, module);
         }
     }
 }

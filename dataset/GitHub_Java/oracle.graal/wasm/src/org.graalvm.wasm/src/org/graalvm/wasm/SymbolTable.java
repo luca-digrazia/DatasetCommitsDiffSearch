@@ -57,6 +57,7 @@ import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.memory.WasmMemoryException;
 import org.graalvm.wasm.collection.ByteArrayList;
 
+import static org.graalvm.wasm.TableRegistry.Table;
 import static org.graalvm.wasm.WasmUtil.unsignedInt32ToLong;
 
 /**
@@ -224,7 +225,7 @@ public class SymbolTable {
      * In the current WebAssembly specification, a module can use at most one table. The value
      * {@code null} denotes that this module uses no table.
      */
-    @CompilationFinal private WasmTable table;
+    @CompilationFinal private Table table;
 
     /**
      * The table used in this module.
@@ -523,7 +524,7 @@ public class SymbolTable {
         context.linker().resolveFunctionExport(module, functionIndex, exportName);
     }
 
-    public Map<String, WasmFunction> exportedFunctions() {
+    Map<String, WasmFunction> exportedFunctions() {
         return exportedFunctions;
     }
 
@@ -536,7 +537,7 @@ public class SymbolTable {
         return function;
     }
 
-    public List<WasmFunction> importedFunctions() {
+    List<WasmFunction> importedFunctions() {
         return importedFunctions;
     }
 
@@ -591,7 +592,7 @@ public class SymbolTable {
         globalAddresses[globalIndex] = address;
     }
 
-    public LinkedHashMap<Integer, ImportDescriptor> importedGlobals() {
+    LinkedHashMap<Integer, ImportDescriptor> importedGlobals() {
         return importedGlobals;
     }
 
@@ -630,7 +631,7 @@ public class SymbolTable {
         return (globalTypes[index] & GLOBAL_INITIALIZED_BIT) != 0;
     }
 
-    public Map<String, Integer> exportedGlobals() {
+    Map<String, Integer> exportedGlobals() {
         return exportedGlobals;
     }
 
@@ -700,11 +701,11 @@ public class SymbolTable {
         context.linker().resolveTableExport(module, exportedTable);
     }
 
-    public WasmTable table() {
+    public Table table() {
         return table;
     }
 
-    void setTable(WasmTable table) {
+    void setTable(Table table) {
         checkNotLinked();
         this.table = table;
     }
@@ -713,7 +714,7 @@ public class SymbolTable {
         return tableExists() ? 1 : 0;
     }
 
-    public ImportDescriptor importedTable() {
+    ImportDescriptor importedTable() {
         return importedTableDescriptor;
     }
 
@@ -721,7 +722,7 @@ public class SymbolTable {
         importedTableDescriptor = descriptor;
     }
 
-    public String exportedTable() {
+    String exportedTable() {
         return exportedTable;
     }
 
@@ -779,11 +780,11 @@ public class SymbolTable {
         return memoryExists() ? 1 : 0;
     }
 
-    public ImportDescriptor importedMemory() {
+    ImportDescriptor importedMemory() {
         return importedMemoryDescriptor;
     }
 
-    public String exportedMemory() {
+    String exportedMemory() {
         return exportedMemory;
     }
 }
