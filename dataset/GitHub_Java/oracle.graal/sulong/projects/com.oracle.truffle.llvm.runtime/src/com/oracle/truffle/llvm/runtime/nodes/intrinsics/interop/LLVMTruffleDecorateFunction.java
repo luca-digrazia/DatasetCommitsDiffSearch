@@ -207,7 +207,7 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
     private Object decorate(LLVMFunctionDescriptor function, LLVMFunctionDescriptor wrapperFunction) {
         assert function != null && wrapperFunction != null;
         FunctionType type = wrapperFunction.getLLVMFunction().getType();
-        FunctionType newFunctionType = FunctionType.copy(type);
+        FunctionType newFunctionType = new FunctionType(type.getReturnType(), type.getArgumentTypes(), type.isVarargs());
         NativeDecoratedRoot decoratedRoot = new NativeDecoratedRoot(lookupLanguageReference(LLVMLanguage.class).get(), function, wrapperFunction);
         return registerRoot(function.getLLVMFunction().getLibrary(), newFunctionType, decoratedRoot);
     }
@@ -222,7 +222,7 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
 
     private Object registerRoot(ExternalLibrary lib, FunctionType newFunctionType, DecoratedRoot decoratedRoot) {
         LLVMIRFunction function = new LLVMIRFunction(Truffle.getRuntime().createCallTarget(decoratedRoot), null);
-        LLVMFunction functionDetail = LLVMFunction.create("<wrapper>", lib, function, newFunctionType, LLVMSymbol.INVALID_INDEX, LLVMSymbol.INVALID_INDEX, false);
+        LLVMFunction functionDetail = LLVMFunction.create("<wrapper>", lib, function, newFunctionType, LLVMSymbol.INVALID_INDEX, LLVMSymbol.INVALID_INDEX);
         LLVMFunctionDescriptor wrappedFunction = new LLVMFunctionDescriptor(getContext(), functionDetail);
         return LLVMManagedPointer.create(wrappedFunction);
     }
