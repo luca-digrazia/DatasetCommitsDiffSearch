@@ -48,11 +48,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
@@ -488,44 +483,31 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
     }
 
     @Test
-    public void testMultiThreadedLoadSource() throws InterruptedException, ExecutionException {
+    public void testMultiThreadedLoadSource() throws InterruptedException {
         testMultiThreadedSourceBindings(true);
     }
 
     @Test
-    public void testMultiThreadedExecuteSource() throws InterruptedException, ExecutionException {
+    public void testMultiThreadedExecuteSource() throws InterruptedException {
         testMultiThreadedSourceBindings(false);
     }
 
-    private void testMultiThreadedSourceBindings(boolean load) throws InterruptedException, ExecutionException {
+    private void testMultiThreadedSourceBindings(boolean load) throws InterruptedException {
+        Engine testEngine = Engine.create();
         int numInstrumentationThreads = 10;
         int numExecutionThreads = 20;
-        int numRepeats = 500;
-        ExecutorService threadPool = Executors.newFixedThreadPool(numInstrumentationThreads + numExecutionThreads);
-        try {
-            for (int i = 0; i < numRepeats; i++) {
-                testMultiThreadedSourceBindings(load, numInstrumentationThreads, numExecutionThreads, threadPool);
-            }
-        } finally {
-            threadPool.shutdown();
-            assertTrue(threadPool.awaitTermination(10, TimeUnit.SECONDS));
-        }
-    }
-
-    private void testMultiThreadedSourceBindings(boolean load, int numInstrumentationThreads, int numExecutionThreads, ExecutorService threadPool) throws InterruptedException, ExecutionException {
-        Engine testEngine = Engine.create();
         Instrument instrument = testEngine.getInstruments().get(TestSourceListenerInstrument.ID);
         TestSourceListenerInstrument testInstrument = instrument.lookup(TestSourceListenerInstrument.class);
-        InstrumentationRunnable[] instrumentationRunnables = new InstrumentationRunnable[numInstrumentationThreads];
+        InstrumentationThread[] instrumentationThreads = new InstrumentationThread[numInstrumentationThreads];
         for (int i = 0; i < numInstrumentationThreads; i++) {
-            instrumentationRunnables[i] = new InstrumentationRunnable(testInstrument.instrumentEnv, load);
+            instrumentationThreads[i] = new InstrumentationThread(testInstrument.instrumentEnv, load, i);
         }
 
-        Runnable[] executionRunnables = new Runnable[numExecutionThreads];
+        Thread[] executionThreads = new Thread[numExecutionThreads];
         int sourceNumDigits = Integer.toString(numExecutionThreads - 1).length();
         for (int i = 0; i < numExecutionThreads; i++) {
             final int fi = i;
-            executionRunnables[i] = new Runnable() {
+            executionThreads[i] = new Thread() {
                 @Override
                 public void run() {
                     Context threadContext = Context.newBuilder().engine(testEngine).build();
@@ -539,25 +521,29 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
         int numExec1 = numExecutionThreads / 4;
         for (int i = 0; i < numExec1; i++) {
-            threadPool.submit(executionRunnables[i]).get();
+            executionThreads[i].start();
+            executionThreads[i].join();
         }
         int numInstr1 = numInstrumentationThreads / 4;
         for (int i = 0; i < numInstr1; i++) {
-            threadPool.submit(instrumentationRunnables[i]).get();
+            instrumentationThreads[i].start();
+            instrumentationThreads[i].join();
         }
-        List<Future<?>> futures = new ArrayList<>();
         for (int i = numInstr1; i < numInstrumentationThreads; i++) {
-            futures.add(threadPool.submit(instrumentationRunnables[i]));
+            instrumentationThreads[i].start();
         }
         for (int i = numExec1; i < numExecutionThreads; i++) {
-            futures.add(threadPool.submit(executionRunnables[i]));
+            executionThreads[i].start();
         }
-        for (Future<?> f : futures) {
-            f.get();
+        for (int i = numInstr1; i < numInstrumentationThreads; i++) {
+            instrumentationThreads[i].join();
+        }
+        for (int i = numExec1; i < numExecutionThreads; i++) {
+            executionThreads[i].join();
         }
 
         for (int i = 0; i < numInstrumentationThreads; i++) {
-            List<com.oracle.truffle.api.source.Source> sourceList = instrumentationRunnables[i].sources;
+            List<com.oracle.truffle.api.source.Source> sourceList = instrumentationThreads[i].sources;
             Assert.assertEquals("Instrument " + i + " : " + sourceList.toString(), numExecutionThreads, sourceList.size());
             Set<String> names = new TreeSet<>();
             for (int t = 0; t < numExecutionThreads; t++) {
@@ -592,13 +578,14 @@ public class SourceListenerTest extends AbstractInstrumentationTest {
 
     }
 
-    private class InstrumentationRunnable implements Runnable {
+    private class InstrumentationThread extends Thread {
 
         private final TruffleInstrument.Env env;
         private final boolean load;
         private final List<com.oracle.truffle.api.source.Source> sources = Collections.synchronizedList(new ArrayList<>());
 
-        InstrumentationRunnable(TruffleInstrument.Env env, boolean load) {
+        InstrumentationThread(TruffleInstrument.Env env, boolean load, int n) {
+            super("Instrumentation Thread " + n);
             this.env = env;
             this.load = load;
         }
