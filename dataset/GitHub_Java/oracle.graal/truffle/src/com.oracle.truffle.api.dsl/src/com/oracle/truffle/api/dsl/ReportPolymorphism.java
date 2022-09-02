@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -49,9 +49,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Nodes (or classes annotated as exported Truffle library messages) annotated with this annotation
- * (and their subclasses) will, if processed by the DSL, automatically
- * {@link Node#reportPolymorphicSpecialize() report polymorphic specializations}.
+ * Nodes annotated with this annotation (and their subclasses) will, if processed by the DSL,
+ * automatically {@link Node#reportPolymorphicSpecialize() report polymorphic specializations}.
  *
  * Polymorphic specializations include, but are not limited to, activating another specialization,
  * increasing the number of instances of an active specialization, excluding a specialization, etc.
