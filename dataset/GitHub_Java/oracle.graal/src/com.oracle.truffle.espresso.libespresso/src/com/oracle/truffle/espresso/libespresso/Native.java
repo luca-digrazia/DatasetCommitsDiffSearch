@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.libespresso;
 
 import static com.oracle.truffle.espresso.libespresso.Arguments.abort;
 
+import java.lang.ref.WeakReference;
 import java.util.EnumSet;
 
 import org.graalvm.nativeimage.RuntimeOptions;
@@ -35,21 +36,31 @@ import org.graalvm.options.OptionType;
 class Native {
     private String argPrefix;
 
-    private OptionDescriptors compilerOptionDescriptors;
-    private OptionDescriptors vmOptionDescriptors;
+    private WeakReference<OptionDescriptors> compilerOptionDescriptors;
+    private WeakReference<OptionDescriptors> vmOptionDescriptors;
 
     private OptionDescriptors getCompilerOptions() {
-        if (compilerOptionDescriptors == null) {
-            compilerOptionDescriptors = RuntimeOptions.getOptions(EnumSet.of(RuntimeOptions.OptionClass.Compiler));
+        OptionDescriptors descriptors = null;
+        if (compilerOptionDescriptors != null) {
+            descriptors = compilerOptionDescriptors.get();
         }
-        return compilerOptionDescriptors;
+        if (descriptors == null) {
+            descriptors = RuntimeOptions.getOptions(EnumSet.of(RuntimeOptions.OptionClass.Compiler));
+            compilerOptionDescriptors = new WeakReference<>(descriptors);
+        }
+        return descriptors;
     }
 
     private OptionDescriptors getVMOptions() {
-        if (vmOptionDescriptors == null) {
-            vmOptionDescriptors = RuntimeOptions.getOptions(EnumSet.of(RuntimeOptions.OptionClass.VM));
+        OptionDescriptors descriptors = null;
+        if (vmOptionDescriptors != null) {
+            descriptors = vmOptionDescriptors.get();
         }
-        return vmOptionDescriptors;
+        if (descriptors == null) {
+            descriptors = RuntimeOptions.getOptions(EnumSet.of(RuntimeOptions.OptionClass.VM));
+            vmOptionDescriptors = new WeakReference<>(descriptors);
+        }
+        return descriptors;
     }
 
     void init(boolean fromXXHandling) {
