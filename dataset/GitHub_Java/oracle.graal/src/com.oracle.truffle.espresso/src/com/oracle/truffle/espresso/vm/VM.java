@@ -72,13 +72,10 @@ import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.MethodParametersAttribute;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
-import com.oracle.truffle.espresso.descriptors.ByteSequence;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.descriptors.Validation;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
@@ -604,21 +601,13 @@ public final class VM extends NativeEnv implements ContextAccess {
         final byte[] bytes = new byte[len];
         buf.get(bytes);
 
+        // TODO(peterssen): Name is in binary form, but separator can be either / or . .
         Symbol<Type> type = null;
         if (name != null) {
-            String internalName = name;
-            if (!name.startsWith("[")) {
-                // Force 'L' type.
-                internalName = "L" + name + ";";
-            }
-            if (!Validation.validTypeDescriptor(ByteSequence.create(internalName), false)) {
-                throw getMeta().throwExWithMessage(NoClassDefFoundError.class, name);
-            }
-            type = getTypes().fromClassGetName(internalName);
+            type = getTypes().fromClassGetName(name);
         }
 
         StaticObject clazz = getContext().getRegistries().defineKlass(type, bytes, loader).mirror();
-        assert clazz != null;
         assert pd != null;
         clazz.setHiddenField(getMeta().HIDDEN_PROTECTION_DOMAIN, pd);
         return clazz;
@@ -1161,26 +1150,10 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     @JniImpl
     public @Host(Class.class) StaticObject JVM_FindClassFromBootLoader(String name) {
-        String internalName = name;
-        if (!name.startsWith("[")) {
-            // Force 'L' type.
-            internalName = "L" + name + ";";
-        }
-
-        if (!Validation.validTypeDescriptor(ByteSequence.create(internalName), false)) {
-            return StaticObject.NULL;
-        }
-
-        Symbol<Type> type = getTypes().fromClassGetName(internalName);
-        if (Types.isPrimitive(type)) {
-            return StaticObject.NULL;
-        }
-
-        Klass klass = getRegistries().loadKlassWithBootClassLoader(type);
+        Klass klass = getRegistries().loadKlassWithBootClassLoader(getTypes().fromClassGetName(name));
         if (klass == null) {
             return StaticObject.NULL;
         }
-
         return klass.mirror();
     }
 
