@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -70,6 +70,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderTool;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.SideEffectsState;
 import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
+import org.graalvm.compiler.nodes.util.GraphUtil;
 
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.Assumptions;
@@ -273,6 +274,8 @@ public final class FrameStateBuilder implements SideEffectsState {
         clearNonLiveLocals = other.clearNonLiveLocals;
         monitorIds = other.monitorIds.length == 0 ? other.monitorIds : other.monitorIds.clone();
 
+        assert locals.length == code.getMaxLocals();
+        assert stack.length == Math.max(1, code.getMaxStackSize());
         assert lockedObjects.length == monitorIds.length;
     }
 
@@ -406,7 +409,7 @@ public final class FrameStateBuilder implements SideEffectsState {
             return false;
         }
         for (int i = 0; i < lockedObjects.length; i++) {
-            if (BytecodeParser.safeOriginalValue(lockedObjects[i]) != BytecodeParser.safeOriginalValue(other.lockedObjects[i]) || monitorIds[i] != other.monitorIds[i]) {
+            if (GraphUtil.originalValue(lockedObjects[i]) != GraphUtil.originalValue(other.lockedObjects[i]) || monitorIds[i] != other.monitorIds[i]) {
                 throw new PermanentBailoutException("unbalanced monitors");
             }
         }
@@ -787,7 +790,7 @@ public final class FrameStateBuilder implements SideEffectsState {
     public ValueNode pop(JavaKind slotKind) {
         if (slotKind.needsTwoSlots()) {
             ValueNode s = xpop();
-            assert s == TWO_SLOT_MARKER : s;
+            assert s == TWO_SLOT_MARKER;
         }
         ValueNode x = xpop();
         assert verifyKind(slotKind, x);
@@ -831,7 +834,7 @@ public final class FrameStateBuilder implements SideEffectsState {
                 /* Ignore second slot of two-slot value. */
                 x = xpop();
             }
-            assert x != null && x != TWO_SLOT_MARKER : x;
+            assert x != null && x != TWO_SLOT_MARKER;
             result[i] = x;
         }
         return result;

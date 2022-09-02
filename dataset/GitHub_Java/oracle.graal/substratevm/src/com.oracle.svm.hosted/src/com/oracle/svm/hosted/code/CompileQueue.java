@@ -904,9 +904,8 @@ public class CompileQueue {
     class HostedCompilationResultBuilderFactory implements CompilationResultBuilderFactory {
         @Override
         public CompilationResultBuilder createBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, Assembler asm, DataBuilder dataBuilder,
-                        FrameContext frameContext, OptionValues options, DebugContext debug, CompilationResult compilationResult, Register uncompressedNullRegister) {
-            return new CompilationResultBuilder(codeCache, foreignCalls, frameMap, asm, dataBuilder, frameContext, options, debug, compilationResult, uncompressedNullRegister,
-                            EconomicMap.wrapMap(dataCache));
+                        FrameContext frameContext, OptionValues options, DebugContext debug, CompilationResult compilationResult, Register nullRegister) {
+            return new CompilationResultBuilder(codeCache, foreignCalls, frameMap, asm, dataBuilder, frameContext, options, debug, compilationResult, nullRegister, EconomicMap.wrapMap(dataCache));
         }
     }
 
@@ -1108,13 +1107,14 @@ public class CompileQueue {
              * tracks the bug in DebugValueMap.
              */
             String className = method.getDeclaringClass().getName();
+            // @formatter:off
             if (className.contains("/svm/core/code/CodeInfoEncoder") ||
-                            className.contains("com/oracle/svm/core/thread/JavaThreads") ||
-                            className.contains("com/oracle/svm/core/heap/") ||
-                            className.contains("com/oracle/svm/core/genscavenge/") ||
-                            className.contains("debug/internal/DebugValueMap") && method.getName().equals("registerTopLevel")) {
+                    className.contains("com/oracle/svm/core/heap/") ||
+                    className.contains("com/oracle/svm/core/genscavenge/") ||
+                    className.contains("debug/internal/DebugValueMap") && method.getName().equals("registerTopLevel")) {
                 return false;
             }
+            // @formatter:on
             /*
              * Method without bytecodes, e.g., methods that have a manually constructed graph, are
              * usually not deoptimizable. This needs to change as soon as we want to runtime compile

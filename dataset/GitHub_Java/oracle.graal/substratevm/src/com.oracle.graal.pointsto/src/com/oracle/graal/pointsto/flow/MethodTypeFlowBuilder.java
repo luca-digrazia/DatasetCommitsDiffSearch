@@ -341,7 +341,7 @@ public class MethodTypeFlowBuilder {
             return;
         }
 
-        bb.getHostVM().checkMethod(bb, method, graph);
+        this.bb.getUnsupportedFeatures().checkMethod(method, graph);
 
         processedNodes = new NodeBitMap(graph);
 
