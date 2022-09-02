@@ -62,12 +62,6 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
          */
         argumentsToLocals(frame);
 
-        /*
-         * WebAssembly rules dictate that a function's locals must be initialized to zero before function invocation.
-         * For more information, check the specification: https://webassembly.github.io/spec/core/exec/instructions.html#function-calls
-         */
-        initializeLocals(frame);
-
         // TODO: Accessing the context like this seems to be quite slow.
         body.execute(WasmContext.getCurrent(), frame);
 
@@ -96,7 +90,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
     private void argumentsToLocals(VirtualFrame frame) {
         Object[] args = frame.getArguments();
         int numArgs = body.wasmModule().symbolTable().function(codeEntry().functionIndex()).numArguments();
-        Assert.assertEquals(args.length, numArgs, "Invalid number of arguments for function call");
+        assert args.length == numArgs;
         for (int i = 0; i != numArgs; ++i) {
             FrameSlot slot = codeEntry.localSlot(i);
             FrameSlotKind kind = frame.getFrameDescriptor().getFrameSlotKind(slot);
@@ -112,28 +106,6 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
                     break;
                 case Double:
                     frame.setDouble(slot, (double) args[i]);
-                    break;
-            }
-        }
-    }
-
-    @ExplodeLoop
-    private void initializeLocals(VirtualFrame frame) {
-        int numArgs = body.wasmModule().symbolTable().function(codeEntry().functionIndex()).numArguments();
-        for (int i = numArgs; i != body.codeEntry().numLocals(); ++i) {
-            byte type = body.codeEntry().localType(i);
-            switch (type) {
-                case ValueTypes.I32_TYPE:
-                    body.setInt(frame, i, 0);
-                    break;
-                case ValueTypes.I64_TYPE:
-                    body.setLong(frame, i, 0);
-                    break;
-                case ValueTypes.F32_TYPE:
-                    body.setFloat(frame, i, 0);
-                    break;
-                case ValueTypes.F64_TYPE:
-                    body.setDouble(frame, i, 0);
                     break;
             }
         }
