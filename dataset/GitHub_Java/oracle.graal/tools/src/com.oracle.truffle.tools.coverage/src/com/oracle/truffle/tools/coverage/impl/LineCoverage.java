@@ -25,12 +25,10 @@
 package com.oracle.truffle.tools.coverage.impl;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.tools.coverage.RootCoverage;
 import com.oracle.truffle.tools.coverage.SectionCoverage;
@@ -49,11 +47,7 @@ final class LineCoverage {
     }
 
     private static Map<Integer, LineState> makeLines(SourceCoverage coverage, boolean strictLines) {
-        final Source source = coverage.getSource();
-        if (!source.hasCharacters()) {
-            return Collections.emptyMap();
-        }
-        final int lineCount = source.getLineCount();
+        final int lineCount = coverage.getSource().getLineCount();
         final HashMap<Integer, List<SectionCoverage>> lineContent = new HashMap<>(lineCount);
         for (RootCoverage rootCoverage : coverage.getRoots()) {
             for (SectionCoverage section : rootCoverage.getSectionCoverage()) {
