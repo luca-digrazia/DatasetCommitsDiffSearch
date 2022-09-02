@@ -931,7 +931,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     private static @Host(java.lang.reflect.Method.class) StaticObject getGuestReflectiveMethodRoot(@Host(java.lang.reflect.Method.class) StaticObject seed) {
         Meta meta = seed.getKlass().getMeta();
-        assert InterpreterToVM.instanceOf(seed, meta.Method);
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
@@ -943,9 +942,8 @@ public final class VM extends NativeEnv implements ContextAccess {
         return curMethod;
     }
 
-    private static @Host(java.lang.reflect.Field.class) StaticObject getGuestReflectiveFieldRoot(@Host(java.lang.reflect.Field.class) StaticObject seed) {
+    private static @Host(java.lang.reflect.Constructor.class) StaticObject getGuestReflectiveFieldRoot(@Host(java.lang.reflect.Constructor.class) StaticObject seed) {
         Meta meta = seed.getKlass().getMeta();
-        assert InterpreterToVM.instanceOf(seed, meta.Field);
         StaticObject curField = seed;
         Field target = null;
         while (target == null) {
@@ -957,9 +955,8 @@ public final class VM extends NativeEnv implements ContextAccess {
         return curField;
     }
 
-    private static @Host(java.lang.reflect.Constructor.class) StaticObject getGuestReflectiveConstructorRoot(@Host(java.lang.reflect.Constructor.class) StaticObject seed) {
+    private static StaticObject getGuestReflectiveConstructorRoot(@Host(java.lang.reflect.Field.class) StaticObject seed) {
         Meta meta = seed.getKlass().getMeta();
-        assert InterpreterToVM.instanceOf(seed, meta.Constructor);
         StaticObject curConstructor = seed;
         Method target = null;
         while (target == null) {

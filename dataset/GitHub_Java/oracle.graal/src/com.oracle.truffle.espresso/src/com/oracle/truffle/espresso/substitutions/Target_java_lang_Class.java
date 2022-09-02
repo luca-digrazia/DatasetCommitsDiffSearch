@@ -473,7 +473,6 @@ public final class Target_java_lang_Class {
         return StaticObject.NULL;
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static @Host(Class.class) StaticObject getDeclaringClass0(@Host(Class.class) StaticObject self) {
         // Primitives and arrays are not "enclosed".
@@ -619,7 +618,6 @@ public final class Target_java_lang_Class {
         return StaticObject.NULL;
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static @Host(Class[].class) StaticObject getDeclaredClasses0(@Host(Class.class) StaticObject self) {
         Meta meta = self.getKlass().getMeta();
