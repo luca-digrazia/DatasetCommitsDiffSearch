@@ -26,11 +26,11 @@ public class ThreadLock {
 
     private volatile boolean locked;
 
-    public synchronized void acquire() {
+    public synchronized void lock() {
         locked = true;
     }
 
-    public synchronized void release() {
+    public synchronized void unlock() {
         locked = false;
     }
 
