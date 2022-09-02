@@ -32,33 +32,21 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import sun.misc.VM;
 
 /**
- * An immutable byte string (modified-UTF8) for internal use in Espresso. <br>
- * Symbols are unique during it's lifetime and can be reference-compared for equality. Internal
- * meta-data in Espresso is stored using symbols: names, signatures, type descriptors and constant
- * pool (modified-)UTF8 entries.
- * <p>
- * Symbols provides several advantages over {@link String} for storing meta-data:
+ * Modified-UTF8 byte string (symbol) for internal use in Espresso.
+ *
+ * An improvement over j.l.String for internal symbols:
  * <ul>
- * <li>Clear separation between guest and host
  * <li>Compact representation
- * <li>Globally unique + cheap equality comparison
- * <li>Seamless de-duplication
- * <li>0-cost tagging for improved type-safety
- * <li>Copy-less symbolification, symbols are only copied once, when they are being
- * created/persisted
- * <li>Contents are effectively {@link CompilationFinal partial-evaluation constant}
+ * <li>Cheap equality comparison
+ * <li>Uniqueness and data de-duplication (symbols are unique during it's lifetime)
+ * <li>Hard/clear separation between guest/host symbols
+ * <li>0-cost tagging for added type-safety
+ * <li>Lazy decoding
+ * <li>Copy-less symbolification...
+ * <li>Effectively partial-evaluation constant {@link CompilationFinal}
  * </ul>
  *
- * Symbols can be tagged, with no runtime cost, for additional type safety:
- * <ul>
- * <li>Symbol&lt;{@link Name}&gt; identifiers, field/class/method names.
- * <li>Symbol&lt;{@link Constant}&gt; strings from the constant pool.
- * <li>Symbol&lt;? extends {@link Descriptor}&gt; valid types or signatures
- * <li>Symbol&lt;{@link Signature}&gt; valid signature descriptor in internal form
- * <li>Symbol&lt;{@link Type}&gt; valid type descriptor in internal form
- * </ul>
- *
- * @param <T> generic tag for improved type-safety
+ * @param <T> generic tag for extra type-safety at the Java level.
  */
 public final class Symbol<T> extends ByteSequence {
 
@@ -190,7 +178,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> compileToBytecode = StaticSymbols.putName("compileToBytecode");
         public static final Symbol<Name> address = StaticSymbols.putName("address");
         public static final Symbol<Name> capacity = StaticSymbols.putName("capacity");
-        public static final Symbol<Name> finalize = StaticSymbols.putName("finalize");
 
         public static final Symbol<Name> lookup = StaticSymbols.putName("lookup");
         public static final Symbol<Name> findMethodHandleType = StaticSymbols.putName("findMethodHandleType");
@@ -238,11 +225,8 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> Signature = StaticSymbols.putName("Signature");
         public static final Symbol<Name> SourceFile = StaticSymbols.putName("SourceFile");
         public static final Symbol<Name> Synthetic = StaticSymbols.putName("Synthetic");
-        public static final Symbol<Name> Deprecated = StaticSymbols.putName("Deprecated");
-        public static final Symbol<Name> LocalVariableTable = StaticSymbols.putName("LocalVariableTable");
-        public static final Symbol<Name> LocalVariableTypeTable = StaticSymbols.putName("LocalVariableTypeTable");
 
-        // Hidden field names. Starts with a 0 in order for the names to be illegal identifiers.
+        // Hidden field names. Starts with a 0 in order for the names to be illegal.
         public static final Symbol<Name> HIDDEN_VMTARGET = StaticSymbols.putName("0HIDDEN_VMTARGET");
         public static final Symbol<Name> HIDDEN_VMINDEX = StaticSymbols.putName("0HIDDEN_VMINDEX");
         public static final Symbol<Name> HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS = StaticSymbols.putName("0HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS");
@@ -256,7 +240,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> HIDDEN_MIRROR_KLASS = StaticSymbols.putName("0HIDDEN_MIRROR_KLASS");
         public static final Symbol<Name> HIDDEN_SIGNERS = StaticSymbols.putName("0HIDDEN_SIGNERS");
         public static final Symbol<Name> HIDDEN_IS_ALIVE = StaticSymbols.putName("0HIDDEN_IS_ALIVE");
-        public static final Symbol<Name> HIDDEN_INTERRUPTED = StaticSymbols.putName("0HIDDEN_INTERRUPTED");
         public static final Symbol<Name> HIDDEN_PROTECTION_DOMAIN = StaticSymbols.putName("0HIDDEN_PROTECTION_DOMAIN");
     }
 
