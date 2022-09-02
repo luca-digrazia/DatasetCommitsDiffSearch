@@ -191,12 +191,11 @@ public final class GraphEffectList extends EffectList {
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
                 if (withExceptionNode.isAlive()) {
                     AbstractBeginNode next = withExceptionNode.next();
-                    GraphUtil.unlinkAndKillExceptionEdge(withExceptionNode);
+                    graph.removeSplitPropagate(withExceptionNode, next);
                     if (next.hasNoUsages() && next instanceof MemoryKill) {
                         // This is a killing begin which is no longer needed.
                         graph.replaceFixedWithFixed(next, graph.add(new BeginNode()));
                     }
-                    obsoleteNodes.add(withExceptionNode);
                 }
             }
 
