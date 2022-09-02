@@ -782,6 +782,12 @@ public class NativeImageGenerator {
                 }
 
                 /*
+                 * This verification has quadratic complexity, so do it only once after the static
+                 * analysis has finished.
+                 */
+                assert AnalysisType.verifyAssignableTypes(bigbang) : "Verification of all-instantiated type flows failed";
+
+                /*
                  * Libraries defined via @CLibrary annotations are added at the end of the list of
                  * libraries so that the written object file AND the static JDK libraries can depend
                  * on them.
@@ -1269,7 +1275,7 @@ public class NativeImageGenerator {
     }
 
     public static boolean nativeImageInlineDuringParsingEnabled() {
-        return ExperimentalNativeImageInlineDuringParsingPlugin.Options.OldInlineBeforeAnalysis.getValue() &&
+        return ExperimentalNativeImageInlineDuringParsingPlugin.Options.InlineBeforeAnalysis.getValue() &&
                         !ImageSingletons.lookup(ExperimentalNativeImageInlineDuringParsingSupport.class).isNativeImageInlineDuringParsingDisabled() &&
                         !DeoptTester.Options.DeoptimizeAll.getValue();
     }
