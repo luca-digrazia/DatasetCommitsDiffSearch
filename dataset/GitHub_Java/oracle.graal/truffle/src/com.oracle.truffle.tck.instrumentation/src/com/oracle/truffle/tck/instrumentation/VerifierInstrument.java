@@ -105,21 +105,6 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
         }
     }
 
-    @TruffleBoundary
-    private static void leave() {
-        ENTERED.set(Boolean.FALSE);
-    }
-
-    @TruffleBoundary
-    private static void enter() {
-        ENTERED.set(Boolean.TRUE);
-    }
-
-    @TruffleBoundary
-    private static Boolean isEntered() {
-        return ENTERED.get();
-    }
-
     private class InlineScriptFactory implements ExecutionEventNodeFactory {
 
         private final Source snippet;
@@ -135,12 +120,11 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
 
         @Override
         public ExecutionEventNode create(EventContext context) {
-            if (!isEntered()) {
-                if (predicate == null || canRunAt(context.getInstrumentedSourceSection())) {
-                    return new InlineScriptNode(context);
-                }
+            if (predicate == null || canRunAt(context.getInstrumentedSourceSection())) {
+                return new InlineScriptNode(context);
+            } else {
+                return null;
             }
-            return null;
         }
 
         private boolean canRunAt(com.oracle.truffle.api.source.SourceSection ss) {
@@ -185,21 +169,38 @@ public class VerifierInstrument extends TruffleInstrument implements InlineVerif
                     }
                     insert(inlineNode);
                 }
-                enter();
-                try {
-                    Object ret = inlineNode.execute(frame);
-                    if (resultVerifier != null) {
-                        verify(ret);
+                if (!isEntered()) {
+                    enter();
+                    try {
+                        Object ret = inlineNode.execute(frame);
+                        if (resultVerifier != null) {
+                            verify(ret);
+                        }
+                    } catch (ThreadDeath t) {
+                        throw t;
+                    } catch (Throwable t) {
+                        CompilerDirectives.transferToInterpreter();
+                        verify(t);
+                        throw t;
+                    } finally {
+                        leave();
                     }
-                } catch (ThreadDeath t) {
-                    throw t;
-                } catch (Throwable t) {
-                    CompilerDirectives.transferToInterpreter();
-                    verify(t);
-                    throw t;
-                } finally {
-                    leave();
                 }
+            }
+
+            @TruffleBoundary
+            private void leave() {
+                ENTERED.set(Boolean.FALSE);
+            }
+
+            @TruffleBoundary
+            private void enter() {
+                ENTERED.set(Boolean.TRUE);
+            }
+
+            @TruffleBoundary
+            private Boolean isEntered() {
+                return ENTERED.get();
             }
 
             @TruffleBoundary
