@@ -119,6 +119,27 @@ public final class EspressoOptions {
                     category = OptionCategory.USER, stability = OptionStability.STABLE) //
     public static final OptionKey<Boolean> EnableSystemAssertions = new OptionKey<>(false);
 
+    public enum SpecCompliancyMode {
+        STRICT,
+        HOTSPOT
+    }
+
+    private static final OptionType<SpecCompliancyMode> SPEC_COMPLIANCY_OPTION_TYPE = new OptionType<>("SpecCompliancy",
+                    new Function<String, SpecCompliancyMode>() {
+                        @Override
+                        public SpecCompliancyMode apply(String s) {
+                            try {
+                                return SpecCompliancyMode.valueOf(s.toUpperCase());
+                            } catch (IllegalArgumentException e) {
+                                throw new IllegalArgumentException("--java.SpecCompliancy: Mode can be 'strict' or 'hotspot'.");
+                            }
+                        }
+                    });
+
+    @Option(help = "Force mimicking of hotspot behavior on unrespected specs points", //
+                    category = OptionCategory.EXPERT, stability = OptionStability.EXPERIMENTAL) //
+    public static final OptionKey<SpecCompliancyMode> SpecCompliancy = new OptionKey<>(SpecCompliancyMode.HOTSPOT, SPEC_COMPLIANCY_OPTION_TYPE);
+
     public enum VerifyMode {
         NONE,
         REMOTE, // Verifies all bytecodes not loaded by the bootstrap class loader.
@@ -144,10 +165,6 @@ public final class EspressoOptions {
     @Option(help = "Speculatively inline field accessors.", //
                     category = OptionCategory.EXPERT, stability = OptionStability.EXPERIMENTAL) //
     public static final OptionKey<Boolean> InlineFieldAccessors = new OptionKey<>(false);
-
-    @Option(help = "Disable efforts to inline through method handle calls.", //
-                    category = OptionCategory.EXPERT, stability = OptionStability.EXPERIMENTAL) //
-    public static final OptionKey<Boolean> DisableMethodHandleInlining = new OptionKey<>(false);
 
     private static final OptionType<com.oracle.truffle.espresso.jdwp.api.JDWPOptions> JDWP_OPTIONS_OPTION_TYPE = new OptionType<>("JDWPOptions",
                     new Function<String, JDWPOptions>() {
