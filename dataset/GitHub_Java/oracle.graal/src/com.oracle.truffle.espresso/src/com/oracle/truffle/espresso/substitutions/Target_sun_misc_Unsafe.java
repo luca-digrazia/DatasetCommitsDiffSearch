@@ -576,7 +576,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        assert f.getKind().needsTwoSlots();
+        assert f.getKind().isSubWord();
         holder.setLongFieldVolatile(f, value);
     }
 
@@ -646,7 +646,7 @@ public final class Target_sun_misc_Unsafe {
         // field index.
         Field f = getInstanceFieldFromIndex(holder, Math.toIntExact(offset) - SAFETY_FIELD_OFFSET);
         assert f != null;
-        assert f.getKind().needsTwoSlots();
+        assert f.getKind().isSubWord();
         holder.setDoubleFieldVolatile(f, value);
     }
 
