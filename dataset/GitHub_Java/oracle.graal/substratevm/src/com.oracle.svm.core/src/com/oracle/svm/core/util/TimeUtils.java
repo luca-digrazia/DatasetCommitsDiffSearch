@@ -144,7 +144,8 @@ public class TimeUtils {
     /** Weight a nanosecond value by a percentage between 0 and 100. */
     public static long weightedNanos(int percent, long nanos) {
         final UnsignedWord unweightedNanos = WordFactory.unsigned(nanos);
-        return unweightedNanos.unsignedDivide(100).multiply(percent).rawValue();
+        final long result = unweightedNanos.unsignedDivide(100).multiply(percent).rawValue();
+        return result;
     }
 
     /** Add two long values, or return Long.MAX_VALUE if the sum overflows. */
