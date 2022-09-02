@@ -781,15 +781,9 @@ public final class ObjectKlass extends Klass {
                 }
             }
             if (getItable() != null) {
-                Method[][] itables = getItable();
-                Klass[] klassTable = getiKlassTable();
-                for (int i = 0; i < getItable().length; i++) {
-                    Klass interfKlass = klassTable[i];
-                    Method[] table = itables[i];
+                for (Method[] table : getItable()) {
                     for (Method m : table) {
-                        if (m.getDeclaringKlass() == this) {
-                            m.checkLoadingConstraints(this.getDefiningClassLoader(), interfKlass.getDefiningClassLoader());
-                        } else {
+                        if (m.getDeclaringKlass() != this) {
                             m.checkLoadingConstraints(this.getDefiningClassLoader(), m.getDeclaringKlass().getDefiningClassLoader());
                         }
                     }
