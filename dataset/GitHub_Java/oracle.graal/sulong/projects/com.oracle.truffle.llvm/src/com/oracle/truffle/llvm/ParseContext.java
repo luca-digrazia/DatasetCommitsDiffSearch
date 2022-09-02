@@ -30,7 +30,7 @@
 package com.oracle.truffle.llvm;
 
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
-import com.oracle.truffle.llvm.runtime.ExternalLibrary;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -42,15 +42,15 @@ import java.util.List;
  */
 final class ParseContext {
     private final List<LLVMParserResult> parserResults;
-    private final ArrayDeque<ExternalLibrary> dependencyQueue;
+    private final ArrayDeque<LLVMContext.ExternalLibrary> dependencyQueue;
 
     static ParseContext create() {
-        ArrayDeque<ExternalLibrary> dependencyQueue = new ArrayDeque<>();
+        ArrayDeque<LLVMContext.ExternalLibrary> dependencyQueue = new ArrayDeque<>();
         ArrayList<LLVMParserResult> parserResults = new ArrayList<>();
         return new ParseContext(parserResults, dependencyQueue);
     }
 
-    private ParseContext(List<LLVMParserResult> parserResults, ArrayDeque<ExternalLibrary> dependencyQueue) {
+    private ParseContext(List<LLVMParserResult> parserResults, ArrayDeque<LLVMContext.ExternalLibrary> dependencyQueue) {
         this.parserResults = parserResults;
         this.dependencyQueue = dependencyQueue;
     }
@@ -63,7 +63,7 @@ final class ParseContext {
         return dependencyQueue.size();
     }
 
-    public ExternalLibrary dependencyQueueRemoveFirst() {
+    public LLVMContext.ExternalLibrary dependencyQueueRemoveFirst() {
         return dependencyQueue.removeFirst();
     }
 
@@ -75,7 +75,7 @@ final class ParseContext {
         return parserResults.isEmpty();
     }
 
-    public void dependencyQueueAddLast(ExternalLibrary dependency) {
+    public void dependencyQueueAddLast(LLVMContext.ExternalLibrary dependency) {
         dependencyQueue.addLast(dependency);
     }
 
