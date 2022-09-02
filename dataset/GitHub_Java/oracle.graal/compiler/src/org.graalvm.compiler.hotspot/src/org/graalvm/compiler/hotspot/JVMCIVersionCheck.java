@@ -180,9 +180,6 @@ public final class JVMCIVersionCheck {
         }
     }
 
-    public static final String JVMCI8_RELEASES_URL = "https://github.com/graalvm/graal-jvmci-8/releases";
-    public static final String JVMCI11_RELEASES_URL = "https://github.com/graalvm/labs-openjdk-11/releases";
-
     private void failVersionCheck(boolean exit, String reason, Object... args) {
         Formatter errorMessage = new Formatter().format(reason, args);
         String javaHome = props.get("java.home");
@@ -192,10 +189,10 @@ public final class JVMCIVersionCheck {
         errorMessage.format("Currently used Java home directory is %s.%n", javaHome);
         errorMessage.format("Currently used VM configuration is: %s%n", vmName);
         if (javaSpecVersion.compareTo("1.9") < 0) {
-            errorMessage.format("Download the latest JVMCI JDK 8 from " + JVMCI8_RELEASES_URL);
+            errorMessage.format("Download the latest JVMCI JDK 8 from https://github.com/graalvm/openjdk8-jvmci-builder/releases");
         } else {
             if (javaSpecVersion.compareTo("11") == 0 && vmVersion.contains("-jvmci-")) {
-                errorMessage.format("Download the latest Labs OpenJDK 11 from " + JVMCI11_RELEASES_URL);
+                errorMessage.format("Download the latest Labs OpenJDK 11 from https://github.com/graalvm/labs-openjdk-11/releases");
             } else {
                 errorMessage.format("Download JDK 11 or later.");
             }
