@@ -24,8 +24,6 @@ package com.oracle.truffle.espresso.classfile.constantpool;
 
 import static com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 
-import java.nio.ByteBuffer;
-
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
@@ -116,11 +114,6 @@ public interface MethodTypeConstant extends PoolConstant {
         @Override
         public void validate(ConstantPool pool) {
             pool.utf8At(descriptorIndex).validateSignature();
-        }
-
-        @Override
-        public void dump(ByteBuffer buf) {
-            buf.putChar(descriptorIndex);
         }
     }
 
