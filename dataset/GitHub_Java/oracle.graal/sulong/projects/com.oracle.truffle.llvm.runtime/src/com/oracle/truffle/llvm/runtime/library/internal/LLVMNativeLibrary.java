@@ -51,6 +51,7 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 @DefaultExport(LongLibrary.class)
 @DefaultExport(ArrayLibrary.class)
 @DefaultExport(DefaultLibrary.class)
+@SuppressWarnings("unused")
 public abstract class LLVMNativeLibrary extends Library {
 
     static final LibraryFactory<LLVMNativeLibrary> FACTORY = LibraryFactory.resolve(LLVMNativeLibrary.class);
@@ -60,12 +61,12 @@ public abstract class LLVMNativeLibrary extends Library {
     }
 
     @Abstract
-    public boolean isPointer(@SuppressWarnings("unused") Object receiver) {
+    public boolean isPointer(Object receiver) {
         return false;
     }
 
     @Abstract
-    public long asPointer(@SuppressWarnings("unused") Object receiver) throws UnsupportedMessageException {
+    public long asPointer(Object receiver) throws UnsupportedMessageException {
         throw UnsupportedMessageException.create();
     }
 
