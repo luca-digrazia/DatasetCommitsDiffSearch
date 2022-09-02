@@ -371,6 +371,7 @@ final class HotSpotToSVMEntryPoints {
     public static void cleanReferences(JNIEnv env, JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId) {
         try (HotSpotToSVMScope s = new HotSpotToSVMScope(CleanReferences, env)) {
             System.gc();
+            HSObject.cleanHandles(env);
         } catch (Throwable t) {
             JNIExceptionWrapper.throwInHotSpot(env, t);
         }
