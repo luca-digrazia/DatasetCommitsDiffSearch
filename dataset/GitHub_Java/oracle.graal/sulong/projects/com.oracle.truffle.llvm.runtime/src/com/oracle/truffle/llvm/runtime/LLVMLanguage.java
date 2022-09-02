@@ -141,12 +141,12 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     static final class LibraryCacheEntry extends WeakReference<CallTarget> {
 
         final String path;
-        final WeakReference<BitcodeID> id;
+        final BitcodeID id;
 
         LibraryCacheEntry(LLVMLanguage language, String path, CallTarget callTarget, BitcodeID id) {
             super(callTarget, language.libraryCacheQueue);
             this.path = path;
-            this.id = new WeakReference<>(id);
+            this.id = id;
         }
     }
 
