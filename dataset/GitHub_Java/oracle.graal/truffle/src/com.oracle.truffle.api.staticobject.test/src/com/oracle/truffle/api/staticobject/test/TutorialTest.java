@@ -43,6 +43,7 @@ package com.oracle.truffle.api.staticobject.test;
 import com.oracle.truffle.api.staticobject.DefaultStaticObjectFactory;
 import com.oracle.truffle.api.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.api.staticobject.StaticProperty;
+import com.oracle.truffle.api.staticobject.StaticPropertyKind;
 import com.oracle.truffle.api.staticobject.StaticShape;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -85,10 +86,9 @@ public class TutorialTest extends StaticObjectModelTest {
     public void gettingStarted() {
         try (TestEnvironment te = new TestEnvironment(config)) {
             StaticShape.Builder builder = StaticShape.newBuilder(te.testLanguage);
-            StaticProperty p1 = new DefaultStaticProperty("property1");
-            StaticProperty p2 = new DefaultStaticProperty("property2");
-            builder.property(p1, int.class, false);
-            builder.property(p2, Object.class, true);
+            StaticProperty p1 = new DefaultStaticProperty("property1", StaticPropertyKind.Int, false);
+            StaticProperty p2 = new DefaultStaticProperty("property2", StaticPropertyKind.Object, true);
+            builder.property(p1).property(p2);
             StaticShape<DefaultStaticObjectFactory> shape = builder.build();
             Object staticObject = shape.getFactory().create();
             p1.setInt(staticObject, 42);
@@ -103,15 +103,14 @@ public class TutorialTest extends StaticObjectModelTest {
         try (TestEnvironment te = new TestEnvironment(config)) {
             // Create a shape
             StaticShape.Builder b1 = StaticShape.newBuilder(te.testLanguage);
-            StaticProperty s1p1 = new DefaultStaticProperty("property1");
-            StaticProperty s1p2 = new DefaultStaticProperty("property2");
-            b1.property(s1p1, int.class, false);
-            b1.property(s1p2, Object.class, true);
+            StaticProperty s1p1 = new DefaultStaticProperty("property1", StaticPropertyKind.Int, false);
+            StaticProperty s1p2 = new DefaultStaticProperty("property2", StaticPropertyKind.Object, true);
+            b1.property(s1p1).property(s1p2);
             StaticShape<DefaultStaticObjectFactory> s1 = b1.build();
             // Create a sub-shape
             StaticShape.Builder b2 = StaticShape.newBuilder(te.testLanguage);
-            StaticProperty s2p1 = new DefaultStaticProperty("property1");
-            b2.property(s2p1, int.class, false);
+            StaticProperty s2p1 = new DefaultStaticProperty("property1", StaticPropertyKind.Int, false);
+            b2.property(s2p1);
             StaticShape<DefaultStaticObjectFactory> s2 = b2.build(s1);
             // Create a static object for the sub-shape
             Object o2 = s2.getFactory().create();
@@ -128,14 +127,14 @@ public class TutorialTest extends StaticObjectModelTest {
     @Test
     public void extendingCustomBaseClasses() {
         try (TestEnvironment te = new TestEnvironment(config)) {
-            StaticProperty property = new DefaultStaticProperty("arg1");
-            StaticShape<MyStaticObjectFactory> shape = StaticShape.newBuilder(te.testLanguage).property(property, Object.class, false).build(MyStaticObject.class, MyStaticObjectFactory.class);
+            StaticProperty property = new DefaultStaticProperty("arg1", StaticPropertyKind.Object, false);
+            StaticShape<MyStaticObjectFactory> shape = StaticShape.newBuilder(te.testLanguage).property(property).build(MyStaticObject.class, MyStaticObjectFactory.class);
             MyStaticObject staticObject = shape.getFactory().create("arg1");
             property.setObject(staticObject, "42");
-            // fields of the custom super class are directly accessible
-            assert staticObject.arg1.equals("arg1");
-            // static properties are accessible as usual
-            assert property.getObject(staticObject).equals("42");
+            assert staticObject.arg1.equals("arg1"); // fields of the custom super class are
+                                                     // directly accessible
+            assert property.getObject(staticObject).equals("42"); // static properties are
+                                                                  // accessible as usual
         }
     }
 
@@ -150,7 +149,7 @@ public class TutorialTest extends StaticObjectModelTest {
             }
         }
 
-        new MyField(new DefaultStaticProperty("property1"));
+        new MyField(new DefaultStaticProperty("property1", StaticPropertyKind.Int, false));
     }
 
     @Test
@@ -159,26 +158,26 @@ public class TutorialTest extends StaticObjectModelTest {
         class MyField extends StaticProperty {
             final Object name;
 
-            MyField(Object name) {
+            MyField(Object name, StaticPropertyKind kind, boolean storeAsFinal) {
+                super(kind, storeAsFinal);
                 this.name = name;
             }
 
             @Override
             public String getId() {
-                // this string must be a unique identifier within a Builder
-                return name.toString();
+                return name.toString(); // this string must be a unique identifier within a Builder
             }
         }
 
-        new MyField("property1");
+        new MyField("property1", StaticPropertyKind.Int, false);
     }
 
     @Test
     public void safetyChecks1() {
         try (TestEnvironment te = new TestEnvironment(config)) {
             StaticShape.Builder builder = StaticShape.newBuilder(te.testLanguage);
-            StaticProperty property = new DefaultStaticProperty("property");
-            Object staticObject = builder.property(property, int.class, false).build().getFactory().create();
+            StaticProperty property = new DefaultStaticProperty("property", StaticPropertyKind.Int, false);
+            Object staticObject = builder.property(property).build().getFactory().create();
             try {
                 property.setObject(staticObject, "wrong access type");
                 assert false;
@@ -192,8 +191,8 @@ public class TutorialTest extends StaticObjectModelTest {
     public void safetyChecks2() {
         try (TestEnvironment te = new TestEnvironment(config)) {
             StaticShape.Builder builder = StaticShape.newBuilder(te.testLanguage);
-            StaticProperty property = new DefaultStaticProperty("property");
-            Object staticObject1 = builder.property(property, Object.class, false).build().getFactory().create();
+            StaticProperty property = new DefaultStaticProperty("property", StaticPropertyKind.Object, false);
+            Object staticObject1 = builder.property(property).build().getFactory().create();
             Object staticObject2 = StaticShape.newBuilder(te.testLanguage).build().getFactory().create();
 
             try {

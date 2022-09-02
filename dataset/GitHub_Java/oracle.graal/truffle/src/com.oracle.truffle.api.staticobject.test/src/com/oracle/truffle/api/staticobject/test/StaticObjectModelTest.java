@@ -46,35 +46,101 @@ import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.staticobject.DefaultStaticProperty;
 import com.oracle.truffle.api.staticobject.StaticProperty;
 import org.graalvm.polyglot.Context;
-import org.junit.After;
-import org.junit.Before;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 
 class StaticObjectModelTest {
-    static final boolean ARRAY_BASED_STORAGE = TruffleOptions.AOT || Boolean.getBoolean("com.oracle.truffle.api.staticobject.ArrayBasedStorage");
-    static final boolean SAFE = Boolean.getBoolean("com.oracle.truffle.api.staticobject.SafeCasts") && Boolean.getBoolean("com.oracle.truffle.api.staticobject.ShapeChecks");
+    @Registration(id = TestLanguage.TEST_LANGUAGE_ID, name = TestLanguage.TEST_LANGUAGE_ID)
+    public static class TestLanguage extends TruffleLanguage<TestContext> {
+        static final String TEST_LANGUAGE_ID = "StaticObjectModelTest_TestLanguage";
 
-    TruffleLanguage<?> testLanguage;
-    Context context;
+        @Override
+        protected TestContext createContext(Env env) {
+            return new TestContext(this);
+        }
 
-    @Before
-    public void setup() {
-        context = Context.newBuilder(SomTestLanguage.TEST_LANGUAGE_ID).build();
-        context.initialize(SomTestLanguage.TEST_LANGUAGE_ID);
-        context.enter();
-        testLanguage = SomTestLanguage.getCurrentContext().getLanguage();
+        static TestContext getCurrentContext() {
+            return getCurrentContext(TestLanguage.class);
+        }
     }
 
-    @After
-    public void teardown() {
-        context.leave();
-        context.close();
+    static class TestContext {
+        private final TestLanguage language;
+
+        TestContext(TestLanguage language) {
+            this.language = language;
+        }
+
+        TestLanguage getLanguage() {
+            return language;
+        }
     }
 
-    String guessGeneratedFieldName(StaticProperty property) {
-        assert !ARRAY_BASED_STORAGE;
+    static class TestEnvironment implements AutoCloseable {
+        private final boolean arrayBased;
+        final boolean relaxChecks;
+        final TruffleLanguage<?> testLanguage;
+        final Context context;
+
+        TestEnvironment(TestConfiguration config) {
+            this.arrayBased = config.arrayBased;
+            this.relaxChecks = config.relaxChecks;
+            context = Context.newBuilder(TestLanguage.TEST_LANGUAGE_ID).//
+                            allowExperimentalOptions(true).//
+                            option("engine.StaticObjectStorageStrategy", this.arrayBased ? "array-based" : "field-based").//
+                            option("engine.RelaxStaticObjectSafetyChecks", this.relaxChecks ? "true" : "false").//
+                            build();
+            context.initialize(TestLanguage.TEST_LANGUAGE_ID);
+            context.enter();
+            testLanguage = TestLanguage.getCurrentContext().getLanguage();
+            context.leave();
+        }
+
+        public boolean isArrayBased() {
+            return arrayBased;
+        }
+
+        public boolean isFieldBased() {
+            return !arrayBased;
+        }
+
+        @Override
+        public void close() {
+            context.close();
+        }
+    }
+
+    static class TestConfiguration {
+        private final boolean arrayBased;
+        private final boolean relaxChecks;
+
+        TestConfiguration(boolean arrayBased, boolean relaxChecks) {
+            this.arrayBased = arrayBased;
+            this.relaxChecks = relaxChecks;
+        }
+
+        @Override
+        public String toString() {
+            return (arrayBased ? "Array-based" : "Field-based") + " storage " + (relaxChecks ? "without" : "with") + " safety checks";
+        }
+    }
+
+    static TestConfiguration[] getTestConfigurations() {
+        ArrayList<TestConfiguration> tests = new ArrayList<>();
+        // AOT mode does not yet support field-based storage
+        boolean[] arrayBased = TruffleOptions.AOT ? new boolean[]{true} : new boolean[]{true, false};
+        boolean[] relaxChecks = new boolean[]{true, false};
+        for (boolean ab : arrayBased) {
+            for (boolean rc : relaxChecks) {
+                tests.add(new TestConfiguration(ab, rc));
+            }
+        }
+        return tests.toArray(new TestConfiguration[tests.size()]);
+    }
+
+    static String guessGeneratedFieldName(StaticProperty property) {
         // The format of generated field names with the field-based storage might change at any
         // time. Do not depend on it!
         if (property instanceof DefaultStaticProperty) {
@@ -87,33 +153,6 @@ class StaticObjectModelTest {
             } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
                 throw new RuntimeException(e);
             }
-        }
-    }
-
-    @Registration(id = SomTestLanguage.TEST_LANGUAGE_ID, name = SomTestLanguage.TEST_LANGUAGE_NAME)
-    public static class SomTestLanguage extends TruffleLanguage<SomTestContext> {
-        static final String TEST_LANGUAGE_NAME = "Test Language for the Static Object Model";
-        static final String TEST_LANGUAGE_ID = "som-test";
-
-        @Override
-        protected SomTestContext createContext(Env env) {
-            return new SomTestContext(this);
-        }
-
-        static SomTestContext getCurrentContext() {
-            return getCurrentContext(SomTestLanguage.class);
-        }
-    }
-
-    static class SomTestContext {
-        private final SomTestLanguage language;
-
-        SomTestContext(SomTestLanguage language) {
-            this.language = language;
-        }
-
-        SomTestLanguage getLanguage() {
-            return language;
         }
     }
 }
