@@ -36,8 +36,8 @@ public final class InvokeSpecialNode extends QuickNode {
     @CompilationFinal protected MethodVersion method;
     @Child private DirectCallNode directCallNode;
 
-    public InvokeSpecialNode(Method method, int top, int callerBCI, int opcode) {
-        super(top, callerBCI, opcode);
+    public InvokeSpecialNode(Method method, int top, int callerBCI) {
+        super(top, callerBCI);
         this.method = method.getMethodVersion();
         this.directCallNode = DirectCallNode.create(method.getCallTarget());
     }
@@ -57,20 +57,7 @@ public final class InvokeSpecialNode extends QuickNode {
         Object[] args = root.peekAndReleaseArguments(frame, top, true, method.getMethod().getParsedSignature());
         assert receiver == args[0] : "receiver must be the first argument";
         Object result = directCallNode.call(args);
-        return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, method.getMethod().getReturnKind());
-    }
-
-    @Override
-    public boolean producedForeignObject(VirtualFrame frame) {
-        return method.getMethod().getReturnKind().isObject() && getBytecodesNode().peekObject(frame, getResultAt()).isForeignObject();
-    }
-
-    private int getResultAt() {
-        return top - Signatures.slotsForParameters(method.getMethod().getParsedSignature()) - 1; // -receiver
-    }
-
-    @Override
-    public boolean redefined() {
-        return method.getMethod().isRemovedByRedefition();
+        int resultAt = top - Signatures.slotsForParameters(method.getMethod().getParsedSignature()) - 1; // -receiver
+        return (resultAt - top) + root.putKind(frame, resultAt, result, method.getMethod().getReturnKind());
     }
 }
