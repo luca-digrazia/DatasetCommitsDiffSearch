@@ -41,8 +41,6 @@ import java.util.stream.Collectors;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
-import org.graalvm.collections.Pair;
-
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -61,7 +59,6 @@ import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceArrayLikeType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceBasicType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceClassLikeType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceFunctionType;
-import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceInheritanceType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceMemberType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceMethodType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourcePointerType;
@@ -270,7 +267,7 @@ public abstract class LLVMInteropType implements TruffleObject {
         @TruffleBoundary
         public StructMember findMember(int startOffset) {
             for (StructMember member : members) {
-                if (member.startOffset == startOffset) {
+                if (member.getStartOffset() == startOffset) {
                     return member;
                 }
             }
@@ -287,22 +284,10 @@ public abstract class LLVMInteropType implements TruffleObject {
         }
     }
 
-    public static final class ClazzInheritance {
-        public final Clazz superClass;
-        public final long offset;
-        public final boolean virtual;
-
-        public ClazzInheritance(Clazz superClass, long offset, boolean virtual) {
-            this.superClass = superClass;
-            this.offset = offset;
-            this.virtual = virtual;
-        }
-    }
-
     public static final class Clazz extends Struct {
 
         @CompilationFinal(dimensions = 1) final Method[] methods;
-        private HashSet<ClazzInheritance> superclasses;
+        private HashSet<Clazz> superclasses;
         private VTable vtable;
         private Boolean virtualMethods;
 
@@ -314,8 +299,8 @@ public abstract class LLVMInteropType implements TruffleObject {
             this.superclasses = new HashSet<>();
         }
 
-        public void addSuperClass(Clazz superclass, long offset, boolean virtual) {
-            superclasses.add(new ClazzInheritance(superclass, offset, virtual));
+        public void addSuperClass(Clazz superclass) {
+            superclasses.add(superclass);
         }
 
         public Method getMethod(int i) {
@@ -335,30 +320,10 @@ public abstract class LLVMInteropType implements TruffleObject {
                     return method;
                 }
             }
-            for (ClazzInheritance ci : superclasses) {
-                Method method = ci.superClass.findMethod(memberName);
+            for (Clazz superclass : superclasses) {
+                Method method = superclass.findMethod(memberName);
                 if (method != null) {
                     return method;
-                }
-            }
-            return null;
-        }
-
-        public LinkedList<Pair<StructMember, ClazzInheritance>> getMemberAccessList(String ident) {
-            for (StructMember member : members) {
-                if (member.name.equals(ident)) {
-                    return new LinkedList<>();
-                }
-            }
-            for (ClazzInheritance ci : superclasses) {
-                LinkedList<Pair<StructMember, ClazzInheritance>> list = ci.superClass.getMemberAccessList(ident);
-                if (list != null) {
-                    for (StructMember member : members) {
-                        if (member.type.equals(ci.superClass)) {
-                            list.addFirst(Pair.create(member, ci));
-                            return list;
-                        }
-                    }
                 }
             }
             return null;
@@ -371,8 +336,8 @@ public abstract class LLVMInteropType implements TruffleObject {
                     return member;
                 }
             }
-            for (ClazzInheritance ci : superclasses) {
-                StructMember member = ci.superClass.findMember(memberName);
+            for (Clazz superclass : superclasses) {
+                StructMember member = superclass.findMember(memberName);
                 if (member != null) {
                     return member;
                 }
@@ -381,7 +346,7 @@ public abstract class LLVMInteropType implements TruffleObject {
         }
 
         public Set<Clazz> getSuperClasses() {
-            return new HashSet<>(superclasses.stream().map(ci -> ci.superClass).collect(Collectors.toSet()));
+            return new HashSet<>(superclasses);
         }
 
         public boolean hasVirtualMethods() {
@@ -392,8 +357,8 @@ public abstract class LLVMInteropType implements TruffleObject {
                         return true;
                     }
                 }
-                for (ClazzInheritance ci : superclasses) {
-                    if (ci.superClass.hasVirtualMethods()) {
+                for (Clazz superclass : superclasses) {
+                    if (superclass.hasVirtualMethods()) {
                         return true;
                     }
                 }
@@ -410,8 +375,8 @@ public abstract class LLVMInteropType implements TruffleObject {
         public void buildVTable() {
             virtualMethods = null;
             if (vtable == null && hasVirtualMethods()) {
-                for (ClazzInheritance ci : superclasses) {
-                    ci.superClass.buildVTable();
+                for (Clazz superclass : superclasses) {
+                    superclass.buildVTable();
                 }
                 vtable = new VTable(this);
             }
@@ -433,8 +398,8 @@ public abstract class LLVMInteropType implements TruffleObject {
                     return method;
                 }
             }
-            for (ClazzInheritance ci : superclasses) {
-                Method m = ci.superClass.findMethodByArgumentsWithSelf(memberName, arguments);
+            for (Clazz c : superclasses) {
+                Method m = c.findMethodByArgumentsWithSelf(memberName, arguments);
                 if (m != null) {
                     return m;
                 }
@@ -458,7 +423,7 @@ public abstract class LLVMInteropType implements TruffleObject {
             list.add(0, clazz);
             do {
                 Clazz c = list.remove(0);
-                list.addAll(c.getSuperClasses());
+                list.addAll(c.superclasses);
                 for (Method m : c.methods) {
                     if (m != null && m.getVirtualIndex() >= 0) {
                         table.putIfAbsent(m.virtualIndex, m);
@@ -475,6 +440,13 @@ public abstract class LLVMInteropType implements TruffleObject {
             }
             return m;
         }
+
+        public void print() {
+            for (long i = 0; i < table.size(); i++) {
+                System.out.printf("%3d %s\n", i, table.get(i).getLinkageName());
+            }
+        }
+
     }
 
     @ExportLibrary(value = InteropLibrary.class)
@@ -765,14 +737,13 @@ public abstract class LLVMInteropType implements TruffleObject {
             for (int i = 0; i < ret.members.length; i++) {
                 LLVMSourceMemberType member = type.getDynamicElement(i);
                 LLVMSourceType memberType = member.getElementType();
-                if (member instanceof LLVMSourceInheritanceType) {
-                    assert memberType instanceof LLVMSourceClassLikeType;
+                if (memberType instanceof LLVMSourceClassLikeType) {
                     LLVMSourceClassLikeType sourceSuperClazz = (LLVMSourceClassLikeType) memberType;
                     if (!typeCache.containsKey(sourceSuperClazz)) {
                         convertClass(sourceSuperClazz);
                     }
                     Clazz superClazz = (Clazz) typeCache.get(sourceSuperClazz);
-                    ret.addSuperClass(superClazz, member.getOffset(), ((LLVMSourceInheritanceType) member).isVirtual());
+                    ret.addSuperClass(superClazz);
                 }
                 long startOffset = member.getOffset() / 8;
                 long endOffset = startOffset + (memberType.getSize() + 7) / 8;
