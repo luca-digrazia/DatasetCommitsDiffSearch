@@ -71,7 +71,7 @@ public class WindowsProcessPropertiesSupport implements ProcessPropertiesSupport
 
     @Override
     public long getProcessID() {
-        return Process.GetCurrentProcessId();
+        throw VMError.unimplemented();
     }
 
     @Override

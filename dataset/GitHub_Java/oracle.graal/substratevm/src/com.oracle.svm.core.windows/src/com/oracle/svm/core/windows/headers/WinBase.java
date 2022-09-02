@@ -40,6 +40,7 @@ import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
+import org.graalvm.word.WordBase;
 
 // Checkstyle: stop
 
@@ -52,12 +53,7 @@ public class WinBase {
     /**
      * Windows opaque Handle type
      */
-    public interface HANDLE extends PointerBase {
-    }
-
-    @CPointerTo(nameOfCType = "HANDLE")
-    public interface LPHANDLE extends PointerBase {
-        HANDLE read();
+    public interface HANDLE extends WordBase {
     }
 
     /**
@@ -304,10 +300,6 @@ public class WinBase {
      */
     @CFunction(transition = Transition.NO_TRANSITION)
     public static native int CloseHandle(HANDLE hFile);
-
-    @CFunction(transition = Transition.NO_TRANSITION)
-    public static native int DuplicateHandle(HANDLE hSourceProcessHandle, HANDLE hSourceHandle, HANDLE hTargetProcessHandle, LPHANDLE lpTargetHandle, int dwDesiredAccess, boolean bInheritHandle,
-                    int dwOptions);
 
     /**
      * GetModuleHandle
