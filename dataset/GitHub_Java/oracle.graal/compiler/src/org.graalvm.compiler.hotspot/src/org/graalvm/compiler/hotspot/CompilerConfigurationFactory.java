@@ -42,7 +42,6 @@ import org.graalvm.compiler.lir.phases.LIRPhaseSuite;
 import org.graalvm.compiler.options.EnumOptionKey;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionStability;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
@@ -70,9 +69,9 @@ public abstract class CompilerConfigurationFactory implements Comparable<Compile
         // @formatter:off
         @Option(help = "Names the compiler configuration to use. If omitted, the compiler configuration " +
                        "with the highest auto-selection priority is used. To see the set of available configurations, " +
-                       "supply the value 'help' to this option.", type = OptionType.Expert, stability = OptionStability.STABLE)
+                       "supply the value 'help' to this option.", type = OptionType.Expert)
         public static final OptionKey<String> CompilerConfiguration = new OptionKey<>(null);
-        @Option(help = "Writes to the VM log information about the compiler configuration selected.", type = OptionType.User, stability = OptionStability.STABLE)
+        @Option(help = "Writes to the VM log information about the compiler configuration selected.", type = OptionType.User)
         public static final OptionKey<ShowConfigurationLevel> ShowConfiguration = new EnumOptionKey<>(ShowConfigurationLevel.none);
         // @formatter:on
     }
