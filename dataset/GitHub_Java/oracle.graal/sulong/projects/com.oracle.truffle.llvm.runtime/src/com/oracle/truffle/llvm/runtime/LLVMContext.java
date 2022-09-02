@@ -260,9 +260,10 @@ public final class LLVMContext {
                 assert !ctx.cleanupNecessary;
                 ctx.initialized = true;
                 ctx.cleanupNecessary = true;
-                StackPointer sp = (StackPointer) FrameUtil.getObjectSafe(frame, this.stackPointer);
-                Object[] args = new Object[]{sp.getLLVMStack(), ctx.getApplicationArguments(), getEnvironmentVariables(), getRandomValues()};
-                initContext.call(args);
+                try (StackPointer sp = ((StackPointer) FrameUtil.getObjectSafe(frame, stackPointer)).newFrame()) {
+                    Object[] args = new Object[]{sp, ctx.getApplicationArguments(), getEnvironmentVariables(), getRandomValues()};
+                    initContext.call(args);
+                }
             }
         }
     }
@@ -400,13 +401,13 @@ public final class LLVMContext {
                 result[i] = mainArguments[i - 1].toString();
             }
         }
-        return toManagedObjects(result);
+        return toTruffleObjects(result);
     }
 
     @TruffleBoundary
     private static LLVMManagedPointer getEnvironmentVariables() {
         String[] result = System.getenv().entrySet().stream().map((e) -> e.getKey() + "=" + e.getValue()).toArray(String[]::new);
-        return toManagedObjects(result);
+        return toTruffleObjects(result);
     }
 
     @TruffleBoundary
@@ -420,7 +421,7 @@ public final class LLVMContext {
         return new SecureRandom();
     }
 
-    public static LLVMManagedPointer toManagedObjects(String[] values) {
+    public static LLVMManagedPointer toTruffleObjects(String[] values) {
         LLVMArgumentBuffer[] result = new LLVMArgumentBuffer[values.length];
         for (int i = 0; i < values.length; i++) {
             result[i] = new LLVMArgumentBuffer(values[i]);
@@ -466,8 +467,9 @@ public final class LLVMContext {
                 if (LLVMManagedPointer.isInstance(pointer)) {
                     LLVMFunctionDescriptor functionDescriptor = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(pointer).getObject();
                     RootCallTarget disposeContext = functionDescriptor.getFunctionCode().getLLVMIRFunctionSlowPath();
-                    LLVMStack stack = threadingStack.getStack();
-                    disposeContext.call(stack);
+                    try (StackPointer stackPointer = threadingStack.getStack().newFrame()) {
+                        disposeContext.call(stackPointer);
+                    }
                 } else {
                     throw new IllegalStateException("Context cannot be disposed: " + SULONG_DISPOSE_CONTEXT + " is not a function or enclosed inside a LLVMManagedPointer");
                 }
