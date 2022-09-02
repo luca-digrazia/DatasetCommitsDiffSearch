@@ -47,9 +47,8 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
-import java.net.URLConnection;
-import java.net.URLStreamHandler;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.SeekableByteChannel;
@@ -225,6 +224,8 @@ final class HostClassLoader extends ClassLoader implements Closeable {
 
         abstract URL getURL();
 
+        abstract URL getOwner();
+
         abstract long getLength() throws IOException;
 
         abstract InputStream getInputStream() throws IOException;
@@ -271,33 +272,18 @@ final class HostClassLoader extends ClassLoader implements Closeable {
                 return res;
             }
         }
+
+        static URL urlOrNull(URI uri) {
+            try {
+                return uri.toURL();
+            } catch (MalformedURLException e) {
+                return null;
+            }
+        }
     }
 
     private interface Loader extends Closeable {
         Resource findResource(String name);
-    }
-
-    private static final class ResourceURLStreamHandler extends URLStreamHandler {
-
-        private final Resource resource;
-
-        ResourceURLStreamHandler(Resource resource) {
-            this.resource = resource;
-        }
-
-        @Override
-        protected URLConnection openConnection(URL u) {
-            return new URLConnection(u) {
-                @Override
-                public void connect() {
-                }
-
-                @Override
-                public InputStream getInputStream() throws IOException {
-                    return resource.getInputStream();
-                }
-            };
-        }
     }
 
     private static final class FolderLoader implements Loader {
@@ -316,11 +302,12 @@ final class HostClassLoader extends ClassLoader implements Closeable {
             return new Resource() {
                 @Override
                 public URL getURL() {
-                    try {
-                        return new URL((URL) null, file.toUri().toString(), new ResourceURLStreamHandler(this));
-                    } catch (MalformedURLException malformed) {
-                        return null;
-                    }
+                    return urlOrNull(file.toUri());
+                }
+
+                @Override
+                public URL getOwner() {
+                    return urlOrNull(root.toUri());
                 }
 
                 @Override
@@ -378,10 +365,15 @@ final class HostClassLoader extends ClassLoader implements Closeable {
                         url.append("!/");
                         url.append(name);
                         try {
-                            return new URL(null, url.toString(), new ResourceURLStreamHandler(this));
+                            return new URL(url.toString());
                         } catch (MalformedURLException malformed) {
                             return null;
                         }
+                    }
+
+                    @Override
+                    URL getOwner() {
+                        return urlOrNull(root.toUri());
                     }
 
                     @Override
