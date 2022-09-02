@@ -358,7 +358,7 @@ public final class EspressoContext {
         mainThread.setIntField(meta.Thread_priority, Thread.NORM_PRIORITY);
         mainThread.setHiddenField(meta.HIDDEN_HOST_THREAD, Thread.currentThread());
         mainThread.setHiddenField(meta.HIDDEN_DEATH, Target_java_lang_Thread.KillStatus.NORMAL);
-        mainThreadGroup = meta.ThreadGroup.allocateInstance();
+        mainThreadGroup = getMainThreadGroup();
 
         threadManager.registerMainThread(Thread.currentThread(), mainThread);
 
@@ -377,6 +377,13 @@ public final class EspressoContext {
         mainThread.setIntField(meta.Thread_threadStatus, Target_java_lang_Thread.State.RUNNABLE.value);
 
         mainThreadCreated = true;
+    }
+
+    private StaticObject getMainThreadGroup() {
+        if (mainThreadGroup == null) {
+            mainThreadGroup = meta.ThreadGroup.allocateInstance();
+        }
+        return mainThreadGroup;
     }
 
     /**
@@ -620,8 +627,8 @@ public final class EspressoContext {
         return true;
     }
 
-    public StaticObject getMainThreadGroup() {
-        return mainThreadGroup;
+    public Object getSystemThreadGroup() {
+        return getMainThreadGroup();
     }
 
     public void prepareDispose() {
