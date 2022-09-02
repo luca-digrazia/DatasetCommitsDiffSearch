@@ -52,7 +52,7 @@ final class GraphManager {
         this.rootRequest = rootRequest;
     }
 
-    Entry pe(CompilableTruffleAST truffleAST) {
+    Entry get(CompilableTruffleAST truffleAST) {
         Entry entry = irCache.get(truffleAST);
         if (entry == null) {
             final PEAgnosticInlineInvokePlugin plugin = newPlugin();
