@@ -155,11 +155,17 @@ final class HostObject implements TruffleObject {
     }
 
     boolean isArrayClass() {
-        return isClass() && asClass().isArray();
+        if (isClass() && asClass().isArray()) {
+            return true;
+        }
+        return false;
     }
 
     boolean isDefaultClass() {
-        return isClass() && !asClass().isArray();
+        if (isClass() && !asClass().isArray()) {
+            return true;
+        }
+        return false;
     }
 
     @ExportMessage
@@ -689,12 +695,15 @@ final class HostObject implements TruffleObject {
                         @Shared("lookupConstructor") @Cached LookupConstructorNode lookupConstructor,
                         @Shared("hostExecute") @Cached HostExecuteNode executeMethod) throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
             assert !receiver.isArrayClass();
-            HostMethodDesc constructor = lookupConstructor.execute(receiver, receiver.asClass());
-            if (constructor != null) {
-                return executeMethod.execute(constructor, null, arguments, receiver.languageContext);
+            if (receiver.isClass()) {
+                HostMethodDesc constructor = lookupConstructor.execute(receiver, receiver.asClass());
+                if (constructor != null) {
+                    return executeMethod.execute(constructor, null, arguments, receiver.languageContext);
+                }
             }
             throw UnsupportedMessageException.create();
         }
+
     }
 
     @ExportMessage
