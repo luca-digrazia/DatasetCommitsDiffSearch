@@ -312,7 +312,7 @@ public abstract class StaticShape<T> {
 
         private <T> StaticShape<T> build(ShapeGenerator<T> sg, StaticShape<T> parentShape) {
             CompilerAsserts.neverPartOfCompilation();
-            boolean safetyChecks = !SomAccessor.ENGINE.areStaticObjectSafetyChecksRelaxed(SomAccessor.LANGUAGE.getPolyglotLanguageInstance(language));
+            boolean safetyChecks = !SomAccessor.LANGUAGE.areStaticObjectSafetyChecksRelaxed(language);
             StaticShape<T> shape = sg.generateShape(parentShape, staticProperties.values(), safetyChecks);
             for (StaticProperty staticProperty : staticProperties.values()) {
                 staticProperty.initShape(shape);
@@ -321,10 +321,10 @@ public abstract class StaticShape<T> {
         }
 
         private GeneratorClassLoader getOrCreateClassLoader(Class<?> referenceClass) {
-            ClassLoader cl = SomAccessor.ENGINE.getStaticObjectClassLoader(SomAccessor.LANGUAGE.getPolyglotLanguageInstance(language), referenceClass);
+            ClassLoader cl = SomAccessor.LANGUAGE.getStaticObjectClassLoader(language, referenceClass);
             if (cl == null) {
                 cl = new GeneratorClassLoader(referenceClass);
-                SomAccessor.ENGINE.setStaticObjectClassLoader(SomAccessor.LANGUAGE.getPolyglotLanguageInstance(language), referenceClass, cl);
+                SomAccessor.LANGUAGE.setStaticObjectClassLoader(language, referenceClass, cl);
             }
             if (!GeneratorClassLoader.class.isInstance(cl)) {
                 throw new RuntimeException("The Truffle language instance associated to this Builder returned an unexpected class loader");
@@ -387,7 +387,7 @@ public abstract class StaticShape<T> {
         }
 
         private StorageStrategy getStorageStrategy() {
-            String strategy = SomAccessor.ENGINE.getStaticObjectStorageStrategy(SomAccessor.LANGUAGE.getPolyglotLanguageInstance(language));
+            String strategy = SomAccessor.LANGUAGE.getStaticObjectStorageStrategy(language);
             switch (strategy) {
                 case "DEFAULT":
                     return TruffleOptions.AOT ? StorageStrategy.ARRAY_BASED : StorageStrategy.FIELD_BASED;
