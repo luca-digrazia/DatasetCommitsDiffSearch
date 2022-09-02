@@ -70,10 +70,10 @@ import java.util.ArrayList;
 public final class InitializeOverwriteNode extends LLVMNode {
 
     @Children final AllocExternalSymbolNode[] allocExternalSymbols;
-    @Children final LLVMWriteSymbolNode[] writeSymbols;
+    @Child LLVMWriteSymbolNode writeSymbols;
 
     public InitializeOverwriteNode(LLVMParserResult result) {
-        ArrayList<LLVMWriteSymbolNode> writeSymbolsList = new ArrayList<>();
+        this.writeSymbols = LLVMWriteSymbolNodeGen.create();
         ArrayList<AllocExternalSymbolNode> allocExternaSymbolsList = new ArrayList<>();
         LLVMScope fileScope = result.getRuntime().getFileScope();
 
@@ -83,7 +83,6 @@ public final class InitializeOverwriteNode extends LLVMNode {
             if (symbol.isOverridable()) {
                 LLVMFunction function = fileScope.getFunction(symbol.getName());
                 // Functions are overwritten by functions from the localScope
-                writeSymbolsList.add(LLVMWriteSymbolNodeGen.create(function));
                 allocExternaSymbolsList.add(AllocExistingLocalSymbolsNodeGen.create(function));
             }
         }
@@ -94,11 +93,9 @@ public final class InitializeOverwriteNode extends LLVMNode {
                 LLVMGlobal global = fileScope.getGlobalVariable(symbol.getName());
                 // Globals are overwritten by (non-hidden) global symbol of the same name in the
                 // globalscope
-                writeSymbolsList.add(LLVMWriteSymbolNodeGen.create(global));
                 allocExternaSymbolsList.add(AllocExternalGlobalNodeGen.create(global));
             }
         }
-        this.writeSymbols = writeSymbolsList.toArray(LLVMWriteSymbolNode.EMPTY);
         this.allocExternalSymbols = allocExternaSymbolsList.toArray(AllocExternalSymbolNode.EMPTY);
     }
 
@@ -112,7 +109,7 @@ public final class InitializeOverwriteNode extends LLVMNode {
             if (pointer == null) {
                 continue;
             }
-            writeSymbols[i].execute(pointer);
+            writeSymbols.execute(pointer, allocSymbol.symbol);
         }
     }
 }
