@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.parser.binary.BinaryParser;
 import com.oracle.truffle.llvm.runtime.DefaultLibraryLocator;
@@ -86,29 +87,28 @@ public final class ElfLibraryLocator extends LibraryLocator {
     }
 
     @Override
-    public Path locateLibrary(LLVMContext context, String lib, Object reason) {
+    public TruffleFile locateLibrary(LLVMContext context, String lib, Object reason) {
         Path libPath = Paths.get(lib);
         if (libPath.isAbsolute()) {
-            return DefaultLibraryLocator.locateAbsolute(context, lib, libPath);
+            return DefaultLibraryLocator.locateAbsolute(context, libPath);
         }
-        Path path = DefaultLibraryLocator.locateGlobal(context, lib);
+        TruffleFile path = DefaultLibraryLocator.locateGlobal(context, lib);
         if (path != null) {
             return path;
         }
 
         if (localPaths != null) {
             // search file local paths
-            context.traceLoaderSearchPath(localPaths, reason);
+            traceSearchPath(context, localPaths, reason);
             for (String p : localPaths) {
                 Path absPath = Paths.get(p, lib);
-                context.traceLoaderTry(absPath);
-                if (absPath.toFile().exists()) {
-                    return absPath;
+                traceTry(context, absPath);
+                TruffleFile file = context.getEnv().getInternalTruffleFile(absPath.toUri());
+                if (file.exists()) {
+                    return file;
                 }
             }
         }
-
-        context.traceLoaderTry(libPath);
-        return libPath;
+        return null;
     }
 }

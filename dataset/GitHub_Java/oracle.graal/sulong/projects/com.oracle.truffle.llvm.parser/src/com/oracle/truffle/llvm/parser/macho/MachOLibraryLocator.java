@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
+import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.parser.binary.BinaryParser;
 import com.oracle.truffle.llvm.parser.elf.ElfFile;
@@ -53,34 +54,37 @@ public final class MachOLibraryLocator extends LibraryLocator {
         this.rPaths = machoPaths;
     }
 
-    private static final String RPATH_PATTERN = "@rpath";
+    private static final String RPATH_PATTERN = "@rpath/";
 
     @Override
-    public Path locateLibrary(LLVMContext context, String lib, Object reason) {
+    public TruffleFile locateLibrary(LLVMContext context, String lib, Object reason) {
         Path libPath = Paths.get(lib);
         if (libPath.isAbsolute()) {
-            return DefaultLibraryLocator.locateAbsolute(context, lib, libPath);
+            return DefaultLibraryLocator.locateAbsolute(context, libPath);
         }
-        Path path = DefaultLibraryLocator.locateGlobal(context, lib);
+        TruffleFile path = DefaultLibraryLocator.locateGlobal(context, lib);
         if (path != null) {
             return path;
         }
 
-        if (!rPaths.isEmpty() && lib.startsWith(RPATH_PATTERN)) {
+        if (lib.startsWith(RPATH_PATTERN)) {
             String subLib = lib.substring(RPATH_PATTERN.length());
-            // search file local paths
-            context.traceLoaderSearchPath(rPaths, reason);
-            for (String p : rPaths) {
-                Path absPath = Paths.get(p, subLib);
-                context.traceLoaderTry(absPath);
-                if (absPath.toFile().exists()) {
-                    return absPath;
+            if (!rPaths.isEmpty()) {
+                // search file local paths
+                traceSearchPath(context, rPaths, reason);
+                for (String p : rPaths) {
+                    Path absPath = Paths.get(p, subLib);
+                    traceTry(context, absPath);
+                    TruffleFile file = context.getEnv().getInternalTruffleFile(absPath.toUri());
+                    if (file.exists()) {
+                        return file;
+                    }
                 }
             }
+            // search global without @rpath
+            return DefaultLibraryLocator.locateGlobal(context, subLib);
         }
-
-        context.traceLoaderTry(libPath);
-        return libPath;
+        return null;
     }
 
 }

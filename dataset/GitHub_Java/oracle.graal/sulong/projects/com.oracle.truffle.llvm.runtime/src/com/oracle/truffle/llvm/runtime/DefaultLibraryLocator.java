@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,7 +29,7 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
+import com.oracle.truffle.api.TruffleFile;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -40,47 +40,49 @@ import java.util.List;
  */
 public final class DefaultLibraryLocator extends LibraryLocator {
 
-    public static DefaultLibraryLocator INSTANCE = new DefaultLibraryLocator();
+    public static final DefaultLibraryLocator INSTANCE = new DefaultLibraryLocator();
 
     private DefaultLibraryLocator() {
     }
 
     @Override
-    public Path locateLibrary(LLVMContext context, String lib, Object reason) {
+    public TruffleFile locateLibrary(LLVMContext context, String lib, Object reason) {
         Path libPath = Paths.get(lib);
         if (libPath.isAbsolute()) {
-            return locateAbsolute(context, lib, libPath);
+            return locateAbsolute(context, libPath);
         }
-        Path absPath = locateGlobal(context, lib);
-        if (absPath != null) {
-            return absPath;
-        }
-
-        context.traceLoaderTry(libPath);
-        return libPath;
+        return locateGlobal(context, lib);
     }
 
-    public static Path locateGlobal(LLVMContext context, String lib) {
+    public static TruffleFile locateGlobal(LLVMContext context, String lib) {
         // search global paths
         List<Path> libraryPaths = context.getLibraryPaths();
-        context.traceLoaderSearchPath(libraryPaths);
+        traceSearchPath(context, libraryPaths);
         for (Path p : libraryPaths) {
             Path absPath = Paths.get(p.toString(), lib);
-            context.traceLoaderTry(absPath);
-            if (absPath.toFile().exists()) {
-                return absPath;
+            traceTry(context, absPath);
+            TruffleFile file = context.getEnv().getInternalTruffleFile(absPath.toUri());
+            if (file.exists()) {
+                return file;
             }
         }
         return null;
     }
 
-    public static Path locateAbsolute(LLVMContext context, String lib, Path libPath) {
+    public static TruffleFile locateAbsolute(LLVMContext context, Path libPath) {
         assert libPath.isAbsolute();
-        context.traceLoaderTry(libPath);
-        if (libPath.toFile().exists()) {
-            return libPath;
+        traceTry(context, libPath);
+        TruffleFile file = context.getEnv().getInternalTruffleFile(libPath.toUri());
+        if (file.exists()) {
+            return file;
         } else {
-            throw new LLVMLinkerException(String.format("Library \"%s\" does not exist.", lib));
+            /*
+             * On OSX Big Sur, some system libraries don't exist as a file. These libraries are
+             * native libraries anyway, Sulong can do nothing with these libraries, so we can just
+             * return null here. The NFI will later re-try locating these libraries, and they will
+             * be found via the dlopen cache.
+             */
+            return null;
         }
     }
 
