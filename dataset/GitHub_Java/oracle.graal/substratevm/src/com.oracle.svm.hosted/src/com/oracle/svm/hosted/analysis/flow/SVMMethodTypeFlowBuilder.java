@@ -47,9 +47,7 @@ import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.typestate.TypeState;
 import com.oracle.svm.core.graal.jdk.SubstrateArraysCopyOf;
-import com.oracle.svm.core.graal.thread.CompareAndSetVMThreadLocalNode;
 import com.oracle.svm.core.graal.thread.LoadVMThreadLocalNode;
-import com.oracle.svm.core.graal.thread.StoreVMThreadLocalNode;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.util.UserError.UserException;
 import com.oracle.svm.core.util.VMError;
@@ -184,11 +182,7 @@ public class SVMMethodTypeFlowBuilder extends MethodTypeFlowBuilder {
 
                 TypeFlowBuilder<?> result;
                 if (objStamp.isExactType()) {
-                    /*
-                     * The node has an exact type. Create a source type flow. This works with
-                     * allocation site sensitivity because the StoreVMThreadLocal is modeled by
-                     * writing the objects to the all-instantiated.
-                     */
+                    /* The node has an exact type. Create a source type flow. */
                     result = TypeFlowBuilder.create(bb, node, SourceTypeFlow.class, () -> {
                         SourceTypeFlow src = new SourceTypeFlow(node, TypeState.forExactType(bb, (AnalysisType) objStamp.type(), !objStamp.nonNull()));
                         methodFlow.addSource(src);
@@ -198,40 +192,17 @@ public class SVMMethodTypeFlowBuilder extends MethodTypeFlowBuilder {
                     /* Use a type state which consists of the entire node's type hierarchy. */
                     AnalysisType type = (AnalysisType) (objStamp.type() == null ? bb.getObjectType() : objStamp.type());
                     result = TypeFlowBuilder.create(bb, node, ProxyTypeFlow.class, () -> {
-                        ProxyTypeFlow proxy = new ProxyTypeFlow(node, type.getTypeFlow(bb, true));
+                        ProxyTypeFlow proxy = new ProxyTypeFlow(node, type.getTypeFlow(bb, false));
                         methodFlow.addMiscEntry(proxy);
                         return proxy;
                     });
                 }
                 state.add(node, result);
             }
-        } else if (n instanceof StoreVMThreadLocalNode) {
-            StoreVMThreadLocalNode node = (StoreVMThreadLocalNode) n;
-            storeVMThreadLocal(state, node, node.getValue());
-        } else if (n instanceof CompareAndSetVMThreadLocalNode) {
-            CompareAndSetVMThreadLocalNode node = (CompareAndSetVMThreadLocalNode) n;
-            storeVMThreadLocal(state, node, node.getUpdate());
+
         } else if (n instanceof SubstrateArraysCopyOf) {
             SubstrateArraysCopyOf node = (SubstrateArraysCopyOf) n;
-            processArraysCopyOf(n, node.getOriginal(), node.getNewObjectArrayType(), state);
-        }
-    }
-
-    private void storeVMThreadLocal(TypeFlowsOfNodes state, ValueNode storeNode, ValueNode value) {
-        Stamp stamp = value.stamp(NodeView.DEFAULT);
-        if (stamp instanceof ObjectStamp) {
-            /* Add the value object to the state of its declared type. */
-            TypeFlowBuilder<?> valueBuilder = state.lookup(value);
-            ObjectStamp valueStamp = (ObjectStamp) stamp;
-            AnalysisType valueType = (AnalysisType) (valueStamp.type() == null ? bb.getObjectType() : valueStamp.type());
-
-            TypeFlowBuilder<?> storeBuilder = TypeFlowBuilder.create(bb, storeNode, ProxyTypeFlow.class, () -> {
-                ProxyTypeFlow proxy = new ProxyTypeFlow(storeNode, valueType.getTypeFlow(bb, false));
-                methodFlow.addMiscEntry(proxy);
-                return proxy;
-            });
-            storeBuilder.addUseDependency(valueBuilder);
-            typeFlowGraphBuilder.registerSinkBuilder(storeBuilder);
+            processArraysCopyOf(n, node.getOriginal(), node.getNewArrayType(), state);
         }
     }
 }
