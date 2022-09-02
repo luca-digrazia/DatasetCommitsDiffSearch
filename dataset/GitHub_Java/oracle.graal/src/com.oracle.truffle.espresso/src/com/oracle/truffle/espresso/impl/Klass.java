@@ -250,7 +250,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         this.type = type;
         this.superKlass = superKlass;
         this.superInterfaces = superInterfaces;
-        this.id = context.getNewId();
+        this.id = context.getNewKlassId();
         this.modifiers = modifiers;
     }
 
@@ -852,7 +852,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         for (Method m : getDeclaredMethods()) {
             if (m.isNative() && m.isVarargs() && m.getName() == methodName) {
                 // check signature?
-                throw EspressoError.unimplemented("New method handle invoke method? ", methodName);
+                throw EspressoError.unimplemented("New method handle invoke method? " + methodName);
             }
         }
         return null;

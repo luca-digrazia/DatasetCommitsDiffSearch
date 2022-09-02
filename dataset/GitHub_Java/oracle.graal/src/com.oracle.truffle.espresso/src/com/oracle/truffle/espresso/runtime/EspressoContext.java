@@ -63,7 +63,6 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.EspressoReference;
 import com.oracle.truffle.espresso.substitutions.JavaVersionUtil;
-import com.oracle.truffle.espresso.substitutions.SubstitutionProfiler;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_ref_Reference;
@@ -113,7 +112,6 @@ public final class EspressoContext {
         return bootClassLoaderID;
     }
 
-    @CompilationFinal private boolean modulesInitialized = false;
     private boolean initialized = false;
 
     private Classpath bootClasspath;
@@ -124,7 +122,6 @@ public final class EspressoContext {
     @CompilationFinal private Meta meta;
     @CompilationFinal private JniEnv jniEnv;
     @CompilationFinal private VM vm;
-    @CompilationFinal private JImageLibrary jimageLibrary;
     @CompilationFinal private EspressoProperties vmProperties;
 
     @CompilationFinal private EspressoException stackOverflow;
@@ -263,14 +260,12 @@ public final class EspressoContext {
 
         initVmProperties();
 
-        // Spawn JNI first, then the VM.
-        this.vm = VM.create(getJNI()); // Mokapot is loaded
-
-        // TODO: link libjimage
-
         this.meta = new Meta(this);
 
         this.interpreterToVM = new InterpreterToVM(this);
+
+        // Spawn JNI first, then the VM.
+        this.vm = VM.create(getJNI()); // Mokapot is loaded
 
         initializeKnownClass(Type.java_lang_Object);
 
@@ -290,8 +285,6 @@ public final class EspressoContext {
 
         // Initialize ReferenceQueues
         this.hostToGuestReferenceDrainThread = getEnv().createThread(new Runnable() {
-            SubstitutionProfiler profiler = new SubstitutionProfiler();
-
             @SuppressWarnings("rawtypes")
             @Override
             public void run() {
@@ -309,7 +302,7 @@ public final class EspressoContext {
 
                         lock.getLock().lock();
                         try {
-                            assert Target_java_lang_Thread.holdsLock(lock, meta) : "must hold Reference.lock at the guest level";
+                            assert Target_java_lang_Thread.holdsLock(lock) : "must hold Reference.lock at the guest level";
                             casNextIfNullAndMaybeClear(head);
 
                             EspressoReference prev = head;
@@ -327,7 +320,7 @@ public final class EspressoContext {
                             StaticObject obj = meta.java_lang_ref_Reference_pending.getAndSetObject(meta.java_lang_ref_Reference.getStatics(), head.getGuestReference());
                             meta.java_lang_ref_Reference_discovered.set(prev.getGuestReference(), obj);
 
-                            getVM().JVM_MonitorNotify(lock, profiler);
+                            getVM().JVM_MonitorNotify(lock);
                         } finally {
                             lock.getLock().unlock();
                         }
@@ -516,10 +509,6 @@ public final class EspressoContext {
         klass.safeInitialize();
     }
 
-    public boolean modulesInitialized() {
-        return modulesInitialized;
-    }
-
     public boolean isInitialized() {
         return initialized;
     }
@@ -530,14 +519,6 @@ public final class EspressoContext {
 
     public VM getVM() {
         return vm;
-    }
-
-    public JImageLibrary jimageLibrary() {
-        if (jimageLibrary == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.jimageLibrary = new JImageLibrary(this);
-        }
-        return jimageLibrary;
     }
 
     public Types getTypes() {

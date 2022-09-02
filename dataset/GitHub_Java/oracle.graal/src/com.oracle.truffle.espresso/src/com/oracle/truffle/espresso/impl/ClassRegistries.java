@@ -23,8 +23,6 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.espresso.impl.LoadingConstraints.INVALID_LOADER_ID;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Set;
@@ -46,7 +44,6 @@ public final class ClassRegistries {
     private final EspressoContext context;
 
     private final Set<StaticObject> weakClassLoaderSet = Collections.newSetFromMap(new WeakHashMap<>());
-    private volatile int totalClassLoadersSet = 0;
 
     public ClassRegistries(EspressoContext context) {
         this.context = context;
@@ -76,12 +73,6 @@ public final class ClassRegistries {
                     // Register the class loader in the weak set.
                     assert Thread.holdsLock(weakClassLoaderSet);
                     weakClassLoaderSet.add(classLoader);
-                    totalClassLoadersSet++;
-                    int size = weakClassLoaderSet.size();
-                    if (totalClassLoadersSet > size) {
-                        constraints.purge();
-                        totalClassLoadersSet = size;
-                    }
                 }
             }
         }
@@ -213,25 +204,5 @@ public final class ClassRegistries {
             }
         }
         return false;
-    }
-
-    /**
-     * Collects IDs of all class loaders that have not been collected by the GC.
-     */
-    int[] aliveLoaders() {
-        int[] loaders = new int[weakClassLoaderSet.size() + 1];
-        loaders[0] = context.getBootClassLoaderID(); // Boot loader is always alive
-        int i = 1;
-        synchronized (weakClassLoaderSet) {
-            for (StaticObject loader : weakClassLoaderSet) {
-                if (loader != null) {
-                    loaders[i++] = getClassRegistry(loader).getLoaderID();
-                }
-            }
-        }
-        if (i < loaders.length) {
-            loaders[i++] = INVALID_LOADER_ID;
-        }
-        return loaders;
     }
 }
