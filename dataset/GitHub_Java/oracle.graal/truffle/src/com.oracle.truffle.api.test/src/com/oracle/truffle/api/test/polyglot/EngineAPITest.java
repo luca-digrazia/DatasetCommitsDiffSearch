@@ -67,7 +67,6 @@ import org.junit.Test;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.test.option.OptionProcessorTest.OptionTestInstrument1;
-import org.graalvm.polyglot.Value;
 
 public class EngineAPITest {
 
@@ -273,7 +272,7 @@ public class EngineAPITest {
     @Test
     @SuppressWarnings("try")
     public void testListLanguagesDoesNotInvalidateSingleContext() {
-        Object prev = resetSingleContextState(false);
+        Object prev = resetSingleContextState();
         try {
             try (Engine engine = Engine.create()) {
                 engine.getLanguages();
@@ -291,7 +290,7 @@ public class EngineAPITest {
 
     @Test
     public void testListInstrumentsDoesNotInvalidateSingleContext() {
-        Object prev = resetSingleContextState(false);
+        Object prev = resetSingleContextState();
         try {
             try (Engine engine = Engine.create()) {
                 engine.getInstruments();
@@ -304,7 +303,7 @@ public class EngineAPITest {
 
     @Test
     public void testContextWithBoundEngineDoesNotInvalidateSingleContext() {
-        Object prev = resetSingleContextState(false);
+        Object prev = resetSingleContextState();
         try {
             try (Context ctx = Context.create()) {
                 ctx.initialize(EngineAPITestLanguage.ID);
@@ -318,7 +317,7 @@ public class EngineAPITest {
     @Test
     @SuppressWarnings("try")
     public void testListLanguagesAndCreateBoundContextDoNotInvalidateSingleContext() {
-        Object prev = resetSingleContextState(false);
+        Object prev = resetSingleContextState();
         try {
             try (Engine engine = Engine.create()) {
                 engine.getLanguages();
@@ -332,36 +331,12 @@ public class EngineAPITest {
         }
     }
 
-    @Test
-    public void testPrepareContextAndUseItAfterReset() throws Exception {
-        Object prev = resetSingleContextState(false);
-        try {
-            Context ctx = Context.newBuilder().build();
-            Value mul = ctx.eval("sl", "" +
-                            "function mul(a, b) {\n" +
-                            "  return a * b;\n" +
-                            "}\n" +
-                            "function main() {\n" +
-                            "  return mul;\n" +
-                            "}\n");
-            assertFalse(mul.isNull());
-
-            assertEquals(42, mul.execute(7, 6).asInt());
-
-            resetSingleContextState(true);
-
-            assertEquals(72, mul.execute(3, 24).asInt());
-        } finally {
-            restoreSingleContextState(prev);
-        }
-    }
-
-    private static Object resetSingleContextState(boolean reuse) {
+    private static Object resetSingleContextState() {
         try {
             Class<?> c = Class.forName("com.oracle.truffle.polyglot.PolyglotContextImpl");
-            Method m = c.getDeclaredMethod("resetSingleContextState", boolean.class);
+            Method m = c.getDeclaredMethod("resetSingleContextState");
             m.setAccessible(true);
-            return m.invoke(null, reuse);
+            return m.invoke(null);
         } catch (Exception e) {
             throw new AssertionError(e);
         }

@@ -143,6 +143,10 @@ public abstract class Launcher {
         seenPolyglot = polyglot;
     }
 
+    final boolean allowExperimentalOptions() {
+        return experimentalOptions;
+    }
+
     final Path getLogFile() {
         return logFile;
     }
@@ -775,7 +779,7 @@ public abstract class Launcher {
                 if (descriptor.isDeprecated()) {
                     warn("Option '" + descriptor.getName() + "' is deprecated and might be removed from future versions.");
                 }
-                if (!experimentalOptions && descriptor.getStability() == OptionStability.EXPERIMENTAL) {
+                if (!allowExperimentalOptions() && descriptor.getStability() == OptionStability.EXPERIMENTAL) {
                     throw abort(String.format("Option '%s' is experimental and must be enabled via '--experimental-options'%n" +
                                     "Do not use experimental options in production environments.", arg));
                 }
