@@ -42,8 +42,6 @@ import com.oracle.truffle.wasm.collection.BooleanArrayList;
 import com.oracle.truffle.wasm.collection.ByteArrayList;
 import com.oracle.truffle.wasm.collection.LongArrayList;
 
-import java.util.ArrayList;
-
 @ExportLibrary(InteropLibrary.class)
 public class WasmModule implements TruffleObject {
     @CompilationFinal private final String name;
@@ -234,7 +232,6 @@ public class WasmModule implements TruffleObject {
     @ExportMessage
     @TruffleBoundary
     Object readMember(String exportName) {
-        // TODO: Do we need to special case __START__?
         return exportName.equals("__START__") ? symbolTable.startFunction() : symbolTable.function(exportName);
     }
 
@@ -242,7 +239,8 @@ public class WasmModule implements TruffleObject {
     @TruffleBoundary
     boolean isMemberReadable(String member) {
         try {
-            return symbolTable.exportedFunctions().containsKey(member);
+            int functionIndex = Integer.parseInt(member);
+            return functionIndex >= 0 && functionIndex < symbolTable.numFunctions();
         } catch (NumberFormatException exc) {
             return false;
         }
@@ -251,16 +249,18 @@ public class WasmModule implements TruffleObject {
     @ExportMessage
     @TruffleBoundary
     Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-        return new ExportedFunctions(symbolTable);
+        return new FunctionNamesObject(symbolTable, symbolTable.numFunctions());
     }
 
     @ExportLibrary(InteropLibrary.class)
-    static final class ExportedFunctions implements TruffleObject {
+    static final class FunctionNamesObject implements TruffleObject {
 
         private SymbolTable symbolTable;
+        private int numFunctions;
 
-        ExportedFunctions(SymbolTable symbolTable) {
+        FunctionNamesObject(SymbolTable symbolTable, int numFunctions) {
             this.symbolTable = symbolTable;
+            this.numFunctions = numFunctions;
         }
 
         @ExportMessage
@@ -270,12 +270,12 @@ public class WasmModule implements TruffleObject {
 
         @ExportMessage
         boolean isArrayElementReadable(long index) {
-            return index >= 0 && index < symbolTable.exportedFunctions().size();
+            return index >= 0 && index < numFunctions;
         }
 
         @ExportMessage
         long getArraySize() {
-            return symbolTable.exportedFunctions().size();
+            return numFunctions;
         }
 
         @ExportMessage
@@ -284,8 +284,8 @@ public class WasmModule implements TruffleObject {
                 transferToInterpreter();
                 throw InvalidArrayIndexException.create(index);
             }
-            // TODO: Use a custom collection to ensure more efficient access.
-            return new ArrayList<>(symbolTable.exportedFunctions().values()).get((int) index);
+            // TODO: Check whether long fits into an int, throw otherwise.
+            return symbolTable.function((int) index);
         }
     }
 }

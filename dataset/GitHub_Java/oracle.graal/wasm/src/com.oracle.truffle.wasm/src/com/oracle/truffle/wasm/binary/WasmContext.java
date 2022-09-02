@@ -89,17 +89,18 @@ public class WasmContext {
     }
 
     private void initializePredefinedModules(Env env) {
-        final String extraModuleValue = WasmOptions.PredefinedModules.getValue(env.getOptions());
-        if (extraModuleValue.equals("")) {
-            return;
-        }
+        // TODO: Readd.
+        // final String extraModuleValue = WasmOptions.PredefinedModules.getValue(env.getOptions());
+        final String extraModuleValue = "";
         final String[] moduleSpecs = extraModuleValue.split(",");
         for (String moduleSpec : moduleSpecs) {
             final String[] parts = moduleSpec.split(":");
-            final String name = parts[0];
-            final String key = parts[1];
-            final WasmModule module = WasmModules.createPredefined(language, name, key);
-            modules.put(name, module);
+            if (parts.length == 2) {
+                final String name = parts[0];
+                final String key = parts[1];
+                final WasmModule module = WasmModules.createPredefined(language, name, key);
+                modules.put(name, module);
+            }
         }
     }
 

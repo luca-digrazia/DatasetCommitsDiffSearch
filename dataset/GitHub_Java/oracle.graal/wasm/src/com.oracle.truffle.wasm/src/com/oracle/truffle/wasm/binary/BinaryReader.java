@@ -234,8 +234,8 @@ public class BinaryReader extends BinaryStreamReader {
     private static final int MAGIC = 0x6d736100;
     private static final int VERSION = 0x00000001;
 
-    private WasmLanguage language;
-    private WasmModule module;
+    private WasmLanguage wasmLanguage;
+    private WasmModule wasmModule;
     private byte[] bytesConsumed;
 
     /**
@@ -246,21 +246,19 @@ public class BinaryReader extends BinaryStreamReader {
      */
     private int moduleFunctionIndex;
 
-    BinaryReader(WasmLanguage language, String moduleName, byte[] data) {
+    BinaryReader(WasmLanguage wasmLanguage, String moduleName, byte[] data) {
         super(data);
-        this.language = language;
-        this.module = new WasmModule(moduleName);
+        this.wasmLanguage = wasmLanguage;
+        this.wasmModule = new WasmModule(moduleName);
         this.bytesConsumed = new byte[1];
         this.moduleFunctionIndex = 0;
     }
 
-    WasmModule readModule() {
-        final WasmContext context = language.getContextReference().get();
+    void readModule() {
         Assert.assertIntEqual(read4(), MAGIC, "Invalid MAGIC number");
         Assert.assertIntEqual(read4(), VERSION, "Invalid VERSION number");
         readSections();
-        context.registerModule(module);
-        return module;
+        wasmLanguage.getContextReference().get().registerModule(wasmModule);
     }
 
     private void readSections() {
@@ -338,7 +336,7 @@ public class BinaryReader extends BinaryStreamReader {
             switch (importType) {
                 case ImportIdentifier.FUNCTION: {
                     int typeIndex = readTypeIndex();
-                    module.symbolTable().importFunction(moduleName, importName, typeIndex);
+                    wasmModule.symbolTable().importFunction(wasmLanguage, moduleName, importName, typeIndex);
                     moduleFunctionIndex++;
                     break;
                 }
@@ -350,13 +348,13 @@ public class BinaryReader extends BinaryStreamReader {
                     switch (limitsPrefix) {
                         case 0x00: {
                             int initSize = readUnsignedInt32();  // initial size (in number of entries)
-                            module.table().initialize(initSize);
+                            wasmModule.table().initialize(initSize);
                             break;
                         }
                         case 0x01: {
                             int initSize = readUnsignedInt32();  // initial size (in number of entries)
                             int maxSize = readUnsignedInt32();  // max size (in number of entries)
-                            module.table().initialize(initSize, maxSize);
+                            wasmModule.table().initialize(initSize, maxSize);
                             break;
                         }
                         default:
@@ -385,7 +383,7 @@ public class BinaryReader extends BinaryStreamReader {
                 case ImportIdentifier.GLOBAL: {
                     byte type = readValueType();
                     byte mut = read1();  // 0x00 means const, 0x01 means var
-                    module.globals().registerImported(importName, type, mut != GlobalModifier.CONSTANT);
+                    wasmModule.globals().registerImported(importName, type, mut != GlobalModifier.CONSTANT);
                     // TODO: Store the imported global.
                     break;
                 }
@@ -400,7 +398,7 @@ public class BinaryReader extends BinaryStreamReader {
         int numFunctions = readVectorLength();
         for (int i = 0; i != numFunctions; ++i) {
             int functionTypeIndex = readUnsignedInt32();
-            module.symbolTable().allocateFunction(functionTypeIndex);
+            wasmModule.symbolTable().allocateFunction(wasmLanguage, functionTypeIndex);
         }
     }
 
@@ -415,13 +413,13 @@ public class BinaryReader extends BinaryStreamReader {
             switch (limitsPrefix) {
                 case 0x00: {
                     int initSize = readUnsignedInt32();  // initial size (in number of entries)
-                    module.table().initialize(initSize);
+                    wasmModule.table().initialize(initSize);
                     break;
                 }
                 case 0x01: {
                     int initSize = readUnsignedInt32();  // initial size (in number of entries)
                     int maxSize = readUnsignedInt32();  // max size (in number of entries)
-                    module.table().initialize(initSize, maxSize);
+                    wasmModule.table().initialize(initSize, maxSize);
                     break;
                 }
                 default:
@@ -469,16 +467,16 @@ public class BinaryReader extends BinaryStreamReader {
 
     private WasmRootNode createCodeEntry(int funcIndex) {
         WasmCodeEntry codeEntry = new WasmCodeEntry(funcIndex, data);
-        module.symbolTable().function(funcIndex).setCodeEntry(codeEntry);
+        wasmModule.symbolTable().function(funcIndex).setCodeEntry(codeEntry);
 
         /*
          * Create the root node and create and set the call target for the body.
          * This needs to be done before reading the body block, because we need to be able to
          * create direct call nodes {@see TruffleRuntime#createDirectCallNode} during parsing.
          */
-        WasmRootNode rootNode = new WasmRootNode(language, codeEntry);
+        WasmRootNode rootNode = new WasmRootNode(wasmLanguage, codeEntry);
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
-        module.symbolTable().function(funcIndex).setCallTarget(callTarget);
+        wasmModule.symbolTable().function(funcIndex).setCallTarget(callTarget);
 
         return rootNode;
     }
@@ -488,7 +486,7 @@ public class BinaryReader extends BinaryStreamReader {
         initCodeEntryLocals(funcIndex);
 
         /* Read (parse) and abstractly interpret the code entry */
-        byte returnTypeId = module.symbolTable().function(funcIndex).returnType();
+        byte returnTypeId = wasmModule.symbolTable().function(funcIndex).returnType();
         ExecutionState state = new ExecutionState();
         WasmBlockNode bodyBlock = readBlock(rootNode.codeEntry(), state, returnTypeId);
         rootNode.setBody(bodyBlock);
@@ -518,9 +516,9 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private void initCodeEntryLocals(int funcIndex) {
-        WasmCodeEntry codeEntry = module.symbolTable().function(funcIndex).codeEntry();
-        int typeIndex = module.symbolTable().function(funcIndex).typeIndex();
-        ByteArrayList argumentTypes = module.symbolTable().getFunctionTypeArgumentTypes(typeIndex);
+        WasmCodeEntry codeEntry = wasmModule.symbolTable().function(funcIndex).codeEntry();
+        int typeIndex = wasmModule.symbolTable().function(funcIndex).typeIndex();
+        ByteArrayList argumentTypes = wasmModule.symbolTable().getFunctionTypeArgumentTypes(typeIndex);
         ByteArrayList localTypes = readCodeEntryLocals();
         byte[] allLocalTypes = ByteArrayList.concat(argumentTypes, localTypes);
         codeEntry.setLocalTypes(allLocalTypes);
@@ -553,7 +551,7 @@ public class BinaryReader extends BinaryStreamReader {
         int startIntConstantOffset = state.intConstantOffset();
         int startNumericLiteralOffset = state.numericLiteralOffset();
         int startBranchTableOffset = state.branchTableOffset();
-        WasmBlockNode currentBlock = new WasmBlockNode(module, codeEntry, startOffset, returnTypeId, startStackSize, startByteConstantOffset, startIntConstantOffset, startNumericLiteralOffset, startBranchTableOffset);
+        WasmBlockNode currentBlock = new WasmBlockNode(wasmModule, codeEntry, startOffset, returnTypeId, startStackSize, startByteConstantOffset, startIntConstantOffset, startNumericLiteralOffset, startBranchTableOffset);
         int opcode;
         do {
             opcode = read1() & 0xFF;
@@ -652,7 +650,7 @@ public class BinaryReader extends BinaryStreamReader {
                     int functionIndex = readFunctionIndex(bytesConsumed);
                     state.saveNumericLiteral(functionIndex);
                     state.useByteConstant(bytesConsumed[0]);
-                    WasmFunction function = module.symbolTable().function(functionIndex);
+                    WasmFunction function = wasmModule.symbolTable().function(functionIndex);
                     state.pop(function.numArguments());
                     state.push(function.returnTypeLength());
 
@@ -674,8 +672,8 @@ public class BinaryReader extends BinaryStreamReader {
                     int expectedFunctionTypeIndex = readTypeIndex(bytesConsumed);
                     state.saveNumericLiteral(expectedFunctionTypeIndex);
                     state.useByteConstant(bytesConsumed[0]);
-                    int numArguments = module.symbolTable().getFunctionTypeNumArguments(expectedFunctionTypeIndex);
-                    int returnLength = module.symbolTable().getFunctionTypeReturnTypeLength(expectedFunctionTypeIndex);
+                    int numArguments = wasmModule.symbolTable().getFunctionTypeNumArguments(expectedFunctionTypeIndex);
+                    int returnLength = wasmModule.symbolTable().getFunctionTypeReturnTypeLength(expectedFunctionTypeIndex);
                     state.pop();  // The function index to call.
                     state.pop(numArguments);
                     state.push(returnLength);
@@ -725,7 +723,7 @@ public class BinaryReader extends BinaryStreamReader {
                     int globalIndex = readLocalIndex(bytesConsumed);
                     state.saveNumericLiteral(globalIndex);
                     state.useByteConstant(bytesConsumed[0]);
-                    Assert.assertIntLessOrEqual(globalIndex, module.globals().size(), "Invalid global index for global.get");
+                    Assert.assertIntLessOrEqual(globalIndex, wasmModule.globals().size(), "Invalid global index for global.get");
                     state.push();
                     break;
                 }
@@ -734,7 +732,7 @@ public class BinaryReader extends BinaryStreamReader {
                     state.saveNumericLiteral(globalIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertIntLessOrEqual(globalIndex, module.globals().size(), "Invalid global index for global.set");
+                    Assert.assertIntLessOrEqual(globalIndex, wasmModule.globals().size(), "Invalid global index for global.set");
                     // Assert there is a value on the top of the stack.
                     Assert.assertIntGreater(state.stackSize(), 0, "global.set requires at least one element in the stack");
                     state.pop();
@@ -1068,10 +1066,10 @@ public class BinaryReader extends BinaryStreamReader {
             if (blockTypeId != ValueTypes.VOID_TYPE) {
                 Assert.fail("An if statement without an else branch block cannot return values.");
             }
-            falseBranch = new WasmEmptyNode(module, codeEntry, 0);
+            falseBranch = new WasmEmptyNode(wasmModule, codeEntry, 0);
         }
 
-        return new WasmIfNode(module, codeEntry, trueBranchBlock, falseBranch, offset() - startOffset, blockTypeId, initialStackPointer,
+        return new WasmIfNode(wasmModule, codeEntry, trueBranchBlock, falseBranch, offset() - startOffset, blockTypeId, initialStackPointer,
                 state.byteConstantOffset() - initialByteConstantOffset, state.numericLiteralOffset() - initialNumericLiteralOffset);
     }
 
@@ -1097,7 +1095,7 @@ public class BinaryReader extends BinaryStreamReader {
                         break;
                     case GLOBAL_GET:
                         int index = readGlobalIndex();
-                        offset = module.globals().getAsInt(index);
+                        offset = wasmModule.globals().getAsInt(index);
                         break;
                     case END:
                         break;
@@ -1112,13 +1110,13 @@ public class BinaryReader extends BinaryStreamReader {
             for (int funcIdx = 0; funcIdx != contentLength; ++funcIdx) {
                 contents[funcIdx] = readFunctionIndex();
             }
-            module.table().initializeContents(offset, contents);
+            wasmModule.table().initializeContents(offset, contents);
         }
     }
 
     private void readStartSection() {
         int startFunctionIndex = readFunctionIndex();
-        module.symbolTable().setStartFunction(startFunctionIndex);
+        wasmModule.symbolTable().setStartFunction(startFunctionIndex);
     }
 
     private void readExportSection() {
@@ -1129,7 +1127,7 @@ public class BinaryReader extends BinaryStreamReader {
             switch (exportType) {
                 case ExportIdentifier.FUNCTION: {
                     int functionIndex = readFunctionIndex();
-                    module.symbolTable().markFunctionAsExported(exportName, functionIndex);
+                    wasmModule.symbolTable().markFunctionAsExported(exportName, functionIndex);
                     break;
                 }
                 case ExportIdentifier.TABLE: {
@@ -1180,7 +1178,7 @@ public class BinaryReader extends BinaryStreamReader {
                         break;
                     case GLOBAL_GET:
                         int index = readGlobalIndex();
-                        value = module.globals().getAsInt(index);
+                        value = wasmModule.globals().getAsInt(index);
                         break;
                     case END:
                         break;
@@ -1189,9 +1187,9 @@ public class BinaryReader extends BinaryStreamReader {
                         break;
                 }
             } while (instruction != END);
-            module.globals().register(value, type, mut != GlobalModifier.CONSTANT);
+            wasmModule.globals().register(value, type, mut != GlobalModifier.CONSTANT);
         }
-        module.globals().makeFinal();
+        wasmModule.globals().makeFinal();
     }
 
     private void readDataSection() {
@@ -1215,7 +1213,7 @@ public class BinaryReader extends BinaryStreamReader {
                         break;
                     case GLOBAL_GET:
                         int index = readGlobalIndex();
-                        offset = module.globals().getAsInt(index);
+                        offset = wasmModule.globals().getAsInt(index);
                         break;
                     case END:
                         break;
@@ -1239,7 +1237,7 @@ public class BinaryReader extends BinaryStreamReader {
         int paramsLength = readVectorLength();
         int resultLength = peekUnsignedInt32(paramsLength);
         resultLength = (resultLength == 0x40) ? 0 : resultLength;
-        int idx = module.symbolTable().allocateFunctionType(paramsLength, resultLength);
+        int idx = wasmModule.symbolTable().allocateFunctionType(paramsLength, resultLength);
         readParameterList(idx, paramsLength);
         readResultList(idx);
     }
@@ -1247,7 +1245,7 @@ public class BinaryReader extends BinaryStreamReader {
     private void readParameterList(int funcTypeIdx, int numParams) {
         for (int paramIdx = 0; paramIdx != numParams; ++paramIdx) {
             byte type = readValueType();
-            module.symbolTable().registerFunctionTypeParameterType(funcTypeIdx, paramIdx, type);
+            wasmModule.symbolTable().registerFunctionTypeParameter(funcTypeIdx, paramIdx, type);
         }
     }
 
@@ -1263,7 +1261,7 @@ public class BinaryReader extends BinaryStreamReader {
                 break;
             case 0x01:  // vector with one element (produced by the Wasm binary compiler)
                 byte type = readValueType();
-                module.symbolTable().registerFunctionTypeReturnType(funcTypeIdx, 0, type);
+                wasmModule.symbolTable().registerFunctionTypeReturnType(funcTypeIdx, 0, type);
                 break;
             default:
                 Assert.fail(String.format("Invalid return value specifier: 0x%02X", b));

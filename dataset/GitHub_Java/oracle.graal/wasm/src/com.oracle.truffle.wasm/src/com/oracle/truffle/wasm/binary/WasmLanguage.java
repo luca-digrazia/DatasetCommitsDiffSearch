@@ -33,7 +33,6 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import org.graalvm.options.OptionDescriptors;
 
 @TruffleLanguage.Registration(id = "wasm", name = "WebAssembly", defaultMimeType = "application/wasm", byteMimeTypes = "application/wasm", contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE, fileTypeDetectors = WasmFileDetector.class)
 public final class WasmLanguage extends TruffleLanguage<WasmContext> {
@@ -58,11 +57,6 @@ public final class WasmLanguage extends TruffleLanguage<WasmContext> {
     @Override
     protected Iterable<Scope> findTopScopes(WasmContext context) {
         return context.getTopScopes();
-    }
-
-    @Override
-    protected OptionDescriptors getOptionDescriptors() {
-        return new WasmOptionsOptionDescriptors();
     }
 
     public static WasmContext getCurrentContext() {
