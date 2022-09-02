@@ -295,10 +295,6 @@ public class AOTSupportTest extends AbstractPolyglotTest {
 
         @Specialization(guards = "arg == 2")
         int nodeCachedSingle(int arg,
-                        @Cached("1") int one,
-                        @Cached("2") int two,
-                        @Cached("3") int three,
-                        @Cached("4") int four,
                         @Cached NoSpecializationTestNode node) {
             return arg;
         }
