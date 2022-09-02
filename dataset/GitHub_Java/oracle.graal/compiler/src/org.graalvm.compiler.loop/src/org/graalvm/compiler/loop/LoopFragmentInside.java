@@ -37,7 +37,6 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Graph.DuplicationReplacement;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeBitMap;
-import org.graalvm.compiler.graph.Position;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractEndNode;
@@ -63,7 +62,7 @@ import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
-import org.graalvm.compiler.nodes.VirtualState.NodePositionClosure;
+import org.graalvm.compiler.nodes.VirtualState.NodeClosure;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
@@ -234,7 +233,7 @@ public class LoopFragmentInside extends LoopFragment {
             }
         }
         mainLoopBegin.setUnrollFactor(mainLoopBegin.getUnrollFactor() * 2);
-        mainLoopBegin.setLoopFrequency(Math.max(1.0, mainLoopBegin.loopFrequency() / 2));
+        mainLoopBegin.setLoopFrequency(mainLoopBegin.loopFrequency() / 2);
         graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "LoopPartialUnroll %s", loop);
 
         mainLoopBegin.getDebug().dump(DebugContext.VERBOSE_LEVEL, mainLoopBegin.graph(), "After insertWithinAfter %s", mainLoopBegin);
@@ -439,7 +438,7 @@ public class LoopFragmentInside extends LoopFragment {
             for (int i = 0; i < phi.valueCount(); i++) {
                 ValueNode v = phi.valueAt(i);
                 if (loopBegin.isPhiAtMerge(v)) {
-                    PhiNode newV = peel.getDuplicatedNode((PhiNode) v);
+                    PhiNode newV = peel.getDuplicatedNode((ValuePhiNode) v);
                     if (newV != null) {
                         phi.setValueAt(i, newV);
                     }
@@ -580,11 +579,12 @@ public class LoopFragmentInside extends LoopFragment {
                 ValueNode initializer = firstPhi;
                 if (duplicateState != null) {
                     // fix the merge's state after
-                    duplicateState.applyToNonVirtual(new NodePositionClosure<Node>() {
+                    duplicateState.applyToNonVirtual(new NodeClosure<ValueNode>() {
+
                         @Override
-                        public void apply(Node from, Position p) {
-                            if (p.get(from) == phi) {
-                                p.set(from, firstPhi);
+                        public void apply(Node from, ValueNode node) {
+                            if (node == phi) {
+                                from.replaceFirstInput(phi, firstPhi);
                             }
                         }
                     });
