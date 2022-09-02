@@ -198,7 +198,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
         this.callNodeTable = null;
     }
 
-    @ExplodeLoop
+    @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.MERGE_EXPLODE)
     public int execute(WasmContext context, VirtualFrame frame) {
         int nestedControlOffset = 0;
         int callNodeOffset = 0;
