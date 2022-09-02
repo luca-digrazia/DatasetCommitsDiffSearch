@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.posix.headers.Unistd;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
@@ -62,6 +61,7 @@ import com.oracle.svm.core.posix.headers.Signal;
 import com.oracle.svm.core.posix.headers.Time;
 import com.oracle.svm.core.posix.headers.Time.timeval;
 import com.oracle.svm.core.posix.headers.Time.timezone;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.PointerUtils;
 import org.graalvm.nativeimage.hosted.Feature;
 
@@ -124,7 +124,7 @@ final class Target_java_lang_ProcessEnvironment {
                 }
 
                 theEnvironment = env;
-                theUnmodifiableEnvironment = SubstrateUtil.cast(new Target_java_lang_ProcessEnvironment_StringEnvironment(env), Map.class);
+                theUnmodifiableEnvironment = KnownIntrinsics.unsafeCast(new Target_java_lang_ProcessEnvironment_StringEnvironment(env), Map.class);
             }
         }
     }
@@ -240,19 +240,19 @@ final class Target_java_lang_UNIXProcess {
         if (fds[0] != -1) {
             in = new Target_java_lang_UNIXProcess_ProcessPipeOutputStream(fds[0]);
         }
-        stdin = SubstrateUtil.cast(in, OutputStream.class);
+        stdin = KnownIntrinsics.unsafeCast(in, OutputStream.class);
 
         Object out = Target_java_lang_ProcessBuilder_NullInputStream.INSTANCE;
         if (fds[1] != -1) {
             out = new Target_java_lang_UNIXProcess_ProcessPipeInputStream(fds[1]);
         }
-        stdout = SubstrateUtil.cast(out, InputStream.class);
+        stdout = KnownIntrinsics.unsafeCast(out, InputStream.class);
 
         Object err = Target_java_lang_ProcessBuilder_NullInputStream.INSTANCE;
         if (fds[2] != -1) {
             err = new Target_java_lang_UNIXProcess_ProcessPipeInputStream(fds[2]);
         }
-        stderr = SubstrateUtil.cast(err, InputStream.class);
+        stderr = KnownIntrinsics.unsafeCast(err, InputStream.class);
 
         Thread reaperThread = Java_lang_Process_Supplement.reaperFactory.newThread(new Runnable() {
             @Override
@@ -267,15 +267,15 @@ final class Target_java_lang_UNIXProcess {
                     Target_java_lang_UNIXProcess.this.notifyAll();
                 }
                 if ((Object) stdout != Target_java_lang_ProcessBuilder_NullInputStream.INSTANCE) {
-                    SubstrateUtil.cast(stdout, Target_java_lang_UNIXProcess_ProcessPipeInputStream.class)
+                    KnownIntrinsics.unsafeCast(stdout, Target_java_lang_UNIXProcess_ProcessPipeInputStream.class)
                                     .processExited();
                 }
                 if ((Object) stderr != Target_java_lang_ProcessBuilder_NullInputStream.INSTANCE) {
-                    SubstrateUtil.cast(stderr, Target_java_lang_UNIXProcess_ProcessPipeInputStream.class)
+                    KnownIntrinsics.unsafeCast(stderr, Target_java_lang_UNIXProcess_ProcessPipeInputStream.class)
                                     .processExited();
                 }
                 if ((Object) stdin != Target_java_lang_ProcessBuilder_NullOutputStream.INSTANCE) {
-                    SubstrateUtil.cast(stdin, Target_java_lang_UNIXProcess_ProcessPipeOutputStream.class)
+                    KnownIntrinsics.unsafeCast(stdin, Target_java_lang_UNIXProcess_ProcessPipeOutputStream.class)
                                     .processExited();
                 }
             }
