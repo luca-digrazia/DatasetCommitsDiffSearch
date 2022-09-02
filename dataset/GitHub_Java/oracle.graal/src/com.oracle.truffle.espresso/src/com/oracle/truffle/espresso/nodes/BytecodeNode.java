@@ -636,11 +636,14 @@ public final class BytecodeNode extends EspressoMethodNode {
 
         CompilerDirectives.ensureVirtualized(primitives);
         CompilerDirectives.ensureVirtualized(refs);
-
-        // Manually hoists lengths out of the main loop.
-        hoistCheck(primitives.length, 2 * (1 << 16));
-        hoistCheck(refs.length, 2 * (1 << 16));
-        hoistCheck(loopCount.length, 1);
+        if (primitives.length >= Integer.MAX_VALUE) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere();
+        }
+        if (refs.length >= Integer.MAX_VALUE) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere();
+        }
 
         setBCI(frame, curBCI);
 
@@ -1203,13 +1206,6 @@ public final class BytecodeNode extends EspressoMethodNode {
             }
             edgeLocalAnalysis(primitives, refs, curBCI, targetBCI);
             curBCI = targetBCI;
-        }
-    }
-
-    private static void hoistCheck(int value, int limit) {
-        if (value > limit) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere();
         }
     }
 
