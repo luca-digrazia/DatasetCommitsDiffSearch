@@ -57,6 +57,7 @@ import com.oracle.svm.hosted.c.util.FileUtils;
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.Architecture;
+import jdk.vm.ci.sparc.SPARC;
 
 public abstract class CCompilerInvoker {
 
@@ -154,7 +155,7 @@ public abstract class CCompilerInvoker {
                 if (scanner.findInLine("Microsoft.*\\(R\\) C/C\\+\\+") == null) {
                     return null;
                 }
-                scanner.useDelimiter("\\D");
+                scanner.useDelimiter("[. ]");
                 while (!scanner.hasNextInt()) {
                     scanner.next();
                 }
@@ -226,13 +227,8 @@ public abstract class CCompilerInvoker {
         @Override
         protected void verify() {
             Class<? extends Architecture> substrateTargetArch = ImageSingletons.lookup(SubstrateTargetDescription.class).arch.getClass();
-            Class<? extends Architecture> guessed = guessArchitecture(compilerInfo.targetArch);
-            if (guessed == null) {
-                UserError.abort(String.format("Native toolchain (%s) has no matching native-image target architecture.", compilerInfo.targetArch));
-            }
-            if (guessed != substrateTargetArch) {
-                UserError.abort(String.format("Native toolchain (%s) implies native-image target architecture %s but configured native-image target architecture is %s.",
-                                compilerInfo.targetArch, guessed, substrateTargetArch));
+            if (guessArchitecture(compilerInfo.targetArch) != substrateTargetArch) {
+                UserError.abort(String.format("Native toolchain (%s) and native-image target architecture (%s) mismatch.", compilerInfo.targetArch, substrateTargetArch));
             }
         }
 
@@ -372,7 +368,6 @@ public abstract class CCompilerInvoker {
         return new String[]{arch, vendor, os};
     }
 
-    @SuppressWarnings({"unchecked", "fallthrough"})
     protected static Class<? extends Architecture> guessArchitecture(String archStr) {
         switch (archStr) {
             case "x86_64":
@@ -380,6 +375,8 @@ public abstract class CCompilerInvoker {
                 return AMD64.class;
             case "aarch64":
                 return AArch64.class;
+            case "sparc64":
+                return SPARC.class;
             case "i686":
             case "80x86": /* Windows notation */
                 /* Graal does not support 32-bit architectures */
