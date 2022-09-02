@@ -437,8 +437,4 @@ public final class GraalServices {
         }
         return VirtualObject.get(type, id);
     }
-
-    public static int getJavaUpdateVersion() {
-        return Runtime.version().update();
-    }
 }
