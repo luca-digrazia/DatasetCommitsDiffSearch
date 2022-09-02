@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -54,6 +54,7 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodes.CompressionNode.CompressionOp;
+import org.graalvm.compiler.nodes.ProfileData.BranchProbabilityData;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FieldLocationIdentity;
@@ -67,7 +68,6 @@ import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.PiNode;
-import org.graalvm.compiler.nodes.ProfileData.BranchProbabilityData;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValuePhiNode;
@@ -914,7 +914,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                         } else if (!(value.isConstant() && value.asConstant().isDefaultForKind())) {
                             // Constant.illegal is always the defaultForKind, so it is skipped
                             JavaKind valueKind = value.getStackKind();
-                            JavaKind storageKind = virtual.entryKind(tool.getMetaAccessExtensionProvider(), i);
+                            JavaKind storageKind = virtual.entryKind(tool.getProviders().getMetaAccessExtensionProvider(), i);
 
                             // Truffle requires some leniency in terms of what can be put where:
                             assert valueKind.getStackKind() == storageKind.getStackKind() ||

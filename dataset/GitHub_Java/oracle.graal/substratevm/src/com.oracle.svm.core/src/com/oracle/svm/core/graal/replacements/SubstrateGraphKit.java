@@ -100,7 +100,7 @@ public class SubstrateGraphKit extends GraphKit {
     }
 
     public SubstrateLoweringProvider getLoweringProvider() {
-        return (SubstrateLoweringProvider) getLowerer();
+        return (SubstrateLoweringProvider) providers.getLowerer();
     }
 
     public FrameStateBuilder getFrameState() {
