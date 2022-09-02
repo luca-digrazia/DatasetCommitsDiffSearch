@@ -133,9 +133,9 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision>, Truff
         int recursions = countRecursions(callStack);
         int deepNodeCount = nodeCount;
 
-        if (visitedNodes[0] < (100 * currentTarget.getOptionValue(PolyglotCompilerOptions.InliningNodeBudget)) &&
+        if (visitedNodes[0] < (100 * TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleInliningMaxCallerSize)) &&
                         callStack.size() < 15 &&
-                        recursions <= currentTarget.getOptionValue(PolyglotCompilerOptions.InliningRecursionDepth)) {
+                        recursions <= TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleMaximumRecursiveInlining)) {
             /*
              * We make a preliminary optimistic inlining decision with best possible characteristics
              * to avoid the exploration of unnecessary paths in the inlining tree.
