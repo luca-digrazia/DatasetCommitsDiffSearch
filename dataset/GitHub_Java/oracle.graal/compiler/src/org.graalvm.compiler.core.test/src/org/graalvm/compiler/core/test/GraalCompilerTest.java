@@ -346,7 +346,7 @@ public abstract class GraalCompilerTest extends GraalTest {
         return ret;
     }
 
-    private static final ThreadLocal<HashMap<ResolvedJavaMethod, InstalledCode>> cache = ThreadLocal.withInitial(HashMap::new);
+    private final static ThreadLocal<HashMap<ResolvedJavaMethod, InstalledCode>> cache = ThreadLocal.withInitial(HashMap::new);
 
     @BeforeClass
     public static void resetCache() {

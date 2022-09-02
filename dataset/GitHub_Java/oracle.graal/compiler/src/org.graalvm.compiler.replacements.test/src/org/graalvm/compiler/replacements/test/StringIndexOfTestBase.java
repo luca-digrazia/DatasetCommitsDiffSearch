@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,8 @@
  */
 package org.graalvm.compiler.replacements.test;
 
+import static org.junit.Assume.assumeFalse;
+
 import java.util.ArrayList;
 import java.util.Collection;
 
@@ -31,6 +33,8 @@ import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+
+import jdk.vm.ci.aarch64.AArch64;
 
 @RunWith(value = Parameterized.class)
 public abstract class StringIndexOfTestBase extends GraalCompilerTest {
@@ -124,6 +128,7 @@ public abstract class StringIndexOfTestBase extends GraalCompilerTest {
 
     @Test
     public void testStringBuilderIndexOfConstant() {
+        assumeFalse("Disabled on AArch64 due to issues on AArch64; see GR-13100 or JDK-8215792", getTarget().arch instanceof AArch64);
         /*
          * Put a copy of the target string in the space after the current string to detect cases
          * where we search too far.
@@ -136,6 +141,7 @@ public abstract class StringIndexOfTestBase extends GraalCompilerTest {
 
     @Test
     public void testStringBuilderIndexOfConstantOffset() {
+        assumeFalse("Disabled on AArch64 due to issues on AArch64; see GR-13100 or JDK-8215792", getTarget().arch instanceof AArch64);
         /*
          * Put a copy of the target string in the space after the current string to detect cases
          * where we search too far.
