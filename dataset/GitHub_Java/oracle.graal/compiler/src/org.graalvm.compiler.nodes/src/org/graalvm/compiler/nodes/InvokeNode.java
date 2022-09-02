@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,6 +24,7 @@
  */
 package org.graalvm.compiler.nodes;
 
+import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.compiler.nodeinfo.InputType.Extension;
 import static org.graalvm.compiler.nodeinfo.InputType.Memory;
 import static org.graalvm.compiler.nodeinfo.InputType.State;
@@ -33,10 +36,11 @@ import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_2;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_64;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_8;
 import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_UNKNOWN;
+import static org.graalvm.compiler.nodes.Invoke.CYCLES_UNKNOWN_RATIONALE;
+import static org.graalvm.compiler.nodes.Invoke.SIZE_UNKNOWN_RATIONALE;
 
 import java.util.Map;
 
-import org.graalvm.api.word.LocationIdentity;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
@@ -45,16 +49,15 @@ import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
 import org.graalvm.compiler.nodeinfo.Verbosity;
-import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.memory.AbstractMemoryCheckpoint;
-import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
+import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.nodes.spi.UncheckedInterfaceProvider;
-import org.graalvm.compiler.nodes.util.GraphUtil;
+import org.graalvm.word.LocationIdentity;
 
+import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.meta.JavaKind;
 
 /**
@@ -63,33 +66,58 @@ import jdk.vm.ci.meta.JavaKind;
 // @formatter:off
 @NodeInfo(nameTemplate = "Invoke#{p#targetMethod/s}",
           allowedUsageTypes = {Memory},
-          cycles = CYCLES_UNKNOWN,
-          cyclesRationale = "We cannot estimate the runtime cost of a call, it is a blackhole." +
-                            "However, we can estimate, dyanmically, the cost of the call operation itself based on the type of the call.",
-          size = SIZE_UNKNOWN,
-          sizeRationale = "We can only dyanmically, based on the type of the call (special, static, virtual, interface) decide" +
-                          "how much code is generated for the call.")
+          cycles = CYCLES_UNKNOWN, cyclesRationale = CYCLES_UNKNOWN_RATIONALE,
+          size   = SIZE_UNKNOWN,   sizeRationale   = SIZE_UNKNOWN_RATIONALE)
 // @formatter:on
-public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, MemoryCheckpoint.Single, UncheckedInterfaceProvider {
+public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke, LIRLowerable, SingleMemoryKill, UncheckedInterfaceProvider {
     public static final NodeClass<InvokeNode> TYPE = NodeClass.create(InvokeNode.class);
 
     @OptionalInput ValueNode classInit;
     @Input(Extension) CallTargetNode callTarget;
     @OptionalInput(State) FrameState stateDuring;
-    protected final int bci;
+    protected int bci;
     protected boolean polymorphic;
-    protected boolean useForInlining;
+    protected InlineControl inlineControl;
+    protected final LocationIdentity identity;
 
     public InvokeNode(CallTargetNode callTarget, int bci) {
         this(callTarget, bci, callTarget.returnStamp().getTrustedStamp());
     }
 
+    public InvokeNode(CallTargetNode callTarget, int bci, LocationIdentity identity) {
+        this(callTarget, bci, callTarget.returnStamp().getTrustedStamp(), identity);
+    }
+
     public InvokeNode(CallTargetNode callTarget, int bci, Stamp stamp) {
+        this(callTarget, bci, stamp, LocationIdentity.any());
+    }
+
+    public InvokeNode(CallTargetNode callTarget, int bci, Stamp stamp, LocationIdentity identity) {
         super(TYPE, stamp);
         this.callTarget = callTarget;
         this.bci = bci;
         this.polymorphic = false;
-        this.useForInlining = true;
+        this.inlineControl = InlineControl.Normal;
+        this.identity = identity;
+    }
+
+    public InvokeNode(InvokeWithExceptionNode invoke) {
+        super(TYPE, invoke.stamp);
+        this.callTarget = invoke.callTarget;
+        this.bci = invoke.bci;
+        this.polymorphic = invoke.polymorphic;
+        this.inlineControl = invoke.inlineControl;
+        this.identity = invoke.getKilledLocationIdentity();
+    }
+
+    @Override
+    protected void afterClone(Node other) {
+        updateInliningLogAfterClone(other);
+    }
+
+    @Override
+    public FixedNode asFixedNode() {
+        return this;
     }
 
     @Override
@@ -113,21 +141,23 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     }
 
     @Override
-    public boolean useForInlining() {
-        return useForInlining;
+    public void setInlineControl(InlineControl control) {
+        this.inlineControl = control;
     }
 
     @Override
-    public void setUseForInlining(boolean value) {
-        this.useForInlining = value;
+    public InlineControl getInlineControl() {
+        return inlineControl;
     }
 
     @Override
     public boolean isAllowedUsageType(InputType type) {
         if (!super.isAllowedUsageType(type)) {
-            if (getStackKind() != JavaKind.Void) {
-                if (callTarget instanceof MethodCallTargetNode && ((MethodCallTargetNode) callTarget).targetMethod().getAnnotation(NodeIntrinsic.class) != null) {
-                    return true;
+            if (!IS_IN_NATIVE_IMAGE) {
+                if (getStackKind() != JavaKind.Void) {
+                    if (callTarget instanceof MethodCallTargetNode && ((MethodCallTargetNode) callTarget).targetMethod().getAnnotation(NodeIntrinsic.class) != null) {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -145,13 +175,8 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        return LocationIdentity.any();
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+    public LocationIdentity getKilledLocationIdentity() {
+        return identity;
     }
 
     @Override
@@ -176,32 +201,9 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     }
 
     @Override
-    public void intrinsify(Node node) {
-        assert !(node instanceof ValueNode) || node.isAllowedUsageType(InputType.Value) == isAllowedUsageType(InputType.Value) : "replacing " + this + " with " + node;
-        CallTargetNode call = callTarget;
-        FrameState currentStateAfter = stateAfter();
-        if (node instanceof StateSplit) {
-            StateSplit stateSplit = (StateSplit) node;
-            stateSplit.setStateAfter(currentStateAfter);
-        }
-        if (node instanceof ForeignCallNode) {
-            ForeignCallNode foreign = (ForeignCallNode) node;
-            foreign.setBci(bci());
-        }
-        if (node instanceof FixedWithNextNode) {
-            graph().replaceFixedWithFixed(this, (FixedWithNextNode) node);
-        } else if (node instanceof ControlSinkNode) {
-            this.replaceAtPredecessor(node);
-            this.replaceAtUsages(null);
-            GraphUtil.killCFG(this);
-            return;
-        } else {
-            graph().replaceFixed(this, node);
-        }
-        GraphUtil.killWithUnusedFloatingInputs(call);
-        if (currentStateAfter.hasNoUsages()) {
-            GraphUtil.killWithUnusedFloatingInputs(currentStateAfter);
-        }
+    public void setBci(int newBci) {
+        assert BytecodeFrame.isPlaceholderBci(bci) && !BytecodeFrame.isPlaceholderBci(newBci) : "can only replace placeholder with better bci";
+        bci = newBci;
     }
 
     @Override
@@ -238,7 +240,10 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
 
     @Override
     public NodeCycles estimatedNodeCycles() {
-        switch (callTarget().invokeKind()) {
+        if (callTarget == null) {
+            return CYCLES_UNKNOWN;
+        }
+        switch (callTarget.invokeKind()) {
             case Interface:
                 return CYCLES_64;
             case Special:
@@ -253,7 +258,10 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
 
     @Override
     public NodeSize estimatedNodeSize() {
-        switch (callTarget().invokeKind()) {
+        if (callTarget == null) {
+            return SIZE_UNKNOWN;
+        }
+        switch (callTarget.invokeKind()) {
             case Interface:
                 return SIZE_64;
             case Special:

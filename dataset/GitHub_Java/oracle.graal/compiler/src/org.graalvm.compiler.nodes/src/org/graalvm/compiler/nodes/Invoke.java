@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,13 +27,39 @@ package org.graalvm.compiler.nodes;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
+import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.type.StampTool;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDuring, FixedNodeInterface, Invokable {
+public interface Invoke extends StateSplit, Lowerable, SingleMemoryKill, DeoptimizingNode.DeoptDuring, FixedNodeInterface, Invokable {
+
+    String CYCLES_UNKNOWN_RATIONALE = "Cannot estimate the runtime cost of a call; it's a blackhole.";
+    String SIZE_UNKNOWN_RATIONALE = "Can only dynamically decide how much code is generated based on the type of a call (special, static, virtual, interface).";
+
+    enum InlineControl {
+        Normal(true, true),
+        BytecodesOnly(true, false),
+        Never(false, false);
+
+        private final boolean allowInlining;
+        private final boolean allowSubstitution;
+
+        InlineControl(boolean allowInlining, boolean allowSubstitution) {
+            this.allowInlining = allowInlining;
+            this.allowSubstitution = allowSubstitution;
+        }
+
+        public boolean allowInlining() {
+            return allowInlining;
+        }
+
+        public boolean allowSubstitution() {
+            return allowSubstitution;
+        }
+    }
 
     FixedNode next();
 
@@ -39,19 +67,23 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
 
     CallTargetNode callTarget();
 
-    int bci();
-
     Node predecessor();
 
     ValueNode classInit();
 
     void setClassInit(ValueNode node);
 
-    void intrinsify(Node node);
+    InlineControl getInlineControl();
 
-    boolean useForInlining();
+    void setInlineControl(InlineControl control);
 
-    void setUseForInlining(boolean value);
+    default boolean useForInlining() {
+        return getInlineControl().allowInlining();
+    }
+
+    default void setUseForInlining(boolean useForInlining) {
+        setInlineControl(useForInlining ? Invoke.InlineControl.Normal : Invoke.InlineControl.Never);
+    }
 
     /**
      * True if this invocation is almost certainly polymorphic, false when in doubt.
@@ -60,17 +92,12 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
 
     void setPolymorphic(boolean value);
 
+    @Override
     default ResolvedJavaMethod getTargetMethod() {
-        return callTarget().targetMethod();
+        return callTarget() != null ? callTarget().targetMethod() : null;
     }
 
-    /**
-     * Returns the {@linkplain ResolvedJavaMethod method} from which this invoke is executed. This
-     * is the caller method and in the case of inlining may be different from the method of the
-     * graph this node is in.
-     *
-     * @return the method from which this invoke is executed.
-     */
+    @Override
     default ResolvedJavaMethod getContextMethod() {
         FrameState state = stateAfter();
         if (state == null) {
@@ -115,4 +142,5 @@ public interface Invoke extends StateSplit, Lowerable, DeoptimizingNode.DeoptDur
     default InvokeKind getInvokeKind() {
         return callTarget().invokeKind();
     }
+
 }

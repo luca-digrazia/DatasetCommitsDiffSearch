@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,8 +37,8 @@ import org.graalvm.compiler.nodes.NamedLocationIdentity;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.ValueNodeUtil;
 import org.graalvm.compiler.nodes.memory.MemoryAccess;
-import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
-import org.graalvm.compiler.nodes.memory.MemoryNode;
+import org.graalvm.compiler.nodes.memory.MemoryKill;
+import org.graalvm.compiler.nodes.memory.MultiMemoryKill;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.word.LocationIdentity;
@@ -46,10 +46,9 @@ import org.graalvm.word.Pointer;
 
 import jdk.vm.ci.meta.JavaKind;
 
-@NodeInfo(allowedUsageTypes = Memory, size = SIZE_512, cycles = CYCLES_UNKNOWN)
-
-public final class AMD64StringLatin1InflateNode
-        extends FixedWithNextNode implements LIRLowerable, MemoryCheckpoint.Multi, MemoryAccess {
+@NodeInfo(allowedUsageTypes = Memory, size = SIZE_512, cycles = CYCLES_UNKNOWN, cyclesRationale = "depends on length")
+public final class AMD64StringLatin1InflateNode extends FixedWithNextNode
+                implements LIRLowerable, MultiMemoryKill, MemoryAccess {
 
     public static final NodeClass<AMD64StringLatin1InflateNode> TYPE = NodeClass.create(AMD64StringLatin1InflateNode.class);
 
@@ -57,19 +56,22 @@ public final class AMD64StringLatin1InflateNode
     @Input private ValueNode dst;
     @Input private ValueNode len;
 
-    @OptionalInput(Memory) private MemoryNode lla; // Last access location registered.
+    private final JavaKind writeKind;
 
-    /* java.lang.StringLatin1.inflate([BI[CII)V
-     *
-     * public static void inflate(byte[] src, int src_indx, char[] dst, int dst_indx, int len)
-     *
-     * Represented as a graph node by:
-     */
-    public AMD64StringLatin1InflateNode(ValueNode src, ValueNode dst, ValueNode len) {
+    @OptionalInput(Memory) private MemoryKill lla; // Last access location registered.
+
+    // java.lang.StringLatin1.inflate([BI[CII)V
+    //
+    // void inflate(byte[] src, int src_indx, char[] dst, int dst_indx, int len)
+    //
+    // Represented as a graph node by:
+
+    public AMD64StringLatin1InflateNode(ValueNode src, ValueNode dst, ValueNode len, JavaKind writeKind) {
         super(TYPE, StampFactory.forVoid());
         this.src = src;
         this.dst = dst;
         this.len = len;
+        this.writeKind = writeKind;
     }
 
     @Override
@@ -79,11 +81,9 @@ public final class AMD64StringLatin1InflateNode
     }
 
     @Override
-    public LocationIdentity[] getLocationIdentities() {
+    public LocationIdentity[] getKilledLocationIdentities() {
         // Model write access via 'dst' using:
-        // Checkstyle: stop
-        return new LocationIdentity[] { NamedLocationIdentity.getArrayLocation(JavaKind.Char) };
-        // Checkstyle: resume
+        return new LocationIdentity[]{NamedLocationIdentity.getArrayLocation(writeKind)};
     }
 
     @Override
@@ -93,16 +93,16 @@ public final class AMD64StringLatin1InflateNode
     }
 
     @Override
-    public MemoryNode getLastLocationAccess() {
+    public MemoryKill getLastLocationAccess() {
         return lla;
     }
 
     @Override
-    public void setLastLocationAccess(MemoryNode newlla) {
+    public void setLastLocationAccess(MemoryKill newlla) {
         updateUsages(ValueNodeUtil.asNode(lla), ValueNodeUtil.asNode(newlla));
         lla = newlla;
     }
 
     @NodeIntrinsic
-    public static native void inflate(Pointer src, Pointer dst, int len);
+    public static native void inflate(Pointer src, Pointer dst, int len, @ConstantNodeParameter JavaKind writeKind);
 }
