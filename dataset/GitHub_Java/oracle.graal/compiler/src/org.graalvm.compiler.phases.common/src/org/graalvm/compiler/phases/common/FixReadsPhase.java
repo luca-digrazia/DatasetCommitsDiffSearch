@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -89,7 +89,7 @@ import jdk.vm.ci.meta.TriState;
 /**
  * This phase lowers {@link FloatingReadNode FloatingReadNodes} into corresponding fixed reads.
  */
-public class FixReadsPhase extends BasePhase<CoreProviders> {
+public class FixReadsPhase extends BasePhase<LowTierContext> {
 
     private static final CounterKey counterStampsRegistered = DebugContext.counter("FixReads_StampsRegistered");
     private static final CounterKey counterIfsKilled = DebugContext.counter("FixReads_KilledIfs");
@@ -602,7 +602,7 @@ public class FixReadsPhase extends BasePhase<CoreProviders> {
     }
 
     @Override
-    protected void run(StructuredGraph graph, CoreProviders context) {
+    protected void run(StructuredGraph graph, LowTierContext context) {
         schedulePhase.apply(graph);
         ScheduleResult schedule = graph.getLastSchedule();
         FixReadsClosure fixReadsClosure = new FixReadsClosure();

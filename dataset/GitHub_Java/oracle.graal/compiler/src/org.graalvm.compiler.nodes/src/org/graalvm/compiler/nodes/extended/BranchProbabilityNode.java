@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,7 +40,6 @@ import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.graph.spi.Simplifiable;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.NodeView;
@@ -144,7 +143,7 @@ public final class BranchProbabilityNode extends FloatingNode implements Simplif
                     }
                     for (IfNode ifNodeUsages : node.usages().filter(IfNode.class)) {
                         usageFound = true;
-                        ifNodeUsages.setTrueSuccessorProbability(probabilityToSet, ProfileSource.INJECTED);
+                        ifNodeUsages.setTrueSuccessorProbability(probabilityToSet);
                     }
                     if (!usageFound) {
                         usageFound = node.usages().filter(NodePredicates.isA(FixedGuardNode.class).or(ConditionalNode.class)).isNotEmpty();

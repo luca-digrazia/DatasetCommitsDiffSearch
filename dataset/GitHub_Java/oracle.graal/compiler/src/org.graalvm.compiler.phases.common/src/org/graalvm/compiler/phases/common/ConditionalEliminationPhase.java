@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -186,8 +186,6 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
 
                 // Check if we can move guards upwards.
                 AbstractBeginNode trueSuccessor = node.trueSuccessor();
-                AbstractBeginNode falseSuccessor = node.falseSuccessor();
-
                 EconomicMap<LogicNode, GuardNode> trueGuards = EconomicMap.create(Equivalence.IDENTITY);
                 for (GuardNode guard : trueSuccessor.guards()) {
                     LogicNode condition = guard.getCondition();
@@ -197,7 +195,7 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
                 }
 
                 if (!trueGuards.isEmpty()) {
-                    for (GuardNode guard : falseSuccessor.guards().snapshot()) {
+                    for (GuardNode guard : node.falseSuccessor().guards().snapshot()) {
                         GuardNode otherGuard = trueGuards.get(guard.getCondition());
                         if (otherGuard != null && guard.isNegated() == otherGuard.isNegated()) {
                             Speculation speculation = otherGuard.getSpeculation();
@@ -212,17 +210,9 @@ public class ConditionalEliminationPhase extends BasePhase<CoreProviders> {
                                                 guard.getNoDeoptSuccessorPosition());
                                 GuardNode newGuard = node.graph().unique(newlyCreatedGuard);
                                 if (otherGuard.isAlive()) {
-                                    if (trueSuccessor instanceof LoopExitNode && beginNode.graph().hasValueProxies()) {
-                                        otherGuard.replaceAndDelete(ProxyNode.forGuard(newGuard, (LoopExitNode) trueSuccessor));
-                                    } else {
-                                        otherGuard.replaceAndDelete(newGuard);
-                                    }
+                                    otherGuard.replaceAndDelete(newGuard);
                                 }
-                                if (falseSuccessor instanceof LoopExitNode && beginNode.graph().hasValueProxies()) {
-                                    guard.replaceAndDelete(ProxyNode.forGuard(newGuard, (LoopExitNode) falseSuccessor));
-                                } else {
-                                    guard.replaceAndDelete(newGuard);
-                                }
+                                guard.replaceAndDelete(newGuard);
                             }
                         }
                     }

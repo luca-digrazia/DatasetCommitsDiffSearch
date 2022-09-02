@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ package org.graalvm.compiler.phases.common.inlining;
 
 import static jdk.vm.ci.meta.DeoptimizationAction.InvalidateReprofile;
 import static jdk.vm.ci.meta.DeoptimizationReason.NullCheckException;
-import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.compiler.core.common.GraalOptions.HotSpotPrintInlining;
 
 import java.util.ArrayDeque;
@@ -57,7 +56,6 @@ import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.graph.NodeMap;
 import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.graph.NodeWorkList;
-import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractEndNode;
@@ -89,7 +87,6 @@ import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.IsNullNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
-import org.graalvm.compiler.nodes.extended.GuardedNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
@@ -529,17 +526,7 @@ public class InliningUtil extends ValueMergeUtil {
                 assert unwindNode.predecessor() != null;
                 assert invokeWithException.exceptionEdge().successors().count() == 1;
                 ExceptionObjectNode obj = (ExceptionObjectNode) invokeWithException.exceptionEdge();
-                /*
-                 * The exception object node is a begin node, i.e., it can be used as an anchor for
-                 * other nodes, thus we need to re-route them to a valid anchor, i.e. the begin node
-                 * of the unwind block.
-                 */
-                assert obj.usages().filter(x -> x instanceof GuardedNode && ((GuardedNode) x).getGuard() == obj).count() == 0 : "Must not have guards attached to an exception object node";
-                AbstractBeginNode replacementAnchor = AbstractBeginNode.prevBegin(unwindNode);
-                assert replacementAnchor != null;
-                obj.replaceAtUsages(InputType.Anchor, replacementAnchor);
-                obj.replaceAtUsages(InputType.Value, unwindNode.exception());
-
+                obj.replaceAtUsages(unwindNode.exception());
                 Node n = obj.next();
                 obj.setNext(null);
                 unwindNode.replaceAndDelete(n);
@@ -857,7 +844,7 @@ public class InliningUtil extends ValueMergeUtil {
                 // partial intrinsic, these calls are given frame states
                 // that exclude the outer frame state denoting a position
                 // in the intrinsic code.
-                assert IS_IN_NATIVE_IMAGE || inlinedMethod.getAnnotation(
+                assert inlinedMethod.getAnnotation(
                                 MethodSubstitution.class) != null : "expected an intrinsic when inlinee frame state matches method of call target but does not match the method of the inlinee graph: " +
                                                 frameState;
             } else if (method.getName().equals(inlinedMethod.getName())) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -398,10 +398,6 @@ public abstract class ArrayCopySnippets implements Snippets {
         }
 
         public void lower(ArrayCopyNode arraycopy, LoweringTool tool) {
-            lower(arraycopy, this.expandArraycopyLoop, tool);
-        }
-
-        public void lower(ArrayCopyNode arraycopy, boolean mayExpandThisArraycopy, LoweringTool tool) {
             JavaKind elementKind = selectComponentKind(arraycopy);
             SnippetInfo snippetInfo;
             ArrayCopyTypeCheck arrayTypeCheck;
@@ -460,7 +456,7 @@ public abstract class ArrayCopySnippets implements Snippets {
                 }
             }
 
-            if (this.expandArraycopyLoop && mayExpandThisArraycopy && snippetInfo == arraycopyExactStubCallSnippet) {
+            if (this.expandArraycopyLoop && snippetInfo == arraycopyExactStubCallSnippet) {
                 snippetInfo = arraycopyExactSnippet;
             }
 
