@@ -154,10 +154,6 @@ public final class TruffleCompilerOptions {
             Lazy.overrideScope.set(this);
         }
 
-        public OptionValues getOptions() {
-            return options;
-        }
-
         @Override
         public void close() {
             Lazy.overrideScope.set(outer);
