@@ -24,56 +24,14 @@
  */
 package com.oracle.svm.agent;
 
-import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 
-/**
- * Minimal data extractor for the Java constant pool. See Java Virtual Machine Specification 4.4.
- */
+/** Minimal data extractor for the Java constant pool. */
 class ConstantPoolTool {
-    private static final int INVALID_LENGTH = -1;
-
-    @SuppressWarnings("unused")
-    enum ConstantKind {
-        // Keep this order: ordinals must match constant pool tag values.
-        UNUSED_0(INVALID_LENGTH),
-        UTF8(INVALID_LENGTH), // variable length
-        UNUSED_2(INVALID_LENGTH),
-        INTEGER(4),
-        FLOAT(4),
-        LONG(8, 2), // double-entry constant
-        DOUBLE(8, 2), // double-entry constant
-        CLASS(2),
-        STRING(2),
-        FIELDREF(4),
-        METHODREF(4),
-        INTERFACEMETHODREF(4),
-        NAMEANDTYPE(4),
-        UNUSED_13(INVALID_LENGTH),
-        UNUSED_14(INVALID_LENGTH),
-        METHODHANDLE(3),
-        METHODTYPE(2),
-        DYNAMIC(4),
-        INVOKEDYNAMIC(4),
-        MODULE(2),
-        PACKAGE(2);
-
-        static final ConstantKind[] VALUES = values();
-
-        final int lengthWithoutTag;
-        final int tableEntries;
-
-        ConstantKind(int lengthWithoutTag) {
-            this(lengthWithoutTag, 1);
-        }
-
-        ConstantKind(int lengthWithoutTag, int tableEntries) {
-            this.lengthWithoutTag = lengthWithoutTag;
-            this.tableEntries = tableEntries;
-        }
-    }
+    static final int TAG_UTF8 = 1;
+    static final int TAG_METHODREF = 10;
+    static final int TAG_NAMEANDTYPE = 12;
 
     static class MethodReference {
         final CharSequence name;
@@ -95,38 +53,32 @@ class ConstantPoolTool {
     }
 
     MethodReference readMethodReference(int cpi) {
-        try {
-            seekEntryPastTag(cpi, ConstantKind.METHODREF);
-            buffer.getShort(); // class: not needed at the moment
-            int nameAndTypeIndex = Short.toUnsignedInt(buffer.getShort());
+        seekEntryPastTag(cpi, TAG_METHODREF);
+        buffer.getShort(); // class: not needed at the moment
+        int nameAndTypeIndex = Short.toUnsignedInt(buffer.getShort());
 
-            seekEntryPastTag(nameAndTypeIndex, ConstantKind.NAMEANDTYPE);
-            int nameIndex = Short.toUnsignedInt(buffer.getShort());
-            int descriptorIndex = Short.toUnsignedInt(buffer.getShort());
+        seekEntryPastTag(nameAndTypeIndex, TAG_NAMEANDTYPE);
+        int nameIndex = Short.toUnsignedInt(buffer.getShort());
+        int descriptorIndex = Short.toUnsignedInt(buffer.getShort());
 
-            CharSequence name = readUTF(nameIndex);
-            CharSequence descriptor = readUTF(descriptorIndex);
-            return new MethodReference(name, descriptor);
-        } catch (BufferUnderflowException | IllegalArgumentException | CharacterCodingException e) {
-            throw new ConstantPoolException("Malformed constant pool", e);
-        }
+        CharSequence name = readUTF(nameIndex);
+        CharSequence descriptor = readUTF(descriptorIndex);
+        return new MethodReference(name, descriptor);
     }
 
-    private void seekEntryPastTag(int cpi, ConstantKind expectedKind) {
+    private void seekEntryPastTag(int cpi, int expectedTag) {
         seekEntry(cpi);
         int tag = Byte.toUnsignedInt(buffer.get());
-        if (tag != expectedKind.ordinal()) {
-            throw new ConstantPoolException("Expected tag " + expectedKind.ordinal());
-        }
+        assert tag == expectedTag;
     }
 
-    private CharSequence readUTF(int cpi) throws CharacterCodingException {
-        seekEntryPastTag(cpi, ConstantKind.UTF8);
+    private CharSequence readUTF(int cpi) {
+        seekEntryPastTag(cpi, TAG_UTF8);
         int length = Short.toUnsignedInt(buffer.getShort());
         int previousLimit = buffer.limit();
         buffer.limit(buffer.position() + length);
         try {
-            return StandardCharsets.UTF_8.newDecoder().decode(buffer);
+            return StandardCharsets.UTF_8.decode(buffer);
         } finally {
             buffer.limit(previousLimit);
         }
@@ -134,39 +86,33 @@ class ConstantPoolTool {
 
     private void seekEntry(int cpi) {
         boolean resumeAtCachedIndex = (cpi >= cachedIndex);
-        int index = resumeAtCachedIndex ? cachedIndex : 1;
+        int i = resumeAtCachedIndex ? cachedIndex : 1;
         buffer.position(resumeAtCachedIndex ? cachedIndexOffset : 0);
-        while (index < cpi) {
+        // See Java Virtual Machine Specification section 4.4
+        while (i < cpi) {
+            int length;
             int tag = Byte.toUnsignedInt(buffer.get());
-            if (tag >= ConstantKind.VALUES.length) {
-                throw new ConstantPoolException("Invalid constant pool entry tag: " + tag);
-            }
-            ConstantKind kind = ConstantKind.VALUES[tag];
-            int length = kind.lengthWithoutTag;
-            if (kind == ConstantKind.UTF8) {
-                length = Short.toUnsignedInt(buffer.getShort()); // in bytes; advances buffer
-            }
-            if (length <= 0 || kind.tableEntries <= 0) {
-                throw new ConstantPoolException("Invalid constant pool entry kind: " + kind);
+            if (tag == TAG_UTF8) {
+                length = Short.toUnsignedInt(buffer.getShort()); // in bytes; consumes two bytes
+            } else if (tag == 7 || tag == 8 || tag == 16 || tag == 19 || tag == 20) {
+                length = 2;
+            } else if (tag == 15) {
+                length = 3;
+            } else if (tag == 3 || tag == 4 || tag == 9 || tag == TAG_METHODREF || tag == 11 || tag == TAG_NAMEANDTYPE || tag == 17 || tag == 18) {
+                length = 4;
+            } else if (tag == 5 || tag == 6) {
+                length = 8;
+                i++; // takes two constant pool entries
+            } else {
+                return;
             }
             buffer.position(buffer.position() + length);
-            index += kind.tableEntries;
+            i++;
         }
-        if (index != cpi) {
-            throw new ConstantPoolException("Constant pool index is not valid or unusable: " + cpi);
+        if (i != cpi) {
+            throw new IllegalArgumentException("Constant pool index is not valid or unusable: " + cpi);
         }
         cachedIndex = cpi;
         cachedIndexOffset = buffer.position();
-    }
-}
-
-@SuppressWarnings("serial")
-final class ConstantPoolException extends RuntimeException {
-    ConstantPoolException(String message) {
-        super(message);
-    }
-
-    ConstantPoolException(String message, Throwable cause) {
-        super(message, cause);
     }
 }
