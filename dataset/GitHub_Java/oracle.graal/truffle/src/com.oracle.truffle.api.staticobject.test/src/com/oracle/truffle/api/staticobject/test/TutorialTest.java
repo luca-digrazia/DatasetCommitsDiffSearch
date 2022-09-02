@@ -112,9 +112,8 @@ public class TutorialTest extends StaticObjectModelTest {
         assert s2p1.getInt(o2) == 24;
     }
 
-    @Test
-    @SuppressWarnings("unused")
-    public void memoryFootprint1() {
+    @Theory
+    public void memoryFootprint1(TestEnvironment te) {
         class MyField {
             final StaticProperty p;
 
@@ -126,9 +125,8 @@ public class TutorialTest extends StaticObjectModelTest {
         new MyField(new DefaultStaticProperty("property1", StaticPropertyKind.Int, false));
     }
 
-    @Test
-    @SuppressWarnings("unused")
-    public void memoryFootprint2() {
+    @Theory
+    public void memoryFootprint2(TestEnvironment te) {
         class MyField extends StaticProperty {
             final Object name;
 
@@ -147,9 +145,7 @@ public class TutorialTest extends StaticObjectModelTest {
     }
 
     public static class MyStaticObject {
-        @SuppressWarnings("unused")
         public MyStaticObject(String arg1) { }
-        @SuppressWarnings("unused")
         public MyStaticObject(String arg1, Object arg2) { }
     }
 
@@ -159,7 +155,6 @@ public class TutorialTest extends StaticObjectModelTest {
     }
 
     @Theory
-    @SuppressWarnings("unused")
     public void memoryFootprint3(TestEnvironment te) {
         StaticShape<MyStaticObjectInterface> shape = StaticShape.newBuilder(te.testLanguage).build(MyStaticObject.class, MyStaticObjectInterface.class);
         MyStaticObject staticObject = shape.getFactory().create("arg1");
@@ -178,7 +173,6 @@ public class TutorialTest extends StaticObjectModelTest {
     }
 
     @Theory
-    @SuppressWarnings("unused")
     public void safetyChecks2(TestEnvironment te) {
         StaticShape.Builder builder = StaticShape.newBuilder(te.testLanguage);
         StaticProperty property = new DefaultStaticProperty("property", StaticPropertyKind.Object, false);
@@ -190,5 +184,10 @@ public class TutorialTest extends StaticObjectModelTest {
             assert false;
         } catch(IllegalArgumentException e) {
         }
+    }
+
+    @Test
+    public void dummy() {
+
     }
 }
