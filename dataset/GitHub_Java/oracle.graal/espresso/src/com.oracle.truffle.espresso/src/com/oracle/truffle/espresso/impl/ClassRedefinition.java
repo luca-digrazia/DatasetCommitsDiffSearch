@@ -168,13 +168,12 @@ public final class ClassRedefinition {
             ClassChange classChange;
             DetectedChange detectedChange = new DetectedChange();
             if (klass instanceof ObjectKlass) {
-                StaticObject loader = ((ObjectKlass) klass).getDefiningClassLoader();
-                parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), loader, "L" + hotSwapInfo.getName() + ";", context);
+                parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), "L" + hotSwapInfo.getName() + ";", null, context);
                 if (hotSwapInfo.isPatched()) {
                     byte[] patched = hotSwapInfo.getPatchedBytes();
                     newParserKlass = parserKlass;
                     // we detect changes against the patched bytecode
-                    parserKlass = ClassfileParser.parse(new ClassfileStream(patched, null), loader, "L" + hotSwapInfo.getNewName() + ";", context);
+                    parserKlass = ClassfileParser.parse(new ClassfileStream(patched, null), "L" + hotSwapInfo.getNewName() + ";", null, context);
                 }
                 classChange = detectClassChanges(parserKlass, (ObjectKlass) klass, detectedChange, newParserKlass);
             } else {

@@ -80,7 +80,7 @@ import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 import com.oracle.truffle.espresso.jdwp.api.LineNumberTableRef;
 import com.oracle.truffle.espresso.jdwp.api.LocalVariableTableRef;
-import com.oracle.truffle.espresso.jdwp.api.MethodHook;
+import com.oracle.truffle.espresso.jdwp.api.MethodBreakpoint;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jni.Mangle;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -92,7 +92,6 @@ import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.NativeMethodNode;
 import com.oracle.truffle.espresso.nodes.methodhandle.MethodHandleIntrinsicNode;
-import com.oracle.truffle.espresso.redefinition.ClassRedefinition;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
@@ -997,72 +996,49 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return genericSignature;
     }
 
-    private final Field.StableBoolean hasActiveHook = new Field.StableBoolean(false);
+    private final Field.StableBoolean hasActiveBreakpoints = new Field.StableBoolean(false);
 
-    private MethodHook[] hooks = new MethodHook[0];
+    private MethodBreakpoint[] infos = new MethodBreakpoint[0];
 
-    public boolean hasActiveHook() {
-        return hasActiveHook.get();
+    public boolean hasActiveBreakpoint() {
+        return hasActiveBreakpoints.get();
     }
 
-    public MethodHook[] getMethodHooks() {
-        return hooks;
+    public MethodBreakpoint[] getMethodBreakpointInfos() {
+        return infos;
     }
 
-    public void addMethodHook(MethodHook info) {
-        hasActiveHook.set(true);
-        if (hooks.length == 0) {
-            hooks = new MethodHook[]{info};
+    public void addMethodBreakpointInfo(MethodBreakpoint info) {
+        hasActiveBreakpoints.set(true);
+        if (infos.length == 0) {
+            infos = new MethodBreakpoint[]{info};
             return;
         }
 
-        hooks = Arrays.copyOf(hooks, hooks.length + 1);
-        hooks[hooks.length - 1] = info;
+        infos = Arrays.copyOf(infos, infos.length + 1);
+        infos[infos.length - 1] = info;
     }
 
-    public void removeActiveHook(int requestId) {
+    public void removeMethodBreakpointInfo(int requestId) {
         // shrink the array to avoid null values
-        if (hooks.length == 0) {
-            throw new RuntimeException("Method: " + getNameAsString() + " should contain method hook");
-        } else if (hooks.length == 1) {
-            hooks = new MethodHook[0];
-            hasActiveHook.set(false);
+        if (infos.length == 0) {
+            throw new RuntimeException("Method: " + getNameAsString() + " should contain method breakpoint info");
+        } else if (infos.length == 1) {
+            infos = new MethodBreakpoint[0];
+            hasActiveBreakpoints.set(false);
         } else {
             int removeIndex = -1;
-            for (int i = 0; i < hooks.length; i++) {
-                if (hooks[i].getRequestId() == requestId) {
+            for (int i = 0; i < infos.length; i++) {
+                if (infos[i].getRequestId() == requestId) {
                     removeIndex = i;
                     break;
                 }
             }
-            MethodHook[] temp = new MethodHook[hooks.length - 1];
+            MethodBreakpoint[] temp = new MethodBreakpoint[infos.length - 1];
             for (int i = 0; i < temp.length; i++) {
-                temp[i] = i < removeIndex ? hooks[i] : hooks[i + 1];
+                temp[i] = i < removeIndex ? infos[i] : infos[i + 1];
             }
-            hooks = temp;
-        }
-    }
-
-    public void removeActiveHook(MethodHook hook) {
-        // shrink the array to avoid null values
-        if (hooks.length == 0) {
-            throw new RuntimeException("Method: " + getNameAsString() + " should contain method hook");
-        } else if (hooks.length == 1) {
-            hooks = new MethodHook[0];
-            hasActiveHook.set(false);
-        } else {
-            int removeIndex = -1;
-            for (int i = 0; i < hooks.length; i++) {
-                if (hooks[i] == hook) {
-                    removeIndex = i;
-                    break;
-                }
-            }
-            MethodHook[] temp = new MethodHook[hooks.length - 1];
-            for (int i = 0; i < temp.length; i++) {
-                temp[i] = i < removeIndex ? hooks[i] : hooks[i + 1];
-            }
-            hooks = temp;
+            infos = temp;
         }
     }
 
@@ -1396,28 +1372,23 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         }
 
         @Override
-        public MethodHook[] getMethodHooks() {
-            return getMethod().getMethodHooks();
+        public MethodBreakpoint[] getMethodBreakpointInfos() {
+            return getMethod().getMethodBreakpointInfos();
         }
 
         @Override
-        public void addMethodHook(MethodHook info) {
-            getMethod().addMethodHook(info);
+        public void addMethodBreakpointInfo(MethodBreakpoint info) {
+            getMethod().addMethodBreakpointInfo(info);
         }
 
         @Override
-        public void removedMethodHook(int requestId) {
-            getMethod().removeActiveHook(requestId);
+        public void removeMethodBreakpointInfo(int requestId) {
+            getMethod().removeMethodBreakpointInfo(requestId);
         }
 
         @Override
-        public void removedMethodHook(MethodHook hook) {
-            getMethod().removeActiveHook(hook);
-        }
-
-        @Override
-        public boolean hasActiveHook() {
-            return getMethod().hasActiveHook();
+        public boolean hasActiveBreakpoint() {
+            return getMethod().hasActiveBreakpoint();
         }
 
         @Override

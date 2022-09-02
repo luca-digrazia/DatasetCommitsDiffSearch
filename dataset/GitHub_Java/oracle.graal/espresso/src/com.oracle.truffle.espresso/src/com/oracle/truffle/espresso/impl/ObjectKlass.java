@@ -68,9 +68,6 @@ import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.redefinition.ChangePacket;
-import com.oracle.truffle.espresso.redefinition.ClassRedefinition;
-import com.oracle.truffle.espresso.redefinition.DetectedChange;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
@@ -1195,13 +1192,12 @@ public final class ObjectKlass extends Klass {
 
         klassVersion = new KlassVersion(pool, linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
 
-        incrementKlassRedefinitionCount();
+        // flush caches before invalidating to avoid races
+        // a potential thread fetching new reflection data
+        // will be blocked at entry until the redefinition
+        // transaction is ended
+        flushReflectionCaches();
         oldVersion.assumption.invalidate();
-    }
-
-    // used by some plugins during klass redefitnion
-    public void reRunClinit() {
-        getClassInitializer().getCallTarget().call();
     }
 
     private static void checkCopyMethods(Method method, Method[][] table, Method.SharedRedefinitionContent content, Ids<Object> ids) {
@@ -1218,7 +1214,7 @@ public final class ObjectKlass extends Klass {
         }
     }
 
-    private void incrementKlassRedefinitionCount() {
+    private void flushReflectionCaches() {
         // increment the redefine count on the class instance to flush reflection caches
         int value = InterpreterToVM.getFieldInt(mirror(), getMeta().java_lang_Class_classRedefinedCount);
         InterpreterToVM.setFieldInt(++value, mirror(), getMeta().java_lang_Class_classRedefinedCount);
@@ -1269,7 +1265,7 @@ public final class ObjectKlass extends Klass {
         // a potential thread fetching new reflection data
         // will be blocked at entry until the redefinition
         // transaction is ended
-        incrementKlassRedefinitionCount();
+        flushReflectionCaches();
         oldVersion.assumption.invalidate();
     }
 

@@ -352,7 +352,6 @@ public final class Meta implements ContextAccess {
         java_lang_Thread_run = java_lang_Thread.requireDeclaredMethod(Name.run, Signature._void);
         java_lang_Thread_threadStatus = java_lang_Thread.requireDeclaredField(Name.threadStatus, Type._int);
         java_lang_Thread_tid = java_lang_Thread.requireDeclaredField(Name.tid, Type._long);
-        java_lang_Thread_contextClassLoader = java_lang_Thread.requireDeclaredField(Name.contextClassLoader, Type.java_lang_ClassLoader);
 
         java_lang_Thread_group = java_lang_Thread.requireDeclaredField(Name.group, java_lang_ThreadGroup.getType());
         java_lang_Thread_name = java_lang_Thread.requireDeclaredField(Name.name, java_lang_String.getType());
@@ -366,7 +365,6 @@ public final class Meta implements ContextAccess {
 
         java_lang_ref_Finalizer$FinalizerThread = knownKlass(Type.java_lang_ref_Finalizer$FinalizerThread);
         java_lang_ref_Reference$ReferenceHandler = knownKlass(Type.java_lang_ref_Reference$ReferenceHandler);
-        misc_InnocuousThread = knownKlassDiffVersion(Type.sun_misc_InnocuousThread, Type.jdk_internal_misc_InnocuousThread);
 
         java_lang_System = knownKlass(Type.java_lang_System);
         java_lang_System_exit = java_lang_System.requireDeclaredMethod(Name.exit, Signature._void_int);
@@ -932,7 +930,6 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass java_lang_Thread;
     public final Field java_lang_Thread_threadStatus;
     public final Field java_lang_Thread_tid;
-    public final Field java_lang_Thread_contextClassLoader;
     public final Method java_lang_Thread_init_ThreadGroup_Runnable;
     public final Method java_lang_Thread_init_ThreadGroup_String;
     public final Method java_lang_Thread_exit;
@@ -958,7 +955,6 @@ public final class Meta implements ContextAccess {
 
     public final ObjectKlass java_lang_ref_Finalizer$FinalizerThread;
     public final ObjectKlass java_lang_ref_Reference$ReferenceHandler;
-    public final ObjectKlass misc_InnocuousThread;
 
     public final ObjectKlass sun_misc_VM;
     public final Method sun_misc_VM_toThreadState;

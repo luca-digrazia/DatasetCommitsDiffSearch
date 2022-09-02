@@ -109,43 +109,39 @@ public interface DynamicConstant extends PoolConstant {
         public ResolvedConstant resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
             Meta meta = accessingKlass.getMeta();
 
-            // Condy constant resolving.
+            // Indy constant resolving.
             BootstrapMethodsAttribute bms = (BootstrapMethodsAttribute) ((ObjectKlass) accessingKlass).getAttribute(BootstrapMethodsAttribute.NAME);
 
             assert (bms != null);
             // TODO(garcia) cache bootstrap method resolution
             // Bootstrap method resolution
+            BootstrapMethodsAttribute.Entry bsEntry = bms.at(getBootstrapMethodAttrIndex());
+
+            StaticObject bootstrapmethodMethodHandle = bsEntry.getMethodHandle(accessingKlass, pool);
+            StaticObject[] args = bsEntry.getStaticArguments(accessingKlass, pool);
+
+            StaticObject fieldName = meta.toGuestString(getName(pool));
+            Klass fieldType = meta.resolveSymbolOrFail(Types.fromDescriptor(getSignature(pool)),
+                            accessingKlass.getDefiningClassLoader(),
+                            accessingKlass.protectionDomain());
+
+            Object result = meta.java_lang_invoke_MethodHandleNatives_linkDynamicConstant.invokeDirect(
+                            null,
+                            accessingKlass.mirror(),
+                            thisIndex,
+                            bootstrapmethodMethodHandle,
+                            fieldName, fieldType.mirror(),
+                            StaticObject.wrap(args, meta));
             try {
-                BootstrapMethodsAttribute.Entry bsEntry = bms.at(getBootstrapMethodAttrIndex());
-
-                StaticObject bootstrapmethodMethodHandle = bsEntry.getMethodHandle(accessingKlass, pool);
-                StaticObject[] args = bsEntry.getStaticArguments(accessingKlass, pool);
-
-                StaticObject fieldName = meta.toGuestString(getName(pool));
-                Klass fieldType = meta.resolveSymbolOrFail(Types.fromDescriptor(getSignature(pool)),
-                                accessingKlass.getDefiningClassLoader(),
-                                accessingKlass.protectionDomain());
-
-                Object result = meta.java_lang_invoke_MethodHandleNatives_linkDynamicConstant.invokeDirect(
-                                null,
-                                accessingKlass.mirror(),
-                                thisIndex,
-                                bootstrapmethodMethodHandle,
-                                fieldName, fieldType.mirror(),
-                                StaticObject.wrap(args, meta));
-                try {
-                    return makeResolved(fieldType, (StaticObject) result);
-                } catch (ClassCastException | NullPointerException e) {
-                    throw meta.throwException(meta.java_lang_BootstrapMethodError);
-                } catch (EspressoException e) {
-                    if (meta.java_lang_NullPointerException.isAssignableFrom(e.getExceptionObject().getKlass()) ||
-                                    meta.java_lang_ClassCastException.isAssignableFrom(e.getExceptionObject().getKlass())) {
-                        throw meta.throwExceptionWithCause(meta.java_lang_BootstrapMethodError, e.getExceptionObject());
-                    }
-                    throw e;
-                }
+                return makeResolved(fieldType, (StaticObject) result);
+            } catch (ClassCastException | NullPointerException e) {
+                throw meta.throwException(meta.java_lang_BootstrapMethodError);
             } catch (EspressoException e) {
-                return new ResolvedFail(e);
+                if (meta.java_lang_NullPointerException.isAssignableFrom(e.getExceptionObject().getKlass()) ||
+                                meta.java_lang_ClassCastException.isAssignableFrom(e.getExceptionObject().getKlass())) {
+                    throw meta.throwExceptionWithCause(meta.java_lang_BootstrapMethodError, e.getExceptionObject());
+                }
+                throw e;
             }
         }
     }
@@ -164,9 +160,6 @@ public interface DynamicConstant extends PoolConstant {
                 return (StaticObject) value;
             }
             return Meta.box(meta, value);
-        }
-
-        default void checkFail() {
         }
     }
 
@@ -282,34 +275,6 @@ public interface DynamicConstant extends PoolConstant {
         @Override
         public String toString(ConstantPool pool) {
             return "ResolvedDynamicConstant(" + resolved + ")";
-        }
-    }
-
-    final class ResolvedFail implements Resolved {
-        final EspressoException failure;
-
-        public ResolvedFail(EspressoException failure) {
-            this.failure = failure;
-        }
-
-        @Override
-        public void checkFail() {
-            throw failure;
-        }
-
-        @Override
-        public void putResolved(long[] primitives, Object[] refs, int top, BytecodeNode node) {
-            throw EspressoError.shouldNotReachHere("Failure should have arose earlier.");
-        }
-
-        @Override
-        public Object value() {
-            throw EspressoError.shouldNotReachHere("Failure should have arose earlier.");
-        }
-
-        @Override
-        public String toString(ConstantPool pool) {
-            return "ResolvedDynamicConstant(" + failure + ")";
         }
     }
 }

@@ -80,4 +80,9 @@ public abstract class ArrayLengthNode extends QuickNode {
     int doEspresso(StaticObject array) {
         return InterpreterToVM.arrayLength(array);
     }
+
+    @Override
+    public final boolean producedForeignObject(Object[] refs) {
+        return false;
+    }
 }

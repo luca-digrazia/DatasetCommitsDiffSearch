@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.nodes.helper;
 
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -543,13 +541,7 @@ abstract class ObjectGetFieldNode extends AbstractGetFieldNode {
     @Override
     public int getField(VirtualFrame frame, long[] primitives, Object[] refs, BytecodeNode root, StaticObject receiver, int at, int statementIndex) {
         root.notifyFieldAccess(frame, statementIndex, field, receiver);
-        StaticObject result = executeGetField(receiver);
-        Assumption noForeignObjects = root.getNoForeignObjects();
-        if (noForeignObjects.isValid() && result.isForeignObject()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            noForeignObjects.invalidate();
-        }
-        BytecodeNode.putObject(refs, at, result);
+        BytecodeNode.putObject(refs, at, executeGetField(receiver));
         return slotCount;
     }
 

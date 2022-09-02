@@ -144,7 +144,7 @@ public final class NativeMethodNode extends EspressoMethodNode {
     }
 
     @Override
-    public int getBci(@SuppressWarnings("unused") Frame frame) {
-        return -2;
+    public int getCurrentBCI(@SuppressWarnings("unused") Frame frame) {
+        return -1;
     }
 }

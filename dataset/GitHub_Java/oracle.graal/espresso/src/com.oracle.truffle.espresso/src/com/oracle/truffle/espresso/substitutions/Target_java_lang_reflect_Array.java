@@ -62,7 +62,6 @@ public final class Target_java_lang_reflect_Array {
      *                dimensions of the requested array instance exceed 255.
      * @exception NegativeArraySizeException if the specified {@code length} is negative
      */
-    @TruffleBoundary
     @Substitution
     public static Object newArray(@Host(Class.class) StaticObject componentType, int length, @InjectMeta Meta meta) {
         if (StaticObject.isNull(componentType)) {
@@ -108,7 +107,6 @@ public final class Target_java_lang_reflect_Array {
      * @exception NegativeArraySizeException if any of the components in the specified
      *                {@code dimensions} argument is negative.
      */
-    @TruffleBoundary
     @Substitution
     public static @Host(Object.class) StaticObject multiNewArray(@Host(Class.class) StaticObject componentType, @Host(int[].class) StaticObject dimensionsArray, @InjectMeta Meta meta) {
         if (StaticObject.isNull(componentType) || StaticObject.isNull(dimensionsArray)) {
@@ -143,7 +141,7 @@ public final class Target_java_lang_reflect_Array {
                     @InjectProfile SubstitutionProfiler profiler) {
         checkNonNullArray(array, meta, profiler);
         try {
-            return Array.getByte(array.unwrap(), index) != 0;
+            return Array.getBoolean(array.unwrap(), index);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
             profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);
@@ -273,7 +271,7 @@ public final class Target_java_lang_reflect_Array {
                     @InjectProfile SubstitutionProfiler profiler) {
         checkNonNullArray(array, meta, profiler);
         try {
-            Array.setByte(array.unwrap(), index, value ? (byte) 1 : (byte) 0);
+            Array.setBoolean(array.unwrap(), index, value);
         } catch (NullPointerException | ArrayIndexOutOfBoundsException | IllegalArgumentException e) {
             profiler.profile(5);
             throw rethrowAsGuestException(e, meta, profiler);

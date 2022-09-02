@@ -43,7 +43,6 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.espresso.substitutions.FinalizationSupport;
 import org.graalvm.options.OptionMap;
 import org.graalvm.polyglot.Engine;
 
@@ -392,7 +391,7 @@ public final class EspressoContext {
         assert !this.initialized;
         eventListener = new EmptyListener();
         // Inject PublicFinalReference in the host VM.
-        FinalizationSupport.ensureInitialized();
+        Target_java_lang_ref_Reference.ensureInitialized();
         spawnVM();
         this.initialized = true;
         this.jdwpContext = new JDWPContextImpl(this);

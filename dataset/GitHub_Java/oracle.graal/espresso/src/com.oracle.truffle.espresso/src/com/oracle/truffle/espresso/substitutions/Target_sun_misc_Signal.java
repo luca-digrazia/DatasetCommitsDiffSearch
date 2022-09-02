@@ -25,7 +25,6 @@ package com.oracle.truffle.espresso.substitutions;
 
 import java.util.WeakHashMap;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.espresso.EspressoLanguage;
@@ -44,7 +43,7 @@ public final class Target_sun_misc_Signal {
 
     // Avoid going through JVM_FindSignal which has a char* argument
     @SuppressWarnings("unused")
-    @Substitution
+    @Substitution(versionFilter = VersionFilter.Java8OrEarlier.class)
     @TruffleBoundary
     public static int findSignal(@Host(String.class) StaticObject name,
                     @InjectMeta Meta meta) {
@@ -59,7 +58,7 @@ public final class Target_sun_misc_Signal {
     }
 
     @SuppressWarnings("unused")
-    @Substitution
+    @Substitution(versionFilter = VersionFilter.Java8OrEarlier.class)
     @TruffleBoundary
     public static void raise(@Host(Signal.class) StaticObject signal,
                     @InjectMeta Meta meta) {
@@ -72,7 +71,7 @@ public final class Target_sun_misc_Signal {
             Signal.raise(hostSignal);
         } catch (IllegalArgumentException e) {
             logger.fine(() -> "failed to raise " + hostSignal + ": " + e.getMessage());
-            throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalArgumentException, meta.toGuestString(e.getMessage()));
+            throw meta.throwExceptionWithMessage(meta.java_lang_IllegalArgumentException, meta.toGuestString(e.getMessage()));
         }
     }
 
@@ -88,7 +87,7 @@ public final class Target_sun_misc_Signal {
     }
 
     @SuppressWarnings("unused")
-    @Substitution
+    @Substitution(versionFilter = VersionFilter.Java8OrEarlier.class)
     @TruffleBoundary
     public static @Host(SignalHandler.class) StaticObject handle(@Host(Signal.class) StaticObject signal, @Host(SignalHandler.class) StaticObject handler,
                     @InjectMeta Meta meta) {
@@ -96,8 +95,8 @@ public final class Target_sun_misc_Signal {
             throw meta.throwNullPointerException();
         }
         if (!meta.getContext().EnableSignals) {
-            logger.info(() -> "failed to setup handler for " + asHostSignal(signal, meta) + ": signal handling is disabled ");
-            throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalArgumentException, "Signal API is disabled");
+            logger.fine(() -> "failed to setup handler for " + asHostSignal(signal, meta) + ": signal handling is disabled ");
+            throw meta.throwExceptionWithMessage(meta.java_lang_IllegalArgumentException, "Signal API is disabled");
         }
         Signal hostSignal = asHostSignal(signal, meta);
         SignalHandler hostHandler = asHostHandler(handler, meta);
@@ -107,7 +106,7 @@ public final class Target_sun_misc_Signal {
             return asGuestHandler(oldHandler, meta);
         } catch (IllegalArgumentException e) {
             logger.fine(() -> "failed to setup handler for " + hostSignal + ": " + e.getMessage());
-            throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalArgumentException, meta.toGuestString(e.getMessage()));
+            throw meta.throwExceptionWithMessage(meta.java_lang_IllegalArgumentException, meta.toGuestString(e.getMessage()));
         }
     }
 
@@ -136,7 +135,7 @@ public final class Target_sun_misc_Signal {
             } else if (rawHandler == 1) {
                 return SignalHandler.SIG_IGN;
             } else {
-                throw Meta.throwExceptionWithMessage(meta.java_lang_InternalError, meta.toGuestString("Unsupported: arbitrary native signal handlers"));
+                throw meta.throwExceptionWithMessage(meta.java_lang_InternalError, meta.toGuestString("Unsupported: arbitrary native signal handlers"));
             }
         }
         return HostSignalHandler.get(meta, handler);
