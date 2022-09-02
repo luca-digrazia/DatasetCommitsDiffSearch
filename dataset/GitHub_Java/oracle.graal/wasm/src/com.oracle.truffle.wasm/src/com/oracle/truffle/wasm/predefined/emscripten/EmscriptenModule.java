@@ -29,13 +29,14 @@
  */
 package com.oracle.truffle.wasm.predefined.emscripten;
 
-import static com.oracle.truffle.wasm.binary.ReferenceTypes.FUNCREF;
+import static com.oracle.truffle.wasm.binary.ReferenceTypes.*;
 import static com.oracle.truffle.wasm.binary.ValueTypes.F64_TYPE;
 import static com.oracle.truffle.wasm.binary.ValueTypes.I32_TYPE;
 
 import com.oracle.truffle.wasm.binary.WasmContext;
 import com.oracle.truffle.wasm.binary.WasmLanguage;
 import com.oracle.truffle.wasm.binary.WasmModule;
+import com.oracle.truffle.wasm.binary.constants.GlobalModifier;
 import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.PredefinedModule;
 
@@ -43,7 +44,7 @@ public class EmscriptenModule extends PredefinedModule {
     @Override
     protected WasmModule createModule(WasmLanguage language, WasmContext context, String name) {
         WasmModule module = new WasmModule(name, null);
-        final WasmMemory memory = defineMemory(context, module, "memory", 0, -1);
+        final WasmMemory memory = defineMemory(context, module, "memory", WasmMemory.INITIAL_MEMORY_SIZE, -1);
         defineFunction(module, "abort", types(I32_TYPE), types(), new AbortNode(language, null, memory));
         defineFunction(module, "abortOnCannotGrowMemory", types(I32_TYPE), types(I32_TYPE), new AbortOnCannotGrowMemory(language, null, memory));
         defineFunction(module, "_emscripten_memcpy_big", types(I32_TYPE, I32_TYPE, I32_TYPE), types(I32_TYPE), new EmscriptenMemcpyBig(language, null, memory));
@@ -55,8 +56,8 @@ public class EmscriptenModule extends PredefinedModule {
         defineFunction(module, "___lock", types(I32_TYPE), types(), new Lock(language, null, memory));
         defineFunction(module, "___unlock", types(I32_TYPE), types(), new Unlock(language, null, memory));
         defineFunction(module, "___setErrNo", types(I32_TYPE), types(), new SetErrNo(language, null, memory));
-        // defineGlobal(context, module, "__table_base", I32_TYPE, GlobalModifier.CONSTANT, 0);
-        // defineGlobal(context, module, "DYNAMICTOP_PTR", I32_TYPE, GlobalModifier.CONSTANT, 0);
+        defineGlobal(context, module, "__table_base", I32_TYPE, GlobalModifier.CONSTANT, 0);
+        defineGlobal(context, module, "DYNAMICTOP_PTR", I32_TYPE, GlobalModifier.CONSTANT, 0);
         defineTable(context, module, "table", 0, -1, FUNCREF);
         return module;
     }

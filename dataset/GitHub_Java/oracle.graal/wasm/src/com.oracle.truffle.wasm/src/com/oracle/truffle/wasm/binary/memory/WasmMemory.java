@@ -30,7 +30,7 @@
 package com.oracle.truffle.wasm.binary.memory;
 
 public interface WasmMemory {
-    int PAGE_SIZE = 1 << 16;
+    int INITIAL_MEMORY_SIZE = 1 << 25;
 
     void validateAddress(long address, int size);
 
@@ -41,11 +41,11 @@ public interface WasmMemory {
     /**
      * The size of the memory, measured in bytes.
      */
-    long pageSize();
+    long size();
 
-    boolean grow(long extraSize);
+    void grow(long newSize);
 
-    long maxPageSize();
+    long maxSize();
 
     int load_i32(long address);
 

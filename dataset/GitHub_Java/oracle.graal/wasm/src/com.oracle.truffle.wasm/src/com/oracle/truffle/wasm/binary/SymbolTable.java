@@ -332,7 +332,7 @@ public class SymbolTable {
         return function;
     }
 
-    public int functionTypeArgumentCount(int typeIndex) {
+    public int getFunctionTypeNumArguments(int typeIndex) {
         int typeOffset = offsets[typeIndex];
         int numArgs = typeData[typeOffset + 0];
         return numArgs;
@@ -375,7 +375,7 @@ public class SymbolTable {
 
     ByteArrayList getFunctionTypeArgumentTypes(int typeIndex) {
         ByteArrayList types = new ByteArrayList();
-        for (int i = 0; i != functionTypeArgumentCount(typeIndex); ++i) {
+        for (int i = 0; i != getFunctionTypeNumArguments(typeIndex); ++i) {
             types.add(getFunctionTypeArgumentTypeAt(typeIndex, i));
         }
         return types;
@@ -410,31 +410,29 @@ public class SymbolTable {
         }
     }
 
-    /**
-     * Allocates a global index in the symbol table, for a global variable that was already allocated.
-     */
-    private void allocateGlobal(int index, int valueType, int mutability, GlobalResolution resolution, int address) {
+    private int allocateGlobal(WasmContext context, int index, int valueType, int mutability, GlobalResolution resolution) {
         assert (valueType & 0xff) == valueType;
         assert (mutability & 0xff) == mutability;
         ensureGlobalsCapacity(index);
         maxGlobalIndex = Math.max(maxGlobalIndex, index);
+        final Globals globals = context.globals();
+        final int address = globals.allocateGlobal();
         globalAddresses[index] = address;
         int globalType = (resolution.ordinal() << 16) | ((mutability << 8) | valueType);
         globalTypes[index] = globalType;
+        return address;
     }
 
     int declareGlobal(WasmContext context, int index, int valueType, int mutability, GlobalResolution resolution) {
         assert !resolution.isImported();
-        final Globals globals = context.globals();
-        final int address = globals.allocateGlobal();
-        allocateGlobal(index, valueType, mutability, resolution, address);
-        return address;
+        return allocateGlobal(context, index, valueType, mutability, resolution);
     }
 
-    public void importGlobal(String moduleName, String globalName, int index, int valueType, int mutability, GlobalResolution resolution, int address) {
+    int importGlobal(WasmContext context, String moduleName, String globalName, int index, int valueType, int mutability, GlobalResolution resolution) {
         assert resolution.isImported();
+        final int address = allocateGlobal(context, index, valueType, mutability, resolution);
         importedGlobals.put(index, new ImportDescriptor(moduleName, globalName));
-        allocateGlobal(index, valueType, mutability, resolution, address);
+        return address;
     }
 
     public int maxGlobalIndex() {
@@ -526,7 +524,8 @@ public class SymbolTable {
 
     void importTable(WasmContext context, String moduleName, String tableName, int initSize, int maxSize) {
         validateSingleTable();
-        context.linker().importTable(context, module, moduleName, tableName, initSize, maxSize);
+        importedTableDescriptor = new ImportDescriptor(moduleName, tableName);
+        tableIndex = context.linker().tryResolveTable(context, module, moduleName, tableName, initSize, maxSize);
     }
 
     private void validateSingleTable() {
@@ -560,19 +559,11 @@ public class SymbolTable {
         return tableExists() ? 1 : 0;
     }
 
-    public void setTableIndex(int i) {
-        tableIndex = i;
-    }
-
-    public ImportDescriptor importedTable() {
+    ImportDescriptor importedTable() {
         return importedTableDescriptor;
     }
 
-    public void setImportedTable(ImportDescriptor descriptor) {
-        importedTableDescriptor = descriptor;
-    }
-
-    public String exportedTable() {
+    String exportedTable() {
         return exportedTable;
     }
 
