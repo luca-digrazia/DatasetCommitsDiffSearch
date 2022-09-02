@@ -27,8 +27,8 @@ package org.graalvm.compiler.hotspot.replacements;
 import static jdk.vm.ci.code.MemoryBarriers.LOAD_STORE;
 import static jdk.vm.ci.code.MemoryBarriers.STORE_LOAD;
 import static jdk.vm.ci.code.MemoryBarriers.STORE_STORE;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_OPTIONVALUES;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfigBase.INJECTED_OPTIONVALUES;
+import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfigBase.INJECTED_VMCONFIG;
 import static org.graalvm.compiler.hotspot.nodes.AcquiredCASLockNode.mark;
 import static org.graalvm.compiler.hotspot.nodes.BeginLockScopeNode.beginLockScope;
 import static org.graalvm.compiler.hotspot.nodes.EndLockScopeNode.endLockScope;
@@ -80,7 +80,6 @@ import static org.graalvm.word.WordFactory.unsigned;
 import static org.graalvm.word.WordFactory.zero;
 
 import java.util.List;
-import java.util.Objects;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.Snippet;
@@ -118,8 +117,8 @@ import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.extended.MembarNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
-import org.graalvm.compiler.nodes.java.MonitorEnterNode;
 import org.graalvm.compiler.nodes.java.MonitorExitNode;
+import org.graalvm.compiler.nodes.java.RawMonitorEnterNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.options.OptionValues;
@@ -584,6 +583,7 @@ public class MonitorSnippets implements Snippets {
                     if (probability(FREQUENT_PROBABILITY, succ.isNonNull())) {
                         // There may be a thread spinning on this monitor. Temporarily setting
                         // the monitor owner to null, and hope that the other thread will grab it.
+                        memoryBarrier(LOAD_STORE | STORE_STORE);
                         monitor.writeWord(ownerOffset, zero());
                         memoryBarrier(STORE_STORE | STORE_LOAD);
                         succ = monitor.readWord(succOffset, OBJECT_MONITOR_SUCC_LOCATION);
@@ -772,7 +772,7 @@ public class MonitorSnippets implements Snippets {
             this.counters = new Counters(factory);
         }
 
-        public void lower(MonitorEnterNode monitorenterNode, HotSpotRegistersProvider registers, LoweringTool tool) {
+        public void lower(RawMonitorEnterNode monitorenterNode, HotSpotRegistersProvider registers, LoweringTool tool) {
             StructuredGraph graph = monitorenterNode.graph();
             checkBalancedMonitors(graph, tool);
 
@@ -782,7 +782,7 @@ public class MonitorSnippets implements Snippets {
             if (useFastLocking) {
                 args = new Arguments(monitorenter, graph.getGuardsStage(), tool.getLoweringStage());
                 args.add("object", monitorenterNode.object());
-                args.add("hub", Objects.requireNonNull(monitorenterNode.getObjectData()));
+                args.add("hub", monitorenterNode.getHub());
                 args.addConst("lockDepth", monitorenterNode.getMonitorId().getLockDepth());
                 args.addConst("threadRegister", registers.getThreadRegister());
                 args.addConst("stackPointerRegister", registers.getStackPointerRegister());
