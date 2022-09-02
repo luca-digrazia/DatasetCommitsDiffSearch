@@ -34,7 +34,7 @@ import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.posix.PosixJavaNetClose;
-import com.oracle.svm.core.headers.Errno;
+import com.oracle.svm.core.posix.headers.Errno;
 import com.oracle.svm.core.posix.headers.Poll;
 import com.oracle.svm.core.posix.headers.Socket;
 import com.oracle.svm.core.posix.headers.Time;
@@ -91,7 +91,7 @@ public class LinuxJavaNetCloseImpl extends PosixJavaNetClose {
             /* Send a wakeup signal to all threads blocked on this file descriptor. */
             fdEntry.getThreadList().forEach((threadEntry) -> {
                 threadEntry.setIntr(true);
-                interruptThread(threadEntry.getPThread());
+                threadEntry.getThread().interrupt();
             });
         }
         return rv;
@@ -163,7 +163,7 @@ public class LinuxJavaNetCloseImpl extends PosixJavaNetClose {
         }
         // 343
         // 344      for(;;) {
-        for (; /* return */;) {
+        for (;;) {
             // 345          struct pollfd pfd;
             Poll.pollfd pfd = StackValue.get(Poll.pollfd.class);
             // 346          int rv;
