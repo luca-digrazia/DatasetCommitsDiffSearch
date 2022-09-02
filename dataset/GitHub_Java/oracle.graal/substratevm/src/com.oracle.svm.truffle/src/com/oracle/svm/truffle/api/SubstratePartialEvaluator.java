@@ -80,10 +80,13 @@ public class SubstratePartialEvaluator extends PartialEvaluator {
     }
 
     @Override
-    protected void doGraphPE(Request request, InlineInvokePlugin inlineInvokePlugin, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
-        super.doGraphPE(request, inlineInvokePlugin, graphCache);
-        new DeadStoreRemovalPhase().apply(request.graph);
-        new TruffleBoundaryPhase().apply(request.graph);
+    protected void doGraphPE(OptionValues options, CompilableTruffleAST callTarget, StructuredGraph graph, HighTierContext tierContext, TruffleInliningPlan inliningDecision,
+                    InlineInvokePlugin inlineInvokePlugin,
+                    EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
+        super.doGraphPE(options, callTarget, graph, tierContext, inliningDecision, inlineInvokePlugin, graphCache);
+
+        new DeadStoreRemovalPhase().apply(graph);
+        new TruffleBoundaryPhase().apply(graph);
     }
 
     @Override
