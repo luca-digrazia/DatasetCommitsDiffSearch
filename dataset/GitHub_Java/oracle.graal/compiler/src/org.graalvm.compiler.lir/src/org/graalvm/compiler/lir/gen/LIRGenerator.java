@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,6 @@ import static jdk.vm.ci.code.ValueUtil.isLegal;
 import static jdk.vm.ci.code.ValueUtil.isStackSlot;
 import static org.graalvm.compiler.lir.LIRValueUtil.asConstant;
 import static org.graalvm.compiler.lir.LIRValueUtil.isConstantValue;
-import static org.graalvm.compiler.lir.LIRValueUtil.asVariable;
 import static org.graalvm.compiler.lir.LIRValueUtil.isVariable;
 import static org.graalvm.compiler.lir.LIRValueUtil.isVirtualStackSlot;
 
@@ -218,7 +217,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
 
     @Override
     public Variable emitMove(Value input) {
-        assert !isVariable(input) : "Creating a copy of a variable via this method is not supported (and potentially a bug): " + input;
+        assert !(input instanceof Variable) : "Creating a copy of a variable via this method is not supported (and potentially a bug): " + input;
         Variable result = newVariable(input.getValueKind());
         emitMove(result, input);
         return result;
@@ -291,7 +290,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         if (!isVariable(value)) {
             return emitMove(value);
         }
-        return asVariable(value);
+        return (Variable) value;
     }
 
     public Value loadNonConst(Value value) {

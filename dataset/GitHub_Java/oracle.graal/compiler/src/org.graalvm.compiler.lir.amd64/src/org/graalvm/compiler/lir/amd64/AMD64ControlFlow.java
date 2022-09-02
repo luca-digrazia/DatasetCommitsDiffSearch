@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -555,39 +555,25 @@ public class AMD64ControlFlow {
     public static final class FloatBranchOp extends BranchOp {
         public static final LIRInstructionClass<FloatBranchOp> TYPE = LIRInstructionClass.create(FloatBranchOp.class);
         protected boolean unorderedIsTrue;
-        protected boolean isSelfEqualsCheck;
 
         public FloatBranchOp(Condition condition, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability) {
-            this(condition, unorderedIsTrue, trueDestination, falseDestination, trueDestinationProbability, false);
-        }
-
-        public FloatBranchOp(Condition condition, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination, double trueDestinationProbability, boolean isSelfEqualsCheck) {
             super(TYPE, floatCond(condition), trueDestination, falseDestination, trueDestinationProbability);
             this.unorderedIsTrue = unorderedIsTrue;
-            this.isSelfEqualsCheck = isSelfEqualsCheck;
         }
 
         @Override
         protected void jcc(AMD64MacroAssembler masm, boolean negate, LabelRef target) {
+            ConditionFlag condition1 = negate ? condition.negate() : condition;
+            boolean unorderedIsTrue1 = negate ? !unorderedIsTrue : unorderedIsTrue;
             Label label = target.label();
             Label endLabel = new Label();
-            if (isSelfEqualsCheck) {
-                // The condition is x == x, i.e., !isNaN(x).
-                assert !unorderedIsTrue;
-                ConditionFlag notNaN = negate ? ConditionFlag.Parity : ConditionFlag.NoParity;
-                masm.jcc(notNaN, label);
-                masm.bind(endLabel);
-            } else {
-                ConditionFlag condition1 = negate ? condition.negate() : condition;
-                boolean unorderedIsTrue1 = negate ? !unorderedIsTrue : unorderedIsTrue;
-                if (unorderedIsTrue1 && !trueOnUnordered(condition1)) {
-                    masm.jcc(ConditionFlag.Parity, label);
-                } else if (!unorderedIsTrue1 && trueOnUnordered(condition1)) {
-                    masm.jccb(ConditionFlag.Parity, endLabel);
-                }
-                masm.jcc(condition1, label);
-                masm.bind(endLabel);
+            if (unorderedIsTrue1 && !trueOnUnordered(condition1)) {
+                masm.jcc(ConditionFlag.Parity, label);
+            } else if (!unorderedIsTrue1 && trueOnUnordered(condition1)) {
+                masm.jccb(ConditionFlag.Parity, endLabel);
             }
+            masm.jcc(condition1, label);
+            masm.bind(endLabel);
         }
     }
 
@@ -893,7 +879,7 @@ public class AMD64ControlFlow {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            cmove(crb, masm, result, false, condition, false, trueValue, falseValue, false);
+            cmove(crb, masm, result, false, condition, false, trueValue, falseValue);
         }
     }
 
@@ -905,35 +891,31 @@ public class AMD64ControlFlow {
         @Alive({REG}) protected Value falseValue;
         private final ConditionFlag condition;
         private final boolean unorderedIsTrue;
-        private final boolean isSelfEqualsCheck;
 
-        public FloatCondMoveOp(Variable result, Condition condition, boolean unorderedIsTrue, Variable trueValue, Variable falseValue, boolean isSelfEqualsCheck) {
+        public FloatCondMoveOp(Variable result, Condition condition, boolean unorderedIsTrue, Variable trueValue, Variable falseValue) {
             super(TYPE);
             this.result = result;
             this.condition = floatCond(condition);
             this.unorderedIsTrue = unorderedIsTrue;
             this.trueValue = trueValue;
             this.falseValue = falseValue;
-            this.isSelfEqualsCheck = isSelfEqualsCheck;
         }
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            cmove(crb, masm, result, true, condition, unorderedIsTrue, trueValue, falseValue, isSelfEqualsCheck);
+            cmove(crb, masm, result, true, condition, unorderedIsTrue, trueValue, falseValue);
         }
     }
 
     private static void cmove(CompilationResultBuilder crb, AMD64MacroAssembler masm, Value result, boolean isFloat, ConditionFlag condition, boolean unorderedIsTrue, Value trueValue,
-                    Value falseValue, boolean isSelfEqualsCheck) {
+                    Value falseValue) {
         // check that we don't overwrite an input operand before it is used.
         assert !result.equals(trueValue);
 
-        // The isSelfEqualsCheck condition is x == x, i.e., !isNaN(x).
-        ConditionFlag moveCondition = (isSelfEqualsCheck ? ConditionFlag.NoParity : condition);
         AMD64Move.move(crb, masm, result, falseValue);
-        cmove(crb, masm, result, moveCondition, trueValue);
+        cmove(crb, masm, result, condition, trueValue);
 
-        if (isFloat && !isSelfEqualsCheck) {
+        if (isFloat) {
             if (unorderedIsTrue && !trueOnUnordered(condition)) {
                 cmove(crb, masm, result, ConditionFlag.Parity, trueValue);
             } else if (!unorderedIsTrue && trueOnUnordered(condition)) {
