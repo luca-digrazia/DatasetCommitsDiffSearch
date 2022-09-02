@@ -98,8 +98,7 @@ public abstract class Type {
 
     /**
      * Encapsulates an array of {@link Type types}. Use to ensure that the array reference is not
-     * leaked and modified out of place. The {@link TypeArray} is never stored in a {@link Type} but
-     * only used for construction.
+     * leaked and modified out of place.
      */
     public static class TypeArray {
         private Type[] types;
