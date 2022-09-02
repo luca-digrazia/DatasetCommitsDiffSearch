@@ -73,9 +73,9 @@ final class DynamicObjectSupport {
         resizePrimitiveStore(object, thisShape, otherShape);
     }
 
-    static void trimToSize(DynamicObject object, Shape thisShape, Shape otherShape) {
-        trimObjectStore(object, thisShape, otherShape);
-        trimPrimitiveStore(object, thisShape, otherShape);
+    static void trimToSize(DynamicObject object, Shape thisShape) {
+        trimObjectStore(object, thisShape);
+        trimPrimitiveStore(object, thisShape);
     }
 
     static void growAndSetShape(DynamicObject object, Shape thisShape, Shape otherShape) {
@@ -157,39 +157,43 @@ final class DynamicObjectSupport {
         }
     }
 
-    private static void trimObjectStore(DynamicObject object, Shape thisShape, Shape newShape) {
+    private static void trimObjectStore(DynamicObject object, Shape thisShape) {
         Object[] oldObjectStore = ACCESS.getObjectArray(object);
-        int destinationCapacity = getObjectArrayCapacity(newShape);
+        Shape curShape = ACCESS.getShape(object);
+        assert curShape == thisShape;
+        int destinationCapacity = getObjectArrayCapacity(curShape);
         if (destinationCapacity == 0) {
             if (oldObjectStore != null) {
                 ACCESS.setObjectArray(object, null);
             }
             // else nothing to do
         } else {
-            int sourceCapacity = getObjectArrayCapacity(thisShape);
+            int sourceCapacity = oldObjectStore.length;
             if (sourceCapacity > destinationCapacity) {
                 Object[] newObjectStore = new Object[destinationCapacity];
-                int destinationSize = getObjectArraySize(newShape);
+                int destinationSize = getObjectArraySize(curShape);
                 ACCESS.arrayCopy(oldObjectStore, newObjectStore, destinationSize);
                 ACCESS.setObjectArray(object, newObjectStore);
             }
         }
     }
 
-    private static void trimPrimitiveStore(DynamicObject object, Shape thisShape, Shape newShape) {
+    private static void trimPrimitiveStore(DynamicObject object, Shape thisShape) {
         int[] oldPrimitiveStore = ACCESS.getPrimitiveArray(object);
-        int destinationCapacity = getPrimitiveArrayCapacity(newShape);
+        Shape curShape = ACCESS.getShape(object);
+        assert curShape == thisShape;
+        int destinationCapacity = getPrimitiveArrayCapacity(curShape);
         if (destinationCapacity == 0) {
             if (oldPrimitiveStore != null) {
                 ACCESS.setPrimitiveArray(object, null);
             }
             // else nothing to do
         } else {
-            int sourceCapacity = getPrimitiveArrayCapacity(thisShape);
+            int sourceCapacity = oldPrimitiveStore.length;
             if (sourceCapacity > destinationCapacity) {
                 int[] newPrimitiveStore = new int[destinationCapacity];
-                int destinationSize = getPrimitiveArraySize(newShape);
-                ACCESS.arrayCopy(oldPrimitiveStore, newPrimitiveStore, destinationSize);
+                int destinationSize = getPrimitiveArraySize(curShape);
+                System.arraycopy(oldPrimitiveStore, 0, newPrimitiveStore, 0, destinationSize);
                 ACCESS.setPrimitiveArray(object, newPrimitiveStore);
             }
         }

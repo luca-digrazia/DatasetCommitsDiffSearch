@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -51,15 +51,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import org.graalvm.nativeimage.ImageInfo;
+
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.object.DynamicObject;
-import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.api.object.Shape;
 import com.oracle.truffle.api.object.Shape.Allocator;
 import com.oracle.truffle.object.CoreLocations.LongLocation;
 import com.oracle.truffle.object.CoreLocations.ObjectLocation;
 
+import sun.misc.Unsafe;
+
+@SuppressWarnings("deprecation")
 class DefaultLayout extends LayoutImpl {
     private final ObjectLocation[] objectFields;
     private final LongLocation[] primitiveFields;
@@ -69,7 +73,7 @@ class DefaultLayout extends LayoutImpl {
     static final ObjectLocation[] NO_OBJECT_FIELDS = new ObjectLocation[0];
     static final LongLocation[] NO_LONG_FIELDS = new LongLocation[0];
 
-    private static final Map<Class<? extends DynamicObject>, LayoutImpl> LAYOUT_MAP = new ConcurrentHashMap<>();
+    private static final Map<Key, DefaultLayout> LAYOUT_MAP = new ConcurrentHashMap<>();
 
     DefaultLayout(Class<? extends DynamicObject> dynamicObjectClass, LayoutStrategy strategy, int implicitCastFlags, ObjectLocation[] objectFields, LongLocation[] primitiveFields) {
         super(dynamicObjectClass, strategy, implicitCastFlags);
@@ -95,23 +99,21 @@ class DefaultLayout extends LayoutImpl {
         }
     }
 
-    public static LayoutImpl createCoreLayout(Layout.Builder builder) {
+    public static LayoutImpl createCoreLayout(com.oracle.truffle.api.object.Layout.Builder builder) {
         Class<? extends DynamicObject> type = getType(builder);
         EnumSet<ImplicitCast> allowedImplicitCasts = getAllowedImplicitCasts(builder);
-        if (allowedImplicitCasts.isEmpty()) {
-            return layoutForType(type);
-        } else {
-            return new DefaultLayout(type, DefaultStrategy.SINGLETON, implicitCastFlags(allowedImplicitCasts));
-        }
+        int implicitCastFlags = implicitCastFlags(allowedImplicitCasts);
+        return getOrCreateLayout(type, implicitCastFlags);
     }
 
-    private static LayoutImpl layoutForType(Class<? extends DynamicObject> type) {
-        LayoutImpl layout = LAYOUT_MAP.get(type);
+    private static DefaultLayout getOrCreateLayout(Class<? extends DynamicObject> type, int implicitCastFlags) {
+        Key key = new Key(type, implicitCastFlags);
+        DefaultLayout layout = LAYOUT_MAP.get(key);
         if (layout != null) {
             return layout;
         }
-        LayoutImpl newLayout = new DefaultLayout(type, DefaultStrategy.SINGLETON, 0);
-        layout = LAYOUT_MAP.putIfAbsent(type, newLayout);
+        DefaultLayout newLayout = new DefaultLayout(type, DefaultStrategy.SINGLETON, implicitCastFlags);
+        layout = LAYOUT_MAP.putIfAbsent(key, newLayout);
         return layout == null ? newLayout : layout;
     }
 
@@ -179,7 +181,7 @@ class DefaultLayout extends LayoutImpl {
     }
 
     protected int getLongFieldSize() {
-        return CoreLocations.LONG_FIELD_SIZE;
+        return CoreLocations.LONG_FIELD_SLOT_SIZE;
     }
 
     @Override
@@ -188,11 +190,43 @@ class DefaultLayout extends LayoutImpl {
         return getStrategy().createAllocator(layout);
     }
 
+    private static final class Key {
+        final Class<? extends DynamicObject> type;
+        final int implicitCastFlags;
+
+        Key(Class<? extends DynamicObject> type, int implicitCastFlags) {
+            this.type = type;
+            this.implicitCastFlags = implicitCastFlags;
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + implicitCastFlags;
+            result = prime * result + ((type == null) ? 0 : type.hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (!(obj instanceof Key)) {
+                return false;
+            }
+            Key other = (Key) obj;
+            return this.type == other.type && this.implicitCastFlags == other.implicitCastFlags;
+        }
+    }
+
     private static final class LayoutInfo {
         final ObjectLocation[] objectFields;
         final LongLocation[] primitiveFields;
 
         private static final ConcurrentMap<Class<? extends DynamicObject>, LayoutInfo> LAYOUT_INFO_MAP = new ConcurrentHashMap<>();
+        private static final Unsafe UNSAFE = CoreLocations.getUnsafe();
 
         static LayoutInfo getOrCreateLayoutInfo(Class<? extends DynamicObject> dynamicObjectClass) {
             LayoutInfo layoutInfo = LAYOUT_INFO_MAP.get(dynamicObjectClass);
@@ -200,17 +234,7 @@ class DefaultLayout extends LayoutImpl {
                 return layoutInfo;
             }
 
-            if (closed()) {
-                /*
-                 * Try to find a registered superclass. Only classes that declare dynamic fields are
-                 * registered ahead-of-time.
-                 */
-                for (Class<? extends DynamicObject> superclass = dynamicObjectClass; superclass != DynamicObject.class; superclass = superclass.getSuperclass().asSubclass(DynamicObject.class)) {
-                    layoutInfo = LAYOUT_INFO_MAP.get(superclass);
-                    if (layoutInfo != null) {
-                        return layoutInfo;
-                    }
-                }
+            if (ImageInfo.inImageRuntimeCode()) {
                 throw new IllegalStateException("Layout not initialized ahead-of-time: " + dynamicObjectClass);
             }
 
@@ -222,6 +246,11 @@ class DefaultLayout extends LayoutImpl {
             List<ObjectLocation> objectFieldList = new ArrayList<>();
             List<LongLocation> longFieldList = new ArrayList<>();
             Class<? extends DynamicObject> superclass = collectFields(subclass, objectFieldList, longFieldList);
+
+            if (objectFieldList.size() + longFieldList.size() > CoreLocations.MAX_DYNAMIC_FIELDS) {
+                throw new IllegalArgumentException("Too many @DynamicField annotated fields.");
+            }
+
             LayoutInfo newLayoutInfo;
             if (superclass != subclass) {
                 // This class does not declare any dynamic fields; reuse info from superclass
@@ -251,7 +280,6 @@ class DefaultLayout extends LayoutImpl {
             Class<? extends DynamicObject> layoutClass = collectFields(clazz.getSuperclass().asSubclass(DynamicObject.class), objectFieldList, primitiveFieldList);
 
             Class<? extends Annotation> dynamicFieldAnnotation = ACCESS.getDynamicFieldAnnotation();
-            Field lastIntField = null;
             boolean hasDynamicFields = false;
             for (Field field : clazz.getDeclaredFields()) {
                 if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
@@ -260,21 +288,17 @@ class DefaultLayout extends LayoutImpl {
                 }
 
                 if (field.getAnnotation(dynamicFieldAnnotation) != null) {
-                    if (Modifier.isFinal(field.getModifiers())) {
-                        throw new IllegalArgumentException("@DynamicField annotated field must not be final: " + field);
-                    }
+                    checkDynamicFieldType(field);
+                    assert field.getDeclaringClass() == clazz;
+
                     hasDynamicFields = true;
                     if (field.getType() == Object.class) {
                         objectFieldList.add(new CoreLocations.DynamicObjectFieldLocation(objectFieldList.size(), field));
-                    } else if (field.getType() == int.class) {
-                        if (lastIntField == null) {
-                            lastIntField = field;
-                        } else {
-                            primitiveFieldList.add(new CoreLocations.DynamicLongFieldLocation(primitiveFieldList.size(), lastIntField, field));
-                            lastIntField = null;
+                    } else if (field.getType() == long.class) {
+                        long offset = UNSAFE.objectFieldOffset(field);
+                        if (offset % Long.BYTES == 0) {
+                            primitiveFieldList.add(new CoreLocations.DynamicLongFieldLocation(primitiveFieldList.size(), offset, clazz));
                         }
-                    } else {
-                        throw new IllegalArgumentException("@DynamicField annotated field type must be either Object or int: " + field);
                     }
                 }
             }
@@ -285,9 +309,26 @@ class DefaultLayout extends LayoutImpl {
             return layoutClass;
         }
 
+        private static void checkDynamicFieldType(Field field) {
+            if (field.getType() != Object.class && field.getType() != int.class && field.getType() != long.class) {
+                throw new IllegalArgumentException("@DynamicField annotated field type must be either Object or int or long: " + field);
+            }
+            if (Modifier.isFinal(field.getModifiers())) {
+                throw new IllegalArgumentException("@DynamicField annotated field must not be final: " + field);
+            }
+        }
+
         @Override
         public String toString() {
             return "LayoutInfo [objectFields=" + Arrays.toString(objectFields) + ", primitiveFields=" + Arrays.toString(primitiveFields) + "]";
         }
+    }
+
+    /**
+     * Resets the state for native image generation.
+     */
+    static void resetNativeImageState() {
+        LAYOUT_MAP.clear();
+        LayoutInfo.LAYOUT_INFO_MAP.clear();
     }
 }

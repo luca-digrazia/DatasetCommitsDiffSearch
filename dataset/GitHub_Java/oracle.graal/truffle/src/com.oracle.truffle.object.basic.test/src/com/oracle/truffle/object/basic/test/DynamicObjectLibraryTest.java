@@ -52,37 +52,28 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.IntUnaryOperator;
 import java.util.function.Supplier;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeInterface;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.DynamicObjectLibrary;
-import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
+import com.oracle.truffle.api.test.AbstractParametrizedLibraryTest;
 import com.oracle.truffle.object.DynamicObjectImpl;
 
+@SuppressWarnings("deprecation")
 @RunWith(Parameterized.class)
-public class DynamicObjectLibraryTest {
-    private final Supplier<? extends DynamicObject> emptyObjectSupplier;
-    private final LibraryMode mode;
-
-    enum LibraryMode {
-        Uncached,
-        Dispatched,
-        Cached,
-    }
+public class DynamicObjectLibraryTest extends AbstractParametrizedLibraryTest {
+    @Parameter(1) public Supplier<? extends DynamicObject> emptyObjectSupplier;
 
     private DynamicObject createEmpty() {
         return emptyObjectSupplier.get();
@@ -93,7 +84,7 @@ public class DynamicObjectLibraryTest {
         Collection<Object[]> params = new ArrayList<>();
 
         Object objectType = newObjectType();
-        Layout layout = Layout.createLayout();
+        com.oracle.truffle.api.object.Layout layout = com.oracle.truffle.api.object.Layout.createLayout();
         Shape shape = layout.createShape((ObjectType) objectType);
         Supplier<? extends Object> doSupplier = () -> shape.newInstance();
         addParams(params, doSupplier);
@@ -110,47 +101,33 @@ public class DynamicObjectLibraryTest {
     }
 
     private static void addParams(Collection<Object[]> params, Supplier<? extends Object> supplier) {
-        for (LibraryMode mode : LibraryMode.values()) {
-            params.add(new Object[]{supplier, mode});
+        for (TestRun run : TestRun.values()) {
+            params.add(new Object[]{run, supplier});
         }
     }
 
-    public DynamicObjectLibraryTest(Supplier<? extends DynamicObject> emptyObjectSupplier, LibraryMode libraryMode) {
-        this.emptyObjectSupplier = emptyObjectSupplier;
-        this.mode = libraryMode;
-    }
-
     private DynamicObjectLibrary createDispatchedLibrary() {
-        if (mode != LibraryMode.Uncached) {
+        if (run == TestRun.DISPATCHED_CACHED || run == TestRun.CACHED) {
             return adopt(DynamicObjectLibrary.getFactory().createDispatched(5));
         }
         return DynamicObjectLibrary.getUncached();
     }
 
     private DynamicObjectLibrary createLibraryForReceiver(DynamicObject receiver) {
-        if (mode == LibraryMode.Cached) {
-            DynamicObjectLibrary cached = adopt(DynamicObjectLibrary.getFactory().create(receiver));
-            assertTrue(cached.accepts(receiver));
-            return cached;
-        }
-        return createDispatchedLibrary();
+        DynamicObjectLibrary objectLibrary = createLibrary(DynamicObjectLibrary.class, receiver);
+        assertTrue(objectLibrary.accepts(receiver));
+        return objectLibrary;
     }
 
     private DynamicObjectLibrary createLibraryForReceiverAndKey(DynamicObject receiver, Object key) {
         assertFalse(key instanceof DynamicObject);
-        if (mode == LibraryMode.Cached) {
-            DynamicObjectLibrary cached = adopt(DynamicObjectLibrary.getFactory().create(receiver));
-            assertTrue(cached.accepts(receiver));
-            return cached;
-        }
-        return createDispatchedLibrary();
+        DynamicObjectLibrary objectLibrary = createLibrary(DynamicObjectLibrary.class, receiver);
+        assertTrue(objectLibrary.accepts(receiver));
+        return objectLibrary;
     }
 
     private DynamicObjectLibrary createLibraryForKey(Object key) {
         assertFalse(key instanceof DynamicObject);
-        if (mode == LibraryMode.Cached) {
-            return adopt(DynamicObjectLibrary.getFactory().createDispatched(5));
-        }
         return createDispatchedLibrary();
     }
 
@@ -274,7 +251,7 @@ public class DynamicObjectLibraryTest {
         assertEquals(null, uncachedGet(o1, key2));
 
         setNode2.put(o1, key2, strval2);
-        assertEquals(mode != LibraryMode.Cached, setNode2.accepts(o1));
+        assertEquals(run != TestRun.CACHED, setNode2.accepts(o1));
         assertTrue(DynamicObjectLibrary.getUncached().containsKey(o1, key2));
         assertEquals(strval2, uncachedGet(o1, key2));
 
@@ -418,7 +395,7 @@ public class DynamicObjectLibraryTest {
         assertSame(myType, cached.getDynamicType(o4));
         Object myType2 = newObjectType();
         cached.setDynamicType(o4, myType2);
-        assertEquals(mode != LibraryMode.Cached, cached.accepts(o4));
+        assertEquals(run != TestRun.CACHED, cached.accepts(o4));
         assertSame(myType2, lib.getDynamicType(o4));
     }
 
@@ -445,7 +422,7 @@ public class DynamicObjectLibraryTest {
 
         DynamicObject o4 = createEmpty();
         lib.setShapeFlags(o4, flags);
-        lib.makeShared(o4);
+        lib.markShared(o4);
         assertEquals(flags, lib.getShapeFlags(o2));
 
         DynamicObjectLibrary cached = createLibraryForReceiver(o4);
@@ -453,7 +430,7 @@ public class DynamicObjectLibraryTest {
         assertEquals(flags, cached.getShapeFlags(o4));
         int flags2 = 43;
         cached.setShapeFlags(o4, flags2);
-        assertEquals(mode != LibraryMode.Cached, cached.accepts(o4));
+        assertEquals(run != TestRun.CACHED, cached.accepts(o4));
         assertEquals(flags2, lib.getShapeFlags(o4));
     }
 
@@ -469,9 +446,18 @@ public class DynamicObjectLibraryTest {
         assertTrue(lib.setShapeFlags(o1, f1));
         assertEquals(f1, lib.getShapeFlags(o1));
         assertEquals(f1, o1.getShape().getFlags());
-        assertTrue(lib.updateShapeFlags(o1, f -> f | f2));
+        assertTrue(updateShapeFlags(lib, o1, f -> f | f2));
         assertEquals(f3, lib.getShapeFlags(o1));
         assertEquals(f3, o1.getShape().getFlags());
+    }
+
+    private static boolean updateShapeFlags(DynamicObjectLibrary lib, DynamicObject obj, IntUnaryOperator updateFunction) {
+        int oldFlags = lib.getShapeFlags(obj);
+        int newFlags = updateFunction.applyAsInt(oldFlags);
+        if (oldFlags == newFlags) {
+            return false;
+        }
+        return lib.setShapeFlags(obj, newFlags);
     }
 
     @Test
@@ -480,7 +466,7 @@ public class DynamicObjectLibraryTest {
 
         DynamicObject o1 = createEmpty();
         assertFalse(lib.isShared(o1));
-        lib.makeShared(o1);
+        lib.markShared(o1);
         assertTrue(lib.isShared(o1));
         lib.put(o1, "key", "value");
         assertTrue(lib.isShared(o1));
@@ -502,13 +488,13 @@ public class DynamicObjectLibraryTest {
         assertTrue(lib.setPropertyFlags(o1, k1, f1));
         assertEquals(f1, lib.getPropertyFlagsOrDefault(o1, k1, -1));
         assertEquals(f1, uncachedGetProperty(o1, k1).getFlags());
-        assertTrue(lib.updatePropertyFlags(o1, k1, f -> f | f2));
+        assertTrue(updatePropertyFlags(lib, o1, k1, f -> f | f2));
         assertEquals(f3, lib.getPropertyFlagsOrDefault(o1, k1, -1));
         assertEquals(f3, uncachedGetProperty(o1, k1).getFlags());
 
         Shape before = o1.getShape();
         assertTrue(lib.setPropertyFlags(o1, k1, f3));
-        assertFalse(lib.updatePropertyFlags(o1, k1, f -> f | f2));
+        assertFalse(updatePropertyFlags(lib, o1, k1, f -> f | f2));
         assertEquals(f3, lib.getPropertyFlagsOrDefault(o1, k1, -1));
         assertEquals(f3, uncachedGetProperty(o1, k1).getFlags());
         assertSame(before, o1.getShape());
@@ -517,12 +503,25 @@ public class DynamicObjectLibraryTest {
         uncachedPut(o2, k1, v2, 0);
         assertTrue(lib.setPropertyFlags(o2, k1, f1));
         assertEquals(f1, lib.getPropertyFlagsOrDefault(o2, k1, -1));
-        assertTrue(lib.updatePropertyFlags(o2, k1, f -> f | f2));
+        assertTrue(updatePropertyFlags(lib, o2, k1, f -> f | f2));
         assertEquals(f3, lib.getPropertyFlagsOrDefault(o2, k1, -1));
         assertSame(o1.getShape(), o2.getShape());
 
         DynamicObject o3 = createEmpty();
         assertFalse(lib.setPropertyFlags(o3, k1, f1));
+    }
+
+    private static boolean updatePropertyFlags(DynamicObjectLibrary lib, DynamicObject obj, String key, IntUnaryOperator updateFunction) {
+        Property property = lib.getProperty(obj, key);
+        if (property == null) {
+            return false;
+        }
+        int oldFlags = property.getFlags();
+        int newFlags = updateFunction.applyAsInt(oldFlags);
+        if (oldFlags == newFlags) {
+            return false;
+        }
+        return lib.setPropertyFlags(obj, key, newFlags);
     }
 
     @Test
@@ -662,6 +661,55 @@ public class DynamicObjectLibraryTest {
     }
 
     @Test
+    public void testPutConstant1() {
+        DynamicObject o1 = createEmpty();
+        String k1 = "key1";
+        int v1 = 42;
+        int v2 = 43;
+        int flags = 0xf;
+
+        DynamicObjectLibrary setNode1 = createLibraryForKey(k1);
+
+        setNode1.putConstant(o1, k1, v1, 0);
+        assertTrue(o1.getShape().getProperty(k1).getLocation().isConstant());
+        assertEquals(0, o1.getShape().getProperty(k1).getFlags());
+        assertEquals(v1, uncachedGet(o1, k1));
+
+        setNode1.putConstant(o1, k1, v1, flags);
+        assertTrue(o1.getShape().getProperty(k1).getLocation().isConstant());
+        assertEquals(flags, o1.getShape().getProperty(k1).getFlags());
+        assertEquals(v1, uncachedGet(o1, k1));
+
+        setNode1.put(o1, k1, v2);
+        assertFalse(o1.getShape().getProperty(k1).getLocation().isConstant());
+        assertEquals(flags, o1.getShape().getProperty(k1).getFlags());
+        assertEquals(v2, uncachedGet(o1, k1));
+    }
+
+    @Test
+    public void testPutConstant2() {
+        DynamicObject o1 = createEmpty();
+        String k1 = "key1";
+        int v1 = 42;
+        int v2 = 43;
+        int flags = 0xf;
+
+        DynamicObjectLibrary setNode1 = createLibraryForKey(k1);
+
+        setNode1.putConstant(o1, k1, v1, 0);
+        assertTrue(o1.getShape().getProperty(k1).getLocation().isConstant());
+        assertEquals(0, o1.getShape().getProperty(k1).getFlags());
+        assertEquals(v1, uncachedGet(o1, k1));
+
+        setNode1.putWithFlags(o1, k1, v2, flags);
+        if (isNewLayout(o1)) {
+            assertFalse(o1.getShape().getProperty(k1).getLocation().isConstant());
+        }
+        assertEquals(flags, o1.getShape().getProperty(k1).getFlags());
+        assertEquals(v2, uncachedGet(o1, k1));
+    }
+
+    @Test
     public void testCachedShape() {
         String key = "testKey";
         DynamicObject o1 = createEmpty();
@@ -679,6 +727,61 @@ public class DynamicObjectLibraryTest {
         assertEquals(42, node.execute(o1));
         assertEquals(42, node.execute(o2));
         assertEquals(42, node.execute(o2));
+    }
+
+    @Test
+    public void testPropertyAndShapeFlags() {
+        DynamicObject o1 = createEmpty();
+        fillObjectWithProperties(o1, false);
+        updateAllFlags(o1, 3);
+        DynamicObject o2 = createEmpty();
+        fillObjectWithProperties(o2, true);
+        DynamicObject o3 = createEmpty();
+        fillObjectWithProperties(o3, false);
+        DynamicObjectLibrary.getUncached().put(o1, "k13", false);
+        updateAllFlags(o2, 3);
+        updateAllFlags(o3, 3);
+        DynamicObjectLibrary library = createLibrary(DynamicObjectLibrary.class, o1);
+        assertEquals(1, library.getOrDefault(o3, "k13", null));
+    }
+
+    private void fillObjectWithProperties(DynamicObject obj, boolean b) {
+        DynamicObjectLibrary library = createLibrary(DynamicObjectLibrary.class, obj);
+
+        for (int i = 0; i < 20; i++) {
+            Object value;
+            if (i % 2 == 0) {
+                if (i == 14) {
+                    value = "string";
+                } else {
+                    value = new ArrayList<>();
+                }
+            } else {
+                if (b && i == 13) {
+                    value = new ArrayList<>();
+                } else {
+                    value = 1;
+                }
+            }
+            int flags = (i == 17 || i == 13) ? 1 : 3;
+            library.putWithFlags(obj, "k" + i, value, flags);
+        }
+    }
+
+    private void updateAllFlags(DynamicObject obj, int flags) {
+        DynamicObjectLibrary propertyFlags = createLibrary(DynamicObjectLibrary.class, obj);
+
+        for (Property property : propertyFlags.getPropertyArray(obj)) {
+            int oldFlags = property.getFlags();
+            int newFlags = oldFlags | flags;
+            if (newFlags != oldFlags) {
+                Object key = property.getKey();
+                propertyFlags.setPropertyFlags(obj, key, newFlags);
+            }
+        }
+
+        DynamicObjectLibrary shapeFlags = createLibrary(DynamicObjectLibrary.class, obj);
+        shapeFlags.setShapeFlags(obj, flags);
     }
 
     private static void uncachedPut(DynamicObject obj, Object key, Object value) {
@@ -706,29 +809,11 @@ public class DynamicObjectLibraryTest {
     }
 
     private List<Object> getKeyList(DynamicObject obj) {
-        if (mode == LibraryMode.Uncached) {
-            return obj.getShape().getKeyList();
-        } else {
-            return Arrays.asList(DynamicObjectLibrary.getUncached().getKeyArray(obj));
-        }
+        DynamicObjectLibrary objectLibrary = createLibrary(DynamicObjectLibrary.class, obj);
+        return Arrays.asList(objectLibrary.getKeyArray(obj));
     }
 
     private static boolean isNewLayout(DynamicObject obj) {
         return !(obj instanceof DynamicObjectImpl);
-    }
-
-    static <T extends NodeInterface> T adopt(T node) {
-        assert ((Node) node).isAdoptable();
-        RootNode dummyNode = new RootNode(null, null) {
-            @Child T child = node;
-
-            @TruffleBoundary
-            @Override
-            public Object execute(VirtualFrame frame) {
-                throw new UnsupportedOperationException();
-            }
-        };
-        dummyNode.adoptChildren();
-        return node;
     }
 }

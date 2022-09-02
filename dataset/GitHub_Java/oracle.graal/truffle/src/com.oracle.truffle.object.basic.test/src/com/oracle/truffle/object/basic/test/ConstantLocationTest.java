@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,24 +40,35 @@
  */
 package com.oracle.truffle.object.basic.test;
 
+import java.util.Arrays;
+import java.util.List;
+
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.api.object.DynamicObjectLibrary;
 import com.oracle.truffle.api.object.FinalLocationException;
 import com.oracle.truffle.api.object.IncompatibleLocationException;
-import com.oracle.truffle.api.object.Layout;
 import com.oracle.truffle.api.object.Location;
 import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
-import com.oracle.truffle.object.basic.DefaultLayoutFactory;
+import com.oracle.truffle.api.test.AbstractParametrizedLibraryTest;
 
-public class ConstantLocationTest {
-    private static final DynamicObjectLibrary LIBRARY = DynamicObjectLibrary.getUncached();
+@SuppressWarnings("deprecation")
+@RunWith(Parameterized.class)
+public class ConstantLocationTest extends AbstractParametrizedLibraryTest {
 
-    final Layout layout = new DefaultLayoutFactory().createLayout(Layout.newLayout());
+    @Parameters(name = "{0}")
+    public static List<TestRun> data() {
+        return Arrays.asList(TestRun.values());
+    }
+
+    final com.oracle.truffle.api.object.Layout layout = com.oracle.truffle.api.object.Layout.newLayout().build();
     final Shape rootShape = layout.createShape(new ObjectType());
     final Object value = new Object();
     final Location constantLocation = rootShape.allocator().constantLocation(value);
@@ -66,9 +77,12 @@ public class ConstantLocationTest {
     @Test
     public void testConstantLocation() {
         DynamicObject object = shapeWithConstant.newInstance();
-        Assert.assertSame(value, LIBRARY.getOrDefault(object, "constant", null));
 
-        LIBRARY.putIfPresent(object, "constant", value);
+        DynamicObjectLibrary library = createLibrary(DynamicObjectLibrary.class, object);
+
+        Assert.assertSame(value, library.getOrDefault(object, "constant", null));
+
+        library.putIfPresent(object, "constant", value);
         Assert.assertSame(shapeWithConstant, object.getShape());
 
         Property property = object.getShape().getProperty("constant");
@@ -90,19 +104,22 @@ public class ConstantLocationTest {
             Assert.assertTrue(e instanceof FinalLocationException);
         }
 
-        Assert.assertSame(value, LIBRARY.getOrDefault(object, "constant", null));
+        Assert.assertSame(value, library.getOrDefault(object, "constant", null));
     }
 
     @Test
     public void testMigrateConstantLocation() {
         DynamicObject object = shapeWithConstant.newInstance();
+
+        DynamicObjectLibrary library = createLibrary(DynamicObjectLibrary.class, object);
+
         Assert.assertSame(shapeWithConstant, object.getShape());
-        Assert.assertSame(value, LIBRARY.getOrDefault(object, "constant", null));
+        Assert.assertSame(value, library.getOrDefault(object, "constant", null));
 
         Object newValue = new Object();
-        LIBRARY.putIfPresent(object, "constant", newValue);
+        library.putIfPresent(object, "constant", newValue);
         Assert.assertNotSame(shapeWithConstant, object.getShape());
-        Assert.assertSame(newValue, LIBRARY.getOrDefault(object, "constant", null));
+        Assert.assertSame(newValue, library.getOrDefault(object, "constant", null));
     }
 
     @SuppressWarnings("deprecation")
@@ -111,9 +128,12 @@ public class ConstantLocationTest {
         Property property = shapeWithConstant.getProperty("constant");
 
         DynamicObject object = rootShape.newInstance();
+
+        DynamicObjectLibrary library = createLibrary(DynamicObjectLibrary.class, object);
+
         property.setSafe(object, value, rootShape, shapeWithConstant);
         Assert.assertSame(shapeWithConstant, object.getShape());
-        Assert.assertSame(value, LIBRARY.getOrDefault(object, "constant", null));
+        Assert.assertSame(value, library.getOrDefault(object, "constant", null));
 
         DynamicObject object2 = rootShape.newInstance();
         Object newValue = new Object();
@@ -126,7 +146,7 @@ public class ConstantLocationTest {
             // Expected
         }
         Assert.assertSame(rootShape, object2.getShape());
-        Assert.assertEquals(false, LIBRARY.containsKey(object2, "constant"));
+        Assert.assertEquals(false, library.containsKey(object2, "constant"));
     }
 
 }

@@ -42,13 +42,9 @@ package com.oracle.truffle.object.dsl.processor;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.annotation.processing.ProcessingEnvironment;
@@ -76,7 +72,7 @@ public class LayoutGenerator {
         stream.printf("package %s;%n", layout.getPackageName());
         stream.println();
 
-        generateImports(stream, layout.getPackageName());
+        generateImports(stream);
 
         stream.println();
         stream.println("@SuppressWarnings(\"deprecation\")");
@@ -122,7 +118,7 @@ public class LayoutGenerator {
         stream.println("}");
     }
 
-    private void generateImports(PrintStream stream, String importingPackage) {
+    private void generateImports(PrintStream stream) {
         boolean needsAtomicInteger = false;
         boolean needsAtomicBoolean = false;
         boolean needsAtomicReference = false;
@@ -130,8 +126,6 @@ public class LayoutGenerator {
         boolean needsFinalLocationException = false;
         boolean needsHiddenKey = false;
         boolean needsBoundary = false;
-
-        HashSet<String> imports = new HashSet<>();
 
         for (PropertyModel property : layout.getProperties()) {
             if (!property.isShapeProperty() && !property.hasIdentifier()) {
@@ -161,76 +155,60 @@ public class LayoutGenerator {
         }
 
         if (layout.hasFinalInstanceProperties() || layout.hasNonNullableInstanceProperties()) {
-            imports.add("java.util.EnumSet");
+            stream.println("import java.util.EnumSet;");
         }
 
         if (needsAtomicBoolean) {
-            imports.add("java.util.concurrent.atomic.AtomicBoolean");
+            stream.println("import java.util.concurrent.atomic.AtomicBoolean;");
         }
 
         if (needsAtomicInteger) {
-            imports.add("java.util.concurrent.atomic.AtomicInteger");
+            stream.println("import java.util.concurrent.atomic.AtomicInteger;");
         }
 
         if (needsAtomicReference) {
-            imports.add("java.util.concurrent.atomic.AtomicReference");
+            stream.println("import java.util.concurrent.atomic.AtomicReference;");
         }
 
         if (!layout.hasBuilder()) {
-            imports.add("com.oracle.truffle.api.CompilerAsserts");
+            stream.println("import com.oracle.truffle.api.CompilerAsserts;");
         }
-        imports.add("com.oracle.truffle.api.dsl.GeneratedBy");
+        stream.println("import com.oracle.truffle.api.dsl.GeneratedBy;");
 
         if (needsBoundary) {
-            imports.add("com.oracle.truffle.api.CompilerDirectives.TruffleBoundary");
+            stream.println("import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;");
         }
 
-        imports.add("com.oracle.truffle.api.object.DynamicObject");
-        imports.add("com.oracle.truffle.api.object.DynamicObjectFactory");
+        stream.println("import com.oracle.truffle.api.object.DynamicObject;");
+        stream.println("import com.oracle.truffle.api.object.DynamicObjectFactory;");
 
         if (needsFinalLocationException) {
-            imports.add("com.oracle.truffle.api.object.FinalLocationException");
+            stream.println("import com.oracle.truffle.api.object.FinalLocationException;");
         }
 
         if (needsHiddenKey) {
-            imports.add("com.oracle.truffle.api.object.HiddenKey");
+            stream.println("import com.oracle.truffle.api.object.HiddenKey;");
         }
 
         if (needsIncompatibleLocationException) {
-            imports.add("com.oracle.truffle.api.object.IncompatibleLocationException");
+            stream.println("import com.oracle.truffle.api.object.IncompatibleLocationException;");
         }
 
         if (layout.hasFinalInstanceProperties() || layout.hasNonNullableInstanceProperties()) {
-            imports.add("com.oracle.truffle.api.object.LocationModifier");
+            stream.println("import com.oracle.truffle.api.object.LocationModifier;");
         }
 
-        imports.add("com.oracle.truffle.api.object.ObjectType");
+        stream.println("import com.oracle.truffle.api.object.ObjectType;");
 
         if (!layout.getInstanceProperties().isEmpty()) {
-            imports.add("com.oracle.truffle.api.object.Property");
+            stream.println("import com.oracle.truffle.api.object.Property;");
         }
 
-        imports.add("com.oracle.truffle.api.object.Shape");
-        imports.add(layout.getInterfaceFullName());
+        stream.println("import com.oracle.truffle.api.object.Shape;");
+        stream.printf("import %s;%n", layout.getInterfaceFullName());
 
         if (layout.getSuperLayout() != null) {
-            imports.add(String.format("%s.%sLayoutImpl", layout.getSuperLayout().getPackageName(), layout.getSuperLayout().getName()));
-        }
-
-        Pattern packageClassBoundary = Pattern.compile("\\.([A-Z])");
-        String[] importsArray = imports.toArray(new String[imports.size()]);
-        Arrays.sort(importsArray);
-        for (String i : importsArray) {
-            Matcher matcher = packageClassBoundary.matcher(i);
-            if (matcher.find()) {
-                String packageName = i.substring(0, matcher.start());
-                String className = i.substring(matcher.start() + 1);
-                if (packageName.equals(importingPackage) && className.indexOf('.') == -1) {
-                    // No need to import top level class in the same package
-                    continue;
-                }
-            }
-            stream.printf("import %s;%n", i);
+            stream.printf("import %s.%sLayoutImpl;%n", layout.getSuperLayout().getPackageName(), layout.getSuperLayout().getName());
         }
     }
 
