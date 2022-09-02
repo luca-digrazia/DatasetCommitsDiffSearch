@@ -28,7 +28,6 @@ import java.lang.management.MemoryMXBean;
 import java.util.List;
 
 import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.nodes.spi.GCProvider;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.Platform;
@@ -61,6 +60,9 @@ public abstract class Heap {
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public abstract boolean isAllocationDisallowed();
 
+    /** Create a PinnedAllocator. */
+    public abstract PinnedAllocator createPinnedAllocator();
+
     /*
      * Collection methods.
      */
@@ -86,7 +88,6 @@ public abstract class Heap {
      *
      * TODO: Would an "Unsigned getBootImageObjectHeaderBits()" method be sufficient?
      */
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public abstract ObjectHeader getObjectHeader();
 
     /** Get the MemoryMXBean for this heap. */
@@ -100,9 +101,4 @@ public abstract class Heap {
 
     /** Reset the heap to the normal execution state. */
     public abstract void endSafepoint();
-
-    /**
-     * Returns a suitable {@link GCProvider} for the garbage collector that is used for this heap.
-     */
-    public abstract GCProvider getGCProvider();
 }
