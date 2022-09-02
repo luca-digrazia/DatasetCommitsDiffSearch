@@ -47,7 +47,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.AccessControlContext;
 import java.security.ProtectionDomain;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -2683,23 +2682,22 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     @SuppressWarnings("unused")
     public static long JVM_GetNanoTimeAdjustment(@Host(Class.class) StaticObject ignored, long offset) {
-        Instant now = Instant.now();
-        long secs = now.getEpochSecond();
-        long nanos = now.getNano();
+        long nanos = System.nanoTime();
+        long secs = nanos / ONE_BILLION;
+        long nsecs = nanos % ONE_BILLION;
         long diff = secs - offset;
         if (diff > MAX_DIFF || diff < -MAX_DIFF) {
             return -1;
         }
-        // Test above also guards against overflow.
-        return (diff * ONE_BILLION) + nanos;
+        return (diff * ONE_BILLION) + nsecs;
     }
 
     @VmImpl
     @JniImpl
     @TruffleBoundary
     public static long JVM_MaxObjectInspectionAge() {
-        // TODO: somehow use GC.maxObjectInspectionAge() (not supported by SVM);
         return 0;
+        // return GC.maxObjectInspectionAge();
     }
 
     @VmImpl
