@@ -54,7 +54,6 @@ public class TruffleDecodingPlugins {
     private static void registerCompilerDirectivesPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
         final ResolvedJavaType compilerDirectivesType = TruffleCompilerRuntime.getRuntime().resolveType(metaAccess, "com.oracle.truffle.api.CompilerDirectives");
         Registration r = new Registration(plugins, new ResolvedJavaSymbol(compilerDirectivesType));
-        r.setAllowOverwrite(true);
         r.register0("inFirstTier", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
