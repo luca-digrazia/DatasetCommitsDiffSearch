@@ -36,41 +36,30 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceFunctionType;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
-import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
-public class LLVMForeignConstructorCallNode extends LLVMForeignCallNode {
-    private final Type clazzType;
-    private final LLVMLanguage language;
+public class LLVMForeignFunctionCallNode extends LLVMForeignCallNode {
 
-    public static LLVMForeignConstructorCallNode create(LLVMLanguage language, LLVMFunctionDescriptor function, LLVMInteropType interopType, LLVMSourceFunctionType sourceType,
-                    LLVMInteropType.Structured structuredType) {
-        Type escapeType = function.getLLVMFunction().getType().getArgumentType(0);
-        return new LLVMForeignConstructorCallNode(language, function, interopType, sourceType, structuredType, escapeType);
-
+    protected LLVMForeignFunctionCallNode(LLVMLanguage language, LLVMFunctionDescriptor function, LLVMInteropType interopType, LLVMSourceFunctionType sourceType) {
+        super(language, function, interopType, sourceType, getReturnBaseType(interopType), function.getLLVMFunction().getType().getReturnType());
     }
 
-    protected LLVMForeignConstructorCallNode(LLVMLanguage language, LLVMFunctionDescriptor function, LLVMInteropType interopType, LLVMSourceFunctionType sourceType,
-                    LLVMInteropType.Structured structuredType, Type escapeType) {
-        super(language, function, interopType, sourceType, structuredType, escapeType);
-        this.language = language;
-        this.clazzType = escapeType;
+    public static LLVMForeignFunctionCallNode create(LLVMLanguage language, LLVMFunctionDescriptor function, LLVMInteropType interopType, LLVMSourceFunctionType sourceType) {
+        return new LLVMForeignFunctionCallNode(language, function, interopType, sourceType);
     }
 
     @Override
     protected Object doCall(VirtualFrame frame, LLVMStack stack) throws ArityException, TypeOverflowException {
-        Object[] rawArguments = frame.getArguments();
-        rawArguments[0] = language.getLLVMMemory().allocateMemory(this, clazzType.getBitSize());
-        if (packArguments.toLLVM.length != rawArguments.length) {
-            // arguments also contain 'self' object, thus -1 for argCount
-            throw ArityException.create(packArguments.toLLVM.length - 1, rawArguments.length - 1);
+        return callNode.call(packArguments.execute(frame.getArguments(), stack));
+    }
+
+    private static LLVMInteropType.Structured getReturnBaseType(LLVMInteropType functionType) {
+        if (functionType instanceof LLVMInteropType.Function) {
+            LLVMInteropType returnType = ((LLVMInteropType.Function) functionType).getReturnType();
+            if (returnType instanceof LLVMInteropType.Value) {
+                return ((LLVMInteropType.Value) returnType).baseType;
+            }
         }
-        Object[] arguments = packArguments.execute(rawArguments, stack);
-        callNode.call(arguments);
-        /*
-         * The packArgumentsNode adds the stack pointer to the argument list. Therefore,
-         * rawArguments[0] is now at arguments[1].
-         */
-        return arguments[1];
+        return null;
     }
 }
