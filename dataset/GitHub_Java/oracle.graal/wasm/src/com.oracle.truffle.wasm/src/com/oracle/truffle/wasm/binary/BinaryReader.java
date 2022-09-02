@@ -221,15 +221,11 @@ public class BinaryReader extends BinaryStreamReader {
 
     private void readBlock(WasmBlockNode currentBlock, ExecutionState state, byte returnTypeId) {
         ByteList constantLengthTable = new ByteList();
-        int opcode;
+        int instruction;
         int startStackSize = state.stackSize();
         do {
-            opcode = read1() & 0xFF;
-            switch (opcode) {
-                case NOP:
-                    break;
-                case END:
-                    break;
+            instruction = read1() & 0xFF;
+            switch (instruction) {
                 case BLOCK:
                     byte blockTypeId = readBlockType();
                     int startOffset = offset();
@@ -268,10 +264,9 @@ public class BinaryReader extends BinaryStreamReader {
                     state.push();
                     break;
                 default:
-                    Assert.fail(Assert.format("Unknown opcode: 0x%02x", opcode));
                     break;
             }
-        } while (opcode != 0x0B);
+        } while (instruction != 0x0B);
         currentBlock.constantLengthTable = constantLengthTable.toArray();
         checkValidStateOnBlockExit(returnTypeId, state, startStackSize);
     }
