@@ -70,7 +70,7 @@ public final class InvokeDynamicCallSiteNode extends QuickNode {
     }
 
     // Transforms ints to sub-words
-    public static Object unbasic(Object arg, Symbol<Type> t) {
+    private static Object unbasic(Object arg, Symbol<Type> t) {
         if (t == Type._boolean) {
             return ((int) arg != 0);
         } else if (t == Type._short) { // Unbox to cast.

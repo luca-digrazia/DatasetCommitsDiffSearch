@@ -83,9 +83,6 @@ public final class Method implements ModifiersProvider, ContextAccess {
     @CompilationFinal(dimensions = 1) //
     private final Symbol<Type>[] parsedSignature;
 
-    @CompilationFinal int vtableIndex;
-    @CompilationFinal int itableIndex;
-
     private final ExceptionsAttribute exceptionsAttribute;
     private final CodeAttribute codeAttribute;
 
@@ -151,7 +148,7 @@ public final class Method implements ModifiersProvider, ContextAccess {
     public final void initRefKind() {
         if (isStatic()) {
             this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeStatic;
-        } else if (isPrivate() || isConstructor()) {
+        } else if (isPrivate() || isConstructor() || isFinal() || declaringKlass.isFinalFlagSet()) {
             this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeSpecial;
         } else if (declaringKlass.isInterface()) {
             this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeInterface;
@@ -509,21 +506,5 @@ public final class Method implements ModifiersProvider, ContextAccess {
         method.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         intrinsicLinkTo.put(signature, method);
         return method;
-    }
-
-    void setVTableIndex(int i) {
-        this.vtableIndex = i;
-    }
-
-    public int getVTableIndex() {
-        return vtableIndex;
-    }
-
-    void setITableIndex(int i) {
-        this.itableIndex = i;
-    }
-
-    public int getITableIndex() {
-        return itableIndex;
     }
 }
