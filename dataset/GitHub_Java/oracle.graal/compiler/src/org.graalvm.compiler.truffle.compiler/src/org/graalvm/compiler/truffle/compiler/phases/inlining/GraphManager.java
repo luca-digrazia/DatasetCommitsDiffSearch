@@ -31,7 +31,6 @@ import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.EncodedGraph;
 import org.graalvm.compiler.nodes.Invoke;
-import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
@@ -47,7 +46,6 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 final class GraphManager {
 
-    public static final int TRIVIAL_NODE_COUNT_LIMIT = 500;
     private final PartialEvaluator partialEvaluator;
     private final EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCacheForInlining;
     private final EconomicMap<CompilableTruffleAST, GraphManager.Entry> irCache = EconomicMap.create();
@@ -66,7 +64,7 @@ final class GraphManager {
             final PartialEvaluator.Request request = newRequest(truffleAST, false);
             request.graph.getAssumptions().record(new TruffleAssumption(truffleAST.getNodeRewritingAssumptionConstant()));
             partialEvaluator.doGraphPE(request, plugin, graphCacheForInlining);
-            entry = new Entry(request.graph, plugin);
+            entry = new Entry(request.graph, plugin.getInvokeToTruffleCallNode(), plugin.getIndirectInvokes(), !plugin.hasMaterializedCall());
             irCache.put(truffleAST, entry);
         }
         return entry;
@@ -91,7 +89,7 @@ final class GraphManager {
     Entry peRoot() {
         final PEAgnosticInlineInvokePlugin plugin = newPlugin();
         partialEvaluator.doGraphPE(rootRequest, plugin, graphCacheForInlining);
-        return new Entry(rootRequest.graph, plugin);
+        return new Entry(rootRequest.graph, plugin.getInvokeToTruffleCallNode(), plugin.getIndirectInvokes(), !plugin.hasMaterializedCall());
     }
 
     UnmodifiableEconomicMap<Node, Node> doInline(Invoke invoke, StructuredGraph ir, CompilableTruffleAST truffleAST) {
@@ -116,11 +114,11 @@ final class GraphManager {
         final List<Invoke> indirectInvokes;
         final boolean trivial;
 
-        Entry(StructuredGraph graph, PEAgnosticInlineInvokePlugin plugin) {
+        Entry(StructuredGraph graph, EconomicMap<Invoke, TruffleCallNode> invokeToTruffleCallNode, List<Invoke> indirectInvokes, boolean trivial) {
             this.graph = graph;
-            this.invokeToTruffleCallNode = plugin.getInvokeToTruffleCallNode();
-            this.indirectInvokes = plugin.getIndirectInvokes();
-            this.trivial = !plugin.hasMaterializedCall() && graph.getNodes(LoopBeginNode.TYPE).count() == 0 && graph.getNodeCount() < TRIVIAL_NODE_COUNT_LIMIT;
+            this.invokeToTruffleCallNode = invokeToTruffleCallNode;
+            this.indirectInvokes = indirectInvokes;
+            this.trivial = trivial;
         }
     }
 
