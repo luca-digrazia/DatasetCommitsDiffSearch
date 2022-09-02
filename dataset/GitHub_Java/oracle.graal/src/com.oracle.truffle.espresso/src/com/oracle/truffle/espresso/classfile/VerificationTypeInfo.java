@@ -81,7 +81,7 @@ public abstract class VerificationTypeInfo {
     }
 }
 
-final class PrimitiveTypeInfo extends VerificationTypeInfo {
+class PrimitiveTypeInfo extends VerificationTypeInfo {
     private static final PrimitiveTypeInfo Bogus = new PrimitiveTypeInfo(ITEM_Bogus);
     private static final PrimitiveTypeInfo Integer = new PrimitiveTypeInfo(ITEM_Integer);
     private static final PrimitiveTypeInfo Float = new PrimitiveTypeInfo(ITEM_Float);
@@ -113,8 +113,8 @@ final class PrimitiveTypeInfo extends VerificationTypeInfo {
     }
 }
 
-final class UninitializedThis extends VerificationTypeInfo {
-    private static final UninitializedThis UNINITIALIZED_THIS = new UninitializedThis();
+class UninitializedThis extends VerificationTypeInfo {
+    private static UninitializedThis UNINITIALIZED_THIS = new UninitializedThis();
 
     private UninitializedThis() {
         super(ITEM_InitObject);
@@ -130,7 +130,7 @@ final class UninitializedThis extends VerificationTypeInfo {
     }
 }
 
-final class UninitializedVariable extends VerificationTypeInfo {
+class UninitializedVariable extends VerificationTypeInfo {
     private final int newOffset;
 
     UninitializedVariable(int newOffset) {
@@ -149,7 +149,7 @@ final class UninitializedVariable extends VerificationTypeInfo {
     }
 }
 
-final class ReferenceVariable extends VerificationTypeInfo {
+class ReferenceVariable extends VerificationTypeInfo {
     private final int constantPoolOffset;
 
     ReferenceVariable(int constantPoolOffset) {
