@@ -156,7 +156,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     @CompilationFinal PolyglotContextConfig config; // effectively final
 
     // map from class to language index
-    @CompilationFinal private volatile FinalIntMap languageIndexMap;
+    @CompilationFinal private FinalIntMap languageIndexMap;
 
     private final List<PolyglotContextImpl> childContexts = new ArrayList<>();
     boolean inContextPreInitialization; // effectively final
