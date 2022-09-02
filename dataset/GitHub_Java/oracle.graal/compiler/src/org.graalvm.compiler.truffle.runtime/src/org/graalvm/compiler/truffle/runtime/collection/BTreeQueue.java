@@ -276,7 +276,7 @@ public class BTreeQueue<E> implements Pool<E> {
             root = nroot;
             return true;
         } else if (result == FAILURE_DUPLICATE) {
-            throw new IllegalArgumentException("Inserted duplicate key: " + x);
+            return false;
         } else {
             throw new IllegalStateException("Unexpected result: " + result);
         }
@@ -442,9 +442,6 @@ public class BTreeQueue<E> implements Pool<E> {
     private Object removeFirst(Node<E> node) {
         if (node instanceof Leaf<?>) {
             final E result = (E) node.children[0];
-            if (result == null) {
-                return null;
-            }
             int pos = 0;
             while (pos < BRANCHING_FACTOR) {
                 final Object next = pos + 1 < node.children.length ? node.children[pos + 1] : null;
