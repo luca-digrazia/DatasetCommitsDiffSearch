@@ -30,6 +30,7 @@ import java.io.CharArrayWriter;
 import java.io.PrintWriter;
 import java.lang.annotation.Annotation;
 import java.lang.invoke.MethodHandle;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -41,6 +42,7 @@ import java.util.ServiceLoader;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 
@@ -135,10 +137,11 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
 
     private static final int JAVA_SPECIFICATION_VERSION = getJavaSpecificationVersion();
     private static final boolean Java8OrEarlier = JAVA_SPECIFICATION_VERSION <= 8;
-    final Consumer<CompilationTask> compilationAction = new Consumer<CompilationTask>() {
+    // TODO Public only for tests, should be package private
+    public final BiConsumer<CancellableCompileTask, WeakReference<OptimizedCallTarget>> compilationAction = new BiConsumer<CancellableCompileTask, WeakReference<OptimizedCallTarget>>() {
         @Override
-        public void accept(CompilationTask task) {
-            OptimizedCallTarget callTarget = task.targetRef.get();
+        public void accept(CancellableCompileTask task, WeakReference<OptimizedCallTarget> targetRef) {
+            OptimizedCallTarget callTarget = targetRef.get();
             if (callTarget != null && task.start()) {
                 try {
                     doCompile(callTarget, task);
@@ -767,9 +770,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     public abstract BackgroundCompileQueue getCompileQueue();
 
     @SuppressWarnings("try")
-    public CompilationTask submitForCompilation(OptimizedCallTarget optimizedCallTarget, boolean lastTierCompilation) {
+    public CancellableCompileTask submitForCompilation(OptimizedCallTarget optimizedCallTarget, boolean lastTierCompilation) {
         Priority priority = new Priority(optimizedCallTarget.getCallAndLoopCount(), lastTierCompilation ? Priority.Tier.LAST : Priority.Tier.FIRST);
-        return getCompileQueue().submitCompilation(priority, optimizedCallTarget);
+        return getCompileQueue().submitTask(priority, optimizedCallTarget, compilationAction);
 
     }
 
@@ -780,7 +783,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         return enabled;
     }
 
-    public void finishCompilation(OptimizedCallTarget optimizedCallTarget, CompilationTask task, boolean mayBeAsynchronous) {
+    public void finishCompilation(OptimizedCallTarget optimizedCallTarget, CancellableCompileTask task, boolean mayBeAsynchronous) {
 
         if (!mayBeAsynchronous) {
             try {
@@ -799,7 +802,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         }
     }
 
-    private static void uninterruptibleWaitForCompilation(CompilationTask task) throws ExecutionException {
+    private static void uninterruptibleWaitForCompilation(CancellableCompileTask task) throws ExecutionException {
         // We want to keep the interrupt bit if we are interrupted.
         // But we also want to maintain the semantics of foreground compilation:
         // waiting for the compilation to finish, even if it takes long,
@@ -822,7 +825,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     public void waitForCompilation(OptimizedCallTarget optimizedCallTarget, long timeout) throws ExecutionException, TimeoutException {
-        CompilationTask task = optimizedCallTarget.getCompilationTask();
+        CancellableCompileTask task = optimizedCallTarget.getCompilationTask();
         if (task != null) {
             try {
                 task.awaitCompletion(timeout, TimeUnit.MILLISECONDS);
