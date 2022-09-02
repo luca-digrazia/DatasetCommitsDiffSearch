@@ -48,7 +48,6 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.Reader;
-import java.lang.reflect.AccessibleObject;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
@@ -66,7 +65,6 @@ import java.util.logging.Handler;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.PolyglotException;
@@ -142,7 +140,6 @@ public abstract class AbstractPolyglotImpl {
 
         public abstract StackFrame newPolyglotStackTraceElement(PolyglotException e, AbstractStackFrameImpl impl);
 
-        public abstract boolean allowAccess(HostAccess conf, AccessibleObject member);
     }
 
     // shared SPI
@@ -170,9 +167,9 @@ public abstract class AbstractPolyglotImpl {
     protected void initialize() {
     }
 
-    public abstract Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> arguments, long timeout, TimeUnit timeoutUnit, boolean sandbox,
-                    long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean allowExperimentalOptions, boolean boundEngine, MessageTransport messageInterceptor, Object logHandlerOrStream,
-                    HostAccess conf);
+    public abstract Engine buildEngine(OutputStream out, OutputStream err, InputStream in, Map<String, String> options, long timeout, TimeUnit timeoutUnit, boolean sandbox,
+                    long maximumAllowedAllocationBytes, boolean useSystemProperties, boolean allowExperimentalOptions, boolean boundEngine, MessageTransport messageInterceptor,
+                    Object logHandlerOrStream);
 
     public abstract void preInitializeEngine();
 
