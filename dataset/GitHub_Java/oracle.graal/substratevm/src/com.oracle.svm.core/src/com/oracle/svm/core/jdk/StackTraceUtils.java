@@ -64,12 +64,12 @@ public class StackTraceUtils {
     /**
      * Implements the shared semantic of Reflection.getCallerClass and StackWalker.getCallerClass.
      */
-    public static Class<?> getCallerClass(Pointer startSP, boolean showLambdaFrames) {
-        return getCallerClass(startSP, showLambdaFrames, 0, true);
+    public static Class<?> getCallerClass(Pointer startSP) {
+        return getCallerClass(startSP, 0, true);
     }
 
-    public static Class<?> getCallerClass(Pointer startSP, boolean showLambdaFrames, int depth, boolean ignoreFirst) {
-        GetCallerClassVisitor visitor = new GetCallerClassVisitor(showLambdaFrames, depth, ignoreFirst);
+    public static Class<?> getCallerClass(Pointer startSP, int depth, boolean ignoreFirst) {
+        GetCallerClassVisitor visitor = new GetCallerClassVisitor(depth, ignoreFirst);
         JavaStackWalker.walkCurrentThread(startSP, visitor);
         return visitor.result;
     }
@@ -175,13 +175,11 @@ class BuildStackTraceVisitor extends JavaStackFrameVisitor {
 }
 
 class GetCallerClassVisitor extends JavaStackFrameVisitor {
-    private final boolean showLambdaFrames;
     private int depth;
     private boolean ignoreFirst;
     Class<?> result;
 
-    GetCallerClassVisitor(boolean showLambdaFrames, int depth, boolean ignoreFirst) {
-        this.showLambdaFrames = showLambdaFrames;
+    GetCallerClassVisitor(int depth, boolean ignoreFirst) {
         this.ignoreFirst = ignoreFirst;
         this.depth = depth;
         assert depth >= 0;
@@ -204,7 +202,7 @@ class GetCallerClassVisitor extends JavaStackFrameVisitor {
             ignoreFirst = false;
             return true;
 
-        } else if (!StackTraceUtils.shouldShowFrame(frameInfo, showLambdaFrames, false, false)) {
+        } else if (!StackTraceUtils.shouldShowFrame(frameInfo, true, false, false)) {
             /*
              * Always ignore the frame. It is an internal frame of the VM or a frame related to
              * reflection.
