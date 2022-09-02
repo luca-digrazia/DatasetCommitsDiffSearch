@@ -123,7 +123,7 @@ final class PolyglotLimits {
         final EventContext eventContext;
         final PolyglotEngineImpl engine;
         final FrameSlot readContext;
-        final ConditionProfile needsLookup = ConditionProfile.create();
+        final ConditionProfile needsLookup = ConditionProfile.createBinaryProfile();
         final FrameDescriptor descriptor;
         @CompilationFinal private boolean seenInnerContext;
 
