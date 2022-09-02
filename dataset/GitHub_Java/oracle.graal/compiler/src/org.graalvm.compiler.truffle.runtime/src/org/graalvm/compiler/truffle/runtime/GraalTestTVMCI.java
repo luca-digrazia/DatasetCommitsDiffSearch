@@ -32,6 +32,7 @@ import org.graalvm.compiler.truffle.common.TruffleDebugContext;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.runtime.GraalTestTVMCI.GraalTestContext;
 import org.graalvm.graphio.GraphOutput;
+import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.impl.TVMCI;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -95,7 +96,7 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
 
     @Override
     protected GraalTestContext createTestContext(String testName) {
-        final Map<String, Object> optionsMap = TruffleRuntimeOptions.getOptionsForCompiler();
+        final Map<String, Object> optionsMap = TruffleRuntimeOptions.asMap(TruffleRuntimeOptions.getOptions());
         TruffleDebugContext debugContext = truffleRuntime.getTruffleCompiler().openDebugContext(optionsMap, null);
         return new GraalTestContext(testName, debugContext);
     }
@@ -109,9 +110,10 @@ final class GraalTestTVMCI extends TVMCI.Test<GraalTestContext, OptimizedCallTar
     @Override
     public void finishWarmup(GraalTestContext testContext, OptimizedCallTarget callTarget) {
         TruffleCompiler compiler = truffleRuntime.getTruffleCompiler();
+        OptionValues options = TruffleRuntimeOptions.getOptions();
         try (TruffleCompilation compilation = compiler.openCompilation(callTarget)) {
             try (AutoCloseable s = testContext.debug.scope("UnitTest")) {
-                truffleRuntime.doCompile(testContext.debug, compilation, TruffleRuntimeOptions.getOptionsForCompiler(), callTarget, new CancellableCompileTask(true));
+                truffleRuntime.doCompile(testContext.debug, compilation, TruffleRuntimeOptions.asMap(options), callTarget, new CancellableCompileTask(true));
             } catch (Throwable e) {
                 throw new InternalError(e);
             }
