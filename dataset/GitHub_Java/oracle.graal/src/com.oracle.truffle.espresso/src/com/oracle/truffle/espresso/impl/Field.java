@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.impl;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -50,10 +49,6 @@ public final class Field implements ModifiersProvider {
     private final Symbol<Type> type;
     private final Symbol<Name> name;
     private volatile Klass typeKlassCache;
-    private final JavaKind kind;
-
-    @CompilerDirectives.CompilationFinal
-    private int fieldIndex = -1;
 
     public Symbol<Type> getType() {
         return type;
@@ -64,11 +59,10 @@ public final class Field implements ModifiersProvider {
         this.holder = holder;
         this.type = linkedField.getType();
         this.name = linkedField.getName();
-        this.kind = Types.getJavaKind(type);
     }
 
     public JavaKind getKind() {
-        return kind;
+        return Types.getJavaKind(getType());
     }
 
     public int getModifiers() {
@@ -162,13 +156,5 @@ public final class Field implements ModifiersProvider {
             }
         }
         return target;
-    }
-
-    void setFieldIndex(int index) {
-        this.fieldIndex = index;
-    }
-
-    public int getFieldIndex() {
-        return fieldIndex;
     }
 }
