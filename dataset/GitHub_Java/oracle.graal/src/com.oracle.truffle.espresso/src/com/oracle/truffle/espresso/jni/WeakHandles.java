@@ -28,7 +28,6 @@ import java.util.LinkedList;
 import java.util.Objects;
 import java.util.WeakHashMap;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 /**
@@ -84,12 +83,11 @@ public class WeakHandles<T> {
      * @param index handle, must be > 0 and fit in an integer
      * @return the object associated with the handle or null if was collected
      */
-    @SuppressWarnings("unchecked")
     public T getObject(long index) {
         if (index <= 0) {
             throw new IllegalArgumentException("index");
         }
-        WeakReference<T> weakRef = CompilerDirectives.castExact(handles[Math.toIntExact(index)], WeakReference.class);
+        WeakReference<T> weakRef = handles[Math.toIntExact(index)];
         return weakRef != null
                         ? weakRef.get()
                         : null;
