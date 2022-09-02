@@ -431,7 +431,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> getZone = StaticSymbols.putName("getZone");
         public static final Symbol<Name> getId = StaticSymbols.putName("getId");
         public static final Symbol<Name> of = StaticSymbols.putName("of");
-        public static final Symbol<Name> compose = StaticSymbols.putName("compose");
 
         public static final Symbol<Name> hour = StaticSymbols.putName("hour");
         public static final Symbol<Name> minute = StaticSymbols.putName("minute");
@@ -508,10 +507,12 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> generateProxyClass = StaticSymbols.putName("generateProxyClass");
         public static final Symbol<Name> removeBeanInfo = StaticSymbols.putName("removeBeanInfo");
 
-        public static final Symbol<Name> platformClassLoader = StaticSymbols.putName("platformClassLoader");
-        public static final Symbol<Name> bootModules = StaticSymbols.putName("bootModules");
+        public static final Symbol<Name> platformModules = StaticSymbols.putName("platformModules");
+        public static final Symbol<Name> toURI = StaticSymbols.putName("toURI");
         public static final Symbol<Name> descriptor = StaticSymbols.putName("descriptor");
-        public static final Symbol<Name> ofSystem = StaticSymbols.putName("ofSystem");
+        public static final Symbol<Name> newJarModule = StaticSymbols.putName("newJarModule");
+        public static final Symbol<Name> newJModModule = StaticSymbols.putName("newJModModule");
+        public static final Symbol<Name> newExplodedModule = StaticSymbols.putName("newExplodedModule");
     }
 
     /**
@@ -558,18 +559,18 @@ public final class Symbol<T> extends ByteSequence {
 
         public static final Symbol<Type> java_io_InputStream = StaticSymbols.putType("Ljava/io/InputStream;");
         public static final Symbol<Type> java_io_PrintStream = StaticSymbols.putType("Ljava/io/PrintStream;");
+        public static final Symbol<Type> java_io_File = StaticSymbols.putType("Ljava/io/File;");
         public static final Symbol<Type> java_nio_file_Path = StaticSymbols.putType("Ljava/nio/file/Path;");
-        public static final Symbol<Type> java_nio_file_Path_array = StaticSymbols.putType("[Ljava/nio/file/Path;");
         public static final Symbol<Type> java_nio_file_Paths = StaticSymbols.putType("Ljava/nio/file/Paths;");
 
-        public static final Symbol<Type> jdk_internal_loader_ClassLoaders = StaticSymbols.putType("Ljdk/internal/loader/ClassLoaders;");
         public static final Symbol<Type> jdk_internal_loader_ClassLoaders$PlatformClassLoader = StaticSymbols.putType("Ljdk/internal/loader/ClassLoaders$PlatformClassLoader;");
         public static final Symbol<Type> jdk_internal_module_ModuleLoaderMap = StaticSymbols.putType("Ljdk/internal/module/ModuleLoaderMap;");
-        public static final Symbol<Type> jdk_internal_module_SystemModuleFinders = StaticSymbols.putType("Ljdk/internal/module/SystemModuleFinders;");
-        public static final Symbol<Type> jdk_internal_module_SystemModules = StaticSymbols.putType("Ljdk/internal/module/SystemModules;");
-        public static final Symbol<Type> java_lang_module_ModuleFinder = StaticSymbols.putType("Ljava/lang/module/ModuleFinder;");
-        public static final Symbol<Type> java_lang_module_ModuleFinder_array = StaticSymbols.putType("[Ljava/lang/module/ModuleFinder;");
-        public static final Symbol<Type> jdk_internal_module_ModulePath = StaticSymbols.putType("Ljdk/internal/module/ModulePath;");
+        public static final Symbol<Type> java_lang_module_ModuleReference = StaticSymbols.putType("Ljava/lang/module/ModuleReference;");
+        public static final Symbol<Type> jdk_internal_module_ModuleReferences = StaticSymbols.putType("Ljdk/internal/module/ModuleReferences;");
+        public static final Symbol<Type> java_lang_module_ModuleDescriptor = StaticSymbols.putType("Ljava/lang/module/ModuleDescriptor;");
+        public static final Symbol<Type> java_net_URI = StaticSymbols.putType("Ljava/net/URI;");
+        public static final Symbol<Type> jdk_internal_module_ModuleInfo_Attributes = StaticSymbols.putType("Ljdk/internal/module/ModuleInfo$Attributes;");
+        public static final Symbol<Type> jdk_internal_module_ModulePatcher = StaticSymbols.putType("Ljdk/internal/module/ModulePatcher;");
 
         public static final Symbol<Type> java_beans_Introspector = StaticSymbols.putType("Ljava/beans/Introspector;");
         public static final Symbol<Type> java_beans_ThreadGroupContext = StaticSymbols.putType("Ljava/beans/ThreadGroupContext;");
@@ -969,10 +970,12 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Signature> _void_sun_misc_Signal = StaticSymbols.putSignature(Type._void, Type.sun_misc_Signal);
         public static final Symbol<Signature> _void_jdk_internal_misc_Signal = StaticSymbols.putSignature(Type._void, Type.jdk_internal_misc_Signal);
 
-        public static final Symbol<Signature> Path_String_String_array = StaticSymbols.putSignature(Type.java_nio_file_Path, Type.java_lang_String, Type.java_lang_String_array);
-        public static final Symbol<Signature> ModuleFinder = StaticSymbols.putSignature(Type.java_lang_module_ModuleFinder);
-        public static final Symbol<Signature> ModuleFinder_SystemModules = StaticSymbols.putSignature(Type.java_lang_module_ModuleFinder, Type.jdk_internal_module_SystemModules);
-        public static final Symbol<Signature> ModuleFinder_Path_array = StaticSymbols.putSignature(Type.java_lang_module_ModuleFinder, Type.java_nio_file_Path_array);
-        public static final Symbol<Signature> ModuleFinder_ModuleFinder_array = StaticSymbols.putSignature(Type.java_lang_module_ModuleFinder, Type.java_lang_module_ModuleFinder_array);
+        public static final Symbol<Signature> Path_URI = StaticSymbols.putSignature(Type.java_nio_file_Path, Type.java_net_URI);
+        public static final Symbol<Signature> URI = StaticSymbols.putSignature(Type.java_net_URI);
+        public static final Symbol<Signature> ModuleDescriptor = StaticSymbols.putSignature(Type.java_lang_module_ModuleDescriptor);
+        public static final Symbol<Signature> Attributes_ModulePatcher_Path = StaticSymbols.putSignature(Type.java_lang_module_ModuleReference, Type.jdk_internal_module_ModuleInfo_Attributes,
+                        Type.jdk_internal_module_ModulePatcher, Type.java_nio_file_Path);
+        public static final Symbol<Signature> Attributes_Path = StaticSymbols.putSignature(Type.java_lang_module_ModuleReference, Type.jdk_internal_module_ModuleInfo_Attributes,
+                        Type.java_nio_file_Path);
     }
 }
