@@ -98,12 +98,12 @@ public final class RubyCaseUnfoldingTrie {
         return depth;
     }
 
-    public static final class Unfolding {
+    public static final class UnfoldingCandidate {
         private final int start;
         private final int length;
         private final int codepoint;
 
-        public Unfolding(int start, int length, int codepoint) {
+        public UnfoldingCandidate(int start, int length, int codepoint) {
             this.start = start;
             this.length = length;
             this.codepoint = codepoint;
@@ -117,19 +117,15 @@ public final class RubyCaseUnfoldingTrie {
             return length;
         }
 
-        public int getEnd() {
-            return start + length;
-        }
-
         public int getCodepoint() {
             return codepoint;
         }
     }
 
-    public static List<Unfolding> findUnfoldings(List<Integer> caseFolded) {
+    public static List<UnfoldingCandidate> findUnfoldings(List<Integer> caseFolded) {
         List<RubyCaseUnfoldingTrie> states = new ArrayList<>();
         List<RubyCaseUnfoldingTrie> nextStates = new ArrayList<>();
-        List<Unfolding> unfoldings = new ArrayList<>();
+        List<UnfoldingCandidate> unfoldings = new ArrayList<>();
 
         for (int i = 0; i < caseFolded.size(); i++) {
             int codepoint = caseFolded.get(i);
@@ -141,7 +137,7 @@ public final class RubyCaseUnfoldingTrie {
                     RubyCaseUnfoldingTrie newState = state.getChildAt(codepoint);
                     nextStates.add(newState);
                     for (int unfoldedCodepoint : newState.getCodepoints()) {
-                        unfoldings.add(new Unfolding(i + 1 - newState.getDepth(), newState.getDepth(), unfoldedCodepoint));
+                        unfoldings.add(new UnfoldingCandidate(i + 1 - newState.getDepth(), newState.getDepth(), unfoldedCodepoint));
                     }
                 }
             }
@@ -153,7 +149,7 @@ public final class RubyCaseUnfoldingTrie {
             nextStates.clear();
         }
 
-        unfoldings.sort(Comparator.comparingInt(Unfolding::getStart).thenComparing(Comparator.comparingInt(Unfolding::getLength).reversed()));
+        unfoldings.sort(Comparator.comparingInt(UnfoldingCandidate::getStart).thenComparing(Comparator.comparingInt(UnfoldingCandidate::getLength).reversed()));
 
         return unfoldings;
     }
