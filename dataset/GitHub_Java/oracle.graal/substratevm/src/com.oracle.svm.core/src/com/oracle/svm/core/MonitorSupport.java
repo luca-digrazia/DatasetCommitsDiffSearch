@@ -31,10 +31,9 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.word.BarrieredAccess;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.svm.core.annotate.Alias;
@@ -47,10 +46,6 @@ import com.oracle.svm.core.snippets.SubstrateForeignCallTarget;
 import com.oracle.svm.core.thread.ThreadingSupportImpl.PauseRecurringCallback;
 import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.util.VMError;
-
-//Checkstyle: stop
-import sun.misc.Unsafe;
-//Checkstyle resume
 
 /**
  * Implementation of synchronized-related operations.
@@ -74,7 +69,6 @@ import sun.misc.Unsafe;
  */
 public class MonitorSupport {
 
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
     /**
      * Secondary storage for monitor slots.
      *
@@ -174,8 +168,8 @@ public class MonitorSupport {
             msg.append("  lock: ");
             appendObject(msg, lockObject);
 
-            Target_java_util_concurrent_locks_ReentrantLock lockObjectTarget = SubstrateUtil.cast(lockObject, Target_java_util_concurrent_locks_ReentrantLock.class);
-            Target_java_util_concurrent_locks_AbstractOwnableSynchronizer sync = SubstrateUtil.cast(lockObjectTarget.sync, Target_java_util_concurrent_locks_AbstractOwnableSynchronizer.class);
+            Target_java_util_concurrent_locks_ReentrantLock lockObjectTarget = KnownIntrinsics.unsafeCast(lockObject, Target_java_util_concurrent_locks_ReentrantLock.class);
+            Target_java_util_concurrent_locks_AbstractOwnableSynchronizer sync = KnownIntrinsics.unsafeCast(lockObjectTarget.sync, Target_java_util_concurrent_locks_AbstractOwnableSynchronizer.class);
 
             if (sync != null) {
                 msg.append("  sync: ");
@@ -212,8 +206,8 @@ public class MonitorSupport {
             return;
         }
 
-        Target_java_util_concurrent_locks_ReentrantLock lock = SubstrateUtil.cast(getOrCreateMonitor(obj, true), Target_java_util_concurrent_locks_ReentrantLock.class);
-        Target_java_util_concurrent_locks_AbstractOwnableSynchronizer sync = SubstrateUtil.cast(lock.sync, Target_java_util_concurrent_locks_AbstractOwnableSynchronizer.class);
+        Target_java_util_concurrent_locks_ReentrantLock lock = KnownIntrinsics.unsafeCast(getOrCreateMonitor(obj, true), Target_java_util_concurrent_locks_ReentrantLock.class);
+        Target_java_util_concurrent_locks_AbstractOwnableSynchronizer sync = KnownIntrinsics.unsafeCast(lock.sync, Target_java_util_concurrent_locks_AbstractOwnableSynchronizer.class);
 
         VMError.guarantee(sync.getExclusiveOwnerThread() != null, "Cannot patch the exclusiveOwnerThread of an object that is not locked");
         sync.setExclusiveOwnerThread(thread);
@@ -325,7 +319,7 @@ public class MonitorSupport {
             }
             /* Atomically put a new lock in place of the null at the monitorOffset. */
             final ReentrantLock newMonitor = new ReentrantLock();
-            if (UNSAFE.compareAndSwapObject(obj, monitorOffset, null, newMonitor)) {
+            if (UnsafeAccess.UNSAFE.compareAndSwapObject(obj, monitorOffset, null, newMonitor)) {
                 return newMonitor;
             }
             /* We lost the race, use the lock some other thread installed. */
