@@ -149,4 +149,8 @@ public abstract class ByteSequence {
             throw EspressoError.shouldNotReachHere(e);
         }
     }
+
+    public boolean isValid() {
+        return Utf8.isValid(value, offset(), length());
+    }
 }
