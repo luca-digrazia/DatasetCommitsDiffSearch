@@ -270,9 +270,6 @@ public final class DebuggerConnection implements Commands {
                                 case JDWP.VirtualMachine.RESUME.ID:
                                     result = JDWP.VirtualMachine.RESUME.createReply(packet, controller);
                                     break;
-                                case JDWP.VirtualMachine.EXIT.ID:
-                                    result = JDWP.VirtualMachine.EXIT.createReply(packet, context);
-                                    break;
                                 case JDWP.VirtualMachine.CREATE_STRING.ID:
                                     result = JDWP.VirtualMachine.CREATE_STRING.createReply(packet, context);
                                     break;
@@ -573,10 +570,10 @@ public final class DebuggerConnection implements Commands {
                             break;
                     }
                 }
-                // run pre futures before sending the reply
-                if (result != null && result.getPreFutures() != null) {
+                // run futures before sending the reply
+                if (result != null && result.getFutures() != null) {
                     try {
-                        for (Callable<Void> future : result.getPreFutures()) {
+                        for (Callable<Void> future : result.getFutures()) {
                             if (future != null) {
                                 future.call();
                             }
@@ -590,18 +587,6 @@ public final class DebuggerConnection implements Commands {
                     connection.queuePacket(result.getReply());
                 } else {
                     JDWPLogger.log("no result for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
-                }
-                // run post futures after sending the reply
-                if (result != null && result.getPostFutures() != null) {
-                    try {
-                        for (Callable<Void> future : result.getPostFutures()) {
-                            if (future != null) {
-                                future.call();
-                            }
-                        }
-                    } catch (Exception e) {
-                        JDWPLogger.log("Failed to run future for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
-                    }
                 }
             } finally {
                 if (entered) {
