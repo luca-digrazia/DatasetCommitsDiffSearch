@@ -169,13 +169,4 @@ public final class LLDBSupport {
             return String.format("%d bytes", byteSize);
         }
     }
-
-    public static boolean isNestedManagedPointer(LLVMPointer base) {
-        if (!LLVMManagedPointer.isInstance(base)) {
-            return false;
-        }
-
-        final LLVMManagedPointer pointer = LLVMManagedPointer.cast(base);
-        return LLVMPointer.isInstance(pointer.getObject()) && pointer.getOffset() == 0L;
-    }
 }
