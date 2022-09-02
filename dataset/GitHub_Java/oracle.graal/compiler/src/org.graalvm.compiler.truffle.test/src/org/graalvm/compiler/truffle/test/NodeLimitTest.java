@@ -41,6 +41,7 @@ import org.junit.Test;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
 
@@ -154,4 +155,17 @@ public class NodeLimitTest extends PartialEvaluationTest {
         partialEval((OptimizedCallTarget) target, arguments, CompilationIdentifier.INVALID_COMPILATION_ID);
     }
 
+    private static RootNode createRootNodeWithCall(final RootNode rootNode) {
+        return new TestRootNode() {
+
+            @Child DirectCallNode call = Truffle.getRuntime().createDirectCallNode(Truffle.getRuntime().createCallTarget(rootNode));
+
+            @Override
+            public Object execute(VirtualFrame frame) {
+                foo();
+                call.call(new Object[0]);
+                return null;
+            }
+        };
+    }
 }

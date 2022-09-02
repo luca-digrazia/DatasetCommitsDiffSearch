@@ -51,6 +51,12 @@ import jdk.vm.ci.meta.MetaAccessProvider;
  */
 final class LibGraalTruffleRuntime extends AbstractHotSpotTruffleRuntime {
 
+    @Override
+    public TruffleMetaAccessProvider createInliningPlan(CompilableTruffleAST compilable, TruffleCompilationTask task) {
+        // TODO
+        return null;
+    }
+
     /**
      * Handle to a HSTruffleCompilerRuntime object in an libgraal heap.
      */

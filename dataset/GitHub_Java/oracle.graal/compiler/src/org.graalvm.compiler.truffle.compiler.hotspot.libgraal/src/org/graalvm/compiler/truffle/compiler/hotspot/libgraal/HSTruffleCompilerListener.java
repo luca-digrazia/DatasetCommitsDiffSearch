@@ -60,13 +60,13 @@ final class HSTruffleCompilerListener extends HSObject implements TruffleCompile
 
     @TruffleFromLibGraal(OnSuccess)
     @Override
-    public void onSuccess(CompilableTruffleAST compilable, TruffleMetaAccessProvider inliningPlan, GraphInfo graphInfo, CompilationResultInfo compilationResultInfo, int tier) {
+    public void onSuccess(CompilableTruffleAST compilable, TruffleMetaAccessProvider inliningPlan, GraphInfo graphInfo, CompilationResultInfo compilationResultInfo) {
         JObject hsCompilable = ((HSCompilableTruffleAST) compilable).getHandle();
         JObject hsInliningPlan = ((HSTruffleInliningPlan) inliningPlan).getHandle();
         JNIEnv env = JNILibGraalScope.env();
         try (LibGraalObjectHandleScope graphInfoScope = LibGraalObjectHandleScope.forObject(graphInfo);
                         LibGraalObjectHandleScope compilationResultInfoScope = LibGraalObjectHandleScope.forObject(compilationResultInfo)) {
-            callOnSuccess(env, getHandle(), hsCompilable, hsInliningPlan, graphInfoScope.getHandle(), compilationResultInfoScope.getHandle(), tier);
+            callOnSuccess(env, getHandle(), hsCompilable, hsInliningPlan, graphInfoScope.getHandle(), compilationResultInfoScope.getHandle());
         }
     }
 
@@ -94,19 +94,19 @@ final class HSTruffleCompilerListener extends HSObject implements TruffleCompile
 
     @TruffleFromLibGraal(OnFailure)
     @Override
-    public void onFailure(CompilableTruffleAST compilable, String serializedException, boolean bailout, boolean permanentBailout, int tier) {
+    public void onFailure(CompilableTruffleAST compilable, String serializedException, boolean bailout, boolean permanentBailout) {
         JObject hsCompilable = ((HSCompilableTruffleAST) compilable).getHandle();
         JNIEnv env = JNILibGraalScope.env();
         JString hsReason = createHSString(env, serializedException);
-        callOnFailure(env, getHandle(), hsCompilable, hsReason, bailout, permanentBailout, tier);
+        callOnFailure(env, getHandle(), hsCompilable, hsReason, bailout, permanentBailout);
     }
 
     @TruffleFromLibGraal(OnCompilationRetry)
     @Override
-    public void onCompilationRetry(CompilableTruffleAST compilable, int tier) {
+    public void onCompilationRetry(CompilableTruffleAST compilable) {
         JObject hsCompilable = ((HSCompilableTruffleAST) compilable).getHandle();
         JNIEnv env = JNILibGraalScope.env();
-        callOnCompilationRetry(env, getHandle(), hsCompilable, tier);
+        callOnCompilationRetry(env, getHandle(), hsCompilable);
     }
 
     private static final class LibGraalObjectHandleScope implements Closeable {
