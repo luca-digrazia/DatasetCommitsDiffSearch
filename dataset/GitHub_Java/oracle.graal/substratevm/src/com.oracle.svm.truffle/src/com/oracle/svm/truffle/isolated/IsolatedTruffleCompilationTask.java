@@ -62,11 +62,6 @@ final class IsolatedTruffleCompilationTask extends IsolatedObjectProxy<TruffleCo
         return new IsolatedTruffleInlining<>(inliningDataHandle);
     }
 
-    @Override
-    public boolean hasNextTier() {
-        return hasNextTier0(IsolatedCompileContext.get().getClient(), handle);
-    }
-
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
     private static boolean isCancelled0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationTask> taskHandle) {
@@ -83,12 +78,6 @@ final class IsolatedTruffleCompilationTask extends IsolatedObjectProxy<TruffleCo
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
     private static boolean isFirstTier0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationTask> taskHandle) {
         return IsolatedCompileClient.get().unhand(taskHandle).isFirstTier();
-    }
-
-    @CEntryPoint
-    @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private static boolean hasNextTier0(@SuppressWarnings("unused") ClientIsolateThread client, ClientHandle<TruffleCompilationTask> taskHandle) {
-        return IsolatedCompileClient.get().unhand(taskHandle).hasNextTier();
     }
 
     @CEntryPoint

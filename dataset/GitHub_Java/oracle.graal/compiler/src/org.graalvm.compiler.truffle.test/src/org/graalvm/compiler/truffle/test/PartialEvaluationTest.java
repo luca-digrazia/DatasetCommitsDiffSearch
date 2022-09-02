@@ -141,7 +141,7 @@ public abstract class PartialEvaluationTest extends TruffleCompilerImplTest {
 
     private static TruffleCompilationTask newTask() {
         return new TruffleCompilationTask() {
-            final TruffleInlining inlining = new TruffleInlining();
+            TruffleInlining inlining = new TruffleInlining();
 
             @Override
             public boolean isCancelled() {
