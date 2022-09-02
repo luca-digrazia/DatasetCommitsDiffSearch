@@ -481,7 +481,7 @@ final class Runner {
             super(symbol);
         }
 
-        @Specialization(guards = {"cachedLocalSymbol != null", "localScope.get(symbol.getName()) == cachedLocalSymbol", "!(containsSymbol(cachedLocalSymbol))"})
+        @Specialization(guards = {"cachedLocalSymbol != null", "localScope.get(symbol.getName()) == cachedLocalSymbol", "!(symbol.equals(cachedLocalSymbol))"})
         LLVMPointer allocateFromLocalScopeCached(@SuppressWarnings("unused") LLVMLocalScope localScope,
                         @SuppressWarnings("unused") LLVMScope globalScope,
                         @SuppressWarnings("unused") LLVMIntrinsicProvider intrinsicProvider,
@@ -494,7 +494,7 @@ final class Runner {
             return pointer;
         }
 
-        @Specialization(replaces = "allocateFromLocalScopeCached", guards = {"localScope.get(symbol.getName()) != null", "!(containsSymbol(localScope.get(symbol.getName())))"})
+        @Specialization(replaces = "allocateFromLocalScopeCached", guards = {"localScope.get(symbol.getName()) != null", "!(symbol.equals(localScope.get(symbol.getName())))"})
         LLVMPointer allocateFromLocalScope(LLVMLocalScope localScope,
                         @SuppressWarnings("unused") LLVMScope globalScope,
                         @SuppressWarnings("unused") LLVMIntrinsicProvider intrinsicProvider,
@@ -508,11 +508,6 @@ final class Runner {
             LLVMPointer pointer = symbolTable[function.getSymbolIndex(false)].get();
             context.registerSymbol(symbol, pointer);
             return pointer;
-        }
-
-        @TruffleBoundary
-        protected boolean containsSymbol(LLVMSymbol localSymbol){
-            return symbol.equals(localSymbol);
         }
 
         /**
@@ -537,7 +532,7 @@ final class Runner {
         }
 
         @Specialization(guards = {"localScope.get(symbol.getName()) == null", "cachedGlobalSymbol != null", "globalScope.get(symbol.getName()) == cachedGlobalSymbol",
-                        "!(containsSymbol(cachedGlobalSymbol))"})
+                        "!(symbol.equals(cachedGlobalSymbol))"})
         LLVMPointer allocateFromGlobalScopeCached(@SuppressWarnings("unused") LLVMLocalScope localScope,
                         @SuppressWarnings("unused") LLVMScope globalScope,
                         @SuppressWarnings("unused") LLVMIntrinsicProvider intrinsicProvider,
@@ -551,7 +546,7 @@ final class Runner {
         }
 
         @Specialization(replaces = "allocateFromGlobalScopeCached", guards = {"localScope.get(symbol.getName()) == null", "globalScope.get(symbol.getName()) != null",
-                        "!(containsSymbol(globalScope.get(symbol.getName())))"})
+                        "!(symbol.equals(globalScope.get(symbol.getName())))"})
         LLVMPointer allocateFromGlobalScope(@SuppressWarnings("unused") LLVMLocalScope localScope,
                         LLVMScope globalScope,
                         @SuppressWarnings("unused") LLVMIntrinsicProvider intrinsicProvider,
@@ -566,12 +561,6 @@ final class Runner {
             LLVMPointer pointer = symbolTable[function.getSymbolIndex(false)].get();
             context.registerSymbol(symbol, pointer);
             return pointer;
-        }
-
-        @Override
-        @TruffleBoundary
-        protected boolean containsSymbol(LLVMSymbol globalSymbol){
-            return symbol.equals(globalSymbol);
         }
 
         @Override
