@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,8 +42,8 @@ import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.nodes.spi.Simplifiable;
-import org.graalvm.compiler.nodes.spi.SimplifierTool;
+import org.graalvm.compiler.graph.spi.Simplifiable;
+import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
@@ -57,8 +57,6 @@ import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.NodeView;
-import org.graalvm.compiler.nodes.ProfileData.ProfileSource;
-import org.graalvm.compiler.nodes.ProfileData.SwitchProbabilityData;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.IntegerBelowNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
@@ -88,10 +86,10 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
      */
     protected final boolean areKeysContiguous;
 
-    public IntegerSwitchNode(ValueNode value, AbstractBeginNode[] successors, int[] keys, int[] keySuccessors, SwitchProbabilityData profileData) {
-        super(TYPE, value, successors, keySuccessors, profileData);
+    public IntegerSwitchNode(ValueNode value, AbstractBeginNode[] successors, int[] keys, double[] keyProbabilities, int[] keySuccessors, ProfileSource profileSource) {
+        super(TYPE, value, successors, keySuccessors, keyProbabilities, profileSource);
         assert keySuccessors.length == keys.length + 1;
-        assert keySuccessors.length == profileData.getKeyProbabilities().length;
+        assert keySuccessors.length == keyProbabilities.length;
         this.keys = keys;
         areKeysContiguous = keys.length < 2 || keys[keys.length - 1] - keys[0] + 1 == keys.length;
         assert value.stamp(NodeView.DEFAULT) instanceof PrimitiveStamp && value.stamp(NodeView.DEFAULT).getStackKind().isNumericInteger();
@@ -118,8 +116,8 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         return true;
     }
 
-    public IntegerSwitchNode(ValueNode value, int successorCount, int[] keys, int[] keySuccessors, SwitchProbabilityData profileData) {
-        this(value, new AbstractBeginNode[successorCount], keys, keySuccessors, profileData);
+    public IntegerSwitchNode(ValueNode value, int successorCount, int[] keys, double[] keyProbabilities, int[] keySuccessors, ProfileSource profileSource) {
+        this(value, new AbstractBeginNode[successorCount], keys, keyProbabilities, keySuccessors, profileSource);
     }
 
     @Override
@@ -237,12 +235,12 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
 
     @Override
     public boolean isNonInitializedProfile() {
-        return !ProfileSource.isTrusted(profileData.getProfileSource());
+        return !ProfileSource.isTrusted(profileSource);
     }
 
     @Override
     public ProfileSource profileSource() {
-        return profileData.getProfileSource();
+        return profileSource;
     }
 
     private static final class MergeCoalesceBuilder {
@@ -496,7 +494,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         ArrayList<AbstractBeginNode> newSuccessors = new ArrayList<>(blockSuccessorCount());
         for (int i = 0; i < keys.length; i++) {
             if (integerStamp.contains(keys[i]) && keySuccessor(i) != defaultSuccessor()) {
-                newKeyDatas.add(new KeyData(keys[i], getKeyProbabilities()[i], addNewSuccessor(keySuccessor(i), newSuccessors)));
+                newKeyDatas.add(new KeyData(keys[i], keyProbabilities[i], addNewSuccessor(keySuccessor(i), newSuccessors)));
             }
         }
 
@@ -513,7 +511,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
 
         } else {
             int newDefaultSuccessor = addNewSuccessor(defaultSuccessor(), newSuccessors);
-            double newDefaultProbability = getKeyProbabilities()[getKeyProbabilities().length - 1];
+            double newDefaultProbability = keyProbabilities[keyProbabilities.length - 1];
             doReplace(value(), newKeyDatas, newSuccessors, newDefaultSuccessor, newDefaultProbability);
             return true;
         }
@@ -592,7 +590,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
              * We do not have detailed profiling information about the individual new keys, so we
              * have to assume they split the probability of the old key.
              */
-            double newKeyProbability = getKeyProbabilities()[i] / newKeys.size();
+            double newKeyProbability = keyProbabilities[i] / newKeys.size();
             int newKeySuccessor = addNewSuccessor(keySuccessor(i), newSuccessors);
 
             for (int newKey : newKeys) {
@@ -601,7 +599,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         }
 
         int newDefaultSuccessor = addNewSuccessor(defaultSuccessor(), newSuccessors);
-        double newDefaultProbability = getKeyProbabilities()[getKeyProbabilities().length - 1];
+        double newDefaultProbability = keyProbabilities[keyProbabilities.length - 1];
 
         if (loadIndexed.getBoundsCheck() == null) {
             /*
@@ -685,7 +683,7 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
          * while removing successors).
          */
         AbstractBeginNode[] successorsArray = newSuccessors.toArray(new AbstractBeginNode[newSuccessors.size()]);
-        SwitchNode newSwitch = graph().add(new IntegerSwitchNode(newValue, successorsArray, newKeys, newKeySuccessors, profileData.copy(newKeyProbabilities)));
+        SwitchNode newSwitch = graph().add(new IntegerSwitchNode(newValue, successorsArray, newKeys, newKeyProbabilities, newKeySuccessors, profileSource));
 
         /* Replace ourselves with the new switch */
         ((FixedWithNextNode) predecessor()).setNext(newSwitch);

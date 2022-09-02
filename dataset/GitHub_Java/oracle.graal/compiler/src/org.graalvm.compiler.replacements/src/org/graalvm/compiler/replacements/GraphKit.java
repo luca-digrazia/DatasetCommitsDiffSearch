@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.graalvm.compiler.core.common.CompilationIdentifier;
+import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
@@ -51,6 +52,7 @@ import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.BeginNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
+import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
@@ -62,7 +64,6 @@ import org.graalvm.compiler.nodes.KillingBeginNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.NodeView;
-import org.graalvm.compiler.nodes.ProfileData.BranchProbabilityData;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.UnwindNode;
@@ -74,7 +75,8 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderTool;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
-import org.graalvm.compiler.nodes.spi.CoreProvidersDelegate;
+import org.graalvm.compiler.nodes.spi.Replacements;
+import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
@@ -84,8 +86,10 @@ import org.graalvm.compiler.word.WordTypes;
 import org.graalvm.word.LocationIdentity;
 
 import jdk.vm.ci.code.BytecodeFrame;
+import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
@@ -95,8 +99,9 @@ import jdk.vm.ci.meta.Signature;
  * subsystems that employ manual graph creation (as opposed to {@linkplain GraphBuilderPhase
  * bytecode parsing} based graph creation).
  */
-public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool {
+public class GraphKit implements GraphBuilderTool {
 
+    protected final Providers providers;
     protected final StructuredGraph graph;
     protected final WordTypes wordTypes;
     protected final GraphBuilderConfiguration.Plugins graphBuilderPlugins;
@@ -108,7 +113,7 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
     }
 
     public GraphKit(DebugContext debug, ResolvedJavaMethod stubMethod, Providers providers, WordTypes wordTypes, Plugins graphBuilderPlugins, CompilationIdentifier compilationId, String name) {
-        super(providers);
+        this.providers = providers;
         StructuredGraph.Builder builder = new StructuredGraph.Builder(debug.getOptions(), debug).compilationId(compilationId);
         if (name != null) {
             builder.name(name);
@@ -136,6 +141,31 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
     @Override
     public StructuredGraph getGraph() {
         return graph;
+    }
+
+    @Override
+    public ConstantReflectionProvider getConstantReflection() {
+        return providers.getConstantReflection();
+    }
+
+    @Override
+    public ConstantFieldProvider getConstantFieldProvider() {
+        return providers.getConstantFieldProvider();
+    }
+
+    @Override
+    public MetaAccessProvider getMetaAccess() {
+        return providers.getMetaAccess();
+    }
+
+    @Override
+    public Replacements getReplacements() {
+        return providers.getReplacements();
+    }
+
+    @Override
+    public StampProvider getStampProvider() {
+        return providers.getStampProvider();
     }
 
     @Override
@@ -214,7 +244,7 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
     }
 
     public ResolvedJavaMethod findMethod(Class<?> declaringClass, String name, boolean isStatic) {
-        ResolvedJavaType type = getMetaAccess().lookupJavaType(declaringClass);
+        ResolvedJavaType type = providers.getMetaAccess().lookupJavaType(declaringClass);
         ResolvedJavaMethod method = null;
         for (ResolvedJavaMethod m : type.getDeclaredMethods()) {
             if (Modifier.isStatic(m.getModifiers()) == isStatic && m.getName().equals(name)) {
@@ -229,7 +259,7 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
     public ResolvedJavaMethod findMethod(Class<?> declaringClass, String name, Class<?>... parameterTypes) {
         try {
             Method m = declaringClass.getDeclaredMethod(name, parameterTypes);
-            return getMetaAccess().lookupJavaMethod(m);
+            return providers.getMetaAccess().lookupJavaMethod(m);
         } catch (NoSuchMethodException | SecurityException e) {
             throw new AssertionError(e);
         }
@@ -367,12 +397,12 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
 
         StructuredGraph calleeGraph;
         if (IS_IN_NATIVE_IMAGE) {
-            calleeGraph = getReplacements().getSnippet(method, null, null, false, null, invokeNode.getOptions());
+            calleeGraph = providers.getReplacements().getSnippet(method, null, null, false, null, invokeNode.getOptions());
         } else {
             calleeGraph = new StructuredGraph.Builder(invokeNode.getOptions(), invokeNode.getDebug()).method(method).trackNodeSourcePosition(
                             invokeNode.graph().trackNodeSourcePosition()).setIsSubstitution(true).build();
-            IntrinsicContext initialReplacementContext = new IntrinsicContext(method, method, getReplacements().getDefaultReplacementBytecodeProvider(), INLINE_AFTER_PARSING);
-            GraphBuilderPhase.Instance instance = createGraphBuilderInstance(config, OptimisticOptimizations.NONE, initialReplacementContext);
+            IntrinsicContext initialReplacementContext = new IntrinsicContext(method, method, providers.getReplacements().getDefaultReplacementBytecodeProvider(), INLINE_AFTER_PARSING);
+            GraphBuilderPhase.Instance instance = createGraphBuilderInstance(providers, config, OptimisticOptimizations.NONE, initialReplacementContext);
             instance.apply(calleeGraph);
         }
         new DeadCodeEliminationPhase().apply(calleeGraph);
@@ -393,16 +423,16 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
          * InliningScope instead of IntrinsicScope. This allows exceptions to be a part of the
          * inlined method.
          */
-        GraphBuilderPhase.Instance instance = createGraphBuilderInstance(config, OptimisticOptimizations.NONE, null);
+        GraphBuilderPhase.Instance instance = createGraphBuilderInstance(providers, config, OptimisticOptimizations.NONE, null);
         instance.apply(calleeGraph);
 
         new DeadCodeEliminationPhase().apply(calleeGraph);
         InliningUtil.inline(invoke, calleeGraph, false, methodToInline, reason, phase);
     }
 
-    protected GraphBuilderPhase.Instance createGraphBuilderInstance(GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
+    protected GraphBuilderPhase.Instance createGraphBuilderInstance(Providers theProviders, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts,
                     IntrinsicContext initialIntrinsicContext) {
-        return new GraphBuilderPhase.Instance(getProviders(), graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
+        return new GraphBuilderPhase.Instance(theProviders, graphBuilderConfig, optimisticOpts, initialIntrinsicContext);
     }
 
     protected void pushStructure(Structure structure) {
@@ -437,13 +467,13 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
      * {@link #endIf} to close the if-block.
      *
      * @param condition The condition for the if-block
-     * @param profileData The estimated probability the condition is true
+     * @param trueProbability The estimated probability the condition is true
      * @return the created {@link IfNode}.
      */
-    public IfNode startIf(LogicNode condition, BranchProbabilityData profileData) {
+    public IfNode startIf(LogicNode condition, double trueProbability) {
         AbstractBeginNode thenSuccessor = graph.add(new BeginNode());
         AbstractBeginNode elseSuccessor = graph.add(new BeginNode());
-        IfNode node = append(new IfNode(condition, thenSuccessor, elseSuccessor, profileData));
+        IfNode node = append(new IfNode(condition, thenSuccessor, elseSuccessor, trueProbability, ProfileSource.UNKNOWN));
         lastFixedNode = null;
 
         IfStructure s = new IfStructure();
@@ -487,7 +517,7 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
     }
 
     /**
-     * Ends an if block started with {@link #startIf(LogicNode, BranchProbabilityData)}.
+     * Ends an if block started with {@link #startIf(LogicNode, double)}.
      *
      * @return the created merge node, or {@code null} if no merge node was required (for example,
      *         when one part ended with a control sink).

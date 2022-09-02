@@ -40,7 +40,6 @@ import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ShortCircuitOrNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AbstractNormalizeCompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
@@ -62,7 +61,8 @@ public class ExpandLogicPhase extends Phase {
                 processNormalizeCompareNode(logic);
             }
         }
-        graph.setAfterStage(StageFlag.EXPAND_LOGIC);
+
+        graph.setAfterExpandLogic();
     }
 
     private static void processNormalizeCompareNode(AbstractNormalizeCompareNode normalize) {
@@ -83,7 +83,7 @@ public class ExpandLogicPhase extends Phase {
                 if (usage instanceof ShortCircuitOrNode) {
                     processBinary((ShortCircuitOrNode) usage);
                 } else if (usage instanceof IfNode) {
-                    processIf(binary.getX(), binary.isXNegated(), binary.getY(), binary.isYNegated(), (IfNode) usage, binary.getShortCircuitProbability().getDesignatedSuccessorProbability());
+                    processIf(binary.getX(), binary.isXNegated(), binary.getY(), binary.isYNegated(), (IfNode) usage, binary.getShortCircuitProbability());
                 } else if (usage instanceof ConditionalNode) {
                     processConditional(binary.getX(), binary.isXNegated(), binary.getY(), binary.isYNegated(), (ConditionalNode) usage);
                 } else {
@@ -146,11 +146,11 @@ public class ExpandLogicPhase extends Phase {
         if (xNegated) {
             firstIfTrueProbability = 1.0 - firstIfTrueProbability;
         }
-        IfNode secondIf = new IfNode(y, yNegated ? falseTarget : secondTrueTarget, yNegated ? secondTrueTarget : falseTarget, ifNode.getProfileData().copy(secondIfTrueProbability));
+        IfNode secondIf = new IfNode(y, yNegated ? falseTarget : secondTrueTarget, yNegated ? secondTrueTarget : falseTarget, secondIfTrueProbability, ifNode.getProfileSource());
         secondIf.setNodeSourcePosition(ifNode.getNodeSourcePosition());
         AbstractBeginNode secondIfBegin = BeginNode.begin(graph.add(secondIf));
         secondIfBegin.setNodeSourcePosition(falseTarget.getNodeSourcePosition());
-        IfNode firstIf = graph.add(new IfNode(x, xNegated ? secondIfBegin : firstTrueTarget, xNegated ? firstTrueTarget : secondIfBegin, ifNode.getProfileData().copy(firstIfTrueProbability)));
+        IfNode firstIf = graph.add(new IfNode(x, xNegated ? secondIfBegin : firstTrueTarget, xNegated ? firstTrueTarget : secondIfBegin, firstIfTrueProbability, ifNode.getProfileSource()));
         firstIf.setNodeSourcePosition(ifNode.getNodeSourcePosition());
         ifNode.replaceAtPredecessor(firstIf);
         ifNode.safeDelete();

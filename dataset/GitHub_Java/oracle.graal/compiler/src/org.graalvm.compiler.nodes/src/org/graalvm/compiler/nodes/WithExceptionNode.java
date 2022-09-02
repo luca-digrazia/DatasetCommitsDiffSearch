@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,10 +27,7 @@ package org.graalvm.compiler.nodes;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ProfileData.BranchProbabilityData;
 import org.graalvm.compiler.nodes.extended.ForeignCallWithExceptionNode;
-import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
-import org.graalvm.compiler.nodes.memory.MemoryKill;
 import org.graalvm.compiler.nodes.memory.MultiMemoryKill;
 import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.util.GraphUtil;
@@ -38,17 +35,6 @@ import org.graalvm.compiler.nodes.util.GraphUtil;
 /**
  * Base class for fixed nodes that have exactly two successors: A "next" successor for normal
  * execution, and an "exception edge" successor for exceptional control flow.
- *
- * In case a subclass of {@link WithExceptionNode} is also a {@link MemoryKill}, we need to be
- * careful to keep the graph schedulable. A node cannot be placed after a {@link ControlSplitNode}
- * (which is the base class of {@link WithExceptionNode}) as it denotes the end of a block. Thus,
- * instead of connecting memory edges to the {@link WithExceptionNode} directly, we rather point to
- * the {@link KillingBeginNode} in the {@link WithExceptionNode#next() non-exceptional case}, or
- * {@link ExceptionObjectNode} in the {@link WithExceptionNode#exceptionEdge() exception case}.
- *
- * @see KillingBeginNode
- * @see MultiKillingBeginNode
- * @see ExceptionObjectNode
  */
 @NodeInfo
 public abstract class WithExceptionNode extends ControlSplitNode {
@@ -56,11 +42,10 @@ public abstract class WithExceptionNode extends ControlSplitNode {
     public static final NodeClass<WithExceptionNode> TYPE = NodeClass.create(WithExceptionNode.class);
 
     protected WithExceptionNode(NodeClass<? extends WithExceptionNode> c, Stamp stamp) {
-        super(c, stamp);
+        super(c, stamp, ProfileSource.INJECTED);
     }
 
     private static final double EXCEPTION_PROBABILITY = 1e-5;
-    private static final BranchProbabilityData NORMAL_EXECUTION_PROFILE = BranchProbabilityData.injected(1 - EXCEPTION_PROBABILITY);
 
     @Successor protected AbstractBeginNode next;
     @Successor protected AbstractBeginNode exceptionEdge;
@@ -96,18 +81,13 @@ public abstract class WithExceptionNode extends ControlSplitNode {
 
     @Override
     public double probability(AbstractBeginNode successor) {
-        return successor == next ? getProfileData().getDesignatedSuccessorProbability() : getProfileData().getNegatedProbability();
+        return successor == next ? 1 - EXCEPTION_PROBABILITY : EXCEPTION_PROBABILITY;
     }
 
     @Override
-    public boolean setProbability(AbstractBeginNode successor, BranchProbabilityData profileData) {
+    public boolean setProbability(AbstractBeginNode successor, double value, ProfileSource profileSource) {
         // Cannot set probability for nodes with exceptions.
         return false;
-    }
-
-    @Override
-    public BranchProbabilityData getProfileData() {
-        return NORMAL_EXECUTION_PROFILE;
     }
 
     @Override

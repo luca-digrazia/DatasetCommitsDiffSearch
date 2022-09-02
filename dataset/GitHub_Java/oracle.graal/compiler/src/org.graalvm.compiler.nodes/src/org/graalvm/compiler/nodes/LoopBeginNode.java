@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,10 +34,10 @@ import org.graalvm.compiler.graph.IterableNodeType;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
-import org.graalvm.compiler.nodes.spi.SimplifierTool;
+import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.ProfileData.LoopFrequencyData;
+import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.StructuredGraph.FrameStateVerificationFeature;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
@@ -53,7 +53,8 @@ import jdk.vm.ci.meta.SpeculationLog;
 public final class LoopBeginNode extends AbstractMergeNode implements IterableNodeType, LIRLowerable {
 
     public static final NodeClass<LoopBeginNode> TYPE = NodeClass.create(LoopBeginNode.class);
-    private LoopFrequencyData profileData;
+    private double loopFrequency;
+    private ProfileSource loopFrequencySource;
     protected double loopOrigFrequency;
     protected int nextEndIndex;
     protected int unswitches;
@@ -95,7 +96,8 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
 
     public LoopBeginNode() {
         super(TYPE);
-        profileData = LoopFrequencyData.DEFAULT;
+        loopFrequency = 1;
+        loopFrequencySource = ProfileSource.UNKNOWN;
         loopOrigFrequency = 1;
         unswitches = 0;
         splits = 0;
@@ -198,16 +200,18 @@ public final class LoopBeginNode extends AbstractMergeNode implements IterableNo
         this.loopOrigFrequency = loopOrigFrequency;
     }
 
-    public LoopFrequencyData profileData() {
-        return profileData;
-    }
-
     public double loopFrequency() {
-        return profileData.getLoopFrequency();
+        return loopFrequency;
     }
 
-    public void setLoopFrequency(LoopFrequencyData newProfileData) {
-        this.profileData = newProfileData;
+    public ProfileSource loopFrequencySource() {
+        return loopFrequencySource;
+    }
+
+    public void setLoopFrequency(double loopFrequency, ProfileSource frequencySource) {
+        assert loopFrequency >= 1.0;
+        this.loopFrequency = loopFrequency;
+        this.loopFrequencySource = frequencySource;
     }
 
     /**

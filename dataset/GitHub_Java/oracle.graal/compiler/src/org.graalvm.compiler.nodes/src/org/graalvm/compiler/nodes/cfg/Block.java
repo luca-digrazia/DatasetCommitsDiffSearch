@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,14 +33,15 @@ import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodeinfo.Verbosity;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
-import org.graalvm.compiler.nodes.BeginNode;
+import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
-import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
+import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopEndNode;
-import org.graalvm.compiler.nodes.LoopExitNode;
-import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
+import org.graalvm.compiler.nodes.WithExceptionNode;
+import org.graalvm.compiler.nodes.memory.MultiMemoryKill;
+import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.word.LocationIdentity;
 
 public final class Block extends AbstractBlockBase<Block> {
@@ -50,7 +51,7 @@ public final class Block extends AbstractBlockBase<Block> {
 
     protected FixedNode endNode;
 
-    protected double probability;
+    protected double relativeFrequency;
     private Loop<Block> loop;
 
     protected Block postdominator;
@@ -67,21 +68,6 @@ public final class Block extends AbstractBlockBase<Block> {
 
     public FixedNode getEndNode() {
         return endNode;
-    }
-
-    /**
-     * Return the {@link LoopExitNode} for this block if it exists.
-     */
-    public LoopExitNode getLoopExit() {
-        if (beginNode instanceof BeginNode) {
-            if (beginNode.next() instanceof LoopExitNode) {
-                return (LoopExitNode) beginNode.next();
-            }
-        }
-        if (beginNode instanceof LoopExitNode) {
-            return (LoopExitNode) beginNode;
-        }
-        return null;
     }
 
     @Override
@@ -111,7 +97,7 @@ public final class Block extends AbstractBlockBase<Block> {
     @Override
     public boolean isExceptionEntry() {
         Node predecessor = getBeginNode().predecessor();
-        return predecessor != null && predecessor instanceof InvokeWithExceptionNode && getBeginNode() == ((InvokeWithExceptionNode) predecessor).exceptionEdge();
+        return predecessor != null && predecessor instanceof WithExceptionNode && getBeginNode() == ((WithExceptionNode) predecessor).exceptionEdge();
     }
 
     public Block getFirstPredecessor() {
@@ -236,14 +222,84 @@ public final class Block extends AbstractBlockBase<Block> {
         return sb.toString();
     }
 
+    /**
+     * Get the relative Frequency of a basic block.
+     *
+     * In order for profile guided optimizations to utilize profiling information from the
+     * interpreter during optimization Graal uses the concept of block and loop frequencies, i.e.,
+     * the frequency of a certain piece of code relative to the start of a method. This is used as a
+     * proxy for the importance of code inside a single method.
+     *
+     * During the life cycle of a method executed by the JavaVM every method is initially executed
+     * by the interpreter which gathers profiling information. Among this profiling information is
+     * the so called branch probability, i.e. the probability for the true and false successor of a
+     * single binary branch.
+     *
+     * For a simple if then else construct like
+     *
+     * <pre>
+     * if (a) {
+     *  thenAction()
+     * } else {
+     *  elseAction()
+     * }
+     * </pre>
+     *
+     * and a true successor probability of 0.5 this means 50% of the time when executing the code
+     * condition a was false. This only becomes relevant in a large context: e.g., out of 1000 times
+     * the code is executed, 500 times a is false.
+     *
+     * The interpreter collects these branch profiles for every java bytecode if instruction. The
+     * Graal compiler uses them to derive its internal representation of execution probabilities
+     * called "block frequencies". Since the Graal compiler only compiles one method at a time and
+     * does not perform inter method optimizations the actual total numbers for invocation and
+     * execution counts are not interesting. Thus, Graal uses the branch probabilities from the
+     * interpreter to derive a metric for profiles within a single compilation unit. These are the
+     * block frequencies. Block frequencies are applied to basic blocks, i.e., every basic block has
+     * one. It is a floating point number that expresses how often a basic block will be executed
+     * with respect to the start of a method. Thus, the metric only makes sense within a single
+     * compilation unit and it marks hot regions of code.
+     *
+     * Consider the following method foo:
+     *
+     * <pre>
+     * void foo() {
+     *  // method start: frequency = 1
+     *  int i=0;
+     *  while (true) {
+     *      if(i>=10) { // exit
+     *          break;
+     *      }
+     *      consume(i)
+     *      i++;
+     *  }
+     *  return // method end: relative frequency = 1
+     * }
+     * </pre>
+     *
+     * Every method's start basic block is unconditionally executed thus it has a frequency of 1.
+     * Then foo contains a loop that consists of a loop header, a condition, an exit and a loop
+     * body. In this while loop, the header is executed initially once and then how often the back
+     * edges indicate that the loop will be executed. For this Graal uses the frequency of the loop
+     * exit condition (i.e. {@code i >= 10}). When the condition has a false successor (enter the
+     * loop body) frequency of roughly 90% we can calculate the loop frequency from that: the loop
+     * frequency is the entry block frequency times the frequency from the exit condition's false
+     * successor which accumulates roughly to 1/0.1 which amounts to roughly 10 loop iterations.
+     * However, since we know the loop is exited at some point the code after the loop has again a
+     * block frequency set to 1 (loop entry frequency).
+     *
+     * Graal {@link IfNode#setTrueSuccessorProbability(double, ProfileSource) sets the profiles}
+     * during parsing and later computes loop frequencies for {@link LoopBeginNode}. Finally, the
+     * frequency for basic {@link Block}s is set during {@link ControlFlowGraph} construction.
+     */
     @Override
-    public double probability() {
-        return probability;
+    public double getRelativeFrequency() {
+        return relativeFrequency;
     }
 
-    public void setProbability(double probability) {
-        assert probability >= 0 && Double.isFinite(probability);
-        this.probability = probability;
+    public void setRelativeFrequency(double relativeFrequency) {
+        assert relativeFrequency >= 0 && Double.isFinite(relativeFrequency);
+        this.relativeFrequency = relativeFrequency;
     }
 
     @Override
@@ -272,11 +328,11 @@ public final class Block extends AbstractBlockBase<Block> {
     private LocationSet calcKillLocations() {
         LocationSet result = new LocationSet();
         for (FixedNode node : this.getNodes()) {
-            if (node instanceof MemoryCheckpoint.Single) {
-                LocationIdentity identity = ((MemoryCheckpoint.Single) node).getLocationIdentity();
+            if (node instanceof SingleMemoryKill) {
+                LocationIdentity identity = ((SingleMemoryKill) node).getKilledLocationIdentity();
                 result.add(identity);
-            } else if (node instanceof MemoryCheckpoint.Multi) {
-                for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
+            } else if (node instanceof MultiMemoryKill) {
+                for (LocationIdentity identity : ((MultiMemoryKill) node).getKilledLocationIdentities()) {
                     result.add(identity);
                 }
             }
@@ -377,5 +433,27 @@ public final class Block extends AbstractBlockBase<Block> {
 
     protected void setPostDominator(Block postdominator) {
         this.postdominator = postdominator;
+    }
+
+    /**
+     * Checks whether {@code this} block is in the same loop or an outer loop of the block given as
+     * parameter.
+     */
+    public boolean isInSameOrOuterLoopOf(Block block) {
+
+        if (this.loop == null) {
+            // We are in no loop, so this holds true for every other block.
+            return true;
+        }
+
+        Loop<Block> l = block.loop;
+        while (l != null) {
+            if (l == this.loop) {
+                return true;
+            }
+            l = l.getParent();
+        }
+
+        return false;
     }
 }

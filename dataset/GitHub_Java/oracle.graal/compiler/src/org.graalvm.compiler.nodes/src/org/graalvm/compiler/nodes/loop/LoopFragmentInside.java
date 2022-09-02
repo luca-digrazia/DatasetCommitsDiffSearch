@@ -216,7 +216,7 @@ public class LoopFragmentInside extends LoopFragment {
             OpaqueNode opaque = opaqueUnrolledStrides.get(loop.loopBegin());
             CountedLoopInfo counted = loop.counted();
             ValueNode counterStride = counted.getCounter().strideNode();
-            if (opaque == null || opaque.isDeleted()) {
+            if (opaque == null) {
                 ValueNode limit = counted.getLimit();
                 opaque = new OpaqueNode(AddNode.add(counterStride, counterStride, NodeView.DEFAULT));
                 ValueNode newLimit = partialUnrollOverflowCheck(opaque, limit, counted);
@@ -231,7 +231,7 @@ public class LoopFragmentInside extends LoopFragment {
             }
         }
         mainLoopBegin.setUnrollFactor(mainLoopBegin.getUnrollFactor() * 2);
-        mainLoopBegin.setLoopFrequency(mainLoopBegin.profileData().scaleFrequency(1 / 2.0));
+        mainLoopBegin.setLoopFrequency(Math.max(1.0, mainLoopBegin.loopFrequency() / 2), mainLoopBegin.loopFrequencySource());
         graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "LoopPartialUnroll %s", loop);
 
         mainLoopBegin.getDebug().dump(DebugContext.VERBOSE_LEVEL, mainLoopBegin.graph(), "After insertWithinAfter %s", mainLoopBegin);

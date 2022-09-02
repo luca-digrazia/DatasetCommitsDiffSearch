@@ -36,8 +36,7 @@ import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.ControlSplitNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.StructuredGraph.StageFlag;
-import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
+import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.phases.BasePhase;
 
@@ -50,7 +49,7 @@ public class PropagateDeoptimizeProbabilityPhase extends BasePhase<CoreProviders
     @Override
     @SuppressWarnings("try")
     protected void run(final StructuredGraph graph, CoreProviders context) {
-        assert graph.isAfterStage(StageFlag.VALUE_PROXY_REMOVAL) : "ConvertDeoptimizeToGuardPhase always creates proxies";
+        assert !graph.hasValueProxies() : "ConvertDeoptimizeToGuardPhase always creates proxies";
 
         if (graph.hasNode(AbstractDeoptimizeNode.TYPE)) {
 
@@ -102,7 +101,7 @@ public class PropagateDeoptimizeProbabilityPhase extends BasePhase<CoreProviders
                 for (AbstractBeginNode begin : value) {
                     double probability = controlSplitNode.probability(begin);
                     if (probability != 0.0) {
-                        controlSplitNode.setProbability(begin, BranchProbabilityNode.DEOPT_PROFILE);
+                        controlSplitNode.setProbability(begin, 0.0, ProfileSource.INJECTED);
                     }
                 }
             }

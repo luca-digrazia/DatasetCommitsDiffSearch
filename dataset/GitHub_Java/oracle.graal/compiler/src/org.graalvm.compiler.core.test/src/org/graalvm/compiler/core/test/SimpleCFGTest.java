@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@
 package org.graalvm.compiler.core.test;
 
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.BeginNode;
@@ -33,6 +34,7 @@ import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
@@ -51,7 +53,7 @@ public class SimpleCFGTest extends GraalCompilerTest {
     @Test
     public void testImplies() {
         OptionValues options = getInitialOptions();
-        DebugContext debug = DebugContext.create(options, new GraalDebugHandlersFactory(getSnippetReflection()));
+        DebugContext debug = new Builder(options, new GraalDebugHandlersFactory(getSnippetReflection())).build();
         StructuredGraph graph = new StructuredGraph.Builder(options, debug, AllowAssumptions.YES).build();
 
         EndNode trueEnd = graph.add(new EndNode());
@@ -62,7 +64,7 @@ public class SimpleCFGTest extends GraalCompilerTest {
         AbstractBeginNode falseBegin = graph.add(new BeginNode());
         falseBegin.setNext(falseEnd);
 
-        IfNode ifNode = graph.add(new IfNode(null, trueBegin, falseBegin, 0.5));
+        IfNode ifNode = graph.add(new IfNode(null, trueBegin, falseBegin, 0.5, ProfileSource.UNKNOWN));
         graph.start().setNext(ifNode);
 
         AbstractMergeNode merge = graph.add(new MergeNode());
