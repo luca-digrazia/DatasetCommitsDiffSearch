@@ -24,13 +24,19 @@
  */
 package org.graalvm.component.installer.persist;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -40,23 +46,29 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.graalvm.component.installer.BundleConstants;
+import org.graalvm.component.installer.CommandTestBase;
+import org.graalvm.component.installer.CommonConstants;
 import org.graalvm.component.installer.FailedOperationException;
-import org.graalvm.component.installer.TestBase;
+import org.graalvm.component.installer.SystemUtils;
+import org.graalvm.component.installer.Version;
 import org.graalvm.component.installer.model.ComponentInfo;
 import org.junit.After;
 import org.junit.AfterClass;
+import static org.junit.Assert.assertNotNull;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Test;
-import static org.junit.Assert.*;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
 
-public class DirectoryStorageTest extends TestBase {
+public class DirectoryStorageTest extends CommandTestBase {
     @Rule public TestName name = new TestName();
     @Rule public TemporaryFolder workDir = new TemporaryFolder();
     @Rule public ExpectedException exception = ExpectedException.none();
@@ -77,11 +89,16 @@ public class DirectoryStorageTest extends TestBase {
     }
 
     @Before
+    @Override
     public void setUp() throws Exception {
+        super.setUp();
         graalVMPath = workDir.newFolder("graal").toPath();
+        Files.createDirectory(graalVMPath.resolve("bin"));
         registryPath = workDir.newFolder("registry").toPath();
 
         storage = new DirectoryStorage(this, registryPath, graalVMPath);
+        // the default assumed by most test data.
+        storage.setJavaVersion("8");
     }
 
     @After
@@ -94,10 +111,21 @@ public class DirectoryStorageTest extends TestBase {
     @Test
     public void testLoadGraalVersionSimple() throws Exception {
         try (InputStream is = getClass().getResourceAsStream("release_simple.properties")) {
-            Files.copy(is, graalVMPath.resolve(Paths.get("release")));
+            Files.copy(is, graalVMPath.resolve(SystemUtils.fileName("release")));
         }
         Map<String, String> result = storage.loadGraalVersionInfo();
         assertEquals(7, result.size());
+        assertEquals(CommonConstants.EDITION_CE, result.get(CommonConstants.CAP_EDITION));
+    }
+
+    @Test
+    public void testLoadGraalVersionSimpleEE() throws Exception {
+        try (InputStream is = getClass().getResourceAsStream("release_ee_simple.properties")) {
+            Files.copy(is, graalVMPath.resolve(SystemUtils.fileName("release")));
+        }
+        Map<String, String> result = storage.loadGraalVersionInfo();
+        assertEquals(7, result.size());
+        assertEquals("ee", result.get(CommonConstants.CAP_EDITION));
     }
 
     @Test
@@ -110,7 +138,7 @@ public class DirectoryStorageTest extends TestBase {
     @Test
     public void testLoadReleaseWithInvalidSourceVersions() throws Exception {
         try (InputStream is = getClass().getResourceAsStream("release_noVersion.properties")) {
-            Files.copy(is, graalVMPath.resolve(Paths.get("release")));
+            Files.copy(is, graalVMPath.resolve(SystemUtils.fileName("release")));
         }
         exception.expect(FailedOperationException.class);
         exception.expectMessage("STORAGE_InvalidReleaseFile");
@@ -121,7 +149,7 @@ public class DirectoryStorageTest extends TestBase {
     @Test
     public void testLoadGraalVersionCorrupted() throws Exception {
         try (InputStream is = getClass().getResourceAsStream("release_corrupted.properties")) {
-            Files.copy(is, graalVMPath.resolve(Paths.get("release")));
+            Files.copy(is, graalVMPath.resolve(SystemUtils.fileName("release")));
         }
         exception.expect(FailedOperationException.class);
         exception.expectMessage("STORAGE_InvalidReleaseFile");
@@ -141,22 +169,47 @@ public class DirectoryStorageTest extends TestBase {
         assertEquals("0.32", info.getRequiredGraalValues().get("graalvm_version"));
     }
 
+    @Test
+    public void testLoadProvidedCapabilities() throws Exception {
+        Path p = dataFile("data/core1.component");
+        ComponentInfo info;
+
+        try (InputStream is = Files.newInputStream(p)) {
+            info = storage.loadMetadataFrom(is);
+        }
+        assertEquals("org.graalvm", info.getId());
+        assertEquals(Version.fromString("1.0.1.0"), info.getProvidedValue("version", Version.class));
+        assertEquals("ee", info.getProvidedValue("edition", String.class));
+    }
+
     /**
      * Test of listComponentIDs method, of class RegistryStorage.
      */
     @Test
     public void testListComponentsSimple() throws Exception {
         copyDir("list1", registryPath);
-        List<String> components = new ArrayList<>(storage.listComponentIDs());
-        Collections.sort(components);
-        assertEquals(Arrays.asList("fastr", "ruby", "sulong"), components);
+        List<String> comps = new ArrayList<>(storage.listComponentIDs());
+        Collections.sort(comps);
+        comps.remove(BundleConstants.GRAAL_COMPONENT_ID);
+        assertEquals(Arrays.asList("fastr", "fastr-2", "ruby", "sulong"), comps);
     }
 
     @Test
     public void testListComponentsEmpty() throws Exception {
         copyDir("emptylist", registryPath);
-        List<String> components = new ArrayList<>(storage.listComponentIDs());
-        assertEquals(Collections.emptyList(), components);
+        List<String> comps = new ArrayList<>(storage.listComponentIDs());
+        comps.remove(BundleConstants.GRAAL_COMPONENT_ID);
+        assertEquals(Collections.emptyList(), comps);
+    }
+
+    private ComponentInfo loadLastComponent(String id) throws IOException {
+        Set<ComponentInfo> infos = storage.loadComponentMetadata(id);
+        if (infos == null || infos.isEmpty()) {
+            return null;
+        }
+        List<ComponentInfo> sorted = new ArrayList<>(infos);
+        Collections.sort(sorted, ComponentInfo.versionComparator());
+        return sorted.get(sorted.size() - 1);
     }
 
     /**
@@ -165,7 +218,7 @@ public class DirectoryStorageTest extends TestBase {
     @Test
     public void testLoadComponentMetadata() throws Exception {
         copyDir("list1", registryPath);
-        ComponentInfo info = storage.loadComponentMetadata("fastr");
+        ComponentInfo info = loadLastComponent("fastr");
         assertEquals("org.graalvm.fastr", info.getId());
         assertEquals("1.0", info.getVersionString());
         assertEquals("0.32", info.getRequiredGraalValues().get("graalvm_version"));
@@ -177,43 +230,43 @@ public class DirectoryStorageTest extends TestBase {
     @Test
     public void testLoadComponentMetadata2() throws Exception {
         copyDir("list1", registryPath);
-        ComponentInfo info = storage.loadComponentMetadata("fastr-2");
+        ComponentInfo info = loadLastComponent("fastr-2");
         assertEquals("org.graalvm.fastr", info.getId());
-        
+
         assertTrue(info.isPolyglotRebuild());
         assertTrue(info.getWorkingDirectories().contains("jre/languages/test/scrap"));
         assertTrue(info.getWorkingDirectories().contains("jre/lib/test/scrapdir"));
     }
 
     /**
-     * Should strip whitespaces around
+     * Should strip whitespaces around.
      * 
      * @throws Exception
      */
     @Test
     public void loadComponentFiles() throws Exception {
         copyDir("list1", registryPath);
-        ComponentInfo info = storage.loadComponentMetadata("fastr");
+        ComponentInfo info = loadLastComponent("fastr");
         storage.loadComponentFiles(info);
-        List<String> files = info.getPaths();
+        List<String> paths = info.getPaths();
         assertEquals(Arrays.asList(
-                        "bin/", "bin/R", "bin/Rscript"), files.subList(0, 3));
+                        "bin/", "bin/R", "bin/Rscript"), paths.subList(0, 3));
     }
 
     /**
-     * Should strip whitespaces around
+     * Should strip whitespaces around.
      * 
      * @throws Exception
      */
     @Test
     public void loadComponentFilesMissing() throws Exception {
         copyDir("list1", registryPath);
-        Files.delete(registryPath.resolve("org.graalvm.fastr.filelist"));
+        Files.delete(registryPath.resolve(SystemUtils.fileName("org.graalvm.fastr.filelist")));
 
-        ComponentInfo info = storage.loadComponentMetadata("fastr");
+        ComponentInfo info = loadLastComponent("fastr");
         storage.loadComponentFiles(info);
-        List<String> files = info.getPaths();
-        assertTrue(files.isEmpty());
+        List<String> paths = info.getPaths();
+        assertTrue(paths.isEmpty());
     }
 
     /**
@@ -222,13 +275,13 @@ public class DirectoryStorageTest extends TestBase {
     @Test
     public void testLoadMissingComponentMetadata() throws Exception {
         copyDir("list1", registryPath);
-        assertNull(storage.loadComponentMetadata("rrr"));
+        assertNull(loadLastComponent("rrr"));
     }
 
     @Test
     public void testLoadReplacedFiles() throws Exception {
         try (InputStream is = getClass().getResourceAsStream("replaced-files.properties")) {
-            Files.copy(is, registryPath.resolve(Paths.get("replaced-files.properties")));
+            Files.copy(is, registryPath.resolve(SystemUtils.fileName("replaced-files.properties")));
         }
         Map<String, Collection<String>> replaced = storage.readReplacedFiles();
         assertEquals(new HashSet<>(Arrays.asList("fastr", "ruby")), new HashSet<>(replaced.get("shared/lib/jline.jar")));
@@ -246,10 +299,10 @@ public class DirectoryStorageTest extends TestBase {
      */
     @Test
     public void testUpdateReplacedFiles() throws Exception {
-        Map<String, Collection<String>> files = new HashMap<>();
-        files.put("whatever/lib.jar", Arrays.asList("fastr", "sulong"));
-        storage.updateReplacedFiles(files);
-        Path regPath = registryPath.resolve(Paths.get("replaced-files.properties"));
+        Map<String, Collection<String>> paths = new HashMap<>();
+        paths.put("whatever/lib.jar", Arrays.asList("fastr", "sulong"));
+        storage.updateReplacedFiles(paths);
+        Path regPath = registryPath.resolve(SystemUtils.fileName("replaced-files.properties"));
         Path goldenPath = dataFile("golden-replaced-files.properties");
         List<String> lines1 = Files.readAllLines(goldenPath);
         List<String> lines2 = Files.readAllLines(regPath).stream().filter((s) -> !s.startsWith("#")).collect(Collectors.toList());
@@ -262,11 +315,11 @@ public class DirectoryStorageTest extends TestBase {
     @Test
     public void testUpdateReplacedFilesNone() throws Exception {
         try (InputStream is = getClass().getResourceAsStream("replaced-files.properties")) {
-            Files.copy(is, registryPath.resolve(Paths.get("replaced-files.properties")));
+            Files.copy(is, registryPath.resolve(SystemUtils.fileName("replaced-files.properties")));
         }
-        Map<String, Collection<String>> files = new HashMap<>();
-        storage.updateReplacedFiles(files);
-        Path regPath = registryPath.resolve(Paths.get("replaced-files.properties"));
+        Map<String, Collection<String>> paths = new HashMap<>();
+        storage.updateReplacedFiles(paths);
+        Path regPath = registryPath.resolve(SystemUtils.fileName("replaced-files.properties"));
         assertFalse(Files.exists(regPath));
     }
 
@@ -275,17 +328,17 @@ public class DirectoryStorageTest extends TestBase {
      */
     @Test
     public void testUpdateReplacedFilesEmpty() throws Exception {
-        Map<String, Collection<String>> files = new HashMap<>();
+        Map<String, Collection<String>> paths = new HashMap<>();
         // make some existing file
         Path goldenPath = dataFile("golden-replaced-files.properties");
-        Path regPath = registryPath.resolve(Paths.get("replaced-files.properties"));
+        Path regPath = registryPath.resolve(SystemUtils.fileName("replaced-files.properties"));
         Files.copy(goldenPath, regPath, StandardCopyOption.REPLACE_EXISTING);
-        storage.updateReplacedFiles(files);
+        storage.updateReplacedFiles(paths);
 
         // should be deleted
         assertFalse(Files.exists(regPath));
 
-        storage.updateReplacedFiles(files);
+        storage.updateReplacedFiles(paths);
         // should not be created
         assertFalse(Files.exists(regPath));
     }
@@ -298,18 +351,18 @@ public class DirectoryStorageTest extends TestBase {
         copyDir("list2", registryPath);
         storage.deleteComponent("fastr");
 
-        Path fastrComp = registryPath.resolve("fastr.component");
-        Path fastrList = registryPath.resolve("fastr.filelist");
+        Path fastrComp = registryPath.resolve(SystemUtils.fileName("fastr.component"));
+        Path fastrList = registryPath.resolve(SystemUtils.fileName("fastr.filelist"));
 
         assertFalse(Files.exists(fastrComp));
         assertFalse(Files.exists(fastrList));
 
         storage.deleteComponent("sulong");
-        Path sulongComp = registryPath.resolve("sulong.component");
+        Path sulongComp = registryPath.resolve(SystemUtils.fileName("sulong.component"));
         assertFalse(Files.exists(sulongComp));
 
         storage.deleteComponent("leftover");
-        Path leftoverList = registryPath.resolve("leftover.filelist");
+        Path leftoverList = registryPath.resolve(SystemUtils.fileName("leftover.filelist"));
         assertFalse(Files.exists(leftoverList));
     }
 
@@ -318,6 +371,10 @@ public class DirectoryStorageTest extends TestBase {
      */
     @Test
     public void testDeleteComponentFailure() throws Exception {
+        if (isWindows()) {
+            return;
+        }
+
         copyDir("list2", registryPath);
         Files.setPosixFilePermissions(registryPath, PosixFilePermissions.fromString("r--r--r--"));
 
@@ -342,7 +399,7 @@ public class DirectoryStorageTest extends TestBase {
         ComponentInfo info = new ComponentInfo("x", "y", "2.0");
         info.addRequiredValue("a", "b");
 
-        Properties props = storage.metaToProperties(info);
+        Properties props = DirectoryStorage.metaToProperties(info);
         assertEquals("x", props.getProperty(BundleConstants.BUNDLE_ID));
         assertEquals("y", props.getProperty(BundleConstants.BUNDLE_NAME));
         assertEquals("2.0", props.getProperty(BundleConstants.BUNDLE_VERSION));
@@ -353,7 +410,7 @@ public class DirectoryStorageTest extends TestBase {
     public void testSaveComponent() throws Exception {
         ComponentInfo info = new ComponentInfo("x", "y", "2.0");
         info.addRequiredValue("a", "b");
-        Path p = registryPath.resolve("x.component");
+        Path p = registryPath.resolve(SystemUtils.fileName("x.component"));
         assertFalse(Files.exists(p));
         storage.saveComponent(info);
         assertTrue(Files.exists(p));
@@ -369,15 +426,34 @@ public class DirectoryStorageTest extends TestBase {
     }
 
     @Test
+    public void testSaveComponentWithCapabilities() throws Exception {
+        ComponentInfo info = new ComponentInfo("x", "y", "2.0");
+        info.provideValue("a", "foo");
+        info.provideValue("v", Version.fromString("1.1.1"));
+        Path p = registryPath.resolve(SystemUtils.fileName("x.component"));
+        assertFalse(Files.exists(p));
+        storage.saveComponent(info);
+        assertTrue(Files.exists(p));
+        List<String> lines = Files.readAllLines(p).stream()
+                        .filter((l) -> !l.startsWith("#"))
+                        .collect(Collectors.toList());
+        List<String> golden = Files.readAllLines(dataFile("golden-save-component2.properties")).stream()
+                        .filter((l) -> !l.startsWith("#"))
+                        .collect(Collectors.toList());
+
+        assertEquals(golden, lines);
+
+    }
+
+    @Test
     public void saveComponentOptionalTags() throws Exception {
         ComponentInfo info = new ComponentInfo("x", "y", "2.0");
         info.setPolyglotRebuild(true);
         info.addWorkingDirectories(Arrays.asList(
-                "jre/languages/test/scrap",
-                "jre/lib/test/scrapdir"
-        ));
+                        "jre/languages/test/scrap",
+                        "jre/lib/test/scrapdir"));
 
-        Path p = registryPath.resolve("x.component");
+        Path p = registryPath.resolve(SystemUtils.fileName("x.component"));
         assertFalse(Files.exists(p));
         storage.saveComponent(info);
         assertTrue(Files.exists(p));
@@ -388,16 +464,17 @@ public class DirectoryStorageTest extends TestBase {
         List<String> golden = Files.readAllLines(dataFile("golden-save-optional.properties")).stream()
                         .filter((l) -> !l.startsWith("#"))
                         .collect(Collectors.toList());
-        
+
         assertEquals(golden, lines);
 
     }
+
     @Test
     public void saveComponentFiles() throws Exception {
         ComponentInfo info = new ComponentInfo("x", "y", "2.0");
         info.addPaths(Arrays.asList("SecondPath/file", "FirstPath/directory/"));
 
-        Path p = registryPath.resolve("x.filelist");
+        Path p = registryPath.resolve(SystemUtils.fileName("x.filelist"));
         assertFalse(Files.exists(p));
         storage.saveComponentFileList(info);
         assertTrue(Files.exists(p));
@@ -411,5 +488,178 @@ public class DirectoryStorageTest extends TestBase {
 
         assertEquals(golden, lines);
     }
-    
+
+    @Test
+    public void testAcceptLicense() throws Exception {
+        copyDir("list1", registryPath);
+        ComponentInfo info = loadLastComponent("fastr");
+        enableLicensesForTesting();
+        storage.recordLicenseAccepted(info, "cafebabe", "This is a dummy license", null);
+        Path p = registryPath.resolve(SystemUtils.fromCommonString(
+                MessageFormat.format(DirectoryStorage.LICENSE_FILE_TEMPLATE, "cafebabe", "org.graalvm.fastr")));
+        Path p2 = registryPath.resolve(SystemUtils.fromCommonString("licenses/cafebabe"));
+        assertTrue(Files.isReadable(p));
+        assertEquals(Arrays.asList("This is a dummy license"), Files.readAllLines(p2));
+    }
+
+    /**
+     * URLs contain characters not representable in filesystem, check they are transliterated.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testAcceptLicenseWithUrlId() throws Exception {
+        copyDir("list1", registryPath);
+        ComponentInfo info = loadLastComponent("fastr");
+        enableLicensesForTesting();
+        storage.recordLicenseAccepted(info, "http://acme.org/license.txt", "This is a dummy license", null);
+        Path p = registryPath.resolve(SystemUtils.fromCommonString(
+                MessageFormat.format(DirectoryStorage.LICENSE_FILE_TEMPLATE, "http___acme.org_license.txt", "org.graalvm.fastr")));
+        Path p2 = registryPath.resolve(SystemUtils.fromCommonString("licenses/http___acme.org_license.txt"));
+        Path p3 = registryPath.resolve(SystemUtils.fromCommonString("licenses/http___acme.org_license.txt.id"));
+        assertTrue(Files.isReadable(p));
+        assertEquals(Arrays.asList("This is a dummy license"), Files.readAllLines(p2));
+        assertTrue(Files.isReadable(p3));
+        assertEquals(Arrays.asList("http://acme.org/license.txt"), Files.readAllLines(p3));
+    }
+
+    /**
+     * Acceptance test must use transliteration, too.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testCheckedAcceptedURLLicense() throws Exception {
+        String urlString = "http://acme.org/license.txt";
+        copyDir("list1", registryPath);
+        ComponentInfo info = loadLastComponent("fastr");
+        enableLicensesForTesting();
+        storage.recordLicenseAccepted(info, urlString, "This is a dummy license", null);
+
+        assertNotNull(storage.licenseAccepted(info, urlString));
+    }
+
+    /**
+     * When listing licenses, Ids cannot be transliterated back, so they are stored\ aside.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testCheckedAcceptedURLLicenseListed() throws Exception {
+        String urlString = "http://acme.org/license.txt";
+        copyDir("list1", registryPath);
+        ComponentInfo info = loadLastComponent("fastr");
+        enableLicensesForTesting();
+        storage.recordLicenseAccepted(info, urlString, "This is a dummy license", null);
+
+        Map<String, Collection<String>> lics = storage.findAcceptedLicenses();
+        assertNotNull(lics.get(urlString));
+    }
+
+    @Test
+    public void testLicenseAccepted1() throws Exception {
+        copyDir("list1", registryPath);
+        ComponentInfo info = loadLastComponent("fastr");
+        ComponentInfo info2 = loadLastComponent("ruby");
+
+        Path p = registryPath.resolve(SystemUtils.fromCommonString(
+                MessageFormat.format(DirectoryStorage.LICENSE_FILE_TEMPLATE, "cafebabe", "org.graalvm.fastr")));
+        Files.createDirectories(p.getParent());
+        Files.write(p, Arrays.asList("ahoj"));
+
+        enableLicensesForTesting();
+        assertNotNull(storage.licenseAccepted(info, "cafebabe"));
+        assertNotNull(storage.licenseAccepted(info2, "cafebabe"));
+    }
+
+    /**
+     * Checks that license management is disabled, that is no license is reported as accepted even
+     * if the data (by some miracle) exist.
+     */
+    @Test
+    public void testLicensesDecativated() throws Exception {
+        copyDir("list1", registryPath);
+        ComponentInfo info = loadLastComponent("fastr");
+
+        Path p = registryPath.resolve(SystemUtils.fromCommonString("licenses/cafebabe.accepted/org.graalvm.fastr"));
+        Files.createDirectories(p.getParent());
+        Files.write(p, Arrays.asList("ahoj"));
+        assertNull(storage.licenseAccepted(info, "cafebabe"));
+    }
+
+    /**
+     * Checks that no license is recorded, as the feature must be disabled.
+     */
+    @Test
+    public void testLicensesNotRecorded() throws Exception {
+        copyDir("list1", registryPath);
+        ComponentInfo info = loadLastComponent("fastr");
+
+        Path p = registryPath.resolve(SystemUtils.fromCommonString("licenses/cafebabe.accepted/org.graalvm.fastr"));
+        Files.createDirectories(p.getParent());
+        Files.write(p, Arrays.asList("ahoj"));
+
+        assertNull(storage.licenseAccepted(info, "cafebabe"));
+    }
+
+    /**
+     * Checks that graalvm.core is present in the list.
+     */
+    @Test
+    public void testCoreComponentPresent() throws Exception {
+        copyDir("list1", registryPath);
+        assertTrue("Must contain graalvm core", storage.listComponentIDs().contains(BundleConstants.GRAAL_COMPONENT_ID));
+    }
+
+    @Test
+    public void testKnowsNativeComponent() throws Exception {
+        copyDir("list3", registryPath);
+        Collection<String> ids = storage.listComponentIDs();
+        assertTrue(ids.contains("fastr"));
+        assertTrue(ids.contains("ruby"));
+        Set<ComponentInfo> cis = storage.loadComponentMetadata("ruby");
+        assertEquals(1, cis.size());
+        ComponentInfo ci = cis.iterator().next();
+        assertTrue(ci.isNativeComponent());
+    }
+
+    @Test
+    public void testRefuseInstallationForROPosix() throws Exception {
+        PosixFileAttributeView posix = registryPath.getFileSystem().provider().getFileAttributeView(registryPath, PosixFileAttributeView.class);
+        Assume.assumeTrue("Not a POSIX system", posix != null);
+        try {
+            // simulate an unreadable directory:
+            posix.setPermissions(PosixFilePermissions.fromString("r-xr-xr-x"));
+
+            exception.expect(FailedOperationException.class);
+            exception.expectMessage("ERROR_MustBecomeUser");
+            storage.saveComponent(null);
+        } finally {
+            posix.setPermissions(PosixFilePermissions.fromString("rwxrwxr-x"));
+        }
+    }
+
+    @Test
+    public void testGraalVMCoreComponentNative() throws Exception {
+        // fake a release file
+        Files.copy(dataFile("release_simple.properties"), graalVMPath.resolve("release"));
+        Path meta = registryPath.resolve(BundleConstants.GRAAL_COMPONENT_ID + ".meta");
+        // create the component storage, tag core component with .meta file
+        Files.createFile(meta);
+
+        Set<ComponentInfo> infos = storage.loadComponentMetadata(BundleConstants.GRAAL_COMPONENT_ID);
+        assertEquals(1, infos.size());
+        ComponentInfo ci = infos.iterator().next();
+        assertTrue(ci.isNativeComponent());
+    }
+
+    @Test
+    public void testGraalVMCoreComponentRegular() throws Exception {
+        Files.copy(dataFile("release_simple.properties"), graalVMPath.resolve("release"));
+
+        Set<ComponentInfo> infos = storage.loadComponentMetadata(BundleConstants.GRAAL_COMPONENT_ID);
+        assertEquals(1, infos.size());
+        ComponentInfo ci = infos.iterator().next();
+        assertFalse(ci.isNativeComponent());
+    }
 }
