@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,7 +38,6 @@ enum MarkId {
     OSR_ENTRY("CodeInstaller::OSR_ENTRY"),
     EXCEPTION_HANDLER_ENTRY("CodeInstaller::EXCEPTION_HANDLER_ENTRY"),
     DEOPT_HANDLER_ENTRY("CodeInstaller::DEOPT_HANDLER_ENTRY"),
-    FRAME_COMPLETE("CodeInstaller::FRAME_COMPLETE"),
     INVOKEINTERFACE("CodeInstaller::INVOKEINTERFACE"),
     INVOKEVIRTUAL("CodeInstaller::INVOKEVIRTUAL"),
     INVOKESTATIC("CodeInstaller::INVOKESTATIC"),
@@ -62,20 +61,12 @@ enum MarkId {
 
     static {
         for (MarkId e : values()) {
-            if (e.value >= 0) {
-                assert !lookup.containsKey(e.value) : "No duplicates allowed";
-                lookup.put(e.value, e);
-            }
+            lookup.put(e.value, e);
         }
     }
 
     MarkId(String name) {
-        Object constant = HotSpotJVMCIRuntime.runtime().getConfigStore().getConstants().get(name);
-        if (constant != null) {
-            this.value = (int) (long) constant;
-        } else {
-            this.value = -1;
-        }
+        this.value = (int) (long) HotSpotJVMCIRuntime.runtime().getConfigStore().getConstants().get(name);
     }
 
     static MarkId getEnum(int value) {
