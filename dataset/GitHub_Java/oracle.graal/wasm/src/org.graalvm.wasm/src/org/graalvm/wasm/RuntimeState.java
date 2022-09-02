@@ -41,7 +41,6 @@
 package org.graalvm.wasm;
 
 import com.oracle.truffle.api.CallTarget;
-import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.exception.WasmValidationException;
 import org.graalvm.wasm.memory.WasmMemory;
 
@@ -89,7 +88,7 @@ public class RuntimeState {
      */
     @CompilationFinal private WasmMemory memory;
 
-    @CompilationFinal private Linker.LinkState linkState;
+    @CompilationFinal private boolean isLinked;
 
     private void ensureGlobalsCapacity(int index) {
         while (index >= globalAddresses.length) {
@@ -111,40 +110,18 @@ public class RuntimeState {
         this.module = module;
         this.globalAddresses = new int[INITIAL_GLOBALS_SIZE];
         this.targets = new CallTarget[INITIAL_TARGETS_SIZE];
-        this.linkState = Linker.LinkState.nonLinked;
+        this.isLinked = false;
     }
 
     private void checkNotLinked() {
         // The symbol table must be read-only after the module gets linked.
-        if (linkState == Linker.LinkState.linked) {
+        if (isLinked) {
             throw new WasmValidationException("The engine tried to modify the instance after linking.");
         }
     }
 
-    public void setLinkInProgress() {
-        if (linkState != Linker.LinkState.nonLinked) {
-            throw new WasmExecutionException(null, "Can only switch to in-progress state when not linked.");
-        }
-        this.linkState = Linker.LinkState.inProgress;
-    }
-
-    public void setLinkCompleted() {
-        if (linkState != Linker.LinkState.inProgress) {
-            throw new WasmExecutionException(null, "Can only switch to linked state when linking is in-progress.");
-        }
-        this.linkState = Linker.LinkState.linked;
-    }
-
-    public boolean isNonLinked() {
-        return linkState == Linker.LinkState.nonLinked;
-    }
-
-    public boolean isLinkInProgress() {
-        return linkState == Linker.LinkState.inProgress;
-    }
-
-    public boolean isLinkCompleted() {
-        return linkState == Linker.LinkState.linked;
+    public void setLinked() {
+        isLinked = true;
     }
 
     public SymbolTable symbolTable() {

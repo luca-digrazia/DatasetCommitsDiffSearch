@@ -75,7 +75,7 @@ public class Dictionary implements TruffleObject {
     public Object readMember(String member) throws UnknownIdentifierException {
         final Object x = members.get(member);
         if (x != null) {
-            return x;
+            return null;
         } else {
             throw unknown(member);
         }
