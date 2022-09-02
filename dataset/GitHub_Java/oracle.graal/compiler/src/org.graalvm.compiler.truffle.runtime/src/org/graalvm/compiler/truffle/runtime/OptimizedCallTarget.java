@@ -993,19 +993,18 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     // This should be private but can't be. GR-19397
     public final Object[] injectArgumentsProfile(Object[] originalArguments) {
-        assert CompilerDirectives.inCompiledCode();
         Assumption argumentTypesAssumption = profiledArgumentTypesAssumption;
-        Class<?>[] types = profiledArgumentTypes;
         Object[] args = originalArguments;
-        if (argumentTypesAssumption != null && types != null && argumentTypesAssumption.isValid()) {
-            args = unsafeCast(castArrayFixedLength(args, types.length), Object[].class, true, true, true);
-            args = castArgumentsImpl(args, types);
+        if (argumentTypesAssumption != null && argumentTypesAssumption.isValid()) {
+            args = unsafeCast(castArrayFixedLength(args, profiledArgumentTypes.length), Object[].class, true, true, true);
+            args = castArgumentsImpl(args);
         }
         return args;
     }
 
     @ExplodeLoop
-    private Object[] castArgumentsImpl(Object[] originalArguments, Class<?>[] types) {
+    private Object[] castArgumentsImpl(Object[] originalArguments) {
+        Class<?>[] types = profiledArgumentTypes;
         Object[] castArguments = new Object[types.length];
         boolean isCallProfiled = callProfiled;
         for (int i = 0; i < types.length; i++) {
