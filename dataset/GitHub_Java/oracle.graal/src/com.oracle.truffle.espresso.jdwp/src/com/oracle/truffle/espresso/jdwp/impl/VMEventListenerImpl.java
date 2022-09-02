@@ -219,7 +219,7 @@ public final class VMEventListenerImpl implements VMEventListener {
         for (ClassPrepareRequest cpr : allClassPrepareRequests) {
             Pattern[] patterns = cpr.getPatterns();
             for (Pattern pattern : patterns) {
-                Matcher matcher = pattern.matcher(dotName);
+                Matcher matcher = pattern.matcher(dotName.replace('$', '_'));
 
                 if (matcher.matches()) {
                     toSend.add(cpr);

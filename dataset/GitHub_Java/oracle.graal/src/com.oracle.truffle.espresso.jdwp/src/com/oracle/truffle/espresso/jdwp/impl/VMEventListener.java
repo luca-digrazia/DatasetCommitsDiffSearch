@@ -22,48 +22,43 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.espresso.jdwp.api.CallFrame;
-import com.oracle.truffle.espresso.jdwp.api.VMListener;
+import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
+import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
 import java.util.concurrent.Callable;
 
-public interface VMEventListener extends VMListener {
-    void setConnection(SocketConnection connection);
-
+public interface VMEventListener {
+    void classPrepared(KlassRef klass, Object currentThread);
     void classUnloaded(KlassRef klass);
-
-    void breakpointHit(BreakpointInfo info, Object currentThread);
-
+    void threadStarted(Object thread);
+    void threadDied(Object thread);
+    void vmStarted(Object mainThread);
     void vmDied();
 
+    void breakpointHIt(BreakpointInfo info, Object currentThread);
+
     void addClassUnloadRequestId(int id);
-
     void addThreadStartedRequestId(int id);
-
     void addThreadDiedRequestId(int id);
-
     void addVMStartRequest(int id);
-
     void addVMDeathRequest(int id);
 
     Callable<Void> addClassPrepareRequest(ClassPrepareRequest request);
-
     void removeClassPrepareRequest(int requestId);
 
     void addBreakpointRequest(int requestId, BreakpointInfo info);
-
     void removeBreakpointRequest(int requestId);
 
-    void stepCompleted(int commandRequestId, CallFrame currentFrame);
+    void stepCompleted(int commandRequestId, JDWPCallFrame currentFrame);
 
-    void exceptionThrown(BreakpointInfo info, Object currentThread, Object exception, CallFrame callFrame);
+    void exceptionThrown(BreakpointInfo info, Object currentThread, Object exception, JDWPCallFrame callFrame);
 
     void increaseFieldBreakpointCount();
-
     void decreaseFieldBreakpointCount();
+    boolean hasFieldModificationBreakpoint(FieldRef field, Object receiver, Object value);
+    boolean hasFieldAccessBreakpoint(FieldRef field, Object receiver);
 
-    void fieldAccessBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame);
-
-    void fieldModificationBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame);
+    void fieldAccessBreakpointHit(FieldBreakpointEvent event, Object currentThread, JDWPCallFrame callFrame);
+    void fieldModificationBreakpointHit(FieldBreakpointEvent event, Object currentThread, JDWPCallFrame callFrame);
 }

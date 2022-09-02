@@ -34,8 +34,8 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.espresso.jdwp.api.VMListener;
 import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
+import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import org.graalvm.polyglot.Engine;
 
@@ -85,8 +85,6 @@ public final class EspressoContext {
     private final AtomicInteger klassIdProvider = new AtomicInteger();
     private boolean mainThreadCreated;
     private JDWPContextImpl jdwpContext;
-    private VMListener eventListener;
-    private boolean contextReady;
 
     public int getNewId() {
         return klassIdProvider.getAndIncrement();
@@ -197,14 +195,11 @@ public final class EspressoContext {
         assert !this.initialized;
         spawnVM();
         this.initialized = true;
-        this.jdwpContext = new JDWPContextImpl(this);
-        this.eventListener = jdwpContext.jdwpInit(env);
-        eventListener.vmStarted(getMainThread());
+        jdwpContext = new JDWPContextImpl(this);
+        jdwpContext.jdwpInit(env);
+        // send the VM start event to listeners, e.g. JDWP
+        VMEventListeners.getDefault().vmStarted(getMainThread());
         hostToGuestReferenceDrainThread.start();
-    }
-
-    public VMListener getJDWPListener() {
-        return eventListener;
     }
 
     public Source findOrCreateSource(Method method) {
@@ -373,6 +368,7 @@ public final class EspressoContext {
                         /* name */ meta.toGuestString("main"));
         mainThread.setIntField(meta.Thread_threadStatus, Target_java_lang_Thread.State.RUNNABLE.value);
 
+        VMEventListeners.getDefault().threadStarted(mainThread);
         mainThreadCreated = true;
     }
 
@@ -515,16 +511,10 @@ public final class EspressoContext {
 
     public void registerThread(Thread host, StaticObject self) {
         threadManager.registerThread(host, self);
-        if (eventListener != null) {
-            eventListener.threadStarted(self);
-        }
     }
 
     public void unregisterThread(StaticObject self) {
         threadManager.unregisterThread(self);
-        if (eventListener != null) {
-            eventListener.threadDied(self);
-        }
     }
 
     public void invalidateNoThreadStop(String message) {
@@ -595,14 +585,6 @@ public final class EspressoContext {
 
     public void prepareDispose() {
         jdwpContext.finalizeContext();
-    }
-
-    public void begin() {
-        this.contextReady = true;
-    }
-
-    public boolean canEnterOtherThread() {
-        return contextReady;
     }
 
     // endregion Options
