@@ -2344,9 +2344,9 @@ public class BasicNodeFactory implements NodeFactory {
     @Override
     public LLVMAllocateNode createAllocateGlobalsBlock(StructureType structType, boolean readOnly) {
         if (readOnly) {
-            return new AllocateReadOnlyGlobalsBlockNode(context, structType, dataLayout);
+            return new AllocateReadOnlyGlobalsBlockNode(context, structType);
         } else {
-            return new AllocateGlobalsBlockNode(context, structType, dataLayout);
+            return new AllocateGlobalsBlockNode(context, structType);
         }
     }
 
