@@ -42,7 +42,7 @@ import sun.misc.Unsafe;
 @EspressoSubstitutions
 public final class Target_sun_misc_Unsafe {
 
-    public static final int SAFETY_FIELD_OFFSET = 123456789;
+    private static final int SAFETY_FIELD_OFFSET = 123456789;
 
     private static Unsafe U;
 
@@ -200,9 +200,15 @@ public final class Target_sun_misc_Unsafe {
 
     // FIXME(peterssen): This abomination must go, once the object model land.
 
-    private static Field getInstanceFieldFromIndex(StaticObject holder, int slot) {
-        if (!(0 <= slot && slot < (1 << 16))) {
-            throw EspressoError.shouldNotReachHere("the field offset is not normalized");
+    private static Field getInstanceFieldFromIndex(StaticObject holder, int _slot) {
+        int slot;
+        if (!(0 <= _slot && _slot < (1 << 16))) {
+            slot = SAFETY_FIELD_OFFSET + _slot;
+            if (!(0 <= SAFETY_FIELD_OFFSET + _slot && SAFETY_FIELD_OFFSET + _slot < (1 << 16))) {
+                throw EspressoError.shouldNotReachHere("the field offset is not normalized");
+            }
+        } else {
+            slot = _slot;
         }
         if (holder.isStaticStorage()) {
             // Lookup static field in current class.
