@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,21 +41,7 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-/**
- * Performs the actual job of an invocation:
- * <li>Obtain the trailing MemberName from the arguments, and extract its payload.
- * <li>Perform method lookup if needed on the given receiver.
- * <li>Execute the payload on the given arguments, stripped from the given MemberName
- * 
- * Note that there is a small overhead, as the method invoked is usually the actual payload (in
- * opposition to the other MH nodes, who usually either calls the type checkers, or performs type
- * checks on erased primitives) to the , whose signature is not sub-workd erased. Unfortunately, the
- * under-the-carpet machinery created by guest java code works, and returns sub-words erased to
- * ints. We thus need to restore the kind of each argument before executing the payload, and since
- * this method is called from the black box, we need to erase the kind of the result to int if
- * needed.
- */
-public abstract class MHLinkToNode extends MethodHandleIntrinsicNode {
+public abstract class MHLinkToNode extends HandleIntrinsicNode {
     private final int argCount;
     private final Linker linker;
     private final int hiddenVmtarget;
@@ -88,18 +74,16 @@ public abstract class MHLinkToNode extends MethodHandleIntrinsicNode {
     }
 
     @SuppressWarnings("unused")
-    @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = {"canInline(target, cachedTarget)"})
+    @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "canInline(target, cachedTarget)")
     Object executeCallDirect(Object[] args, Method target,
                     @Cached("target") Method cachedTarget,
                     @Cached("create(target.getCallTarget())") DirectCallNode directCallNode) {
-        hits.inc();
         return directCallNode.call(args);
     }
 
     @Specialization(replaces = "executeCallDirect")
     Object executeCallIndirect(Object[] args, Method target,
                     @Cached("create()") IndirectCallNode callNode) {
-        miss.inc();
         return callNode.call(target.getCallTarget(), args);
     }
 
