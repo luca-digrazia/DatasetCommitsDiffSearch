@@ -55,8 +55,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -72,18 +70,14 @@ import org.graalvm.polyglot.PolyglotException.StackFrame;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.Proxy;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.test.polyglot.ValueAssert.Trait;
-
-import sun.reflect.CallerSensitive;
 
 /**
  * Tests class for {@link Context#asValue(Object)}.
@@ -180,11 +174,6 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
         assertTrue(context.asValue(new String[0]).hasArrayElements());
         assertTrue(context.asValue(new ArrayList<>()).isHostObject());
         assertTrue(context.asValue(new ArrayList<>()).hasArrayElements());
-    }
-
-    @Test
-    public void testBasicExamplesLambda() {
-        Assume.assumeFalse("Cannot get reflection data for a lambda", TruffleOptions.AOT);
         assertTrue(context.asValue((Supplier<Integer>) () -> 42).execute().asInt() == 42);
     }
 
@@ -981,17 +970,6 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
     }
 
     @Test
-    public void testExecuteFunction() {
-        Value function = context.asValue(new Function<Object, Object>() {
-            public Object apply(Object t) {
-                return ((int) t) * 2;
-            }
-        });
-
-        assertEquals(2, function.execute(1).asInt());
-    }
-
-    @Test
     public void testExceptionFrames1() {
         Value innerInner = context.asValue(new Function<Object, Object>() {
             public Object apply(Object t) {
@@ -1037,7 +1015,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
     public static class TestExceptionFrames2 {
 
         public void foo() {
-            throw new RuntimeException("message");
+            throw new RuntimeException("foo");
         }
 
     }
@@ -1051,7 +1029,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
         } catch (PolyglotException e) {
             assertTrue(e.isHostException());
             assertTrue(e.asHostException() instanceof RuntimeException);
-            assertEquals("message", e.getMessage());
+            assertEquals("foo", e.getMessage());
             Iterator<StackFrame> frameIterator = e.getPolyglotStackTrace().iterator();
             StackFrame frame;
             frame = frameIterator.next();
@@ -1083,7 +1061,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
         } catch (PolyglotException e) {
             assertTrue(e.isHostException());
             assertTrue(e.asHostException() instanceof RuntimeException);
-            assertEquals("message", e.getMessage());
+            assertEquals("foo", e.getMessage());
             Iterator<StackFrame> frameIterator = e.getPolyglotStackTrace().iterator();
             StackFrame frame;
             frame = frameIterator.next();
@@ -1099,132 +1077,6 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
             assertTrue(frame.isHostFrame());
             assertEquals("testExceptionFrames3", frame.toHostFrame().getMethodName());
         }
-    }
-
-    public static class TestExceptionFramesWithCallToMethodInvoke {
-
-        static final Method METHOD;
-        static {
-            try {
-                METHOD = TestExceptionFramesWithCallToMethodInvoke.class.getMethod("callCallback");
-            } catch (NoSuchMethodException e) {
-                throw new Error(e);
-            }
-        }
-
-        final Value callback;
-
-        public TestExceptionFramesWithCallToMethodInvoke(Value callback) {
-            this.callback = callback;
-        }
-
-        public void callCallback() {
-            callback.execute();
-        }
-
-        public void callReflectively() {
-            try {
-                METHOD.invoke(this);
-            } catch (InvocationTargetException e) {
-                throw (RuntimeException) e.getCause();
-            } catch (ReflectiveOperationException e) {
-                throw new Error(e);
-            }
-        }
-
-        public void foo() {
-            callReflectively();
-        }
-
-    }
-
-    @Test
-    public void testExceptionFramesWithCallToMethodInvoke() {
-        Value inner = context.asValue(new Supplier<Object>() {
-            public Object get() {
-                throw new RuntimeException("foobar");
-            }
-        });
-
-        Value value = context.asValue(new TestExceptionFramesWithCallToMethodInvoke(inner));
-        try {
-            value.getMember("foo").execute();
-            Assert.fail();
-        } catch (PolyglotException e) {
-            assertTrue(e.isHostException());
-            assertEquals(RuntimeException.class, e.asHostException().getClass());
-            assertEquals("foobar", e.getMessage());
-            Iterator<StackFrame> frameIterator = e.getPolyglotStackTrace().iterator();
-            StackFrame frame;
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            assertEquals("get", frame.toHostFrame().getMethodName());
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            assertEquals("execute", frame.toHostFrame().getMethodName());
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            assertEquals("callCallback", frame.toHostFrame().getMethodName());
-
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            StackFrame last = frame;
-            // Skip Method.invoke implementation classes
-            while (frame.toHostFrame().getMethodName().startsWith("invoke")) {
-                last = frame;
-                frame = frameIterator.next();
-                assertTrue(frame.isHostFrame());
-            }
-            assertEquals(Method.class.getName(), last.toHostFrame().getClassName());
-            assertEquals("invoke", last.toHostFrame().getMethodName());
-
-            assertTrue(frame.isHostFrame());
-            assertEquals("callReflectively", frame.toHostFrame().getMethodName());
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            assertEquals("foo", frame.toHostFrame().getMethodName());
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            assertEquals("execute", frame.toHostFrame().getMethodName());
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            assertEquals("testExceptionFramesWithCallToMethodInvoke", frame.toHostFrame().getMethodName());
-        }
-
-    }
-
-    public static class TestExceptionFramesCallerSensitive {
-
-        @CallerSensitive
-        public void foo() {
-            throw new RuntimeException("message");
-        }
-
-    }
-
-    @Test
-    public void testExceptionFramesCallerSensitive() {
-        Value value = context.asValue(new TestExceptionFramesCallerSensitive());
-        try {
-            value.getMember("foo").execute();
-            Assert.fail();
-        } catch (PolyglotException e) {
-            assertTrue(e.isHostException());
-            assertTrue(e.asHostException() instanceof RuntimeException);
-            assertEquals("message", e.getMessage());
-            Iterator<StackFrame> frameIterator = e.getPolyglotStackTrace().iterator();
-            StackFrame frame;
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            assertEquals("foo", frame.toHostFrame().getMethodName());
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            assertEquals("execute", frame.toHostFrame().getMethodName());
-            frame = frameIterator.next();
-            assertTrue(frame.isHostFrame());
-            assertEquals("testExceptionFramesCallerSensitive", frame.toHostFrame().getMethodName());
-        }
-
     }
 
     public static class TestIllegalArgumentInt {
