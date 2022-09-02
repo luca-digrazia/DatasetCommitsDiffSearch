@@ -226,7 +226,7 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
         }
     }
 
-    public static final class UnresolvedFunction extends Function {
+    static final class UnresolvedFunction extends Function {
         @Override
         void resolve(LLVMFunctionDescriptor descriptor) {
             CompilerAsserts.neverPartOfCompilation();
@@ -282,14 +282,17 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
         return function.get();
     }
 
-    public LLVMFunctionDescriptor(LLVMContext context, String name, FunctionType type, int functionId, Function function, ExternalLibrary library) {
+    private LLVMFunctionDescriptor(LLVMContext context, String name, FunctionType type, int functionId, Function function) {
         CompilerAsserts.neverPartOfCompilation();
         this.context = context;
         this.name = name;
         this.type = type;
         this.functionId = functionId;
         this.function = new AssumedValue<>("LLVMFunctionDescriptor.functionAssumption", function);
-        this.library = library;
+    }
+
+    public static LLVMFunctionDescriptor createDescriptor(LLVMContext context, String name, FunctionType type, int functionId) {
+        return new LLVMFunctionDescriptor(context, name, type, functionId, new UnresolvedFunction());
     }
 
     public interface LazyToTruffleConverter {
