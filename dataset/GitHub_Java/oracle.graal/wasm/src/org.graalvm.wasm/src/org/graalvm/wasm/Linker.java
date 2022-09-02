@@ -71,6 +71,7 @@ import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.nodes.WasmBlockNode;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 
 public class Linker {
     private enum LinkState {
@@ -251,7 +252,11 @@ public class Linker {
                                                 "', does not exist.");
             }
             WasmFunction importedFunction;
-            importedFunction = importedInstance.module().exportedFunctions().get(function.importedFunctionName());
+            try {
+                importedFunction = (WasmFunction) importedInstance.readMember(function.importedFunctionName());
+            } catch (UnknownIdentifierException e) {
+                importedFunction = null;
+            }
             if (importedFunction == null) {
                 throw new WasmLinkerException("The imported function '" + function.importedFunctionName() + "', referenced in the module '" + instance.name() +
                                 "', does not exist in the imported module '" + function.importedModuleName() + "'.");
@@ -412,8 +417,7 @@ public class Linker {
             table.ensureSizeAtLeast(baseAddress + segmentLength);
             for (int index = 0; index != segmentLength; ++index) {
                 final WasmFunction function = functions[index];
-                final CallTarget target = instance.target(function.index());
-                table.initialize(baseAddress + index, new WasmFunctionInstance(function, target));
+                table.initialize(baseAddress + index, function);
             }
         };
         final ArrayList<Sym> dependencies = new ArrayList<>();
@@ -422,11 +426,6 @@ public class Linker {
         }
         if (offsetGlobalIndex != -1) {
             dependencies.add(new InitializeGlobalSym(instance.name(), offsetGlobalIndex));
-        }
-        for (WasmFunction function : functions) {
-            if (function.importDescriptor() != null) {
-                dependencies.add(new ImportFunctionSym(instance.name(), function.importDescriptor()));
-            }
         }
         resolutionDag.resolveLater(new ElemSym(instance.name(), elemSegmentId), dependencies.toArray(new Sym[dependencies.size()]), resolveAction);
     }

@@ -41,7 +41,6 @@
 package org.graalvm.wasm;
 
 import com.oracle.truffle.api.CallTarget;
-import org.graalvm.wasm.exception.WasmValidationException;
 import org.graalvm.wasm.memory.WasmMemory;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -88,8 +87,6 @@ public class RuntimeState {
      */
     @CompilationFinal private WasmMemory memory;
 
-    @CompilationFinal private boolean isLinked;
-
     private void ensureGlobalsCapacity(int index) {
         while (index >= globalAddresses.length) {
             final int[] nGlobalAddresses = new int[globalAddresses.length * 2];
@@ -110,18 +107,6 @@ public class RuntimeState {
         this.module = module;
         this.globalAddresses = new int[INITIAL_GLOBALS_SIZE];
         this.targets = new CallTarget[INITIAL_TARGETS_SIZE];
-        this.isLinked = false;
-    }
-
-    private void checkNotLinked() {
-        // The symbol table must be read-only after the module gets linked.
-        if (isLinked) {
-            throw new WasmValidationException("The engine tried to modify the instance after linking.");
-        }
-    }
-
-    public void setLinked() {
-        isLinked = true;
     }
 
     public SymbolTable symbolTable() {
@@ -151,7 +136,7 @@ public class RuntimeState {
 
     void setGlobalAddress(int globalIndex, int address) {
         ensureGlobalsCapacity(globalIndex);
-        checkNotLinked();
+        // TODO: checkNotLinked();
         globalAddresses[globalIndex] = address;
     }
 
@@ -160,7 +145,7 @@ public class RuntimeState {
     }
 
     void setTable(WasmTable table) {
-        checkNotLinked();
+        // TODO: checkNotLinked();
         this.table = table;
     }
 
@@ -169,7 +154,7 @@ public class RuntimeState {
     }
 
     public void setMemory(WasmMemory memory) {
-        checkNotLinked();
+        // TODO: checkNotLinked();
         this.memory = memory;
     }
 }
