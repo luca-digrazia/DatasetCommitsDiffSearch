@@ -38,7 +38,6 @@ import com.oracle.truffle.llvm.parser.model.GlobalSymbol;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionSymbol;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionCode;
 import com.oracle.truffle.llvm.runtime.LLVMIntrinsicProvider;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMLocalScope;
@@ -96,11 +95,10 @@ public final class InitializeExternalNode extends LLVMNode {
         for (FunctionSymbol symbol : result.getExternalFunctions()) {
             String name = symbol.getName();
             LLVMFunction function = fileScope.getFunction(name);
-            LLVMFunctionCode functionCode = new LLVMFunctionCode(function);
             if (name.startsWith("llvm.") || name.startsWith("__builtin_") || name.equals("polyglot_get_arg") || name.equals("polyglot_get_arg_count")) {
                 continue;
             }
-            allocExternaSymbolsList.add(AllocExternalFunctionNodeGen.create(function, functionCode, nodeFactory));
+            allocExternaSymbolsList.add(AllocExternalFunctionNodeGen.create(function, nodeFactory));
             writeSymbolsList.add(LLVMWriteSymbolNodeGen.create(function));
         }
 
