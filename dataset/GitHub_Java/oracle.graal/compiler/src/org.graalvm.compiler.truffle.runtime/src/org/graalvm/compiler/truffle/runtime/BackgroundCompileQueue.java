@@ -244,14 +244,11 @@ public class BackgroundCompileQueue {
         private final CancellableCompileTask task;
         private final WeakReference<OptimizedCallTarget> targetRef;
         private final Request request;
-        private final boolean usePriorityValue;
 
         RequestImpl(long id, Priority priority, WeakReference<OptimizedCallTarget> targetRef, CancellableCompileTask task, Request request) {
             this.id = id;
             this.priority = priority;
             this.targetRef = targetRef;
-            OptimizedCallTarget target = targetRef.get();
-            usePriorityValue = target != null && target.getOptionValue(PolyglotCompilerOptions.UseCompilationJobPriority);
             this.task = task;
             this.request = request;
         }
@@ -262,11 +259,9 @@ public class BackgroundCompileQueue {
             if (tierCompare != 0) {
                 return tierCompare;
             }
-            if (usePriorityValue) {
-                int valueCompare = -1 * Long.compare(priority.value, that.priority.value);
-                if (valueCompare != 0) {
-                    return valueCompare;
-                }
+            int valueCompare = -1 * Long.compare(priority.value, that.priority.value);
+            if (valueCompare != 0) {
+                return valueCompare;
             }
             return Long.compare(this.id, that.id);
         }
