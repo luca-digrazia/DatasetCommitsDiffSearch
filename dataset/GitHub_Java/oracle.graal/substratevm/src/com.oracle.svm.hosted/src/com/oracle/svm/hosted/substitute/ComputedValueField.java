@@ -39,23 +39,17 @@ import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 
-import com.oracle.graal.pointsto.infrastructure.OriginalFieldProvider;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.CustomFieldValueComputer;
-import com.oracle.svm.core.annotate.RecomputeFieldValue.CustomFieldValueTransformer;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.meta.ReadableJavaField;
-import com.oracle.svm.core.util.UserError;
-import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.c.GraalAccess;
 import com.oracle.svm.hosted.meta.HostedField;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
-import com.oracle.svm.util.ReflectionUtil;
-import com.oracle.svm.util.ReflectionUtil.ReflectionUtilError;
 
 import jdk.vm.ci.common.NativeImageReinitialize;
 import jdk.vm.ci.meta.JavaConstant;
@@ -63,7 +57,6 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import sun.misc.Unsafe;
 
 /**
  * Wraps a field whose value is recomputed when added to an image.
@@ -71,9 +64,8 @@ import sun.misc.Unsafe;
  * @see RecomputeFieldValue
  * @see NativeImageReinitialize
  */
-public class ComputedValueField implements ReadableJavaField, OriginalFieldProvider, ComputedValue {
+public class ComputedValueField implements ReadableJavaField, ComputedValue {
 
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
     private final ResolvedJavaField original;
     private final ResolvedJavaField annotated;
 
@@ -237,9 +229,11 @@ public class ComputedValueField implements ReadableJavaField, OriginalFieldProvi
 
             case NewInstance:
                 try {
-                    result = originalSnippetReflection.forObject(ReflectionUtil.newInstance(targetClass));
-                } catch (ReflectionUtilError ex) {
-                    throw VMError.shouldNotReachHere("Error performing field recomputation for alias " + annotated.format("%H.%n"), ex.getCause());
+                    Constructor<?> constructor = targetClass.getDeclaredConstructor();
+                    constructor.setAccessible(true);
+                    result = originalSnippetReflection.forObject(constructor.newInstance());
+                } catch (NoSuchMethodException | InvocationTargetException | InstantiationException | IllegalAccessException ex) {
+                    throw shouldNotReachHere("Error performing field recomputation for alias " + annotated.format("%H.%n"), ex);
                 }
                 break;
             case AtomicFieldUpdaterOffset:
@@ -252,7 +246,7 @@ public class ComputedValueField implements ReadableJavaField, OriginalFieldProvi
                 try {
                     Constructor<?>[] constructors = targetClass.getDeclaredConstructors();
                     if (constructors.length != 1) {
-                        throw UserError.abort("The custom field value computer class " + targetClass.getName() + " has more than one constructor");
+                        throw shouldNotReachHere("The " + CustomFieldValueComputer.class.getSimpleName() + " class " + targetClass.getName() + " has more than one constructor");
                     }
                     Constructor<?> constructor = constructors[0];
 
@@ -261,27 +255,10 @@ public class ComputedValueField implements ReadableJavaField, OriginalFieldProvi
                         constructorArgs[i] = configurationValue(constructor.getParameterTypes()[i]);
                     }
                     constructor.setAccessible(true);
-                    Object instance = constructor.newInstance(constructorArgs);
+                    CustomFieldValueComputer computer = (CustomFieldValueComputer) constructor.newInstance(constructorArgs);
 
                     Object receiverValue = receiver == null ? null : originalSnippetReflection.asObject(Object.class, receiver);
-                    Object newValue;
-                    if (instance instanceof CustomFieldValueComputer) {
-                        newValue = ((CustomFieldValueComputer) instance).compute(hMetaAccess, original, annotated, receiverValue);
-                    } else if (instance instanceof CustomFieldValueTransformer) {
-                        JavaConstant originalValueConstant = ReadableJavaField.readFieldValue(GraalAccess.getOriginalProviders().getConstantReflection(), original, receiver);
-                        Object originalValue;
-                        if (originalValueConstant.getJavaKind().isPrimitive()) {
-                            originalValue = originalValueConstant.asBoxedPrimitive();
-                        } else {
-                            originalValue = originalSnippetReflection.asObject(Object.class, originalValueConstant);
-                        }
-                        newValue = ((CustomFieldValueTransformer) instance).transform(hMetaAccess, original, annotated, receiverValue, originalValue);
-                    } else {
-                        throw UserError.abort("The custom field value computer class " + targetClass.getName() + " does not implement " + CustomFieldValueComputer.class.getSimpleName() + " or " +
-                                        CustomFieldValueTransformer.class.getSimpleName());
-                    }
-
-                    result = originalSnippetReflection.forBoxed(annotated.getJavaKind(), newValue);
+                    result = originalSnippetReflection.forBoxed(annotated.getJavaKind(), computer.compute(hMetaAccess, original, annotated, receiverValue));
                     assert result.getJavaKind() == annotated.getJavaKind();
                 } catch (InvocationTargetException | InstantiationException | IllegalAccessException ex) {
                     throw shouldNotReachHere("Error performing field recomputation for alias " + annotated.format("%H.%n"), ex);
@@ -326,7 +303,7 @@ public class ComputedValueField implements ReadableJavaField, OriginalFieldProvi
 
     @Override
     public boolean allowConstantFolding() {
-        return getDeclaringClass().isInitialized() && isFinal;
+        return isFinal;
     }
 
     @Override
@@ -351,7 +328,7 @@ public class ComputedValueField implements ReadableJavaField, OriginalFieldProvi
         // search the declared fields for a field with a matching offset
         for (Field f : tclass.getDeclaredFields()) {
             if (!Modifier.isStatic(f.getModifiers())) {
-                long fieldOffset = UNSAFE.objectFieldOffset(f);
+                long fieldOffset = UnsafeAccess.UNSAFE.objectFieldOffset(f);
                 if (fieldOffset == searchOffset) {
                     HostedField sf = hMetaAccess.lookupJavaField(f);
                     guarantee(sf.isAccessed() && sf.getLocation() > 0, "Field not marked as accessed: " + sf.format("%H.%n"));
@@ -411,10 +388,5 @@ public class ComputedValueField implements ReadableJavaField, OriginalFieldProvi
     @Override
     public String toString() {
         return "RecomputeValueField<original " + original.toString() + ", kind " + kind + ">";
-    }
-
-    @Override
-    public Field getJavaField() {
-        return OriginalFieldProvider.getJavaField(GraalAccess.getOriginalSnippetReflection(), original);
     }
 }
