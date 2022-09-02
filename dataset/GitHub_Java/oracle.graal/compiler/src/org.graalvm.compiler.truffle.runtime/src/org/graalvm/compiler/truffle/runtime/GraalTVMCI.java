@@ -142,7 +142,7 @@ final class GraalTVMCI extends TVMCI {
     }
 
     EngineData getEngineData(RootNode rootNode) {
-        return getOrCreateRuntimeData(rootNode, EngineData.ENGINE_DATA_SUPPLIER);
+        return getOrCreateRuntimeData(rootNode, EngineData.engineDataConstructor);
     }
 
     @Override
