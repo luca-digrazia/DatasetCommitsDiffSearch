@@ -119,234 +119,234 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     public String asString() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            return Meta.toHostString(this);
         }
-        return Meta.toHostString(this);
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     public boolean isBoolean() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (isNull(this)) {
+                return false;
+            }
+            return klass == klass.getMeta().java_lang_Boolean;
         }
-        if (isNull(this)) {
-            return false;
-        }
-        return klass == klass.getMeta().java_lang_Boolean;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     public boolean asBoolean() throws UnsupportedMessageException {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (!isBoolean()) {
+                throw UnsupportedMessageException.create();
+            }
+            return (boolean) klass.getMeta().java_lang_Boolean_value.get(this);
         }
-        if (!isBoolean()) {
-            throw UnsupportedMessageException.create();
-        }
-        return (boolean) klass.getMeta().java_lang_Boolean_value.get(this);
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     public boolean isNumber() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (isNull(this)) {
+                return false;
+            }
+            Meta meta = klass.getMeta();
+            return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Integer || klass == meta.java_lang_Long || klass == meta.java_lang_Float ||
+                            klass == meta.java_lang_Double;
         }
-        if (isNull(this)) {
-            return false;
-        }
-        Meta meta = klass.getMeta();
-        return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Integer || klass == meta.java_lang_Long || klass == meta.java_lang_Float ||
-                        klass == meta.java_lang_Double;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     boolean fitsInByte() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
-        }
-        if (isNull(this)) {
+        if (isEspressoObject()) {
+            if (isNull(this)) {
+                return false;
+            }
+            if (isAtMostByte(klass)) {
+                return true;
+            }
+
+            Meta meta = klass.getMeta();
+            if (klass == meta.java_lang_Short) {
+                short content = getShortField(meta.java_lang_Short_value);
+                return (byte) content == content;
+            }
+            if (klass == meta.java_lang_Integer) {
+                int content = getIntField(meta.java_lang_Integer_value);
+                return (byte) content == content;
+            }
+            if (klass == meta.java_lang_Long) {
+                long content = getLongField(meta.java_lang_Long_value);
+                return (byte) content == content;
+            }
+            if (klass == meta.java_lang_Float) {
+                float content = getFloatField(meta.java_lang_Float_value);
+                return (byte) content == content && !isNegativeZero(content);
+            }
+            if (klass == meta.java_lang_Double) {
+                double content = getDoubleField(meta.java_lang_Double_value);
+                return (byte) content == content && !isNegativeZero(content);
+            }
             return false;
         }
-        if (isAtMostByte(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Short) {
-            short content = getShortField(meta.java_lang_Short_value);
-            return (byte) content == content;
-        }
-        if (klass == meta.java_lang_Integer) {
-            int content = getIntField(meta.java_lang_Integer_value);
-            return (byte) content == content;
-        }
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            return (byte) content == content;
-        }
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return (byte) content == content && !isNegativeZero(content);
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return (byte) content == content && !isNegativeZero(content);
-        }
-        return false;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     boolean fitsInShort() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
-        }
-        if (isNull(this)) {
+        if (isEspressoObject()) {
+            if (isNull(this)) {
+                return false;
+            }
+            if (isAtMostShort(klass)) {
+                return true;
+            }
+
+            Meta meta = klass.getMeta();
+            if (klass == meta.java_lang_Integer) {
+                int content = getIntField(meta.java_lang_Integer_value);
+                return (short) content == content;
+            }
+            if (klass == meta.java_lang_Long) {
+                long content = getLongField(meta.java_lang_Long_value);
+                return (short) content == content;
+            }
+            if (klass == meta.java_lang_Float) {
+                float content = getFloatField(meta.java_lang_Float_value);
+                return (short) content == content && !isNegativeZero(content);
+            }
+            if (klass == meta.java_lang_Double) {
+                double content = getDoubleField(meta.java_lang_Double_value);
+                return (short) content == content && !isNegativeZero(content);
+            }
             return false;
         }
-        if (isAtMostShort(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Integer) {
-            int content = getIntField(meta.java_lang_Integer_value);
-            return (short) content == content;
-        }
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            return (short) content == content;
-        }
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return (short) content == content && !isNegativeZero(content);
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return (short) content == content && !isNegativeZero(content);
-        }
-        return false;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     public boolean fitsInInt() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
-        }
-        if (isNull(this)) {
+        if (isEspressoObject()) {
+            if (isNull(this)) {
+                return false;
+            }
+            if (isAtMostInt(klass)) {
+                return true;
+            }
+
+            Meta meta = klass.getMeta();
+            if (klass == meta.java_lang_Long) {
+                long content = getLongField(meta.java_lang_Long_value);
+                return (int) content == content;
+            }
+            if (klass == meta.java_lang_Float) {
+                float content = getFloatField(meta.java_lang_Float_value);
+                return inSafeIntegerRange(content) && !isNegativeZero(content) && (int) content == content;
+            }
+            if (klass == meta.java_lang_Double) {
+                double content = getDoubleField(meta.java_lang_Double_value);
+                return (int) content == content && !isNegativeZero(content);
+            }
             return false;
         }
-        if (isAtMostInt(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            return (int) content == content;
-        }
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return inSafeIntegerRange(content) && !isNegativeZero(content) && (int) content == content;
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return (int) content == content && !isNegativeZero(content);
-        }
-        return false;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     boolean fitsInLong() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
-        }
-        if (isNull(this)) {
+        if (isEspressoObject()) {
+            if (isNull(this)) {
+                return false;
+            }
+            if (isAtMostLong(klass)) {
+                return true;
+            }
+
+            Meta meta = klass.getMeta();
+            if (klass == meta.java_lang_Float) {
+                float content = getFloatField(meta.java_lang_Float_value);
+                return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
+            }
+            if (klass == meta.java_lang_Double) {
+                double content = getDoubleField(meta.java_lang_Double_value);
+                return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
+            }
             return false;
         }
-        if (isAtMostLong(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
-        }
-        return false;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     boolean fitsInFloat() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
-        }
-        if (isNull(this)) {
+        if (isEspressoObject()) {
+            if (isNull(this)) {
+                return false;
+            }
+            if (isAtMostFloat(klass)) {
+                return true;
+            }
+
+            Meta meta = klass.getMeta();
+            // We might lose precision when we convert an int or a long to a float, however, we
+            // still
+            // perform the conversion.
+            // This is consistent with Truffle interop, see GR-22718 for more details.
+            if (klass == meta.java_lang_Integer) {
+                int content = getIntField(meta.java_lang_Integer_value);
+                float floatContent = content;
+                return (int) floatContent == content;
+            }
+            if (klass == meta.java_lang_Long) {
+                long content = getLongField(meta.java_lang_Long_value);
+                float floatContent = content;
+                return (long) floatContent == content;
+            }
+            if (klass == meta.java_lang_Double) {
+                double content = getDoubleField(meta.java_lang_Double_value);
+                return !Double.isFinite(content) || (float) content == content;
+            }
             return false;
         }
-        if (isAtMostFloat(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        // We might lose precision when we convert an int or a long to a float, however, we
-        // still
-        // perform the conversion.
-        // This is consistent with Truffle interop, see GR-22718 for more details.
-        if (klass == meta.java_lang_Integer) {
-            int content = getIntField(meta.java_lang_Integer_value);
-            float floatContent = content;
-            return (int) floatContent == content;
-        }
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            float floatContent = content;
-            return (long) floatContent == content;
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return !Double.isFinite(content) || (float) content == content;
-        }
-        return false;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     boolean fitsInDouble() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
-        }
-        if (isNull(this)) {
+        if (isEspressoObject()) {
+            if (isNull(this)) {
+                return false;
+            }
+
+            Meta meta = klass.getMeta();
+            if (isAtMostInt(klass) || klass == meta.java_lang_Double) {
+                return true;
+            }
+            if (klass == meta.java_lang_Long) {
+                long content = getLongField(meta.java_lang_Long_value);
+                double doubleContent = content;
+                return (long) doubleContent == content;
+            }
+            if (klass == meta.java_lang_Float) {
+                float content = getFloatField(meta.java_lang_Float_value);
+                return !Float.isFinite(content) || (double) content == content;
+            }
             return false;
         }
-
-        Meta meta = klass.getMeta();
-        if (isAtMostInt(klass) || klass == meta.java_lang_Double) {
-            return true;
-        }
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            double doubleContent = content;
-            return (long) doubleContent == content;
-        }
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return !Float.isFinite(content) || (double) content == content;
-        }
-        return false;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     private Number readNumberValue() throws UnsupportedMessageException {
@@ -376,102 +376,102 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     byte asByte() throws UnsupportedMessageException {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (!fitsInByte()) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.create();
+            }
+            return readNumberValue().byteValue();
         }
-        if (!fitsInByte()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().byteValue();
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     short asShort() throws UnsupportedMessageException {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (!fitsInShort()) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.create();
+            }
+            return readNumberValue().shortValue();
         }
-        if (!fitsInShort()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().shortValue();
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     public int asInt() throws UnsupportedMessageException {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (!fitsInInt()) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.create();
+            }
+            return readNumberValue().intValue();
         }
-        if (!fitsInInt()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().intValue();
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     long asLong() throws UnsupportedMessageException {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (!fitsInLong()) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.create();
+            }
+            return readNumberValue().longValue();
         }
-        if (!fitsInLong()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().longValue();
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     float asFloat() throws UnsupportedMessageException {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (!fitsInFloat()) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.create();
+            }
+            return readNumberValue().floatValue();
         }
-        if (!fitsInFloat()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().floatValue();
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     double asDouble() throws UnsupportedMessageException {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (!fitsInDouble()) {
+                CompilerDirectives.transferToInterpreter();
+                throw UnsupportedMessageException.create();
+            }
+            return readNumberValue().doubleValue();
         }
-        if (!fitsInDouble()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().doubleValue();
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     long getArraySize(@Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
-        if (isInterop()) {
-            error.enter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (!isArray()) {
+                error.enter();
+                throw UnsupportedMessageException.create();
+            }
+            return length();
         }
-        if (!isArray()) {
-            error.enter();
-            throw UnsupportedMessageException.create();
-        }
-        return length();
+        error.enter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     boolean hasArrayElements(@Shared("error") @Cached BranchProfile error) {
-        if (isInterop()) {
-            error.enter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            return isArray();
         }
-        return isArray();
+        error.enter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
@@ -856,23 +856,23 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isArrayElementReadable(long index) {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            if (isArray()) {
+                return index >= 0 && index < length();
+            }
+            return false;
         }
-        if (isArray()) {
-            return index >= 0 && index < length();
-        }
-        return false;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     boolean isArrayElementModifiable(long index) {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            return isPrimitiveArray(this) && index >= 0 && index < length();
         }
-        return isPrimitiveArray(this) && index >= 0 && index < length();
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @SuppressWarnings({"unused", "static-method"})
@@ -896,91 +896,91 @@ public final class StaticObject implements TruffleObject {
     @TruffleBoundary
     @ExportMessage
     Object toDisplayString(boolean allowSideEffects) {
-        if (isInterop()) {
-            InteropLibrary interopLibrary = InteropLibrary.getUncached();
-            try {
-                return "Foreign object: " + interopLibrary.asString(interopLibrary.toDisplayString(rawInteropObject(), allowSideEffects));
-            } catch (UnsupportedMessageException e) {
-                throw EspressoError.shouldNotReachHere("Interop library failed to convert display string to string");
+        if (isEspressoObject()) {
+            if (StaticObject.isNull(this)) {
+                return "NULL";
             }
-        }
-        if (StaticObject.isNull(this)) {
-            return "NULL";
-        }
-        Klass thisKlass = getKlass();
+            Klass thisKlass = getKlass();
 
-        if (allowSideEffects) {
-            // Call guest toString.
-            int toStringIndex = thisKlass.getMeta().java_lang_Object_toString.getVTableIndex();
-            Method toString = thisKlass.vtableLookup(toStringIndex);
-            return Meta.toHostString((StaticObject) toString.invokeDirect(this));
-        }
+            if (allowSideEffects) {
+                // Call guest toString.
+                int toStringIndex = thisKlass.getMeta().java_lang_Object_toString.getVTableIndex();
+                Method toString = thisKlass.vtableLookup(toStringIndex);
+                return Meta.toHostString((StaticObject) toString.invokeDirect(this));
+            }
 
-        // Handle some special instances without side effects.
-        if (thisKlass == thisKlass.getMeta().java_lang_Class) {
-            return "class " + thisKlass.getTypeAsString();
+            // Handle some special instances without side effects.
+            if (thisKlass == thisKlass.getMeta().java_lang_Class) {
+                return "class " + thisKlass.getTypeAsString();
+            }
+            if (thisKlass == thisKlass.getMeta().java_lang_String) {
+                return Meta.toHostString(this);
+            }
+            return thisKlass.getTypeAsString() + "@" + Integer.toHexString(System.identityHashCode(this));
         }
-        if (thisKlass == thisKlass.getMeta().java_lang_String) {
-            return Meta.toHostString(this);
+        InteropLibrary interopLibrary = InteropLibrary.getUncached();
+        try {
+            return "Foreign object: " + interopLibrary.asString(interopLibrary.toDisplayString(rawInteropObject(), allowSideEffects));
+        } catch (UnsupportedMessageException e) {
+            throw EspressoError.shouldNotReachHere("Interop library failed to convert display string to string");
         }
-        return thisKlass.getTypeAsString() + "@" + Integer.toHexString(System.identityHashCode(this));
     }
 
     public static final String CLASS_TO_STATIC = "static";
 
     @ExportMessage
     Object readMember(String member) throws UnknownIdentifierException {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
-        }
-        if (notNull(this)) {
-            // Class<T>.static == Klass<T>
-            if (CLASS_TO_STATIC.equals(member)) {
-                if (getKlass() == getKlass().getMeta().java_lang_Class) {
-                    return getMirrorKlass();
+        if (isEspressoObject()) {
+            if (notNull(this)) {
+                // Class<T>.static == Klass<T>
+                if (CLASS_TO_STATIC.equals(member)) {
+                    if (getKlass() == getKlass().getMeta().java_lang_Class) {
+                        return getMirrorKlass();
+                    }
+                }
+                // Class<T>.class == Class<T>
+                if (STATIC_TO_CLASS.equals(member)) {
+                    if (getKlass() == getKlass().getMeta().java_lang_Class) {
+                        return this;
+                    }
                 }
             }
-            // Class<T>.class == Class<T>
-            if (STATIC_TO_CLASS.equals(member)) {
-                if (getKlass() == getKlass().getMeta().java_lang_Class) {
-                    return this;
-                }
-            }
+            throw UnknownIdentifierException.create(member);
         }
-        throw UnknownIdentifierException.create(member);
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     boolean hasMembers() {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            return notNull(this);
         }
-        return notNull(this);
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     @ExportMessage
     boolean isMemberReadable(String member) {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            return notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class //
+                            && (CLASS_TO_STATIC.equals(member) || STATIC_TO_CLASS.equals(member));
         }
-        return notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class //
-                        && (CLASS_TO_STATIC.equals(member) || STATIC_TO_CLASS.equals(member));
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     private static final KeysArray CLASS_MEMBERS = new KeysArray(new String[]{CLASS_TO_STATIC, STATIC_TO_CLASS});
 
     @ExportMessage
     Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-        if (isInterop()) {
-            CompilerDirectives.transferToInterpreter();
-            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        if (isEspressoObject()) {
+            return (notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class)
+                            ? CLASS_MEMBERS // .static and .class
+                            : KeysArray.EMPTY;
         }
-        return (notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class)
-                        ? CLASS_MEMBERS // .static and .class
-                        : KeysArray.EMPTY;
+        CompilerDirectives.transferToInterpreter();
+        throw EspressoError.shouldNotReachHere("Unexpected interop object");
     }
 
     // endregion Interop
