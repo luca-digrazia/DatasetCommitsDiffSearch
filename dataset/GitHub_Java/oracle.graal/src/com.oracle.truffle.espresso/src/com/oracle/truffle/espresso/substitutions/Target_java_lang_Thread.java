@@ -248,6 +248,7 @@ public final class Target_java_lang_Thread {
         if (EspressoOptions.RUNNING_ON_SVM) {
             /* nop */
         } else {
+
             Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
             if (hostThread == null) {
                 return;
