@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -80,8 +80,7 @@ public class NodeData extends Template implements Comparable<NodeData> {
     private final boolean generateFactory;
 
     private TypeMirror frameType;
-    private boolean generateIntrospection;
-    private boolean generateStatistics;
+    private boolean reflectable;
 
     private boolean reportPolymorphism;
     private boolean isUncachable;
@@ -90,7 +89,7 @@ public class NodeData extends Template implements Comparable<NodeData> {
     private Set<String> allowedCheckedExceptions;
     private Map<CacheExpression, String> sharedCaches = Collections.emptyMap();
 
-    public NodeData(ProcessorContext context, TypeElement type, TypeSystemData typeSystem, boolean generateFactory, boolean generateUncached) {
+    public NodeData(ProcessorContext context, TypeElement type, TypeSystemData typeSystem, boolean generateFactory) {
         super(context, type, null);
         this.nodeId = ElementUtils.getSimpleName(type);
         this.typeSystem = typeSystem;
@@ -100,15 +99,6 @@ public class NodeData extends Template implements Comparable<NodeData> {
         this.thisExecution = new NodeExecutionData(new NodeChildData(null, null, "this", getNodeType(), getNodeType(), null, Cardinality.ONE, null), -1, -1);
         this.thisExecution.getChild().setNode(this);
         this.generateFactory = generateFactory;
-        this.generateUncached = generateUncached;
-    }
-
-    public void setGenerateStatistics(boolean generateStatistics) {
-        this.generateStatistics = generateStatistics;
-    }
-
-    public boolean isGenerateStatistics() {
-        return generateStatistics;
     }
 
     public Map<CacheExpression, String> getSharedCaches() {
@@ -120,7 +110,7 @@ public class NodeData extends Template implements Comparable<NodeData> {
     }
 
     public NodeData(ProcessorContext context, TypeElement type) {
-        this(context, type, null, false, false);
+        this(context, type, null, false);
     }
 
     public void setNodeBound(boolean isNodeBound) {
@@ -165,12 +155,12 @@ public class NodeData extends Template implements Comparable<NodeData> {
         return thisExecution;
     }
 
-    public boolean isGenerateIntrospection() {
-        return generateIntrospection;
+    public boolean isReflectable() {
+        return reflectable;
     }
 
-    public void setGenerateIntrospection(boolean reflectable) {
-        this.generateIntrospection = reflectable;
+    public void setReflectable(boolean reflectable) {
+        this.reflectable = reflectable;
     }
 
     public boolean isFallbackReachable() {
@@ -199,7 +189,7 @@ public class NodeData extends Template implements Comparable<NodeData> {
     }
 
     public Set<TypeMirror> findSpecializedTypes(NodeExecutionData execution) {
-        Set<TypeMirror> foundTypes = new HashSet<>();
+        Set<TypeMirror> types = new HashSet<>();
         for (SpecializationData specialization : getSpecializations()) {
             if (!specialization.isSpecialized()) {
                 continue;
@@ -210,21 +200,21 @@ public class NodeData extends Template implements Comparable<NodeData> {
                 if (type == null) {
                     throw new AssertionError();
                 }
-                foundTypes.add(type);
+                types.add(type);
             }
         }
-        return foundTypes;
+        return types;
     }
 
     public Collection<TypeMirror> findSpecializedReturnTypes() {
-        Set<TypeMirror> foundTypes = new HashSet<>();
+        Set<TypeMirror> types = new HashSet<>();
         for (SpecializationData specialization : getSpecializations()) {
             if (!specialization.isSpecialized()) {
                 continue;
             }
-            foundTypes.add(specialization.getReturnType().getType());
+            types.add(specialization.getReturnType().getType());
         }
-        return foundTypes;
+        return types;
     }
 
     public int getExecutionCount() {
@@ -395,20 +385,20 @@ public class NodeData extends Template implements Comparable<NodeData> {
     }
 
     public ExecutableTypeData findAnyGenericExecutableType(ProcessorContext context, int evaluatedCount) {
-        List<ExecutableTypeData> foundTypes = findGenericExecutableTypes(evaluatedCount);
-        for (ExecutableTypeData type : foundTypes) {
+        List<ExecutableTypeData> types = findGenericExecutableTypes(context, evaluatedCount);
+        for (ExecutableTypeData type : types) {
             if (context.isType(type.getReturnType(), Object.class)) {
                 return type;
             }
         }
 
-        for (ExecutableTypeData type : foundTypes) {
+        for (ExecutableTypeData type : types) {
             if (!context.isType(type.getReturnType(), void.class)) {
                 return type;
             }
         }
 
-        for (ExecutableTypeData type : foundTypes) {
+        for (ExecutableTypeData type : types) {
             return type;
         }
         return null;
@@ -428,14 +418,14 @@ public class NodeData extends Template implements Comparable<NodeData> {
         }
     }
 
-    public List<ExecutableTypeData> findGenericExecutableTypes(int evaluatedCount) {
-        List<ExecutableTypeData> foundTypes = new ArrayList<>();
+    public List<ExecutableTypeData> findGenericExecutableTypes(ProcessorContext context, int evaluatedCount) {
+        List<ExecutableTypeData> types = new ArrayList<>();
         for (ExecutableTypeData type : getExecutableTypes(evaluatedCount)) {
-            if (!type.hasUnexpectedValue()) {
-                foundTypes.add(type);
+            if (!type.hasUnexpectedValue(context)) {
+                types.add(type);
             }
         }
-        return foundTypes;
+        return types;
     }
 
     public ExecutableTypeData findExecutableType(TypeMirror primitiveType, int evaluatedCount) {
@@ -646,15 +636,15 @@ public class NodeData extends Template implements Comparable<NodeData> {
     }
 
     public List<TypeMirror> getGenericTypes(NodeExecutionData execution) {
-        List<TypeMirror> foundTypes = new ArrayList<>();
+        List<TypeMirror> types = new ArrayList<>();
 
         // add types possible through return types and evaluated parameters in execute methods
         if (execution.getChild() != null) {
             for (ExecutableTypeData executable : execution.getChild().getNodeData().getExecutableTypes()) {
-                if (executable.hasUnexpectedValue()) {
+                if (executable.hasUnexpectedValue(getContext())) {
                     continue;
                 }
-                foundTypes.add(executable.getReturnType());
+                types.add(executable.getReturnType());
             }
         }
 
@@ -664,12 +654,12 @@ public class NodeData extends Template implements Comparable<NodeData> {
                 List<TypeMirror> signatureParameters = typeData.getSignatureParameters();
                 if (executionIndex < signatureParameters.size()) {
                     TypeMirror genericType = signatureParameters.get(executionIndex);
-                    foundTypes.add(genericType);
+                    types.add(genericType);
                 }
             }
         }
 
-        return Arrays.asList(ElementUtils.getCommonSuperType(ProcessorContext.getInstance(), foundTypes));
+        return Arrays.asList(ElementUtils.getCommonSuperType(ProcessorContext.getInstance(), types));
     }
 
     public void setReportPolymorphism(boolean report) {
