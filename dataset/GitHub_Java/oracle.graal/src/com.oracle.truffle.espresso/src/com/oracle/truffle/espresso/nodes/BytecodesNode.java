@@ -227,7 +227,9 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.SWAP;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.TABLESWITCH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.locks.Lock;
 
 import com.oracle.truffle.api.CompilerAsserts;
@@ -905,17 +907,38 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
                                     instrument.notifyAfterBci(frame, curBCI);
                                 }
                             }
-                            return notifyReturn(frame, curBCI, top, exitMethodAndReturn(peekInt(frame, top - 1)));
-                       case LRETURN:
-                            return notifyReturn(frame, curBCI, top, exitMethodAndReturnObject(peekLong(frame, top - 1)));
                         case FRETURN:
-                            return notifyReturn(frame, curBCI, top, exitMethodAndReturnObject(peekFloat(frame, top - 1)));
+                            try {
+                                return exitMethodAndReturnObject(peekFloat(frame, top - 1));
+                            } finally {
+                                if (instrument != null) {
+                                    instrument.notifyAfterBci(frame, curBCI);
+                                }
+                            }
                         case DRETURN:
-                            return notifyReturn(frame, curBCI, top, exitMethodAndReturnObject(peekDouble(frame, top - 1)));
+                            try {
+                                return exitMethodAndReturnObject(peekDouble(frame, top - 1));
+                            } finally {
+                                if (instrument != null) {
+                                    instrument.notifyAfterBci(frame, curBCI);
+                                }
+                            }
                         case ARETURN:
-                             return notifyReturn(frame, curBCI, top, exitMethodAndReturnObject(peekObject(frame, top - 1)));
+                            try {
+                                 return exitMethodAndReturnObject(peekObject(frame, top - 1));
+                            } finally {
+                                if (instrument != null) {
+                                    instrument.notifyAfterBci(frame, curBCI);
+                                }
+                            }
                         case RETURN:
-                            return notifyReturn(frame, curBCI, top, exitMethodAndReturn());
+                            try {
+                                return exitMethodAndReturn();
+                           } finally {
+                               if (instrument != null) {
+                                   instrument.notifyAfterBci(frame, curBCI);
+                               }
+                           }
 
                         // TODO(peterssen): Order shuffled.
                         case GETSTATIC: // fall through
@@ -1120,13 +1143,6 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
             curBCI = bs.nextBCI(curBCI);
         }
 
-    }
-
-    private Object notifyReturn(VirtualFrame frame, int curBCI, int top, Object toReturn) {
-        if (instrumentation != null) {
-            instrumentation.notifyAfterBci(frame, curBCI);
-        }
-        return toReturn;
     }
 
     public InstrumentableNode materializeInstrumentableNodes(Set<Class<? extends Tag>> materializedTags) {
