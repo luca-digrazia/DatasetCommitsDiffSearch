@@ -25,6 +25,7 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import java.lang.ref.WeakReference;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.FutureTask;
@@ -49,7 +50,7 @@ import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
  *
  * Note that all the compilation requests are second tier when the multi-tier option is turned off.
  */
-public abstract class BackgroundCompileQueue {
+public class BackgroundCompileQueue {
 
     private final AtomicLong idCounter;
     private volatile ExecutorService compilationExecutorService;
@@ -58,22 +59,12 @@ public abstract class BackgroundCompileQueue {
 
 
     private Runnable onIdleDelayed;
-
     private long delayNanos;
-    private volatile boolean idlingEventEnabled;
 
     public BackgroundCompileQueue(GraalTruffleRuntime runtime, Runnable onIdleDelayed) {
         this.runtime = runtime;
         this.onIdleDelayed = onIdleDelayed;
         this.idCounter = new AtomicLong();
-    }
-
-    public boolean isIdlingEventEnabled() {
-        return idlingEventEnabled;
-    }
-
-    public void setIdlingEventEnabled(boolean idlingEventEnabled) {
-        this.idlingEventEnabled = idlingEventEnabled;
     }
 
     private ExecutorService getExecutorService(OptimizedCallTarget callTarget) {
@@ -92,7 +83,7 @@ public abstract class BackgroundCompileQueue {
             int capacity = callTarget.getOptionValue(PolyglotCompilerOptions.EncodedGraphCacheCapacity);
             if (capacity == 0) {
                 // Shared cache across compilations is disabled.
-                setIdlingEventEnabled(false);
+                onIdleDelayed = null;
             }
             int delaySeconds = callTarget.getOptionValue(PolyglotCompilerOptions.EncodedGraphCachePurgeDelay);
             this.delayNanos = TimeUnit.SECONDS.toNanos(delaySeconds);
@@ -112,6 +103,10 @@ public abstract class BackgroundCompileQueue {
 
             long compilerIdleDelay = runtime.getCompilerIdleDelay(callTarget);
             long keepAliveTime = compilerIdleDelay >= 0 ? compilerIdleDelay : 0;
+
+            BlockingQueue<Runnable> queue = onIdleDelayed != null
+                            ? new IdlingPriorityBlockingQueue<>()
+                            : new PriorityBlockingQueue<>();
 
             ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(threads, threads,
                             keepAliveTime, TimeUnit.MILLISECONDS,
@@ -298,16 +293,16 @@ public abstract class BackgroundCompileQueue {
 
         private static final long serialVersionUID = 5437415215836241566L;
 
-        @SuppressWarnings("unused") volatile long latestEventNanos = System.nanoTime();
+        @SuppressWarnings("unused") volatile long latestEventNanos;
 
         @Override
         public E take() throws InterruptedException {
 
-            assert delayNanos > 0;
+            assert onIdleDelayed != null;
             assert compilationExecutorService instanceof ThreadPoolExecutor &&
                             !((ThreadPoolExecutor) compilationExecutorService).allowsCoreThreadTimeOut() : "idling notification does not support dynamically sized thread pools";
 
-            while (isIdlingEventEnabled()) {
+            while (true) {
                 E elem = poll(delayNanos, TimeUnit.NANOSECONDS);
                 if (elem == null) {
                     // Compiler thread has been idle for >= delayMillis.
@@ -315,26 +310,14 @@ public abstract class BackgroundCompileQueue {
                     long nowNanos = System.nanoTime();
                     if (nowNanos - latestNanos >= delayNanos) {
                         if (LATEST_EVENT_NANOS_UPDATER.compareAndSet(this, latestNanos, nowNanos)) {
-                            compileQueueIdled();
+                            onIdleDelayed.run();
                         }
                     }
                 } else {
                     return elem;
                 }
             }
-
-            // Fallback to blocking version.
-            return super.take();
-        }
-
-        @Override
-        public E poll(long timeout, TimeUnit unit) throws InterruptedException {
-            throw new UnsupportedOperationException("Should not reach here, timed poll not supported");
         }
     }
 
-    /**
-     * Called when the compile queue becomes idle for more than {@code delayMillis}.
-     */
-    public abstract void compileQueueIdled();
 }
