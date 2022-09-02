@@ -357,7 +357,7 @@ public abstract class EffectsClosure<BlockT extends EffectsBlockState<BlockT>> e
                     lastMergedState = mergeProcessor.newState;
                     for (Block block : loop.getBlocks()) {
                         blockEffects.get(block).clear();
-                        if (block.isLoopHeader()) {
+                        if (block.getLoop() != null) {
                             final GraphEffectList loopEffects = loopMergeEffects.get(block.getLoop());
                             if (loopEffects != null) {
                                 loopEffects.clear();
