@@ -1,26 +1,42 @@
 /*
- * Copyright (c) 2012, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.api.dsl;
 
@@ -42,9 +58,10 @@ import com.oracle.truffle.api.nodes.Node;
 @Target({ElementType.TYPE})
 @Repeatable(NodeChildren.class)
 public @interface NodeChild {
-
+    /** @since 0.8 or earlier */
     String value() default "";
 
+    /** @since 0.8 or earlier */
     Class<?> type() default Node.class;
 
     /**
@@ -55,6 +72,54 @@ public @interface NodeChild {
      * number of {@link #executeWith()} arguments that are defined. For example if this child is
      * executed with one argument, the {@link #type()} attribute must define a node which publicly
      * declares a method with the signature <code>Object execute*(VirtualFrame, Object)</code>.
+     *
+     * @since 0.8 or earlier
      */
     String[] executeWith() default {};
+
+    /**
+     * Allows implicit creation of this child node. If this property is {@code false} (the default),
+     * the factory method of the parent node needs to be called with an instance of the child node
+     * as argument. If {@link #implicit} is {@code true}, the child node will be implicitly created
+     * when calling the factory method of the parent node.
+     *
+     * @since 21.1
+     */
+    boolean implicit() default false;
+
+    /**
+     * Defines the initializer expression for implicit child node creation. Specifying this property
+     * will enable {@link #implicit()} mode on this child node automatically, this should not be
+     * specified together with {@link #implicit()}. If {@link #implicit()} is {@code true}, the
+     * initializer expression defaults to {@code "create()"}.
+     *
+     * @see #implicit()
+     * @see Cached
+     * @since 21.1
+     */
+    String implicitCreate() default "create()";
+
+    /**
+     * Allow this child node to be used in uncached mode. If set to {@code false} (the default),
+     * only execute methods that have an explicit argument for the child value can be used on the
+     * uncached version of the parent node. If set to {@code true}, execute methods that do not have
+     * an explicit argument for the child value use an uncached version of the child node to compute
+     * the missing value.
+     *
+     * @see GenerateUncached
+     * @since 21.1
+     */
+    boolean allowUncached() default false;
+
+    /**
+     * Defines the expression to get an uncached instance of the child node. Specifying this
+     * property will implicitly enable {@link #allowUncached()} on this child node, this should not
+     * be specified together with {@link #allowUncached()}. If {@link #allowUncached()} is
+     * {@code true}, the uncached expression defaults to {@code "getUncached()"}.
+     *
+     * @see #allowUncached()
+     * @see Cached
+     * @since 21.1
+     */
+    String uncached() default "getUncached()";
 }
