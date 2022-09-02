@@ -41,7 +41,12 @@ public class CxxMethodsTest extends InteropTestBase {
     private static Value allocXtendPoint;
     private static Value freeXtendPoint;
 
+    private static Value getY;
+    private static Value setX;
+    private static Value setY;
+
     private static Value constructor;
+
     private static Value squaredEuclideanDistance;
     private static Value swap;
 
@@ -55,6 +60,9 @@ public class CxxMethodsTest extends InteropTestBase {
         freePoint = testLibrary.getMember("freeNativePoint");
         allocXtendPoint = testLibrary.getMember("allocNativeXtendPoint");
         freeXtendPoint = testLibrary.getMember("freeNativeXtendPoint");
+        getY = testLibrary.getMember("getY");
+        setX = testLibrary.getMember("setX");
+        setY = testLibrary.getMember("setY");
         squaredEuclideanDistance = testLibrary.getMember("squaredEuclideanDistance");
         constructor = testLibrary.getMember("Point");
         swap = testLibrary.getMember("swap");
@@ -88,10 +96,10 @@ public class CxxMethodsTest extends InteropTestBase {
     public void testGettersAndSetters() {
         Value point = allocPoint.execute();
         try {
-            point.invokeMember("setX", 30000);
             point.invokeMember("setY", 4);
+            setX.execute(point, 30000);
             checkPoint(point, 30000, 4);
-            checkPoint(point, point.invokeMember("getX").asInt(), point.invokeMember("getY").asInt());
+            checkPoint(point, point.invokeMember("getX").asInt(), getY.execute(point).asInt());
 
         } finally {
             freePoint.execute(point);
@@ -105,8 +113,8 @@ public class CxxMethodsTest extends InteropTestBase {
         try {
             point.invokeMember("setX", 3);
             Assert.assertEquals("getX()==3 after setX(3)", 3, point.invokeMember("getX").asInt());
-            point.invokeMember("setY", -4);
-            point2.invokeMember("setX", -6);
+            setY.execute(point, -4);
+            setX.execute(point2, -6);
             testLibrary.invokeMember("setY", point2, 8);
             checkPoint(point, 3, -4);
             checkPoint(point2, -6, 8);
@@ -117,7 +125,6 @@ public class CxxMethodsTest extends InteropTestBase {
             // calculate distance
             Value distanceResult1 = squaredEuclideanDistance.execute(point, point2);
             Value distanceResult2 = squaredEuclideanDistance.execute(point2, point);
-
             Value distanceResult3 = point2.invokeMember("squaredEuclideanDistance", point);
             Value distanceResult4 = point.invokeMember("squaredEuclideanDistance", point2);
 
@@ -169,16 +176,24 @@ public class CxxMethodsTest extends InteropTestBase {
 
     @Test(expected = IllegalArgumentException.class)
     public void testWrongArity() {
-        Value point = constructor.newInstance();
-        point.invokeMember("setX");
+        Value point = allocPoint.execute();
+        try {
+            constructor.execute(point);
+            point.invokeMember("setX", 6, 9, 4);
+        } finally {
+            freePoint.execute(point);
+        }
     }
 
     @Test
     public void testConstructor() {
-        Value point = constructor.newInstance();
-        checkPoint(point, 0, 0);
-        point.invokeMember("setX", 6);
-        checkPoint(point, 6, 0);
+        Value point = allocPoint.execute();
+        try {
+            constructor.execute(point);
+            checkPoint(point, 0, 0);
+        } finally {
+            freePoint.execute(point);
+        }
     }
 
 }
