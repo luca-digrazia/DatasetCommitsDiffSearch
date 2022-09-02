@@ -343,7 +343,7 @@ final class EngineAccessor extends Accessor {
             TruffleLanguage.Env env = context.env;
             if (env == null) {
                 CompilerDirectives.transferToInterpreter();
-                throw PolyglotEngineException.illegalState("Current context is not yet initialized or already disposed.");
+                throw new IllegalStateException("Current context is not yet initialized or already disposed.");
             }
             return (C) LANGUAGE.getContext(env);
         }
@@ -362,7 +362,7 @@ final class EngineAccessor extends Accessor {
             TruffleLanguage.Env env = context.getLanguageContext(languageClass).env;
             if (env == null) {
                 CompilerDirectives.transferToInterpreter();
-                throw PolyglotEngineException.illegalState("Current context is not yet initialized or already disposed.");
+                throw new IllegalStateException("Current context is not yet initialized or already disposed.");
             }
             return (T) EngineAccessor.LANGUAGE.getLanguage(env);
         }
@@ -493,16 +493,6 @@ final class EngineAccessor extends Accessor {
         public boolean isEvalRoot(RootNode target) {
             // TODO no eval root nodes anymore on the stack for the polyglot api
             return false;
-        }
-
-        @Override
-        public RuntimeException engineToLanguageException(Throwable t) {
-            return PolyglotImpl.engineToLanguageException(t);
-        }
-
-        @Override
-        public RuntimeException engineToInstrumentException(Throwable t) {
-            return PolyglotImpl.engineToInstrumentException(t);
         }
 
         @Override
@@ -715,7 +705,7 @@ final class EngineAccessor extends Accessor {
         @Override
         public Thread createThread(Object polyglotLanguageContext, Runnable runnable, Object innerContextImpl, ThreadGroup group, long stackSize) {
             if (!isCreateThreadAllowed(polyglotLanguageContext)) {
-                throw PolyglotEngineException.illegalState("Creating threads is not allowed.");
+                throw new IllegalStateException("Creating threads is not allowed.");
             }
 
             PolyglotLanguageContext threadContext = (PolyglotLanguageContext) polyglotLanguageContext;
@@ -728,7 +718,7 @@ final class EngineAccessor extends Accessor {
 
         @Override
         public RuntimeException wrapHostException(Node location, Object languageContext, Throwable exception) {
-            return PolyglotImpl.hostToGuestException((PolyglotLanguageContext) languageContext, exception);
+            return PolyglotImpl.wrapHostException((PolyglotLanguageContext) languageContext, exception);
         }
 
         @Override
@@ -779,7 +769,7 @@ final class EngineAccessor extends Accessor {
             }
             PolyglotLanguage language = pc.engine.findLanguage(null, languageId, null, true, true);
             PolyglotLanguageContext languageContext = pc.getContextInitialized(language, null);
-            return (PolyglotException) PolyglotImpl.guestToHostException(languageContext, e);
+            return (PolyglotException) PolyglotImpl.wrapGuestException(languageContext, e);
         }
 
         @Override
@@ -1110,11 +1100,8 @@ final class EngineAccessor extends Accessor {
             PolyglotLanguage accessingPolyglotLanguage = ((PolyglotLanguageContext) polyglotLanguageContext).language;
             try {
                 targetLanguageContext.checkAccess(accessingPolyglotLanguage);
-            } catch (PolyglotEngineException notAccessible) {
-                if (notAccessible.e instanceof IllegalArgumentException) {
-                    throw new SecurityException(notAccessible.e.getMessage());
-                }
-                throw notAccessible;
+            } catch (PolyglotIllegalArgumentException notAccessible) {
+                throw new SecurityException(notAccessible.getMessage());
             }
             return targetLanguageContext.ensureInitialized(accessingPolyglotLanguage);
         }
