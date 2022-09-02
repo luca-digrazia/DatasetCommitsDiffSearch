@@ -52,6 +52,16 @@ public class MethodHandlePlugin implements NodePlugin {
         this.safeForDeoptimization = safeForDeoptimization;
     }
 
+    private static int countRecursiveInlining(GraphBuilderContext b, ResolvedJavaMethod method) {
+        int count = 0;
+        for (GraphBuilderContext c = b.getParent(); c != null; c = c.getParent()) {
+            if (method.equals(c.getMethod())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     @Override
     public boolean handleInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
         IntrinsicMethod intrinsicMethod = methodHandleAccess.lookupMethodHandleIntrinsic(method);
@@ -90,12 +100,12 @@ public class MethodHandlePlugin implements NodePlugin {
                     inlineEverything = args.length != argumentsList.size();
                 }
                 ResolvedJavaMethod targetMethod = callTarget.targetMethod();
-                if (inlineEverything && !targetMethod.hasBytecodes() && !b.getReplacements().hasSubstitution(targetMethod)) {
+                if (inlineEverything && !targetMethod.hasBytecodes() && !b.getReplacements().hasSubstitution(targetMethod, b.bci())) {
                     // we need to force-inline but we can not, leave the invoke as-is
                     return false;
                 }
 
-                int recursionDepth = b.recursiveInliningDepth(targetMethod);
+                int recursionDepth = countRecursiveInlining(b, targetMethod);
                 int maxRecursionDepth = MaximumRecursiveInlining.getValue(b.getOptions());
                 if (recursionDepth > maxRecursionDepth) {
                     return false;

@@ -216,11 +216,6 @@ public class SPARCHotSpotBackend extends HotSpotHostBackend implements LIRGenera
             SPARCMacroAssembler masm = (SPARCMacroAssembler) crb.asm;
             masm.restoreWindow();
         }
-
-        @Override
-        public void returned(CompilationResultBuilder crb) {
-            // nothing to do
-        }
     }
 
     @Override
