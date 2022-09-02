@@ -191,6 +191,7 @@ public abstract class EspressoProcessor extends BaseProcessor {
 
     // Processor local info
     protected boolean done = false;
+    protected HashSet<String> classes = null;
 
     // Special annotations
     TypeElement injectMeta;
@@ -394,6 +395,11 @@ public abstract class EspressoProcessor extends BaseProcessor {
         return false;
     }
 
+    private String getSubstitutorQualifiedName(String substitutorName) {
+        assert collectorPackage != null;
+        return collectorPackage + "." + substitutorName;
+    }
+
     private static StringBuilder signatureSuffixBuilder(List<String> parameterTypes) {
         StringBuilder str = new StringBuilder();
         str.append("_").append(parameterTypes.size());
@@ -460,6 +466,7 @@ public abstract class EspressoProcessor extends BaseProcessor {
             Writer wr = file.openWriter();
             wr.write(classFile);
             wr.close();
+            classes.add(substitutorName);
         } catch (IOException ex) {
             /* nop */
         }
@@ -504,7 +511,9 @@ public abstract class EspressoProcessor extends BaseProcessor {
     // @formatter:off
     /**
      * Generate the following:
-     *     @Collect(ImplAnnotation.class)
+     * 
+     * private static final Factory factory = new Factory();
+     * 
      *     public static final class Factory extends SUBSTITUTOR.Factory {
      *         private Factory() {
      *             super(
@@ -591,6 +600,7 @@ public abstract class EspressoProcessor extends BaseProcessor {
 
     /**
      * Creates the substitutor.
+     *
      *
      * @param className The name of the host class where the substituted method is found.
      * @param targetMethodName The name of the substituted method.
