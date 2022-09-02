@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveFieldCount;
-
 import java.util.Objects;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
@@ -36,6 +34,8 @@ import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
+
+import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveFieldCount;
 
 public interface FieldRefConstant extends MemberRefConstant {
 

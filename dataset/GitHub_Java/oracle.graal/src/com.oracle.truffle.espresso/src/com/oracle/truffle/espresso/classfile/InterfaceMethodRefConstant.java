@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
-
 import java.util.Objects;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
@@ -37,6 +35,8 @@ import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
+
+import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
 
 public interface InterfaceMethodRefConstant extends MethodRefConstant {
 

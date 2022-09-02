@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveKlassCount;
-
 import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -33,6 +31,8 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
+
+import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveKlassCount;
 
 /**
  * Interface denoting a class entry in a constant pool.
@@ -91,6 +91,10 @@ public interface ClassConstant extends PoolConstant {
          * If steps 1 and 2 succeed but step 3 fails, C is still valid and usable. Nevertheless,
          * resolution fails, and D is prohibited from accessing C.
          */
+        private static void pepe() {
+
+        }
+
         @Override
         public Resolved resolve(RuntimeConstantPool pool, int thisIndex, Klass accessingKlass) {
             resolveKlassCount.inc();

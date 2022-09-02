@@ -23,21 +23,14 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
+import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 
 @EspressoSubstitutions
 public final class Target_java_lang_Thread {
-
-    static final String HIDDEN_HOST_THREAD = "$$host_thread";
-    private static final ConcurrentHashMap<Thread, StaticObject> host2guest = new ConcurrentHashMap<>();
 
     // TODO(peterssen): Remove single thread shim, support real threads.
     @Substitution
@@ -45,34 +38,22 @@ public final class Target_java_lang_Thread {
         EspressoContext context = EspressoLanguage.getCurrentContext();
         if (context.getMainThread() == null) {
             Meta meta = context.getMeta();
-            StaticObjectImpl mainThread = (StaticObjectImpl) meta.Thread.allocateInstance();
-            StaticObject threadGroup = meta.ThreadGroup.allocateInstance();
-            meta.ThreadGroup_maxPriority.set(threadGroup, Thread.MAX_PRIORITY);
-            meta.Thread_group.set(mainThread, threadGroup);
+            StaticObject mainThread = meta.Thread.allocateInstance();
+            meta.Thread_group.set(mainThread, meta.ThreadGroup.allocateInstance());
             meta.Thread_name.set(mainThread, meta.toGuestString("mainThread"));
             meta.Thread_priority.set(mainThread, 5);
-
-            mainThread.setHiddenField(HIDDEN_HOST_THREAD, Thread.currentThread());
-            // host2guest should be in the context
-            host2guest.put(Thread.currentThread(), mainThread);
 
             // Lock object used by NIO.
             meta.Thread_blockerLock.set(mainThread, meta.Object.allocateInstance());
             context.setMainThread(mainThread);
         }
-        return host2guest.get(Thread.currentThread());
-    }
-
-    @Substitution
-    public static void yield() {
-        Thread.yield();
+        return context.getMainThread();
     }
 
     @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
     public static void setPriority0(@Host(Thread.class) StaticObject self, int newPriority) {
-        /* nop */
-    }
+        /* nop */ }
 
     @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
@@ -93,19 +74,7 @@ public final class Target_java_lang_Thread {
     @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
     public static void start0(@Host(Thread.class) StaticObject self) {
-        Thread hostThread = EspressoLanguage.getCurrentContext().getEnv().createThread(new Runnable() {
-            @Override
-            public void run() {
-                self.getKlass().lookupMethod(Name.run, Signature._void).invokeDirect(self);
-            }
-        });
-
-        ((StaticObjectImpl) self).setHiddenField(HIDDEN_HOST_THREAD, hostThread);
-        host2guest.put(hostThread, self);
-
-        System.err.println("Starting thread: " + self.getKlass());
-        hostThread.setDaemon((boolean) self.getKlass().getMeta().Thread_daemon.get(self));
-        hostThread.start();
+        /* nop */
     }
 
     @SuppressWarnings("unused")
@@ -115,8 +84,14 @@ public final class Target_java_lang_Thread {
     }
 
     @Substitution
-    public static boolean holdsLock(@Host(Object.class) StaticObject object) {
-        return Thread.holdsLock(object);
+    public static boolean holdsLock(Object object) {
+        if (!EspressoOptions.RUNNING_ON_SVM) {
+            // Sane behavior on HotSpot.
+            return Thread.holdsLock(object);
+        }
+        // TODO(peterssen): On SVM we incorrectly hold all locks since this method is usually used
+        // to ensure that locks are hold.
+        return true;
     }
 
     @Substitution
