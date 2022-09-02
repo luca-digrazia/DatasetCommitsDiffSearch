@@ -1108,17 +1108,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                         this.callTarget = proxy.getCallTarget();
                         return callTarget;
                     }
-
-                    // Substitutions are only valid for methods loaded on the boot class loader.
-                    StaticObject loader = (StaticObject) getDeclaringKlass().getDefiningClassLoader();
-                    if (StaticObject.isNull(loader)) {
-                        EspressoRootNode redirectedMethod = getSubstitutions().get(getMethod());
-                        if (redirectedMethod != null) {
-                            callTarget = Truffle.getRuntime().createCallTarget(redirectedMethod);
-                        }
-                    }
-
-                    if (callTarget == null) {
+                    EspressoRootNode redirectedMethod = getSubstitutions().get(getMethod());
+                    if (redirectedMethod != null) {
+                        callTarget = Truffle.getRuntime().createCallTarget(redirectedMethod);
+                    } else {
                         if (getMethod().isNative()) {
                             // Bind native method.
                             // If the loader is null we have a system class, so we attempt a lookup
@@ -1265,6 +1258,11 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         @Override
         public LocalVariableTableRef getLocalVariableTypeTable() {
             return getMethod().getLocalVariableTypeTable();
+        }
+
+        @Override
+        public boolean hasVariableTable() {
+            return getLocalVariableTable() != LocalVariableTable.EMPTY;
         }
 
         @Override
