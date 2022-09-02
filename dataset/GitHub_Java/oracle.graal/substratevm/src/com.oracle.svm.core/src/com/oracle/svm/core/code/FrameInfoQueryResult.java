@@ -26,12 +26,10 @@ package com.oracle.svm.core.code;
 
 import org.graalvm.nativeimage.c.function.CodePointer;
 
-import com.oracle.svm.core.CalleeSavedRegisters;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.meta.SharedMethod;
 
-import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.VirtualObject;
 import jdk.vm.ci.meta.Constant;
@@ -51,13 +49,6 @@ public class FrameInfoQueryResult {
          * slot.
          */
         StackSlot(true),
-
-        /**
-         * A {@link Register} value. The {@link ValueInfo#data} is the frame offset of the stack
-         * slot in the callee where the register value was spilled to according to the
-         * {@link CalleeSavedRegisters}.
-         */
-        Register(true),
 
         /**
          * A {@link Constant} value. The {@link ValueInfo#data} is the primitive data value of the
@@ -92,7 +83,7 @@ public class FrameInfoQueryResult {
         protected long data;
         protected JavaConstant value;
         protected String name;
-        /** Index of {@link #name} in {@link FrameInfoDecoder#decodeFrameInfo frameInfoNames}. */
+        /** The index of {@link #name} in {@link CodeInfoDecoder#frameInfoNames}. */
         protected int nameIndex = -1;
 
         /**
@@ -195,9 +186,9 @@ public class FrameInfoQueryResult {
 
     /**
      * Returns the offset of the deoptimization target method. The offset is relative to the
-     * {@link CodeInfoAccess#getCodeStart code start} of the {@link ImageCodeInfo image}. Together
-     * with the BCI it is used to find the corresponding bytecode frame in the target method. Note
-     * that there is no inlining in target methods, so the method + BCI is unique.
+     * {@link AbstractCodeInfo#getCodeStart() code start} of the {@link ImageCodeInfo image}.
+     * Together with the BCI it is used to find the corresponding bytecode frame in the target
+     * method. Note that there is no inlining in target methods, so the method + BCI is unique.
      */
     public int getDeoptMethodOffset() {
         return deoptMethodOffset;
@@ -207,7 +198,7 @@ public class FrameInfoQueryResult {
      * Returns the entry point address of the deoptimization target method.
      */
     public CodePointer getDeoptMethodAddress() {
-        return CodeInfoAccess.absoluteIP(CodeInfoTable.getImageCodeInfo(), deoptMethodOffset);
+        return CodeInfoTable.getImageCodeCache().absoluteIP(deoptMethodOffset);
     }
 
     /**
