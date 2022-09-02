@@ -218,7 +218,7 @@ public final class InspectorDebugger extends DebuggerDomain {
         JSONObject json = new JSONObject();
         JSONArray arr = new JSONArray();
         Source source = script.getSource();
-        if (source.hasCharacters() && source.getLength() > 0) {
+        if (source.getLength() > 0) {
             int l1 = start.getLine();
             int c1 = start.getColumn();
             if (c1 <= 0) {
@@ -557,7 +557,7 @@ public final class InspectorDebugger extends DebuggerDomain {
                         value = cf.getFrame().eval(expression);
                     }
                     if (value != null) {
-                        RemoteObject ro = new RemoteObject(value, generatePreview, context);
+                        RemoteObject ro = new RemoteObject(value, generatePreview, context.getErr());
                         context.getRemoteObjectsHandler().register(ro);
                         json.put("result", ro.toJSON());
                     }

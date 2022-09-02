@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -39,9 +39,8 @@ import org.graalvm.collections.Pair;
 
 final class DebuggerSuspendedInfo {
 
-    private final InspectorDebugger debugger;
     private final SuspendedEvent se;
-    private volatile CallFrame[] callFrames;
+    private final CallFrame[] callFrames;
     /**
      * Holder of the last evaluated value, if any. It's expected to be used for non
      * {@link RemoteObject#isReplicable() replicable} values, while assuming that
@@ -50,8 +49,7 @@ final class DebuggerSuspendedInfo {
      */
     final AtomicReference<Pair<DebugValue, Object>> lastEvaluatedValue = new AtomicReference<>();
 
-    DebuggerSuspendedInfo(InspectorDebugger debugger, SuspendedEvent se, CallFrame[] callFrames) {
-        this.debugger = debugger;
+    DebuggerSuspendedInfo(SuspendedEvent se, CallFrame[] callFrames) {
         this.se = se;
         this.callFrames = callFrames;
     }
@@ -62,9 +60,5 @@ final class DebuggerSuspendedInfo {
 
     public CallFrame[] getCallFrames() {
         return callFrames;
-    }
-
-    void refreshFrames() {
-        this.callFrames = debugger.refreshCallFrames(se.getStackFrames(), se.getSuspendAnchor(), callFrames);
     }
 }

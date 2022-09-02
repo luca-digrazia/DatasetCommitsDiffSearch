@@ -35,7 +35,7 @@ import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.tools.utils.json.JSONArray;
 import com.oracle.truffle.tools.utils.json.JSONObject;
 
-final class ObjectPreview {
+public final class ObjectPreview {
 
     private static final int OVERFLOW_LIMIT_PROPERTIES = 5;
     private static final int OVERFLOW_LIMIT_ARRAY_ELEMENTS = 100;
@@ -43,7 +43,7 @@ final class ObjectPreview {
     private ObjectPreview() {
     }
 
-    static JSONObject create(DebugValue debugValue, String type, String subtype, LanguageInfo language, PrintWriter err) {
+    public static JSONObject create(DebugValue debugValue, String type, String subtype, LanguageInfo language, PrintWriter err) {
         JSONObject json = new JSONObject();
         json.put("type", type);
         json.put("subtype", subtype);
@@ -76,21 +76,16 @@ final class ObjectPreview {
         } else {
             Collection<DebugValue> valueProperties = debugValue.getProperties();
             if (valueProperties != null) {
+                int size = valueProperties.size();
+                overflow = size > OVERFLOW_LIMIT_PROPERTIES;
+                int n = Math.min(size, OVERFLOW_LIMIT_PROPERTIES);
                 Iterator<DebugValue> propertyIterator = valueProperties.iterator();
-                overflow = false;
-                while (propertyIterator.hasNext()) {
-                    DebugValue property = propertyIterator.next();
-                    if (!property.isInternal() && !property.hasReadSideEffects() && property.isReadable()) {
-                        if (properties.length() == OVERFLOW_LIMIT_PROPERTIES) {
-                            overflow = true;
-                            break;
-                        }
-                        try {
-                            properties.put(createPropertyPreview(property, language, err));
-                        } catch (DebugException ex) {
-                            overflow = true;
-                            break;
-                        }
+                for (int i = 0; i < n; i++) {
+                    try {
+                        properties.put(createPropertyPreview(propertyIterator.next(), language, err));
+                    } catch (DebugException ex) {
+                        overflow = true;
+                        break;
                     }
                 }
             } else {

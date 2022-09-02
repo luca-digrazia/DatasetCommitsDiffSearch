@@ -29,7 +29,6 @@ import java.io.PrintWriter;
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.nodes.LanguageInfo;
-import com.oracle.truffle.tools.chromeinspector.LanguageChecks;
 
 import static com.oracle.truffle.tools.chromeinspector.types.RemoteObject.getMetaObject;
 
@@ -81,7 +80,7 @@ final class TypeInfo {
         String type = null;
         String subtype = null;
         String className = null;
-        boolean isJS = LanguageChecks.isJS(originalLanguage);
+        boolean isJS = originalLanguage != null && "js".equals(originalLanguage.getId());
         if (metaObject != null && isJS) {
             // Get special JS properties:
             try {

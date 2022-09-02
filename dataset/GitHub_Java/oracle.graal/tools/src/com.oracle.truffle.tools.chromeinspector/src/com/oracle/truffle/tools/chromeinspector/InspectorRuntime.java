@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,7 +57,6 @@ import com.oracle.truffle.tools.chromeinspector.instrument.OutputConsumerInstrum
 import com.oracle.truffle.tools.chromeinspector.server.CommandProcessException;
 import com.oracle.truffle.tools.chromeinspector.server.InspectServerSession.CommandPostProcessor;
 import com.oracle.truffle.tools.chromeinspector.types.CallArgument;
-import com.oracle.truffle.tools.chromeinspector.types.CustomPreview;
 import com.oracle.truffle.tools.chromeinspector.types.ExceptionDetails;
 import com.oracle.truffle.tools.chromeinspector.types.InternalPropertyDescriptor;
 import com.oracle.truffle.tools.chromeinspector.types.Location;
@@ -228,7 +227,7 @@ public final class InspectorRuntime extends RuntimeDomain {
                         if (returnByValue) {
                             result = RemoteObject.createJSONResultValue(value, context.getErr());
                         } else {
-                            RemoteObject ro = new RemoteObject(value, generatePreview, context);
+                            RemoteObject ro = new RemoteObject(value, generatePreview, context.getErr());
                             context.getRemoteObjectsHandler().register(ro);
                             result = ro.toJSON();
                             if (!ro.isReplicable()) {
@@ -315,47 +314,43 @@ public final class InspectorRuntime extends RuntimeDomain {
         JSONArray result = new JSONArray();
         JSONArray internals = new JSONArray();
         boolean hasArray = !arrayElements.isEmpty();
-        HashSet<String> storedPropertyNames = (hasArray && properties != null) ? new HashSet<>(properties.size()) : null;
+        HashSet<String> storedPropertyNames = hasArray ? new HashSet<>(properties.size()) : null;
         DebugException exception = null;
         String nameExc = null;
         // Test functionLocation for executable values only
         boolean hasFunctionLocation = value == null || !value.canExecute();
+        Iterator<DebugValue> propertiesIterator = properties.iterator();
         try {
-            boolean isJS = false;
-            if (properties != null) {
-                LanguageInfo language = (value != null) ? value.getOriginalLanguage() : null;
-                isJS = LanguageChecks.isJS(language);
-                Iterator<DebugValue> propertiesIterator = properties.iterator();
-                while (propertiesIterator.hasNext()) {
-                    DebugValue v = null;
-                    try {
-                        v = propertiesIterator.next();
-                        if (v.isReadable()) {
-                            if (!v.isInternal()) {
-                                result.put(createPropertyJSON(v, generatePreview));
-                                if (storedPropertyNames != null) {
-                                    storedPropertyNames.add(v.getName());
-                                }
-                            } else {
-                                internals.put(createPropertyJSON(v, generatePreview));
+            while (propertiesIterator.hasNext()) {
+                DebugValue v = null;
+                try {
+                    v = propertiesIterator.next();
+                    if (v.isReadable()) {
+                        if (!v.isInternal()) {
+                            result.put(createPropertyJSON(v, generatePreview));
+                            if (storedPropertyNames != null) {
+                                storedPropertyNames.add(v.getName());
                             }
-                            if (!hasFunctionLocation && functionLocation.equals(v.getName())) {
-                                hasFunctionLocation = true;
-                            }
+                        } else {
+                            internals.put(createPropertyJSON(v, generatePreview));
                         }
-                    } catch (DebugException ex) {
-                        if (exception == null) {
-                            exception = ex;
-                            nameExc = (v != null) ? v.getName() : "<unknown>";
+                        if (!hasFunctionLocation && functionLocation.equals(v.getName())) {
+                            hasFunctionLocation = true;
                         }
+                    }
+                } catch (DebugException ex) {
+                    if (exception == null) {
+                        exception = ex;
+                        nameExc = (v != null) ? v.getName() : "<unknown>";
                     }
                 }
             }
             int i = 0;
             for (DebugValue v : arrayElements) {
+                assert storedPropertyNames != null;
                 String name = Integer.toString(i++);
                 try {
-                    if (v.isReadable() && (storedPropertyNames == null || !storedPropertyNames.contains(name))) {
+                    if (v.isReadable() && !storedPropertyNames.contains(name)) {
                         result.put(createPropertyJSON(v, name, generatePreview));
                     }
                 } catch (DebugException ex) {
@@ -363,13 +358,6 @@ public final class InspectorRuntime extends RuntimeDomain {
                         exception = ex;
                         nameExc = name;
                     }
-                }
-            }
-            if (isJS) {
-                // Add __proto__ when in JavaScript:
-                DebugValue prototype = value.getProperty("__proto__");
-                if (!prototype.isNull()) {
-                    result.put(createPropertyJSON(prototype, null, generatePreview, true, false));
                 }
             }
         } catch (DebugException ex) {
@@ -477,29 +465,6 @@ public final class InspectorRuntime extends RuntimeDomain {
                                 }
                                 result = asResult(p);
                             } else {
-                                // Process CustomPreview body:
-                                if (arguments.length() > 0) {
-                                    Object arg0 = arguments.get(0);
-                                    if (arg0 instanceof JSONObject) {
-                                        JSONObject argObj = (JSONObject) arg0;
-                                        Object id = argObj.opt("objectId");
-                                        if (id instanceof String) {
-                                            DebugValue body = context.getRemoteObjectsHandler().getCustomPreviewBody((String) id);
-                                            if (body != null) {
-                                                // The config is not provided as an argument.
-                                                // Get the cached config:
-                                                DebugValue config = context.getRemoteObjectsHandler().getCustomPreviewConfig(objectId);
-                                                DebugValue bodyML = (config != null) ? body.execute(object.getDebugValue(), config) : body.execute(object.getDebugValue());
-                                                Object bodyjson = CustomPreview.value2JSON(bodyML, context);
-                                                result = new JSONObject();
-                                                result.put("type", "object");
-                                                result.put("value", bodyjson);
-                                                json.put("result", result);
-                                                return null;
-                                            }
-                                        }
-                                    }
-                                }
                                 String code = "(" + functionDeclaration + ")(" + ((value != null) ? value.getName() : "") + ")";
                                 DebugValue eval = suspendedInfo.getSuspendedEvent().getTopStackFrame().eval(code);
                                 result = asResult(eval);
@@ -521,7 +486,7 @@ public final class InspectorRuntime extends RuntimeDomain {
                                 result = RemoteObject.createNullObject(context.getEnv(), language).toJSON();
                             } else {
                                 if (!returnByValue) {
-                                    RemoteObject ro = new RemoteObject(v, true, generatePreview, context);
+                                    RemoteObject ro = new RemoteObject(v, true, generatePreview, context.getErr());
                                     context.getRemoteObjectsHandler().register(ro);
                                     result = ro.toJSON();
                                 } else {
@@ -645,27 +610,17 @@ public final class InspectorRuntime extends RuntimeDomain {
     }
 
     private JSONObject createPropertyJSON(DebugValue v, String defaultName, boolean generatePreview) {
-        return createPropertyJSON(v, defaultName, generatePreview, false, true);
-    }
-
-    private JSONObject createPropertyJSON(DebugValue v, String defaultName, boolean generatePreview, boolean readEagerly, boolean enumerable) {
         PropertyDescriptor pd;
-        RemoteObject rv = new RemoteObject(v, readEagerly, generatePreview, context);
+        RemoteObject rv = new RemoteObject(v, generatePreview, context.getErr());
         context.getRemoteObjectsHandler().register(rv);
         String name = v.getName();
         if (name == null && defaultName != null) {
             name = defaultName;
         }
         if (!v.isInternal()) {
-            RemoteObject getter;
-            RemoteObject setter;
-            if (readEagerly) {
-                getter = setter = null;
-            } else {
-                getter = findGetter(v);
-                setter = findSetter(v);
-            }
-            pd = new PropertyDescriptor(name, rv, v.isWritable(), getter, setter, true, enumerable, null, true, null);
+            RemoteObject getter = findGetter(v);
+            RemoteObject setter = findSetter(v);
+            pd = new PropertyDescriptor(name, rv, v.isWritable(), getter, setter, true, true, null, true, null);
             return pd.toJSON();
         } else {
             InternalPropertyDescriptor ipd = new InternalPropertyDescriptor(name, rv);

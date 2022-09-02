@@ -93,7 +93,7 @@ public abstract class DebugValue {
      *
      * @param primitiveValue a primitive value to set
      * @throws DebugException when guest language code throws an exception
-     * @since 19.0
+     * @since 1.0
      */
     public abstract void set(Object primitiveValue) throws DebugException;
 
@@ -117,15 +117,6 @@ public abstract class DebugValue {
     public abstract <T> T as(Class<T> clazz) throws DebugException;
 
     /**
-     * Returns the {@link String} value if this value represents a string. This method returns
-     * <code>null</code> otherwise.
-     *
-     * @throws DebugException when guest language code throws an exception
-     * @since 19.0
-     */
-    public abstract String asString() throws DebugException;
-
-    /**
      * Returns the name of this value as it is referred to from its origin. If this value is
      * originated from the stack it returns the name of the local variable. If the value was
      * returned from another objects then it returns the name of the property or field it is
@@ -147,7 +138,7 @@ public abstract class DebugValue {
      * Returns <code>true</code> if reading of this value can have side-effects, else
      * <code>false</code>. Read has side-effects if it changes runtime state.
      *
-     * @since 19.0
+     * @since 1.0
      */
     public abstract boolean hasReadSideEffects();
 
@@ -155,7 +146,7 @@ public abstract class DebugValue {
      * Returns <code>true</code> if setting a new value can have side-effects, else
      * <code>false</code>. Write has side-effects if it changes runtime state besides this value.
      *
-     * @since 19.0
+     * @since 1.0
      */
     public abstract boolean hasWriteSideEffects();
 
@@ -193,19 +184,6 @@ public abstract class DebugValue {
      */
     public DebugScope getScope() {
         return null;
-    }
-
-    /**
-     * Test if the value represents 'null'.
-     *
-     * @since 19.0
-     */
-    public final boolean isNull() {
-        if (!isReadable()) {
-            return false;
-        }
-        Object value = get();
-        return INTEROP.isNull(value);
     }
 
     /**
@@ -253,7 +231,7 @@ public abstract class DebugValue {
      * @return the property value, or <code>null</code> if the property does not exist.
      * @throws DebugException when guest language code throws an exception
      * @throws IllegalStateException if the value is not {@link #isReadable() readable}
-     * @since 19.0
+     * @since 1.0
      */
     public final DebugValue getProperty(String name) throws DebugException {
         if (!isReadable()) {
@@ -390,37 +368,12 @@ public abstract class DebugValue {
      * Returns <code>true</code> if this value can be executed (represents a guest language
      * function), else <code>false</code>.
      *
-     * @since 19.0
+     * @since 1.0
      */
     public final boolean canExecute() throws DebugException {
         Object value = get();
         try {
             return INTEROP.isExecutable(value);
-        } catch (ThreadDeath td) {
-            throw td;
-        } catch (Throwable ex) {
-            throw new DebugException(getSession(), ex, resolveLanguage(), null, true, null);
-        }
-    }
-
-    /**
-     * Executes the executable represented by this value.
-     *
-     * @param arguments Arguments passed to the executable
-     * @return the result of the execution
-     * @throws DebugException when guest language code throws an exception
-     * @see #canExecute()
-     * @since 19.0
-     */
-    public final DebugValue execute(DebugValue... arguments) throws DebugException {
-        Object value = get();
-        Object[] args = new Object[arguments.length];
-        for (int i = 0; i < arguments.length; i++) {
-            args[i] = arguments[i].get();
-        }
-        try {
-            Object retValue = INTEROP.execute(value, args);
-            return new HeapValue(getSession(), null, retValue);
         } catch (ThreadDeath td) {
             throw td;
         } catch (Throwable ex) {
@@ -525,25 +478,6 @@ public abstract class DebugValue {
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public String asString() throws DebugException {
-            if (!isReadable()) {
-                throw new IllegalStateException("Value is not readable");
-            }
-            try {
-                Object val = get();
-                if (INTEROP.isString(val)) {
-                    return INTEROP.asString(val);
-                } else {
-                    return null;
-                }
-            } catch (ThreadDeath td) {
-                throw td;
-            } catch (Throwable ex) {
-                throw new DebugException(getSession(), ex, resolveLanguage(), null, true, null);
-            }
-        }
-
         protected boolean isMeta() {
             return false;
         }
@@ -573,7 +507,7 @@ public abstract class DebugValue {
         }
 
         HeapValue(DebuggerSession session, LanguageInfo preferredLanguage, String name, Object value) {
-            this(session, preferredLanguage, name, value, false);
+            this(session, null, name, value, false);
         }
 
         HeapValue(DebuggerSession session, LanguageInfo preferredLanguage, String name, Object value, boolean isMeta) {

@@ -63,7 +63,6 @@ public final class InspectServerSession implements MessageEndpoint {
     private volatile MessageEndpoint messageEndpoint;
     private volatile JSONMessageListener jsonMessageListener;
     private CommandProcessThread processThread;
-    private Runnable onClose;
 
     private InspectServerSession(RuntimeDomain runtime, DebuggerDomain debugger, ProfilerDomain profiler,
                     InspectorExecutionContext context) {
@@ -80,10 +79,6 @@ public final class InspectServerSession implements MessageEndpoint {
         return new InspectServerSession(runtime, debugger, profiler, context);
     }
 
-    public void onClose(Runnable onCloseTask) {
-        this.onClose = onCloseTask;
-    }
-
     @Override
     public void sendClose() {
         runtime.disable();
@@ -93,14 +88,6 @@ public final class InspectServerSession implements MessageEndpoint {
         messageEndpoint = null;
         processThread.dispose();
         processThread = null;
-        if (onClose != null) {
-            onClose.run();
-        }
-    }
-
-    // For tests only
-    public DebuggerDomain getDebugger() {
-        return debugger;
     }
 
     public void setMessageListener(MessageEndpoint messageListener) {

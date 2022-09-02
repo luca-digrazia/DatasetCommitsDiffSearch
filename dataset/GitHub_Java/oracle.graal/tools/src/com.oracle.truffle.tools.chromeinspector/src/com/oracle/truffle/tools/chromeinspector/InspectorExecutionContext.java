@@ -38,7 +38,6 @@ import java.util.logging.Level;
 import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugValue;
-import com.oracle.truffle.api.debug.DebuggerSession;
 import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.SourceFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
@@ -52,7 +51,6 @@ import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
  */
 public final class InspectorExecutionContext {
 
-    public static final String VALUE_NOT_READABLE = "<not readable>";
     private static final AtomicLong LAST_ID = new AtomicLong(0);
 
     private final String name;
@@ -146,8 +144,8 @@ public final class InspectorExecutionContext {
     public ScriptsHandler acquireScriptsHandler() {
         if (sch == null) {
             sch = new ScriptsHandler(inspectInternal);
-            schCounter = new AtomicInteger(0);
             schBinding = env.getInstrumenter().attachLoadSourceListener(SourceFilter.ANY, sch, true);
+            schCounter = new AtomicInteger(0);
         }
         schCounter.incrementAndGet();
         return sch;
@@ -187,15 +185,15 @@ public final class InspectorExecutionContext {
         }
     }
 
-    public synchronized RemoteObjectsHandler getRemoteObjectsHandler() {
+    synchronized RemoteObjectsHandler getRemoteObjectsHandler() {
         if (roh == null) {
-            roh = new RemoteObjectsHandler(this);
+            roh = new RemoteObjectsHandler(err);
         }
         return roh;
     }
 
     public RemoteObject createAndRegister(DebugValue value, boolean generatePreview) {
-        RemoteObject ro = new RemoteObject(value, generatePreview, this);
+        RemoteObject ro = new RemoteObject(value, generatePreview, getErr());
         if (ro.getId() != null) {
             getRemoteObjectsHandler().register(ro);
         }
@@ -292,16 +290,6 @@ public final class InspectorExecutionContext {
     }
 
     /**
-     * Returns the current debugger session if debugging is on.
-     *
-     * @return the current debugger session, or <code>null</code>.
-     */
-    public DebuggerSession getDebuggerSession() {
-        ScriptsHandler handler = this.sch;
-        return (handler != null) ? handler.getDebuggerSession() : null;
-    }
-
-    /**
      * For test purposes only. Do not call from production code.
      */
     public static void resetIDs() {
@@ -330,7 +318,7 @@ public final class InspectorExecutionContext {
         this.customObjectFormatterEnabled = enabled;
     }
 
-    public boolean isCustomObjectFormatterEnabled() {
+    boolean isCustomObjectFormatterEnabled() {
         return this.customObjectFormatterEnabled;
     }
 
