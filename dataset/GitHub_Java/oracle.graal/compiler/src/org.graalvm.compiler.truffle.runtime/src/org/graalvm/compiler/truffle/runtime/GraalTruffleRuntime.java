@@ -602,20 +602,15 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     @Override
     public final RootCallTarget createCallTarget(RootNode rootNode) {
         CompilerAsserts.neverPartOfCompilation();
-        final OptimizedCallTarget target = createClonedCallTarget(rootNode, null);
-        TruffleSplittingStrategy.newTargetCreated(target);
-        return target;
+        final OptimizedCallTarget newCallTarget = createClonedCallTarget(rootNode, null);
+        TruffleSplittingStrategy.newTargetCreated(newCallTarget);
+        return newCallTarget;
     }
 
     public final OptimizedCallTarget createClonedCallTarget(RootNode rootNode, OptimizedCallTarget source) {
         CompilerAsserts.neverPartOfCompilation();
         OptimizedCallTarget target = createOptimizedCallTarget(source, rootNode);
         GraalRuntimeAccessor.INSTRUMENT.onLoad(target.getRootNode());
-        if (target.engine.compileAOTOnCreate) {
-            if (target.prepareForAOT()) {
-                target.compile(true);
-            }
-        }
         return target;
     }
 
@@ -686,8 +681,8 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                     debug = compiler.openDebugContext(optionsMap, compilation);
                 }
                 // Open the "Truffle::methodName" dump group if dumping is enabled.
-                try (AutoCloseable s = debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget));
-                                TruffleOutputGroup o = isPrintGraphEnabled() ? TruffleOutputGroup.openCallTarget(debug, callTarget, Collections.singletonMap(GROUP_ID, compilation)) : null) {
+                try (TruffleOutputGroup o = isPrintGraphEnabled() ? TruffleOutputGroup.openCallTarget(debug, callTarget, Collections.singletonMap(GROUP_ID, compilation)) : null;
+                                AutoCloseable s = debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget));) {
                     compilationStarted = true;
                     listeners.onCompilationStarted(callTarget, task.tier());
                     TruffleInlining inlining = new TruffleInlining();
