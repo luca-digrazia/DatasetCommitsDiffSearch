@@ -7,8 +7,12 @@ import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.llvm.runtime.ArithmeticOperation;
 import com.oracle.truffle.llvm.runtime.CompareOperator;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprBitFlipNodeFactory.BitFlipNodeGen;
+import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprNotNode.NotNode;
+import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprNotNodeFactory.NotNodeGen;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
+import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.Parser;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
 
@@ -109,9 +113,9 @@ public final class DebugExprNodeFactory {
             case '-':
                 return createArithmeticOp(ArithmeticOperation.SUB, createIntegerConstant(0), pair);
             case '~':
-                return DebugExpressionPair.create(DebugExprBitFlipNodeGen.create(pair.getNode()), pair.getType());
+                return DebugExpressionPair.create(BitFlipNodeGen.create(pair.getNode()), pair.getType());
             case '!':
-                return DebugExpressionPair.create(DebugExprNotNodeGen.create(pair.getNode()), pair.getType());
+                return DebugExpressionPair.create(NotNodeGen.create(pair.getNode()), pair.getType());
             default:
                 throw DebugExprException.create(pair.getNode(), "unknown symbol: " + unaryOp);
         }
