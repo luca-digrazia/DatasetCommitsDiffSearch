@@ -174,10 +174,8 @@ class SVMHotSpotGraalRuntimeMBean implements DynamicMBean {
     public Object invoke(String actionName, Object[] params, String[] signature) throws MBeanException, ReflectionException {
         try (LibGraalScope scope = new LibGraalScope(HotSpotJVMCIRuntime.runtime())) {
             Map<String, Object> paramsMap = new LinkedHashMap<>();
-            if (params != null) {
-                for (int i = 0; i < params.length; i++) {
-                    paramsMap.put(Integer.toString(i), params[i]);
-                }
+            for (int i = 0; i < params.length; i++) {
+                paramsMap.put(Integer.toString(i), params[i]);
             }
             byte[] rawData = OptionsEncoder.encode(paramsMap);
             rawData = HotSpotToSVMCalls.invoke(LibGraalScope.getIsolateThread(), handle, actionName, rawData, signature);
