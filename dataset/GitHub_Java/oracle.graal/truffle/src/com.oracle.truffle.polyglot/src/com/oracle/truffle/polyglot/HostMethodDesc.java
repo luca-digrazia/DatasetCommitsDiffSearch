@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -51,18 +51,19 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.StringJoiner;
 
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import com.oracle.truffle.api.nodes.Node;
 
 abstract class HostMethodDesc {
 
     abstract String getName();
 
-    abstract HostMethodDesc[] getOverloads();
+    abstract SingleMethod[] getOverloads();
 
     boolean isInternal() {
         return false;
@@ -110,11 +111,13 @@ abstract class HostMethodDesc {
         }
 
         @Override
-        public HostMethodDesc[] getOverloads() {
-            return new HostMethodDesc[]{this};
+        public SingleMethod[] getOverloads() {
+            return new SingleMethod[]{this};
         }
 
         public abstract Object invoke(Object receiver, Object[] arguments) throws Throwable;
+
+        public abstract Object invokeGuestToHost(Object receiver, Object[] arguments, PolyglotEngineImpl engine, PolyglotLanguageContext context, Node node);
 
         @Override
         public boolean isMethod() {
@@ -165,7 +168,22 @@ abstract class HostMethodDesc {
             return "Method[" + getReflectionMethod().toString() + "]";
         }
 
-        private static final class MethodReflectImpl extends SingleMethod {
+        abstract static class ReflectBase extends SingleMethod {
+
+            ReflectBase(Executable executable) {
+                super(executable);
+            }
+
+            @Override
+            public Object invokeGuestToHost(Object receiver, Object[] arguments, PolyglotEngineImpl engine, PolyglotLanguageContext languageContext, Node node) {
+                CallTarget target = engine.getHostToGuestCodeCache().reflectionHostInvoke;
+                assert target == languageContext.context.engine.getHostToGuestCodeCache().reflectionHostInvoke;
+                return GuestToHostRootNode.guestToHostCall(node, target, languageContext, receiver, this, arguments);
+            }
+
+        }
+
+        private static final class MethodReflectImpl extends ReflectBase {
             private final Method reflectionMethod;
 
             MethodReflectImpl(Method reflectionMethod) {
@@ -184,7 +202,7 @@ abstract class HostMethodDesc {
                 try {
                     return reflectInvoke(reflectionMethod, receiver, arguments);
                 } catch (IllegalArgumentException | IllegalAccessException ex) {
-                    throw UnsupportedTypeException.create(arguments);
+                    throw HostInteropErrors.unsupportedTypeException(arguments, ex);
                 } catch (InvocationTargetException e) {
                     throw e.getCause();
                 }
@@ -207,7 +225,7 @@ abstract class HostMethodDesc {
             }
         }
 
-        private static final class ConstructorReflectImpl extends SingleMethod {
+        private static final class ConstructorReflectImpl extends ReflectBase {
             private final Constructor<?> reflectionConstructor;
 
             ConstructorReflectImpl(Constructor<?> reflectionConstructor) {
@@ -226,7 +244,7 @@ abstract class HostMethodDesc {
                 try {
                     return reflectNewInstance(reflectionConstructor, arguments);
                 } catch (IllegalArgumentException | IllegalAccessException | InstantiationException ex) {
-                    throw UnsupportedTypeException.create(arguments);
+                    throw HostInteropErrors.unsupportedTypeException(arguments, ex);
                 } catch (InvocationTargetException e) {
                     throw e.getCause();
                 }
@@ -244,7 +262,7 @@ abstract class HostMethodDesc {
             }
         }
 
-        private abstract static class MHBase extends SingleMethod {
+        abstract static class MHBase extends SingleMethod {
             @CompilationFinal private MethodHandle methodHandle;
 
             MHBase(Executable executable) {
@@ -253,19 +271,17 @@ abstract class HostMethodDesc {
 
             @Override
             public final Object invoke(Object receiver, Object[] arguments) throws Throwable {
-                if (methodHandle == null) {
+                MethodHandle handle = methodHandle;
+                if (handle == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    methodHandle = makeMethodHandle();
+                    handle = makeMethodHandle();
+                    methodHandle = handle;
                 }
-                try {
-                    return invokeHandle(methodHandle, receiver, arguments);
-                } catch (ClassCastException ex) {
-                    throw UnsupportedTypeException.create(arguments);
-                }
+                return invokeHandle(handle, receiver, arguments);
             }
 
             @TruffleBoundary(allowInlining = true)
-            private static Object invokeHandle(MethodHandle invokeHandle, Object receiver, Object[] arguments) throws Throwable {
+            static Object invokeHandle(MethodHandle invokeHandle, Object receiver, Object[] arguments) throws Throwable {
                 return invokeHandle.invokeExact(receiver, arguments);
             }
 
@@ -282,6 +298,24 @@ abstract class HostMethodDesc {
                 adaptedHandle = adaptedHandle.asSpreader(Object[].class, parameterCount);
                 return adaptedHandle;
             }
+
+            @Override
+            public Object invokeGuestToHost(Object receiver, Object[] arguments, PolyglotEngineImpl engine, PolyglotLanguageContext languageContext, Node node) {
+                MethodHandle handle = methodHandle;
+                if (handle == null) {
+                    if (CompilerDirectives.isPartialEvaluationConstant(this)) {
+                        // we must not repeatedly deoptimize if MHBase is uncached.
+                        // it ok to modify the methodHandle here even though it is compilation final
+                        // because it is always initialized to the same value.
+                        CompilerDirectives.transferToInterpreterAndInvalidate();
+                    }
+                    methodHandle = handle = makeMethodHandle();
+                }
+                CallTarget target = engine.getHostToGuestCodeCache().methodHandleHostInvoke;
+                CompilerAsserts.partialEvaluationConstant(target);
+                return GuestToHostRootNode.guestToHostCall(node, target, languageContext, receiver, handle, arguments);
+            }
+
         }
 
         private static final class MethodMHImpl extends MHBase {
@@ -309,11 +343,12 @@ abstract class HostMethodDesc {
             }
 
             @Override
+            @TruffleBoundary
             protected MethodHandle makeMethodHandle() {
-                CompilerAsserts.neverPartOfCompilation();
                 try {
-                    final MethodHandle methodHandle = MethodHandles.publicLookup().unreflect(reflectionMethod);
-                    return adaptSignature(methodHandle, Modifier.isStatic(reflectionMethod.getModifiers()), reflectionMethod.getParameterCount());
+                    Method m = reflectionMethod;
+                    final MethodHandle methodHandle = MethodHandles.publicLookup().unreflect(m);
+                    return adaptSignature(methodHandle, Modifier.isStatic(m.getModifiers()), m.getParameterCount());
                 } catch (IllegalAccessException e) {
                     throw new IllegalStateException(e);
                 }
@@ -340,6 +375,7 @@ abstract class HostMethodDesc {
             }
 
             @Override
+            @TruffleBoundary
             protected MethodHandle makeMethodHandle() {
                 CompilerAsserts.neverPartOfCompilation();
                 try {
