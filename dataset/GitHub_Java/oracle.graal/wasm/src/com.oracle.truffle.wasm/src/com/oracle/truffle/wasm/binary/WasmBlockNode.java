@@ -204,9 +204,7 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.RETURN;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.SELECT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.UNREACHABLE;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
@@ -260,7 +258,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
         return rawContextReference;
     }
 
-    @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN)
+    @ExplodeLoop
     public int execute(WasmContext context, VirtualFrame frame) {
         int nestedControlOffset = 0;
         int callNodeOffset = 0;
@@ -275,7 +273,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
             byte byteOpcode = BinaryStreamReader.peek1(codeEntry().data(), offset);
             int opcode = byteOpcode & 0xFF;
             offset++;
-            CompilerAsserts.partialEvaluationConstant(offset);
             switch (opcode) {
                 case UNREACHABLE:
                     logger.finest("unreachable");
@@ -371,7 +368,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 }
                 case BR_IF: {
                     stackPointer--;
-                    if (popCondition(frame, stackPointer)) {
+                    int cond = popInt(frame, stackPointer);
+                    if (cond != 0) {
                         int unwindCounter = codeEntry().numericLiteralAsInt(numericLiteralOffset);
 
                         // Reset the stack pointer to the target block stack pointer.
@@ -398,17 +396,17 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     stackPointer--;
                     int index = popInt(frame, stackPointer);
                     int[] table = codeEntry().branchTable(branchTableOffset);
+                    int[] continuationStackPointers = codeEntry().branchTable(branchTableOffset + 1);
+                    int[] targetBlocksReturnLengths = codeEntry().branchTable(branchTableOffset + 2);
                     index = index >= table.length ? table.length - 1 : index;
                     // Technically, we should increment the branchTableOffset at this point,
                     // but since we are returning, it does not really matter.
 
-                    int returnTypeLength = table[0];
-                    int target = table[1 + 2 * index];
-                    int continuationStackPointer = table[1 + 2 * index + 1];
+                    int target = table[index];
                     logger.finest(() -> String.format("br_table, target = %d", target));
 
                     // Populate the stack with the return values of the current block (the one we are escaping from).
-                    unwindStack(frame, stackPointer, continuationStackPointer, returnTypeLength);
+                    unwindStack(frame, stackPointer, continuationStackPointers[index], targetBlocksReturnLengths[index]);
 
                     return target;
                 }
@@ -433,7 +431,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
 
                     if (callNodeTable[callNodeOffset] instanceof WasmCallStubNode) {
                         // Lazily create the direct call node at this code position, and recompile to eliminate this check.
-                        resolveCallNode(callNodeOffset);
+                        final RootCallTarget target = ((WasmCallStubNode) callNodeTable[callNodeOffset]).function().resolveCallTarget();
+                        callNodeTable[callNodeOffset] = Truffle.getRuntime().createDirectCallNode(target);
                         CompilerDirectives.transferToInterpreterAndInvalidate();
                     }
                     DirectCallNode callNode = (DirectCallNode) callNodeTable[callNodeOffset];
@@ -2248,17 +2247,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
         return -1;
     }
 
-    private boolean popCondition(VirtualFrame frame, int stackPointer) {
-        int condition = popInt(frame, stackPointer);
-        return condition != 0;
-    }
-
-    @TruffleBoundary
-    private void resolveCallNode(int callNodeOffset) {
-        final RootCallTarget target = ((WasmCallStubNode) callNodeTable[callNodeOffset]).function().resolveCallTarget();
-        callNodeTable[callNodeOffset] = Truffle.getRuntime().createDirectCallNode(target);
-    }
-
     @ExplodeLoop
     private Object[] createArgumentsForCall(VirtualFrame frame, WasmFunction function, int numArgs, int stackPointer) {
         Object[] args = new Object[numArgs];
@@ -2284,12 +2272,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @ExplodeLoop
-    private void unwindStack(VirtualFrame frame, int initStackPointer, int initialContinuationStackPointer, int targetBlockReturnLength) {
-        // TODO: If the targetBlockReturnLength could ever be > 1, this would invert the stack values.
-        //  The spec seems to imply that the operand stack should not be inverted.
-        CompilerAsserts.partialEvaluationConstant(targetBlockReturnLength);
-        int stackPointer = initStackPointer;
-        int continuationStackPointer = initialContinuationStackPointer;
+    private void unwindStack(VirtualFrame frame, int stackPointer, int continuationStackPointer, int targetBlockReturnLength) {
         for (int i = 0; i != targetBlockReturnLength; ++i) {
             stackPointer--;
             long value = pop(frame, stackPointer);

@@ -40,9 +40,8 @@ public class UnsafeWasmMemory implements WasmMemory {
 
     private final Unsafe unsafe;
     private long startAddress;
-    private long pageSize;
-    private final long maxPageSize;
     private long byteSize;
+    private final long maxPageSize;
 
     public UnsafeWasmMemory(long initPageSize, long maxPageSize) {
         try {
@@ -52,7 +51,6 @@ public class UnsafeWasmMemory implements WasmMemory {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        this.pageSize = initPageSize;
         this.maxPageSize = maxPageSize;
         this.byteSize = initPageSize * PAGE_SIZE;
         this.startAddress = unsafe.allocateMemory(byteSize);
@@ -80,12 +78,7 @@ public class UnsafeWasmMemory implements WasmMemory {
 
     @Override
     public long pageSize() {
-        return pageSize;
-    }
-
-    @Override
-    public long byteSize() {
-        return pageSize * PAGE_SIZE;
+        return byteSize;
     }
 
     @Override

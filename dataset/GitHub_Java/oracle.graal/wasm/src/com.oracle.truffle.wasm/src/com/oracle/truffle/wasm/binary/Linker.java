@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.wasm.binary;
 
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.wasm.binary.constants.GlobalModifier;
 import com.oracle.truffle.wasm.binary.constants.GlobalResolution;
 import com.oracle.truffle.wasm.binary.exception.WasmLinkerException;
@@ -59,12 +58,7 @@ public class Linker {
             if (importedModule == null) {
                 throw new WasmLinkerException("The module '" + function.importedModuleName() + "', referenced by the import '" + function.importedFunctionName() + "' in the module '" + module.name() + "', does not exist.");
             }
-            WasmFunction importedFunction;
-            try {
-                importedFunction = (WasmFunction) importedModule.readMember(function.importedFunctionName());
-            } catch (UnknownIdentifierException e) {
-                importedFunction = null;
-            }
+            final WasmFunction importedFunction = (WasmFunction) importedModule.readMember(function.importedFunctionName());
             if (importedFunction == null) {
                 throw new WasmLinkerException("The imported function '" + function.importedFunctionName() + "', referenced in the module '" + module.name() + "', does not exist in the imported module '" + function.importedModuleName() + "'.");
             }

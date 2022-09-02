@@ -471,7 +471,6 @@ public class BinaryReader extends BinaryStreamReader {
                     int initSize = readUnsignedInt32();
                     // Read max size (in Wasm pages).
                     int maxSize = readUnsignedInt32();
-                    module.symbolTable().allocateMemory(language.getContextReference().get(), initSize, maxSize);
                     break;
                 }
                 default:

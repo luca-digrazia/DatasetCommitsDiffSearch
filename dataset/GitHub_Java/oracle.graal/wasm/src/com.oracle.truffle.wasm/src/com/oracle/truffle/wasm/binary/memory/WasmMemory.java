@@ -39,14 +39,9 @@ public interface WasmMemory {
     void memcopy(long src, long dst, long n);
 
     /**
-     * The size of the memory, measured in number of pages.
-     */
-    long pageSize();
-
-    /**
      * The size of the memory, measured in bytes.
      */
-    long byteSize();
+    long pageSize();
 
     boolean grow(long extraSize);
 
