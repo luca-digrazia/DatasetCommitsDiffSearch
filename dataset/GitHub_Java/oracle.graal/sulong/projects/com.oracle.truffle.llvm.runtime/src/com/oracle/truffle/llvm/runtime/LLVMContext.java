@@ -280,7 +280,9 @@ public final class LLVMContext {
         }
 
         this.threadingStack = new LLVMThreadingStack(Thread.currentThread(), parseStackSize(env.getOptions().get(SulongEngineOption.STACK_SIZE)));
-
+        for (ContextExtension ext : getContextExtensions()) {
+            ext.initialize();
+        }
         String languageHome = language.getLLVMLanguageHome();
         if (languageHome != null) {
             PlatformCapability<?> sysContextExt = language.getCapability(PlatformCapability.class);
@@ -289,11 +291,6 @@ public final class LLVMContext {
             // add internal library location also to the external library lookup path
             addLibraryPath(internalLibraryPath.toString());
         }
-
-        for (ContextExtension ext : getContextExtensions()) {
-            ext.initialize(this);
-        }
-
         try {
             /*
              * The default internal libraries are parsed in reverse dependency order, but not
