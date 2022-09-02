@@ -63,6 +63,9 @@ public class Space {
         return accounting;
     }
 
+    /** Flag specifying if this is a young space. */
+    private final boolean isYoungSpace;
+
     /** The name of this Space. */
     protected final String name;
 
@@ -120,10 +123,11 @@ public class Space {
      * with a simple, fast, constant check.
      */
     @Platforms(Platform.HOSTED_ONLY.class)
-    protected Space(String name, boolean isFrom, int age) {
+    protected Space(String name, boolean isYoungSpace, boolean isFrom, int age) {
         this.name = name;
         assert name != null : "Space name should not be null.";
         this.accounting = Accounting.factory();
+        this.isYoungSpace = isYoungSpace;
         this.isFrom = isFrom;
         this.age = age;
     }
@@ -140,7 +144,7 @@ public class Space {
     }
 
     boolean isYoungSpace() {
-        return age <= HeapPolicy.getMaxSurvivorSpaces();
+        return isYoungSpace;
     }
 
     boolean isSurvivorSpace() {
