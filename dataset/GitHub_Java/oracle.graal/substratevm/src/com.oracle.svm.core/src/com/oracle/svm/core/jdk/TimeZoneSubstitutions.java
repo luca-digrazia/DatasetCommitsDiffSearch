@@ -24,129 +24,88 @@
  */
 package com.oracle.svm.core.jdk;
 
-import com.oracle.svm.core.LibCHelper;
-import com.oracle.svm.core.OS;
-import com.oracle.svm.core.annotate.Alias;
-import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.annotate.RecomputeFieldValue;
-import com.oracle.svm.core.annotate.Substitute;
-import com.oracle.svm.core.util.VMError;
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.compiler.options.Option;
-import org.graalvm.compiler.options.OptionKey;
+import static java.util.stream.Collectors.toMap;
 
+import java.util.Arrays;
+import java.util.Map;
+import java.util.TimeZone;
+import java.util.function.Function;
+
+import org.graalvm.compiler.options.Option;
+import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.ImageSingletons;
+
+import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.option.HostedOptionKey;
-import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.c.type.CCharPointer;
-import org.graalvm.nativeimage.c.type.CTypeConversion;
-import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.impl.InternalPlatform;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.TimeZone;
+final class TimeZoneSupport {
 
-@Platforms(InternalPlatform.PLATFORM_JNI.class)
-@TargetClass(java.util.TimeZone.class)
-@SuppressWarnings("unused")
-final class Target_java_util_TimeZone {
+    final Map<String, TimeZone> zones;
+    TimeZone defaultZone;
 
-    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) private static volatile TimeZone defaultTimeZone;
+    TimeZoneSupport(Map<String, TimeZone> zones, TimeZone defaultZone) {
+        this.zones = zones;
+        this.defaultZone = defaultZone;
+    }
 
-    @Substitute
-    private static String getSystemTimeZoneID(String javaHome) {
-        String tzmappings = "";
-        if (OS.getCurrent() == OS.WINDOWS) {
-            TimeZoneSupport timeZoneSupport = ImageSingletons.lookup(TimeZoneSupport.class);
-            byte[] content = timeZoneSupport.getTzMappingsContent();
-            tzmappings = new String(content);
-        }
-        try (CTypeConversion.CCharPointerHolder tzMappingsHolder = CTypeConversion.toCString(tzmappings)) {
-            CCharPointer tzMappings = tzMappingsHolder.get();
-            CCharPointer tzId = LibCHelper.customFindJavaTZmd(tzMappings);
-            return CTypeConversion.toJavaString(tzId);
-        }
+    public static TimeZoneSupport instance() {
+        return ImageSingletons.lookup(TimeZoneSupport.class);
     }
 }
 
-final class TimeZoneSupport {
-    final byte[] tzMappingsContent;
+@TargetClass(java.util.TimeZone.class)
+final class Target_java_util_TimeZone {
 
-    TimeZoneSupport(final byte[] content) {
-        this.tzMappingsContent = content;
+    @Substitute
+    private static TimeZone getDefaultRef() {
+        return TimeZoneSupport.instance().defaultZone;
     }
 
-    public byte[] getTzMappingsContent() {
-        return tzMappingsContent;
+    @Substitute
+    private static void setDefault(TimeZone zone) {
+        TimeZoneSupport.instance().defaultZone = zone;
     }
 
+    @Substitute
+    public static TimeZone getTimeZone(String id) {
+        return TimeZoneSupport.instance().zones.getOrDefault(id, TimeZoneSupport.instance().zones.get("GMT"));
+    }
 }
 
 @AutomaticFeature
-@Platforms(InternalPlatform.PLATFORM_JNI.class)
 final class TimeZoneFeature implements Feature {
     static class Options {
+        private static final TimeZone defaultZone = TimeZone.getDefault();
+
         @Option(help = "When true, all time zones will be pre-initialized in the image.")//
-        public static final HostedOptionKey<Boolean> IncludeAllTimeZones = new HostedOptionKey<Boolean>(false) {
-            @Override
-            protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Boolean oldValue, Boolean newValue) {
-                super.onValueUpdate(values, oldValue, newValue);
-                printWarning("-H:IncludeAllTimeZones and -H:IncludeTimeZones are deprecated");
-            }
-        };
+        public static final HostedOptionKey<Boolean> IncludeAllTimeZones = new HostedOptionKey<>(false);
 
         @Option(help = "The time zones, in addition to the default zone of the host, that will be pre-initialized in the image.")//
-        public static final HostedOptionKey<String> IncludeTimeZones = new HostedOptionKey<String>("") {
-            @Override
-            protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
-                super.onValueUpdate(values, oldValue, newValue);
-                printWarning("-H:IncludeAllTimeZones and -H:IncludeTimeZones are deprecated");
-            }
-        };
-
-        private static void printWarning(String warning) {
-            // Checkstyle: stop
-            System.err.println(warning);
-            // Checkstyle: resume
-        }
-    }
-
-    private static byte[] cleanCR(byte[] buffer) {
-        byte[] scratch = new byte[buffer.length];
-        int copied = 0;
-        for (byte b : buffer) {
-            if (b == 13) {
-                continue;
-            }
-            scratch[copied++] = b;
-        }
-        byte[] content = new byte[copied];
-        System.arraycopy(scratch, 0, content, 0, copied);
-        return content;
+        public static final HostedOptionKey<String> IncludeTimeZones = new HostedOptionKey<>("GMT,UTC," + defaultZone.getID());
     }
 
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
-
-        if (OS.getCurrent() != OS.WINDOWS) {
-            ImageSingletons.add(TimeZoneSupport.class, new TimeZoneSupport(null));
-            return;
+        final String[] supportedZoneIDs;
+        if (Options.IncludeAllTimeZones.getValue()) {
+            supportedZoneIDs = TimeZone.getAvailableIDs();
+        } else {
+            supportedZoneIDs = Options.IncludeTimeZones.getValue().split(",");
         }
+        Map<String, TimeZone> supportedZones = Arrays.stream(supportedZoneIDs)
+                        .collect(toMap(Function.identity(), TimeZone::getTimeZone, (tz1, tz2) -> tz1));
 
-        // read tzmappings on windows
-        Path tzMappingsPath = Paths.get(System.getProperty("java.home"), "lib", "tzmappings");
-        try {
-            byte[] buffer = Files.readAllBytes(tzMappingsPath);
-            // tzmappings has windows line endings on windows??
-            byte[] content = cleanCR(buffer);
-            ImageSingletons.add(TimeZoneSupport.class, new TimeZoneSupport(content));
-        } catch (IOException e) {
-            VMError.shouldNotReachHere("Failed to read time zone mappings. The time zone mappings should be part" +
-                            "of your JDK usually found: " + tzMappingsPath.toAbsolutePath(), e);
-        }
+        // In al cases put "GMT", "UTC" and default. The JDK returns the GMT time zone for missing
+        // time zone ids
+        Arrays.asList("GMT", "UTC", Options.defaultZone.getID()).forEach(id -> supportedZones.putIfAbsent(id, TimeZone.getTimeZone(id)));
+        ImageSingletons.add(TimeZoneSupport.class, new TimeZoneSupport(supportedZones, Options.defaultZone));
     }
+}
+
+/**
+ * This whole file should be eventually removed: GR-11844.
+ */
+public class TimeZoneSubstitutions {
 }
