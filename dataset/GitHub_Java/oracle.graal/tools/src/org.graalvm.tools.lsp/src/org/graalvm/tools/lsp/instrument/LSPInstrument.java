@@ -30,10 +30,8 @@ import java.lang.ref.WeakReference;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.net.SocketAddress;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -49,21 +47,14 @@ import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.tools.lsp.server.ContextAwareExecutor;
 import org.graalvm.tools.lsp.exceptions.LSPIOException;
+import org.graalvm.tools.lsp.hacks.LanguageSpecificHacks;
 import org.graalvm.tools.lsp.instrument.LSOptions.HostAndPort;
 import org.graalvm.tools.lsp.server.LanguageServerImpl;
 import org.graalvm.tools.lsp.server.LSPFileSystem;
 import org.graalvm.tools.lsp.server.TruffleAdapter;
-import org.graalvm.tools.lsp.server.utils.CoverageEventNode;
 
-import com.oracle.truffle.api.instrumentation.EventBinding;
-import com.oracle.truffle.api.instrumentation.EventContext;
-import com.oracle.truffle.api.instrumentation.ExecutionEventNode;
-import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
-import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.source.SourceSection;
 
 @Registration(id = LSPInstrument.ID, name = "Language Server", version = "0.1", services = {EnvironmentProvider.class})
 public final class LSPInstrument extends TruffleInstrument implements EnvironmentProvider {
@@ -71,48 +62,15 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
 
     private OptionValues options;
     private Env environment;
-    private EventBinding<ExecutionEventNodeFactory> eventFactoryBinding;
-    private volatile boolean waitForClose = false;
 
     @Override
     protected void onCreate(Env env) {
         env.registerService(this);
-        this.environment = env;
         options = env.getOptions();
-        if (options.hasSetOptions()) {
-            final TruffleAdapter truffleAdapter = launchServer(new PrintWriter(env.out(), true), new PrintWriter(env.err(), true));
-            SourceSectionFilter eventFilter = SourceSectionFilter.newBuilder().includeInternal(options.get(LSOptions.Internal)).build();
-            eventFactoryBinding = env.getInstrumenter().attachExecutionEventFactory(eventFilter, new ExecutionEventNodeFactory() {
-                private final long creatorThreadId = Thread.currentThread().getId();
-
-                @Override
-                public ExecutionEventNode create(final EventContext eventContext) {
-                    final SourceSection section = eventContext.getInstrumentedSourceSection();
-                    if (section != null && section.isAvailable()) {
-                        final Node instrumentedNode = eventContext.getInstrumentedNode();
-                        return new CoverageEventNode(section, instrumentedNode, null, truffleAdapter.surrogateGetter(instrumentedNode.getRootNode().getLanguageInfo()), creatorThreadId);
-                    } else {
-                        return null;
-                    }
-                }
-            });
-        }
-    }
-
-    @Override
-    protected void onDispose(Env env) {
-        if (eventFactoryBinding != null) {
-            eventFactoryBinding.dispose();
-        }
-    }
-
-    @Override
-    protected void onFinalize(Env env) {
-        if (waitForClose) {
-            PrintWriter info = new PrintWriter(env.out());
-            info.println("Waiting for the language client to disconnect...");
-            info.flush();
-            waitForClose();
+        if (options.hasBeenSet(LSOptions.Lsp)) {
+            launchServer(new PrintWriter(env.out(), true), new PrintWriter(env.err(), true));
+        } else {
+            this.environment = env;
         }
     }
 
@@ -126,37 +84,24 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
         return environment;
     }
 
-    private void setWaitForClose() {
-        waitForClose = true;
-    }
-
-    public synchronized void waitForClose() {
-        while (waitForClose) {
-            try {
-                wait();
-            } catch (InterruptedException ex) {
-                break;
-            }
-        }
-    }
-
-    private synchronized void notifyClose() {
-        waitForClose = false;
-        notifyAll();
-    }
-
-    private TruffleAdapter launchServer(PrintWriter info, PrintWriter err) {
+    private void launchServer(PrintWriter info, PrintWriter err) {
         assert options != null;
         assert options.hasSetOptions();
 
-        setWaitForClose();
+        LanguageSpecificHacks.enableLanguageSpecificHacks = options.get(LSOptions.LanguageSpecificHacksOption).booleanValue();
 
-        TruffleAdapter truffleAdapter = new TruffleAdapter(options.get(LSOptions.DeveloperMode));
+        TruffleAdapter truffleAdapter = new TruffleAdapter();
+
+        String userDirString = System.getProperty("user.home");
+        Path userDir = null;
+        if (userDirString != null) {
+            userDir = Paths.get(userDirString);
+        }
 
         Context.Builder builder = Context.newBuilder();
         builder.allowAllAccess(true);
         builder.engine(Engine.create());
-        builder.fileSystem(LSPFileSystem.newReadOnlyFileSystem(truffleAdapter));
+        builder.fileSystem(LSPFileSystem.newReadOnlyFileSystem(userDir, truffleAdapter));
         ContextAwareExecutor executorWrapper = new ContextAwareExecutorImpl(builder);
 
         executorWrapper.executeWithDefaultContext(() -> {
@@ -174,8 +119,7 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
                 Integer backlog = options.get(LSOptions.SocketBacklogSize);
                 InetAddress address = socketAddress.getAddress();
                 ServerSocket serverSocket = new ServerSocket(port, backlog, address);
-                List<SocketAddress> delegates = createDelegateSockets(options.get(LSOptions.Delegates));
-                LanguageServerImpl.create(truffleAdapter, info, err).start(serverSocket, delegates).thenRun(() -> {
+                LanguageServerImpl.create(truffleAdapter, info, err).start(serverSocket).thenRun(() -> {
                     try {
                         executorWrapper.executeWithDefaultContext(() -> {
                             context.leave();
@@ -184,7 +128,6 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
                     } catch (ExecutionException | InterruptedException ex) {
                     }
                     executorWrapper.shutdown();
-                    notifyClose();
                 });
             } catch (IOException e) {
                 String message = String.format("[Graal LSP] Starting server on %s failed: %s", hostAndPort.getHostPort(), e.getLocalizedMessage());
@@ -193,18 +136,6 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
 
             return null;
         });
-        return truffleAdapter;
-    }
-
-    private static List<SocketAddress> createDelegateSockets(List<HostAndPort> hostPorts) {
-        if (hostPorts.isEmpty()) {
-            return Collections.emptyList();
-        }
-        List<SocketAddress> sockets = new ArrayList<>(hostPorts.size());
-        for (HostAndPort hostPort : hostPorts) {
-            sockets.add(hostPort.createSocket());
-        }
-        return sockets;
     }
 
     private static final class ContextAwareExecutorImpl implements ContextAwareExecutor {
