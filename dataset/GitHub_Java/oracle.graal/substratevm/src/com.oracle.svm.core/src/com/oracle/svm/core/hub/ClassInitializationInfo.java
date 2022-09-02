@@ -27,17 +27,13 @@ package com.oracle.svm.core.hub;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.InvokeJavaFunctionPointer;
 import com.oracle.svm.core.annotate.NeverInline;
-
-// Checkstyle: stop
-import sun.misc.Unsafe;
-// Checkstyle: resume
 
 /**
  * Information about the runtime class initialization state of a {@link DynamicHub class}, and
@@ -50,16 +46,11 @@ import sun.misc.Unsafe;
  */
 public final class ClassInitializationInfo {
 
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
-
     /**
      * Singleton for classes that are already initialized during image building and do not need
      * class initialization at runtime.
      */
-    public static final ClassInitializationInfo INITIALIZED_INFO_SINGLETON = new ClassInitializationInfo(InitState.FullyInitialized);
-
-    /** Singleton for classes that failed to link during image building. */
-    public static final ClassInitializationInfo FAILED_INFO_SINGLETON = new ClassInitializationInfo(InitState.InitializationError);
+    public static final ClassInitializationInfo INITIALIZED_INFO_SINGLETON = new ClassInitializationInfo();
 
     enum InitState {
         /**
@@ -124,10 +115,10 @@ public final class ClassInitializationInfo {
     private Condition initCondition;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    private ClassInitializationInfo(InitState initState) {
+    private ClassInitializationInfo() {
         this.classInitializer = null;
-        this.initState = initState;
-        this.initLock = initState == InitState.FullyInitialized ? null : new ReentrantLock();
+        this.initState = InitState.FullyInitialized;
+        this.initLock = null;
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -334,7 +325,7 @@ public final class ClassInitializationInfo {
             this.initState = state;
             this.initThread = null;
             /* Make sure previous stores are all done, notably the initState. */
-            UNSAFE.storeFence();
+            UnsafeAccess.UNSAFE.storeFence();
 
             if (initCondition != null) {
                 initCondition.signalAll();
