@@ -108,20 +108,18 @@ public final class TruffleFile {
     private final FileSystem fileSystem;
     private final Path path;
     private final Path normalizedPath;
-    private final boolean useContextClassLoader;
 
-    TruffleFile(final FileSystem fileSystem, final Path path, boolean useContextClassLoader) {
-        this(fileSystem, path, path.normalize(), useContextClassLoader);
+    TruffleFile(final FileSystem fileSystem, final Path path) {
+        this(fileSystem, path, path.normalize());
     }
 
-    TruffleFile(final FileSystem fileSystem, final Path path, final Path normalizedPath, boolean useContextClassLoader) {
+    TruffleFile(final FileSystem fileSystem, final Path path, final Path normalizedPath) {
         Objects.requireNonNull(fileSystem, "FileSystem must not be null.");
         Objects.requireNonNull(path, "Path must not be null.");
         Objects.requireNonNull(normalizedPath, "NormalizedPath must not be null.");
         this.fileSystem = fileSystem;
         this.path = path;
         this.normalizedPath = normalizedPath;
-        this.useContextClassLoader = useContextClassLoader;
     }
 
     Path getSPIPath() {
@@ -371,7 +369,7 @@ public final class TruffleFile {
         }
         try {
             Path[] absolutePaths = toAbsolutePathImpl();
-            return new TruffleFile(fileSystem, absolutePaths[0], absolutePaths[1], useContextClassLoader);
+            return new TruffleFile(fileSystem, absolutePaths[0], absolutePaths[1]);
         } catch (SecurityException se) {
             throw se;
         } catch (Throwable t) {
@@ -391,7 +389,7 @@ public final class TruffleFile {
     @TruffleBoundary
     public TruffleFile getCanonicalFile(LinkOption... options) throws IOException {
         try {
-            return new TruffleFile(fileSystem, fileSystem.toRealPath(path, options), useContextClassLoader);
+            return new TruffleFile(fileSystem, fileSystem.toRealPath(path, options));
         } catch (IOException | SecurityException e) {
             throw e;
         } catch (Throwable t) {
@@ -409,7 +407,7 @@ public final class TruffleFile {
     public TruffleFile getParent() {
         try {
             final Path parent = path.getParent();
-            return parent == null ? null : new TruffleFile(fileSystem, parent, useContextClassLoader);
+            return parent == null ? null : new TruffleFile(fileSystem, parent);
         } catch (Throwable t) {
             throw wrapHostException(t);
         }
@@ -426,7 +424,7 @@ public final class TruffleFile {
     @TruffleBoundary
     public TruffleFile resolve(String name) {
         try {
-            return new TruffleFile(fileSystem, path.resolve(name), useContextClassLoader);
+            return new TruffleFile(fileSystem, path.resolve(name));
         } catch (InvalidPathException ip) {
             throw ip;
         } catch (Throwable t) {
@@ -445,7 +443,7 @@ public final class TruffleFile {
     @TruffleBoundary
     public TruffleFile resolveSibling(String name) {
         try {
-            return new TruffleFile(fileSystem, path.resolveSibling(name), useContextClassLoader);
+            return new TruffleFile(fileSystem, path.resolveSibling(name));
         } catch (InvalidPathException ip) {
             throw ip;
         } catch (Throwable t) {
@@ -613,7 +611,7 @@ public final class TruffleFile {
                     result.add(new TruffleFile(
                                     fileSystem,
                                     normalized ? p : path.resolve(p.getFileName()),
-                                    normalized ? p : normalizedPath.resolve(p.getFileName()), useContextClassLoader));
+                                    normalized ? p : normalizedPath.resolve(p.getFileName())));
                 }
             }
             return result;
@@ -1047,7 +1045,7 @@ public final class TruffleFile {
         if (isNormalized()) {
             return this;
         }
-        return new TruffleFile(fileSystem, normalizedPath, normalizedPath, useContextClassLoader);
+        return new TruffleFile(fileSystem, normalizedPath, normalizedPath);
     }
 
     /**
@@ -1071,7 +1069,7 @@ public final class TruffleFile {
     @TruffleBoundary
     public TruffleFile relativize(TruffleFile other) {
         try {
-            return new TruffleFile(fileSystem, path.relativize(other.path), useContextClassLoader);
+            return new TruffleFile(fileSystem, path.relativize(other.path));
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Throwable t) {
@@ -1401,113 +1399,6 @@ public final class TruffleFile {
         }
     }
 
-    /**
-     * Returns the {@link TruffleFile file} MIME type.
-     *
-     * @return the MIME type or {@code null} if the MIME type is not recognized
-     * @throws IOException in case of IO error
-     * @throws SecurityException if the {@link FileSystem} denied the operation
-     * @since 1.0
-     */
-    @TruffleBoundary
-    public String getMimeType() throws IOException {
-        return getMimeType(null);
-    }
-
-    @TruffleBoundary
-    String getMimeType(Set<String> validMimeTypes) throws IOException {
-        try {
-            String result = fileSystem.getMimeType(normalizedPath);
-            if (result != null && (validMimeTypes == null || validMimeTypes.contains(result))) {
-                return result;
-            }
-            ClassLoader loader = useContextClassLoader ? Thread.currentThread().getContextClassLoader() : null;
-            for (FileTypeDetector detector : TruffleLanguage.AccessAPI.engineAccess().getFileTypeDetectors(loader)) {
-                result = detector.findMimeType(this);
-                if (result != null && (validMimeTypes == null || validMimeTypes.contains(result))) {
-                    return result;
-                }
-            }
-            return null;
-        } catch (IOException | SecurityException e) {
-            throw e;
-        } catch (Throwable t) {
-            throw wrapHostException(t);
-        }
-    }
-
-    /**
-     * Returns the {@link TruffleFile file} encoding. For a file containing an encoding information
-     * returns the encoding.
-     *
-     * @return the file encoding or {@code null} if the file does not provide encoding
-     * @throws IOException in case of IO error
-     * @throws SecurityException if the {@link FileSystem} denied the operation
-     * @since 1.0
-     */
-    @TruffleBoundary
-    public Charset getEncoding() throws IOException {
-        try {
-            Charset result = fileSystem.getEncoding(normalizedPath);
-            if (result != null) {
-                return result;
-            }
-            ClassLoader loader = useContextClassLoader ? Thread.currentThread().getContextClassLoader() : null;
-            for (FileTypeDetector detector : TruffleLanguage.AccessAPI.engineAccess().getFileTypeDetectors(loader)) {
-                result = detector.findEncoding(this);
-                if (result != null) {
-                    return result;
-                }
-            }
-            return null;
-        } catch (IOException | UnsupportedOperationException | SecurityException e) {
-            throw e;
-        } catch (Throwable t) {
-            throw wrapHostException(t);
-        }
-    }
-
-    /**
-     * A detector for finding {@link TruffleFile file}'s MIME type and encoding.
-     *
-     * <p>
-     * The means by which the detector determines the MIME is highly implementation specific. A
-     * simple implementation might detect the MIME type using {@link TruffleFile file} extension. In
-     * other cases, the content of {@link TruffleFile file} needs to be examined to guess its file
-     * type.
-     * <p>
-     * The implementations are registered using
-     * {@link TruffleLanguage.Registration#fileTypeDetectors() TruffleLanguage registration}.
-     *
-     * @see TruffleFile#getMimeType()
-     * @see TruffleLanguage.Registration#fileTypeDetectors()
-     * @since 1.0
-     */
-    public interface FileTypeDetector {
-        /**
-         * Finds a MIME type for given {@link TruffleFile}.
-         *
-         * @param file the {@link TruffleFile file} to find a MIME type for
-         * @return the MIME type or {@code null} if the MIME type is not recognized
-         * @throws IOException of an I/O error occurs
-         * @throws SecurityException if the implementation requires an access the file and the
-         *             {@link FileSystem} denies the operation
-         * @since 1.0
-         */
-        String findMimeType(TruffleFile file) throws IOException;
-
-        /**
-         * For a file containing an encoding information returns the encoding.
-         *
-         * @param file the {@link TruffleFile file} to find an encoding for
-         * @return the file encoding or {@code null} if the file does not provide encoding
-         * @throws IOException of an I/O error occurs
-         * @throws SecurityException if the {@link FileSystem} denies the file access
-         * @since 1.0
-         */
-        Charset findEncoding(TruffleFile file) throws IOException;
-    }
-
     private boolean isNormalized() {
         return path == normalizedPath || path.equals(normalizedPath);
     }
@@ -1584,14 +1475,10 @@ public final class TruffleFile {
     }
 
     private <T extends Throwable> RuntimeException wrapHostException(T t) {
-        throw wrapHostException(t, fileSystem);
-    }
-
-    static <T extends Throwable> RuntimeException wrapHostException(T t, FileSystem fs) {
-        if (TruffleLanguage.AccessAPI.engineAccess().isDefaultFileSystem(fs)) {
+        if (TruffleLanguage.AccessAPI.engineAccess().isDefaultFileSystem(fileSystem)) {
             throw sthrow(t);
         }
-        throw TruffleLanguage.AccessAPI.engineAccess().wrapHostException(null, TruffleLanguage.AccessAPI.engineAccess().getCurrentHostContext(), t);
+        throw TruffleLanguage.AccessAPI.engineAccess().wrapHostException(TruffleLanguage.AccessAPI.engineAccess().getCurrentHostContext(), t);
     }
 
     @SuppressWarnings("unchecked")
@@ -1727,8 +1614,7 @@ public final class TruffleFile {
                     return new TruffleFile(
                                     directory.fileSystem,
                                     normalized ? path : directory.path.resolve(path.getFileName()),
-                                    normalized ? path : directory.normalizedPath.resolve(path.getFileName()),
-                                    directory.useContextClassLoader);
+                                    normalized ? path : directory.normalizedPath.resolve(path.getFileName()));
                 } catch (DirectoryIteratorException e) {
                     throw e;
                 } catch (Throwable t) {
