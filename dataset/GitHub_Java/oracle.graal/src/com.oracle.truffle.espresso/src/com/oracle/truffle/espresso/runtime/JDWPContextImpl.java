@@ -59,6 +59,7 @@ public final class JDWPContextImpl implements JDWPContext {
     private final EspressoContext context;
     private final Ids<Object> ids;
     private JDWPSetup setup;
+    private Object previous;
 
     public JDWPContextImpl(EspressoContext context) {
         this.context = context;
@@ -75,6 +76,20 @@ public final class JDWPContextImpl implements JDWPContext {
             return control.getEventListener();
         }
         return new EmptyListener();
+    }
+
+    public void enterTruffleContext() {
+        if (previous == null) {
+            if (context.canEnterOtherThread()) {
+                previous = context.getEnv().getContext().enter();
+            }
+        }
+    }
+
+    public void leaveTruffleContext() {
+        if (previous != null) {
+            context.getEnv().getContext().leave(previous);
+        }
     }
 
     public void finalizeContext() {
