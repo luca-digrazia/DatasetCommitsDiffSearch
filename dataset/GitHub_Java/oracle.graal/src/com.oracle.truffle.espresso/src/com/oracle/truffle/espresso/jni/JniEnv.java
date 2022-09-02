@@ -1414,7 +1414,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     // region Get*ArrayRegion
 
     @JniImpl
-    @TruffleBoundary
     public void GetBooleanArrayRegion(@Host(boolean[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         boolean[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1432,7 +1431,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void GetCharArrayRegion(@Host(char[].class /* or byte[].class */) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         char[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1441,7 +1439,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void GetByteArrayRegion(@Host(byte[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         byte[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1450,7 +1447,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void GetShortArrayRegion(@Host(short[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         short[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1459,7 +1455,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void GetIntArrayRegion(@Host(int[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         int[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1468,7 +1463,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void GetFloatArrayRegion(@Host(float[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         float[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1477,7 +1471,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void GetDoubleArrayRegion(@Host(double[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         double[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1486,7 +1479,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void GetLongArrayRegion(@Host(long[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         long[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1499,7 +1491,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     // region Set*ArrayRegion
 
     @JniImpl
-    @TruffleBoundary
     public void SetBooleanArrayRegion(@Host(boolean[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         boolean[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1510,7 +1501,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void SetCharArrayRegion(@Host(char[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         char[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1519,7 +1509,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void SetByteArrayRegion(@Host(byte[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         byte[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1528,7 +1517,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void SetShortArrayRegion(@Host(short[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         short[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1537,7 +1525,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void SetIntArrayRegion(@Host(int[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         int[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1546,7 +1533,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void SetFloatArrayRegion(@Host(float[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         float[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1555,7 +1541,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void SetDoubleArrayRegion(@Host(double[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         double[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1564,7 +1549,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void SetLongArrayRegion(@Host(long[].class) StaticObject array, int start, int len, @Pointer TruffleObject bufPtr) {
         long[] contents = array.unwrap();
         boundsCheck(start, len, contents.length);
@@ -1628,7 +1612,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      * Get/ReleasePrimitiveArrayCritical.
      */
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetStringCritical(@Host(String.class) StaticObject str, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -1650,7 +1633,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetStringUTFChars(@Host(String.class) StaticObject str, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -1676,7 +1658,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      *            the operation fails.
      */
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetStringChars(@Host(String.class) StaticObject string, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -1745,7 +1726,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      * Throws StringIndexOutOfBoundsException on index overflow.
      */
     @JniImpl
-    @TruffleBoundary
     public void GetStringRegion(@Host(String.class) StaticObject str, int start, int len, @Pointer TruffleObject bufPtr) {
         char[] chars;
         if (getJavaVersion().compactStringsEnabled()) {
@@ -1766,7 +1746,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public void GetStringUTFRegion(@Host(String.class) StaticObject str, int start, int len, @Pointer TruffleObject bufPtr) {
         int length = ModifiedUtf8.utfLength(getMeta().toHostString(str));
         if (start < 0 || start + (long) len > length) {
@@ -1962,7 +1941,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     // region Get*ArrayElements
 
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetBooleanArrayElements(@Host(boolean[].class) StaticObject array, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -1977,7 +1955,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetCharArrayElements(@Host(char[].class) StaticObject array, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -1991,7 +1968,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetByteArrayElements(@Host(byte[].class) StaticObject array, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -2005,7 +1981,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetShortArrayElements(@Host(short[].class) StaticObject array, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -2019,7 +1994,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetIntArrayElements(@Host(int[].class) StaticObject array, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -2033,7 +2007,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetFloatArrayElements(@Host(float[].class) StaticObject array, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -2047,7 +2020,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetDoubleArrayElements(@Host(double[].class) StaticObject array, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
@@ -2061,7 +2033,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     @JniImpl
-    @TruffleBoundary
     public @Pointer TruffleObject GetLongArrayElements(@Host(long[].class) StaticObject array, @Pointer TruffleObject isCopyPtr) {
         if (!getUncached().isNull(isCopyPtr)) {
             ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);

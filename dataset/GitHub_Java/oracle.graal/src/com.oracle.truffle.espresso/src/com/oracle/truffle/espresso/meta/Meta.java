@@ -248,12 +248,6 @@ public final class Meta implements ContextAccess {
         java_lang_ClassLoader_name = java_lang_ClassLoader.lookupDeclaredField(Name.name, Type.java_lang_String);
         HIDDEN_CLASS_LOADER_REGISTRY = java_lang_ClassLoader.lookupHiddenField(Name.HIDDEN_CLASS_LOADER_REGISTRY);
 
-        java_lang_ClassLoader_getResourceAsStream = java_lang_ClassLoader.lookupMethod(Name.getResourceAsStream, Signature.InputStream_String);
-        java_lang_ClassLoader_loadClass = java_lang_ClassLoader.lookupMethod(Name.loadClass, Signature.Class_String);
-        java_io_InputStream = knownKlass(Type.java_io_InputStream);
-        java_io_InputStream_read = java_io_InputStream.lookupMethod(Name.read, Signature._int_byte_array_int_int);
-        java_io_InputStream_close = java_io_InputStream.lookupMethod(Name.close, Signature._void);
-
         // Guest reflection.
         java_lang_reflect_Executable = knownKlass(Type.java_lang_reflect_Executable);
         java_lang_reflect_Constructor = knownKlass(Type.java_lang_reflect_Constructor);
@@ -423,7 +417,6 @@ public final class Meta implements ContextAccess {
         java_lang_AssertionStatusDirectives_deflt = java_lang_AssertionStatusDirectives.lookupField(Name.deflt, Type._boolean);
 
         java_lang_Class_classRedefinedCount = java_lang_Class.lookupField(Name.classRedefinedCount, Type._int);
-        java_lang_Class_name = java_lang_Class.lookupField(Name.name, Type.java_lang_String);
 
         // Classes and Members that differ from Java 8 to 11
 
@@ -547,14 +540,6 @@ public final class Meta implements ContextAccess {
         java_time_ZoneId_getId = java_time_ZoneId.lookupDeclaredMethod(Name.getId, Signature.String);
         java_time_ZoneId_of = java_time_ZoneId.lookupDeclaredMethod(Name.of, Signature.ZoneId_String);
         assert java_time_ZoneId_of.isStatic();
-
-        // Interop support.
-        com_oracle_truffle_espresso_polyglot_ArityException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_ArityException);
-        com_oracle_truffle_espresso_polyglot_UnknownIdentifierException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_UnknownIdentifierException);
-        com_oracle_truffle_espresso_polyglot_UnsupportedMessageException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_UnsupportedMessageException);
-        com_oracle_truffle_espresso_polyglot_UnsupportedTypeException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_UnsupportedTypeException);
-        com_oracle_truffle_espresso_polyglot_InvalidArrayIndexException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_InvalidArrayIndexException);
-
     }
 
     public void postSystemInit() {
@@ -625,7 +610,6 @@ public final class Meta implements ContextAccess {
     public final Method java_lang_Class_forName_String;
     public final Method java_lang_Class_forName_String_boolean_ClassLoader;
     public final Field java_lang_Class_classRedefinedCount;
-    public final Field java_lang_Class_name;
 
     // Primitives.
     public final PrimitiveKlass _boolean;
@@ -699,8 +683,6 @@ public final class Meta implements ContextAccess {
     public final Method java_lang_ClassLoader_findNative;
     public final Method java_lang_ClassLoader_getSystemClassLoader;
     public final Field HIDDEN_CLASS_LOADER_REGISTRY;
-    public final Method java_lang_ClassLoader_getResourceAsStream;
-    public final Method java_lang_ClassLoader_loadClass;
 
     public final ObjectKlass jdk_internal_loader_ClassLoaders$PlatformClassLoader;
 
@@ -817,10 +799,6 @@ public final class Meta implements ContextAccess {
 
     public final ObjectKlass java_security_PrivilegedActionException;
     public final Method java_security_PrivilegedActionException_init_Exception;
-
-    public final ObjectKlass java_io_InputStream;
-    public final Method java_io_InputStream_read;
-    public final Method java_io_InputStream_close;
 
     // Array support.
     public final ObjectKlass java_lang_Cloneable;
@@ -1012,12 +990,6 @@ public final class Meta implements ContextAccess {
     @CompilationFinal public Method sun_management_ManagementFactory_createMemoryManager;
     @CompilationFinal public Method sun_management_ManagementFactory_createGarbageCollector;
     @CompilationFinal public ObjectKlass java_lang_management_ThreadInfo;
-
-    @CompilationFinal public ObjectKlass com_oracle_truffle_espresso_polyglot_UnknownIdentifierException;
-    @CompilationFinal public ObjectKlass com_oracle_truffle_espresso_polyglot_UnsupportedMessageException;
-    @CompilationFinal public ObjectKlass com_oracle_truffle_espresso_polyglot_UnsupportedTypeException;
-    @CompilationFinal public ObjectKlass com_oracle_truffle_espresso_polyglot_ArityException;
-    @CompilationFinal public ObjectKlass com_oracle_truffle_espresso_polyglot_InvalidArrayIndexException;
 
     @CompilationFinal(dimensions = 1) //
     public final ObjectKlass[] ARRAY_SUPERINTERFACES;
