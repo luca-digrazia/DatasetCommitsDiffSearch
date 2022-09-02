@@ -394,6 +394,9 @@ public enum AArch64ArithmeticOp {
                 case UREM:
                     masm.urem(size, dst, src1, src2);
                     break;
+                case FREM:
+                    masm.frem(size, dst, src1, src2);
+                    break;
                 default:
                     throw GraalError.shouldNotReachHere();
             }
