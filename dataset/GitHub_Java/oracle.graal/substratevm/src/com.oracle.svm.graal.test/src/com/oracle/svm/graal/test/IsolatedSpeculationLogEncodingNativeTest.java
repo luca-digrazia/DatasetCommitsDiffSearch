@@ -25,10 +25,13 @@
  */
 package com.oracle.svm.graal.test;
 
+// Checkstyle: allow reflection
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
+import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.serviceprovider.UnencodedSpeculationReason;
 import org.junit.Assert;
 import org.junit.Test;
@@ -44,9 +47,16 @@ public class IsolatedSpeculationLogEncodingNativeTest {
         final int groupId = 1234;
         final Object[] context = {'a', null, "Hello World!", Byte.MAX_VALUE, Short.MAX_VALUE, Long.MAX_VALUE, Integer.MAX_VALUE, Double.MAX_VALUE, Float.MAX_VALUE};
 
+        // Checkstyle: stop
         final Class<?> encodedSpeculationReasonClass = Class.forName("jdk.vm.ci.meta.EncodedSpeculationReason");
+        // Checkstyle: resume
+
         Constructor<?> encodedSpeculationReasonConstructor = encodedSpeculationReasonClass.getDeclaredConstructor(Integer.TYPE, String.class, Object[].class);
         SpeculationLog.SpeculationReason encodedReason = (SpeculationLog.SpeculationReason) encodedSpeculationReasonConstructor.newInstance(groupId, "testGroup", context);
+
+        final Method createSpeculationReason = GraalServices.class.getDeclaredMethod("createSpeculationReason", Integer.TYPE, String.class, Object[].class);
+        createSpeculationReason.setAccessible(true);
+        SpeculationLog.SpeculationReason encodedReason2 = (SpeculationLog.SpeculationReason) createSpeculationReason.invoke(null, groupId, "testGroup", context);
 
         Constructor<?> unencodedSpeculationReasonConstructor = UnencodedSpeculationReason.class.getDeclaredConstructor(Integer.TYPE, String.class, Object[].class);
         unencodedSpeculationReasonConstructor.setAccessible(true);
@@ -56,7 +66,9 @@ public class IsolatedSpeculationLogEncodingNativeTest {
         encodeAsByteArray.setAccessible(true);
 
         byte[] encodedResult = (byte[]) encodeAsByteArray.invoke(null, encodedReason);
+        byte[] encodedResult2 = (byte[]) encodeAsByteArray.invoke(null, encodedReason2);
         byte[] unencodedResult = (byte[]) encodeAsByteArray.invoke(null, unencodedReason);
+        Assert.assertArrayEquals(encodedResult, encodedResult2);
         Assert.assertArrayEquals(encodedResult, unencodedResult);
     }
 }
