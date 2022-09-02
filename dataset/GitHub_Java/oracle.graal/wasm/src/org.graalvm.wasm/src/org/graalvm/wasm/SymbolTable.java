@@ -47,7 +47,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import org.graalvm.wasm.api.ValueType;
 import org.graalvm.wasm.collection.ByteArrayList;
 import org.graalvm.wasm.constants.GlobalModifier;
-import org.graalvm.wasm.constants.ImportIdentifier;
 import org.graalvm.wasm.exception.Failure;
 import org.graalvm.wasm.exception.WasmException;
 import org.graalvm.wasm.memory.ByteArrayWasmMemory;
@@ -186,11 +185,6 @@ public abstract class SymbolTable {
     @CompilationFinal private int typeCount;
 
     /**
-     * List of the names of all the imported symbols.
-     */
-    private final List<ImportDescriptor> importedSymbols;
-
-    /**
      * List of the names of all the exported symbols.
      */
     private final List<String> exportedSymbols;
@@ -296,7 +290,6 @@ public abstract class SymbolTable {
         this.typeEquivalenceClasses = new int[INITIAL_TYPE_SIZE];
         this.typeDataSize = 0;
         this.typeCount = 0;
-        this.importedSymbols = new ArrayList<>();
         this.exportedSymbols = new ArrayList<>();
         this.functions = new WasmFunction[INITIAL_FUNCTION_TYPES_SIZE];
         this.numFunctions = 0;
@@ -550,15 +543,6 @@ public abstract class SymbolTable {
         return new FunctionType(functionTypeArgumentTypes(index).toArray(), functionTypeReturnType(index));
     }
 
-    public void importSymbol(ImportDescriptor descriptor) {
-        checkNotParsed();
-        importedSymbols.add(descriptor);
-    }
-
-    public List<ImportDescriptor> importedSymbols() {
-        return importedSymbols;
-    }
-
     protected void exportSymbol(String name) {
         checkNotParsed();
         checkUniqueExport(name);
@@ -583,9 +567,8 @@ public abstract class SymbolTable {
 
     public WasmFunction importFunction(String moduleName, String functionName, int typeIndex) {
         checkNotParsed();
-        final ImportDescriptor descriptor = new ImportDescriptor(moduleName, functionName, ImportIdentifier.FUNCTION);
-        importSymbol(descriptor);
-        WasmFunction function = allocateFunction(typeIndex, descriptor);
+        final ImportDescriptor importDescriptor = new ImportDescriptor(moduleName, functionName);
+        WasmFunction function = allocateFunction(typeIndex, importDescriptor);
         importedFunctions.add(function);
         module().addLinkAction((context, instance) -> context.linker().resolveFunctionImport(context, instance, function));
         return function;
@@ -598,15 +581,6 @@ public abstract class SymbolTable {
     public WasmFunction importedFunction(String name) {
         for (WasmFunction f : importedFunctions) {
             if (f.name().equals(name)) {
-                return f;
-            }
-        }
-        return null;
-    }
-
-    public WasmFunction importedFunction(ImportDescriptor descriptor) {
-        for (WasmFunction f : importedFunctions) {
-            if (f.importDescriptor().equals(descriptor)) {
                 return f;
             }
         }
@@ -669,24 +643,14 @@ public abstract class SymbolTable {
     }
 
     void importGlobal(String moduleName, String globalName, int index, byte valueType, byte mutability) {
-        final ImportDescriptor descriptor = new ImportDescriptor(moduleName, globalName, ImportIdentifier.GLOBAL);
-        importedGlobals.put(index, descriptor);
-        importSymbol(descriptor);
+        importedGlobals.put(index, new ImportDescriptor(moduleName, globalName));
         allocateGlobal(index, valueType, mutability);
         module().addLinkAction((context, instance) -> instance.setGlobalAddress(index, UNINITIALIZED_GLOBAL_ADDRESS));
-        module().addLinkAction((context, instance) -> context.linker().resolveGlobalImport(context, instance, descriptor, index, valueType, mutability));
+        module().addLinkAction((context, instance) -> context.linker().resolveGlobalImport(context, instance, new ImportDescriptor(moduleName, globalName), index, valueType, mutability));
     }
 
     public LinkedHashMap<Integer, ImportDescriptor> importedGlobals() {
         return importedGlobals;
-    }
-
-    public LinkedHashMap<ImportDescriptor, Integer> importedGlobalDescriptors() {
-        final LinkedHashMap<ImportDescriptor, Integer> reverseMap = new LinkedHashMap<>();
-        for (Map.Entry<Integer, ImportDescriptor> entry : importedGlobals.entrySet()) {
-            reverseMap.put(entry.getValue(), entry.getKey());
-        }
-        return reverseMap;
     }
 
     public int maxGlobalIndex() {
@@ -778,8 +742,7 @@ public abstract class SymbolTable {
     void importTable(String moduleName, String tableName, int initSize, int maxSize) {
         checkNotParsed();
         validateSingleTable();
-        importedTableDescriptor = new ImportDescriptor(moduleName, tableName, ImportIdentifier.TABLE);
-        importSymbol(importedTableDescriptor);
+        importedTableDescriptor = new ImportDescriptor(moduleName, tableName);
         module().addLinkAction((context, instance) -> context.linker().resolveTableImport(context, instance, importedTableDescriptor, initSize, maxSize));
     }
 
@@ -847,8 +810,7 @@ public abstract class SymbolTable {
     public void importMemory(String moduleName, String memoryName, int initSize, int maxSize) {
         checkNotParsed();
         validateSingleMemory();
-        importedMemoryDescriptor = new ImportDescriptor(moduleName, memoryName, ImportIdentifier.MEMORY);
-        importSymbol(importedMemoryDescriptor);
+        importedMemoryDescriptor = new ImportDescriptor(moduleName, memoryName);
         module().addLinkAction((context, instance) -> context.linker().resolveMemoryImport(context, instance, importedMemoryDescriptor, initSize, maxSize));
     }
 
