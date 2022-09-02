@@ -134,13 +134,11 @@ abstract class TargetMappingNode extends Node {
         @Specialization
         protected Object doDefault(Object receiver, @SuppressWarnings("unused") PolyglotTargetMapping cachedMapping,
                         PolyglotLanguageContext context, InteropLibrary interop, boolean checkOnly,
-                        @Cached ConditionProfile acceptsProfile,
-                        @Cached(value = "allowsImplementation(context, cachedMapping.sourceType)", allowUncached = true) boolean allowsImplementation,
+                        @Cached("createBinaryProfile()") ConditionProfile acceptsProfile,
                         @Cached ToHostNode toHostRecursive) {
             CompilerAsserts.partialEvaluationConstant(checkOnly);
             Object convertedValue = NO_RESULT;
-            if (acceptsProfile.profile(ToHostNode.canConvert(receiver, cachedMapping.sourceType, cachedMapping.sourceType,
-                            allowsImplementation, context, ToHostNode.MAX, interop, null))) {
+            if (acceptsProfile.profile(ToHostNode.canConvert(receiver, cachedMapping.sourceType, cachedMapping.sourceType, context, ToHostNode.MAX, interop, null))) {
                 if (!checkOnly || cachedMapping.accepts != null) {
                     convertedValue = toHostRecursive.execute(receiver, cachedMapping.sourceType, cachedMapping.sourceType, context, false);
                 }
@@ -157,19 +155,15 @@ abstract class TargetMappingNode extends Node {
             }
         }
 
-        static boolean allowsImplementation(PolyglotLanguageContext context, Class<?> type) {
-            return ToHostNode.allowsImplementation(context, type);
-        }
-
         @TruffleBoundary
         private static Object convert(PolyglotLanguageContext languageContext, Function<Object, Object> converter, Object value) {
             try {
                 return converter.apply(value);
             } catch (ClassCastException t) {
                 // we allow class cast exceptions
-                throw PolyglotEngineException.classCast(t.getMessage());
+                throw new PolyglotClassCastException(t.getMessage());
             } catch (Throwable t) {
-                throw PolyglotImpl.hostToGuestException(languageContext, t);
+                throw PolyglotImpl.wrapHostException(languageContext, t);
             }
         }
 
@@ -178,7 +172,7 @@ abstract class TargetMappingNode extends Node {
             try {
                 return predicate.test(convertedValue);
             } catch (Throwable t) {
-                throw PolyglotImpl.hostToGuestException(languageContext, t);
+                throw PolyglotImpl.wrapHostException(languageContext, t);
             }
         }
     }
