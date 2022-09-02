@@ -222,6 +222,7 @@ import java.util.ArrayList;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.wasm.collection.ByteArrayList;
 import com.oracle.truffle.wasm.constants.CallIndirect;
 import com.oracle.truffle.wasm.constants.ExportIdentifier;
 import com.oracle.truffle.wasm.constants.GlobalModifier;
@@ -231,11 +232,11 @@ import com.oracle.truffle.wasm.constants.LimitsPrefix;
 import com.oracle.truffle.wasm.exception.WasmException;
 import com.oracle.truffle.wasm.exception.WasmLinkerException;
 import com.oracle.truffle.wasm.memory.WasmMemory;
-import com.oracle.truffle.wasm.collection.ByteArrayList;
 import com.oracle.truffle.wasm.nodes.WasmBlockNode;
 import com.oracle.truffle.wasm.nodes.WasmCallStubNode;
 import com.oracle.truffle.wasm.nodes.WasmEmptyNode;
 import com.oracle.truffle.wasm.nodes.WasmIfNode;
+import com.oracle.truffle.wasm.nodes.WasmIndirectCallNode;
 import com.oracle.truffle.wasm.nodes.WasmLoopNode;
 import com.oracle.truffle.wasm.nodes.WasmNode;
 import com.oracle.truffle.wasm.nodes.WasmRootNode;
@@ -253,13 +254,13 @@ public class BinaryParser extends BinaryStreamParser {
     private byte[] bytesConsumed;
 
     /**
-     * Modules may import, as well as define their own functions.
-     * Function IDs are shared among imported and defined functions.
-     * This variable keeps track of the function indices, so that imported and parsed code
-     * entries can be correctly associated to their respective functions and types.
+     * Modules may import, as well as define their own functions. Function IDs are shared among
+     * imported and defined functions. This variable keeps track of the function indices, so that
+     * imported and parsed code entries can be correctly associated to their respective functions
+     * and types.
      */
     // TODO: We should remove this to reduce complexity - codeEntry state should be sufficient
-    //  to track the current largest function index.
+    // to track the current largest function index.
     private int moduleFunctionIndex;
 
     BinaryParser(WasmLanguage language, WasmModule module, byte[] data) {
@@ -331,7 +332,8 @@ public class BinaryParser extends BinaryStreamParser {
     }
 
     private void readCustomSection(int size) {
-        // TODO: We skip the custom section for now, but we should see what we could typically pick up here.
+        // TODO: We skip the custom section for now, but we should see what we could typically pick
+        // up here.
         offset += size;
     }
 
@@ -352,7 +354,7 @@ public class BinaryParser extends BinaryStreamParser {
     private void readImportSection() {
         Assert.assertIntEqual(module.symbolTable().maxGlobalIndex(), -1,
                         "The global index should be -1 when the import section is first read.");
-        final WasmContext context = language.getContextReference().get();
+        final WasmContext context = WasmLanguage.getCurrentContext();
         int numImports = readVectorLength();
         for (int i = 0; i != numImports; ++i) {
             String moduleName = readName();
@@ -371,12 +373,14 @@ public class BinaryParser extends BinaryStreamParser {
                     byte limitsPrefix = read1();
                     switch (limitsPrefix) {
                         case LimitsPrefix.NO_MAX: {
-                            int initSize = readUnsignedInt32();  // initial size (in number of entries)
+                            int initSize = readUnsignedInt32();  // initial size (in number of
+                                                                 // entries)
                             module.symbolTable().importTable(context, moduleName, memberName, initSize, -1);
                             break;
                         }
                         case LimitsPrefix.WITH_MAX: {
-                            int initSize = readUnsignedInt32();  // initial size (in number of entries)
+                            int initSize = readUnsignedInt32();  // initial size (in number of
+                                                                 // entries)
                             int maxSize = readUnsignedInt32();  // max size (in number of entries)
                             module.symbolTable().importTable(context, moduleName, memberName, initSize, maxSize);
                             break;
@@ -435,7 +439,8 @@ public class BinaryParser extends BinaryStreamParser {
     private void readTableSection() {
         int numTables = readVectorLength();
         Assert.assertIntLessOrEqual(module.symbolTable().tableCount() + numTables, 1, "Can import or declare at most one table per module.");
-        // Since in the current version of WebAssembly supports at most one table instance per module.
+        // Since in the current version of WebAssembly supports at most one table instance per
+        // module.
         // this loop should be executed at most once.
         for (byte tableIndex = 0; tableIndex != numTables; ++tableIndex) {
             byte elemType = readElemType();
@@ -444,14 +449,14 @@ public class BinaryParser extends BinaryStreamParser {
             switch (limitsPrefix) {
                 case LimitsPrefix.NO_MAX: {
                     int initSize = readUnsignedInt32();  // initial size (in number of entries)
-                    module.symbolTable().allocateTable(language.getContextReference().get(), initSize, -1);
+                    module.symbolTable().allocateTable(WasmLanguage.getCurrentContext(), initSize, -1);
                     break;
                 }
                 case LimitsPrefix.WITH_MAX: {
                     int initSize = readUnsignedInt32();  // initial size (in number of entries)
                     int maxSize = readUnsignedInt32();  // max size (in number of entries)
                     Assert.assertIntLessOrEqual(initSize, maxSize, "Initial table size must be smaller or equal than maximum size");
-                    module.symbolTable().allocateTable(language.getContextReference().get(), initSize, maxSize);
+                    module.symbolTable().allocateTable(WasmLanguage.getCurrentContext(), initSize, maxSize);
                     break;
                 }
                 default:
@@ -463,7 +468,8 @@ public class BinaryParser extends BinaryStreamParser {
     private void readMemorySection() {
         int numMemories = readVectorLength();
         Assert.assertIntLessOrEqual(module.symbolTable().tableCount() + numMemories, 1, "Can import or declare at most one memory per module.");
-        // Since in the current version of WebAssembly supports at most one table instance per module.
+        // Since in the current version of WebAssembly supports at most one table instance per
+        // module.
         // this loop should be executed at most once.
         for (int i = 0; i != numMemories; ++i) {
             byte limitsPrefix = readLimitsPrefix();
@@ -472,7 +478,7 @@ public class BinaryParser extends BinaryStreamParser {
                     // Read initial size (in Wasm pages).
                     int initSize = readUnsignedInt32();
                     int maxSize = -1;
-                    module.symbolTable().allocateMemory(language.getContextReference().get(), initSize, maxSize);
+                    module.symbolTable().allocateMemory(WasmLanguage.getCurrentContext(), initSize, maxSize);
                     break;
                 }
                 case LimitsPrefix.WITH_MAX: {
@@ -480,7 +486,7 @@ public class BinaryParser extends BinaryStreamParser {
                     int initSize = readUnsignedInt32();
                     // Read max size (in Wasm pages).
                     int maxSize = readUnsignedInt32();
-                    module.symbolTable().allocateMemory(language.getContextReference().get(), initSize, maxSize);
+                    module.symbolTable().allocateMemory(WasmLanguage.getCurrentContext(), initSize, maxSize);
                     break;
                 }
                 default:
@@ -509,9 +515,9 @@ public class BinaryParser extends BinaryStreamParser {
         module.symbolTable().function(funcIndex).setCodeEntry(codeEntry);
 
         /*
-         * Create the root node and create and set the call target for the body.
-         * This needs to be done before reading the body block, because we need to be able to
-         * create direct call nodes {@see TruffleRuntime#createDirectCallNode} during parsing.
+         * Create the root node and create and set the call target for the body. This needs to be
+         * done before reading the body block, because we need to be able to create direct call
+         * nodes {@see TruffleRuntime#createDirectCallNode} during parsing.
          */
         WasmRootNode rootNode = new WasmRootNode(language, codeEntry);
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
@@ -521,7 +527,9 @@ public class BinaryParser extends BinaryStreamParser {
     }
 
     private void readCodeEntry(int funcIndex, WasmRootNode rootNode) {
-        /* Initialise the code entry local variables (which contain the parameters and the locals). */
+        /*
+         * Initialise the code entry local variables (which contain the parameters and the locals).
+         */
         initCodeEntryLocals(funcIndex);
 
         /* Read (parse) and abstractly interpret the code entry */
@@ -557,13 +565,14 @@ public class BinaryParser extends BinaryStreamParser {
     private void initCodeEntryLocals(int funcIndex) {
         WasmCodeEntry codeEntry = module.symbolTable().function(funcIndex).codeEntry();
         int typeIndex = module.symbolTable().function(funcIndex).typeIndex();
-        ByteArrayList argumentTypes = module.symbolTable().getFunctionTypeArgumentTypes(typeIndex);
+        ByteArrayList argumentTypes = module.symbolTable().functionTypeArgumentTypes(typeIndex);
         ByteArrayList localTypes = readCodeEntryLocals();
         byte[] allLocalTypes = ByteArrayList.concat(argumentTypes, localTypes);
         codeEntry.setLocalTypes(allLocalTypes);
     }
 
-    private void checkValidStateOnBlockExit(byte returnTypeId, ExecutionState state, int initialStackSize) {
+    @SuppressWarnings("unused")
+    private static void checkValidStateOnBlockExit(byte returnTypeId, ExecutionState state, int initialStackSize) {
         if (returnTypeId == 0x40) {
             Assert.assertIntEqual(state.stackSize(), initialStackSize, "Void function left values in the stack");
         } else {
@@ -640,11 +649,14 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 case BR: {
                     // TODO: restore check
-                    // This check was here to validate the stack size before branching and make sure that the block that
-                    // is currently executing produced as many values as it was meant to before branching.
-                    // We now have to postpone this check, as the target of a branch instruction may be more than one
-                    // levels up, so the amount of values it should leave in the stack depends on the branch target.
-                    // Assert.assertEquals(state.stackSize() - startStackSize, currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
+                    // This check was here to validate the stack size before branching and make sure
+                    // that the block that is currently executing produced as many values as it
+                    // was meant to before branching.
+                    // We now have to postpone this check, as the target of a branch instruction may
+                    // be more than one levels up, so the amount of values it should leave in
+                    // the stack depends on the branch target.
+                    // Assert.assertEquals(state.stackSize() - startStackSize,
+                    // currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
                     int unwindLevel = readLabelIndex(bytesConsumed);
                     state.useLongConstant(unwindLevel);
                     state.useByteConstant(bytesConsumed[0]);
@@ -655,11 +667,14 @@ public class BinaryParser extends BinaryStreamParser {
                 case BR_IF: {
                     state.pop();  // The branch condition.
                     // TODO: restore check
-                    // This check was here to validate the stack size before branching and make sure that the block that
-                    // is currently executing produced as many values as it was meant to before branching.
-                    // We now have to postpone this check, as the target of a branch instruction may be more than one
-                    // levels up, so the amount of values it should leave in the stack depends on the branch target.
-                    // Assert.assertEquals(state.stackSize() - startStackSize, currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
+                    // This check was here to validate the stack size before branching and make sure
+                    // that the block that is currently executing produced as many values as it
+                    // was meant to before branching.
+                    // We now have to postpone this check, as the target of a branch instruction may
+                    // be more than one levels up, so the amount of values it should leave in the
+                    // stack depends on the branch target.
+                    // Assert.assertEquals(state.stackSize() - startStackSize,
+                    // currentBlock.returnTypeLength(), "Invalid stack state on BR instruction");
                     int unwindLevel = readLabelIndex(bytesConsumed);
                     state.useLongConstant(unwindLevel);
                     state.useByteConstant(bytesConsumed[0]);
@@ -669,7 +684,8 @@ public class BinaryParser extends BinaryStreamParser {
                 }
                 case BR_TABLE: {
                     int numLabels = readVectorLength();
-                    // We need to save three tables here, to maintain the mapping target -> state mapping:
+                    // We need to save three tables here, to maintain the mapping target -> state
+                    // mapping:
                     // - a table containing the branch targets for the instruction
                     // - a table containing the stack state for each corresponding branch target
                     // - the length of the return type
@@ -729,13 +745,14 @@ public class BinaryParser extends BinaryStreamParser {
                     state.useLongConstant(expectedFunctionTypeIndex);
                     state.useByteConstant(bytesConsumed[0]);
                     int numArguments = module.symbolTable().functionTypeArgumentCount(expectedFunctionTypeIndex);
-                    int returnLength = module.symbolTable().getFunctionTypeReturnTypeLength(expectedFunctionTypeIndex);
+                    int returnLength = module.symbolTable().functionTypeReturnTypeLength(expectedFunctionTypeIndex);
 
-                    // Pop the function index to call, then pop the arguments and push the return value.
+                    // Pop the function index to call, then pop the arguments and push the return
+                    // value.
                     state.pop();
                     state.pop(numArguments);
                     state.push(returnLength);
-                    callNodes.add(Truffle.getRuntime().createIndirectCallNode());
+                    callNodes.add(WasmIndirectCallNode.create());
                     Assert.assertIntEqual(read1(), CallIndirect.ZERO_TABLE, "CALL_INDIRECT: Instruction must end with 0x00");
                     break;
                 }
@@ -743,7 +760,8 @@ public class BinaryParser extends BinaryStreamParser {
                     state.pop();
                     break;
                 case SELECT:
-                    // Pop three values from the stack: the condition and the values to select between.
+                    // Pop three values from the stack: the condition and the values to select
+                    // between.
                     state.pop(3);
                     state.push();
                     break;
@@ -795,7 +813,7 @@ public class BinaryParser extends BinaryStreamParser {
                                     "Invalid global index for global.set.");
                     // Assert that the global is mutable.
                     Assert.assertTrue(module.symbolTable().globalMutability(index) == GlobalModifier.MUTABLE,
-                            "Immutable globals cannot be set: " + index);
+                                    "Immutable globals cannot be set: " + index);
                     // Assert there is a value on the top of the stack.
                     Assert.assertIntGreater(state.stackSize(), 0, "global.set requires at least one element in the stack");
                     state.pop();
@@ -815,12 +833,14 @@ public class BinaryParser extends BinaryStreamParser {
                 case I64_LOAD16_U:
                 case I64_LOAD32_S:
                 case I64_LOAD32_U: {
-                    readUnsignedInt32(bytesConsumed);  // align
-                    // We don't store the `align` literal, as our implementation does not make use of it,
-                    // but we need to store it's byte length, so that we can skip it during execution.
+                    // We don't store the `align` literal, as our implementation does not make use
+                    // of it, but we need to store it's byte length, so that we can skip it
+                    // during execution.
+                    readUnsignedInt32(bytesConsumed);
+                    // Set consume count for the bytes.
                     state.useByteConstant(bytesConsumed[0]);
-                    int offset = readUnsignedInt32(bytesConsumed);  // offset
-                    state.useLongConstant(offset);
+                    int loadOffset = readUnsignedInt32(bytesConsumed);
+                    state.useLongConstant(loadOffset);
                     state.useByteConstant(bytesConsumed[0]);
                     Assert.assertIntGreater(state.stackSize(), 0, String.format("load instruction 0x%02X requires at least one element in the stack", opcode));
                     state.pop();   // Base address.
@@ -837,11 +857,12 @@ public class BinaryParser extends BinaryStreamParser {
                 case I64_STORE_16:
                 case I64_STORE_32: {
                     readUnsignedInt32(bytesConsumed);  // align
-                    // We don't store the `align` literal, as our implementation does not make use of it,
-                    // but we need to store it's byte length, so that we can skip it during execution.
+                    // We don't store the `align` literal, as our implementation does not make use
+                    // of it,but we need to store it's byte length, so that we can skip it
+                    // during the execution.
                     state.useByteConstant(bytesConsumed[0]);
-                    int offset = readUnsignedInt32(bytesConsumed);  // offset
-                    state.useLongConstant(offset);
+                    int storeOffset = readUnsignedInt32(bytesConsumed);
+                    state.useLongConstant(storeOffset);
                     state.useByteConstant(bytesConsumed[0]);
                     Assert.assertIntGreater(state.stackSize(), 1, String.format("store instruction 0x%02X requires at least two elements in the stack", opcode));
                     state.pop();  // Value to store.
@@ -1068,14 +1089,13 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
             }
         } while (opcode != END && opcode != ELSE);
-        currentBlock.setNestedControlTable(nestedControlTable.toArray(new WasmNode[nestedControlTable.size()]));
-        currentBlock.setCallNodeTable(callNodes.toArray(new Node[callNodes.size()]));
-        currentBlock.setByteLength(offset() - startOffset);
-        currentBlock.setByteConstantLength(state.byteConstantOffset() - startByteConstantOffset);
-        currentBlock.setIntConstantLength(state.intConstantOffset() - startIntConstantOffset);
-        currentBlock.setLongConstantLength(state.longConstantOffset() - startLongConstantOffset);
-        currentBlock.setBranchTableLength(state.branchTableOffset() - startBranchTableOffset);
-        // TODO: Restore this check, when we fix the case where the block contains a return instruction.
+        currentBlock.initialize(nestedControlTable.toArray(new WasmNode[nestedControlTable.size()]),
+                        callNodes.toArray(new Node[callNodes.size()]),
+                        offset() - startOffset, state.byteConstantOffset() - startByteConstantOffset,
+                        state.intConstantOffset() - startIntConstantOffset, state.longConstantOffset() - startLongConstantOffset,
+                        state.branchTableOffset() - startBranchTableOffset);
+        // TODO: Restore this check, when we fix the case where the block contains a return
+        // instruction.
         // checkValidStateOnBlockExit(returnTypeId, state, startStackSize);
 
         // Pop the current block return length in the return lengths stack.
@@ -1091,8 +1111,10 @@ public class BinaryParser extends BinaryStreamParser {
 
         // TODO: Hack to correctly set the stack pointer for abstract interpretation.
         // If a block has branch instructions that target "shallower" blocks which return no value,
-        // then it can leave no values in the stack, which is invalid for our abstract interpretation.
-        // Correct the stack pointer to the value it would have in case there were no branch instructions.
+        // then it can leave no values in the stack, which is invalid for our abstract
+        // interpretation.
+        // Correct the stack pointer to the value it would have in case there were no branch
+        // instructions.
         state.setStackPointer(returnTypeId != ValueTypes.VOID_TYPE ? initialStackPointer + 1 : initialStackPointer);
 
         return new WasmLoopNode(loopBlock);
@@ -1101,8 +1123,6 @@ public class BinaryParser extends BinaryStreamParser {
     private WasmIfNode readIf(WasmCodeEntry codeEntry, ExecutionState state) {
         byte blockTypeId = readBlockType();
         int initialStackPointer = state.stackSize();
-        int initialByteConstantOffset = state.byteConstantOffset();
-        int initialNumericLiteralOffset = state.longConstantOffset();
 
         // Pop the condition value from the stack.
         state.pop();
@@ -1113,15 +1133,19 @@ public class BinaryParser extends BinaryStreamParser {
 
         // TODO: Hack to correctly set the stack pointer for abstract interpretation.
         // If a block has branch instructions that target "shallower" blocks which return no value,
-        // then it can leave no values in the stack, which is invalid for our abstract interpretation.
-        // Correct the stack pointer to the value it would have in case there were no branch instructions.
+        // then it can leave no values in the stack, which is invalid for our abstract
+        // interpretation.
+        // Correct the stack pointer to the value it would have in case there were no branch
+        // instructions.
         state.setStackPointer(blockTypeId != ValueTypes.VOID_TYPE ? initialStackPointer : initialStackPointer - 1);
 
         // Read false branch, if it exists.
         WasmNode falseBranchBlock;
         if (peek1(-1) == ELSE) {
-            // If the if instruction has a true and a false branch, and it has non-void type, then each one of the two
-            // readBlockBody above and below would push once, hence we need to pop once to compensate for the extra push.
+            // If the if instruction has a true and a false branch, and it has non-void type, then
+            // each one of the two
+            // readBlockBody above and below would push once, hence we need to pop once to
+            // compensate for the extra push.
             if (blockTypeId != ValueTypes.VOID_TYPE) {
                 state.pop();
             }
@@ -1130,9 +1154,11 @@ public class BinaryParser extends BinaryStreamParser {
 
             if (blockTypeId != ValueTypes.VOID_TYPE) {
                 // TODO: Hack to correctly set the stack pointer for abstract interpretation.
-                // If a block has branch instructions that target "shallower" blocks which return no value,
-                // then it can leave no values in the stack, which is invalid for our abstract interpretation.
-                // Correct the stack pointer to the value it would have in case there were no branch instructions.
+                // If a block has branch instructions that target "shallower" blocks which return no
+                // value, then it can leave no values in the stack, which is invalid for our
+                // abstract interpretation.
+                // Correct the stack pointer to the value it would have in case there were no branch
+                // instructions.
                 state.setStackPointer(initialStackPointer);
             }
         } else {
@@ -1142,16 +1168,16 @@ public class BinaryParser extends BinaryStreamParser {
             falseBranchBlock = new WasmEmptyNode(module, codeEntry, 0);
         }
 
-        return new WasmIfNode(module, codeEntry, trueBranchBlock, falseBranchBlock, offset() - startOffset, blockTypeId, initialStackPointer,
-                state.byteConstantOffset() - initialByteConstantOffset, state.longConstantOffset() - initialNumericLiteralOffset);
+        return new WasmIfNode(module, codeEntry, trueBranchBlock, falseBranchBlock, offset() - startOffset, blockTypeId, initialStackPointer);
     }
 
     private void readElementSection() {
-        final WasmContext context = language.getContextReference().get();
+        final WasmContext context = WasmLanguage.getCurrentContext();
         int numElements = readVectorLength();
         for (int i = 0; i != numElements; ++i) {
             int tableIndex = readUnsignedInt32();
-            // At the moment, WebAssembly only supports one table instance, thus the only valid table index is 0.
+            // At the moment, WebAssembly only supports one table instance, thus the only valid
+            // table index is 0.
             Assert.assertIntEqual(tableIndex, 0, "Invalid table index");
 
             // Read the offset expression.
@@ -1161,11 +1187,11 @@ public class BinaryParser extends BinaryStreamParser {
             // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
             switch (instruction) {
                 case I32_CONST: {
-                    int offset = readSignedInt32();
+                    int elementOffset = readSignedInt32();
                     readEnd();
                     // Read the contents.
                     int[] contents = readElemContents();
-                    module.symbolTable().initializeTableWithFunctions(context, offset, contents);
+                    module.symbolTable().initializeTableWithFunctions(context, elementOffset, contents);
                     break;
                 }
                 case GLOBAL_GET: {
@@ -1221,7 +1247,7 @@ public class BinaryParser extends BinaryStreamParser {
                     break;
                 }
                 case ExportIdentifier.MEMORY: {
-                    int memoryIndex = readMemoryIndex();
+                    readMemoryIndex();
                     // TODO: Store the export information somewhere (e.g. in the symbol table).
                     break;
                 }
@@ -1238,7 +1264,7 @@ public class BinaryParser extends BinaryStreamParser {
     }
 
     private void readGlobalSection() {
-        final Globals globals = language.getContextReference().get().globals();
+        final Globals globals = WasmLanguage.getCurrentContext().globals();
         int numGlobals = readVectorLength();
         int startingGlobalIndex = module.symbolTable().maxGlobalIndex() + 1;
         for (int i = startingGlobalIndex; i != startingGlobalIndex + numGlobals; i++) {
@@ -1281,7 +1307,8 @@ public class BinaryParser extends BinaryStreamParser {
                         value = globals.loadAsLong(existingAddress);
                         resolution = DECLARED;
                     } else {
-                        // The imported module with the referenced global was not yet parsed and resolved,
+                        // The imported module with the referenced global was not yet parsed and
+                        // resolved,
                         // so it is not possible to initialize the current global.
                         // The resolution state is set accordingly, until it gets resolved later.
                         resolution = UNRESOLVED_GET;
@@ -1292,7 +1319,7 @@ public class BinaryParser extends BinaryStreamParser {
             }
             instruction = read1();
             Assert.assertByteEqual(instruction, (byte) END, "Global initialization must end with END");
-            final int address = module.symbolTable().declareGlobal(language.getContextReference().get(), i, type, mutability, resolution);
+            final int address = module.symbolTable().declareGlobal(WasmLanguage.getCurrentContext(), i, type, mutability, resolution);
             if (resolution.isResolved()) {
                 globals.storeLong(address, value);
             } else {
@@ -1307,26 +1334,27 @@ public class BinaryParser extends BinaryStreamParser {
         int numDataSections = readVectorLength();
         for (int i = 0; i != numDataSections; ++i) {
             int memIndex = readUnsignedInt32();
-            // At the moment, WebAssembly only supports one memory instance, thus the only valid memory index is 0.
+            // At the moment, WebAssembly only supports one memory instance, thus the only valid
+            // memory index is 0.
             Assert.assertIntEqual(memIndex, 0, "Invalid memory index, only the memory index 0 is currently supported");
-            long offset = 0;
+            long dataOffset = 0;
             byte instruction;
             do {
                 instruction = read1();
 
-                // Data offset expression must be a constant expression with result type i32.
+                // Data dataOffset expression must be a constant expression with result type i32.
                 // https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
                 // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
 
                 switch (instruction) {
                     case I32_CONST:
-                        offset = readSignedInt32();
+                        dataOffset = readSignedInt32();
                         break;
                     case GLOBAL_GET:
-                        int index = readGlobalIndex();
+                        readGlobalIndex();
                         // TODO: Implement GLOBAL_GET case for data sections (and add tests).
                         throw new WasmException("GLOBAL_GET in data section not implemented.");
-                        // offset = module.globals().getAsInt(index);
+                        // dataOffset = module.globals().getAsInt(index);
                         // break;
                     case END:
                         break;
@@ -1336,7 +1364,7 @@ public class BinaryParser extends BinaryStreamParser {
             } while (instruction != END);
             int byteLength = readVectorLength();
 
-            long baseAddress = offset;
+            long baseAddress = dataOffset;
             memory.validateAddress(baseAddress, byteLength);
 
             for (int writeOffset = 0; writeOffset != byteLength; ++writeOffset) {
@@ -1362,9 +1390,12 @@ public class BinaryParser extends BinaryStreamParser {
         }
     }
 
-    // Specification seems ambiguous: https://webassembly.github.io/spec/core/binary/types.html#result-types
-    // According to the spec, the result type can only be 0x40 (void) or 0xtt, where tt is a value type.
-    // However, the Wasm binary compiler produces binaries with either 0x00 or 0x01 0xtt. Therefore, we support both.
+    // Specification seems ambiguous:
+    // https://webassembly.github.io/spec/core/binary/types.html#result-types
+    // According to the spec, the result type can only be 0x40 (void) or 0xtt, where tt is a value
+    // type.
+    // However, the Wasm binary compiler produces binaries with either 0x00 or 0x01 0xtt. Therefore,
+    // we support both.
     private void readResultList(int funcTypeIdx) {
         byte b = read1();
         switch (b) {
@@ -1397,12 +1428,12 @@ public class BinaryParser extends BinaryStreamParser {
         return readUnsignedInt32();
     }
 
-    private int readTypeIndex(byte[] bytesConsumed) {
-        return readUnsignedInt32(bytesConsumed);
+    private int readTypeIndex(byte[] bytesConsumedResult) {
+        return readUnsignedInt32(bytesConsumedResult);
     }
 
-    private int readFunctionIndex(byte[] bytesConsumed) {
-        return readUnsignedInt32(bytesConsumed);
+    private int readFunctionIndex(byte[] bytesConsumedResult) {
+        return readUnsignedInt32(bytesConsumedResult);
     }
 
     private int readTableIndex() {
@@ -1417,20 +1448,21 @@ public class BinaryParser extends BinaryStreamParser {
         return readUnsignedInt32();
     }
 
+    @SuppressWarnings("unused")
     private int readLocalIndex() {
         return readUnsignedInt32();
     }
 
-    private int readLocalIndex(byte[] bytesConsumed) {
-        return readUnsignedInt32(bytesConsumed);
+    private int readLocalIndex(byte[] bytesConsumedResult) {
+        return readUnsignedInt32(bytesConsumedResult);
     }
 
     private int readLabelIndex() {
         return readUnsignedInt32();
     }
 
-    private int readLabelIndex(byte[] bytesConsumed) {
-        return readUnsignedInt32(bytesConsumed);
+    private int readLabelIndex(byte[] bytesConsumedResult) {
+        return readUnsignedInt32(bytesConsumedResult);
     }
 
     private byte readExportType() {
@@ -1536,7 +1568,7 @@ public class BinaryParser extends BinaryStreamParser {
             }
         }
         if (tryJumpToSection(GLOBAL)) {
-            final Globals globals = language.getContextReference().get().globals();
+            final Globals globals = WasmLanguage.getCurrentContext().globals();
             int numGlobals = readVectorLength();
             int startingGlobalIndex = globalIndex;
             for (; globalIndex != startingGlobalIndex + numGlobals; globalIndex++) {

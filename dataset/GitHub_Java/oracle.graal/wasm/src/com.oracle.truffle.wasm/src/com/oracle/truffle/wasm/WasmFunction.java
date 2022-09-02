@@ -29,22 +29,25 @@
  */
 package com.oracle.truffle.wasm;
 
-import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.IndirectCallNode;
 
 @ExportLibrary(InteropLibrary.class)
 public class WasmFunction implements TruffleObject {
 
     private final SymbolTable symbolTable;
-    private int index;
+    private final int index;
     private ImportDescriptor importDescriptor;
     private WasmCodeEntry codeEntry;
     private final String name;
     private final int typeIndex;
-    private RootCallTarget callTarget;
+    private CallTarget callTarget;
 
     /**
      * Represents a WebAssembly function.
@@ -56,7 +59,8 @@ public class WasmFunction implements TruffleObject {
         this.index = index;
         this.importDescriptor = importDescriptor;
         this.codeEntry = null;
-        // TODO: Establish a valid naming convention (integers are not valid identifiers), or remove this.
+        // TODO: Establish a valid naming convention (integers are not valid identifiers), or remove
+        // this.
         this.name = String.valueOf(index);
         this.typeIndex = typeIndex;
         this.callTarget = null;
@@ -66,26 +70,27 @@ public class WasmFunction implements TruffleObject {
         return symbolTable.functionTypeArgumentCount(typeIndex);
     }
 
-    public byte argumentTypeAt(int index) {
-        return symbolTable.getFunctionTypeArgumentTypeAt(typeIndex, index);
+    public byte argumentTypeAt(int argumentIndex) {
+        return symbolTable.functionTypeArgumentTypeAt(typeIndex, argumentIndex);
     }
 
     public byte returnType() {
-        return symbolTable.getFunctionTypeReturnType(typeIndex);
+        return symbolTable.functionTypeReturnType(typeIndex);
     }
 
     public int returnTypeLength() {
-        return symbolTable.getFunctionTypeReturnTypeLength(typeIndex);
+        return symbolTable.functionTypeReturnTypeLength(typeIndex);
     }
 
-    public void setCallTarget(RootCallTarget callTarget) {
+    public void setCallTarget(CallTarget callTarget) {
         this.callTarget = callTarget;
     }
 
-    public RootCallTarget resolveCallTarget() {
+    public CallTarget resolveCallTarget() {
         if (callTarget == null) {
+            CompilerDirectives.transferToInterpreter();
             // TODO: If this is an imported function, the call target might not yet be resolved.
-            //  Check this, and wait until the call target gets resolved.
+            // Check this, and wait until the call target gets resolved.
             throw new RuntimeException("Call target was not resolved.");
         }
         return callTarget;
@@ -102,8 +107,8 @@ public class WasmFunction implements TruffleObject {
     }
 
     @ExportMessage
-    Object execute(Object[] arguments) {
-        return resolveCallTarget().call(arguments);
+    Object execute(Object[] arguments, @Cached IndirectCallNode callNode) {
+        return callNode.call(resolveCallTarget(), arguments);
     }
 
     public WasmCodeEntry codeEntry() {

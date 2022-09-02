@@ -49,11 +49,21 @@ public class Linker {
         this.language = language;
     }
 
-    // TODO: Many of the following methods should work on all the modules in the context, instead of a single one.
-    //  See which ones and update.
+    // TODO: Many of the following methods should work on all the modules in the context, instead of
+    // a single one. See which ones and update.
     public void tryLink() {
+        // The first execution of a WebAssembly call target will trigger the linking of the modules
+        // that are inside the current context (which will happen behind the call boundary).
+        // This linking will set this flag to true.
+        //
+        // If the code is compiled asynchronously, then linking will usually end before
+        // compilation, and this check will fold away.
+        // If the code is compiled synchronously, then this check will persist in the compiled code.
+        // We nevertheless invalidate the compiled code that reaches this point.
         if (!linked) {
+            // TODO: Once we support multi-threading, add adequate synchronization here.
             tryLinkOutsidePartialEvaluation();
+            CompilerDirectives.transferToInterpreterAndInvalidate();
         }
     }
 
@@ -70,15 +80,17 @@ public class Linker {
                 linkMemories(module);
                 module.setLinked();
             }
+            linked = true;
         }
     }
 
-    private void linkFunctions(WasmModule module) {
-        final WasmContext context = language.getContextReference().get();
+    private static void linkFunctions(WasmModule module) {
+        final WasmContext context = WasmLanguage.getCurrentContext();
         for (WasmFunction function : module.symbolTable().importedFunctions()) {
             final WasmModule importedModule = context.modules().get(function.importedModuleName());
             if (importedModule == null) {
-                throw new WasmLinkerException("The module '" + function.importedModuleName() + "', referenced by the import '" + function.importedFunctionName() + "' in the module '" + module.name() + "', does not exist.");
+                throw new WasmLinkerException("The module '" + function.importedModuleName() + "', referenced by the import '" + function.importedFunctionName() + "' in the module '" + module.name() +
+                                "', does not exist.");
             }
             WasmFunction importedFunction;
             try {
@@ -87,20 +99,24 @@ public class Linker {
                 importedFunction = null;
             }
             if (importedFunction == null) {
-                throw new WasmLinkerException("The imported function '" + function.importedFunctionName() + "', referenced in the module '" + module.name() + "', does not exist in the imported module '" + function.importedModuleName() + "'.");
+                throw new WasmLinkerException("The imported function '" + function.importedFunctionName() + "', referenced in the module '" + module.name() +
+                                "', does not exist in the imported module '" + function.importedModuleName() + "'.");
             }
             function.setCallTarget(importedFunction.resolveCallTarget());
         }
     }
 
+    @SuppressWarnings("unused")
     private void linkGlobals(WasmModule module) {
         // TODO: Ensure that the globals are resolved.
     }
 
+    @SuppressWarnings("unused")
     private void linkTables(WasmModule module) {
         // TODO: Ensure that tables are resolved.
     }
 
+    @SuppressWarnings("unused")
     private void linkMemories(WasmModule module) {
         // TODO: Ensure that tables are resolved.
     }
@@ -118,7 +134,7 @@ public class Linker {
 
     int importGlobal(WasmModule module, int index, String importedModuleName, String importedGlobalName, int valueType, int mutability) {
         GlobalResolution resolution = UNRESOLVED_IMPORT;
-        final WasmContext context = language.getContextReference().get();
+        final WasmContext context = WasmLanguage.getCurrentContext();
         final WasmModule importedModule = context.modules().get(importedModuleName);
         int address = -1;
 
@@ -152,7 +168,8 @@ public class Linker {
             }
         }
 
-        // TODO: Once we support asynchronous parsing, we will need to record the dependency on the global.
+        // TODO: Once we support asynchronous parsing, we will need to record the dependency on the
+        // global.
 
         module.symbolTable().importGlobal(importedModuleName, importedGlobalName, index, valueType, mutability, resolution, address);
 
@@ -167,7 +184,8 @@ public class Linker {
             module.symbolTable().initializeTableWithFunctions(context, offset, contents);
         } else {
             // TODO: Record the contents array for later initialization - with a single module,
-            //  the predefined modules will be already initialized, so we don't yet run into this case.
+            // the predefined modules will be already initialized, so we don't yet run into this
+            // case.
             throw new WasmLinkerException("Postponed table initialization not implemented.");
         }
     }
@@ -175,7 +193,8 @@ public class Linker {
     int importTable(WasmContext context, WasmModule module, String importedModuleName, String importedTableName, int initSize, int maxSize) {
         final WasmModule importedModule = context.modules().get(importedModuleName);
         if (importedModule == null) {
-            // TODO: Record the fact that this table was not resolved, to be able to resolve it later during linking.
+            // TODO: Record the fact that this table was not resolved, to be able to resolve it
+            // later during linking.
             throw new WasmLinkerException("Postponed table resolution not implemented.");
         } else {
             final String exportedTableName = importedModule.symbolTable().exportedTable();
@@ -191,8 +210,8 @@ public class Linker {
             final int declaredMaxSize = context.tables().maxSizeOf(tableIndex);
             if (declaredMaxSize >= 0 && (initSize > declaredMaxSize || maxSize > declaredMaxSize)) {
                 // This requirement does not seem to be mentioned in the WebAssembly specification.
-                // It might be necessary to refine what maximum size means in the import-table declaration
-                // (and in particular what it means that it's unlimited).
+                // It might be necessary to refine what maximum size means in the import-table
+                // declaration (and in particular what it means that it's unlimited).
                 throw new WasmLinkerException(String.format("The table '%s' in the imported module '%s' has maximum size %d, but module '%s' imports it with maximum size '%d'",
                                 importedTableName, importedModuleName, declaredMaxSize, module.name(), maxSize));
             }

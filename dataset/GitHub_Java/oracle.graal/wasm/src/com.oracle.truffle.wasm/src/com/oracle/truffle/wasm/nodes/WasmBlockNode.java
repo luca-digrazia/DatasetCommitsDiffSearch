@@ -29,8 +29,8 @@
  */
 package com.oracle.truffle.wasm.nodes;
 
-import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import static com.oracle.truffle.wasm.Assert.format;
+import static com.oracle.truffle.wasm.WasmTracing.trace;
 import static com.oracle.truffle.wasm.constants.Instructions.BLOCK;
 import static com.oracle.truffle.wasm.constants.Instructions.BR;
 import static com.oracle.truffle.wasm.constants.Instructions.BR_IF;
@@ -204,16 +204,16 @@ import static com.oracle.truffle.wasm.constants.Instructions.RETURN;
 import static com.oracle.truffle.wasm.constants.Instructions.SELECT;
 import static com.oracle.truffle.wasm.constants.Instructions.UNREACHABLE;
 
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.wasm.Assert;
@@ -233,7 +233,28 @@ import com.oracle.truffle.wasm.memory.WasmMemoryException;
 
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
-public class WasmBlockNode extends WasmNode implements RepeatingNode {
+public final class WasmBlockNode extends WasmNode implements RepeatingNode {
+
+    /**
+     * The number of bytes in the byte constant table used by this node.
+     */
+    @CompilationFinal private int byteConstantLength;
+
+    /**
+     * The number of integers in the int constant table used by this node.
+     */
+    @CompilationFinal private int intConstantLength;
+
+    /**
+     * The number of literals in the numeric literals table used by this node.
+     */
+    @CompilationFinal private int longConstantLength;
+
+    /**
+     * The number of branch tables used by this node.
+     */
+    @CompilationFinal private int branchTableLength;
+
     @CompilationFinal private final int startOffset;
     @CompilationFinal private final byte returnTypeId;
     @CompilationFinal private final byte continuationTypeId;
@@ -247,8 +268,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     @Children private Node[] callNodeTable;
 
     public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, byte continuationTypeId, int initialStackPointer,
-                         int initialByteConstantOffset, int initialIntConstantOffset, int initialLongConstantOffset, int initialBranchTableOffset) {
-        super(wasmModule, codeEntry, -1, -1, -1);
+                    int initialByteConstantOffset, int initialIntConstantOffset, int initialLongConstantOffset, int initialBranchTableOffset) {
+        super(wasmModule, codeEntry, -1);
         this.startOffset = startOffset;
         this.returnTypeId = returnTypeId;
         this.continuationTypeId = continuationTypeId;
@@ -263,19 +284,45 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     private ContextReference<WasmContext> contextReference() {
         if (rawContextReference == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             rawContextReference = lookupContextReference(WasmLanguage.class);
         }
         return rawContextReference;
     }
 
-    public void setNestedControlTable(WasmNode[] nestedControlTable) {
+    @SuppressWarnings("hiding")
+    public void initialize(WasmNode[] nestedControlTable, Node[] callNodeTable, int byteLength, int byteConstantLength,
+                    int intConstantLength, int longConstantLength, int branchTableLength) {
+        initialize(byteLength);
         this.nestedControlTable = nestedControlTable;
-    }
-
-    public void setCallNodeTable(Node[] callNodeTable) {
         this.callNodeTable = callNodeTable;
+        this.byteConstantLength = byteConstantLength;
+        this.intConstantLength = intConstantLength;
+        this.longConstantLength = longConstantLength;
+        this.branchTableLength = branchTableLength;
     }
 
+    @Override
+    int byteConstantLength() {
+        return byteConstantLength;
+    }
+
+    @Override
+    int intConstantLength() {
+        return intConstantLength;
+    }
+
+    @Override
+    int longConstantLength() {
+        return longConstantLength;
+    }
+
+    @Override
+    int branchTableLength() {
+        return branchTableLength;
+    }
+
+    @Override
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN)
     public TargetOffset execute(WasmContext context, VirtualFrame frame) {
         int nestedControlOffset = 0;
@@ -302,7 +349,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case BLOCK: {
                     WasmNode block = nestedControlTable[nestedControlOffset];
 
-                    // The unwind counter indicates how many levels up we need to branch from within the block.
+                    // The unwind counter indicates how many levels up we need to branch from within
+                    // the block.
                     trace("block ENTER");
                     TargetOffset unwindCounter = block.execute(context, frame);
                     trace("block EXIT, target = %d", unwindCounter.value);
@@ -322,21 +370,26 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case LOOP: {
                     WasmNode loopNode = nestedControlTable[nestedControlOffset];
 
-                    // The unwind counter indicates how many levels up we need to branch from within the loop block.
+                    // The unwind counter indicates how many levels up we need to branch from within
+                    // the loop block.
                     // There are three possibilities for the value of unwind counter:
-                    // - A value equal to -1 indicates normal loop completion and that the flow should continue
-                    //   after the loop end (break out of the loop).
-                    // - A value equal to 0 indicates that we need to branch to the beginning of the loop (repeat loop).
-                    //   This is handled internally by Truffle and the executing loop should never return 0 here.
-                    // - A value larger than 0 indicates that we need to branch to a level "shallower" than the current
-                    //   loop block (break out of the loop and even further).
+                    // - A value equal to -1 indicates normal loop completion and that the flow
+                    // should continue after the loop end (break out of the loop).
+                    // - A value equal to 0 indicates that we need to branch to the beginning of the
+                    // loop (repeat loop).
+                    // This is handled internally by Truffle and the executing loop should never
+                    // return 0 here.
+                    // - A value larger than 0 indicates that we need to branch to a level
+                    // "shallower" than the current loop block
+                    // (break out of the loop and even further).
                     trace("loop ENTER");
                     TargetOffset unwindCounter = loopNode.execute(context, frame);
                     trace("loop EXIT, target = %d", unwindCounter.value);
                     if (unwindCounter.isGreaterThanZero()) {
                         return unwindCounter.decrement();
                     }
-                    // The unwind counter cannot be 0 at this point, because that corresponds to CONTINUE_LOOP_STATUS.
+                    // The unwind counter cannot be 0 at this point, because that corresponds to
+                    // CONTINUE_LOOP_STATUS.
                     assert unwindCounter.isMinusOne() : "Unwind counter after loop exit: " + unwindCounter.value;
 
                     nestedControlOffset++;
@@ -377,12 +430,14 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     // Reset the stack pointer to the target block stack pointer.
                     int continuationStackPointer = codeEntry().intConstant(intConstantOffset);
                     int targetBlockReturnLength = codeEntry().intConstant(intConstantOffset + 1);
-                    // Technically, we should increment the intConstantOffset and longConstantOffset at this point,
+                    // Technically, we should increment the intConstantOffset and longConstantOffset
+                    // at this point,
                     // but since we are returning, it does not really matter.
 
                     trace("br, target = %d", unwindCounterValue);
 
-                    // Populate the stack with the return values of the current block (the one we are escaping from).
+                    // Populate the stack with the return values of the current block (the one we
+                    // are escaping from).
                     unwindStack(frame, stackPointer, continuationStackPointer, targetBlockReturnLength);
 
                     return unwindCounter;
@@ -396,12 +451,14 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                         // Reset the stack pointer to the target block stack pointer.
                         int continuationStackPointer = codeEntry().intConstant(intConstantOffset);
                         int targetBlockReturnLength = codeEntry().intConstant(intConstantOffset + 1);
-                        // Technically, we should increment the intConstantOffset and longConstantOffset at this point,
+                        // Technically, we should increment the intConstantOffset and
+                        // longConstantOffset at this point,
                         // but since we are returning, it does not really matter.
 
                         trace("br_if, target = %d", unwindCounterValue);
 
-                        // Populate the stack with the return values of the current block (the one we are escaping from).
+                        // Populate the stack with the return values of the current block (the one
+                        // we are escaping from).
                         unwindStack(frame, stackPointer, continuationStackPointer, targetBlockReturnLength);
 
                         return unwindCounter;
@@ -426,13 +483,15 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     int continuationStackPointer = table[1 + 2 * index + 1];
                     trace("br_table, target = %d", targetOffsetValue);
 
-                    // Populate the stack with the return values of the current block (the one we are escaping from).
+                    // Populate the stack with the return values of the current block (the one we
+                    // are escaping from).
                     unwindStack(frame, stackPointer, continuationStackPointer, returnTypeLength);
 
                     return TargetOffset.createOrCached(targetOffsetValue);
                 }
                 case RETURN: {
-                    // A return statement causes the termination of the current function, i.e. causes the execution
+                    // A return statement causes the termination of the current function, i.e.
+                    // causes the execution
                     // to resume after the instruction that invoked the current frame.
                     int unwindCounterValue = codeEntry().longConstantAsInt(longConstantOffset);
                     int rootBlockReturnLength = codeEntry().intConstant(intConstantOffset);
@@ -452,7 +511,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     int numArgs = function.numArguments();
 
                     if (callNodeTable[callNodeOffset] instanceof WasmCallStubNode) {
-                        // Lazily create the direct call node at this code position, and recompile to eliminate this check.
+                        // Lazily create the direct call node at this code position, and recompile
+                        // to eliminate this check.
                         resolveCallNode(callNodeOffset);
                         CompilerDirectives.transferToInterpreterAndInvalidate();
                     }
@@ -521,16 +581,17 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
 
                     // Validate that the function type matches the expected type.
                     if (expectedFunctionTypeIndex != function.typeIndex()) {
-                        // TODO: This check may be too rigorous, as the WebAssembly specification seems to allow
-                        //  multiple definitions of the same type. We should refine the check.
-                        //  Alternatively, we should maybe refine our modules to avoid function type redefinition --
-                        //  the predefined modules may currently redefine a type.
+                        // TODO: This check may be too rigorous, as the WebAssembly specification
+                        // seems to allow multiple definitions of the same type.
+                        // We should refine the check.
+                        // Alternatively, we should maybe refine our modules to avoid function type
+                        // redefinition -- the predefined modules may currently redefine a type.
                         throw new WasmTrap(this, format("Actual (%d) and expected (%d) function types differ in the indirect call.",
                                         function.typeIndex(), expectedFunctionTypeIndex));
                     }
 
                     // Invoke the resolved function.
-                    IndirectCallNode callNode = (IndirectCallNode) callNodeTable[callNodeOffset];
+                    WasmIndirectCallNode callNode = (WasmIndirectCallNode) callNodeTable[callNodeOffset];
                     callNodeOffset++;
 
                     int numArgs = module().symbolTable().functionTypeArgumentCount(expectedFunctionTypeIndex);
@@ -538,11 +599,13 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     stackPointer -= args.length;
 
                     trace("indirect call to function %s (%d args)", function, args.length);
-                    Object result = callNode.call(function.resolveCallTarget(), args);
+                    Object result = callNode.execute(function, args);
                     trace("return from indirect_call to function %s : %s", function, result);
                     // At the moment, WebAssembly functions may return up to one value.
-                    // As per the WebAssembly specification, this restriction may be lifted in the future.
-                    switch (function.returnType()) {
+                    // As per the WebAssembly specification, this restriction may be lifted in the
+                    // future.
+                    int returnType = module().symbolTable().functionTypeReturnType(expectedFunctionTypeIndex);
+                    switch (returnType) {
                         case ValueTypes.I32_TYPE: {
                             pushInt(frame, stackPointer, (int) result);
                             stackPointer++;
@@ -624,6 +687,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                             trace("local.get %d, value = %f [f64]", index, value);
                             break;
                         }
+                        default: {
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
+                        }
                     }
                     break;
                 }
@@ -662,6 +728,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                             setDouble(frame, index, value);
                             trace("local.set %d, value = %f [f64]", index, value);
                             break;
+                        }
+                        default: {
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
                         }
                     }
                     break;
@@ -709,6 +778,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                             setDouble(frame, index, value);
                             trace("local.tee %d, value = %f [f64]", index, value);
                             break;
+                        }
+                        default: {
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
                         }
                     }
                     break;
@@ -760,6 +832,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                             trace("global.get %d, value = %f [f64]", index, Double.longBitsToDouble(value));
                             break;
                         }
+                        default: {
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
+                        }
                     }
                     break;
                 }
@@ -777,7 +852,8 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     }
 
                     byte type = module().symbolTable().globalValueType(index);
-                    // For global.set, we don't need to make sure that the referenced global is mutable.
+                    // For global.set, we don't need to make sure that the referenced global is
+                    // mutable.
                     // This is taken care of by validation during wat to wasm compilation.
                     switch (type) {
                         case ValueTypes.I32_TYPE: {
@@ -811,6 +887,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                             context.globals().storeDoubleWithLong(address, value);
                             trace("global.set %d, value = %f [f64]", index, Double.longBitsToDouble(value));
                             break;
+                        }
+                        default: {
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
                         }
                     }
                     break;
@@ -931,6 +1010,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 push(frame, stackPointer, value);
                                 break;
                             }
+                            default: {
+                                throw new WasmTrap(this, "Unknown load opcode: " + opcode);
+                            }
                         }
                     } catch (WasmMemoryException e) {
                         throw new WasmTrap(this, "memory address out-of-bounds");
@@ -1050,6 +1132,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 memory.validateAddress(address, 32);
                                 memory.store_i64_32(address, (int) value);
                                 break;
+                            }
+                            default: {
+                                throw new WasmTrap(this, "Unknown store opcode: " + opcode);
                             }
                         }
                     } catch (WasmMemoryException e) {
@@ -2195,7 +2280,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case F32_CONVERT_I32_U: {
                     stackPointer--;
                     int x = popInt(frame, stackPointer);
-                    float result = (float) x;
+                    float result = x;
                     pushFloat(frame, stackPointer, result);
                     stackPointer++;
                     trace("push convert_i32(0x%08X) = %f [f32]", x, result);
@@ -2205,7 +2290,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case F32_CONVERT_I64_U: {
                     stackPointer--;
                     long x = pop(frame, stackPointer);
-                    float result = (float) x;
+                    float result = x;
                     pushFloat(frame, stackPointer, result);
                     stackPointer++;
                     trace("push convert_i64(0x%016X) = %f [f32]", x, result);
@@ -2218,7 +2303,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case F64_CONVERT_I32_U: {
                     stackPointer--;
                     int x = popInt(frame, stackPointer);
-                    double result = (double) x;
+                    double result = x;
                     pushDouble(frame, stackPointer, result);
                     stackPointer++;
                     trace("push convert_i32(0x%08X) = %f [f64]", x, result);
@@ -2228,7 +2313,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case F64_CONVERT_I64_U: {
                     stackPointer--;
                     long x = pop(frame, stackPointer);
-                    double result = (double) x;
+                    double result = x;
                     pushDouble(frame, stackPointer, result);
                     stackPointer++;
                     trace("push convert_i64(0x%016X) = %f [f64]", x, result);
@@ -2238,26 +2323,34 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     throw new NotImplementedException();
                 }
                 case I32_REINTERPRET_F32: {
-                    // As we don't store type information for the frame slots (everything is stored as raw bits in a long,
-                    // and interpreted appropriately upon access), we don't need to do anything for these instructions.
+                    // As we don't store type information for the frame slots (everything is stored
+                    // as raw bits in a long,
+                    // and interpreted appropriately upon access), we don't need to do anything for
+                    // these instructions.
                     trace("push reinterpret_f32 [i32]");
                     break;
                 }
                 case I64_REINTERPRET_F64: {
-                    // As we don't store type information for the frame slots (everything is stored as raw bits in a long,
-                    // and interpreted appropriately upon access), we don't need to do anything for these instructions.
+                    // As we don't store type information for the frame slots (everything is stored
+                    // as raw bits in a long,
+                    // and interpreted appropriately upon access), we don't need to do anything for
+                    // these instructions.
                     trace("push reinterpret_f64 [i64]");
                     break;
                 }
                 case F32_REINTERPRET_I32: {
-                    // As we don't store type information for the frame slots (everything is stored as raw bits in a long,
-                    // and interpreted appropriately upon access), we don't need to do anything for these instructions.
+                    // As we don't store type information for the frame slots (everything is stored
+                    // as raw bits in a long,
+                    // and interpreted appropriately upon access), we don't need to do anything for
+                    // these instructions.
                     trace("push reinterpret_i32 [f32]");
                     break;
                 }
                 case F64_REINTERPRET_I64: {
-                    // As we don't store type information for the frame slots (everything is stored as raw bits in a long,
-                    // and interpreted appropriately upon access), we don't need to do anything for these instructions.
+                    // As we don't store type information for the frame slots (everything is stored
+                    // as raw bits in a long,
+                    // and interpreted appropriately upon access), we don't need to do anything for
+                    // these instructions.
                     trace("push reinterpret_i64 [f64]");
                     break;
                 }
@@ -2275,17 +2368,18 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     @TruffleBoundary
     private void resolveCallNode(int callNodeOffset) {
-        final RootCallTarget target = ((WasmCallStubNode) callNodeTable[callNodeOffset]).function().resolveCallTarget();
+        final CallTarget target = ((WasmCallStubNode) callNodeTable[callNodeOffset]).function().resolveCallTarget();
         callNodeTable[callNodeOffset] = Truffle.getRuntime().createDirectCallNode(target);
     }
 
     @ExplodeLoop
-    private Object[] createArgumentsForCall(VirtualFrame frame, WasmFunction function, int numArgs, int stackPointer) {
+    private Object[] createArgumentsForCall(VirtualFrame frame, WasmFunction function, int numArgs, int stackPointerOffset) {
         CompilerAsserts.partialEvaluationConstant(numArgs);
         Object[] args = new Object[numArgs];
+        int stackPointer = stackPointerOffset;
         for (int i = numArgs - 1; i >= 0; --i) {
             stackPointer--;
-            byte type = module().symbolTable().getFunctionTypeArgumentTypeAt(function.typeIndex(), i);
+            byte type = module().symbolTable().functionTypeArgumentTypeAt(function.typeIndex(), i);
             switch (type) {
                 case ValueTypes.I32_TYPE:
                     args[i] = popInt(frame, stackPointer);
@@ -2299,6 +2393,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case ValueTypes.F64_TYPE:
                     args[i] = popAsDouble(frame, stackPointer);
                     break;
+                default: {
+                    throw new WasmTrap(this, "Unknown type: " + type);
+                }
             }
         }
         return args;
@@ -2306,8 +2403,9 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     @ExplodeLoop
     private void unwindStack(VirtualFrame frame, int initStackPointer, int initialContinuationStackPointer, int targetBlockReturnLength) {
-        // TODO: If the targetBlockReturnLength could ever be > 1, this would invert the stack values.
-        //  The spec seems to imply that the operand stack should not be inverted.
+        // TODO: If the targetBlockReturnLength could ever be > 1, this would invert the stack
+        // values.
+        // The spec seems to imply that the operand stack should not be inverted.
         CompilerAsserts.partialEvaluationConstant(targetBlockReturnLength);
         int stackPointer = initStackPointer;
         int continuationStackPointer = initialContinuationStackPointer;
@@ -2325,9 +2423,22 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @Override
-    public ShouldContinue executeRepeatingWithValue(VirtualFrame frame) {
+    public Object executeRepeatingWithValue(VirtualFrame frame) {
         final TargetOffset offset = execute(contextReference().get(), frame);
         return offset;
+    }
+
+    @Override
+    public boolean shouldContinue(Object value) {
+        // This is a trick to avoid the load of the value field.
+        // In particular, we avoid:
+        //
+        // return this.value == 0;
+        //
+        // This helps the partial evaluator short-circuit the
+        // pattern with a diamond and a loop exit check,
+        // when br_if occurs in the loop body.
+        return value == TargetOffset.ZERO;
     }
 
     @Override
