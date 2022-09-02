@@ -1631,10 +1631,6 @@ public final class VM extends NativeEnv implements ContextAccess {
             return StaticObject.NULL;
         }
         // Verify first.
-        /*
-         * If number of entries in ParametersAttribute is inconsistent with actual parameters from
-         * the signature, it will be caught in guest java code.
-         */
         int cpLength = method.getConstantPool().length();
         for (MethodParametersAttribute.Entry entry : methodParameters.getEntries()) {
             int nameIndex = entry.getNameIndex();
@@ -1657,21 +1653,18 @@ public final class VM extends NativeEnv implements ContextAccess {
                         /* executable */ Type.java_lang_reflect_Executable,
                         /* index */ Type._int));
 
-        // Use attribute's number of parameters.
-        return getMeta().java_lang_reflect_Parameter.allocateReferenceArray(methodParameters.getEntries().length, new IntFunction<StaticObject>() {
+        return getMeta().java_lang_reflect_Parameter.allocateReferenceArray(numParams, new IntFunction<StaticObject>() {
             @Override
             public StaticObject apply(int index) {
                 MethodParametersAttribute.Entry entry = methodParameters.getEntries()[index];
                 StaticObject instance = getMeta().java_lang_reflect_Parameter.allocateInstance();
                 // For a 0 index, give an empty name.
-                StaticObject guestName;
+                String hostName = "";
                 if (entry.getNameIndex() != 0) {
-                    guestName = getMeta().toGuestString(method.getConstantPool().symbolAt(entry.getNameIndex(), "parameter name").toString());
-                } else {
-                    guestName = getJavaVersion().java9OrLater() ? StaticObject.NULL : getMeta().toGuestString("");
+                    hostName = method.getConstantPool().symbolAt(entry.getNameIndex(), "parameter name").toString();
                 }
                 parameterInit.invokeDirect(/* this */ instance,
-                                /* name */ guestName,
+                                /* name */ getMeta().toGuestString(hostName),
                                 /* modifiers */ entry.getAccessFlags(),
                                 /* executable */ executable,
                                 /* index */ index);
