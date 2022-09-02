@@ -52,7 +52,6 @@ import org.graalvm.compiler.core.common.type.DataPointerConstant;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.NodeSourcePosition;
-import org.graalvm.compiler.lir.ImplicitLIRFrameState;
 import org.graalvm.compiler.lir.LIR;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LIRInstruction;
@@ -117,14 +116,16 @@ public class CompilationResultBuilder {
         }
     }
 
-    public static class PendingImplicitException {
+    private static class PendingImplicitException {
 
         public final int codeOffset;
-        public final ImplicitLIRFrameState state;
+        public final LabelRef dispatchOffset;
+        public final DebugInfo debugInfo;
 
-        PendingImplicitException(int pcOffset, ImplicitLIRFrameState state) {
+        PendingImplicitException(int pcOffset, LabelRef dispatchOffset, DebugInfo debugInfo) {
             this.codeOffset = pcOffset;
-            this.state = state;
+            this.dispatchOffset = dispatchOffset;
+            this.debugInfo = debugInfo;
         }
     }
 
@@ -270,6 +271,12 @@ public class CompilationResultBuilder {
                 compilationResult.recordExceptionHandler(codeOffset, ei.exceptionEdge.label().position());
             }
         }
+        if (pendingImplicitExceptionList != null) {
+            for (PendingImplicitException pendingImplicitException : pendingImplicitExceptionList) {
+                compilationResult.recordImplicitException(pendingImplicitException.codeOffset,
+                                pendingImplicitException.dispatchOffset.label().position(), pendingImplicitException.debugInfo);
+            }
+        }
         closeCompilationResult();
     }
 
@@ -292,19 +299,15 @@ public class CompilationResultBuilder {
     }
 
     public void recordImplicitException(int pcOffset, LIRFrameState info) {
-        if (info instanceof ImplicitLIRFrameState) {
-            if (pendingImplicitExceptionList == null) {
-                pendingImplicitExceptionList = new ArrayList<>(4);
-            }
-            pendingImplicitExceptionList.add(new PendingImplicitException(pcOffset, (ImplicitLIRFrameState) info));
-        } else {
-            recordImplicitException(pcOffset, pcOffset, info);
-        }
+        compilationResult.recordImplicitException(pcOffset, pcOffset, info.debugInfo());
+        assert info.exceptionEdge == null;
     }
 
-    public void recordImplicitException(int pcOffset, int dispatchOffset, LIRFrameState info) {
-        compilationResult.recordImplicitException(pcOffset, dispatchOffset, info.debugInfo());
-        assert info.exceptionEdge == null;
+    public void recordImplicitException(int pcOffset, LabelRef dispatchEdge, LIRFrameState info) {
+        if (pendingImplicitExceptionList == null) {
+            pendingImplicitExceptionList = new ArrayList<>(4);
+        }
+        pendingImplicitExceptionList.add(new PendingImplicitException(pcOffset, dispatchEdge, info.debugInfo()));
     }
 
     public boolean isImplicitExceptionExist(int pcOffset) {
@@ -753,9 +756,5 @@ public class CompilationResultBuilder {
 
     public boolean needsMHDeoptHandler() {
         return needsMHDeoptHandler;
-    }
-
-    public List<PendingImplicitException> getPendingImplicitExceptionList() {
-        return pendingImplicitExceptionList;
     }
 }

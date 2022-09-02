@@ -30,7 +30,6 @@ import java.util.List;
 
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
@@ -62,8 +61,8 @@ import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.tiers.LowTierContext;
 
 import jdk.vm.ci.meta.DeoptimizationReason;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.meta.SpeculationLog.Speculation;
 
 public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
@@ -88,15 +87,14 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
         }
         assert graph.getGuardsStage().areFrameStatesAtDeopts();
 
-        MetaAccessProvider metaAccessProvider = context.getMetaAccess();
         long implicitNullCheckLimit = context.getTarget().implicitNullCheckLimit;
         for (DeoptimizeNode deopt : graph.getNodes(DeoptimizeNode.TYPE)) {
-            tryUseTrappingNullCheck(deopt, deopt.predecessor(), deopt.getReason(), deopt.getSpeculation(), implicitNullCheckLimit,
-                            deopt.getActionAndReason(metaAccessProvider).asJavaConstant(), deopt.getSpeculation(metaAccessProvider).asJavaConstant());
+            tryUseTrappingNullCheck(deopt, deopt.predecessor(), deopt.getReason(), deopt.getSpeculation(), implicitNullCheckLimit);
         }
         for (DynamicDeoptimizeNode deopt : graph.getNodes(DynamicDeoptimizeNode.TYPE)) {
-            tryUseTrappingNullCheck(metaAccessProvider, deopt, implicitNullCheckLimit);
+            tryUseTrappingNullCheck(context.getMetaAccess(), deopt, implicitNullCheckLimit);
         }
+
     }
 
     private static void tryUseTrappingNullCheck(MetaAccessProvider metaAccessProvider, DynamicDeoptimizeNode deopt, long implicitNullCheckLimit) {
@@ -161,20 +159,24 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
                 }
                 DeoptimizationReason deoptimizationReason = metaAccessProvider.decodeDeoptReason(thisReason.asJavaConstant());
                 Speculation speculationConstant = metaAccessProvider.decodeSpeculation(thisSpeculation.asJavaConstant(), deopt.graph().getSpeculationLog());
-                tryUseTrappingNullCheck(deopt, endPredecesssor, deoptimizationReason, speculationConstant, implicitNullCheckLimit,
-                                thisReason.asJavaConstant(), thisSpeculation.asJavaConstant());
+                tryUseTrappingNullCheck(deopt, endPredecesssor, deoptimizationReason, speculationConstant, implicitNullCheckLimit);
             }
         }
     }
 
-    private static void tryUseTrappingNullCheck(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason,
-                    Speculation speculation, long implicitNullCheckLimit, JavaConstant deoptReasonAndAction, JavaConstant deoptSpeculation) {
+    private static void tryUseTrappingNullCheck(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason, Speculation speculation, long implicitNullCheckLimit) {
         assert predecessor != null;
         if (deoptimizationReason != DeoptimizationReason.NullCheckException && deoptimizationReason != DeoptimizationReason.UnreachedCode &&
                         deoptimizationReason != DeoptimizationReason.TypeCheckedInliningViolated) {
             deopt.getDebug().log(DebugContext.INFO_LEVEL, "Not a null check or unreached %s", predecessor);
             return;
         }
+        assert speculation != null;
+        if (!speculation.equals(SpeculationLog.NO_SPECULATION)) {
+            deopt.getDebug().log(DebugContext.INFO_LEVEL, "Has a speculation %s", predecessor);
+            return;
+        }
+
         // Skip over loop exit nodes.
         Node pred = predecessor;
         while (pred instanceof LoopExitNode) {
@@ -184,18 +186,17 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
             AbstractMergeNode merge = (AbstractMergeNode) pred;
             if (merge.phis().isEmpty()) {
                 for (AbstractEndNode end : merge.cfgPredecessors().snapshot()) {
-                    checkPredecessor(deopt, end.predecessor(), deoptimizationReason, implicitNullCheckLimit, deoptReasonAndAction, deoptSpeculation);
+                    checkPredecessor(deopt, end.predecessor(), deoptimizationReason, implicitNullCheckLimit);
                 }
             }
         } else if (pred instanceof AbstractBeginNode) {
-            checkPredecessor(deopt, pred, deoptimizationReason, implicitNullCheckLimit, deoptReasonAndAction, deoptSpeculation);
+            checkPredecessor(deopt, pred, deoptimizationReason, implicitNullCheckLimit);
         } else {
             deopt.getDebug().log(DebugContext.INFO_LEVEL, "Not a Begin or Merge %s", pred);
         }
     }
 
-    private static void checkPredecessor(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason, long implicitNullCheckLimit,
-                    JavaConstant deoptReasonAndAction, JavaConstant deoptSpeculation) {
+    private static void checkPredecessor(AbstractDeoptimizeNode deopt, Node predecessor, DeoptimizationReason deoptimizationReason, long implicitNullCheckLimit) {
         Node current = predecessor;
         AbstractBeginNode branch = null;
         while (current instanceof AbstractBeginNode) {
@@ -213,17 +214,12 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
             }
             LogicNode condition = ifNode.condition();
             if (condition instanceof IsNullNode) {
-                if (deoptimizationReason != DeoptimizationReason.NullCheckException && deoptimizationReason != DeoptimizationReason.UnreachedCode &&
-                                deoptimizationReason != DeoptimizationReason.TypeCheckedInliningViolated) {
-                    TTY.println("Not a null check or unreached %s %s", predecessor, deoptimizationReason);
-                }
-                replaceWithTrappingNullCheck(deopt, ifNode, condition, deoptimizationReason, implicitNullCheckLimit, deoptReasonAndAction, deoptSpeculation);
+                replaceWithTrappingNullCheck(deopt, ifNode, condition, deoptimizationReason, implicitNullCheckLimit);
             }
         }
     }
 
-    private static void replaceWithTrappingNullCheck(AbstractDeoptimizeNode deopt, IfNode ifNode, LogicNode condition, DeoptimizationReason deoptimizationReason,
-                    long implicitNullCheckLimit, JavaConstant deoptReasonAndAction, JavaConstant deoptSpeculation) {
+    private static void replaceWithTrappingNullCheck(AbstractDeoptimizeNode deopt, IfNode ifNode, LogicNode condition, DeoptimizationReason deoptimizationReason, long implicitNullCheckLimit) {
         DebugContext debug = deopt.getDebug();
         StructuredGraph graph = deopt.graph();
         counterTrappingNullCheck.increment(debug);
@@ -259,8 +255,6 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
                         // Opportunity for implicit null check as part of an existing read found!
                         fixedAccessNode.setStateBefore(deopt.stateBefore());
                         fixedAccessNode.setNullCheck(true);
-                        fixedAccessNode.setDeoptReasonAndAction(deoptReasonAndAction);
-                        fixedAccessNode.setDeoptSpeculation(deoptSpeculation);
                         graph.removeSplit(ifNode, nonTrappingContinuation);
                         trappingNullCheck = fixedAccessNode;
                         counterTrappingNullCheckExistingRead.increment(debug);
@@ -272,7 +266,7 @@ public class UseTrappingNullChecksPhase extends BasePhase<LowTierContext> {
 
         if (trappingNullCheck == null) {
             // Need to add a null check node.
-            trappingNullCheck = graph.add(new NullCheckNode(value, deoptReasonAndAction, deoptSpeculation));
+            trappingNullCheck = graph.add(new NullCheckNode(value));
             graph.replaceSplit(ifNode, trappingNullCheck, nonTrappingContinuation);
             debug.log("Inserted NullCheckNode %s", trappingNullCheck);
         }
