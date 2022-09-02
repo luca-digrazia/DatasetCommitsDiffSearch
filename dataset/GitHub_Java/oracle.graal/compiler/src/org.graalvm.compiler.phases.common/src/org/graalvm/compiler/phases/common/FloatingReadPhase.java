@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,7 +48,6 @@ import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopEndNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.PhiNode;
-import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StartNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -141,7 +140,7 @@ public class FloatingReadPhase extends Phase {
 
     @Override
     public float codeSizeIncrease() {
-        return 1.50f;
+        return 1.25f;
     }
 
     /**
@@ -167,9 +166,9 @@ public class FloatingReadPhase extends Phase {
 
     protected void processNode(FixedNode node, EconomicSet<LocationIdentity> currentState) {
         if (node instanceof MemoryCheckpoint.Single) {
-            processIdentity(currentState, ((MemoryCheckpoint.Single) node).getKilledLocationIdentity());
+            processIdentity(currentState, ((MemoryCheckpoint.Single) node).getLocationIdentity());
         } else if (node instanceof MemoryCheckpoint.Multi) {
-            for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getKilledLocationIdentities()) {
+            for (LocationIdentity identity : ((MemoryCheckpoint.Multi) node).getLocationIdentities()) {
                 processIdentity(currentState, identity);
             }
         }
@@ -275,7 +274,7 @@ public class FloatingReadPhase extends Phase {
                 }
                 mergedStatesCount++;
             }
-            newState.getMap().put(key, merged);
+            newState.lastMemorySnapshot.put(key, merged);
         }
         return newState;
 
@@ -302,16 +301,6 @@ public class FloatingReadPhase extends Phase {
 
         @Override
         protected MemoryMapImpl processNode(FixedNode node, MemoryMapImpl state) {
-
-            if (node instanceof LoopExitNode) {
-                final LoopExitNode loopExitNode = (LoopExitNode) node;
-                final EconomicSet<LocationIdentity> modifiedInLoop = modifiedInLoops.get(loopExitNode.loopBegin());
-                final boolean anyModified = modifiedInLoop.contains(LocationIdentity.any());
-                state.getMap().replaceAll((locationIdentity, memoryNode) -> (anyModified || modifiedInLoop.contains(locationIdentity))
-                                ? ProxyNode.forMemory(memoryNode, loopExitNode, locationIdentity)
-                                : memoryNode);
-            }
-
             if (node instanceof MemoryAnchorNode) {
                 processAnchor((MemoryAnchorNode) node, state);
                 return state;
@@ -323,8 +312,7 @@ public class FloatingReadPhase extends Phase {
 
             if (createFloatingReads && node instanceof FloatableAccessNode) {
                 processFloatable((FloatableAccessNode) node, state);
-            }
-            if (node instanceof MemoryCheckpoint.Single) {
+            } else if (node instanceof MemoryCheckpoint.Single) {
                 processCheckpoint((MemoryCheckpoint.Single) node, state);
             } else if (node instanceof MemoryCheckpoint.Multi) {
                 processCheckpoint((MemoryCheckpoint.Multi) node, state);
@@ -332,7 +320,7 @@ public class FloatingReadPhase extends Phase {
             assert MemoryCheckpoint.TypeAssertion.correctType(node) : node;
 
             if (createMemoryMapNodes && node instanceof ReturnNode) {
-                ((ReturnNode) node).setMemoryMap(node.graph().unique(new MemoryMapNode(state.getMap())));
+                ((ReturnNode) node).setMemoryMap(node.graph().unique(new MemoryMapNode(state.lastMemorySnapshot)));
             }
             return state;
         }
@@ -367,21 +355,21 @@ public class FloatingReadPhase extends Phase {
         }
 
         private static void processCheckpoint(MemoryCheckpoint.Single checkpoint, MemoryMapImpl state) {
-            processIdentity(checkpoint.getKilledLocationIdentity(), checkpoint, state);
+            processIdentity(checkpoint.getLocationIdentity(), checkpoint, state);
         }
 
         private static void processCheckpoint(MemoryCheckpoint.Multi checkpoint, MemoryMapImpl state) {
-            for (LocationIdentity identity : checkpoint.getKilledLocationIdentities()) {
+            for (LocationIdentity identity : checkpoint.getLocationIdentities()) {
                 processIdentity(identity, checkpoint, state);
             }
         }
 
         private static void processIdentity(LocationIdentity identity, MemoryCheckpoint checkpoint, MemoryMapImpl state) {
             if (identity.isAny()) {
-                state.getMap().clear();
+                state.lastMemorySnapshot.clear();
             }
             if (identity.isMutable()) {
-                state.getMap().put(identity, checkpoint);
+                state.lastMemorySnapshot.put(identity, checkpoint);
             }
         }
 
@@ -393,8 +381,7 @@ public class FloatingReadPhase extends Phase {
                 assert accessNode.getNullCheck() == false;
                 MemoryNode lastLocationAccess = state.getLastLocationAccess(locationIdentity);
                 try (DebugCloseable position = accessNode.withNodeSourcePosition()) {
-                    FloatingAccessNode floatingNode = accessNode.asFloatingNode();
-                    assert floatingNode.getLastLocationAccess() == lastLocationAccess;
+                    FloatingAccessNode floatingNode = accessNode.asFloatingNode(lastLocationAccess);
                     graph.replaceFixedWithFloating(accessNode, floatingNode);
                 }
             }
@@ -417,7 +404,7 @@ public class FloatingReadPhase extends Phase {
                  * side it needs to choose by putting in the location identity on both successors.
                  */
                 InvokeWithExceptionNode invoke = (InvokeWithExceptionNode) node.predecessor();
-                result.getMap().put(invoke.getKilledLocationIdentity(), (MemoryCheckpoint) node);
+                result.lastMemorySnapshot.put(invoke.getLocationIdentity(), (MemoryCheckpoint) node);
             }
             return result;
         }
@@ -429,13 +416,13 @@ public class FloatingReadPhase extends Phase {
             if (modifiedLocations.contains(LocationIdentity.any())) {
                 // create phis for all locations if ANY is modified in the loop
                 modifiedLocations = EconomicSet.create(Equivalence.DEFAULT, modifiedLocations);
-                modifiedLocations.addAll(initialState.getMap().getKeys());
+                modifiedLocations.addAll(initialState.lastMemorySnapshot.getKeys());
             }
 
             for (LocationIdentity location : modifiedLocations) {
                 createMemoryPhi(loop, initialState, phis, location);
             }
-            initialState.getMap().putAll(phis);
+            initialState.lastMemorySnapshot.putAll(phis);
 
             LoopInfo<MemoryMapImpl> loopInfo = ReentrantNodeIterator.processLoop(this, loop, initialState);
 

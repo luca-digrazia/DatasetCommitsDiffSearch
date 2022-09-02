@@ -488,10 +488,10 @@ public class BytecodeParser implements GraphBuilderContext {
     protected static final CounterKey EXPLICIT_EXCEPTIONS = DebugContext.counter("ExplicitExceptions");
 
     /**
-     * A scoped object for tasks to be performed after inlining during parsing such as processing
+     * A scoped object for tasks to be performed after parsing an intrinsic such as processing
      * {@linkplain BytecodeFrame#isPlaceholderBci(int) placeholder} frames states.
      */
-    static class InliningScope implements AutoCloseable {
+    static class IntrinsicScope implements AutoCloseable {
         FrameState stateBefore;
         final Mark mark;
         final BytecodeParser parser;
@@ -502,7 +502,7 @@ public class BytecodeParser implements GraphBuilderContext {
          *
          * @param parser the parsing context of the intrinsic
          */
-        InliningScope(BytecodeParser parser) {
+        IntrinsicScope(BytecodeParser parser) {
             this.parser = parser;
             assert parser.parent == null;
             assert parser.bci() == 0;
@@ -515,7 +515,7 @@ public class BytecodeParser implements GraphBuilderContext {
          * @param parser the parsing context of the (non-intrinsic) method calling the intrinsic
          * @param args the arguments to the call
          */
-        InliningScope(BytecodeParser parser, JavaKind[] argSlotKinds, ValueNode[] args) {
+        IntrinsicScope(BytecodeParser parser, JavaKind[] argSlotKinds, ValueNode[] args) {
             assert !parser.parsingIntrinsic();
             this.parser = parser;
             mark = parser.getGraph().getMark();
@@ -524,16 +524,22 @@ public class BytecodeParser implements GraphBuilderContext {
 
         @Override
         public void close() {
-            processPlaceholderFrameStates(false);
+            IntrinsicContext intrinsic = parser.intrinsicContext;
+            if (intrinsic != null && intrinsic.isPostParseInlined()) {
+                return;
+            }
+
+            processPlaceholderFrameStates(intrinsic);
         }
 
         /**
          * Fixes up the {@linkplain BytecodeFrame#isPlaceholderBci(int) placeholder} frame states
          * added to the graph while parsing/inlining the intrinsic for which this object exists.
          */
-        protected void processPlaceholderFrameStates(boolean isCompilationRoot) {
+        private void processPlaceholderFrameStates(IntrinsicContext intrinsic) {
             StructuredGraph graph = parser.getGraph();
             graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "Before processPlaceholderFrameStates in %s", parser.method);
+            boolean sawInvalidFrameState = false;
             for (Node node : graph.getNewNodes(mark)) {
                 if (node instanceof FrameState) {
                     FrameState frameState = (FrameState) node;
@@ -541,7 +547,7 @@ public class BytecodeParser implements GraphBuilderContext {
                         if (frameState.bci == BytecodeFrame.AFTER_BCI) {
                             if (parser.getInvokeReturnType() == null) {
                                 // A frame state in a root compiled intrinsic.
-                                assert isCompilationRoot;
+                                assert intrinsic.isCompilationRoot();
                                 FrameState newFrameState = graph.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI));
                                 frameState.replaceAndDelete(newFrameState);
                             } else {
@@ -551,7 +557,7 @@ public class BytecodeParser implements GraphBuilderContext {
                                 if (frameState.stackSize() != 0) {
                                     ValueNode returnVal = frameState.stackAt(0);
                                     if (!ReturnToCallerData.containsReturnValue(returnDataList, returnVal)) {
-                                        throw new GraalError("AFTER_BCI frame state within a sub-parse has a non-return value on the stack: %s", returnVal);
+                                        throw new GraalError("AFTER_BCI frame state within an intrinsic has a non-return value on the stack: %s", returnVal);
                                     }
 
                                     // Swap the top-of-stack value with the return value
@@ -563,7 +569,15 @@ public class BytecodeParser implements GraphBuilderContext {
                                     newFrameState.setNodeSourcePosition(frameState.getNodeSourcePosition());
                                     frameStateBuilder.push(returnKind, tos);
                                 } else if (returnKind != JavaKind.Void) {
-                                    handleReturnMismatch(graph, frameState);
+                                    // If the intrinsic returns a non-void value, then any frame
+                                    // state with an empty stack is invalid as it cannot
+                                    // be used to deoptimize to just after the call returns.
+                                    // These invalid frame states are expected to be removed
+                                    // by later compilation stages.
+                                    FrameState newFrameState = graph.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI));
+                                    newFrameState.setNodeSourcePosition(frameState.getNodeSourcePosition());
+                                    frameState.replaceAndDelete(newFrameState);
+                                    sawInvalidFrameState = true;
                                 } else {
                                     // An intrinsic for a void method.
                                     FrameState newFrameState = frameStateBuilder.create(parser.stream.nextBCI(), null);
@@ -603,62 +617,17 @@ public class BytecodeParser implements GraphBuilderContext {
                     }
                 }
             }
-            graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "After processPlaceholderFrameStates in %s", parser.method);
-        }
-
-        protected void handleReturnMismatch(StructuredGraph graph, FrameState frameState) {
-            throw GraalError.shouldNotReachHere("Unexpected return kind mismatch in " + parser.method + " at FS " + frameState);
-        }
-    }
-
-    static class IntrinsicScope extends InliningScope {
-        boolean sawInvalidFrameState;
-
-        IntrinsicScope(BytecodeParser parser) {
-            super(parser);
-        }
-
-        IntrinsicScope(BytecodeParser parser, JavaKind[] argSlotKinds, ValueNode[] args) {
-            super(parser, argSlotKinds, args);
-        }
-
-        @Override
-        public void close() {
-            IntrinsicContext intrinsic = parser.intrinsicContext;
-            boolean isRootCompilation;
-            if (intrinsic != null) {
-                if (intrinsic.isPostParseInlined()) {
-                    return;
-                }
-                isRootCompilation = intrinsic.isCompilationRoot();
-            } else {
-                isRootCompilation = false;
-            }
-            processPlaceholderFrameStates(isRootCompilation);
             if (sawInvalidFrameState) {
                 JavaKind returnKind = parser.getInvokeReturnType().getJavaKind();
                 FrameStateBuilder frameStateBuilder = parser.frameState;
                 ValueNode returnValue = frameStateBuilder.pop(returnKind);
-                StructuredGraph graph = parser.lastInstr.graph();
                 StateSplitProxyNode proxy = graph.add(new StateSplitProxyNode(returnValue));
                 parser.lastInstr.setNext(proxy);
                 frameStateBuilder.push(returnKind, proxy);
                 proxy.setStateAfter(parser.createFrameState(parser.stream.nextBCI(), proxy));
                 parser.lastInstr = proxy;
             }
-        }
-
-        @Override
-        protected void handleReturnMismatch(StructuredGraph graph, FrameState frameState) {
-            // If the intrinsic returns a non-void value, then any frame
-            // state with an empty stack is invalid as it cannot
-            // be used to deoptimize to just after the call returns.
-            // These invalid frame states are expected to be removed
-            // by later compilation stages.
-            FrameState newFrameState = graph.add(new FrameState(BytecodeFrame.INVALID_FRAMESTATE_BCI));
-            newFrameState.setNodeSourcePosition(frameState.getNodeSourcePosition());
-            frameState.replaceAndDelete(newFrameState);
-            sawInvalidFrameState = true;
+            graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "After processPlaceholderFrameStates in %s", parser.method);
         }
     }
 
@@ -808,7 +777,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
     @SuppressWarnings("try")
     protected void buildRootMethod() {
-        FrameStateBuilder startFrameState = new FrameStateBuilder(this, code, graph, graphBuilderConfig.retainLocalVariables());
+        FrameStateBuilder startFrameState = new FrameStateBuilder(this, code, graph);
         startFrameState.initializeForMethodStart(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null, graphBuilderConfig.getPlugins());
 
         try (IntrinsicScope s = intrinsicContext != null ? new IntrinsicScope(this) : null) {
@@ -2472,10 +2441,9 @@ public class BytecodeParser implements GraphBuilderContext {
         FixedWithNextNode calleeBeforeUnwindNode = null;
         ValueNode calleeUnwindValue = null;
 
-        try (InliningScope s = parsingIntrinsic() ? null : (calleeIntrinsicContext != null ? new IntrinsicScope(this, targetMethod.getSignature().toParameterKinds(!targetMethod.isStatic()), args)
-                        : new InliningScope(this, targetMethod.getSignature().toParameterKinds(!targetMethod.isStatic()), args))) {
+        try (IntrinsicScope s = calleeIntrinsicContext != null && !parsingIntrinsic() ? new IntrinsicScope(this, targetMethod.getSignature().toParameterKinds(!targetMethod.isStatic()), args) : null) {
             BytecodeParser parser = graphBuilderInstance.createBytecodeParser(graph, this, targetMethod, INVOCATION_ENTRY_BCI, calleeIntrinsicContext);
-            FrameStateBuilder startFrameState = new FrameStateBuilder(parser, parser.code, graph, graphBuilderConfig.retainLocalVariables());
+            FrameStateBuilder startFrameState = new FrameStateBuilder(parser, parser.code, graph);
             if (!targetMethod.isStatic()) {
                 args[0] = nullCheckedValue(args[0]);
             }

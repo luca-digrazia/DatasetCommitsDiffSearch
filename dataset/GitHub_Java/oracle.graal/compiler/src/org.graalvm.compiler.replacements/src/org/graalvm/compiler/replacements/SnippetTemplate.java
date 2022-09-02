@@ -675,7 +675,7 @@ public class SnippetTemplate {
             ResolvedJavaMethod javaMethod = findMethod(providers.getMetaAccess(), declaringClass, methodName);
             assert javaMethod != null : "did not find @" + Snippet.class.getSimpleName() + " method in " + declaringClass + " named " + methodName;
             assert javaMethod.getAnnotation(Snippet.class) != null : javaMethod + " must be annotated with @" + Snippet.class.getSimpleName();
-            providers.getReplacements().registerSnippet(javaMethod, original, receiver, GraalOptions.TrackNodeSourcePosition.getValue(options), options);
+            providers.getReplacements().registerSnippet(javaMethod, original, receiver, GraalOptions.TrackNodeSourcePosition.getValue(options));
             LocationIdentity[] privateLocations = GraalOptions.SnippetCounters.getValue(options) ? SnippetCounterNode.addSnippetCounters(initialPrivateLocations) : initialPrivateLocations;
             if (GraalOptions.EagerSnippets.getValue(options)) {
                 return new EagerSnippetInfo(javaMethod, original, privateLocations, receiver);
@@ -691,7 +691,7 @@ public class SnippetTemplate {
                 Description description = new Description(args.cacheKey.method, "SnippetTemplate_" + nextSnippetTemplateId.incrementAndGet());
                 return DebugContext.create(options, description, outer.getGlobalMetrics(), DEFAULT_LOG_STREAM, factories);
             }
-            return DebugContext.disabled(options);
+            return DebugContext.DISABLED;
         }
 
         /**
@@ -764,8 +764,7 @@ public class SnippetTemplate {
 
         Object[] constantArgs = getConstantArgs(args);
         boolean shouldTrackNodeSourcePosition1 = trackNodeSourcePosition || (providers.getCodeCache() != null && providers.getCodeCache().shouldDebugNonSafepoints());
-        StructuredGraph snippetGraph = providers.getReplacements().getSnippet(args.info.method, args.info.original, constantArgs, shouldTrackNodeSourcePosition1, replacee.getNodeSourcePosition(),
-                        options);
+        StructuredGraph snippetGraph = providers.getReplacements().getSnippet(args.info.method, args.info.original, constantArgs, shouldTrackNodeSourcePosition1, replacee.getNodeSourcePosition());
 
         ResolvedJavaMethod method = snippetGraph.method();
         Signature signature = method.getSignature();
@@ -966,7 +965,9 @@ public class SnippetTemplate {
                         }
                         retNode.setMemoryMap(null);
                     }
-                    memoryMap.safeDelete();
+                    if (memoryMap != null) {
+                        memoryMap.safeDelete();
+                    }
                 }
                 if (needsAnchor) {
                     snippetCopy.addAfterFixed(snippetCopy.start(), anchor);

@@ -109,9 +109,6 @@ public class GraphDecoder {
         /** All merges created during loop explosion. */
         public final EconomicSet<Node> loopExplosionMerges;
 
-        /** Known values that were written to the frames. */
-        public final EconomicMap<Integer, Node> frameSlotStates;
-
         /**
          * The start of explosion, and the merge point for when irreducible loops are detected. Only
          * used when {@link MethodScope#loopExplosion} is {@link LoopExplosionKind#MERGE_EXPLODE}.
@@ -124,7 +121,6 @@ public class GraphDecoder {
             this.encodedGraph = encodedGraph;
             this.loopExplosion = loopExplosion;
             this.returnAndUnwindNodes = new ArrayList<>(2);
-            this.frameSlotStates = EconomicMap.create();
 
             if (encodedGraph != null) {
                 reader = UnsafeArrayTypeReader.create(encodedGraph.getEncoding(), encodedGraph.getStartOffset(), architecture.supportsUnalignedMemoryAccess());
@@ -882,37 +878,33 @@ public class GraphDecoder {
                 registerNode(outerScope, proxyOrderId, phiInput, true, false);
                 replacement = phiInput;
 
-            } else {
-                // Fortify: Suppress Null Dereference false positive
-                assert merge != null;
-
-                if (!merge.isPhiAtMerge(existing)) {
-                    /* Now we have two different values, so we need to create a phi node. */
-                    PhiNode phi;
-                    if (proxy instanceof ValueProxyNode) {
-                        phi = graph.addWithoutUnique(new ValuePhiNode(proxy.stamp(NodeView.DEFAULT), merge));
-                    } else if (proxy instanceof GuardProxyNode) {
-                        phi = graph.addWithoutUnique(new GuardPhiNode(merge));
-                    } else {
-                        throw GraalError.shouldNotReachHere();
-                    }
-                    /* Add the inputs from all previous exits. */
-                    for (int j = 0; j < merge.phiPredecessorCount() - 1; j++) {
-                        phi.addInput(existing);
-                    }
-                    /* Add the input from this exit. */
-                    phi.addInput(phiInput);
-                    registerNode(outerScope, proxyOrderId, phi, true, false);
-                    replacement = phi;
-                    phiCreated = true;
-
+            } else if (!merge.isPhiAtMerge(existing)) { // TODO: `merge` could be null
+                /* Now we have two different values, so we need to create a phi node. */
+                PhiNode phi;
+                if (proxy instanceof ValueProxyNode) {
+                    phi = graph.addWithoutUnique(new ValuePhiNode(proxy.stamp(NodeView.DEFAULT), merge));
+                } else if (proxy instanceof GuardProxyNode) {
+                    phi = graph.addWithoutUnique(new GuardPhiNode(merge));
                 } else {
-                    /* Phi node has been created before, so just add the new input. */
-                    PhiNode phi = (PhiNode) existing;
-                    phi.addInput(phiInput);
-                    replacement = phi;
+                    throw GraalError.shouldNotReachHere();
                 }
+                /* Add the inputs from all previous exits. */
+                for (int j = 0; j < merge.phiPredecessorCount() - 1; j++) {
+                    phi.addInput(existing);
+                }
+                /* Add the input from this exit. */
+                phi.addInput(phiInput);
+                registerNode(outerScope, proxyOrderId, phi, true, false);
+                replacement = phi;
+                phiCreated = true;
+
+            } else {
+                /* Phi node has been created before, so just add the new input. */
+                PhiNode phi = (PhiNode) existing;
+                phi.addInput(phiInput);
+                replacement = phi;
             }
+
             proxy.replaceAtUsagesAndDelete(replacement);
         }
 

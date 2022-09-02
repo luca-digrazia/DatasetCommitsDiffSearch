@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -742,8 +742,8 @@ public class GraphUtil {
 
     /**
      * Tries to find an original value of the given node by traversing through proxies and
-     * unambiguous phis. Note that this method will perform an exhaustive search through phis. This
-     * method must not be used during graph building as phi nodes may not yet have all their inputs.
+     * unambiguous phis. Note that this method will perform an exhaustive search through phis. It is
+     * intended to be used during graph building, when phi nodes aren't yet canonicalized.
      *
      * @param value The node whose original value should be determined.
      * @return The original value (which might be the input value itself).
