@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -295,14 +295,6 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
 
     default VirtualStackSlot allocateStackSlots(int slots) {
         return getResult().getFrameMapBuilder().allocateStackSlots(slots);
-    }
-
-    default Value emitTimeStamp() {
-        throw new GraalError("Emitting code to return the current value of the timestamp counter is not currently supported on %s", target().arch);
-    }
-
-    default Value emitTimeStampWithProcid() {
-        throw new GraalError("Emitting code to return the current value of the timestamp counter with procid is not currently supported on %s", target().arch);
     }
 
     default Value emitReadCallerStackPointer(Stamp wordStamp) {
