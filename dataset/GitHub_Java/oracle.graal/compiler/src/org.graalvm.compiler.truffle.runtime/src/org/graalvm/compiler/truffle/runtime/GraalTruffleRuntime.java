@@ -688,15 +688,18 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 TruffleInlining inlining = new TruffleInlining();
                 listeners.onCompilationStarted(callTarget, task.tier());
                 compilationStarted = true;
-                try {
-                    compiler.doCompile(debug, compilation, optionsMap, inlining, task, listeners.isEmpty() ? null : listeners);
+                compiler.doCompile(debug, compilation, optionsMap, inlining, task, listeners.isEmpty() ? null : listeners);
+                // Open the "Truffle::methodName" dump group if dumping is enabled.
+                try (AutoCloseable s = debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget));
+                                TruffleOutputGroup o = isPrintGraphEnabled() ? TruffleOutputGroup.openCallTarget(debug, callTarget, Collections.singletonMap(GROUP_ID, compilation)) : null) {
+                    maybeDumpTruffleTree(debug, callTarget);
+                    maybeDumpInlinedASTs(debug, callTarget, inlining);
+                    inlining.dequeueTargets();
                 } finally {
                     if (initialDebug == null) {
                         debug.close();
                     }
                 }
-                truffleDump(callTarget, compiler, compilation, optionsMap, inlining);
-                inlining.dequeueTargets();
             }
         } catch (OptimizationFailedException e) {
             // Listeners already notified
@@ -710,19 +713,9 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         }
     }
 
-    @SuppressWarnings("try")
-    private void truffleDump(OptimizedCallTarget callTarget, TruffleCompiler compiler, TruffleCompilation compilation, Map<String, Object> optionsMap, TruffleInlining inlining) throws Exception {
-        try (TruffleDebugContext debug = compiler.openDebugContext(optionsMap, compilation)) {
-            if (!debug.isDumpEnabled()) {
-                return;
-            }
-            try (AutoCloseable s = debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget));
-                            TruffleOutputGroup o = isPrintGraphEnabled() ? TruffleOutputGroup.openCallTarget(debug, callTarget, Collections.singletonMap(GROUP_ID, compilation)) : null) {
-                if (inlining.inlinedTargets().length > 1) {
-                    TruffleTreeDumper.dump(debug, callTarget, inlining);
-                }
-                TruffleTreeDumper.dump(debug, callTarget);
-            }
+    private static void maybeDumpInlinedASTs(TruffleDebugContext debug, OptimizedCallTarget callTarget, TruffleInlining inlining) throws Exception {
+        if (debug.isDumpEnabled() && inlining.inlinedTargets().length > 1) {
+            TruffleTreeDumper.dump(debug, callTarget, inlining);
         }
     }
 
@@ -736,6 +729,15 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         } finally {
             Supplier<String> serializedException = () -> CompilableTruffleAST.serializeException(t);
             callTarget.onCompilationFailed(serializedException, isSuppressedFailure(callTarget, serializedException), false, false, false);
+        }
+    }
+
+    @SuppressWarnings("try")
+    private static void maybeDumpTruffleTree(TruffleDebugContext debug, OptimizedCallTarget callTarget) throws Exception {
+        try (AutoCloseable c = debug.scope("TruffleTree")) {
+            if (debug.isDumpEnabled()) {
+                TruffleTreeDumper.dump(debug, callTarget);
+            }
         }
     }
 
