@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -47,7 +47,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
@@ -56,22 +55,12 @@ import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.junit.Test;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebugStackFrame;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
-import com.oracle.truffle.api.debug.SourceElement;
 import com.oracle.truffle.api.debug.SuspendedEvent;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.GenerateWrapper;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
-import com.oracle.truffle.api.instrumentation.ProbeNode;
-import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
@@ -79,8 +68,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 
 @SuppressWarnings({"static-method", "unused"})
@@ -90,7 +77,6 @@ public class DebugValueTest extends AbstractDebugTest {
     public void testNumValue() throws Throwable {
         final Source source = testSource("ROOT(\n" +
                         "  VARIABLE(a, 42), \n" +
-                        "  VARIABLE(b, true), \n" +
                         "  VARIABLE(inf, infinity), \n" +
                         "  STATEMENT()\n" +
                         ")\n");
@@ -101,67 +87,16 @@ public class DebugValueTest extends AbstractDebugTest {
             expectSuspended((SuspendedEvent event) -> {
                 DebugStackFrame frame = event.getTopStackFrame();
                 DebugValue value42 = frame.getScope().getDeclaredValue("a");
-                DebugValue valueTrue = frame.getScope().getDeclaredValue("b");
-                DebugValue valueInf = frame.getScope().getDeclaredValue("inf");
 
                 assertEquals("a", value42.getName());
                 assertFalse(value42.isArray());
                 assertNull(value42.getArray());
                 assertNull(value42.getProperties());
-                assertFalse(value42.isBoolean());
-                assertTrue(value42.isNumber());
-                assertTrue(value42.fitsInLong());
-                assertTrue(value42.fitsInInt());
-                assertTrue(value42.fitsInShort());
-                assertTrue(value42.fitsInByte());
-                assertTrue(value42.fitsInDouble());
-                assertTrue(value42.fitsInFloat());
-                assertFalse(value42.isString());
-                assertFalse(value42.isDate());
-                assertFalse(value42.isDuration());
-                assertFalse(value42.isInstant());
-                assertFalse(value42.isTime());
-                assertFalse(value42.isTimeZone());
-                assertEquals("42", value42.toDisplayString());
-                DebugValue value42Meta = value42.getMetaObject();
-                assertEquals("Integer", value42Meta.toDisplayString());
-                assertEquals("Integer", value42Meta.getMetaQualifiedName());
-                assertEquals("Integer", value42Meta.getMetaSimpleName());
-                assertTrue(value42Meta.isMetaInstance(value42));
-                assertFalse(value42Meta.isMetaInstance(valueTrue));
-                assertFalse(value42Meta.isMetaInstance(valueInf));
+                assertEquals("Integer", value42.getMetaObject().as(String.class));
+                assertEquals("Infinity", frame.getScope().getDeclaredValue("inf").getMetaObject().as(String.class));
                 SourceSection integerSS = value42.getSourceLocation();
                 assertEquals("source integer", integerSS.getCharacters());
-
-                assertEquals("b", valueTrue.getName());
-                assertTrue(valueTrue.isBoolean());
-                assertFalse(valueTrue.isNumber());
-                assertFalse(valueTrue.fitsInLong());
-                assertFalse(valueTrue.fitsInInt());
-                assertFalse(valueTrue.fitsInDouble());
-                assertEquals("true", valueTrue.toDisplayString());
-                DebugValue valueTrueMeta = valueTrue.getMetaObject();
-                assertEquals("Boolean", valueTrueMeta.toDisplayString());
-                assertEquals("Boolean", valueTrueMeta.getMetaQualifiedName());
-                assertEquals("Boolean", valueTrueMeta.getMetaSimpleName());
-                assertTrue(valueTrueMeta.isMetaInstance(valueTrue));
-                assertFalse(valueTrueMeta.isMetaInstance(value42));
-                assertFalse(valueTrueMeta.isMetaInstance(valueInf));
-
-                assertEquals("inf", valueInf.getName());
-                assertFalse(valueInf.isBoolean());
-                assertTrue(valueInf.isNumber());
-                assertFalse(valueInf.fitsInLong());
-                assertTrue(valueInf.fitsInDouble());
-                assertEquals("Infinity", valueInf.toDisplayString());
-                DebugValue valueInfMeta = valueInf.getMetaObject();
-                assertEquals("Infinity", valueInfMeta.toDisplayString());
-                assertEquals("Infinity", valueInfMeta.getMetaQualifiedName());
-                assertEquals("Infinity", valueInfMeta.getMetaSimpleName());
-                assertTrue(valueInfMeta.isMetaInstance(valueInf));
-                assertFalse(valueInfMeta.isMetaInstance(value42));
-                assertFalse(valueInfMeta.isMetaInstance(valueTrue));
-                SourceSection infinitySS = valueInf.getSourceLocation();
+                SourceSection infinitySS = frame.getScope().getDeclaredValue("inf").getSourceLocation();
                 assertEquals("source infinity", infinitySS.getCharacters());
             });
 
@@ -321,33 +256,33 @@ public class DebugValueTest extends AbstractDebugTest {
             assertNotNull(ap1);
             assertNotNull(ap2);
 
-            assertEquals(0, ap1.asInt());
-            assertEquals(0, ap2.asInt());
-            assertEquals(0, ap1.asInt());
+            assertEquals(0, ap1.as(Number.class).intValue());
+            assertEquals(0, ap2.as(Number.class).intValue());
+            assertEquals(0, ap1.as(Number.class).intValue());
             ap2 = a.getProperty("p2"); // Get a fresh property value
-            assertEquals(1, ap2.asInt());
+            assertEquals(1, ap2.as(Number.class).intValue());
             ap1.isArray();
             ap1.isNull();
             ap2.isArray();
             ap2.isNull();
-            assertEquals(0, ap1.asInt());
-            assertEquals(1, ap2.asInt());
+            assertEquals(0, ap1.as(Number.class).intValue());
+            assertEquals(1, ap2.as(Number.class).intValue());
 
             DebugValue ap1New = a.getProperty("p1");
             DebugValue ap2New = a.getProperty("p2");
             ap1New.isNull();
             ap2New.isNull();
-            assertEquals(1, ap1New.asInt());
-            assertEquals(2, ap2New.asInt());
+            assertEquals(1, ap1New.as(Number.class).intValue());
+            assertEquals(2, ap2New.as(Number.class).intValue());
             a.getProperty("p1");
             ap1New = a.getProperty("p1");
             ap1New.isNull();
             ap2New.isNull();
-            assertEquals(2, ap1New.asInt());
-            assertEquals(2, ap2New.asInt());
+            assertEquals(2, ap1New.as(Number.class).intValue());
+            assertEquals(2, ap2New.as(Number.class).intValue());
             // Original properties are unchanged:
-            assertEquals(0, ap1.asInt());
-            assertEquals(1, ap2.asInt());
+            assertEquals(0, ap1.as(Number.class).intValue());
+            assertEquals(1, ap2.as(Number.class).intValue());
             event.prepareContinue();
             suspended[0] = true;
         })) {
@@ -355,97 +290,6 @@ public class DebugValueTest extends AbstractDebugTest {
             functionValue.execute(ma);
         }
         assertTrue(suspended[0]);
-    }
-
-    @Test
-    public void testNull() {
-        ProxyLanguage.setDelegate(new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                return Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance));
-            }
-
-            final class TestRootNode extends RootNode {
-                @Node.Child TestBody body = new TestBody();
-
-                TestRootNode(TruffleLanguage<?> language) {
-                    super(language);
-                }
-
-                @Override
-                public Object execute(VirtualFrame frame) {
-                    if (frame.getArguments().length == 0) {
-                        return getCallTarget().call(null, 11, new Object());
-                    }
-                    return body.execute(frame);
-                }
-            }
-        });
-        try (DebuggerSession session = tester.startSession(SourceElement.ROOT)) {
-            session.suspendNextExecution();
-            Source source = Source.create(ProxyLanguage.ID, "");
-            tester.startEval(source);
-            expectSuspended((SuspendedEvent event) -> {
-                Iterator<DebugValue> declaredValues = event.getTopStackFrame().getScope().getDeclaredValues().iterator();
-                DebugValue arg0 = declaredValues.next();
-                DebugValue arg1 = declaredValues.next();
-                DebugValue arg2 = declaredValues.next();
-                assertFalse(declaredValues.hasNext());
-
-                assertFalse(arg0.isReadable());
-                assertTrue(arg1.isReadable());
-                assertFalse(arg2.isReadable());
-
-                assertEquals("<not readable>", arg0.toDisplayString());
-                assertNull(arg0.getProperties());
-                assertNull(arg0.getMetaObject());
-                assertFalse(arg0.isArray());
-                assertFalse(arg0.isBoolean());
-                assertFalse(arg0.isDate());
-                assertFalse(arg0.isDuration());
-                assertFalse(arg0.isInstant());
-                assertFalse(arg0.isInternal());
-                assertFalse(arg0.isMetaObject());
-                assertFalse(arg0.isNull());
-                assertFalse(arg0.isNumber());
-                assertFalse(arg0.isReadable());
-                assertFalse(arg0.isString());
-                assertFalse(arg0.isTime());
-                assertFalse(arg0.isTimeZone());
-
-                assertEquals("11", arg1.toDisplayString());
-                assertEquals("<not readable>", arg2.toDisplayString());
-            });
-        }
-        expectDone();
-    }
-
-    @GenerateWrapper
-    static class TestBody extends Node implements InstrumentableNode {
-
-        @Override
-        public boolean isInstrumentable() {
-            return true;
-        }
-
-        @Override
-        public boolean hasTag(Class<? extends Tag> tag) {
-            return StandardTags.RootTag.class.equals(tag);
-        }
-
-        @Override
-        public InstrumentableNode.WrapperNode createWrapper(ProbeNode probe) {
-            return new TestBodyWrapper(this, probe);
-        }
-
-        @Override
-        public SourceSection getSourceSection() {
-            return com.oracle.truffle.api.source.Source.newBuilder(ProxyLanguage.ID, "", "").build().createUnavailableSection();
-        }
-
-        public Object execute(VirtualFrame frame) {
-            return 42;
-        }
     }
 
     @ExportLibrary(InteropLibrary.class)
