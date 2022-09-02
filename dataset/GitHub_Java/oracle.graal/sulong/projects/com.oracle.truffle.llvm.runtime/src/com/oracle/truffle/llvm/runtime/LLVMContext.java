@@ -348,8 +348,7 @@ public final class LLVMContext {
     }
 
     public void addLibsulongDataLayout(DataLayout layout) {
-        // Libsulong datalayout can only be set once. This should be called by
-        // Runner#parseDefaultLibraries.
+        // Libsulong datalayout can only be set once. This should be called by Runner#parseDefaultLibraries.
         if (!datalayoutInitialised) {
             this.libsulongDatalayout = this.libsulongDatalayout.merge(layout);
             datalayoutInitialised = true;
