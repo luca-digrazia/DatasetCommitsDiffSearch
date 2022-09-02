@@ -32,14 +32,12 @@ public class DynamicThresholdsQueue extends TraversingBlockingQueue {
     private final int threads;
     private final double minScale;
     private final int normalLoad;
-    private final double plateauWidth;
 
-    public DynamicThresholdsQueue(GraalTruffleRuntime runtime, int threads, double minScale, int normalLoad, double plateauWidth) {
+    public DynamicThresholdsQueue(GraalTruffleRuntime runtime, int threads, double minScale, int normalLoad) {
         this.runtime = runtime;
         this.threads = threads;
         this.minScale = minScale;
         this.normalLoad = normalLoad;
-        this.plateauWidth = plateauWidth;
     }
 
     private double load() {
@@ -77,18 +75,7 @@ public class DynamicThresholdsQueue extends TraversingBlockingQueue {
     }
 
     private void scaleThresholds() {
-        runtime.setCompilationThresholdScale(scale());
-    }
-
-    private double scale() {
-        double x = load();
-        if ((1 - plateauWidth) * normalLoad <= x && x <= (1 + plateauWidth) * normalLoad) {
-            return 1;
-        }
         double slope = (1 - minScale) / normalLoad;
-        if (x < (1 - plateauWidth) * normalLoad) {
-            return slope * x + minScale;
-        }
-        return slope * x - (1 + plateauWidth) * slope * normalLoad + 1;
+        runtime.setCompilationThresholdScale(slope * load() + minScale);
     }
 }
