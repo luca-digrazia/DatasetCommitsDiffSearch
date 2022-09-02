@@ -31,39 +31,54 @@ import com.oracle.truffle.espresso.jdwp.impl.RequestFilter;
  */
 public class LineBreakpointInfo extends AbstractBreakpointInfo {
 
-    private final RequestFilter filter;
     private final byte typeTag;
     private final long classId;
     private final long methodId;
     private final long bci;
+    private final String slashName;
+    private final long line;
 
-    public LineBreakpointInfo(RequestFilter filter, byte tag, long classId, long methodId, long bci) {
-        super(filter.getRequestId());
-        this.filter = filter;
+    public LineBreakpointInfo(RequestFilter filter, byte tag, long classId, long methodId, long bci, String slashName, long line) {
+        super(filter);
         this.typeTag = tag;
         this.classId = classId;
         this.methodId = methodId;
         this.bci = bci;
+        this.slashName = slashName;
+        this.line = line;
     }
 
+    @Override
     public Object getThread() {
-        return filter.getThread();
+        return getFilter().getThread();
     }
 
+    @Override
     public long getClassId() {
         return classId;
     }
 
+    @Override
     public long getMethodId() {
         return methodId;
     }
 
+    @Override
     public byte getTypeTag() {
         return typeTag;
     }
 
+    @Override
     public long getBci() {
         return bci;
+    }
+
+    public String getSlashName() {
+        return slashName;
+    }
+
+    public long getLine() {
+        return line;
     }
 
     @Override

@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
-import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.LineBreakpointInfo;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
@@ -65,8 +64,8 @@ public class RequestedJDWPEvents {
     private final VMEventListener eventListener;
     private final Ids<Object> ids;
 
-    RequestedJDWPEvents(JDWPContext context, SocketConnection connection, JDWPDebuggerController controller) {
-        this.eventListener = new VMEventListenerImpl(connection, context, controller);
+    RequestedJDWPEvents(JDWPContext context, SocketConnection connection) {
+        this.eventListener = new VMEventListenerImpl(connection, context);
         VMEventListeners.getDefault().registerListener(eventListener);
         this.ids = context.getIds();
     }
@@ -110,20 +109,6 @@ public class RequestedJDWPEvents {
                 if (callable != null) {
                     futures.add(callable);
                 }
-                reply = toReply(packet);
-                break;
-            case FIELD_ACCESS:
-                FieldBreakpointInfo fieldBreakpointInfo = (FieldBreakpointInfo) filter.getBreakpointInfo();
-                fieldBreakpointInfo.addSuspendPolicy(suspendPolicy);
-                fieldBreakpointInfo.setAccessBreakpoint();
-                eventListener.addFieldBreakpointRequest(fieldBreakpointInfo);
-                reply = toReply(packet);
-                break;
-            case FIELD_MODIFICATION:
-                fieldBreakpointInfo = (FieldBreakpointInfo) filter.getBreakpointInfo();
-                fieldBreakpointInfo.addSuspendPolicy(suspendPolicy);
-                fieldBreakpointInfo.setModificationBreakpoint();
-                eventListener.addFieldBreakpointRequest(fieldBreakpointInfo);
                 reply = toReply(packet);
                 break;
             case THREAD_START:
@@ -217,14 +202,8 @@ public class RequestedJDWPEvents {
                 ExceptionBreakpointInfo exceptionBreakpointInfo = new ExceptionBreakpointInfo(filter, klass, caught, unCaught);
                 filter.addBreakpointInfo(exceptionBreakpointInfo);
                 break;
-            case 9: // limit to specific field
-                refTypeId = input.readLong();
-                long fieldId = input.readLong();
-                klass = (KlassRef) context.getIds().fromId((int) refTypeId);
-                FieldRef field = (FieldRef) context.getIds().fromId((int) fieldId);
-
-                FieldBreakpointInfo fieldBreakpointInfo = new FieldBreakpointInfo(filter, klass, field);
-                filter.addBreakpointInfo(fieldBreakpointInfo);
+            case 9:
+                System.err.println("unhandled modKind 9");
                 break;
             case 10:
                 filter.setStepping(true);

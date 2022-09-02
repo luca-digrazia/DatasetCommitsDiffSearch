@@ -38,7 +38,7 @@ public class JDWPInstrument extends TruffleInstrument implements Runnable {
     public static Object suspendStartupLock = new Object();
 
     private JDWPDebuggerController controller;
-    private TruffleInstrument.Env env;
+    TruffleInstrument.Env env;
     private JDWPContext context;
     private DebuggerConnection connection;
     private Collection<Thread> activeThreads = new ArrayList<>();
@@ -88,7 +88,7 @@ public class JDWPInstrument extends TruffleInstrument implements Runnable {
         // replace the controller instance
         JDWPOptions options = controller.getOptions();
         controller = new JDWPController(this);
-        controller.reInitialize(options, context, true);
+        controller.initialize(options, context, true);
 
         // prepare to accept a new debugger connection
         try {
