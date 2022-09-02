@@ -101,7 +101,6 @@ import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 
 import com.oracle.truffle.dsl.processor.ProcessorContext;
-import com.oracle.truffle.dsl.processor.TruffleProcessorOptions;
 import com.oracle.truffle.dsl.processor.TruffleTypes;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression;
 import com.oracle.truffle.dsl.processor.expression.DSLExpression.AbstractDSLExpressionVisitor;
@@ -203,7 +202,7 @@ public class FlatNodeGenFactory {
         this.node = node;
         this.typeSystem = node.getTypeSystem();
         this.genericType = context.getType(Object.class);
-        this.boxingEliminationEnabled = !TruffleProcessorOptions.generateSlowPathOnly(context.getEnvironment());
+        this.boxingEliminationEnabled = true;
         this.reachableSpecializations = calculateReachableSpecializations(node);
         this.reachableSpecializationsArray = reachableSpecializations.toArray(new SpecializationData[0]);
         this.primaryNode = stateSharingNodes.iterator().next() == node;
@@ -3018,43 +3017,38 @@ public class FlatNodeGenFactory {
             }
 
             boolean extractInBoundary = false;
-            boolean pushEncapsulatingNode = false;
-            // if library is used in guard we need to push encapsulating node early
-            // otherwise we can push it behind the guard
-            boolean libraryInGuard = false;
+            boolean pushEnclosingNode = false;
+
             if (specialization != null) {
-                libraryInGuard = specialization.isAnyLibraryBoundInGuard();
-                pushEncapsulatingNode = specialization.needsPushEncapsulatingNode();
-                extractInBoundary = specialization.needsTruffleBoundary();
-                if (extractInBoundary && specialization.needsVirtualFrame()) {
-                    // Cannot extract to boundary with a virtual frame.
-                    extractInBoundary = false;
+                for (GuardExpression guard : guardExpressions) {
+                    Set<CacheExpression> caches = group.getSpecialization().getBoundCaches(guard.getExpression(), true);
+                    if (cachesRequireFastPathBoundary(caches)) {
+                        // boundary cached is used in guard
+                        pushEnclosingNode = true;
+                    }
+                }
+                if (!pushEnclosingNode) {
+                    List<CacheExpression> caches = specialization.getCaches();
+                    extractInBoundary |= cachesRequireFastPathBoundary(caches);
+                    if (specialization.getFrame() != null) {
+                        if (ElementUtils.typeEquals(specialization.getFrame().getType(), types.VirtualFrame)) {
+                            // not supported for frames
+                            extractInBoundary = false;
+                        }
+                    }
                 }
             }
             List<IfTriple> nonBoundaryGuards = new ArrayList<>();
-            guards: for (Iterator<GuardExpression> iterator = guardExpressions.iterator(); iterator.hasNext();) {
+            for (Iterator<GuardExpression> iterator = guardExpressions.iterator(); iterator.hasNext();) {
                 GuardExpression guard = iterator.next();
                 Set<CacheExpression> caches = group.getSpecialization().getBoundCaches(guard.getExpression(), true);
-                for (CacheExpression cache : caches) {
-                    if (cache.isAlwaysInitialized() && cache.isRequiresBoundary()) {
-                        break guards;
-                    }
+                if (cachesRequireFastPathBoundary(caches)) {
+                    // boundary cached is used in guard
+                    break;
                 }
                 nonBoundaryGuards.addAll(initializeCaches(frameState, mode, group, caches, true, false));
                 nonBoundaryGuards.add(createMethodGuardCheck(frameState, group.getSpecialization(), guard, mode));
                 iterator.remove();
-            }
-
-            if (pushEncapsulatingNode && libraryInGuard) {
-                GeneratorUtils.pushEncapsulatingNode(builder, "this");
-                builder.startTryBlock();
-            }
-
-            for (Iterator<GuardExpression> iterator = guardExpressions.iterator(); iterator.hasNext();) {
-                GuardExpression guard = iterator.next();
-                Set<CacheExpression> caches = group.getSpecialization().getBoundCaches(guard.getExpression(), true);
-                nonBoundaryGuards.addAll(initializeCaches(frameState, mode, group, caches, true, false));
-                nonBoundaryGuards.add(createMethodGuardCheck(frameState, group.getSpecialization(), guard, mode));
             }
 
             FrameState innerFrameState = frameState;
@@ -3067,8 +3061,18 @@ public class FlatNodeGenFactory {
                 }
             }
 
+            for (GuardExpression guard : guardExpressions) {
+                Set<CacheExpression> caches = group.getSpecialization().getBoundCaches(guard.getExpression(), true);
+                cachedTriples.addAll(initializeCaches(innerFrameState, mode, group, caches, true, false));
+                cachedTriples.add(createMethodGuardCheck(innerFrameState, group.getSpecialization(), guard, mode));
+            }
+
             if (specialization != null) {
                 cachedTriples.addAll(initializeCaches(innerFrameState, frameState.getMode(), group, specialization.getCaches(), true, false));
+            }
+
+            if (pushEnclosingNode && extractInBoundary) {
+                throw new AssertionError("cannot push enclosing node and extract boundary");
             }
 
             BlockState nonBoundaryIfCount = BlockState.NONE;
@@ -3076,7 +3080,7 @@ public class FlatNodeGenFactory {
             if (extractInBoundary) {
                 nonBoundaryIfCount = nonBoundaryIfCount.add(IfTriple.materialize(builder, IfTriple.optimize(nonBoundaryGuards), false));
                 innerBuilder = extractInBoundaryMethod(builder, frameState, specialization);
-            } else if (pushEncapsulatingNode) {
+            } else if (pushEnclosingNode) {
                 innerBuilder = builder;
                 nonBoundaryIfCount = IfTriple.materialize(innerBuilder, IfTriple.optimize(nonBoundaryGuards), false);
             } else {
@@ -3084,7 +3088,7 @@ public class FlatNodeGenFactory {
                 cachedTriples.addAll(0, nonBoundaryGuards);
             }
 
-            if (pushEncapsulatingNode && !libraryInGuard) {
+            if (pushEnclosingNode || extractInBoundary) {
                 GeneratorUtils.pushEncapsulatingNode(innerBuilder, "this");
                 innerBuilder.startTryBlock();
             }
@@ -3097,22 +3101,14 @@ public class FlatNodeGenFactory {
             }
 
             innerBuilder.end(innerIfCount.blockCount);
+            hasFallthrough |= innerIfCount.ifCount > 0;
 
-            if (pushEncapsulatingNode && !libraryInGuard) {
+            if (pushEnclosingNode || extractInBoundary) {
                 innerBuilder.end().startFinallyBlock();
                 GeneratorUtils.popEncapsulatingNode(innerBuilder);
                 innerBuilder.end();
             }
-
-            hasFallthrough |= innerIfCount.ifCount > 0;
-
             builder.end(nonBoundaryIfCount.blockCount);
-
-            if (pushEncapsulatingNode && libraryInGuard) {
-                builder.end().startFinallyBlock();
-                GeneratorUtils.popEncapsulatingNode(builder);
-                builder.end();
-            }
 
             if (useSpecializationClass && specialization.getMaximumNumberOfInstances() > 1) {
                 String name = createSpecializationLocalName(specialization);
@@ -3371,7 +3367,6 @@ public class FlatNodeGenFactory {
             includeFrameParameter = FRAME_VALUE;
         }
         CodeExecutableElement boundaryMethod = new CodeExecutableElement(modifiers(PRIVATE), parentMethod.getReturnType(), boundaryMethodName);
-        GeneratorUtils.mergeSupressWarnings(boundaryMethod, "static-method");
         frameState.addParametersTo(boundaryMethod, Integer.MAX_VALUE, STATE_VALUE, includeFrameParameter,
                         createSpecializationLocalName(specialization));
         boundaryMethod.getAnnotationMirrors().add(new CodeAnnotationMirror(types.CompilerDirectives_TruffleBoundary));
@@ -4380,45 +4375,10 @@ public class FlatNodeGenFactory {
                 expression = cache.getUncachedExpression();
             } else {
                 expression = cache.getDefaultExpression();
-                if (specialization.needsTruffleBoundary() &&
-                                (specialization.isAnyLibraryBoundInGuard() || specialization.needsVirtualFrame())) {
-                    /*
-                     * Library.getUncached() should be used instead of Library.getUnached(receiver)
-                     * in order to avoid non TruffleBoundary virtual dispatches on the compiled code
-                     * path.
-                     */
-                    expression = substituteToDispatchedUncached(expression);
-                }
             }
             tree = writeExpression(frameState, specialization, expression);
         }
         return tree;
-    }
-
-    private DSLExpression substituteToDispatchedUncached(DSLExpression expression) {
-        return expression.reduce(new DSLExpressionReducer() {
-            public DSLExpression visitVariable(Variable binary) {
-                return binary;
-            }
-
-            public DSLExpression visitNegate(Negate negate) {
-                return negate;
-            }
-
-            public DSLExpression visitCall(Call call) {
-                if (call.getName().equals("getUncached") && ElementUtils.typeEquals(call.getResolvedMethod().getEnclosingElement().asType(), types.LibraryFactory)) {
-                    Call newCall = new Call(call.getReceiver(), call.getName(), Collections.emptyList());
-                    newCall.setResolvedMethod(ElementUtils.findExecutableElement(types.LibraryFactory, "getUncached", 0));
-                    newCall.setResolvedTargetType(call.getResolvedTargetType());
-                    return newCall;
-                }
-                return call;
-            }
-
-            public DSLExpression visitBinary(Binary binary) {
-                return binary;
-            }
-        });
     }
 
     private static String createElementReferenceName(CacheExpression cache) {
