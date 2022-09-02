@@ -209,7 +209,7 @@ public class FeatureImpl {
         }
 
         public boolean isReachable(AnalysisType type) {
-            return type.isReachable() || type.isInstantiated();
+            return type.isInTypeCheck() || type.isInstantiated();
         }
 
         public boolean isReachable(Field field) {
@@ -309,7 +309,7 @@ public class FeatureImpl {
         }
 
         public void registerAsUsed(AnalysisType aType) {
-            aType.registerAsReachable();
+            aType.registerAsInTypeCheck();
         }
 
         @Override
@@ -323,17 +323,11 @@ public class FeatureImpl {
 
         @Override
         public void registerAsAccessed(Field field) {
-            getMetaAccess().lookupJavaType(field.getDeclaringClass()).registerAsReachable();
             registerAsAccessed(getMetaAccess().lookupJavaField(field));
         }
 
         public void registerAsAccessed(AnalysisField aField) {
             aField.registerAsAccessed();
-        }
-
-        public void registerAsRead(Field field) {
-            getMetaAccess().lookupJavaType(field.getDeclaringClass()).registerAsReachable();
-            registerAsRead(getMetaAccess().lookupJavaField(field));
         }
 
         public void registerAsRead(AnalysisField aField) {
@@ -342,7 +336,6 @@ public class FeatureImpl {
 
         @Override
         public void registerAsUnsafeAccessed(Field field) {
-            getMetaAccess().lookupJavaType(field.getDeclaringClass()).registerAsReachable();
             registerAsUnsafeAccessed(getMetaAccess().lookupJavaField(field));
         }
 
