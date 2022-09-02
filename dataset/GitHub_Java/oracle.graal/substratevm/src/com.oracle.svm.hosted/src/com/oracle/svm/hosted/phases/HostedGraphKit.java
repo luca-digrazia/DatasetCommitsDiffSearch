@@ -24,6 +24,7 @@
  */
 package com.oracle.svm.hosted.phases;
 
+import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.debug.DebugContext;
@@ -36,7 +37,6 @@ import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PiNode;
-import org.graalvm.compiler.nodes.ProfileData.BranchProbabilityData;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.IsNullNode;
@@ -140,7 +140,7 @@ public class HostedGraphKit extends SubstrateGraphKit {
     }
 
     public GuardingNode createCheckThrowingBytecodeException(LogicNode condition, boolean failOnTrue, BytecodeExceptionNode.BytecodeExceptionKind exceptionKind, ValueNode... arguments) {
-        BranchProbabilityData trueProbability = failOnTrue ? BranchProbabilityNode.SLOW_PATH_PROFILE : BranchProbabilityNode.FAST_PATH_PROFILE;
+        double trueProbability = failOnTrue ? BranchProbabilityNode.SLOW_PATH_PROBABILITY : BranchProbabilityNode.FAST_PATH_PROBABILITY;
         IfNode ifNode = startIf(condition, trueProbability);
         if (failOnTrue) {
             thenPart();
@@ -166,6 +166,7 @@ public class HostedGraphKit extends SubstrateGraphKit {
             return object;
         }
         createCheckThrowingBytecodeException(IsNullNode.create(object), true, BytecodeExceptionNode.BytecodeExceptionKind.NULL_POINTER);
-        return append(PiNode.create(object, StampFactory.objectNonNull()));
+        Stamp nonNullStamp = object.stamp(NodeView.DEFAULT).join(StampFactory.objectNonNull());
+        return append(PiNode.create(object, nonNullStamp));
     }
 }

@@ -52,7 +52,6 @@ import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.BeginNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
-import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
@@ -473,7 +472,7 @@ public class GraphKit implements GraphBuilderTool {
     public IfNode startIf(LogicNode condition, double trueProbability) {
         AbstractBeginNode thenSuccessor = graph.add(new BeginNode());
         AbstractBeginNode elseSuccessor = graph.add(new BeginNode());
-        IfNode node = append(new IfNode(condition, thenSuccessor, elseSuccessor, trueProbability, ProfileSource.UNKNOWN));
+        IfNode node = append(new IfNode(condition, thenSuccessor, elseSuccessor, trueProbability));
         lastFixedNode = null;
 
         IfStructure s = new IfStructure();
