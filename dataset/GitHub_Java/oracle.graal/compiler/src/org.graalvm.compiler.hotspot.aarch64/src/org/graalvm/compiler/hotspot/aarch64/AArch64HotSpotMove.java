@@ -143,7 +143,7 @@ public class AArch64HotSpotMove {
                 if (encoding.hasShift()) {
                     masm.lsr(64, resultRegister, ptr, encoding.getShift());
                 } else {
-                    masm.mov(64, resultRegister, ptr);
+                    masm.movx(resultRegister, ptr);
                 }
             } else if (nonNull) {
                 masm.sub(64, resultRegister, ptr, base);
@@ -199,7 +199,7 @@ public class AArch64HotSpotMove {
                 if (shift != 0) {
                     masm.lsl(64, resReg, inputRegister, shift);
                 } else if (!resReg.equals(inputRegister)) {
-                    masm.mov(64, resReg, inputRegister);
+                    masm.movx(resReg, inputRegister);
                 }
                 return;
             }
