@@ -45,8 +45,6 @@ import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.HostedOptionValues;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.option.RuntimeOptionKey;
-import com.oracle.svm.core.option.SubstrateOptionsParser;
-import com.oracle.svm.core.option.XOptions;
 
 public class SubstrateOptions {
 
@@ -142,58 +140,8 @@ public class SubstrateOptions {
     @Option(help = "Print summary GC information after each collection")//
     public static final RuntimeOptionKey<Boolean> PrintGC = new RuntimeOptionKey<>(false);
 
-    @Option(help = "Print summary GC information after main completion")//
-    public static final RuntimeOptionKey<Boolean> PrintGCSummary = new RuntimeOptionKey<>(false);
-
-    @Option(help = "Print a time stamp at each collection, if +PrintGC or +VerboseGC.")//
-    public static final RuntimeOptionKey<Boolean> PrintGCTimeStamps = new RuntimeOptionKey<>(false);
-
     @Option(help = "Print more information about the heap before and after each collection")//
     public static final RuntimeOptionKey<Boolean> VerboseGC = new RuntimeOptionKey<>(false);
-
-    @Option(help = "The minimum heap size at run-time, in bytes.", type = OptionType.User)//
-    public static final RuntimeOptionKey<String> MinHeapSize = new RuntimeOptionKey<String>("0") {
-        @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
-            if (!SubstrateUtil.HOSTED) {
-                long size = SubstrateOptionsParser.parseLong(newValue);
-                XOptions.getXms().setValue(size);
-            }
-        }
-    };
-
-    @Option(help = "The maximum heap size at run-time, in bytes.", type = OptionType.User)//
-    public static final RuntimeOptionKey<String> MaxHeapSize = new RuntimeOptionKey<String>("0") {
-        @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
-            if (!SubstrateUtil.HOSTED) {
-                long size = SubstrateOptionsParser.parseLong(newValue);
-                XOptions.getXmx().setValue(size);
-            }
-        }
-    };
-
-    @Option(help = "The maximum size of the young generation at run-time, in bytes", type = OptionType.User)//
-    public static final RuntimeOptionKey<String> MaxNewSize = new RuntimeOptionKey<String>("0") {
-        @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
-            if (!SubstrateUtil.HOSTED) {
-                long size = SubstrateOptionsParser.parseLong(newValue);
-                XOptions.getXmn().setValue(size);
-            }
-        }
-    };
-
-    @Option(help = "The size of each thread stack at run-time, in bytes.", type = OptionType.User)//
-    public static final RuntimeOptionKey<String> StackSize = new RuntimeOptionKey<String>("0") {
-        @Override
-        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
-            if (!SubstrateUtil.HOSTED) {
-                long size = SubstrateOptionsParser.parseLong(newValue);
-                XOptions.getXss().setValue(size);
-            }
-        }
-    };
 
     @Option(help = "Verify naming conventions during image construction.")//
     public static final HostedOptionKey<Boolean> VerifyNamingConventions = new HostedOptionKey<>(false);
@@ -359,7 +307,7 @@ public class SubstrateOptions {
     @Option(help = "Emit substitutions for UTF16 and latin1 compression", type = OptionType.Debug)//
     public static final HostedOptionKey<Boolean> EmitStringEncodingSubstitutions = new HostedOptionKey<>(true);
 
-    @Option(help = "Determines if VM operations should be executed in a dedicated thread.", type = OptionType.Debug)//
+    @Option(help = "Determines if VM operations should be executed in a dedicated thread.", type = OptionType.Expert)//
     public static final HostedOptionKey<Boolean> UseDedicatedVMOperationThread = new HostedOptionKey<>(false);
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -401,23 +349,4 @@ public class SubstrateOptions {
         return GraalOptions.LoopHeaderAlignment.getValue(HostedOptionValues.singleton());
     }
 
-    @Fold
-    public static long hostedMinHeapSize() {
-        return SubstrateOptionsParser.parseLong(MinHeapSize.getValue());
-    }
-
-    @Fold
-    public static long hostedMaxHeapSize() {
-        return SubstrateOptionsParser.parseLong(MaxHeapSize.getValue());
-    }
-
-    @Fold
-    public static long hostedMaxNewSize() {
-        return SubstrateOptionsParser.parseLong(MaxNewSize.getValue());
-    }
-
-    @Fold
-    public static long hostedStackSize() {
-        return SubstrateOptionsParser.parseLong(StackSize.getValue());
-    }
 }
