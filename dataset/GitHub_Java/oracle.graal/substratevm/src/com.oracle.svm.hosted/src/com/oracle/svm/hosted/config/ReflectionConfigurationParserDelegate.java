@@ -22,22 +22,43 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.svm.agent.restrict;
+package com.oracle.svm.hosted.config;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 
-public class Configuration {
-    private final Map<String, ConfigurationType> types = new HashMap<>();
+public interface ReflectionConfigurationParserDelegate<T> {
+    T resolveType(String typeName);
 
-    public void add(ConfigurationType type) {
-        if (types.containsKey(type.getName())) {
-            throw new RuntimeException("Type must be registered exactly once");
-        }
-        types.putIfAbsent(type.getName(), type);
-    }
+    void registerType(T type);
 
-    public ConfigurationType get(String name) {
-        return types.get(name);
-    }
+    void registerPublicClasses(T type);
+
+    void registerDeclaredClasses(T type);
+
+    void registerPublicFields(T type);
+
+    void registerDeclaredFields(T type);
+
+    void registerPublicMethods(T type);
+
+    void registerDeclaredMethods(T type);
+
+    void registerPublicConstructors(T type);
+
+    void registerDeclaredConstructors(T type);
+
+    void registerField(T type, String fieldName, boolean allowWrite) throws NoSuchFieldException;
+
+    boolean registerAllMethodsWithName(T type, String methodName);
+
+    void registerMethod(T type, String methodName, List<T> methodParameterTypes) throws NoSuchMethodException;
+
+    void registerConstructor(T type, List<T> methodParameterTypes) throws NoSuchMethodException;
+
+    boolean registerAllConstructors(T type);
+
+    String getTypeName(T type);
+
+    String getSimpleName(T type);
+
 }

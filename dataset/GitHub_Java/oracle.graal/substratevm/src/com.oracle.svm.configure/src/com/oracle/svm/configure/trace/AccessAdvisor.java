@@ -29,7 +29,7 @@ import java.util.function.Supplier;
 public class AccessAdvisor {
     private boolean ignoreInternalAccesses = true;
     private boolean isInLivePhase = false;
-    private int launchPhase = 0;
+    private boolean previousIsGetApplicationClass = false;
 
     public void setIgnoreInternalAccesses(boolean enabled) {
         ignoreInternalAccesses = enabled;
@@ -56,25 +56,17 @@ public class AccessAdvisor {
         if (shouldIgnore(callerClass)) {
             return true;
         }
-        // Heuristic to ignore this sequence during startup:
-        // 1. Lookup of LauncherHelper.getApplicationClass()
-        // 2. Lookup of Class.getCanonicalName() -- only on Darwin
-        // 3. Lookup of application's main(String[])
+        // Heuristic: filter LauncherHelper as well as a lookup of main(String[]) that
+        // immediately follows a lookup of LauncherHelper.getApplicationClass()
         if ("sun.launcher.LauncherHelper".equals(queriedClass.get())) {
-            if (launchPhase == 0 && "getApplicationClass".equals(name.get()) && "()Ljava/lang/Class;".equals(signature.get())) {
-                launchPhase = 1;
-            }
+            previousIsGetApplicationClass = "getApplicationClass".equals(name.get()) && "()Ljava/lang/Class;".equals(signature.get());
             return true;
         }
-        if (launchPhase == 1 && "getCanonicalName".equals(name.get()) && "()Ljava/lang/String;".equals(signature.get())) {
-            launchPhase = 2;
-            return true;
-        }
-        if (launchPhase > 0) {
-            launchPhase = -1;
+        if (previousIsGetApplicationClass) {
             if ("main".equals(name.get()) && "([Ljava/lang/String;)V".equals(signature.get())) {
                 return true;
             }
+            previousIsGetApplicationClass = false;
         }
         /*
          * NOTE: JVM invocations cannot be reliably filtered with callerClass == null because these

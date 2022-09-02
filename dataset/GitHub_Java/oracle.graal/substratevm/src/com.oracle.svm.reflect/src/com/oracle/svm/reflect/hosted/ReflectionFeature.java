@@ -35,10 +35,8 @@ import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.hosted.FallbackFeature;
 import com.oracle.svm.hosted.FeatureImpl.DuringSetupAccessImpl;
 import com.oracle.svm.hosted.ImageClassLoader;
-import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.analysis.Inflation;
 import com.oracle.svm.hosted.config.ConfigurationDirectories;
 import com.oracle.svm.hosted.config.ConfigurationParser;
@@ -61,14 +59,12 @@ public final class ReflectionFeature implements GraalFeature {
 
     private ReflectionDataBuilder reflectionData;
     private ImageClassLoader loader;
-    private SVMHost hostVM;
 
     @Override
     public void duringSetup(DuringSetupAccess a) {
         DuringSetupAccessImpl access = (DuringSetupAccessImpl) a;
-        hostVM = access.getHostVM();
 
-        ReflectionSubstitution subst = new ReflectionSubstitution(access.getMetaAccess().getWrapped(), access.getHostVM().getClassInitializationSupport(), access.getImageClassLoader());
+        ReflectionSubstitution subst = new ReflectionSubstitution(access.getMetaAccess().getWrapped(), access.getImageClassLoader());
         access.registerSubstitutionProcessor(subst);
         ImageSingletons.add(ReflectionSubstitution.class, subst);
 
@@ -94,19 +90,11 @@ public final class ReflectionFeature implements GraalFeature {
     }
 
     @Override
-    public void beforeCompilation(BeforeCompilationAccess access) {
-        FallbackFeature.FallbackImageRequest reflectionFallback = ImageSingletons.lookup(FallbackFeature.class).reflectionFallback;
-        if (reflectionFallback != null && Options.ReflectionConfigurationFiles.getValue() == null && Options.ReflectionConfigurationResources.getValue() == null) {
-            throw reflectionFallback;
-        }
-    }
-
-    @Override
     public void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, InvocationPlugins invocationPlugins, boolean analysis, boolean hosted) {
         /*
          * The reflection invocation plugins need to be registered only when reflection is enabled
          * since it adds Field and Method objects to the image heap which otherwise are not allowed.
          */
-        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, annotationSubstitutions, invocationPlugins, hostVM, analysis, hosted);
+        ReflectionPlugins.registerInvocationPlugins(loader, snippetReflection, annotationSubstitutions, invocationPlugins, analysis, hosted);
     }
 }

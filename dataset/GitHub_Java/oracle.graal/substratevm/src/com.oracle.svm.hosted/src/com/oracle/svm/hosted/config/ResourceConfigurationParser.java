@@ -32,13 +32,14 @@ import java.util.function.Consumer;
 
 import com.oracle.svm.core.util.json.JSONParser;
 import com.oracle.svm.core.util.json.JSONParserException;
-import com.oracle.svm.hosted.ResourcesFeature.ResourcesRegistry;
 
 public class ResourceConfigurationParser extends ConfigurationParser {
-    private final ResourcesRegistry registry;
+    private final Consumer<String> resourceRegistry;
+    private final Consumer<String> resourceBundleRegistry;
 
-    public <T> ResourceConfigurationParser(ResourcesRegistry registry) {
-        this.registry = registry;
+    public ResourceConfigurationParser(Consumer<String> resourceRegistry, Consumer<String> resourceBundleRegistry) {
+        this.resourceRegistry = resourceRegistry;
+        this.resourceBundleRegistry = resourceBundleRegistry;
     }
 
     @Override
@@ -63,13 +64,13 @@ public class ResourceConfigurationParser extends ConfigurationParser {
         if (resourcesObject != null) {
             List<Object> resources = asList(resourcesObject, "Attribute 'resources' must be a list of resources");
             for (Object object : resources) {
-                parseEntry(object, "pattern", registry::addResources, "resource descriptor object", "'resources' list");
+                parseEntry(object, "pattern", resourceRegistry, "resource descriptor object", "'resources' list");
             }
         }
         if (bundlesObject != null) {
             List<Object> bundles = asList(bundlesObject, "Attribute 'bundles' must be a list of bundles");
             for (Object object : bundles) {
-                parseEntry(object, "name", registry::addResourceBundles, "bundle descriptor object", "'bundles' list");
+                parseEntry(object, "name", resourceBundleRegistry, "bundle descriptor object", "'bundles' list");
             }
         }
     }

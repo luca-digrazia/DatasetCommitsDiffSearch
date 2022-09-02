@@ -39,7 +39,6 @@ import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ExceptionCheckFuncti
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ExceptionOccurredFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ExceptionVoidFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.FindClassFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.FromReflectedFieldFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.FromReflectedMethodFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetArrayLengthFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetFieldIDFunctionPointer;
@@ -50,13 +49,9 @@ import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetStringUTFCharsFun
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetSuperclassFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.IsAssignableFromFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.NewGlobalRefFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.NewObjectArrayFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ReleaseStringUTFCharsFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.SetObjectArrayElementFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ThrowFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ThrowNewFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ToReflectedFieldFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ToReflectedMethodFunctionPointer;
 
 @CContext(JNIHeaderDirectives.class)
 @CStruct(value = "JNINativeInterface_", addStructKeyword = true)
@@ -99,16 +94,16 @@ public interface JNINativeInterface extends PointerBase {
     void setFromReflectedMethod(FromReflectedMethodFunctionPointer p);
 
     @CField
-    FromReflectedFieldFunctionPointer getFromReflectedField();
+    CFunctionPointer getFromReflectedField();
 
     @CField
-    void setFromReflectedField(FromReflectedFieldFunctionPointer p);
+    void setFromReflectedField(CFunctionPointer p);
 
     @CField
-    ToReflectedMethodFunctionPointer getToReflectedMethod();
+    CFunctionPointer getToReflectedMethod();
 
     @CField
-    void setToReflectedMethod(ToReflectedMethodFunctionPointer p);
+    void setToReflectedMethod(CFunctionPointer p);
 
     @CField
     GetSuperclassFunctionPointer getGetSuperclass();
@@ -123,10 +118,10 @@ public interface JNINativeInterface extends PointerBase {
     void setIsAssignableFrom(IsAssignableFromFunctionPointer p);
 
     @CField
-    ToReflectedFieldFunctionPointer getToReflectedField();
+    CFunctionPointer getToReflectedField();
 
     @CField
-    void setToReflectedField(ToReflectedFieldFunctionPointer p);
+    void setToReflectedField(CFunctionPointer p);
 
     @CField
     ThrowFunctionPointer getThrow();
@@ -1083,10 +1078,10 @@ public interface JNINativeInterface extends PointerBase {
     void setGetArrayLength(GetArrayLengthFunctionPointer p);
 
     @CField
-    NewObjectArrayFunctionPointer getNewObjectArray();
+    CFunctionPointer getNewObjectArray();
 
     @CField
-    void setNewObjectArray(NewObjectArrayFunctionPointer p);
+    void setNewObjectArray(CFunctionPointer p);
 
     @CField
     GetObjectArrayElementFunctionPointer getGetObjectArrayElement();
@@ -1095,10 +1090,10 @@ public interface JNINativeInterface extends PointerBase {
     void setGetObjectArrayElement(GetObjectArrayElementFunctionPointer p);
 
     @CField
-    SetObjectArrayElementFunctionPointer getSetObjectArrayElement();
+    CFunctionPointer getSetObjectArrayElement();
 
     @CField
-    void setSetObjectArrayElement(SetObjectArrayElementFunctionPointer p);
+    void setSetObjectArrayElement(CFunctionPointer p);
 
     @CField
     CFunctionPointer getNewBooleanArray();

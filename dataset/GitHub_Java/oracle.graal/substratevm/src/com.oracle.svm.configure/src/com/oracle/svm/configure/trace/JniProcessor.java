@@ -27,25 +27,20 @@ package com.oracle.svm.configure.trace;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.svm.configure.config.ConfigurationMemberKind;
-import com.oracle.svm.configure.config.TypeConfiguration;
+import com.oracle.svm.configure.config.JniConfiguration;
+import com.oracle.svm.configure.config.JniMethod;
 
 import jdk.vm.ci.meta.MetaUtil;
 
 class JniProcessor extends AbstractProcessor {
-    private final TypeConfiguration configuration;
+    private final JniConfiguration configuration = new JniConfiguration();
     private final AccessAdvisor advisor;
 
     JniProcessor(AccessAdvisor advisor) {
-        this(advisor, new TypeConfiguration());
-    }
-
-    JniProcessor(AccessAdvisor advisor, TypeConfiguration configuration) {
         this.advisor = advisor;
-        this.configuration = configuration;
     }
 
-    public TypeConfiguration getConfiguration() {
+    public JniConfiguration getConfiguration() {
         return configuration;
     }
 
@@ -64,7 +59,6 @@ class JniProcessor extends AbstractProcessor {
             return;
         }
         String declaringClassOrClazz = (declaringClass != null) ? declaringClass : clazz;
-        ConfigurationMemberKind memberKind = (declaringClass != null) ? ConfigurationMemberKind.DECLARED : ConfigurationMemberKind.PRESENT;
         switch (function) {
             case "DefineClass": {
                 String name = singleElement(args);
@@ -89,7 +83,7 @@ class JniProcessor extends AbstractProcessor {
                 String name = (String) args.get(0);
                 String signature = (String) args.get(1);
                 if (!advisor.shouldIgnoreJniMethodLookup(() -> clazz, () -> name, () -> signature, () -> callerClass)) {
-                    configuration.getOrCreateType(declaringClassOrClazz).addMethod(name, signature, memberKind);
+                    configuration.getOrCreateType(declaringClassOrClazz).getMethods().add(new JniMethod(name, signature));
                 }
                 break;
             }
@@ -97,7 +91,7 @@ class JniProcessor extends AbstractProcessor {
             case "GetStaticFieldID": {
                 expectSize(args, 2);
                 String name = (String) args.get(0);
-                configuration.getOrCreateType(declaringClassOrClazz).addField(name, memberKind);
+                configuration.getOrCreateType(declaringClassOrClazz).getFields().add(name);
                 break;
             }
         }
