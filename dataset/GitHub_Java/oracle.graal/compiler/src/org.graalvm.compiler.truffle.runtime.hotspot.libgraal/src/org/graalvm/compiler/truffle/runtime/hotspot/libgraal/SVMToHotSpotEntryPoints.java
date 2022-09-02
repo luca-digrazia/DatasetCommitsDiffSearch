@@ -286,7 +286,7 @@ final class SVMToHotSpotEntryPoints {
     static long getFailedSpeculationsAddress(CompilableTruffleAST compilable) {
         OptimizedCallTarget callTarget = (OptimizedCallTarget) compilable;
         HotSpotSpeculationLog log = (HotSpotSpeculationLog) callTarget.getSpeculationLog();
-        return LibGraal.getFailedSpeculationsAddress(log);
+        return log.getFailedSpeculationsAddress();
     }
 
     /**
