@@ -85,8 +85,8 @@ public class CSourceCodeWriter {
         if (NativeImageOptions.getCStandard().compatibleWith(C99)) {
             if (!Platform.includedIn(Platform.WINDOWS.class)) {
                 /*
-                 * CStandard says we are C99 compatible yet we cannot include stdbool.h because old
-                 * Windows native compilers do not support it. This should be fixed.
+                 * No stdbool.h in Windows SDK 7.1. If we add native-compiler version detection this
+                 * should only be omitted if cl.exe version is < 19.*.
                  */
                 includeFiles(Collections.singletonList("<stdbool.h>"));
             }
@@ -120,7 +120,7 @@ public class CSourceCodeWriter {
                 Path headerFilePath = Paths.get(headerFileName);
                 appendln("#include " + "\"" + headerFilePath.toString() + "\"");
             } else {
-                throw UserError.abort("Header file name must be surrounded by <...> or \"...\": %s", headerFile);
+                throw UserError.abort("header file name must be surrounded by <...> or \"...\": " + headerFile);
             }
         }
     }
