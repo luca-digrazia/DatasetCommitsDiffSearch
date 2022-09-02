@@ -920,7 +920,7 @@ public final class StaticObject implements TruffleObject {
         }
         InteropLibrary interopLibrary = InteropLibrary.getUncached();
         try {
-            return "Foreign object: " + interopLibrary.asString(interopLibrary.toDisplayString(rawInteropObject(), allowSideEffects));
+            return interopLibrary.asString(interopLibrary.toDisplayString(rawInteropObject(), allowSideEffects));
         } catch (UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere("Interop library failed to convert display string to string");
         }
