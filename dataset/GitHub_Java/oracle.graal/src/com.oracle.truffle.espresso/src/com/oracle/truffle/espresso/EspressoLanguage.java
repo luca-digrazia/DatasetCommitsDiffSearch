@@ -55,6 +55,7 @@ import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.EspressoStatementNode;
 import com.oracle.truffle.espresso.nodes.interop.DestroyVMNode;
+import com.oracle.truffle.espresso.nodes.interop.LoadKlassNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
@@ -237,11 +238,13 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         assert context.isInitialized();
         context.begin();
         String className = request.getSource().getCharacters().toString();
+        RootNode node;
         if (DestroyVMNode.EVAL_NAME.equals(className)) {
-            RootNode node = new DestroyVMNode(this);
-            return Truffle.getRuntime().createCallTarget(node);
+            node = new DestroyVMNode(this);
+        } else {
+            node = new LoadKlassNode(this, className);
         }
-        throw new UnsupportedOperationException("Unsupported operation. Use the global bindings to load classes e.g. context.getBindings(\"java\").getMember(\"java.lang.Integer\")");
+        return Truffle.getRuntime().createCallTarget(node);
     }
 
     public Utf8ConstantTable getUtf8ConstantTable() {
