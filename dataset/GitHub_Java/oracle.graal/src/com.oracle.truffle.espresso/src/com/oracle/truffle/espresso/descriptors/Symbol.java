@@ -123,8 +123,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> CLINIT = StaticSymbols.putName("<clinit>");
 
         public static final Symbol<Name> backtrace = StaticSymbols.putName("backtrace");
-        public static final Symbol<Name> fillInStackTrace = StaticSymbols.putName("fillInStackTrace");
-        public static final Symbol<Name> fillInStackTrace0 = StaticSymbols.putName("fillInStackTrace0");
         public static final Symbol<Name> clazz = StaticSymbols.putName("clazz");
         public static final Symbol<Name> type = StaticSymbols.putName("type");
         public static final Symbol<Name> slot = StaticSymbols.putName("slot");
@@ -214,7 +212,8 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> HIDDEN_FIELD_KEY = StaticSymbols.putName("0HIDDEN_FIELD_KEY");
         public static final Symbol<Name> HIDDEN_FRAMES = StaticSymbols.putName("0HIDDEN_FRAMES");
         public static final Symbol<Name> HIDDEN_HOST_THREAD = StaticSymbols.putName("0HIDDEN_HOST_THREAD");
-        public static final Symbol<Name> HIDDEN_MIRROR_KLASS = StaticSymbols.putName("0HIDDEN_MIRROR_KLASS =");
+        public static final Symbol<Name> HIDDEN_MIRROR_KLASS = StaticSymbols.putName("0HIDDEN_MIRROR_KLASS");
+        public static final Symbol<Name> HIDDEN_SIGNERS = StaticSymbols.putName("0HIDDEN_SIGNERS");
     }
 
     public static final class Type extends Descriptor {
