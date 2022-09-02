@@ -60,17 +60,12 @@ public abstract class ReferenceArrayStoreNode extends QuickNode {
                     @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
                     @CachedContext(EspressoLanguage.class) EspressoContext context,
                     @Cached BranchProfile exceptionProfile) {
-        Object unwrappedValue = value.isForeignObject() ? value.rawForeignObject(context.getLanguage()) : value;
+        Object unwrappedValue = value.isForeignObject() ? value.rawForeignObject() : value;
         ForeignArrayUtils.writeForeignArrayElement(array, index, unwrappedValue, interop, context.getMeta(), exceptionProfile);
     }
 
     @Specialization(guards = "array.isEspressoObject()")
     void doEspresso(StaticObject array, int index, StaticObject value) {
         getBytecodeNode().getInterpreterToVM().setArrayObject(value, index, array);
-    }
-
-    @Override
-    public boolean producedForeignObject(Object[] refs) {
-        return false;
     }
 }

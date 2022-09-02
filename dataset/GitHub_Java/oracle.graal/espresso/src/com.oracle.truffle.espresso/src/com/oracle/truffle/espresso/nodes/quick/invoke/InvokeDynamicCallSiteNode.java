@@ -22,6 +22,7 @@
  */
 package com.oracle.truffle.espresso.nodes.quick.invoke;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -70,7 +71,11 @@ public final class InvokeDynamicCallSiteNode extends QuickNode {
         }
         Object result = callNode.call(args);
         if (!returnsPrimitiveType) {
-            getBytecodeNode().checkNoForeignObjectAssumption((StaticObject) result);
+            Assumption noForeignObjects = getBytecodeNode().getNoForeignObjects();
+            if (noForeignObjects.isValid() && ((StaticObject) result).isForeignObject()) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                noForeignObjects.invalidate();
+            }
         }
         return (getResultAt() - top) + BytecodeNode.putKind(primitives, refs, getResultAt(), unbasic(result, returnType), returnKind);
     }
