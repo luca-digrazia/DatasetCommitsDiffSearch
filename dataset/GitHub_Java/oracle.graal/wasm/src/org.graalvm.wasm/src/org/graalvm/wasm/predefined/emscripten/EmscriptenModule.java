@@ -1,72 +1,95 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * All rights reserved.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * Redistribution and use in source and binary forms, with or without modification, are
- * permitted provided that the following conditions are met:
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * 1. Redistributions of source code must retain the above copyright notice, this list of
- * conditions and the following disclaimer.
+ * (a) the Software, and
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice, this list of
- * conditions and the following disclaimer in the documentation and/or other materials provided
- * with the distribution.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
  *
- * 3. Neither the name of the copyright holder nor the names of its contributors may be used to
- * endorse or promote products derived from this software without specific prior written
- * permission.
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package org.graalvm.wasm.predefined.emscripten;
 
-import static org.graalvm.wasm.ValueTypes.F64_TYPE;
-import static org.graalvm.wasm.ValueTypes.I32_TYPE;
+import static org.graalvm.wasm.WasmType.F64_TYPE;
+import static org.graalvm.wasm.WasmType.I32_TYPE;
 
 import org.graalvm.wasm.WasmContext;
+import org.graalvm.wasm.WasmInstance;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.constants.GlobalModifier;
-import org.graalvm.wasm.memory.WasmMemory;
-import org.graalvm.wasm.predefined.PredefinedModule;
+import org.graalvm.wasm.predefined.BuiltinModule;
 import org.graalvm.wasm.ReferenceTypes;
+import org.graalvm.wasm.predefined.testutil.TestutilModule;
+import org.graalvm.wasm.predefined.wasi.WasiFdWriteNode;
 
-public class EmscriptenModule extends PredefinedModule {
+public class EmscriptenModule extends BuiltinModule {
     @Override
-    protected WasmModule createModule(WasmLanguage language, WasmContext context, String name) {
-        WasmModule module = new WasmModule(name, null);
-        final WasmMemory memory = defineMemory(context, module, "memory", 32, 4096);
-        defineFunction(module, "abort", types(I32_TYPE), types(), new AbortNode(language, null, memory));
-        defineFunction(module, "abortOnCannotGrowMemory", types(I32_TYPE), types(I32_TYPE), new AbortOnCannotGrowMemory(language, null, memory));
-        defineFunction(module, "_abort", types(), types(), new AbortNode(language, null, memory));
-        defineFunction(module, "_emscripten_memcpy_big", types(I32_TYPE, I32_TYPE, I32_TYPE), types(I32_TYPE), new EmscriptenMemcpyBig(language, null, memory));
-        defineFunction(module, "_emscripten_get_heap_size", types(), types(I32_TYPE), new EmscriptenGetHeapSize(language, null, memory));
-        defineFunction(module, "_emscripten_resize_heap", types(I32_TYPE), types(I32_TYPE), new EmscriptenResizeHeap(language, null, memory));
-        defineFunction(module, "_gettimeofday", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new GetTimeOfDay(language, null, memory));
-        defineFunction(module, "_llvm_exp2_f64", types(F64_TYPE), types(F64_TYPE), new LLVMExp2F64(language, null, memory));
-        defineFunction(module, "___wasi_fd_write", types(I32_TYPE, I32_TYPE, I32_TYPE, I32_TYPE), types(I32_TYPE), new WasiFdWrite(language, memory));
-        defineFunction(module, "___lock", types(I32_TYPE), types(), new Lock(language, null, memory));
-        defineFunction(module, "___unlock", types(I32_TYPE), types(), new Unlock(language, null, memory));
-        defineFunction(module, "___setErrNo", types(I32_TYPE), types(), new SetErrNo(language, null, memory));
-        defineFunction(module, "___syscall140", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("___syscall140", language, null, memory));
-        defineFunction(module, "___syscall146", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("___syscall146", language, null, memory));
-        defineFunction(module, "___syscall54", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("___syscall54", language, null, memory));
-        defineFunction(module, "___syscall6", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("___syscall6", language, null, memory));
-        defineFunction(module, "setTempRet0", types(I32_TYPE), types(), new UnimplementedNode("setTempRet0", language, null, memory));
-        defineGlobal(context, module, "__table_base", I32_TYPE, GlobalModifier.CONSTANT, 0);
-        defineGlobal(context, module, "__memory_base", I32_TYPE, GlobalModifier.CONSTANT, 0);
-        defineGlobal(context, module, "DYNAMICTOP_PTR", I32_TYPE, GlobalModifier.CONSTANT, 0);
-        defineGlobal(context, module, "DYNAMIC_BASE", I32_TYPE, GlobalModifier.CONSTANT, 0);
-        defineTable(context, module, "table", 0, -1, ReferenceTypes.FUNCREF);
-        return module;
+    protected WasmInstance createInstance(WasmLanguage language, WasmContext context, String name) {
+        WasmInstance instance = new WasmInstance(context, new WasmModule(name, null));
+
+        final WasmInstance testutil = context.moduleInstances().get("testutil");
+        if (testutil != null) {
+            // Emscripten only allows extern symbols through the 'env' module, so we need to
+            // re-export some symbols from the testutil module.
+            if (testutil.symbolTable().function(TestutilModule.Names.SAVE_BINARY_FILE) != null) {
+                importFunction(instance, "testutil", TestutilModule.Names.SAVE_BINARY_FILE, types(I32_TYPE, I32_TYPE, I32_TYPE), types(), "" + TestutilModule.Names.SAVE_BINARY_FILE);
+            }
+        }
+
+        defineFunction(instance, "abort", types(), types(), new AbortNode(language, instance));
+        defineFunction(instance, "abortOnCannotGrowMemory", types(I32_TYPE), types(I32_TYPE), new AbortOnCannotGrowMemoryNode(language, instance));
+        defineFunction(instance, "segfault", types(), types(), new SegfaultNode(language, instance));
+        defineFunction(instance, "alignfault", types(), types(), new AlignfaultNode(language, instance));
+        defineFunction(instance, "emscripten_memcpy_big", types(I32_TYPE, I32_TYPE, I32_TYPE), types(I32_TYPE), new EmscriptenMemcpyBigNode(language, instance));
+        defineFunction(instance, "emscripten_get_heap_size", types(), types(I32_TYPE), new EmscriptenGetHeapSizeNode(language, instance));
+        defineFunction(instance, "emscripten_resize_heap", types(I32_TYPE), types(I32_TYPE), new EmscriptenResizeHeapNode(language, instance));
+        defineFunction(instance, "gettimeofday", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new GetTimeOfDayNode(language, instance));
+        defineFunction(instance, "llvm_exp2_f64", types(F64_TYPE), types(F64_TYPE), new LLVMExp2F64Node(language, instance));
+        defineFunction(instance, "__wasi_fd_write", types(I32_TYPE, I32_TYPE, I32_TYPE, I32_TYPE), types(I32_TYPE), new WasiFdWriteNode(language, instance));
+        defineFunction(instance, "__lock", types(I32_TYPE), types(), new LockNode(language, instance));
+        defineFunction(instance, "__unlock", types(I32_TYPE), types(), new UnlockNode(language, instance));
+        defineFunction(instance, "__setErrNo", types(I32_TYPE), types(), new SetErrNoNode(language, instance));
+        defineFunction(instance, "__syscall140", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("__syscall140", language, instance));
+        defineFunction(instance, "__syscall146", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("__syscall146", language, instance));
+        defineFunction(instance, "__syscall54", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("__syscall54", language, instance));
+        defineFunction(instance, "__syscall6", types(I32_TYPE, I32_TYPE), types(I32_TYPE), new UnimplementedNode("__syscall6", language, instance));
+        defineFunction(instance, "setTempRet0", types(I32_TYPE), types(), new UnimplementedNode("setTempRet0", language, instance));
+        defineGlobal(instance, "_table_base", I32_TYPE, (byte) GlobalModifier.CONSTANT, 0);
+        defineGlobal(instance, "_memory_base", I32_TYPE, (byte) GlobalModifier.CONSTANT, 0);
+        defineGlobal(instance, "DYNAMICTOP_PTR", I32_TYPE, (byte) GlobalModifier.CONSTANT, 0);
+        defineGlobal(instance, "DYNAMIC_BASE", I32_TYPE, (byte) GlobalModifier.CONSTANT, 0);
+        defineTable(instance, "table", 0, -1, ReferenceTypes.FUNCREF);
+        return instance;
     }
 }
