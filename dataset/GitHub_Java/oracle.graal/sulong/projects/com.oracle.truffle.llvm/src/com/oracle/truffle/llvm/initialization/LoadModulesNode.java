@@ -39,6 +39,7 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
@@ -242,12 +243,14 @@ public final class LoadModulesNode extends RootNode {
         return null;
     }
 
+    @ExplodeLoop
     @SuppressWarnings("unchecked")
     private LLVMScope loadModule(VirtualFrame frame,
                     @CachedContext(LLVMLanguage.class) LLVMContext context) {
 
         try (LLVMStack.StackPointer stackPointer = ctxRef.get().getThreadingStack().getStack().newFrame()) {
             frame.setObject(stackPointerSlot, stackPointer);
+
             LLVMLoadingPhase phase;
             LLVMLocalScope localScope = null;
             BitSet visited;
@@ -257,11 +260,9 @@ public final class LoadModulesNode extends RootNode {
             if (frame.getArguments().length > 0 && (frame.getArguments()[0] instanceof LLVMLoadingPhase)) {
                 phase = (LLVMLoadingPhase) frame.getArguments()[0];
                 visited = (BitSet) frame.getArguments()[1];
-                if (phase == LLVMLoadingPhase.BUILD_SCOPES || phase == LLVMLoadingPhase.INIT_EXTERNALS || phase == LLVMLoadingPhase.INIT_OVERWRITE) {
-                    localScope = (LLVMLocalScope) frame.getArguments()[2];
-                }
                 // Additional arguments are required for building the scopes.
                 if (phase == LLVMLoadingPhase.BUILD_SCOPES) {
+                    localScope = (LLVMLocalScope) frame.getArguments()[2];
                     que = (ArrayDeque<CallTarget>) frame.getArguments()[3];
                     resultScope = (LLVMScope) frame.getArguments()[4];
                 }
@@ -323,7 +324,7 @@ public final class LoadModulesNode extends RootNode {
                 if (LLVMLoadingPhase.ALL == phase) {
                     visited.clear();
                 }
-                executeInitialiseExternal(context, visited, localScope);
+                executeInitialiseExternal(context, visited);
             }
 
             if (LLVMLoadingPhase.INIT_GLOBALS.isActive(phase)) {
@@ -337,7 +338,7 @@ public final class LoadModulesNode extends RootNode {
                 if (LLVMLoadingPhase.ALL == phase) {
                     visited.clear();
                 }
-                executeInitialiseOverwrite(context, visited, localScope);
+                executeInitialiseOverwrite(context, visited);
             }
 
             if (LLVMLoadingPhase.INIT_CONTEXT.isActive(phase)) {
@@ -381,15 +382,15 @@ public final class LoadModulesNode extends RootNode {
         }
     }
 
-    private void executeInitialiseExternal(LLVMContext context, BitSet visited, LLVMLocalScope localScope) {
+    private void executeInitialiseExternal(LLVMContext context, BitSet visited) {
         if (!visited.get(bitcodeID)) {
             visited.set(bitcodeID);
             for (DirectCallNode d : dependencies) {
                 if (d != null) {
-                    d.call(LLVMLoadingPhase.INIT_EXTERNALS, visited, localScope);
+                    d.call(LLVMLoadingPhase.INIT_EXTERNALS, visited);
                 }
             }
-            initExternals.execute(context, localScope);
+            initExternals.execute(context, bitcodeID);
         }
     }
 
@@ -405,16 +406,16 @@ public final class LoadModulesNode extends RootNode {
         }
     }
 
-    private void executeInitialiseOverwrite(LLVMContext context, BitSet visited, LLVMLocalScope localScope) {
+    private void executeInitialiseOverwrite(LLVMContext context, BitSet visited) {
         if (!visited.get(bitcodeID)) {
             visited.set(bitcodeID);
             for (DirectCallNode d : dependencies) {
                 if (d != null) {
-                    d.call(LLVMLoadingPhase.INIT_OVERWRITE, visited, localScope);
+                    d.call(LLVMLoadingPhase.INIT_OVERWRITE, visited);
                 }
             }
         }
-        initOverwrite.execute(context, localScope);
+        initOverwrite.execute(context, bitcodeID);
     }
 
     private void executeInitialiseContext(BitSet visited, VirtualFrame frame) {
