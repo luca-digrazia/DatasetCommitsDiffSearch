@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,32 +21,36 @@
  * questions.
  */
 package com.oracle.truffle.espresso.jdwp.impl;
+
 import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.espresso.jdwp.api.CallFrame;
 
 public class SuspendedInfo {
 
-    private SuspendedEvent event;
-    private int suspendStrategy;
-    private JDWPCallFrame[] stackFrames;
-    private Object thread;
+    private final SuspendedEvent event;
+    private final CallFrame[] stackFrames;
+    private final Object thread;
     private DebuggerCommand.Kind stepKind;
+    private final RootNode callerRootNode;
 
-    SuspendedInfo(SuspendedEvent event, int strategy, JDWPCallFrame[] stackFrames, Object thread) {
+    SuspendedInfo(SuspendedEvent event, CallFrame[] stackFrames, Object thread, RootNode callerRootNode) {
         this.event = event;
-        this.suspendStrategy = strategy;
         this.stackFrames = stackFrames;
         this.thread = thread;
+        this.callerRootNode = callerRootNode;
+    }
+
+    SuspendedInfo(CallFrame[] stackFrames, Object thread) {
+        this(null, stackFrames, thread, null);
     }
 
     public SuspendedEvent getEvent() {
         return event;
     }
 
-    public int getSuspendStrategy() {
-        return suspendStrategy;
-    }
-
-    public JDWPCallFrame[] getStackFrames() {
+    public CallFrame[] getStackFrames() {
         return stackFrames;
     }
 
@@ -60,5 +64,17 @@ public class SuspendedInfo {
 
     public DebuggerCommand.Kind getStepKind() {
         return stepKind;
+    }
+
+    public RootNode getCallerRootNode() {
+        return callerRootNode;
+    }
+
+    public Frame getCallerFrame() {
+        return stackFrames.length > 1 ? stackFrames[1].getFrame() : null;
+    }
+
+    public void clearStepping() {
+        stepKind = null;
     }
 }
