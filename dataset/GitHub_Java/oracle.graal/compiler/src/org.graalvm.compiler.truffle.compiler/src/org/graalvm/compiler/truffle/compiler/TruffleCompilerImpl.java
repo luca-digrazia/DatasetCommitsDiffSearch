@@ -278,6 +278,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
                     TruffleCompilationTask task,
                     TruffleCompilerListener inListener) {
         Objects.requireNonNull(compilation, "Compilation must be non null.");
+
         org.graalvm.options.OptionValues options = getOptionsForCompiler(optionsMap);
         TruffleCompilationIdentifier compilationId = asTruffleCompilationIdentifier(compilation);
         CompilableTruffleAST compilable = compilationId.getCompilable();
@@ -288,7 +289,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
             try (DebugContext.Scope s = maybeOpenTruffleScope(compilable, callerDebug)) {
                 actuallyCompile(options, inliningPlan, task, inListener, compilationId, compilable, callerDebug);
             } catch (Throwable e) {
-                notifyCompilableOfFailure(compilable, e, isSuppressedFailure(compilable, e));
+                notifyCompilableOfFailure(compilable, e);
             }
         } else {
             OptionValues debugContextOptionValues = TruffleCompilerRuntime.getRuntime().getGraalOptions(OptionValues.class);
@@ -296,7 +297,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
                             DebugContext.Scope s = maybeOpenTruffleScope(compilable, graalDebug)) {
                 actuallyCompile(options, inliningPlan, task, inListener, compilationId, compilable, graalDebug);
             } catch (Throwable e) {
-                notifyCompilableOfFailure(compilable, e, isSuppressedFailure(compilable, e));
+                notifyCompilableOfFailure(compilable, e);
             }
         }
     }
@@ -351,7 +352,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         return debug.scope("Truffle", new TruffleDebugJavaMethod(compilable));
     }
 
-    private static void notifyCompilableOfFailure(CompilableTruffleAST compilable, Throwable e, boolean silent) {
+    private static void notifyCompilableOfFailure(CompilableTruffleAST compilable, Throwable e) {
         Throwable error = e;
         boolean graphTooBig = false;
         if (error instanceof GraphTooBigBailoutException) {
@@ -361,7 +362,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         BailoutException bailout = error instanceof BailoutException ? (BailoutException) error : null;
         boolean permanentBailout = bailout != null ? bailout.isPermanent() : false;
         Throwable finalError = error;
-        compilable.onCompilationFailed(() -> CompilableTruffleAST.serializeException(finalError), silent, bailout != null, permanentBailout, graphTooBig);
+        compilable.onCompilationFailed(() -> CompilableTruffleAST.serializeException(finalError), bailout != null, permanentBailout, graphTooBig);
     }
 
     @Override
@@ -672,7 +673,6 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         private final TruffleCompilerListener listener;
         private final CompilationIdentifier compilationId;
         private final org.graalvm.options.OptionValues options;
-        private boolean silent;
 
         private TruffleCompilationWrapper(
                         org.graalvm.options.OptionValues options,
@@ -724,7 +724,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
 
         @Override
         protected Void handleException(Throwable t) {
-            notifyCompilableOfFailure(compilable, t, silent);
+            notifyCompilableOfFailure(compilable, t);
             return null;
         }
 
@@ -750,8 +750,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
 
         @Override
         protected Void onCompilationFailure(CompilationWrapper<Void>.Failure failure) {
-            silent = isSuppressedFailure(compilable, failure.cause);
-            failure.handle(silent);
+            handleCompilationFailure(failure);
             return null;
         }
     }
@@ -759,9 +758,8 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
     /**
      * Handles a Truffle compilation failure by calling {@code failure.handle()}.
      */
-    private static boolean isSuppressedFailure(CompilableTruffleAST compilable, Throwable cause) {
-        return TruffleCompilerRuntime.getRuntime().isSuppressedFailure(
-                        compilable, () -> CompilableTruffleAST.serializeException(cause));
+    protected void handleCompilationFailure(CompilationWrapper<Void>.Failure failure) {
+        failure.handle(false);
     }
 
     /**
@@ -830,7 +828,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
                         // inlines a call to a compile-time constant Truffle node.
                         dependency = new OptimizedAssumptionDependency() {
                             @Override
-                            public void onAssumptionInvalidated(Object source, CharSequence reason) {
+                            public void invalidate() {
                                 installedCode.invalidate();
                             }
 
