@@ -282,7 +282,7 @@ public final class LLVMContext {
         }
 
         this.threadingStack = new LLVMThreadingStack(Thread.currentThread(), parseStackSize(env.getOptions().get(SulongEngineOption.STACK_SIZE)));
-        for (ContextExtension ext : getContextExtensions()) {
+        for (ContextExtension ext : getLanguageContextExtension()) {
             ext.initialize();
         }
         String languageHome = language.getLLVMLanguageHome();
@@ -297,7 +297,7 @@ public final class LLVMContext {
         loader.loadDefaults(this, internalLibraryPath);
     }
 
-    private List<ContextExtension> getContextExtensions() {
+    private List<ContextExtension> getLanguageContextExtension() {
         verifyContextExtensionsInitialized();
         return contextExtensions;
     }
