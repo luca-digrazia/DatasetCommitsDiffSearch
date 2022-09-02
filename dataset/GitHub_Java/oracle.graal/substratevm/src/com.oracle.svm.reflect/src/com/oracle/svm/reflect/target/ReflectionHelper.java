@@ -80,15 +80,7 @@ class ReflectionHelper {
         return KnownIntrinsics.unsafeCast(object, Target_java_lang_reflect_Constructor.class);
     }
 
-    private static Target_java_lang_reflect_Executable asExecutable(Target_java_lang_reflect_Method object) {
-        return KnownIntrinsics.unsafeCast(object, Target_java_lang_reflect_Executable.class);
-    }
-
-    private static Target_java_lang_reflect_Executable asExecutable(Target_java_lang_reflect_Constructor object) {
-        return KnownIntrinsics.unsafeCast(object, Target_java_lang_reflect_Executable.class);
-    }
-
-    private static Target_java_lang_reflect_Executable asExecutable(Target_java_lang_reflect_AccessibleObject object) {
+    private static Target_java_lang_reflect_Executable asExecutable(Object object) {
         return KnownIntrinsics.unsafeCast(object, Target_java_lang_reflect_Executable.class);
     }
 
