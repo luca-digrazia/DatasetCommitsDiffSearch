@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,6 +29,7 @@ import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
 import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderTool;
 import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
@@ -45,18 +48,19 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
- * This plugin handles the HotSpot-specific customizations of bytecode parsing:
- * <p>
- * {@link Word}-type rewriting for {@link GraphBuilderContext#parsingIntrinsic intrinsic} functions
- * (snippets and method substitutions), by forwarding to the {@link WordOperationPlugin}. Note that
- * we forward the {@link NodePlugin} and {@link TypePlugin} methods, but not the
+ * This plugin does HotSpot-specific customization of bytecode parsing:
+ * <ul>
+ * <li>{@link Word}-type rewriting for {@link GraphBuilderContext#parsingIntrinsic intrinsic}
+ * functions (snippets and method substitutions), by forwarding to the {@link WordOperationPlugin}.
+ * Note that we forward the {@link NodePlugin} and {@link TypePlugin} methods, but not the
  * {@link InlineInvokePlugin} methods implemented by {@link WordOperationPlugin}. The latter is not
  * necessary because HotSpot only uses the {@link Word} type in methods that are force-inlined,
- * i.e., there are never non-inlined invokes that involve the {@link Word} type.
- * <p>
- * Constant folding of field loads.
+ * i.e., there are never non-inlined invokes that involve the {@link Word} type.</li>
+ * <li>Constant folding of field loads.</li>
+ * </ul>
  */
 public final class HotSpotNodePlugin implements NodePlugin, TypePlugin {
+
     protected final WordOperationPlugin wordOperationPlugin;
 
     public HotSpotNodePlugin(WordOperationPlugin wordOperationPlugin) {
@@ -147,16 +151,16 @@ public final class HotSpotNodePlugin implements NodePlugin, TypePlugin {
     }
 
     @Override
-    public boolean handleLoadIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, JavaKind elementKind) {
-        if (b.parsingIntrinsic() && wordOperationPlugin.handleLoadIndexed(b, array, index, elementKind)) {
+    public boolean handleLoadIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, JavaKind elementKind) {
+        if (b.parsingIntrinsic() && wordOperationPlugin.handleLoadIndexed(b, array, index, boundsCheck, elementKind)) {
             return true;
         }
         return false;
     }
 
     @Override
-    public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, JavaKind elementKind, ValueNode value) {
-        if (b.parsingIntrinsic() && wordOperationPlugin.handleStoreIndexed(b, array, index, elementKind, value)) {
+    public boolean handleStoreIndexed(GraphBuilderContext b, ValueNode array, ValueNode index, GuardingNode boundsCheck, GuardingNode storeCheck, JavaKind elementKind, ValueNode value) {
+        if (b.parsingIntrinsic() && wordOperationPlugin.handleStoreIndexed(b, array, index, boundsCheck, storeCheck, elementKind, value)) {
             return true;
         }
         return false;
