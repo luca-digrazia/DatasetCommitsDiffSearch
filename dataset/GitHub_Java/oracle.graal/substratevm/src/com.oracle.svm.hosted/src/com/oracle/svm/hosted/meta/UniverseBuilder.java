@@ -85,7 +85,6 @@ import com.oracle.svm.hosted.config.HybridLayout;
 import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
 import com.oracle.svm.hosted.substitute.ComputedValueField;
 import com.oracle.svm.hosted.substitute.DeletedMethod;
-import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.ExceptionHandler;
@@ -1245,11 +1244,7 @@ public class UniverseBuilder {
     }
 
     private static boolean excludeFromReferenceMap(HostedField field) {
-        ExcludeFromReferenceMap annotation = field.getAnnotation(ExcludeFromReferenceMap.class);
-        if (annotation != null) {
-            return ReflectionUtil.newInstance(annotation.condition()).getAsBoolean();
-        }
-        return false;
+        return field.getAnnotation(ExcludeFromReferenceMap.class) != null;
     }
 
     private void processFieldLocations() {
