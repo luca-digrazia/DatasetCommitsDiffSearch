@@ -75,7 +75,6 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.pthread.LLVMPThreadContext;
-import com.oracle.truffle.llvm.runtime.IDGenerater.*;
 
 public final class LLVMContext {
 
@@ -134,7 +133,6 @@ public final class LLVMContext {
     @CompilationFinal(dimensions = 2) private Assumption[][] symbolAssumptions;
 
     private boolean[] libraryLoaded;
-    private CallTarget[] libraryLoadedCache;
 
     // signals
     private final LLVMNativePointer sigDfl;
@@ -216,7 +214,6 @@ public final class LLVMContext {
         // These two fields contain the same value, but have different CompilationFinal annotations:
         symbolFinalStorage = symbolDynamicStorage = new LLVMPointer[10][];
         libraryLoaded = new boolean[10];
-        libraryLoadedCache = new CallTarget[10];
     }
 
     boolean patchContext(Env newEnv) {
@@ -620,13 +617,11 @@ public final class LLVMContext {
         }
     }
 
-    public boolean isLibraryAlreadyLoaded(BitcodeID bitcodeID) {
-        int id = bitcodeID.getId();
+    public boolean isLibraryAlreadyLoaded(int id) {
         return id < libraryLoaded.length && libraryLoaded[id];
     }
 
-    public void markLibraryLoaded(BitcodeID bitcodeID) {
-        int id = bitcodeID.getId();
+    public void markLibraryLoaded(int id) {
         if (id >= libraryLoaded.length) {
             int newLength = (id + 1) + ((id + 1) / 2);
             boolean[] temp = new boolean[newLength];
@@ -634,16 +629,6 @@ public final class LLVMContext {
             libraryLoaded = temp;
         }
         libraryLoaded[id] = true;
-    }
-
-    public void markLibraryLoadedCached(int id, CallTarget callTarget) {
-        if (id >= libraryLoadedCache.length) {
-            int newLength = (id + 1) + ((id + 1) / 2);
-            CallTarget[] temp = new CallTarget[newLength];
-            System.arraycopy(libraryLoadedCache, 0, temp, 0, libraryLoadedCache.length);
-            libraryLoadedCache = temp;
-        }
-        libraryLoadedCache[id] = callTarget;
     }
 
     public LLVMLanguage getLanguage() {
@@ -663,18 +648,27 @@ public final class LLVMContext {
         localScopes.add(scope);
     }
 
+    @TruffleBoundary
+    public LLVMLocalScope getLocalScope(int id) {
+        for (LLVMLocalScope scope : localScopes) {
+            if (scope.containID(id)) {
+                return scope;
+            }
+        }
+        return null;
+    }
+
     public LLVMPointer getSymbol(LLVMSymbol symbol) {
         assert !symbol.isAlias();
-        BitcodeID bitcodeID = symbol.getBitcodeID(false);
-        int id = bitcodeID.getId();
+        int bitcodeID = symbol.getBitcodeID(false);
         int index = symbol.getSymbolIndex(false);
         if (CompilerDirectives.inCompiledCode() && CompilerDirectives.isPartialEvaluationConstant(this)) {
-            if (!symbolAssumptions[id][index].isValid()) {
+            if (!symbolAssumptions[bitcodeID][index].isValid()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
             }
-            return symbolFinalStorage[id][index];
+            return symbolFinalStorage[bitcodeID][index];
         } else {
-            return symbolDynamicStorage[id][index];
+            return symbolDynamicStorage[bitcodeID][index];
         }
     }
 
@@ -684,10 +678,9 @@ public final class LLVMContext {
     @TruffleBoundary
     public void initializeSymbol(LLVMSymbol symbol, LLVMPointer value) {
         assert !symbol.isAlias();
-        BitcodeID bitcodeID = symbol.getBitcodeID(false);
-        int id = bitcodeID.getId();
-        LLVMPointer[] symbols = symbolDynamicStorage[id];
-        Assumption[] assumptions = symbolAssumptions[id];
+        int bitcodeID = symbol.getBitcodeID(false);
+        LLVMPointer[] symbols = symbolDynamicStorage[bitcodeID];
+        Assumption[] assumptions = symbolAssumptions[bitcodeID];
         synchronized (symbols) {
             try {
                 int index = symbol.getSymbolIndex(false);
@@ -709,10 +702,9 @@ public final class LLVMContext {
     public boolean checkSymbol(LLVMSymbol symbol) {
         assert !symbol.isAlias();
         if (symbol.hasValidIndexAndID()) {
-            BitcodeID bitcodeID = symbol.getBitcodeID(false);
-            int id = bitcodeID.getId();
-            if (id < symbolDynamicStorage.length && symbolDynamicStorage[id] != null) {
-                LLVMPointer[] symbols = symbolDynamicStorage[id];
+            int bitcodeID = symbol.getBitcodeID(false);
+            if (bitcodeID < symbolDynamicStorage.length && symbolDynamicStorage[bitcodeID] != null) {
+                LLVMPointer[] symbols = symbolDynamicStorage[bitcodeID];
                 int index = symbol.getSymbolIndex(false);
                 return symbols[index] != null;
             }
@@ -723,10 +715,9 @@ public final class LLVMContext {
     public void setSymbol(LLVMSymbol symbol, LLVMPointer value) {
         CompilerAsserts.neverPartOfCompilation();
         LLVMSymbol target = LLVMAlias.resolveAlias(symbol);
-        BitcodeID bitcodeID = symbol.getBitcodeID(false);
-        int id = bitcodeID.getId();
-        LLVMPointer[] symbols = symbolDynamicStorage[id];
-        Assumption[] assumptions = symbolAssumptions[id];
+        int bitcodeID = target.getBitcodeID(false);
+        LLVMPointer[] symbols = symbolDynamicStorage[bitcodeID];
+        Assumption[] assumptions = symbolAssumptions[bitcodeID];
         synchronized (symbols) {
             try {
                 int index = target.getSymbolIndex(false);
@@ -744,9 +735,8 @@ public final class LLVMContext {
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     @TruffleBoundary
-    public void initializeSymbolTable(BitcodeID bitcodeID, int globalLength) {
+    public void initializeSymbolTable(int index, int globalLength) {
         synchronized (this) {
-            int index = bitcodeID.getId();
             assert symbolDynamicStorage == symbolFinalStorage;
             if (index >= symbolDynamicStorage.length) {
                 int newLength = (index + 1) + ((index + 1) / 2);
@@ -933,9 +923,9 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public LLVMPointer getReadOnlyGlobals(BitcodeID bitcodeID) {
+    public LLVMPointer getReadOnlyGlobals(int id) {
         synchronized (globalsStoreLock) {
-            return globalsReadOnlyStore.get(bitcodeID.getId());
+            return globalsReadOnlyStore.get(id);
         }
     }
 
