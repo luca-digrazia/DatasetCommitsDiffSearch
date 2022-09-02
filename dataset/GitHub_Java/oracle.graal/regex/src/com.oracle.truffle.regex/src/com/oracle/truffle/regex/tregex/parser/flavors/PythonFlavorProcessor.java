@@ -59,7 +59,6 @@ import com.oracle.truffle.regex.charset.CodePointSet;
 import com.oracle.truffle.regex.charset.CodePointSetAccumulator;
 import com.oracle.truffle.regex.charset.Range;
 import com.oracle.truffle.regex.charset.UnicodeProperties;
-import com.oracle.truffle.regex.errors.PyErrorMessages;
 import com.oracle.truffle.regex.tregex.parser.CaseFoldTable;
 import com.oracle.truffle.regex.tregex.string.Encodings;
 import com.oracle.truffle.regex.util.TBitSet;
@@ -79,11 +78,11 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
      * Characters that are considered special in ECMAScript regexes. To match these characters, they
      * need to be escaped using a backslash.
      */
-    private static final TBitSet SYNTAX_CHARACTERS = TBitSet.valueOf('$', '(', ')', '*', '+', '.', '?', '[', '\\', ']', '^', '{', '|', '}');
+    private static final TBitSet SYNTAX_CHARACTERS = TBitSet.valueOf('^', '$', '\\', '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|');
     /**
      * Characters that are considered special in ECMAScript regex character classes.
      */
-    private static final TBitSet CHAR_CLASS_SYNTAX_CHARACTERS = TBitSet.valueOf('-', '\\', ']', '^');
+    private static final TBitSet CHAR_CLASS_SYNTAX_CHARACTERS = TBitSet.valueOf('\\', ']', '-', '^');
 
     /**
      * Maps Python's predefined Unicode character classes (d, D, s, S, w, W) to equivalent
@@ -236,7 +235,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
     /**
      * Characters considered as whitespace in Python's regex verbose mode.
      */
-    private static final TBitSet WHITESPACE = TBitSet.valueOf('\t', '\n', '\u000b', '\f', '\r', ' ');
+    private static final TBitSet WHITESPACE = TBitSet.valueOf(' ', '\t', '\n', '\r', '\u000b', '\f');
 
     /**
      * The (slightly modified) version of the XID_Start Unicode property used to check names of
@@ -467,7 +466,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
 
     private void mustHaveMore() {
         if (atEnd()) {
-            throw syntaxErrorHere(PyErrorMessages.UNEXPECTED_END_OF_PATTERN);
+            throw syntaxErrorHere("unexpected end of pattern");
         }
     }
 
@@ -671,7 +670,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
 
         if (!atEnd()) {
             assert curChar() == ')';
-            throw syntaxErrorAtRel(PyErrorMessages.UNBALANCED_PARENTHESIS, 0);
+            throw syntaxErrorAtRel("unbalanced parenthesis", 0);
         }
     }
 
@@ -932,7 +931,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
             String number = getUpTo(2, PythonFlavorProcessor::isDecDigit);
             int groupNumber = Integer.parseInt(number);
             if (groupNumber > groups) {
-                throw syntaxErrorAtRel(PyErrorMessages.invalidGroupReference(number), number.length());
+                throw syntaxErrorAtRel("invalid group reference " + number, number.length());
             }
             verifyGroupReference(groupNumber, number);
             if (getLocalFlags().isIgnoreCase()) {
@@ -956,12 +955,12 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
     private void verifyGroupReference(int groupNumber, String groupName) throws RegexSyntaxException {
         for (Group openGroup : groupStack) {
             if (groupNumber == openGroup.groupNumber) {
-                throw syntaxErrorAtRel(PyErrorMessages.CANNOT_REFER_TO_AN_OPEN_GROUP, groupName.length() + 1);
+                throw syntaxErrorAtRel("cannot refer to an open group", groupName.length() + 1);
             }
         }
         for (Lookbehind openLookbehind : lookbehindStack) {
             if (groupNumber >= openLookbehind.containedGroups) {
-                throw syntaxErrorHere(PyErrorMessages.CANNOT_REFER_TO_GROUP_DEFINED_IN_THE_SAME_LOOKBEHIND_SUBPATTERN);
+                throw syntaxErrorHere("cannot refer to group defined in the same lookbehind subpattern");
             }
         }
     }
@@ -1010,7 +1009,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
             case 'x': {
                 String code = getUpTo(2, PythonFlavorProcessor::isHexDigit);
                 if (code.length() < 2) {
-                    throw syntaxErrorAtRel(PyErrorMessages.incompleteEscapeX(code), 2 + code.length());
+                    throw syntaxErrorAtRel("incomplete escape \\x" + code, 2 + code.length());
                 }
                 int codepoint = Integer.parseInt(code, 16);
                 return codepoint;
@@ -1033,20 +1032,20 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                     }
                     String code = getUpTo(escapeLength, PythonFlavorProcessor::isHexDigit);
                     if (code.length() < escapeLength) {
-                        throw syntaxErrorAtRel(PyErrorMessages.incompleteEscapeU(escapeLead, code), 2 + code.length());
+                        throw syntaxErrorAtRel("incomplete escape \\" + escapeLead + code, 2 + code.length());
                     }
                     try {
                         int codePoint = Integer.parseInt(code, 16);
                         if (codePoint > 0x10FFFF) {
-                            throw syntaxErrorAtRel(PyErrorMessages.invalidUnicodeEscape(escapeLead, code), 2 + code.length());
+                            throw syntaxErrorAtRel("unicode escape value \\" + escapeLead + code + " outside of range 0-0x10FFFF", 2 + code.length());
                         }
                         return codePoint;
                     } catch (NumberFormatException e) {
-                        throw syntaxErrorAtRel(PyErrorMessages.incompleteEscapeU(escapeLead, code), 2 + code.length());
+                        throw syntaxErrorAtRel("bad escape \\" + escapeLead + code, 2 + code.length());
                     }
                 } else {
                     // \\u or \\U in 'bytes' patterns
-                    throw syntaxErrorAtRel(PyErrorMessages.badEscape(curChar()), 1);
+                    throw syntaxErrorAtRel("bad escape \\" + curChar(), 1);
                 }
             default:
                 if (isOctDigit(ch)) {
@@ -1054,11 +1053,11 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                     String code = getUpTo(3, PythonFlavorProcessor::isOctDigit);
                     int codePoint = Integer.parseInt(code, 8);
                     if (codePoint > 0377) {
-                        throw syntaxErrorAtRel(PyErrorMessages.invalidOctalEscape(code), 1 + code.length());
+                        throw syntaxErrorAtRel("octal escape value \\" + code + " outside of range 0-o377", 1 + code.length());
                     }
                     return codePoint;
                 } else if (isAsciiLetter(ch)) {
-                    throw syntaxErrorAtRel(PyErrorMessages.badEscape(ch), 2);
+                    throw syntaxErrorAtRel("bad escape \\" + new String(Character.toChars(ch)), 2);
                 } else {
                     return ch;
                 }
@@ -1078,7 +1077,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         int firstPosInside = position;
         classBody: while (true) {
             if (atEnd()) {
-                throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_CHARACTER_SET, start);
+                throw syntaxErrorAtAbs("unterminated character set", start);
             }
             int rangeStart = position;
             Optional<Integer> lowerBound;
@@ -1100,7 +1099,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
             }
             if (match("-")) {
                 if (atEnd()) {
-                    throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_CHARACTER_SET, start);
+                    throw syntaxErrorAtAbs("unterminated character set", start);
                 }
                 Optional<Integer> upperBound;
                 ch = consumeChar();
@@ -1119,7 +1118,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                         upperBound = Optional.of(ch);
                 }
                 if (!lowerBound.isPresent() || !upperBound.isPresent() || upperBound.get() < lowerBound.get()) {
-                    throw syntaxErrorAtAbs(PyErrorMessages.badCharacterRange(inPattern.substring(rangeStart, position)), rangeStart);
+                    throw syntaxErrorAtAbs("bad character range " + inPattern.substring(rangeStart, position), rangeStart);
                 }
                 curCharClass.clear();
                 curCharClass.addRange(lowerBound.get(), upperBound.get());
@@ -1185,7 +1184,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                     return;
                 }
                 if (lowerBound.isPresent() && upperBound.isPresent() && lowerBound.get().compareTo(upperBound.get()) > 0) {
-                    throw syntaxErrorAtAbs(PyErrorMessages.MIN_REPEAT_GREATER_THAN_MAX_REPEAT, start);
+                    throw syntaxErrorAtAbs("min repeat greater than max repeat", start);
                 }
                 if (lowerBound.isPresent()) {
                     emitSnippet(inPattern.substring(start, position));
@@ -1204,9 +1203,9 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         switch (lastTerm) {
             case None:
             case Assertion:
-                throw syntaxErrorAtAbs(PyErrorMessages.NOTHING_TO_REPEAT, start);
+                throw syntaxErrorAtAbs("nothing to repeat", start);
             case Quantifier:
-                throw syntaxErrorAtAbs(PyErrorMessages.MULTIPLE_REPEAT, start);
+                throw syntaxErrorAtAbs("multiple repeat", start);
             case Atom:
                 if (match("?")) {
                     emitSnippet("?");
@@ -1254,7 +1253,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                                     break;
                                 }
                                 default:
-                                    throw syntaxErrorAtRel(PyErrorMessages.unknownExtensionP(ch2), 3);
+                                    throw syntaxErrorAtRel("unknown extension ?P" + new String(Character.toChars(ch2)), 3);
                             }
                             break;
                         }
@@ -1278,7 +1277,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                                     lookbehind(false);
                                     break;
                                 default:
-                                    throw syntaxErrorAtRel(PyErrorMessages.unknownExtensionLt(ch2), 3);
+                                    throw syntaxErrorAtRel("unknown extension ?<" + new String(Character.toChars(ch2)), 3);
                             }
                             break;
                         }
@@ -1308,7 +1307,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                             break;
 
                         default:
-                            throw syntaxErrorAtRel(PyErrorMessages.unknownExtensionQ(ch1), 2);
+                            throw syntaxErrorAtRel("unknown extension ?" + new String(Character.toChars(ch1)), 2);
                     }
                     break;
 
@@ -1317,7 +1316,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                     group(true, Optional.empty(), start);
             }
         } else {
-            throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_SUBPATTERN, start);
+            throw syntaxErrorAtAbs("missing ), unterminated subpattern", start);
         }
     }
 
@@ -1327,16 +1326,15 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
      * @return the group name
      */
     private String parseGroupName(char terminator) {
-        assert terminator == '>' || terminator == ')';
         String groupName = getMany(c -> c != terminator);
         if (groupName.isEmpty()) {
-            throw syntaxErrorHere(PyErrorMessages.MISSING_GROUP_NAME);
+            throw syntaxErrorHere("missing group name");
         }
         if (!match(Character.toString(terminator))) {
-            throw syntaxErrorAtRel(terminator == ')' ? PyErrorMessages.UNTERMINATED_NAME : PyErrorMessages.UNTERMINATED_NAME_ANGLE_BRACKET, groupName.length());
+            throw syntaxErrorAtRel("missing " + terminator + ", unterminated name", groupName.length());
         }
         if (!checkGroupName(groupName)) {
-            throw syntaxErrorAtRel(PyErrorMessages.badCharacterInGroupName(groupName), groupName.length() + 1);
+            throw syntaxErrorAtRel("bad character in group name " + groupName, groupName.length() + 1);
         }
         return groupName;
     }
@@ -1373,7 +1371,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
             emitSnippet("\\" + groupNumber);
             lastTerm = TermCategory.Atom;
         } else {
-            throw syntaxErrorAtRel(PyErrorMessages.unknownGroupName(groupName), groupName.length() + 1);
+            throw syntaxErrorAtRel("unknown group name " + groupName, groupName.length() + 1);
         }
     }
 
@@ -1384,7 +1382,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         int start = position - 2;
         getMany(c -> c != ')');
         if (!match(")")) {
-            throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_COMMENT, start);
+            throw syntaxErrorAtAbs("missing ), unterminated comment", start);
         }
     }
 
@@ -1411,7 +1409,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                 namedCaptureGroups = new HashMap<>();
             }
             if (namedCaptureGroups.containsKey(name)) {
-                throw syntaxErrorAtRel(PyErrorMessages.redefinitionOfGroupName(name, groups, namedCaptureGroups.get(name)), name.length() + 1);
+                throw syntaxErrorAtRel(String.format("redefinition of group name '%s' as group %d; was group %d", name, groups, namedCaptureGroups.get(name)), name.length() + 1);
             }
             namedCaptureGroups.put(name, groups);
         });
@@ -1419,7 +1417,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         if (match(")")) {
             emitSnippet(")");
         } else {
-            throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_SUBPATTERN, start);
+            throw syntaxErrorAtAbs("missing ), unterminated subpattern", start);
         }
         if (capturing) {
             groupStack.pop();
@@ -1444,7 +1442,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         if (match(")")) {
             emitSnippet(")");
         } else {
-            throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_SUBPATTERN, start);
+            throw syntaxErrorAtAbs("missing ), unterminated subpattern", start);
         }
         lastTerm = TermCategory.Assertion;
     }
@@ -1465,7 +1463,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         if (match(")")) {
             emitSnippet(")");
         } else {
-            throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_SUBPATTERN, start);
+            throw syntaxErrorAtAbs("missing ), unterminated subpattern", start);
         }
         lastTerm = TermCategory.Assertion;
     }
@@ -1478,10 +1476,10 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         bailOut("conditional backreference groups not supported");
         String groupId = getMany(c -> c != ')');
         if (groupId.isEmpty()) {
-            throw syntaxErrorHere(PyErrorMessages.MISSING_GROUP_NAME);
+            throw syntaxErrorHere("missing group name");
         }
         if (!match(Character.toString(')'))) {
-            throw syntaxErrorAtRel(PyErrorMessages.UNTERMINATED_NAME, groupId.length());
+            throw syntaxErrorAtRel("missing ), unterminated name", groupId.length());
         }
         int groupNumber;
         if (checkGroupName(groupId)) {
@@ -1489,16 +1487,16 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
             if (namedCaptureGroups != null && namedCaptureGroups.containsKey(groupId)) {
                 groupNumber = namedCaptureGroups.get(groupId);
             } else {
-                throw syntaxErrorAtRel(PyErrorMessages.unknownGroupName(groupId), groupId.length() + 1);
+                throw syntaxErrorAtRel("unknown group name " + groupId, groupId.length() + 1);
             }
         } else {
             try {
                 groupNumber = Integer.parseInt(groupId);
                 if (groupNumber < 0) {
-                    throw new NumberFormatException(PyErrorMessages.NEGATIVE_GROUP_NUMBER);
+                    throw new NumberFormatException("negative group number");
                 }
             } catch (NumberFormatException e) {
-                throw syntaxErrorAtRel(PyErrorMessages.badCharacterInGroupName(groupId), groupId.length() + 1);
+                throw syntaxErrorAtRel("bad character in group name " + groupId, groupId.length() + 1);
             }
         }
         if (!lookbehindStack.isEmpty()) {
@@ -1508,11 +1506,11 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         if (match("|")) {
             disjunction();
             if (curChar() == '|') {
-                throw syntaxErrorHere(PyErrorMessages.CONDITIONAL_BACKREF_WITH_MORE_THAN_TWO_BRANCHES);
+                throw syntaxErrorHere("conditional backref with more than two branches");
             }
         }
         if (!match(")")) {
-            throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_SUBPATTERN, start);
+            throw syntaxErrorAtAbs("missing ), unterminated subpattern", start);
         }
         lastTerm = TermCategory.Atom;
     }
@@ -1528,16 +1526,16 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         while (PythonFlags.isValidFlagChar(ch)) {
             positiveFlags = positiveFlags.addFlag(ch);
             if (mode == PythonREMode.Str && ch == 'L') {
-                throw syntaxErrorHere(PyErrorMessages.INLINE_FLAGS_CANNOT_USE_L_FLAG_WITH_A_STR_PATTERN);
+                throw syntaxErrorHere("bad inline flags: cannot use 'L' flag with a str pattern");
             }
             if (mode == PythonREMode.Bytes && ch == 'u') {
-                throw syntaxErrorHere(PyErrorMessages.INLINE_FLAGS_CANNOT_USE_U_FLAG_WITH_A_BYTES_PATTERN);
+                throw syntaxErrorHere("bad inline flags: cannot use 'u' flag with a bytes pattern");
             }
             if (positiveFlags.numberOfTypeFlags() > 1) {
-                throw syntaxErrorHere(PyErrorMessages.INLINE_FLAGS_FLAGS_A_U_AND_L_ARE_INCOMPATIBLE);
+                throw syntaxErrorHere("bad inline flags: flags 'a', 'u' and 'L' are incompatible");
             }
             if (atEnd()) {
-                throw syntaxErrorHere(PyErrorMessages.MISSING_DASH_COLON_PAREN);
+                throw syntaxErrorHere("missing -, : or )");
             }
             ch = consumeChar();
         }
@@ -1547,46 +1545,46 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                 break;
             case ':':
                 if (positiveFlags.includesGlobalFlags()) {
-                    throw syntaxErrorAtRel(PyErrorMessages.INLINE_FLAGS_CANNOT_TURN_ON_GLOBAL_FLAG, 1);
+                    throw syntaxErrorAtRel("bad inline flags: cannot turn on global flag", 1);
                 }
                 localFlags(positiveFlags, PythonFlags.EMPTY_INSTANCE, start);
                 break;
             case '-':
                 if (positiveFlags.includesGlobalFlags()) {
-                    throw syntaxErrorAtRel(PyErrorMessages.INLINE_FLAGS_CANNOT_TURN_ON_GLOBAL_FLAG, 1);
+                    throw syntaxErrorAtRel("bad inline flags: cannot turn on global flag", 1);
                 }
                 if (atEnd()) {
-                    throw syntaxErrorHere(PyErrorMessages.MISSING_FLAG);
+                    throw syntaxErrorHere("missing flag");
                 }
                 ch = consumeChar();
                 PythonFlags negativeFlags = PythonFlags.EMPTY_INSTANCE;
                 while (PythonFlags.isValidFlagChar(ch)) {
                     negativeFlags = negativeFlags.addFlag(ch);
-                    if (PythonFlags.isTypeFlagChar(ch)) {
-                        throw syntaxErrorHere(PyErrorMessages.INLINE_FLAGS_CANNOT_TURN_OFF_FLAGS_A_U_AND_L);
+                    if (PythonFlags.TYPE_FLAGS_INSTANCE.hasFlag(ch)) {
+                        throw syntaxErrorHere("bad inline flags: cannot turn off flags 'a', 'u' and 'L'");
                     }
                     if (atEnd()) {
-                        throw syntaxErrorHere(PyErrorMessages.MISSING_COLON);
+                        throw syntaxErrorHere("missing :");
                     }
                     ch = consumeChar();
                 }
                 if (ch != ':') {
                     if (Character.isAlphabetic(ch)) {
-                        throw syntaxErrorAtRel(PyErrorMessages.UNKNOWN_FLAG, 1);
+                        throw syntaxErrorAtRel("unknown flag", 1);
                     } else {
-                        throw syntaxErrorAtRel(PyErrorMessages.MISSING_COLON, 1);
+                        throw syntaxErrorAtRel("missing :", 1);
                     }
                 }
                 if (negativeFlags.includesGlobalFlags()) {
-                    throw syntaxErrorAtRel(PyErrorMessages.INLINE_FLAGS_CANNOT_TURN_OFF_GLOBAL_FLAG, 1);
+                    throw syntaxErrorAtRel("bad inline flags: cannot turn off global flag", 1);
                 }
                 localFlags(positiveFlags, negativeFlags, start);
                 break;
             default:
                 if (Character.isAlphabetic(ch)) {
-                    throw syntaxErrorAtRel(PyErrorMessages.UNKNOWN_FLAG, 1);
+                    throw syntaxErrorAtRel("unknown flag", 1);
                 } else {
-                    throw syntaxErrorAtRel(PyErrorMessages.MISSING_DASH_COLON_PAREN, 1);
+                    throw syntaxErrorAtRel("missing -, : or )", 1);
                 }
         }
     }
@@ -1602,7 +1600,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
      */
     private void localFlags(PythonFlags positiveFlags, PythonFlags negativeFlags, int start) {
         if (positiveFlags.overlaps(negativeFlags)) {
-            throw syntaxErrorHere(PyErrorMessages.INLINE_FLAGS_FLAG_TURNED_ON_AND_OFF);
+            throw syntaxErrorHere("bad inline flags: flag turned on and off");
         }
         PythonFlags newFlags = getLocalFlags().addFlags(positiveFlags).delFlags(negativeFlags);
         if (positiveFlags.numberOfTypeFlags() > 0) {

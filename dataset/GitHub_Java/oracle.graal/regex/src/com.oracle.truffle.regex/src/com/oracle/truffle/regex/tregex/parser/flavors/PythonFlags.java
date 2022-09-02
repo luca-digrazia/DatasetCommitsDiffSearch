@@ -49,7 +49,6 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.regex.AbstractConstantKeysObject;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
-import com.oracle.truffle.regex.util.TBitSet;
 import com.oracle.truffle.regex.util.TruffleReadOnlyKeysArray;
 
 /**
@@ -62,30 +61,10 @@ public final class PythonFlags extends AbstractConstantKeysObject {
 
     private final int value;
 
-    private static final TBitSet ALL_FLAG_CHARS = TBitSet.valueOf('L', 'a', 'i', 'm', 's', 't', 'u', 'x', 'y');
-    private static final TBitSet VALID_FLAG_CHARS = TBitSet.valueOf('L', 'a', 'i', 'm', 's', 't', 'u', 'x');
-    private static final TBitSet TYPE_FLAG_CHARS = TBitSet.valueOf('L', 'a', 'u');
-
     private static final String FLAGS = "iLmsxatu";
-
-    private static final int FLAG_IGNORE_CASE = 1;
-    private static final int FLAG_LOCALE = 1 << 1;
-    private static final int FLAG_MULTILINE = 1 << 2;
-    private static final int FLAG_DOT_ALL = 1 << 3;
-    private static final int FLAG_VERBOSE = 1 << 4;
-    private static final int FLAG_ASCII = 1 << 5;
-    private static final int FLAG_TEMPLATE = 1 << 6;
-    private static final int FLAG_UNICODE = 1 << 7;
-    private static final int FLAG_STICKY = 1 << 8;
-
-    private static final int[] FLAG_LOOKUP = {
-                    FLAG_ASCII, 0, 0, 0, 0, 0, 0, 0, FLAG_IGNORE_CASE, 0, 0, FLAG_LOCALE, FLAG_MULTILINE, 0, 0, 0,
-                    0, 0, FLAG_DOT_ALL, FLAG_TEMPLATE, FLAG_UNICODE, 0, 0, FLAG_VERBOSE, FLAG_STICKY
-    };
-
-    private static final int TYPE_FLAGS = FLAG_LOCALE | FLAG_ASCII | FLAG_UNICODE;
-    private static final int GLOBAL_FLAGS = FLAG_TEMPLATE;
-    private static final int INTERNAL_FLAGS = FLAG_STICKY;
+    private static final String TYPE_FLAGS = "Lau";
+    private static final String GLOBAL_FLAGS = "t";
+    private static final String INTERNAL_FLAGS = "y";
 
     public static final PythonFlags EMPTY_INSTANCE = new PythonFlags("");
     public static final PythonFlags TYPE_FLAGS_INSTANCE = new PythonFlags(TYPE_FLAGS);
@@ -103,51 +82,53 @@ public final class PythonFlags extends AbstractConstantKeysObject {
     }
 
     private static int maskForFlag(int flagChar) {
-        assert ALL_FLAG_CHARS.get(flagChar);
-        // flagChar must be one of [A-Ya-y].
-        // (flagChar | 0x20) effectively downcases the character and allows us to use an array of
-        // just 25 integers for the lookup.
-        return FLAG_LOOKUP[(flagChar | 0x20) - 'a'];
+        int index = FLAGS.indexOf(flagChar);
+        if (index >= 0) {
+            return 1 << index;
+        } else {
+            assert INTERNAL_FLAGS.indexOf(flagChar) >= 0;
+            return 1 << (FLAGS.length() + INTERNAL_FLAGS.indexOf(flagChar));
+        }
     }
 
-    private boolean hasFlag(int flag) {
-        return (value & flag) != 0;
+    public boolean hasFlag(int flagChar) {
+        return (this.value & maskForFlag(flagChar)) != 0;
     }
 
     public boolean isIgnoreCase() {
-        return hasFlag(FLAG_IGNORE_CASE);
+        return hasFlag('i');
     }
 
     public boolean isLocale() {
-        return hasFlag(FLAG_LOCALE);
+        return hasFlag('L');
     }
 
     public boolean isMultiLine() {
-        return hasFlag(FLAG_MULTILINE);
+        return hasFlag('m');
     }
 
     public boolean isDotAll() {
-        return hasFlag(FLAG_DOT_ALL);
+        return hasFlag('s');
     }
 
     public boolean isVerbose() {
-        return hasFlag(FLAG_VERBOSE);
+        return hasFlag('x');
     }
 
     public boolean isAscii() {
-        return hasFlag(FLAG_ASCII);
+        return hasFlag('a');
     }
 
     public boolean isTemplate() {
-        return hasFlag(FLAG_TEMPLATE);
+        return hasFlag('t');
     }
 
     public boolean isUnicode() {
-        return hasFlag(FLAG_UNICODE);
+        return hasFlag('u');
     }
 
     public boolean isSticky() {
-        return hasFlag(FLAG_STICKY);
+        return hasFlag('y');
     }
 
     public PythonFlags addFlag(int flagChar) {
@@ -170,22 +151,22 @@ public final class PythonFlags extends AbstractConstantKeysObject {
     public PythonFlags fixFlags(RegexSource source, PythonREMode mode) {
         switch (mode) {
             case Str:
-                if (isLocale()) {
+                if (hasFlag('L')) {
                     throw RegexSyntaxException.createFlags(source, "cannot use LOCALE flag with a str pattern");
                 }
-                if (isAscii() && isUnicode()) {
+                if (hasFlag('a') && hasFlag('u')) {
                     throw RegexSyntaxException.createFlags(source, "ASCII and UNICODE flags are incompatible");
                 }
-                if (!isAscii() && !isUnicode()) {
-                    return new PythonFlags(value | FLAG_UNICODE);
+                if (!hasFlag('a')) {
+                    return addFlag('u');
                 } else {
                     return this;
                 }
             case Bytes:
-                if (isUnicode()) {
+                if (hasFlag('u')) {
                     throw RegexSyntaxException.createFlags(source, "cannot use UNICODE flag with a bytes pattern");
                 }
-                if (isAscii() && isLocale()) {
+                if (hasFlag('a') && hasFlag('L')) {
                     throw RegexSyntaxException.createFlags(source, "ASCII and LOCALE flags are incompatible");
                 }
                 return this;
@@ -195,19 +176,26 @@ public final class PythonFlags extends AbstractConstantKeysObject {
     }
 
     public static boolean isValidFlagChar(int candidateChar) {
-        return VALID_FLAG_CHARS.get(candidateChar);
-    }
-
-    public static boolean isTypeFlagChar(int candidateChar) {
-        return TYPE_FLAG_CHARS.get(candidateChar);
+        return FLAGS.indexOf(candidateChar) >= 0;
     }
 
     public int numberOfTypeFlags() {
-        return Integer.bitCount(value & TYPE_FLAGS);
+        int typeFlags = 0;
+        for (int i = 0; i < TYPE_FLAGS.length(); i++) {
+            if (hasFlag(TYPE_FLAGS.charAt(i))) {
+                typeFlags++;
+            }
+        }
+        return typeFlags;
     }
 
     public boolean includesGlobalFlags() {
-        return (value & GLOBAL_FLAGS) != 0;
+        for (int i = 0; i < GLOBAL_FLAGS.length(); i++) {
+            if (hasFlag(GLOBAL_FLAGS.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean overlaps(PythonFlags otherFlags) {
@@ -227,15 +215,14 @@ public final class PythonFlags extends AbstractConstantKeysObject {
     @TruffleBoundary
     @Override
     public String toString() {
-        char[] out = new char[Integer.bitCount(value & ~INTERNAL_FLAGS)];
-        int iOut = 0;
+        StringBuilder out = new StringBuilder(FLAGS.length());
         for (int i = 0; i < FLAGS.length(); i++) {
             char flag = FLAGS.charAt(i);
-            if (hasFlag(maskForFlag(flag))) {
-                out[iOut++] = flag;
+            if (this.hasFlag(flag)) {
+                out.append(flag);
             }
         }
-        return new String(out);
+        return out.toString();
     }
 
     @TruffleBoundary

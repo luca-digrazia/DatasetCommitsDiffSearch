@@ -62,7 +62,6 @@ import com.oracle.truffle.regex.charset.CodePointSet;
 import com.oracle.truffle.regex.charset.CodePointSetAccumulator;
 import com.oracle.truffle.regex.charset.Range;
 import com.oracle.truffle.regex.charset.UnicodeProperties;
-import com.oracle.truffle.regex.errors.RbErrorMessages;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
 import com.oracle.truffle.regex.tregex.string.Encodings;
 import com.oracle.truffle.regex.util.TBitSet;
@@ -79,11 +78,11 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * Characters that are considered special in ECMAScript regexes. To match these characters, they
      * need to be escaped using a backslash.
      */
-    private static final TBitSet SYNTAX_CHARACTERS = TBitSet.valueOf('$', '(', ')', '*', '+', '.', '?', '[', '\\', ']', '^', '{', '|', '}');
+    private static final TBitSet SYNTAX_CHARACTERS = TBitSet.valueOf('^', '$', '\\', '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|');
     /**
      * Characters that are considered special in ECMAScript regex character classes.
      */
-    private static final TBitSet CHAR_CLASS_SYNTAX_CHARACTERS = TBitSet.valueOf('-', '\\', ']', '^');
+    private static final TBitSet CHAR_CLASS_SYNTAX_CHARACTERS = TBitSet.valueOf('\\', ']', '-', '^');
 
     // Ruby's predefined character classes.
     // This one is for classes like \w, \s or \d...
@@ -269,7 +268,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     /**
      * Characters considered as whitespace in Ruby's regex verbose mode.
      */
-    private static final TBitSet WHITESPACE = TBitSet.valueOf('\t', '\n', '\f', '\r', ' ');
+    private static final TBitSet WHITESPACE = TBitSet.valueOf(' ', '\t', '\n', '\r', '\f');
 
     /**
      * The source object of the input pattern.
@@ -464,7 +463,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
 
     private void advance() {
         if (atEnd()) {
-            throw syntaxErrorAtEnd(RbErrorMessages.UNEXPECTED_END_OF_PATTERN);
+            throw syntaxError("unexpected end of pattern");
         }
         advance(1);
     }
@@ -487,9 +486,8 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     }
 
     private void mustMatch(String next) {
-        assert "}".equals(next) || ")".equals(next);
         if (!match(next)) {
-            throw syntaxErrorHere("}".equals(next) ? RbErrorMessages.EXPECTED_BRACE : RbErrorMessages.EXPECTED_PAREN);
+            throw syntaxError("expected " + next);
         }
     }
 
@@ -638,16 +636,8 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
 
     // Error reporting
 
-    private RegexSyntaxException syntaxErrorAtEnd(String message) {
-        return RegexSyntaxException.createPattern(inSource, message, inPattern.length() - 1);
-    }
-
-    private RegexSyntaxException syntaxErrorHere(String message) {
-        return RegexSyntaxException.createPattern(inSource, message, position);
-    }
-
-    private RegexSyntaxException syntaxErrorAt(String message, int pos) {
-        return RegexSyntaxException.createPattern(inSource, message, pos);
+    private RegexSyntaxException syntaxError(String message) {
+        return RegexSyntaxException.createPattern(inSource, message);
     }
 
     // Character predicates
@@ -756,7 +746,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
 
         if (!atEnd()) {
             assert curChar() == ')';
-            throw syntaxErrorHere(RbErrorMessages.UNBALANCED_PARENTHESIS);
+            throw syntaxError("unbalanced parenthesis");
         }
     }
 
@@ -1101,13 +1091,13 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 return false;
             }
             if (containsNamedCaptureGroups()) {
-                throw syntaxErrorAt(RbErrorMessages.NUMBERED_BACKREF_CALL_IS_NOT_ALLOWED, restorePosition);
+                throw syntaxError("numbered backref/call is not allowed. (use name)");
             }
             if (groupNumber > numberOfCaptureGroups()) {
-                throw syntaxErrorAt(RbErrorMessages.invalidGroupReference(number), restorePosition);
+                throw syntaxError("invalid group reference " + number);
             }
             if (lookbehindDepth > 0) {
-                throw syntaxErrorAt(RbErrorMessages.INVALID_PATTERN_IN_LOOK_BEHIND, restorePosition);
+                throw syntaxError("invalid pattern in look-behind");
             }
             if (groupNumber > groupIndex && groupNumber >= 10) {
                 // forward references >= 10 are interpreted as octal escapes instead
@@ -1139,10 +1129,9 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     private int parseGroupReference(char terminator, boolean allowNumeric, boolean allowNamed, boolean allowLevels, boolean ignoreUnresolved) {
         String groupName;
         int groupNumber;
-        int beginPos = position;
         if (curChar() == '-' || isDecDigit(curChar())) {
             if (!allowNumeric) {
-                throw syntaxErrorHere(RbErrorMessages.INVALID_GROUP_NAME);
+                throw syntaxError("invalid group name");
             }
             int sign = match("-") ? -1 : 1;
             groupName = getMany(RubyFlavorProcessor::isDecDigit);
@@ -1152,17 +1141,17 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     groupNumber = numberOfCaptureGroups() + 1 + groupNumber;
                 }
             } catch (NumberFormatException e) {
-                throw syntaxErrorAt(RbErrorMessages.INVALID_GROUP_NAME, beginPos);
+                throw syntaxError("invalid group name");
             }
             if (containsNamedCaptureGroups()) {
-                throw syntaxErrorAt(RbErrorMessages.NUMBERED_BACKREF_CALL_IS_NOT_ALLOWED, beginPos);
+                throw syntaxError("numbered backref/call is not allowed. (use name)");
             }
             if (!ignoreUnresolved && (groupNumber <= 0 || groupNumber > numberOfCaptureGroups())) {
-                throw syntaxErrorAt(RbErrorMessages.invalidGroupReference(groupName), beginPos);
+                throw syntaxError("invalid group reference " + groupName);
             }
         } else {
             if (!allowNamed) {
-                throw syntaxErrorAt(RbErrorMessages.INVALID_GROUP_NAME, beginPos);
+                throw syntaxError("invalid group name");
             }
             groupName = getMany(c -> {
                 if (allowLevels) {
@@ -1172,13 +1161,13 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 }
             });
             if (groupName.isEmpty()) {
-                throw syntaxErrorAt(RbErrorMessages.MISSING_GROUP_NAME, beginPos);
+                throw syntaxError("missing group name");
             }
             if (namedCaptureGroups == null || !namedCaptureGroups.containsKey(groupName)) {
                 if (ignoreUnresolved) {
                     groupNumber = -1;
                 } else {
-                    throw syntaxErrorAt(RbErrorMessages.unknownGroupName(groupName), beginPos);
+                    throw syntaxError("unknown group name " + groupName);
                 }
             } else {
                 groupNumber = namedCaptureGroups.get(groupName);
@@ -1188,15 +1177,15 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             advance(); // consume sign
             String level = getMany(RubyFlavorProcessor::isDecDigit);
             if (level.isEmpty()) {
-                throw syntaxErrorAt(RbErrorMessages.INVALID_GROUP_NAME, beginPos);
+                throw syntaxError("invalid group name");
             }
             bailOut("backreferences to other levels are not supported");
         }
         if (!match(Character.toString(terminator))) {
-            throw syntaxErrorAt(RbErrorMessages.INVALID_GROUP_NAME, beginPos);
+            throw syntaxError("invalid group name");
         }
         if (lookbehindDepth > 0) {
-            throw syntaxErrorAt(RbErrorMessages.INVALID_PATTERN_IN_LOOK_BEHIND, beginPos);
+            throw syntaxError("invalid pattern in look-behind");
         }
         return groupNumber;
     }
@@ -1295,7 +1284,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * @return true if parsed correctly
      */
     private boolean stringEscape() {
-        int beginPos = position - 1;
         if (match("u{")) {
             getMany(c -> ASCII_POSIX_CHAR_CLASSES.get("space").contains(c));
             while (!match("}")) {
@@ -1303,11 +1291,11 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 try {
                     int codePoint = Integer.parseInt(code, 16);
                     if (codePoint > 0x10FFFF) {
-                        throw syntaxErrorAt(RbErrorMessages.invalidUnicodeEscape(code), beginPos);
+                        throw syntaxError("unicode escape value " + code + " outside of range 0-0x10FFFF");
                     }
                     emitChar(codePoint);
                 } catch (NumberFormatException e) {
-                    throw syntaxErrorAt(RbErrorMessages.badEscape(code), beginPos);
+                    throw syntaxError("bad escape \\u" + code);
                 }
                 getMany(c -> WHITESPACE.get(c));
             }
@@ -1337,7 +1325,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * character classes.
      */
     private int silentCharacterEscape() {
-        int beginPos = position;
         int ch = consumeChar();
         switch (ch) {
             case 'a':
@@ -1359,10 +1346,10 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             case 'c':
             case 'C': {
                 if (atEnd()) {
-                    throw syntaxErrorAt(RbErrorMessages.END_PATTERN_AT_CONTROL, beginPos);
+                    throw syntaxError("end pattern at control");
                 }
                 if (ch == 'C' && !match("-")) {
-                    throw syntaxErrorAt(RbErrorMessages.INVALID_CONTROL_CODE_SYNTAX, beginPos);
+                    throw syntaxError("invalid control-code syntax");
                 }
                 int c = consumeChar();
                 if (c == '?') {
@@ -1375,13 +1362,13 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             }
             case 'M': {
                 if (atEnd()) {
-                    throw syntaxErrorAt(RbErrorMessages.END_PATTERN_AT_META, beginPos);
+                    throw syntaxError("end pattern at meta");
                 }
                 if (!match("-")) {
-                    throw syntaxErrorAt(RbErrorMessages.INVALID_META_CODE_SYNTAX, beginPos);
+                    throw syntaxError("invalid meta-code syntax");
                 }
                 if (atEnd()) {
-                    throw syntaxErrorAt(RbErrorMessages.END_PATTERN_AT_META, beginPos);
+                    throw syntaxError("end pattern at meta");
                 }
                 int c = consumeChar();
                 if (c == '\\') {
@@ -1413,17 +1400,17 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 } else {
                     code = getUpTo(4, RubyFlavorProcessor::isHexDigit);
                     if (code.length() < 4) {
-                        throw syntaxErrorAt(RbErrorMessages.incompleteEscape(code), beginPos);
+                        throw syntaxError("incomplete escape \\u" + code);
                     }
                 }
                 try {
                     int codePoint = Integer.parseInt(code, 16);
                     if (codePoint > 0x10FFFF) {
-                        throw syntaxErrorAt(RbErrorMessages.invalidUnicodeEscape(code), beginPos);
+                        throw syntaxError("unicode escape value \\u" + code + " outside of range 0-0x10FFFF");
                     }
                     return codePoint;
                 } catch (NumberFormatException e) {
-                    throw syntaxErrorAt(RbErrorMessages.badEscape(code), beginPos);
+                    throw syntaxError("bad escape \\u" + code);
                 }
             }
             default:
@@ -1432,7 +1419,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     String code = getUpTo(3, RubyFlavorProcessor::isOctDigit);
                     int codePoint = Integer.parseInt(code, 8);
                     if (codePoint > 0xFF) {
-                        throw syntaxErrorAt(RbErrorMessages.TOO_BIG_NUMBER, beginPos);
+                        throw syntaxError("too big number");
                     }
                     return codePoint;
                 } else {
@@ -1460,11 +1447,10 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         if (match("^")) {
             negated = true;
         }
-        int beginPos = position - 1;
         int firstPosInside = position;
         classBody: while (true) {
             if (atEnd()) {
-                throw syntaxErrorAt(RbErrorMessages.UNTERMINATED_CHARACTER_SET, beginPos);
+                throw syntaxError("unterminated character set");
             }
             int rangeStart = position;
             Optional<Integer> lowerBound;
@@ -1507,7 +1493,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             // a hyphen following a nested char class is never interpreted as a range operator
             if (!wasNestedCharClass && match("-")) {
                 if (atEnd()) {
-                    throw syntaxErrorAt(RbErrorMessages.UNTERMINATED_CHARACTER_SET, beginPos);
+                    throw syntaxError("unterminated character set");
                 }
                 Optional<Integer> upperBound;
                 ch = consumeChar();
@@ -1552,7 +1538,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 // both the left operand and the range operator
                 if (!wasNestedCharClass) {
                     if (!lowerBound.isPresent() || !upperBound.isPresent() || upperBound.get() < lowerBound.get()) {
-                        throw syntaxErrorAt(RbErrorMessages.badCharacterRange(inPattern.substring(rangeStart, position)), rangeStart);
+                        throw syntaxError("bad character range " + inPattern.substring(rangeStart, position));
                     }
                     curCharClass.addRange(lowerBound.get(), upperBound.get());
                 }
@@ -1614,7 +1600,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         }
         if (match(":]")) {
             if (!UNICODE_POSIX_CHAR_CLASSES.containsKey(className)) {
-                throw syntaxErrorAt(RbErrorMessages.INVALID_POSIX_BRACKET_TYPE, restorePosition);
+                throw syntaxError("invalid POSIX bracket type");
             }
             CodePointSet charSet;
             if (getLocalFlags().isAscii()) {
@@ -1684,7 +1670,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     return;
                 }
                 if (lowerBound.isPresent() && upperBound.isPresent() && lowerBound.get().compareTo(upperBound.get()) > 0) {
-                    throw syntaxErrorAt(RbErrorMessages.MIN_REPEAT_GREATER_THAN_MAX_REPEAT, start);
+                    throw syntaxError("min repeat greater than max repeat");
                 }
                 quantifier = new Quantifier(lowerBound.orElse(BigInteger.ZERO).intValue(),
                                 upperBound.orElse(BigInteger.valueOf(Quantifier.INFINITY)).intValue(),
@@ -1723,7 +1709,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
 
         switch (lastTerm) {
             case None:
-                throw syntaxErrorAt(RbErrorMessages.NOTHING_TO_REPEAT, start);
+                throw syntaxError("nothing to repeat");
             case Quantifier:
                 wrapLastTerm("(?:", ")" + quantifier.toString());
                 break;
@@ -1774,7 +1760,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      */
     private void parens() {
         if (atEnd()) {
-            throw syntaxErrorAtEnd(RbErrorMessages.UNTERMINATED_SUBPATTERN);
+            throw syntaxError("missing ), unterminated subpattern");
         }
         if (match("?")) {
             final int ch1 = consumeChar();
@@ -1836,7 +1822,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     break;
 
                 default:
-                    throw syntaxErrorAt(RbErrorMessages.unknownExtension(ch1), position - 1);
+                    throw syntaxError("unknown extension ?" + new String(Character.toChars(ch1)));
             }
         } else {
             group(!containsNamedCaptureGroups());
@@ -1851,10 +1837,10 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     private String parseGroupName(char terminator) {
         String groupName = getMany(c -> c != terminator);
         if (!match(Character.toString(terminator))) {
-            throw syntaxErrorHere(RbErrorMessages.unterminatedName(terminator));
+            throw syntaxError("missing " + terminator + ", unterminated name");
         }
         if (groupName.isEmpty()) {
-            throw syntaxErrorHere(RbErrorMessages.MISSING_GROUP_NAME);
+            throw syntaxError("missing group name");
         }
         return groupName;
     }
@@ -1863,10 +1849,9 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * Parses a parenthesized comment, assuming that the '(#' prefix was already parsed.
      */
     private void parenComment() {
-        int beginPos = position - 2;
         while (true) {
             if (atEnd()) {
-                throw syntaxErrorAt(RbErrorMessages.UNTERMINATED_COMMENT, beginPos);
+                throw syntaxError("missing ), unterminated comment");
             }
             int ch = consumeChar();
             if (ch == '\\' && !atEnd()) {
@@ -1897,7 +1882,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         if (match(")")) {
             emitSnippet(")");
         } else {
-            throw syntaxErrorHere(RbErrorMessages.UNTERMINATED_SUBPATTERN);
+            throw syntaxError("missing ), unterminated subpattern");
         }
         if (capturing) {
             groupStack.pop();
@@ -1923,7 +1908,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         if (match(")")) {
             emitSnippet("))");
         } else {
-            throw syntaxErrorHere(RbErrorMessages.UNTERMINATED_SUBPATTERN);
+            throw syntaxError("missing ), unterminated subpattern");
         }
         lastTerm = TermCategory.LookAroundAssertion;
         lastTermOutPosition = outPosition;
@@ -1945,7 +1930,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         if (match(")")) {
             emitSnippet("))");
         } else {
-            throw syntaxErrorHere(RbErrorMessages.UNTERMINATED_SUBPATTERN);
+            throw syntaxError("missing ), unterminated subpattern");
         }
         lastTerm = TermCategory.LookAroundAssertion;
         lastTermOutPosition = outPosition;
@@ -1965,17 +1950,17 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         } else if (isDecDigit(curChar())) {
             parseGroupReference(')', true, false, true, false);
         } else {
-            throw syntaxErrorHere(RbErrorMessages.INVALID_GROUP_NAME);
+            throw syntaxError("invalid group name");
         }
         disjunction();
         if (match("|")) {
             disjunction();
             if (curChar() == '|') {
-                throw syntaxErrorHere(RbErrorMessages.CONDITIONAL_BACKREF_WITH_MORE_THAN_TWO_BRANCHES);
+                throw syntaxError("conditional backref with more than two branches");
             }
         }
         if (!match(")")) {
-            throw syntaxErrorHere(RbErrorMessages.UNTERMINATED_SUBPATTERN);
+            throw syntaxError("missing ), unterminated subpattern");
         }
         lastTerm = TermCategory.Atom;
         lastTermOutPosition = -1; // bail out
@@ -1990,7 +1975,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         if (match(")")) {
             bailOut("absent expressions not supported");
         } else {
-            throw syntaxErrorHere(RbErrorMessages.UNTERMINATED_SUBPATTERN);
+            throw syntaxError("missing ), unterminated subpattern");
         }
         lastTerm = TermCategory.Atom;
         lastTermOutPosition = -1; // bail out
@@ -2010,20 +1995,20 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             } else if (RubyFlags.isValidFlagChar(ch)) {
                 if (negative) {
                     if (RubyFlags.isTypeFlag(ch)) {
-                        throw syntaxErrorHere(RbErrorMessages.UNDEFINED_GROUP_OPTION);
+                        throw syntaxError("undefined group option");
                     }
                     newFlags = newFlags.delFlag(ch);
                 } else {
                     newFlags = newFlags.addFlag(ch);
                 }
             } else if (Character.isAlphabetic(ch)) {
-                throw syntaxErrorHere(RbErrorMessages.UNDEFINED_GROUP_OPTION);
+                throw syntaxError("undefined group option");
             } else {
-                throw syntaxErrorHere(RbErrorMessages.MISSING_DASH_COLON_PAREN);
+                throw syntaxError("missing -, : or )");
             }
 
             if (atEnd()) {
-                throw syntaxErrorAtEnd(RbErrorMessages.MISSING_FLAG_DASH_COLON_PAREN);
+                throw syntaxError("missing flag, -, : or )");
             }
             ch = consumeChar();
         }

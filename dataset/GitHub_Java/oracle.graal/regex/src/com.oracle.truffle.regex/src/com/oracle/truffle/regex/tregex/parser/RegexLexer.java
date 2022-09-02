@@ -53,14 +53,14 @@ import com.oracle.truffle.regex.charset.CodePointSet;
 import com.oracle.truffle.regex.charset.CodePointSetAccumulator;
 import com.oracle.truffle.regex.charset.Constants;
 import com.oracle.truffle.regex.charset.UnicodeProperties;
-import com.oracle.truffle.regex.errors.ErrorMessages;
 import com.oracle.truffle.regex.tregex.string.Encodings.Encoding;
 import com.oracle.truffle.regex.util.TBitSet;
 
 public final class RegexLexer {
 
-    private static final TBitSet PREDEFINED_CHAR_CLASSES = TBitSet.valueOf('D', 'S', 'W', 'd', 's', 'w');
-    private static final TBitSet SYNTAX_CHARS = TBitSet.valueOf('$', '(', ')', '*', '+', '.', '/', '?', '[', '\\', ']', '^', '{', '|', '}');
+    private static final TBitSet PREDEFINED_CHAR_CLASSES = TBitSet.valueOf('s', 'S', 'd', 'D', 'w', 'W');
+    private static final TBitSet SYNTAX_CHARS = TBitSet.valueOf(
+                    '^', '$', '/', '\\', '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|');
 
     private static final CodePointSet ID_START = UnicodeProperties.getProperty("ID_Start");
     private static final CodePointSet ID_CONTINUE = UnicodeProperties.getProperty("ID_Continue");

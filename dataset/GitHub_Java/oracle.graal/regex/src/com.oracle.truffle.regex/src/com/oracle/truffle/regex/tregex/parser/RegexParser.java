@@ -52,7 +52,6 @@ import com.oracle.truffle.regex.RegexSyntaxException;
 import com.oracle.truffle.regex.charset.CodePointSet;
 import com.oracle.truffle.regex.charset.CodePointSetAccumulator;
 import com.oracle.truffle.regex.charset.Constants;
-import com.oracle.truffle.regex.errors.ErrorMessages;
 import com.oracle.truffle.regex.tregex.TRegexOptions;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
 import com.oracle.truffle.regex.tregex.buffer.IntRangesBuffer;
@@ -780,28 +779,14 @@ public final class RegexParser {
             replaceCurTermWithDeadNode();
             return;
         }
-        if (quantifier.getMax() == 0) {
+        boolean curTermIsZeroWidthGroup = curTerm.isGroup() && curTerm.asGroup().isAlwaysZeroWidth();
+        if (quantifier.getMax() == 0 || quantifier.getMin() == 0 && (curTerm.isLookAroundAssertion() || curTermIsZeroWidthGroup ||
+                        curTerm.isCharacterClass() && curTerm.asCharacterClass().getCharSet().matchesNothing())) {
             removeCurTerm();
             return;
         }
-        boolean curTermIsZeroWidthGroup = curTerm.isGroup() && curTerm.asGroup().isAlwaysZeroWidth();
-        if (source.getOptions().getFlavor() == RubyFlavor.INSTANCE) {
-            // In Ruby, we cannot remove optional zero-width groups or lookaround assertions as Ruby
-            // will admit executing them even though they match the empty string, because they can
-            // change the state of capture groups.
-            if (quantifier.getMin() == 0 && curTerm.isCharacterClass() && curTerm.asCharacterClass().getCharSet().matchesNothing()) {
-                removeCurTerm();
-                return;
-            }
-        } else {
-            if (quantifier.getMin() == 0 && (curTerm.isLookAroundAssertion() || curTermIsZeroWidthGroup ||
-                            curTerm.isCharacterClass() && curTerm.asCharacterClass().getCharSet().matchesNothing())) {
-                removeCurTerm();
-                return;
-            }
-        }
         ast.addSourceSection(curTerm, quantifier);
-        if (quantifier.getMin() > 0 && (curTerm.isLookAroundAssertion() || curTermIsZeroWidthGroup)) {
+        if (curTerm.isLookAroundAssertion() || curTermIsZeroWidthGroup) {
             // quantifying LookAroundAssertions doesn't do anything if quantifier.getMin() > 0, so
             // ignore.
             return;
