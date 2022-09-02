@@ -271,17 +271,17 @@ public final class JavaMemoryUtil {
     /** Implementation of {@code Unsafe.copyMemory}. */
     public static void unsafeCopyMemory(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {
         if (srcBase != null || destBase != null) {
-            copyOnHeap(srcBase, WordFactory.unsigned(srcOffset), destBase, WordFactory.unsigned(destOffset), WordFactory.unsigned(bytes));
+            copyOnHeap(srcBase, srcOffset, destBase, destOffset, bytes);
         } else {
             UnmanagedMemoryUtil.copy(WordFactory.pointer(srcOffset), WordFactory.pointer(destOffset), WordFactory.unsigned(bytes));
         }
     }
 
     @Uninterruptible(reason = "Memory is on the heap, copying must not be interrupted.")
-    private static void copyOnHeap(Object srcBase, UnsignedWord srcOffset, Object destBase, UnsignedWord destOffset, UnsignedWord size) {
-        Word fromPtr = Word.objectToUntrackedPointer(srcBase).add(srcOffset);
-        Word toPtr = Word.objectToUntrackedPointer(destBase).add(destOffset);
-        UnmanagedMemoryUtil.copy(fromPtr, toPtr, size);
+    private static void copyOnHeap(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {
+        UnmanagedMemoryUtil.copy(Word.objectToUntrackedPointer(srcBase).add(WordFactory.unsigned(srcOffset)),
+                        Word.objectToUntrackedPointer(destBase).add(WordFactory.unsigned(destOffset)),
+                        WordFactory.unsigned(bytes));
     }
 
     /**
@@ -358,7 +358,6 @@ public final class JavaMemoryUtil {
 
     /** Implementation of {@code Unsafe.setMemory}. */
     public static void unsafeSetMemory(Object destBase, long destOffset, long bytes, byte bvalue) {
-        // Can't use UnmanagedMemoryUtil.fill as that method doesn't guarantee atomicity.
         if (destBase != null) {
             fillOnHeap(destBase, destOffset, bytes, bvalue);
         } else {
@@ -368,8 +367,7 @@ public final class JavaMemoryUtil {
 
     @Uninterruptible(reason = "Accessed memory is on the heap, code must not be interrupted.")
     private static void fillOnHeap(Object destBase, long destOffset, long bytes, byte bvalue) {
-        Word fromPtr = Word.objectToUntrackedPointer(destBase).add(WordFactory.unsigned(destOffset));
-        fill(fromPtr, WordFactory.unsigned(bytes), bvalue);
+        fill(Word.objectToUntrackedPointer(destBase).add(WordFactory.unsigned(destOffset)), WordFactory.unsigned(bytes), bvalue);
     }
 
     /**
@@ -399,9 +397,9 @@ public final class JavaMemoryUtil {
 
     @Uninterruptible(reason = "Accessed memory is on the heap, code must not be interrupted.")
     private static void copySwapOnHeap(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes, long elemSize) {
-        Word fromPtr = Word.objectToUntrackedPointer(srcBase).add(WordFactory.unsigned(srcOffset));
-        Word toPtr = Word.objectToUntrackedPointer(destBase).add(WordFactory.unsigned(destOffset));
-        copySwap(fromPtr, toPtr, WordFactory.unsigned(bytes), WordFactory.unsigned(elemSize));
+        copySwap(Word.objectToUntrackedPointer(srcBase).add(WordFactory.unsigned(srcOffset)),
+                        Word.objectToUntrackedPointer(destBase).add(WordFactory.unsigned(destOffset)),
+                        WordFactory.unsigned(bytes), WordFactory.unsigned(elemSize));
     }
 
     /** Implementation of {@code Unsafe.copySwapMemory}. */
@@ -464,7 +462,7 @@ public final class JavaMemoryUtil {
         UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, toIndex);
         UnsignedWord count = WordFactory.unsigned(length);
 
-        copyReferencesForward(fromArray, fromOffset, toArray, toOffset, count);
+        copyObjectsForward(fromArray, fromOffset, toArray, toOffset, count);
     }
 
     /**
@@ -479,7 +477,7 @@ public final class JavaMemoryUtil {
         UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, toIndex);
         UnsignedWord count = WordFactory.unsigned(length);
 
-        copyReferencesBackward(fromArray, fromOffset, toArray, toOffset, count);
+        copyObjectsBackward(fromArray, fromOffset, toArray, toOffset, count);
     }
 
     /**
@@ -487,7 +485,7 @@ public final class JavaMemoryUtil {
      * read/write barriers but does *NOT* perform any array store checks (i.e., if this is used for
      * copying between arrays, it is up to the caller to ensure that the arrays are compatible).
      */
-    public static void copyReferencesForward(Object from, UnsignedWord fromOffset, Object to, UnsignedWord toOffset, UnsignedWord length) {
+    public static void copyObjectsForward(Object from, UnsignedWord fromOffset, Object to, UnsignedWord toOffset, UnsignedWord length) {
         int elementSize = ConfigurationValues.getObjectLayout().getReferenceSize();
         UnsignedWord size = length.multiply(elementSize);
         UnsignedWord copied = WordFactory.zero();
@@ -502,7 +500,7 @@ public final class JavaMemoryUtil {
      * read/write barriers but does *NOT* perform any array store checks (i.e., if this is used for
      * copying between arrays, it is up to the caller to ensure that the arrays are compatible).
      */
-    public static void copyReferencesBackward(Object from, UnsignedWord fromOffset, Object to, UnsignedWord toOffset, UnsignedWord length) {
+    public static void copyObjectsBackward(Object from, UnsignedWord fromOffset, Object to, UnsignedWord toOffset, UnsignedWord length) {
         int elementSize = ConfigurationValues.getObjectLayout().getReferenceSize();
         UnsignedWord remaining = length.multiply(elementSize);
         while (remaining.aboveThan(0)) {
@@ -530,65 +528,41 @@ public final class JavaMemoryUtil {
     /**
      * Copies between Java primitive arrays.
      */
+    @Uninterruptible(reason = "Arrays must not move")
     public static void copyPrimitiveArrayForward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int layoutEncoding) {
         assert length >= 0;
-        assert fromArray != null;
-        assert toArray != null;
 
         UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, fromIndex);
         UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, toIndex);
         UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(layoutEncoding));
         UnsignedWord size = elementSize.multiply(length);
 
-        copyPrimitiveArrayForward(fromArray, fromOffset, toArray, toOffset, size);
-    }
-
-    @IntrinsicCandidate
-    @Uninterruptible(reason = "Arrays must not move")
-    private static void copyPrimitiveArrayForward(Object fromArray, UnsignedWord fromOffset, Object toArray, UnsignedWord toOffset, UnsignedWord size) {
-        Pointer fromPtr = Word.objectToUntrackedPointer(fromArray).add(fromOffset);
-        Pointer toPtr = Word.objectToUntrackedPointer(toArray).add(toOffset);
-        copyPrimitiveArrayForward(fromPtr, toPtr, size);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static void copyPrimitiveArrayForward(Pointer fromPtr, Pointer toPtr, UnsignedWord size) {
         /*
          * When copying primitive array data, we know that the offsets and the size are aligned to
          * the array element size. So, in terms of the atomicity that is required for the Java
          * memory model, we are fine as long as we guarantee that we are always copying multiples of
          * element size.
          */
+        Pointer fromPtr = Word.objectToUntrackedPointer(fromArray).add(fromOffset);
+        Pointer toPtr = Word.objectToUntrackedPointer(toArray).add(toOffset);
         UnmanagedMemoryUtil.copyForward(fromPtr, toPtr, size);
     }
 
     /**
      * Copies between Java primitive arrays.
      */
+    @Uninterruptible(reason = "Arrays must not move")
     public static void copyPrimitiveArrayBackward(Object fromArray, int fromIndex, Object toArray, int toIndex, int length, int layoutEncoding) {
         assert length >= 0;
-        assert fromArray != null;
-        assert toArray != null;
 
         UnsignedWord fromOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, fromIndex);
         UnsignedWord toOffset = LayoutEncoding.getArrayElementOffset(layoutEncoding, toIndex);
         UnsignedWord elementSize = WordFactory.unsigned(LayoutEncoding.getArrayIndexScale(layoutEncoding));
         UnsignedWord size = elementSize.multiply(length);
 
-        copyPrimitiveArrayBackward(fromArray, fromOffset, toArray, toOffset, size);
-    }
-
-    @IntrinsicCandidate
-    @Uninterruptible(reason = "Arrays must not move")
-    private static void copyPrimitiveArrayBackward(Object fromArray, UnsignedWord fromOffset, Object toArray, UnsignedWord toOffset, UnsignedWord size) {
+        // See comment in copyPrimitiveArrayForward.
         Pointer fromPtr = Word.objectToUntrackedPointer(fromArray).add(fromOffset);
         Pointer toPtr = Word.objectToUntrackedPointer(toArray).add(toOffset);
-        copyPrimitiveArrayBackward(fromPtr, toPtr, size);
-    }
-
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public static void copyPrimitiveArrayBackward(Pointer fromPtr, Pointer toPtr, UnsignedWord size) {
-        // See comment in copyPrimitiveArrayForward.
         UnmanagedMemoryUtil.copyBackward(fromPtr, toPtr, size);
     }
 
