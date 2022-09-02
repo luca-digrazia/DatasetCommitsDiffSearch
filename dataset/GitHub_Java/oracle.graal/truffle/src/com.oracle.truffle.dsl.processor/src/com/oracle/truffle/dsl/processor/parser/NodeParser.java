@@ -386,8 +386,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
                     if (node.getTemplateType() instanceof GeneratedElement) {
                         // generated node
                         declaringElement = node.getTemplateType().getEnclosingElement();
-                        if (!declaringElement.getKind().isClass() &&
-                                        !declaringElement.getKind().isInterface()) {
+                        if (declaringElement.getKind() != ElementKind.CLASS) {
                             throw new AssertionError("Unexpected declared element for generated element: " + declaringElement.toString());
                         }
                     } else {
