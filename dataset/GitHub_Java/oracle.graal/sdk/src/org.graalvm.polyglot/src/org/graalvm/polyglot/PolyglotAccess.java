@@ -100,7 +100,7 @@ public final class PolyglotAccess {
         return newMap;
     }
 
-    String validate(UnmodifiableEconomicSet<String> availableLanguages) {
+    void validate(UnmodifiableEconomicSet<String> availableLanguages) {
         if (evalAccess != null) {
             MapCursor<String, EconomicSet<String>> entries = evalAccess.getEntries();
             while (entries.advance()) {
@@ -117,8 +117,8 @@ public final class PolyglotAccess {
                     }
                 }
                 if (invalidKey != null) {
-                    return String.format("Language '%s' configured in polyglot evaluation rule %s -> %s is not installed or available.",
-                                    invalidKey, entries.getKey(), toStringSet(entries.getValue()));
+                    throw new IllegalArgumentException(String.format("Language '%s' configured in polyglot evaluation rule %s -> %s is not installed or available.",
+                                    invalidKey, entries.getKey(), toStringSet(entries.getValue())));
                 }
             }
         }
@@ -126,12 +126,11 @@ public final class PolyglotAccess {
         if (bindingsAccess != null) {
             for (String language : bindingsAccess) {
                 if (!availableLanguages.contains(language)) {
-                    return String.format("Language '%s' configured in polyglot bindings access rule is not installed or available.",
-                                    language);
+                    throw new IllegalArgumentException(String.format("Language '%s' configured in polyglot bindings access rule is not installed or available.",
+                                    language));
                 }
             }
         }
-        return null;
 
     }
 
