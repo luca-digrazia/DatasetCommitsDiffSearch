@@ -27,6 +27,7 @@ package org.graalvm.compiler.nodes.spi;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
+import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.meta.JavaKind;
 
@@ -53,7 +54,13 @@ public interface LoweringProvider {
     Integer smallestCompareWidth();
 
     /**
-     * Indicates whether the target platform supports bulk zeroing instruction.
+     * Indicates whether this target platform supports bulk zeroing of arbitrary size.
      */
-    boolean supportBulkZeroing();
+    boolean supportsBulkZeroing();
+
+    /**
+     * Indicates whether this target platform supports optimized filling of memory regions with
+     * {@code long} values.
+     */
+    boolean supportsOptimizedFilling(OptionValues options);
 }
