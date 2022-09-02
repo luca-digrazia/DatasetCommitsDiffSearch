@@ -59,7 +59,7 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
     private final List<Path> buildmp;
 
     private final ClassLoader classLoader;
-    public final ModuleLayer moduleLayerForImageBuild;
+    final ModuleLayer moduleLayerForImageBuild;
 
     NativeImageClassLoaderSupport(ClassLoader defaultSystemClassLoader, String[] classpath, String[] modulePath) {
         super(defaultSystemClassLoader, classpath);
@@ -222,19 +222,8 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
     Class<?> loadClassFromModule(Object module, String className) throws ClassNotFoundException {
         assert module instanceof Module : "Argument `module` is not an instance of java.lang.Module";
         Module m = (Module) module;
-        assert isModuleClassLoader(classLoader, m.getClassLoader()) : "Argument `module` is java.lang.Module from unknown ClassLoader";
+        assert m.getClassLoader() == classLoader : "Argument `module` is java.lang.Module from different ClassLoader";
         return Class.forName(m, className);
-    }
-
-    private static boolean isModuleClassLoader(ClassLoader loader, ClassLoader moduleClassLoader) {
-        if (moduleClassLoader == loader) {
-            return true;
-        } else {
-            if (loader == null) {
-                return false;
-            }
-            return isModuleClassLoader(loader.getParent(), moduleClassLoader);
-        }
     }
 
     @Override
@@ -244,7 +233,7 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
     }
 
     @Override
-    public ClassLoader getClassLoader() {
+    ClassLoader getClassLoader() {
         return classLoader;
     }
 
