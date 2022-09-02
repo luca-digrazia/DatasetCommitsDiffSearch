@@ -28,7 +28,6 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
-import java.lang.ref.WeakReference;
 
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.nativeimage.PinnedObject;
@@ -47,9 +46,9 @@ import com.oracle.svm.core.code.FrameInfoQueryResult;
 import com.oracle.svm.core.code.SimpleCodeInfoQueryResult;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.deopt.Deoptimizer.TargetContent;
+import com.oracle.svm.core.heap.FeebleReference;
 import com.oracle.svm.core.log.StringBuilderLog;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
-import com.oracle.svm.core.monitor.MonitorSupport;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.code.InstalledCode;
@@ -275,44 +274,26 @@ public final class DeoptimizedFrame {
         }
     }
 
-    /** Data for re-locking of an object during deoptimization. */
-    static class RelockObjectData {
-        /** The object that needs to be re-locked. */
-        final Object object;
-        /**
-         * Value returned by {@link MonitorSupport#prepareRelockObject} and passed to
-         * {@link MonitorSupport#doRelockObject}.
-         */
-        final Object lockData;
-
-        RelockObjectData(Object object, Object lockData) {
-            this.object = object;
-            this.lockData = lockData;
-        }
-    }
-
     protected static DeoptimizedFrame factory(int targetContentSize, long sourceEncodedFrameSize, SubstrateInstalledCode sourceInstalledCode, VirtualFrame topFrame,
-                    RelockObjectData[] relockedObjects, CodePointer sourcePC) {
+                    CodePointer sourcePC) {
         final TargetContent targetContentBuffer = new TargetContent(targetContentSize, ConfigurationValues.getTarget().arch.getByteOrder());
-        return new DeoptimizedFrame(sourceEncodedFrameSize, sourceInstalledCode, topFrame, targetContentBuffer, relockedObjects, sourcePC);
+        return new DeoptimizedFrame(sourceEncodedFrameSize, sourceInstalledCode, topFrame, targetContentBuffer, sourcePC);
     }
 
     private final long sourceEncodedFrameSize;
-    private final WeakReference<SubstrateInstalledCode> sourceInstalledCode;
+    private final FeebleReference<SubstrateInstalledCode> sourceInstalledCode;
     private final VirtualFrame topFrame;
     private final Deoptimizer.TargetContent targetContent;
-    private final RelockObjectData[] relockedObjects;
     private final PinnedObject pin;
     private final CodePointer sourcePC;
     private final char[] completedMessage;
 
     private DeoptimizedFrame(long sourceEncodedFrameSize, SubstrateInstalledCode sourceInstalledCode, VirtualFrame topFrame, Deoptimizer.TargetContent targetContent,
-                    RelockObjectData[] relockedObjects, CodePointer sourcePC) {
+                    CodePointer sourcePC) {
         this.sourceEncodedFrameSize = sourceEncodedFrameSize;
         this.topFrame = topFrame;
         this.targetContent = targetContent;
-        this.relockedObjects = relockedObjects;
-        this.sourceInstalledCode = sourceInstalledCode == null ? null : new WeakReference<>(sourceInstalledCode);
+        this.sourceInstalledCode = sourceInstalledCode == null ? null : FeebleReference.factory(sourceInstalledCode, null);
         this.sourcePC = sourcePC;
         this.pin = PinnedObject.create(this);
         StringBuilderLog sbl = new StringBuilderLog();
@@ -404,12 +385,6 @@ public final class DeoptimizedFrame {
             }
             cur = cur.caller;
         } while (cur != null);
-
-        if (relockedObjects != null) {
-            for (RelockObjectData relockedObject : relockedObjects) {
-                MonitorSupport.singleton().doRelockObject(relockedObject.object, relockedObject.lockData);
-            }
-        }
     }
 
     /**
