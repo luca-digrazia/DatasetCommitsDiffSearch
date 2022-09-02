@@ -25,8 +25,6 @@
 package com.oracle.truffle.tools.agentscript.impl;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.instrumentation.EventBinding;
-import com.oracle.truffle.api.instrumentation.ExecutionEventNodeFactory;
 import com.oracle.truffle.api.instrumentation.Instrumenter;
 import com.oracle.truffle.api.instrumentation.LoadSourceEvent;
 import com.oracle.truffle.api.instrumentation.LoadSourceListener;
@@ -37,7 +35,6 @@ import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -47,63 +44,42 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.tools.agentscript.AgentScript;
 import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @SuppressWarnings({"unused", "static-method"})
 @ExportLibrary(InteropLibrary.class)
 final class AgentObject implements TruffleObject {
     private final TruffleInstrument.Env env;
-    private final ExcludeAgentScriptsFilter excludeSources = new ExcludeAgentScriptsFilter();
-    private final Map<AgentType, Map<Object, EventBinding<?>>> listeners = new EnumMap<>(AgentType.class);
+    private final AtomicBoolean initializationFinished;
     private Object closeFn;
 
     AgentObject(TruffleInstrument.Env env) {
         this.env = env;
-    }
-
-    private void registerHandle(AgentType at, EventBinding<?> handle, Object arg) {
-        synchronized (listeners) {
-            Map<Object, EventBinding<?>> listenersForType = listeners.get(at);
-            if (listenersForType == null) {
-                listenersForType = new LinkedHashMap<>();
-                listeners.put(at, listenersForType);
-            }
-            listenersForType.put(arg, handle);
-        }
-    }
-
-    private void removeHandle(AgentType type, Object arg) {
-        EventBinding<?> remove;
-        synchronized (listeners) {
-            Map<Object, EventBinding<?>> listenersForType = listeners.get(type);
-            remove = listenersForType == null ? null : listenersForType.get(arg);
-        }
-        if (remove != null) {
-            remove.dispose();
-        }
-    }
-
-    void ignoreSource(Source script) {
-        excludeSources.ignoreSource(script);
+        this.initializationFinished = new AtomicBoolean(false);
     }
 
     private static final class ExcludeAgentScriptsFilter implements SourceSectionFilter.SourcePredicate {
+        private final AtomicBoolean initializationFinished;
         private final Map<Source, Boolean> ignore = new WeakHashMap<>();
 
-        ExcludeAgentScriptsFilter() {
+        ExcludeAgentScriptsFilter(AtomicBoolean initializationFinished) {
+            this.initializationFinished = initializationFinished;
         }
 
         @Override
         public boolean test(Source source) {
-            return !Boolean.TRUE.equals(ignore.get(source));
-        }
-
-        void ignoreSource(Source source) {
-            ignore.put(source, Boolean.TRUE);
+            if (initializationFinished.get()) {
+                if (Boolean.TRUE.equals(ignore.get(source))) {
+                    return false;
+                }
+                return true;
+            } else {
+                ignore.put(source, Boolean.TRUE);
+                return false;
+            }
         }
     }
 
@@ -137,12 +113,12 @@ final class AgentObject implements TruffleObject {
                     @CachedLibrary(limit = "0") InteropLibrary interop) throws UnknownIdentifierException, UnsupportedMessageException {
         Instrumenter instrumenter = obj.env.getInstrumenter();
         switch (member) {
-            case "on": {
+            case "on":
                 AgentType type = AgentType.find((String) args[0]);
                 switch (type) {
                     case SOURCE: {
-                        SourceFilter filter = SourceFilter.newBuilder().sourceIs(obj.excludeSources).includeInternal(false).build();
-                        EventBinding<LoadSourceListener> handle = instrumenter.attachLoadSourceListener(filter, new LoadSourceListener() {
+                        SourceFilter filter = SourceFilter.newBuilder().sourceIs(new ExcludeAgentScriptsFilter(obj.initializationFinished)).includeInternal(false).build();
+                        instrumenter.attachLoadSourceListener(filter, new LoadSourceListener() {
                             @Override
                             public void onLoad(LoadSourceEvent event) {
                                 try {
@@ -151,22 +127,19 @@ final class AgentObject implements TruffleObject {
                                     throw AgentException.raise(ex);
                                 }
                             }
-                        }, false);
-                        obj.registerHandle(type, handle, args[1]);
+                        }, true);
                         break;
                     }
                     case ENTER: {
                         CompilerDirectives.transferToInterpreter();
                         SourceSectionFilter filter = createFilter(obj, args);
-                        EventBinding<ExecutionEventNodeFactory> handle = instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, args[1], null));
-                        obj.registerHandle(type, handle, args[1]);
+                        instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, args[1], null));
                         break;
                     }
                     case RETURN: {
                         CompilerDirectives.transferToInterpreter();
                         SourceSectionFilter filter = createFilter(obj, args);
-                        EventBinding<ExecutionEventNodeFactory> handle = instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, null, args[1]));
-                        obj.registerHandle(type, handle, args[1]);
+                        instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, null, args[1]));
                         break;
                     }
                     case CLOSE: {
@@ -178,13 +151,6 @@ final class AgentObject implements TruffleObject {
                         throw new IllegalStateException();
                 }
                 break;
-            }
-            case "off": {
-                CompilerDirectives.transferToInterpreter();
-                AgentType type = AgentType.find((String) args[0]);
-                obj.removeHandle(type, args[1]);
-                break;
-            }
             default:
                 throw UnknownIdentifierException.create(member);
         }
@@ -192,55 +158,32 @@ final class AgentObject implements TruffleObject {
     }
 
     private static SourceSectionFilter createFilter(AgentObject obj, Object[] args) throws IllegalArgumentException, UnsupportedMessageException {
-        final SourceSectionFilter.Builder builder = SourceSectionFilter.newBuilder().sourceIs(obj.excludeSources).includeInternal(false);
+        final SourceSectionFilter.Builder builder = SourceSectionFilter.newBuilder().sourceIs(new ExcludeAgentScriptsFilter(obj.initializationFinished)).includeInternal(false);
         List<Class<? extends Tag>> allTags = new ArrayList<>();
         if (args.length > 2) {
             final InteropLibrary iop = InteropLibrary.getFactory().getUncached();
             final Object config = args[2];
-            Object allMembers = iop.getMembers(config, false);
-            long allMembersSize = iop.getArraySize(allMembers);
-            for (int i = 0; i < allMembersSize; i++) {
-                Object atI;
-                try {
-                    atI = iop.readArrayElement(allMembers, i);
-                } catch (InvalidArrayIndexException ex) {
-                    continue;
-                }
-                String type = iop.asString(atI);
-                switch (type) {
-                    case "expressions":
-                        if (isSet(iop, config, "expressions")) {
-                            allTags.add(StandardTags.ExpressionTag.class);
-                        }
-                        break;
-                    case "statements":
-                        if (isSet(iop, config, "statements")) {
-                            allTags.add(StandardTags.StatementTag.class);
-                        }
-                        break;
-                    case "roots":
-                        if (isSet(iop, config, "roots")) {
-                            allTags.add(StandardTags.RootBodyTag.class);
-                        }
-                        break;
-                    case "rootNameFilter":
-                        try {
-                            Object rootNameFilter = iop.readMember(config, "rootNameFilter");
-                            if (rootNameFilter != null && !iop.isNull(rootNameFilter)) {
-                                if (!iop.isExecutable(rootNameFilter)) {
-                                    throw new IllegalArgumentException("rootNameFilter has to be a function!");
-                                }
-                                builder.rootNameIs(new RootNameFilter(rootNameFilter));
-                            }
-                        } catch (UnknownIdentifierException ex) {
-                            // OK
-                        }
-                        break;
-                    default:
-                        throw AgentException.unknownAttribute(type);
-                }
-            }
 
+            if (isSet(iop, config, "expressions")) {
+                allTags.add(StandardTags.ExpressionTag.class);
+            }
+            if (isSet(iop, config, "statements")) {
+                allTags.add(StandardTags.StatementTag.class);
+            }
+            if (isSet(iop, config, "roots")) {
+                allTags.add(StandardTags.RootBodyTag.class);
+            }
+            try {
+                Object rootNameFilter = iop.readMember(config, "rootNameFilter");
+                if (rootNameFilter != null && !iop.isNull(rootNameFilter)) {
+                    if (!iop.isExecutable(rootNameFilter)) {
+                        throw new IllegalArgumentException("rootNameFilter has to be a function!");
+                    }
+                    builder.rootNameIs(new RootNameFilter(rootNameFilter, obj.initializationFinished));
+                }
+            } catch (UnknownIdentifierException ex) {
+                // OK
+            }
         }
         if (allTags.isEmpty()) {
             throw new IllegalArgumentException(
@@ -256,16 +199,12 @@ final class AgentObject implements TruffleObject {
         return false;
     }
 
+    void initializationFinished() {
+        this.initializationFinished.set(true);
+    }
+
     @CompilerDirectives.TruffleBoundary
     void onClosed() {
-        synchronized (listeners) {
-            for (Map.Entry<AgentType, Map<Object, EventBinding<?>>> entry : listeners.entrySet()) {
-                Map<Object, EventBinding<?>> val = entry.getValue();
-                for (EventBinding<?> binding : val.values()) {
-                    binding.dispose();
-                }
-            }
-        }
         if (closeFn == null) {
             return;
         }
