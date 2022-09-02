@@ -69,9 +69,6 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
         void check(ValueNode tag, ValueNode object, ValueNode primitive);
     }
 
-    /**
-     * Checks that a frame slot is consistent.
-     */
     private static final FSChecker regularFSChecker = new FSChecker() {
         @Override
         public void check(ValueNode tag, ValueNode object, ValueNode primitive) {
@@ -79,10 +76,10 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
                 return;
             }
             if (tag.isJavaConstant()) {
-                if (tag.asJavaConstant().asInt() == FrameSlotKind.Illegal.tag) {
+                if (tag.asJavaConstant().asInt() == (int) FrameSlotKind.Illegal.tag) {
                     assertTrue(object.isNullConstant());
                     assertTrue(primitive.isJavaConstant());
-                } else if (tag.asJavaConstant().asInt() == FrameSlotKind.Object.tag) {
+                } else if (tag.asJavaConstant().asInt() == (int) FrameSlotKind.Object.tag) {
                     assertTrue(primitive.isJavaConstant());
                 } else {
                     assertTrue(object.isNullConstant());
@@ -91,9 +88,6 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
         }
     };
 
-    /**
-     * Checks that if a frame slot can be primitive or object kinds, it is not cleared.
-     */
     private static final FSChecker noClearPhiChecker = new FSChecker() {
         @Override
         public void check(ValueNode tag, ValueNode object, ValueNode primitive) {
@@ -104,9 +98,9 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
                 return;
             }
             PrimitiveStamp stamp = (PrimitiveStamp) tag.stamp(NodeView.DEFAULT);
-            if (!stamp.join(StampFactory.forInteger(stamp.getBits(), FrameSlotKind.Object.tag, FrameSlotKind.Object.tag)).isEmpty()) {
+            if (!stamp.join(StampFactory.forInteger(stamp.getBits(), (int) FrameSlotKind.Object.tag, (int) FrameSlotKind.Object.tag)).isEmpty()) {
                 assertFalse(object.isNullConstant());
-                assertFalse(primitive.asJavaConstant() != null && primitive.asJavaConstant().asInt() == 0);
+                assertFalse(primitive.asJavaConstant() == null || primitive.asJavaConstant().asInt() != 0);
             }
         }
     };
@@ -115,10 +109,6 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
     static void boundary() {
     }
 
-    /**
-     * Iterates all frames in the graph, and check that each slot is consistent according to the
-     * {@code fsChecker}.
-     */
     private static Consumer<StructuredGraph> graphFSChecker(FSChecker fsChecker) {
         return new Consumer<StructuredGraph>() {
             int tagArrayIndex = -1;
@@ -157,9 +147,6 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
                 }
             }
 
-            /**
-             * Obtains indexes for the relevant fields in the FrameWithoutBoxing class
-             */
             private void initIndexes(ResolvedJavaType type) {
                 if (tagArrayIndex == -1) {
                     ResolvedJavaField[] instanceFields = type.getInstanceFields(true);
@@ -183,9 +170,6 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
         };
     }
 
-    /**
-     * clears a slot, then reads it. Fails with IllegalStateException.
-     */
     private static RootNode clearedAccessRoot() {
         FrameDescriptor fd = new FrameDescriptor();
         FrameSlot slot = fd.addFrameSlot("test");
@@ -204,9 +188,29 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
                         voidChecker, emptyArgs, false, true);
     }
 
-    /**
-     * Writes an object over a previous primitive slot. Ensures that the primitive slot is zero-ed.
-     */
+    private static RootNode unbalancedClearRoot() {
+        FrameDescriptor fd = new FrameDescriptor();
+        FrameSlot slot = fd.addFrameSlot("test");
+        return new RootNode(null, fd) {
+            @Override
+            public Object execute(VirtualFrame frame) {
+                Object[] args = frame.getArguments();
+                if ((boolean) args[0]) {
+                    frame.clear(slot);
+                }
+                // Expected CompilationError
+                boundary();
+                return null;
+            }
+        };
+    }
+
+    @Test
+    public void unbalancedClear() {
+        doTest(ClearFrameSlotTest::unbalancedClearRoot,
+                        voidChecker, trueArg, true, false);
+    }
+
     private static RootNode setClearsPrimitive() {
         FrameDescriptor fd = new FrameDescriptor();
         FrameSlot slot = fd.addFrameSlot("test");
@@ -227,9 +231,6 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
                         graphFSChecker(regularFSChecker), emptyArgs, false, false);
     }
 
-    /**
-     * Writes a primitive over a previous object slot. Ensures that the object slot is null-ed.
-     */
     private static RootNode setClearsObject() {
         FrameDescriptor fd = new FrameDescriptor();
         FrameSlot slot = fd.addFrameSlot("test");
@@ -250,9 +251,6 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
                         graphFSChecker(regularFSChecker), emptyArgs, false, false);
     }
 
-    /**
-     * A slot can be either object or primitive. Verifies that nothing is cleared.
-     */
     private static RootNode setNotClearPhi() {
         FrameDescriptor fd = new FrameDescriptor();
         FrameSlot slot = fd.addFrameSlot("test");
@@ -273,7 +271,7 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
 
     @Test
     public void setNotClear() {
-        doTest(ClearFrameSlotTest::setNotClearPhi,
+        doTest(ClearFrameSlotTest::setClearsObject,
                         graphFSChecker(noClearPhiChecker), trueArg, false, false);
     }
 
