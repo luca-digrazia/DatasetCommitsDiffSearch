@@ -98,14 +98,4 @@ public final class EmptyListener implements VMListener {
     public Object[] getOwnedMonitors(Object thread) {
         return new Object[0];
     }
-
-    @Override
-    public void addCurrentContendedMonitor(Object monitor) {
-
-    }
-
-    @Override
-    public Object getCurrentContendedMonitor(Object guestThread) {
-        return null;
-    }
 }
