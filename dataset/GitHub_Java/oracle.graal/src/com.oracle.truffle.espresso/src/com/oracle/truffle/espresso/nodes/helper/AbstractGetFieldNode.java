@@ -32,7 +32,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
@@ -48,7 +47,6 @@ public abstract class AbstractGetFieldNode extends Node {
     final Field field;
     final String fieldName;
     final int slotCount;
-    static final int CACHED_LIBRARY_LIMIT = 3;
 
     AbstractGetFieldNode(Field field) {
         this.field = field;
@@ -76,14 +74,13 @@ public abstract class AbstractGetFieldNode extends Node {
         // @formatter:on
     }
 
-    protected Object getForeignField(StaticObject receiver, InteropLibrary interopLibrary, EspressoContext context, BranchProfile error) {
+    protected Object getForeignField(StaticObject receiver, InteropLibrary interopLibrary, EspressoContext context) {
         assert field.getDeclaringKlass().isAssignableFrom(receiver.getKlass());
         assert !field.isStatic();
         Object value;
         try {
             value = interopLibrary.readMember(receiver.rawForeignObject(), fieldName);
         } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-            error.enter();
             throw Meta.throwExceptionWithMessage(context.getMeta().java_lang_NoSuchFieldError, "Foreign object has no readable field " + fieldName);
         }
         return value;
@@ -109,12 +106,11 @@ abstract class IntGetFieldNode extends AbstractGetFieldNode {
         return receiver.getIntField(field);
     }
 
-    @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
+    @Specialization(guards = "receiver.isForeignObject()", limit = "1")
     int doForeign(StaticObject receiver, @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile error) {
-        Object value = getForeignField(receiver, interopLibrary, context, error);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
+        Object value = getForeignField(receiver, interopLibrary, context);
         try {
             return (int) toEspressoNode.execute(value, context.getMeta()._int);
         } catch (UnsupportedMessageException | UnsupportedTypeException e) {
@@ -142,12 +138,11 @@ abstract class BooleanGetFieldNode extends AbstractGetFieldNode {
         return receiver.getBooleanField(field);
     }
 
-    @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
+    @Specialization(guards = "receiver.isForeignObject()", limit = "1")
     boolean doForeign(StaticObject receiver, @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile error) {
-        Object value = getForeignField(receiver, interopLibrary, context, error);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
+        Object value = getForeignField(receiver, interopLibrary, context);
         try {
             return (boolean) toEspressoNode.execute(value, context.getMeta()._boolean);
         } catch (UnsupportedMessageException | UnsupportedTypeException e) {
@@ -175,12 +170,11 @@ abstract class CharGetFieldNode extends AbstractGetFieldNode {
         return receiver.getCharField(field);
     }
 
-    @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
+    @Specialization(guards = "receiver.isForeignObject()", limit = "1")
     char doForeign(StaticObject receiver, @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile error) {
-        Object value = getForeignField(receiver, interopLibrary, context, error);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
+        Object value = getForeignField(receiver, interopLibrary, context);
         try {
             return (char) toEspressoNode.execute(value, context.getMeta()._char);
         } catch (UnsupportedMessageException | UnsupportedTypeException e) {
@@ -208,12 +202,11 @@ abstract class ShortGetFieldNode extends AbstractGetFieldNode {
         return receiver.getShortField(field);
     }
 
-    @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
+    @Specialization(guards = "receiver.isForeignObject()", limit = "1")
     short doForeign(StaticObject receiver, @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile error) {
-        Object value = getForeignField(receiver, interopLibrary, context, error);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
+        Object value = getForeignField(receiver, interopLibrary, context);
         try {
             return (short) toEspressoNode.execute(value, context.getMeta()._short);
         } catch (UnsupportedMessageException | UnsupportedTypeException e) {
@@ -241,12 +234,11 @@ abstract class ByteGetFieldNode extends AbstractGetFieldNode {
         return receiver.getByteField(field);
     }
 
-    @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
+    @Specialization(guards = "receiver.isForeignObject()", limit = "1")
     byte doForeign(StaticObject receiver, @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile error) {
-        Object value = getForeignField(receiver, interopLibrary, context, error);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
+        Object value = getForeignField(receiver, interopLibrary, context);
         try {
             return (byte) toEspressoNode.execute(value, context.getMeta()._byte);
         } catch (UnsupportedMessageException | UnsupportedTypeException e) {
@@ -274,12 +266,11 @@ abstract class LongGetFieldNode extends AbstractGetFieldNode {
         return receiver.getLongField(field);
     }
 
-    @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
+    @Specialization(guards = "receiver.isForeignObject()", limit = "1")
     long doForeign(StaticObject receiver, @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile error) {
-        Object value = getForeignField(receiver, interopLibrary, context, error);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
+        Object value = getForeignField(receiver, interopLibrary, context);
         try {
             return (long) toEspressoNode.execute(value, context.getMeta()._long);
         } catch (UnsupportedMessageException | UnsupportedTypeException e) {
@@ -307,12 +298,11 @@ abstract class FloatGetFieldNode extends AbstractGetFieldNode {
         return receiver.getFloatField(field);
     }
 
-    @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
+    @Specialization(guards = "receiver.isForeignObject()", limit = "1")
     float doForeign(StaticObject receiver, @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile error) {
-        Object value = getForeignField(receiver, interopLibrary, context, error);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
+        Object value = getForeignField(receiver, interopLibrary, context);
         try {
             return (float) toEspressoNode.execute(value, context.getMeta()._float);
         } catch (UnsupportedMessageException | UnsupportedTypeException e) {
@@ -340,12 +330,11 @@ abstract class DoubleGetFieldNode extends AbstractGetFieldNode {
         return receiver.getDoubleField(field);
     }
 
-    @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
+    @Specialization(guards = "receiver.isForeignObject()", limit = "1")
     double doForeign(StaticObject receiver, @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile error) {
-        Object value = getForeignField(receiver, interopLibrary, context, error);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
+        Object value = getForeignField(receiver, interopLibrary, context);
         try {
             return (double) toEspressoNode.execute(value, context.getMeta()._double);
         } catch (UnsupportedMessageException | UnsupportedTypeException e) {
@@ -376,12 +365,11 @@ abstract class ObjectGetFieldNode extends AbstractGetFieldNode {
         return receiver.getField(field);
     }
 
-    @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
+    @Specialization(guards = "receiver.isForeignObject()", limit = "1")
     StaticObject doForeign(StaticObject receiver, @CachedLibrary("receiver.rawForeignObject()") InteropLibrary interopLibrary,
                     @Cached ToEspressoNode toEspressoNode,
-                    @CachedContext(EspressoLanguage.class) EspressoContext context,
-                    @Cached BranchProfile error) {
-        Object value = getForeignField(receiver, interopLibrary, context, error);
+                    @CachedContext(EspressoLanguage.class) EspressoContext context) {
+        Object value = getForeignField(receiver, interopLibrary, context);
         try {
             return (StaticObject) toEspressoNode.execute(value, typeKlass);
         } catch (UnsupportedMessageException | UnsupportedTypeException e) {
