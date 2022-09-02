@@ -44,7 +44,6 @@ import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.graal.pointsto.results.StaticAnalysisResults;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AlwaysInline;
-import com.oracle.svm.core.annotate.StubCallingConvention;
 import com.oracle.svm.core.deopt.Deoptimizer;
 import com.oracle.svm.core.meta.SharedMethod;
 import com.oracle.svm.core.util.VMError;
@@ -234,11 +233,6 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
     @Override
     public boolean isEntryPoint() {
         return wrapped.isEntryPoint();
-    }
-
-    @Override
-    public boolean hasCalleeSavedRegisters() {
-        return StubCallingConvention.Utils.hasStubCallingConvention(this);
     }
 
     @Override
