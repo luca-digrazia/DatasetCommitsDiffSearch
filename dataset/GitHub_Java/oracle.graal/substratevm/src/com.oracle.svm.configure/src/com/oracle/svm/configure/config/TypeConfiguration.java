@@ -35,7 +35,6 @@ import com.oracle.svm.configure.json.JsonPrintable;
 import com.oracle.svm.configure.json.JsonWriter;
 import com.oracle.svm.core.util.UserError;
 
-import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaUtil;
 
 public class TypeConfiguration implements JsonPrintable {
@@ -64,13 +63,7 @@ public class TypeConfiguration implements JsonPrintable {
         }
         if (n > 0) { // transform to Java source syntax
             StringBuilder sb = new StringBuilder(s.length() + n);
-            if (s.charAt(n) == 'L' && s.charAt(s.length() - 1) == ';') {
-                sb.append(s, n + 1, s.length() - 1); // cut off leading '[' and 'L' and trailing ';'
-            } else if (n == s.length() - 1) {
-                sb.append(JavaKind.fromPrimitiveOrVoidTypeChar(s.charAt(n)).getJavaName());
-            } else {
-                throw new IllegalArgumentException();
-            }
+            sb.append(s, n + 1, s.length() - 1); // cut off leading '[' and 'L' and trailing ';'
             for (int i = 0; i < n; i++) {
                 sb.append("[]");
             }

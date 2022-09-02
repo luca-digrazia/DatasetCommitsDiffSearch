@@ -43,85 +43,12 @@ public final class AccessAdvisor {
     static {
         internalCallerFilter = RuleNode.createRoot();
         internalCallerFilter.addOrGetChildren("**", RuleNode.Inclusion.Include);
-
-        internalCallerFilter.addOrGetChildren("apple.security.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.crypto.provider.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.java.util.jar.pack.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.jndi.ldap.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.jndi.toolkit.ctx.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.jndi.toolkit.dir.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.jndi.toolkit.url.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.jndi.url.ldap.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.jndi.url.ldaps.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.management.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.naming.internal.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.net.ssl.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.nio.file.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.nio.sctp.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.nio.zipfs.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.security.auth.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.security.jgss.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.security.cert.internal.x509.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.security.ntlm.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("com.sun.security.sasl.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("java.io.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("java.lang.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("java.math.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("java.net.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("java.nio.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("java.security.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("java.text.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("java.time.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("java.util.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.annotation.processing.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.crypto.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.lang.model.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.management.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.naming.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.net.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.security.cert.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.security.sasl.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("javax.tools.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("jdk.internal.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("jdk.jfr.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("jdk.net.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("jdk.nio.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("org.ietf.jgss.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.invoke.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.launcher.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.management.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.misc.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.net.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.nio.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.reflect.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.action.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.ec.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.internal.interfaces.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.internal.spec.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.jca.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.jgss.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.krb5.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.pkcs.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.pkcs10.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.pkcs11.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.pkcs12.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.provider.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.rsa.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.ssl.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.timestamp.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.tools.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.util.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.validator.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.x509.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.security.smartcardio.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.text.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("sun.util.**", RuleNode.Inclusion.Exclude);
-        internalCallerFilter.addOrGetChildren("org.ietf.jgss.**", RuleNode.Inclusion.Exclude);
-
-
-        // This is special case wher we initialize at build time but include for the agent.
+        internalCallerFilter.addOrGetChildren("java.**", RuleNode.Inclusion.Exclude);
+        internalCallerFilter.addOrGetChildren("javax.**", RuleNode.Inclusion.Exclude);
         internalCallerFilter.addOrGetChildren("javax.security.auth.**", RuleNode.Inclusion.Include);
-
+        internalCallerFilter.addOrGetChildren("sun.**", RuleNode.Inclusion.Exclude);
+        internalCallerFilter.addOrGetChildren("com.sun.**", RuleNode.Inclusion.Exclude);
+        internalCallerFilter.addOrGetChildren("jdk.**", RuleNode.Inclusion.Exclude);
         internalCallerFilter.addOrGetChildren("org.graalvm.compiler.**", RuleNode.Inclusion.Exclude);
         internalCallerFilter.addOrGetChildren("org.graalvm.libgraal.**", RuleNode.Inclusion.Exclude);
         internalCallerFilter.removeRedundantNodes();
@@ -140,17 +67,15 @@ public final class AccessAdvisor {
         return internalCallerFilter.copy();
     }
 
-    public static RuleNode copyBuiltinAccessFilterTree() {
-        RuleNode root = RuleNode.createRoot();
-        root.addOrGetChildren("**", RuleNode.Inclusion.Include);
-        return root;
-    }
-
     private RuleNode callerFilter = internalCallerFilter;
-    private RuleNode accessFilter = null;
     private boolean heuristicsEnabled = true;
     private boolean isInLivePhase = false;
     private int launchPhase = 0;
+
+    private boolean filterExcludesCaller(String qualifiedClass) {
+        assert qualifiedClass == null || qualifiedClass.indexOf('/') == -1 : "expecting Java-format qualifiers, not internal format";
+        return qualifiedClass != null && !callerFilter.treeIncludes(qualifiedClass);
+    }
 
     public void setHeuristicsEnabled(boolean enable) {
         heuristicsEnabled = enable;
@@ -158,10 +83,6 @@ public final class AccessAdvisor {
 
     public void setCallerFilterTree(RuleNode rootNode) {
         callerFilter = rootNode;
-    }
-
-    public void setAccessFilterTree(RuleNode rootNode) {
-        accessFilter = rootNode;
     }
 
     public void setInLivePhase(boolean live) {
@@ -172,16 +93,13 @@ public final class AccessAdvisor {
         if (heuristicsEnabled && !isInLivePhase) {
             return true;
         }
-        String qualifiedCaller = callerClass.get();
-        assert qualifiedCaller == null || qualifiedCaller.indexOf('/') == -1 : "expecting Java-format qualifiers, not internal format";
-        if (qualifiedCaller != null && !callerFilter.treeIncludes(qualifiedCaller)) {
+        if (filterExcludesCaller(callerClass.get())) {
             return true;
         }
-        // NOTE: queriedClass can be null for non-class accesses like resources
-        if (callerClass.get() == null && queriedClass.get() != null && !accessWithoutCallerFilter.treeIncludes(queriedClass.get())) {
-            return true;
+        if (callerClass.get() == null) {
+            return !accessWithoutCallerFilter.treeIncludes(queriedClass.get());
         }
-        return accessFilter != null && queriedClass.get() != null && !accessFilter.treeIncludes(queriedClass.get());
+        return false;
     }
 
     public boolean shouldIgnoreJniMethodLookup(LazyValue<String> queriedClass, LazyValue<String> name, LazyValue<String> signature, LazyValue<String> callerClass) {

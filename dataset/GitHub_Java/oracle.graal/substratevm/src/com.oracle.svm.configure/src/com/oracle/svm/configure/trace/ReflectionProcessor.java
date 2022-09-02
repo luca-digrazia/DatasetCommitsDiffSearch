@@ -31,8 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import org.graalvm.compiler.phases.common.LazyValue;
-
 import com.oracle.svm.configure.config.ConfigurationMemberKind;
 import com.oracle.svm.configure.config.ConfigurationMethod;
 import com.oracle.svm.configure.config.ProxyConfiguration;
@@ -177,12 +175,12 @@ class ReflectionProcessor extends AbstractProcessor {
 
             case "getProxyClass": {
                 expectSize(args, 2);
-                addDynamicProxy((List<?>) args.get(1), lazyValue(callerClass));
+                addDynamicProxy((List<?>) args.get(1));
                 break;
             }
             case "newProxyInstance": {
                 expectSize(args, 3);
-                addDynamicProxy((List<?>) args.get(1), lazyValue(callerClass));
+                addDynamicProxy((List<?>) args.get(1));
                 break;
             }
 
@@ -225,14 +223,8 @@ class ReflectionProcessor extends AbstractProcessor {
         configuration.getOrCreateType(qualifiedClass).addMethod(methodName, signature, ConfigurationMemberKind.DECLARED);
     }
 
-    private void addDynamicProxy(List<?> interfaceList, LazyValue<String> callerClass) {
-        @SuppressWarnings("unchecked")
-        List<String> interfaces = (List<String>) interfaceList;
-        for (String iface : interfaces) {
-            if (advisor.shouldIgnore(lazyValue(iface), callerClass)) {
-                return;
-            }
-        }
-        proxyConfiguration.add(interfaces);
+    @SuppressWarnings("unchecked")
+    private void addDynamicProxy(List<?> interfaceList) {
+        proxyConfiguration.add((List<String>) interfaceList);
     }
 }
