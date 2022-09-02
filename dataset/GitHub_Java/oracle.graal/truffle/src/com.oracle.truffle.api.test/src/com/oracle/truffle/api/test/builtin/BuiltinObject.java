@@ -47,6 +47,7 @@ import java.lang.annotation.Target;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -152,12 +153,14 @@ public abstract class BuiltinObject implements TruffleObject {
         return false;
     }
 
-    static BuiltinDescriptor getDescriptorImpl(BuiltinObject object) {
-        return object.getBuiltinDescriptor();
+    static final BuiltinDescriptor getDescriptorImpl(BuiltinObject object) {
+        BuiltinDescriptor descriptor = object.getBuiltinDescriptor();
+        CompilerAsserts.partialEvaluationConstant(descriptor);
+        return descriptor;
     }
 
     @GenerateNodeFactory
-    @GenerateUncached(inherit = true)
+    @GenerateUncached
     public abstract static class BuiltinNode extends Node {
 
         protected abstract Object execute(BuiltinObject receiver, Object... arguments) throws ArityException, UnsupportedTypeException;
