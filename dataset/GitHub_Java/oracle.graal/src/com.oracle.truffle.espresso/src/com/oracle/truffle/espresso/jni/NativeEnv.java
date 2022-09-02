@@ -239,8 +239,7 @@ public abstract class NativeEnv {
     public static @Pointer TruffleObject loadLibraryInternal(List<Path> searchPaths, String name, boolean notFoundIsFatal) {
         for (Path path : searchPaths) {
             Path libPath = path.resolve(System.mapLibraryName(name));
-            @Pointer
-            TruffleObject library = NativeLibrary.loadLibrary(libPath.toAbsolutePath());
+            @Pointer TruffleObject library = NativeLibrary.loadLibrary(libPath.toAbsolutePath());
             if (library != null) {
                 return library;
             }
