@@ -34,11 +34,9 @@ import org.graalvm.nativeimage.Platforms;
 final class HotSpotToSVMCalls {
 
     /**
-     * Used to block threads in different isolates waiting for native methods registration. The
-     * field is set to {@code true} from the libgraal native library when all natives in this class
-     * have been registered.
+     * Used to block threads in different isolates waiting for native methods registration.
      */
-    private static volatile boolean nativesRegistered;
+    private static volatile boolean nativeRegistered;
 
     private HotSpotToSVMCalls() {
     }

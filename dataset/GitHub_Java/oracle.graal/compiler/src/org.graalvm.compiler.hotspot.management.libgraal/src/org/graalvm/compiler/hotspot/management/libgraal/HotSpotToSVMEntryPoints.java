@@ -43,6 +43,7 @@ import org.graalvm.compiler.serviceprovider.IsolateUtil;
 import org.graalvm.libgraal.jni.HotSpotToSVMScope;
 import org.graalvm.libgraal.jni.JNI;
 import org.graalvm.libgraal.jni.JNIUtil;
+import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.ObjectHandles;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.type.CCharPointer;
@@ -73,7 +74,7 @@ final class HotSpotToSVMEntryPoints {
     static JNI.JLongArray pollRegistrations(JNI.JNIEnv env, JNI.JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId) {
         HotSpotToSVMScope<Id> scope = new HotSpotToSVMScope<>(Id.PollRegistrations, env);
         try (HotSpotToSVMScope<Id> s = scope) {
-            List<MBeanProxy<?>> registrations = MBeanProxy.drainRegistrations();
+            List<MBeanProxy<?>> registrations = MBeanProxy.drain();
             JNI.JLongArray res = JNIUtil.NewLongArray(env, registrations.size());
             CLongPointer elems = JNIUtil.GetLongArrayElements(env, res, WordFactory.nullPointer());
             try {
@@ -343,9 +344,8 @@ enum Id {
     GetMBeanInfo,
     GetObjectName,
     Invoke,
-    NewMBeans,
+    NewMBean,
     PollRegistrations,
     RegisterNatives,
-    SetAttributes,
-    UnregisterMBeans
+    SetAttributes
 }
