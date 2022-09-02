@@ -281,12 +281,14 @@ public class SubstitutionType implements ResolvedJavaType, OriginalClassProvider
 
     @Override
     public boolean hasDefaultMethods() {
-        return original.hasDefaultMethods();
+        assert !isInterface() : "only interfaces can have default methods";
+        return false;
     }
 
     @Override
     public boolean declaresDefaultMethods() {
-        return original.declaresDefaultMethods();
+        assert !isInterface() : "only interfaces can have default methods";
+        return false;
     }
 
     @Override

@@ -28,9 +28,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
@@ -106,9 +108,8 @@ public class TypeInitializerGraph {
      * A type initializer is initially unsafe only if it was marked by the user as such.
      */
     private Safety initialTypeInitializerSafety(AnalysisType t) {
-        return classInitializationSupport.specifiedInitKindFor(t.getJavaClass()) == InitKind.BUILD_TIME || classInitializationSupport.canBeProvenSafe(t.getJavaClass())
-                        ? Safety.SAFE
-                        : Safety.UNSAFE;
+        return classInitializationSupport.specifiedInitKindFor(t.getJavaClass()) == InitKind.RUN_TIME ? Safety.UNSAFE
+                        : Safety.SAFE;
     }
 
     boolean isUnsafe(AnalysisType type) {
@@ -120,9 +121,9 @@ public class TypeInitializerGraph {
     }
 
     private boolean updateTypeInitializerSafety() {
-        return types.keySet().stream()
-                        .map(t -> tryPromoteToUnsafe(t, methodSafety))
-                        .reduce(false, (lhs, rhs) -> lhs || rhs);
+        List<AnalysisType> newUnsafeTypes = types.keySet().stream().filter(type -> shouldPromoteToUnsafe(type, methodSafety)).collect(Collectors.toList());
+        newUnsafeTypes.forEach(this::setUnsafe);
+        return !newUnsafeTypes.isEmpty();
     }
 
     private void addInitializerDependencies(AnalysisType t) {
@@ -173,19 +174,14 @@ public class TypeInitializerGraph {
     /**
      * Type is promoted to unsafe when it is not already unsafe and it (1) depends on an unsafe
      * type, or (2) its class initializer was promoted to unsafe.
-     *
-     * @return if pomotion to unsafe happened
      */
-    private boolean tryPromoteToUnsafe(AnalysisType type, Map<AnalysisMethod, Safety> safeMethods) {
+    private boolean shouldPromoteToUnsafe(AnalysisType type, Map<AnalysisMethod, Safety> safeMethods) {
         if (types.get(type) == Safety.UNSAFE) {
             return false;
-        } else if (type.getClassInitializer() != null && safeMethods.get(type.getClassInitializer()) == Safety.UNSAFE ||
-                        dependencies.get(type).stream().anyMatch(t -> types.get(t) == Safety.UNSAFE) ||
-                        dependencies.get(type).stream().anyMatch(t -> tryPromoteToUnsafe(t, safeMethods))) {
-            setUnsafe(type);
+        } else if (dependencies.get(type).stream().anyMatch(t -> shouldPromoteToUnsafe(t, safeMethods))) {
             return true;
         } else {
-            return false;
+            return type.getClassInitializer() != null && safeMethods.get(type.getClassInitializer()) == Safety.UNSAFE;
         }
     }
 

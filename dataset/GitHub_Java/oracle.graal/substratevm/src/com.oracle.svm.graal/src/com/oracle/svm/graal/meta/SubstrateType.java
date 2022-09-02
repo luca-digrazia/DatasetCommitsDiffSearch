@@ -43,6 +43,7 @@ import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.meta.SharedType;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
+import com.oracle.svm.core.util.Replaced;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeClass;
@@ -57,7 +58,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import sun.misc.Unsafe;
 
-public class SubstrateType extends NodeClass implements SharedType {
+public class SubstrateType extends NodeClass implements SharedType, Replaced {
 
     private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
 
@@ -212,14 +213,14 @@ public class SubstrateType extends NodeClass implements SharedType {
 
     @Override
     public boolean isAssignableFrom(ResolvedJavaType other) {
-        return DynamicHub.toClass(hub).isAssignableFrom(DynamicHub.toClass(((SubstrateType) other).hub));
+        return hub.isAssignableFromHub(((SubstrateType) other).hub);
     }
 
     @Override
     public boolean isInstance(JavaConstant obj) {
         if (obj.getJavaKind() == JavaKind.Object && !obj.isNull()) {
             DynamicHub objHub = KnownIntrinsics.readHub(SubstrateObjectConstant.asObject(obj));
-            return DynamicHub.toClass(hub).isAssignableFrom(DynamicHub.toClass(objHub));
+            return hub.isAssignableFromHub(objHub);
         }
         return false;
     }
