@@ -118,9 +118,7 @@ public final class DebugScope {
     public String getName() {
         try {
             return INTEROP.asString(INTEROP.toDisplayString(scope));
-        } catch (ThreadDeath td) {
-            throw td;
-        } catch (Throwable ex) {
+        } catch (UnsupportedMessageException ex) {
             throw DebugException.create(session, ex, language, node, true, null);
         }
     }

@@ -1,26 +1,42 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.api.debug.test;
 
@@ -33,6 +49,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import org.graalvm.polyglot.Source;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -40,9 +57,11 @@ import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebugStackFrame;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.debug.DebuggerSession;
+import com.oracle.truffle.api.debug.SuspendAnchor;
 import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.api.debug.SuspensionFilter;
 import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
-import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
 public class SuspendedEventTest extends AbstractDebugTest {
 
@@ -114,29 +133,200 @@ public class SuspendedEventTest extends AbstractDebugTest {
             });
             expectSuspended((SuspendedEvent event) -> {
                 checkState(event, 3, false, "CALL(bar)").prepareStepInto(1);
-                assertEquals("42", event.getReturnValue().as(String.class));
+                assertEquals("42", event.getReturnValue().toDisplayString());
             });
 
             expectSuspended((SuspendedEvent event) -> {
                 checkState(event, 4, false, "CALL(foo)").prepareContinue();
-                assertEquals("42", event.getReturnValue().as(String.class));
+                assertEquals("42", event.getReturnValue().toDisplayString());
             });
 
-            expectDone();
+            assertEquals("42", expectDone());
+        }
+    }
+
+    @Test
+    public void testForceEarlyReturnValue() throws Throwable {
+        final Source source = testSource("ROOT(\n" +
+                        "  DEFINE(bar, STATEMENT(CONSTANT(42))), \n" +
+                        "  DEFINE(foo, CALL(bar)), \n" +
+                        "  STATEMENT(CALL(foo))\n" +
+                        ")\n");
+
+        try (DebuggerSession session = startSession()) {
+            session.suspendNextExecution();
+            startEval(source);
+
+            expectSuspended((SuspendedEvent event) -> {
+                checkState(event, 4, true, "STATEMENT(CALL(foo))").prepareStepInto(1);
+            });
+            expectSuspended((SuspendedEvent event) -> {
+                DebugStackFrame frame = event.getStackFrames().iterator().next();
+                checkState(event, 2, true, "STATEMENT(CONSTANT(42))").prepareUnwindFrame(frame, frame.getScope().convertRawValue(InstrumentationTestLanguage.class, 41));
+            });
+            assertEquals("41", expectDone());
+        }
+    }
+
+    @Test
+    public void testForceEarlyReturnValueNotInterop() throws Throwable {
+        final Source source = testSource("ROOT(\n" +
+                        "  DEFINE(bar, STATEMENT(CONSTANT(42))), \n" +
+                        "  DEFINE(foo, CALL(bar)), \n" +
+                        "  STATEMENT(CALL(foo))\n" +
+                        ")\n");
+
+        try (DebuggerSession session = startSession()) {
+            session.suspendNextExecution();
+            startEval(source);
+
+            expectSuspended((SuspendedEvent event) -> {
+                checkState(event, 4, true, "STATEMENT(CALL(foo))").prepareStepInto(1);
+            });
+            expectSuspended((SuspendedEvent event) -> {
+                DebugStackFrame frame = event.getStackFrames().iterator().next();
+                Object notInterop = new Object();
+                boolean expectedException = false;
+                try {
+                    checkState(event, 2, true, "STATEMENT(CONSTANT(42))").prepareUnwindFrame(frame, frame.getScope().convertRawValue(InstrumentationTestLanguage.class, notInterop));
+                } catch (IllegalArgumentException ex) {
+                    expectedException = true;
+                }
+                Assert.assertTrue("Expected IllegalArgumentException not triggered!", expectedException);
+            });
+        }
+    }
+
+    @Test
+    public void testConvertRawValueIllegalLanguage() throws Throwable {
+        final Source source = testSource("ROOT(\n" +
+                        "  DEFINE(bar, STATEMENT(CONSTANT(42))), \n" +
+                        "  DEFINE(foo, CALL(bar)), \n" +
+                        "  STATEMENT(CALL(foo))\n" +
+                        ")\n");
+
+        try (DebuggerSession session = startSession()) {
+            session.suspendNextExecution();
+            startEval(source);
+
+            expectSuspended((SuspendedEvent event) -> {
+                DebugStackFrame frame = event.getStackFrames().iterator().next();
+                DebugValue debugValue = frame.getScope().convertRawValue(ProxyLanguage.class, 41);
+                Assert.assertEquals(null, debugValue);
+                event.prepareContinue();
+            });
+            Assert.assertEquals("42", expectDone());
+        }
+    }
+
+    @Test
+    public void testConvertRawValueNullLanguage() throws Throwable {
+        final Source source = testSource("ROOT(\n" +
+                        "  DEFINE(bar, STATEMENT(CONSTANT(42))), \n" +
+                        "  DEFINE(foo, CALL(bar)), \n" +
+                        "  STATEMENT(CALL(foo))\n" +
+                        ")\n");
+
+        try (DebuggerSession session = startSession()) {
+            session.suspendNextExecution();
+            startEval(source);
+
+            expectSuspended((SuspendedEvent event) -> {
+                DebugStackFrame frame = event.getStackFrames().iterator().next();
+                boolean expectedException = false;
+                try {
+                    frame.getScope().convertRawValue(null, 41);
+                } catch (NullPointerException ex) {
+                    expectedException = true;
+                }
+                Assert.assertTrue("Expected NPE not caught", expectedException);
+                event.prepareContinue();
+            });
+            Assert.assertEquals("42", expectDone());
+        }
+    }
+
+    @Test
+    public void testConvertRawValueNullArgument() throws Throwable {
+        final Source source = testSource("ROOT(\n" +
+                        "  DEFINE(bar, STATEMENT(CONSTANT(42))), \n" +
+                        "  DEFINE(foo, CALL(bar)), \n" +
+                        "  STATEMENT(CALL(foo))\n" +
+                        ")\n");
+
+        try (DebuggerSession session = startSession()) {
+            session.suspendNextExecution();
+            startEval(source);
+
+            expectSuspended((SuspendedEvent event) -> {
+                DebugStackFrame frame = event.getStackFrames().iterator().next();
+                boolean expectedException = false;
+                try {
+                    frame.getScope().convertRawValue(InstrumentationTestLanguage.class, null);
+                } catch (IllegalArgumentException ex) {
+                    expectedException = true;
+                }
+                Assert.assertTrue("Expected IllegalArgumentException not caught", expectedException);
+                event.prepareContinue();
+            });
+            Assert.assertEquals("42", expectDone());
+        }
+    }
+
+    @Test
+    public void testReturnValueChanged() throws Throwable {
+        final Source source = testSource("ROOT(\n" +
+                        "  DEFINE(bar, VARIABLE(a, 41), STATEMENT(CONSTANT(42))), \n" +
+                        "  DEFINE(foo, VARIABLE(b, 40), CALL(bar)), \n" +
+                        "  VARIABLE(c, 24), STATEMENT(CALL(foo))\n" +
+                        ")\n");
+
+        try (DebuggerSession session = startSession()) {
+            Breakpoint breakpoint = Breakpoint.newBuilder(getSourceImpl(source)).lineIs(2).suspendAnchor(SuspendAnchor.AFTER).build();
+            session.install(breakpoint);
+            startEval(source);
+
+            expectSuspended((SuspendedEvent event) -> {
+                checkState(event, 2, false, "STATEMENT(CONSTANT(42))", "a", "41").prepareStepInto(1);
+                assertEquals("42", event.getReturnValue().toDisplayString());
+                DebugValue a = event.getTopStackFrame().getScope().getDeclaredValues().iterator().next();
+                assertEquals("a", a.getName());
+                event.setReturnValue(a);
+            });
+            expectSuspended((SuspendedEvent event) -> {
+                checkState(event, 3, false, "CALL(bar)", "b", "40").prepareStepInto(1);
+                assertEquals("41", event.getReturnValue().toDisplayString());
+                DebugValue b = event.getTopStackFrame().getScope().getDeclaredValues().iterator().next();
+                assertEquals("b", b.getName());
+                event.setReturnValue(b);
+            });
+
+            expectSuspended((SuspendedEvent event) -> {
+                checkState(event, 4, false, "CALL(foo)", "c", "24").prepareContinue();
+                assertEquals("40", event.getReturnValue().toDisplayString());
+                DebugValue c = event.getTopStackFrame().getScope().getDeclaredValues().iterator().next();
+                assertEquals("c", c.getName());
+                event.setReturnValue(c);
+            });
+
+            assertEquals("24", expectDone());
         }
     }
 
     @Test
     public void testIsInternal() throws Throwable {
-        final Source source = Source.newBuilder("ROOT(\n" +
-                        "  DEFINE(bar, ROOT(STATEMENT)),\n" +
-                        "  DEFINE(foo, STATEMENT, \n" +
-                        "              STATEMENT(CALL(bar))),\n" +
-                        "  STATEMENT(CALL(foo))\n" +
-                        ")\n").mimeType(InstrumentationTestLanguage.MIME_TYPE).internal().name("internal test code").build();
+        final Source source = Source.newBuilder(InstrumentationTestLanguage.ID,
+                        "ROOT(\n" +
+                                        "  DEFINE(bar, ROOT(STATEMENT)),\n" +
+                                        "  DEFINE(foo, STATEMENT, \n" +
+                                        "              STATEMENT(CALL(bar))),\n" +
+                                        "  STATEMENT(CALL(foo))\n" +
+                                        ")\n",
+                        "internal test code").internal(true).build();
 
         try (DebuggerSession session = startSession()) {
-            session.install(Breakpoint.newBuilder(source).lineIs(2).build());
+            session.setSteppingFilter(SuspensionFilter.newBuilder().includeInternal(true).build());
+            session.install(Breakpoint.newBuilder(getSourceImpl(source)).lineIs(2).build());
             startEval(source);
 
             expectSuspended((SuspendedEvent event) -> {
@@ -166,7 +356,7 @@ public class SuspendedEventTest extends AbstractDebugTest {
                         ")\n");
 
         try (DebuggerSession session = startSession()) {
-            final Breakpoint breakpoint = session.install(Breakpoint.newBuilder(source).lineIs(4).build());
+            final Breakpoint breakpoint = session.install(Breakpoint.newBuilder(getSourceImpl(source)).lineIs(4).build());
             startEval(source);
 
             expectSuspended((SuspendedEvent event) -> {
@@ -175,7 +365,7 @@ public class SuspendedEventTest extends AbstractDebugTest {
                 run(() -> event.getSession());
                 run(() -> event.getSourceSection());
                 run(() -> event.getBreakpoints());
-                run(() -> event.isHaltedBefore());
+                run(() -> event.getSuspendAnchor());
                 run(() -> event.toString());
 
                 run(() -> {
@@ -205,13 +395,13 @@ public class SuspendedEventTest extends AbstractDebugTest {
 
                 for (DebugStackFrame frame : event.getStackFrames()) {
 
-                    for (DebugValue value : frame) {
-                        runExpectIllegalState(() -> value.as(String.class));
+                    for (DebugValue value : frame.getScope().getDeclaredValues()) {
+                        runExpectIllegalState(() -> value.toDisplayString());
                         runExpectIllegalState(() -> {
                             value.set(null);
                             return null;
                         });
-                        runExpectIllegalState(() -> value.getName());
+                        value.getName(); // Name is known
                         runExpectIllegalState(() -> value.isReadable());
                         runExpectIllegalState(() -> value.isWritable());
                     }
