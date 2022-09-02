@@ -30,11 +30,8 @@
 package com.oracle.truffle.llvm.nodes.asm.syscall;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.nodes.asm.support.LLVMString;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -48,9 +45,8 @@ public abstract class LLVMAMD64SyscallGetcwdNode extends LLVMSyscallOperationNod
 
     @Specialization
     protected long doOp(LLVMNativePointer buf, long size,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
-                    @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
-        String cwd = ctx.getEnv().getCurrentWorkingDirectory().getPath();
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        String cwd = getContextReference().get().getEnv().getCurrentWorkingDirectory().getPath();
         if (cwd.length() >= size) {
             return -LLVMAMD64Error.ERANGE;
         } else {
@@ -61,10 +57,7 @@ public abstract class LLVMAMD64SyscallGetcwdNode extends LLVMSyscallOperationNod
 
     @Specialization
     protected long doOp(long buf, long size,
-                    @Cached("getLLVMMemory()") LLVMMemory memory,
-                    @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
-        return doOp(LLVMNativePointer.create(buf), size, memory, ctx);
+                    @Cached("getLLVMMemory()") LLVMMemory memory) {
+        return doOp(LLVMNativePointer.create(buf), size, memory);
     }
-
-
 }
