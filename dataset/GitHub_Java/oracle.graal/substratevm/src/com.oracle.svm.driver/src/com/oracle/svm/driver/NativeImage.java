@@ -468,12 +468,12 @@ public class NativeImage {
         }
     }
 
-    protected static class DefaultBuildConfiguration implements BuildConfiguration {
-        protected final Path workDir;
-        protected final Path rootDir;
-        protected final List<String> args;
+    private static class DefaultBuildConfiguration implements BuildConfiguration {
+        private final Path workDir;
+        private final Path rootDir;
+        private final List<String> args;
 
-        protected DefaultBuildConfiguration(List<String> args) {
+        DefaultBuildConfiguration(List<String> args) {
             this(null, null, args);
         }
 
@@ -1481,7 +1481,7 @@ public class NativeImage {
         System.exit(0);
     }
 
-    protected static void build(BuildConfiguration config, Function<BuildConfiguration, NativeImage> nativeImageProvider) {
+    private static void build(BuildConfiguration config, Function<BuildConfiguration, NativeImage> nativeImageProvider) {
         NativeImage nativeImage = nativeImageProvider.apply(config);
         if (config.getBuildArgs().isEmpty()) {
             nativeImage.showMessage(usageText);
@@ -1938,11 +1938,6 @@ public class NativeImage {
                 ModuleSupport.exportAndOpenAllPackagesToUnnamed("jdk.internal.vm.compiler.management", true);
                 ModuleSupport.exportAndOpenAllPackagesToUnnamed("com.oracle.graal.graal_enterprise", true);
                 ModuleSupport.exportAndOpenAllPackagesToUnnamed("java.xml", false);
-                if (JavaVersionUtil.JAVA_SPEC >= 16) {
-                    ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "sun.reflect.annotation", false);
-                    ModuleSupport.exportAndOpenPackageToUnnamed("java.base", "sun.security.jca", false);
-                    ModuleSupport.exportAndOpenPackageToUnnamed("jdk.jdeps", "com.sun.tools.classfile", false);
-                }
             }
             NativeImage.main(args);
         }
