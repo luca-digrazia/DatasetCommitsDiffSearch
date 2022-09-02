@@ -32,7 +32,9 @@ import static com.oracle.svm.hosted.classinitialization.InitKind.SEPARATOR;
 import java.lang.reflect.Modifier;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -40,6 +42,7 @@ import org.graalvm.collections.Pair;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.impl.clinit.ClassInitializationTracking;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
@@ -163,12 +166,12 @@ public class ClassInitializationFeature implements Feature {
          */
         if (obj != null && classInitializationSupport.shouldInitializeAtRuntime(obj.getClass())) {
             String msg = "No instances of " + obj.getClass().getTypeName() + " are allowed in the image heap as this class should be initialized at image runtime.";
-            msg += classInitializationSupport.objectInstantiationTraceMessage(obj,
-                            " To fix the issue mark " + obj.getClass().getTypeName() + " for build-time initialization with " +
-                                            SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-build-time") +
-                                            " or use the the information from the trace to find the culprit and " +
-                                            SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization, "<culprit>", "initialize-at-run-time") +
-                                            " to prevent its instantiation.\n");
+            msg += classInitializationSupport.objectInstantiationTraceMessage(obj);
+            msg += "Either mark this class for build-time initialization with " +
+                            SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-build-time") +
+                            " or use the the information above and " +
+                            SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-run-time") +
+                            " to prevent its instantiation.\n";
             throw new UnsupportedFeatureException(msg);
         }
         return obj;
@@ -221,6 +224,14 @@ public class ClassInitializationFeature implements Feature {
             Set<AnalysisType> provenSafe = initializeSafeDelayedClasses(initGraph);
 
             if (Options.PrintClassInitialization.getValue()) {
+                List<ClassOrPackageConfig> allConfigs = classInitializationSupport.getClassInitializationConfiguration();
+                allConfigs.sort(Comparator.comparing(ClassOrPackageConfig::getName));
+                ReportUtils.report("initializer configuration", path, "initializer_configuration", "txt", writer -> {
+                    for (ClassOrPackageConfig config : allConfigs) {
+                        writer.append(config.getName()).append(" -> ").append(config.getKind().toString()).append(" reasons: ")
+                                        .append(String.join(" and ", config.getReasons())).append(System.lineSeparator());
+                    }
+                });
                 reportSafeTypeInitiazliation(universe, initGraph, path, provenSafe);
                 reportMethodInitializationInfo(path);
             }
@@ -379,4 +390,9 @@ public class ClassInitializationFeature implements Feature {
         return false;
     }
 
+    @Override
+    public void cleanup() {
+        /* we clean all classes from the non-system class loaders. */
+        ClassInitializationTracking.initializedClasses.clear();
+    }
 }

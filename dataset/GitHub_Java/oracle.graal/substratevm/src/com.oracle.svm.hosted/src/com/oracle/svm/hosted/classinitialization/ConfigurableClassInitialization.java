@@ -27,18 +27,17 @@ package com.oracle.svm.hosted.classinitialization;
 import static com.oracle.svm.core.SubstrateOptions.TraceClassInitialization;
 
 import java.lang.reflect.Proxy;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
+import org.graalvm.nativeimage.impl.clinit.ClassInitializationTracking;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatures;
 import com.oracle.graal.pointsto.meta.AnalysisType;
@@ -77,13 +76,6 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
      */
     private final Map<Class<?>, InitKind> classInitKinds = new ConcurrentHashMap<>();
 
-    private static final int START_OF_THE_TRACE = 4;
-
-    /*
-     * These two are intentionally static to keep the reference to object and classes that were
-     * initialized in the JDK.
-     */
-    private static final Map<Class<?>, StackTraceElement[]> initializedClasses = Collections.synchronizedMap(new WeakHashMap<>());
     private static final Map<Object, StackTraceElement[]> instantiatedObjects = Collections.synchronizedMap(new WeakIdentityHashMap<>());
 
     private boolean configurationSealed;
@@ -237,10 +229,8 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
         checkEagerInitialization(clazz);
 
         if (!UNSAFE.shouldBeInitialized(clazz)) {
-            throw UserError.abort("The class " + clazz.getTypeName() + " has already been initialized; it is too late to register " +
-                            clazz.getTypeName() + " for build-time initialization (" + reason + "). " +
-                            classInitializationErrorMessage(clazz, "Try avoiding this conflict by avoiding to initialize the class that caused initialization of " + clazz.getTypeName() +
-                                            " or by not marking " + clazz.getTypeName() + " for build-time initialization."));
+            throw UserError.abort("The class " + clazz.getTypeName() + " has already been initialized; it is too late to register delaying class initialization for the reason: " + reason + "\n." +
+                            classInitializationTraceMessage(clazz));
         }
         /*
          * Propagate possible existing RUN_TIME registration from a superclass, so that we can check
@@ -256,63 +246,53 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
         }
     }
 
-    private String classInitializationErrorMessage(Class<?> clazz, String action) {
+    private String classInitializationTraceMessage(Class<?> clazz) {
         if (!TraceClassInitialization.getValue()) {
-            return " To see why " + clazz.getTypeName() + " got initialized use " + SubstrateOptionsParser.commandArgument(SubstrateOptions.TraceClassInitialization, "+");
-        } else if (initializedClasses.containsKey(clazz)) {
+            return "To see why this class got initialized enable use " + SubstrateOptionsParser.commandArgument(SubstrateOptions.TraceClassInitialization, "+");
+        }
 
-            StackTraceElement[] trace = initializedClasses.get(clazz);
+        if (ClassInitializationTracking.initializedClasses.containsKey(clazz)) {
             String culprit = null;
-            boolean containsLambdaMetaFactory = false;
+            StackTraceElement[] trace = ClassInitializationTracking.initializedClasses.get(clazz);
             for (StackTraceElement stackTraceElement : trace) {
                 if (stackTraceElement.getMethodName().equals("<clinit>")) {
                     culprit = stackTraceElement.getClassName();
                 }
-                if (stackTraceElement.getClassName().equals("java.lang.invoke.LambdaMetafactory")) {
-                    containsLambdaMetaFactory = true;
-                }
             }
-            if (containsLambdaMetaFactory) {
-                return clazz.getTypeName() + " was initialized through a lambda (https://github.com/oracle/graal/issues/1218). Try marking " + clazz.getTypeName() +
-                                " for build-time initialization with " + SubstrateOptionsParser.commandArgument(
-                                                ClassInitializationFeature.Options.ClassInitialization, clazz.getTypeName(), "initialize-at-build-time") +
-                                ".";
-            } else if (culprit != null) {
-                assert classInitializationConfiguration.lookupKind(culprit) != InitKind.BUILD_TIME;
-                return culprit + " caused initialization of this class with the following trace: \n" + classInitializationTrace(clazz);
+            if (culprit != null) {
+                boolean intentional = classInitializationConfiguration.lookupKind(culprit) != InitKind.BUILD_TIME;
+                String action = intentional ? culprit + " initialization was intentionally requested for " + classInitializationConfiguration.lookupReason(culprit)
+                                : culprit + " was unintentionally initialized with the following trace: " + classInitializationTrace(clazz);
+                return clazz.getTypeName() + " has been initialized by the " + culprit + " class initializer. " + action;
             } else {
                 return clazz.getTypeName() + " has been initialized through the following trace:\n" + classInitializationTrace(clazz);
             }
         } else {
-            return clazz.getTypeName() + " has been initialized without the native-image initialization instrumentation and the stack trace can't be tracked. " + action;
+            return clazz.getTypeName() + " has been initialized without the native-image initialization instrumentation and the stack trace can't be tracked.";
         }
+
     }
 
     @Override
-    public String objectInstantiationTraceMessage(Object obj, String action) {
+    public String objectInstantiationTraceMessage(Object obj) {
         if (!TraceClassInitialization.getValue()) {
             return " To see how this object got instantiated use " + SubstrateOptionsParser.commandArgument(SubstrateOptions.TraceClassInitialization, "+") + ".";
-        } else if (instantiatedObjects.containsKey(obj)) {
+        }
+        if (instantiatedObjects.containsKey(obj)) {
             String culprit = null;
             StackTraceElement[] trace = instantiatedObjects.get(obj);
-            boolean containsLambdaMetaFactory = false;
             for (StackTraceElement stackTraceElement : trace) {
                 if (stackTraceElement.getMethodName().equals("<clinit>")) {
                     culprit = stackTraceElement.getClassName();
                 }
-                if (stackTraceElement.getClassName().equals("java.lang.invoke.LambdaMetafactory")) {
-                    containsLambdaMetaFactory = true;
-                }
             }
-            if (containsLambdaMetaFactory) {
-                return " Object was instantiated through a lambda (https://github.com/oracle/graal/issues/1218). Try marking " + obj.getClass().getTypeName() +
-                                " for build-time initialization with " + SubstrateOptionsParser.commandArgument(
-                                                ClassInitializationFeature.Options.ClassInitialization, obj.getClass().getTypeName(), "initialize-at-build-time") +
-                                ".";
-            } else if (culprit != null) {
-                return " Object has been initialized by the " + culprit + " class initializer with a trace: \n " + getTraceString(instantiatedObjects.get(obj)) + ". " + action;
+            if (culprit != null) {
+                boolean intentional = classInitializationConfiguration.lookupKind(culprit) != InitKind.BUILD_TIME;
+                String action = intentional ? culprit + " initialization was intentionally requested for " + classInitializationConfiguration.lookupReason(culprit)
+                                : culprit + " was unintentionally initialized.";
+                return "Object has been initialized by the " + culprit + " class initializer. " + action;
             } else {
-                return " Object has been initialized through the following trace:\n" + getTraceString(instantiatedObjects.get(obj)) + ". " + action;
+                return "Object has been initialized through the following trace:\n" + getTraceString(instantiatedObjects.get(obj));
             }
         } else {
             return "Object has been initialized without the native-image initialization instrumentation and the stack trace can't be tracked.";
@@ -320,13 +300,13 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
     }
 
     private static String classInitializationTrace(Class<?> clazz) {
-        return getTraceString(initializedClasses.get(clazz));
+        return getTraceString(ClassInitializationTracking.initializedClasses.get(clazz));
     }
 
     private static String getTraceString(StackTraceElement[] trace) {
         StringBuilder b = new StringBuilder();
 
-        for (int i = START_OF_THE_TRACE; i < trace.length; i++) {
+        for (int i = ClassInitializationTracking.START_OF_THE_TRACE; i < trace.length; i++) {
             StackTraceElement stackTraceElement = trace[i];
             b.append("\tat ").append(stackTraceElement.toString()).append("\n");
         }
@@ -372,14 +352,6 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
     }
 
     private void setSubclassesAsRunTime(Class<?> clazz) {
-        if (clazz.isInterface() && !ClassInitializationFeature.declaresDefaultMethods(metaAccess.lookupJavaType(clazz))) {
-            /*
-             * An interface that does not declare a default method is independent from a class
-             * initialization point of view, i.e., it is not initialized when a class implementing
-             * that interface is initialized.
-             */
-            return;
-        }
         loader.findSubclasses(clazz, false).stream()
                         .filter(c -> !c.equals(clazz))
                         .filter(c -> !(c.isInterface() && !ClassInitializationFeature.declaresDefaultMethods(metaAccess.lookupJavaType(c))))
@@ -389,49 +361,18 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
     @Override
     public void reportClassInitialized(Class<?> clazz) {
         assert TraceClassInitialization.getValue();
-        initializedClasses.put(clazz, relevantStackTrace());
-        /*
-         * We don't do early failing here. Lambdas tend to initialize many classes that should not
-         * be initialized, but effectively they do not change the behavior of the final image.
-         *
-         * Failing early here creates many unnecessary constraints and reduces usability.
-         */
+        if (configurationSealed) {
+            UserError.guarantee(InitKind.RUN_TIME != specifiedInitKindFor(clazz),
+                            "Class " + clazz.getTypeName() + " got initiailized although it is marked for run-time initialization.");
+
+            UserError.guarantee(!shouldInitializeAtRuntime(clazz),
+                            "Class " + clazz.getTypeName() + " got initiailized although it should be initialized at run-time.");
+        }
     }
 
     @Override
-    public void reportObjectInstantiated(Object o) {
-        assert TraceClassInitialization.getValue();
-        instantiatedObjects.putIfAbsent(o, relevantStackTrace());
-    }
-
-    /**
-     * If the stack trace contains class initializaiton takes the stack up to the last
-     * initialization. Otherwise returns the whole stack trace. The method never returns the stack
-     * from the instrumented part.
-     *
-     * This method can be refined on a case-by-case basis to print nicer traces.
-     *
-     * @return a stack trace that led to erroneous situation
-     */
-    private static StackTraceElement[] relevantStackTrace() {
-        StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-        ArrayList<StackTraceElement> filteredStack = new ArrayList<>();
-        assert stack[START_OF_THE_TRACE - 1].getClassName().equals("org.graalvm.nativeimage.impl.clinit.ClassInitializationTracking");
-        int lastClinit = START_OF_THE_TRACE;
-        boolean containsLambdaMetaFactory = false;
-        for (int i = START_OF_THE_TRACE; i < stack.length; i++) {
-            StackTraceElement stackTraceElement = stack[i];
-            if ("<clinit>".equals(stackTraceElement.getMethodName())) {
-                lastClinit = i;
-            }
-            if (stackTraceElement.getClassName().equals("java.lang.invoke.LambdaMetafactory")) {
-                containsLambdaMetaFactory = true;
-            }
-            filteredStack.add(stackTraceElement);
-        }
-        int lastClinitIndex = lastClinit - START_OF_THE_TRACE + 1;
-        List<StackTraceElement> finalStack = lastClinit != START_OF_THE_TRACE & !containsLambdaMetaFactory ? filteredStack.subList(0, lastClinitIndex) : filteredStack;
-        return finalStack.toArray(new StackTraceElement[0]);
+    public void reportObjectInstantiated(Object o, StackTraceElement[] trace) {
+        instantiatedObjects.putIfAbsent(o, trace);
     }
 
     @Override
@@ -479,15 +420,15 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
                 InitKind specifiedKind = specifiedInitKindFor(c);
                 /* not specified by the user so it is an accident => try to fix it */
                 if (specifiedKind == null) {
-                    detailedMessage.append(c.getTypeName()).append(" was unintentionally initialized at build time. ");
-                    detailedMessage.append(classInitializationErrorMessage(c,
-                                    "Try marking this class for build-time initialization with " + SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization,
-                                                    c.getTypeName(), "initialize-at-build-time")));
+                    detailedMessage.append(classInitializationTraceMessage(c));
+                    detailedMessage.append("Try marking this class for build-time initialization with ")
+                                    .append(SubstrateOptionsParser.commandArgument(ClassInitializationFeature.Options.ClassInitialization,
+                                                    c.getTypeName(), "initialize-at-build-time"));
                 } else {
                     assert specifiedKind.isDelayed();
                     String reason = classInitializationConfiguration.lookupReason(c.getTypeName());
-                    detailedMessage.append(c.getTypeName()).append(" the class was requested to be initialized at build time (").append(reason).append("). ")
-                                    .append(classInitializationErrorMessage(c, "Try avoiding to initialize the class that caused initialization of " + c.getTypeName()));
+                    detailedMessage.append(c.getTypeName()).append(" the class was requested to be initialized at build time for reason: ").append(reason).append(".")
+                                    .append(classInitializationTraceMessage(c));
                 }
             });
 
@@ -557,22 +498,13 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
                 result = result.max(ensureClassInitialized(clazz, false));
             }
             InitKind previous = classInitKinds.put(clazz, result);
-            assert previous == null || previous == result : "Overwriting existing value: previous " + previous + " new " + result;
+            assert previous == null || previous == result : "Overwriting existing value";
         }
         return result;
     }
 
     private InitKind processInterfaces(Class<?> clazz, boolean memoizeEager) {
-        /*
-         * Note that we do not call computeInitKindForClass(clazz) on purpose: if clazz is the root
-         * class or an interface declaring default methods, then
-         * computeInitKindAndMaybeInitializeClass() already calls computeInitKindForClass. If the
-         * interface does not declare default methods, than we must not take the InitKind of that
-         * interface into account, because interfaces without default methods are independent from a
-         * class initialization point of view.
-         */
-        InitKind result = InitKind.BUILD_TIME;
-
+        InitKind result = computeInitKindForClass(clazz);
         for (Class<?> iface : clazz.getInterfaces()) {
             if (ClassInitializationFeature.declaresDefaultMethods(metaAccess.lookupJavaType(iface))) {
                 /*
