@@ -30,10 +30,22 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Objects;
 
+import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
+import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
+import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.replacements.test.MethodSubstitutionTest;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.junit.Assume;
 import org.junit.Test;
+
+import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class CheckIndexTest extends MethodSubstitutionTest {
 
@@ -152,6 +164,7 @@ public class CheckIndexTest extends MethodSubstitutionTest {
 
     @Test
     public void testByteBufferViewVarHandleGetInt() {
+        Assume.assumeTrue("GR-23778", JavaVersionUtil.JAVA_SPEC <= 11);
         testGraph("byteBufferViewVarHandleGetInt");
         test("byteBufferViewVarHandleGetInt");
         testGraph("byteBufferViewVarHandleGetIntConstIndex");
@@ -195,5 +208,35 @@ public class CheckIndexTest extends MethodSubstitutionTest {
     @Override
     protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
         return super.editGraphBuilderConfiguration(conf).withBytecodeExceptionMode(withExceptions ? BytecodeExceptionMode.CheckAll : BytecodeExceptionMode.OmitAll);
+    }
+
+    @Override
+    protected OptimisticOptimizations getOptimisticOptimizations() {
+        return OptimisticOptimizations.NONE;
+    }
+
+    @Override
+    protected void registerInvocationPlugins(InvocationPlugins invocationPlugins) {
+        super.registerInvocationPlugins(invocationPlugins);
+
+        // Cut off the Objects.requireNonNull exception path: might generate an unwanted invoke.
+        final InvocationPlugin requireNonNullPlugin = new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode obj) {
+                b.addPush(JavaKind.Object, b.addNonNullCast(obj));
+                return true;
+            }
+        };
+        final Registration objects = new Registration(invocationPlugins, Objects.class);
+        objects.register1("requireNonNull", Object.class, requireNonNullPlugin);
+    }
+
+    @Override
+    protected InlineInvokePlugin.InlineInfo bytecodeParserShouldInlineInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args) {
+        // Ensure non-intrinsified Unsafe methods are inlined.
+        if (method.getDeclaringClass().getUnqualifiedName().equals("Unsafe")) {
+            return InlineInvokePlugin.InlineInfo.createStandardInlineInfo(method);
+        }
+        return super.bytecodeParserShouldInlineInvoke(b, method, args);
     }
 }
