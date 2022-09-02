@@ -40,32 +40,32 @@
  */
 package org.graalvm.wasm.nodes;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
+import org.graalvm.wasm.WasmFunction;
 
 @GenerateUncached
 public abstract class WasmIndirectCallNode extends Node {
 
     static final int INLINE_CACHE_LIMIT = 5;
 
-    public abstract Object execute(CallTarget target, Object[] args);
+    public abstract Object execute(WasmFunction function, Object[] args);
 
-    @Specialization(guards = "target == callNode.getCallTarget()", limit = "INLINE_CACHE_LIMIT")
+    @Specialization(guards = "function.resolveCallTarget() == callNode.getCallTarget()", limit = "INLINE_CACHE_LIMIT")
     @SuppressWarnings("unused")
-    static Object doCached(CallTarget target, Object[] args,
-                    @Cached("create(target)") DirectCallNode callNode) {
+    static Object doCached(WasmFunction function, Object[] args,
+                    @Cached("create(function.resolveCallTarget())") DirectCallNode callNode) {
         return callNode.call(args);
     }
 
     @Specialization(replaces = "doCached")
-    static Object doIndirect(CallTarget target, Object[] args,
+    static Object doIndirect(WasmFunction function, Object[] args,
                     @Cached IndirectCallNode indirectCall) {
-        return indirectCall.call(target, args);
+        return indirectCall.call(function.resolveCallTarget(), args);
     }
 
     public static WasmIndirectCallNode create() {

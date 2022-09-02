@@ -41,10 +41,9 @@
 package org.graalvm.wasm;
 
 import org.graalvm.wasm.collection.ByteArrayList;
+import org.graalvm.wasm.collection.IntArrayArrayList;
 import org.graalvm.wasm.collection.IntArrayList;
 import org.graalvm.wasm.collection.LongArrayList;
-
-import java.util.ArrayList;
 
 public class ExecutionState {
     private int stackSize;
@@ -54,7 +53,7 @@ public class ExecutionState {
     private LongArrayList longConstants;
     private IntArrayList stackStates;
     private IntArrayList continuationReturnLength;
-    private ArrayList<int[]> branchTables;
+    private IntArrayArrayList branchTables;
 
     public ExecutionState() {
         this.stackSize = 0;
@@ -64,7 +63,7 @@ public class ExecutionState {
         this.longConstants = new LongArrayList();
         this.stackStates = new IntArrayList();
         this.continuationReturnLength = new IntArrayList();
-        this.branchTables = new ArrayList<>();
+        this.branchTables = new IntArrayArrayList();
     }
 
     public void push() {
@@ -110,9 +109,6 @@ public class ExecutionState {
     }
 
     public int getStackState(int level) {
-        if (stackStates.size() < level + 1) {
-            Assert.fail("Branch to level " + level + " larger than the nesting " + stackStates.size());
-        }
         return stackStates.get(stackStates.size() - 1 - level);
     }
 
@@ -177,6 +173,6 @@ public class ExecutionState {
     }
 
     public int[][] branchTables() {
-        return branchTables.toArray(new int[0][]);
+        return branchTables.toArray();
     }
 }

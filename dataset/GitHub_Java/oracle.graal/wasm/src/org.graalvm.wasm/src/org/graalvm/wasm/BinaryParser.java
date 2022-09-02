@@ -293,7 +293,7 @@ public class BinaryParser extends BinaryStreamParser {
 
     private void readMemorySection() {
         int numMemories = readVectorLength();
-        Assert.assertIntLessOrEqual(module.symbolTable().memoryCount() + numMemories, 1, "Can import or declare at most one memory per module.");
+        Assert.assertIntLessOrEqual(module.symbolTable().tableCount() + numMemories, 1, "Can import or declare at most one memory per module.");
         // Since in the current version of WebAssembly supports at most one table instance per
         // module.
         // this loop should be executed at most once.
@@ -1156,7 +1156,8 @@ public class BinaryParser extends BinaryStreamParser {
     }
 
     private void readDataSection() {
-        final WasmContext context = WasmLanguage.getCurrentContext();
+        WasmMemory memory = module.symbolTable().memory();
+        Assert.assertNotNull(memory, "No memory declared or imported in the module.");
         int numDataSections = readVectorLength();
         for (int i = 0; i != numDataSections; ++i) {
             int memIndex = readUnsignedInt32();
@@ -1188,23 +1189,14 @@ public class BinaryParser extends BinaryStreamParser {
                         Assert.fail(String.format("Invalid instruction for data offset expression: 0x%02X", instruction));
                 }
             } while (instruction != Instructions.END);
-
             int byteLength = readVectorLength();
+
             long baseAddress = dataOffset;
-            final WasmMemory memory = module.symbolTable().memory();
-            if (memory != null) {
-                memory.validateAddress(null, baseAddress, byteLength);
-                for (int writeOffset = 0; writeOffset != byteLength; ++writeOffset) {
-                    byte b = read1();
-                    memory.store_i32_8(baseAddress + writeOffset, b);
-                }
-            } else {
-                byte[] dataSegment = new byte[byteLength];
-                for (int writeOffset = 0; writeOffset != byteLength; ++writeOffset) {
-                    byte b = read1();
-                    dataSegment[writeOffset] = b;
-                }
-                context.linker().resolveDataSection(module, i, baseAddress, byteLength, dataSegment);
+            memory.validateAddress(baseAddress, byteLength);
+
+            for (int writeOffset = 0; writeOffset != byteLength; ++writeOffset) {
+                byte b = read1();
+                memory.store_i32_8(baseAddress + writeOffset, b);
             }
         }
     }

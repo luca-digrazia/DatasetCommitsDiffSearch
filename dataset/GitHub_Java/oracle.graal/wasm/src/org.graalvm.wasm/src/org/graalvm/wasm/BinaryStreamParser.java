@@ -41,22 +41,32 @@
 package org.graalvm.wasm;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-import org.graalvm.wasm.constants.GlobalModifier;
-
-import static com.oracle.truffle.api.nodes.ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN;
 
 public abstract class BinaryStreamParser {
     @CompilationFinal(dimensions = 1) protected byte[] data;
     protected int offset;
+    private byte[] bytesConsumed;
 
     public BinaryStreamParser(byte[] data) {
         this.data = data;
         this.offset = 0;
+        this.bytesConsumed = new byte[1];
     }
 
-    @ExplodeLoop(kind = FULL_EXPLODE_UNTIL_RETURN)
-    public static int peekSignedInt32(byte[] data, int initialOffset) {
+    protected int readSignedInt32() {
+        int value = peekSignedInt32(data, offset, bytesConsumed);
+        offset += bytesConsumed[0];
+        return value;
+    }
+
+    protected int readSignedInt32(byte[] bytesConsumedOut) {
+        byte[] out = bytesConsumedOut != null ? bytesConsumedOut : bytesConsumed;
+        int value = peekSignedInt32(data, offset, out);
+        offset += out[0];
+        return value;
+    }
+
+    protected static int peekSignedInt32(byte[] data, int initialOffset, byte[] bytesConsumed) {
         int result = 0;
         int shift = 0;
         int offset = initialOffset;
@@ -66,16 +76,32 @@ public abstract class BinaryStreamParser {
             offset++;
             result |= ((b & 0x7F) << shift);
             shift += 7;
-        } while ((b & 0x80) != 0 && shift < 35);
+        } while ((b & 0x80) != 0);
 
         if ((shift < 32) && (b & 0x40) != 0) {
             result |= (~0 << shift);
         }
+
+        if (bytesConsumed != null) {
+            bytesConsumed[0] = (byte) (offset - initialOffset);
+        }
         return result;
     }
 
-    @ExplodeLoop(kind = FULL_EXPLODE_UNTIL_RETURN)
-    public static int peekUnsignedInt32(byte[] data, int initialOffset) {
+    protected int readUnsignedInt32() {
+        int value = peekUnsignedInt32(data, offset, bytesConsumed);
+        offset += bytesConsumed[0];
+        return value;
+    }
+
+    protected int readUnsignedInt32(byte[] bytesConsumedOut) {
+        byte[] out = bytesConsumedOut != null ? bytesConsumedOut : bytesConsumed;
+        int value = peekUnsignedInt32(data, offset, out);
+        offset += out[0];
+        return value;
+    }
+
+    protected static int peekUnsignedInt32(byte[] data, int initialOffset, byte[] bytesConsumed) {
         int result = 0;
         int shift = 0;
         int offset = initialOffset;
@@ -92,11 +118,14 @@ public abstract class BinaryStreamParser {
             Assert.fail("Unsigned LEB128 overflow");
         }
 
+        if (bytesConsumed != null) {
+            bytesConsumed[0] = (byte) (offset - initialOffset);
+        }
+
         return result;
     }
 
-    @ExplodeLoop(kind = FULL_EXPLODE_UNTIL_RETURN)
-    public int peekUnsignedInt32(int ahead) {
+    protected int peekUnsignedInt32(int ahead) {
         int result = 0;
         int shift = 0;
         int i = 0;
@@ -115,8 +144,20 @@ public abstract class BinaryStreamParser {
         return result;
     }
 
-    @ExplodeLoop(kind = FULL_EXPLODE_UNTIL_RETURN)
-    public static long peekSignedInt64(byte[] data, int initialOffset) {
+    protected long readSignedInt64() {
+        long value = peekSignedInt64(data, offset, bytesConsumed);
+        offset += bytesConsumed[0];
+        return value;
+    }
+
+    protected long readSignedInt64(byte[] bytesConsumedOut) {
+        byte[] out = bytesConsumedOut != null ? bytesConsumedOut : bytesConsumed;
+        long value = peekSignedInt64(data, offset, out);
+        offset += out[0];
+        return value;
+    }
+
+    protected static long peekSignedInt64(byte[] data, int initialOffset, byte[] bytesConsumed) {
         long result = 0;
         int shift = 0;
         int offset = initialOffset;
@@ -126,12 +167,15 @@ public abstract class BinaryStreamParser {
             result |= ((b & 0x7FL) << shift);
             shift += 7;
             offset++;
-        } while ((b & 0x80) != 0 && shift < 70);
+        } while ((b & 0x80) != 0);
 
         if ((shift < 64) && (b & 0x40) != 0) {
             result |= (~0L << shift);
         }
 
+        if (bytesConsumed != null) {
+            bytesConsumed[0] = (byte) (shift / 7);
+        }
         return result;
     }
 
@@ -149,23 +193,6 @@ public abstract class BinaryStreamParser {
 
     protected long readFloatAsInt64() {
         return read8();
-    }
-
-    protected byte readMutability() {
-        final byte mut = peekMutability();
-        offset++;
-        return mut;
-    }
-
-    protected byte peekMutability() {
-        final byte mut = peek1();
-        if (mut == GlobalModifier.CONSTANT) {
-            return mut;
-        } else if (mut == GlobalModifier.MUTABLE) {
-            return mut;
-        } else {
-            throw Assert.fail("Invalid mutability flag: " + mut);
-        }
     }
 
     protected byte read1() {
@@ -261,24 +288,5 @@ public abstract class BinaryStreamParser {
         byte b = peekValueType(data, offset);
         offset++;
         return b;
-    }
-
-    @ExplodeLoop(kind = FULL_EXPLODE_UNTIL_RETURN)
-    public static byte getLeb128Length(byte[] data, int offset) {
-        byte length = 0;
-        byte b;
-        do {
-            b = data[offset];
-            offset++;
-            length++;
-        } while ((b & 0x80) != 0 && length < 12);
-
-        return length;
-    }
-
-    public static boolean storeLeb128InPool(byte[] data, int offset) {
-        return false;
-        //return true;
-        //return (data[offset] & 0x80) != 0;
     }
 }

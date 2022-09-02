@@ -43,12 +43,13 @@ package org.graalvm.wasm.predefined.emscripten;
 import static org.graalvm.wasm.WasmTracing.trace;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import org.graalvm.wasm.WasmCodeEntry;
 import org.graalvm.wasm.WasmLanguage;
-import org.graalvm.wasm.WasmModule;
+import org.graalvm.wasm.memory.WasmMemory;
 
 public class AbortOnCannotGrowMemory extends AbortNode {
-    public AbortOnCannotGrowMemory(WasmLanguage language, WasmModule module) {
-        super(language, module);
+    public AbortOnCannotGrowMemory(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
+        super(language, codeEntry, memory);
     }
 
     @Override

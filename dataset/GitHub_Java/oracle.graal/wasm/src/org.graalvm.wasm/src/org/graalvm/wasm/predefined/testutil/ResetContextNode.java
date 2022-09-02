@@ -42,9 +42,11 @@ package org.graalvm.wasm.predefined.testutil;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import org.graalvm.wasm.WasmCodeEntry;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.WasmVoidResult;
+import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
 
 /**
@@ -52,8 +54,8 @@ import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
  * module's binary.
  */
 public class ResetContextNode extends WasmPredefinedRootNode {
-    public ResetContextNode(WasmLanguage language, WasmModule module) {
-        super(language, module);
+    public ResetContextNode(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
+        super(language, codeEntry, memory);
     }
 
     @Override
@@ -71,7 +73,7 @@ public class ResetContextNode extends WasmPredefinedRootNode {
     @CompilerDirectives.TruffleBoundary
     private void resetModuleState(boolean zeroMemory) {
         // TODO: Reset globals and the memory in all modules of the context.
-        WasmModule testModule = contextReference().get().modules().get("test");
-        contextReference().get().linker().resetModuleState(testModule, testModule.data(), zeroMemory);
+        WasmModule module = contextReference().get().modules().get("test");
+        contextReference().get().linker().resetModuleState(module, module.data(), zeroMemory);
     }
 }

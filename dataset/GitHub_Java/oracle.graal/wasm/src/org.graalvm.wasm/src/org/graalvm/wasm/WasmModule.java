@@ -113,7 +113,7 @@ public final class WasmModule implements TruffleObject {
         if (globalIndex != null) {
             readGlobal(symbolTable, globalIndex);
         }
-        if (member.equals(symbolTable.exportedMemory())) {
+        if (symbolTable.exportedMemory().equals(member)) {
             return symbolTable.memory();
         }
         throw UnknownIdentifierException.create(member);
@@ -173,7 +173,7 @@ public final class WasmModule implements TruffleObject {
 
     private static Object readGlobal(SymbolTable symbolTable, int globalIndex) {
         final int address = symbolTable.globalAddress(globalIndex);
-        final GlobalRegistry globals = WasmContext.getCurrent().globals();
+        final Globals globals = WasmContext.getCurrent().globals();
         final byte type = symbolTable.globalValueType(globalIndex);
         switch (type) {
             case ValueTypes.I32_TYPE:
@@ -209,10 +209,6 @@ public final class WasmModule implements TruffleObject {
         return null;
     }
 
-    public boolean isBuiltin() {
-        return data == null;
-    }
-
     @ExportLibrary(InteropLibrary.class)
     static final class ExportedMembers implements TruffleObject {
         private final SymbolTable symbolTable;
@@ -229,19 +225,16 @@ public final class WasmModule implements TruffleObject {
         }
 
         @ExportMessage
-        @TruffleBoundary
         boolean hasArrayElements() {
             return true;
         }
 
         @ExportMessage
-        @TruffleBoundary
         boolean isArrayElementReadable(long index) {
             return index >= 0 && index < getArraySize();
         }
 
         @ExportMessage
-        @TruffleBoundary
         long getArraySize() {
             return exportedFunctions.size() + exportedGlobals.size() + memoriesSize();
         }
@@ -251,7 +244,6 @@ public final class WasmModule implements TruffleObject {
         }
 
         @ExportMessage
-        @TruffleBoundary
         Object readArrayElement(long absoluteIndex) throws InvalidArrayIndexException {
             long index = absoluteIndex;
             if (!isArrayElementReadable(index)) {

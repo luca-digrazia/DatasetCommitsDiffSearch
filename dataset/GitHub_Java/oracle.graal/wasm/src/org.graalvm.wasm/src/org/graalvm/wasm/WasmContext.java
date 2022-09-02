@@ -79,10 +79,6 @@ public final class WasmContext {
         return env.parsePublic(source);
     }
 
-    public Env environment() {
-        return env;
-    }
-
     public WasmLanguage language() {
         return language;
     }

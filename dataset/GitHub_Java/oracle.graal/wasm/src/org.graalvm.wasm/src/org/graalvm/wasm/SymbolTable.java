@@ -653,11 +653,11 @@ public class SymbolTable {
         return memory;
     }
 
-    public void importMemory(WasmContext context, String moduleName, String memoryName, int initSize, int maxSize) {
+    void importMemory(WasmContext context, String moduleName, String memoryName, int initSize, int maxSize) {
         checkNotLinked();
         validateSingleMemory();
         importedMemoryDescriptor = new ImportDescriptor(moduleName, memoryName);
-        context.linker().resolveMemoryImport(context, module, importedMemoryDescriptor, initSize, maxSize, wasmMemory -> memory = wasmMemory);
+        memory = context.linker().tryResolveMemory(context, module, moduleName, memoryName, initSize, maxSize);
     }
 
     private void validateSingleMemory() {
@@ -673,7 +673,7 @@ public class SymbolTable {
         return importedMemoryDescriptor != null || memory != null;
     }
 
-    public void exportMemory(WasmContext context, String name) {
+    public void exportMemory(String name) {
         checkNotLinked();
         if (exportedMemory != null) {
             throw new WasmException("A memory has been already exported from this module.");
@@ -681,7 +681,6 @@ public class SymbolTable {
         if (!memoryExists()) {
             throw new WasmException("No memory has been declared or imported, so memory cannot be exported.");
         }
-        context.linker().resolveMemoryExport(module, name);
         exportedMemory = name;
     }
 

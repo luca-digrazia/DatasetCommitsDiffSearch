@@ -40,8 +40,6 @@
  */
 package org.graalvm.wasm.exception;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -56,19 +54,7 @@ public class WasmExecutionException extends RuntimeException implements TruffleE
 
     public WasmExecutionException(Node location, String message) {
         super(message);
-        CompilerAsserts.neverPartOfCompilation();
         this.location = location;
-    }
-
-    public WasmExecutionException(Node location, String message, Throwable cause) {
-        super(message, cause);
-        CompilerAsserts.neverPartOfCompilation();
-        this.location = location;
-    }
-
-    @TruffleBoundary
-    public static WasmExecutionException create(Node location, String message) {
-        return new WasmExecutionException(location, message);
     }
 
     @Override

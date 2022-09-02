@@ -68,16 +68,14 @@ public final class WasmIfNode extends WasmNode {
     }
 
     @Override
-    public int execute(WasmContext context, VirtualFrame frame) {
+    public TargetOffset execute(WasmContext context, VirtualFrame frame) {
         int stackPointer = initialStackPointer - 1;
         if (condition.profile(popInt(frame, stackPointer) != 0)) {
             trace("taking if branch");
             return trueBranch.execute(context, frame);
-        } else if (falseBranch != null) {
+        } else {
             trace("taking else branch");
             return falseBranch.execute(context, frame);
-        } else {
-            return -1;
         }
     }
 
@@ -88,26 +86,21 @@ public final class WasmIfNode extends WasmNode {
 
     @Override
     int byteConstantLength() {
-        return trueBranch.byteConstantLength() + (falseBranch != null ? falseBranch.byteConstantLength() : 0);
+        return trueBranch.byteConstantLength() + falseBranch.byteConstantLength();
     }
 
     @Override
     int intConstantLength() {
-        return trueBranch.intConstantLength() + (falseBranch != null ? falseBranch.intConstantLength() : 0);
+        return trueBranch.intConstantLength() + falseBranch.intConstantLength();
     }
 
     @Override
     int longConstantLength() {
-        return trueBranch.longConstantLength() + (falseBranch != null ? falseBranch.longConstantLength() : 0);
+        return trueBranch.longConstantLength() + falseBranch.longConstantLength();
     }
 
     @Override
     int branchTableLength() {
-        return trueBranch.branchTableLength() + (falseBranch != null ? falseBranch.branchTableLength() : 0);
-    }
-
-    @Override
-    int profileCount() {
-        return trueBranch.profileCount() + (falseBranch != null ? falseBranch.profileCount() : 0);
+        return trueBranch.branchTableLength() + falseBranch.branchTableLength();
     }
 }

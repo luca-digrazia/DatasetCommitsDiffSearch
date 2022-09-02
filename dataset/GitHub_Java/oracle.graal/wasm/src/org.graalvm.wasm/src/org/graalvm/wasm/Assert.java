@@ -41,56 +41,78 @@
 package org.graalvm.wasm;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
+import org.graalvm.wasm.exception.BinaryParserException;
 
 public class Assert {
 
-    public static void assertByteEqual(byte b1, byte b2, String message, Failure failure) throws WasmException {
+    public static void assertByteEqual(byte b1, byte b2, String message) throws BinaryParserException {
         if (b1 != b2) {
-            fail(format("%s: 0x%02X should = 0x%02X.", message, b1, b2), failure);
+            fail(format("%s: should be equal: 0x%02X != 0x%02X", message, b1, b2));
         }
     }
 
-    public static void assertIntEqual(int n1, int n2, String message, Failure failure) throws WasmException {
+    public static void assertIntEqual(int n1, int n2, String message) throws BinaryParserException {
         if (n1 != n2) {
-            fail(format("%s: %d should = %d.", message, n1, n2), failure);
+            fail(format("%s: should be equal: %d != %d", message, n1, n2));
         }
     }
 
-    public static void assertIntGreater(int n1, int n2, String message, Failure failure) throws WasmException {
+    public static void assertLongEqual(long n1, long n2, String message) throws BinaryParserException {
+        if (n1 != n2) {
+            fail(format("%s: should be equal: %d != %d", message, n1, n2));
+        }
+    }
+
+    public static void assertIntIn(int value, int start, int end, String message) {
+        if (value < start || value > end) {
+            fail(format("%s: value %d should be in range [%d, %d]", message, value, start, end));
+        }
+    }
+
+    public static void assertLongIn(long value, long start, long end, String message) {
+        if (value < start || value > end) {
+            fail(format("%s: value %d should be in range [%d, %d]", message, value, start, end));
+        }
+    }
+
+    public static void assertIntGreater(int n1, int n2, String message) throws BinaryParserException {
         if (n1 <= n2) {
-            fail(format("%s: %d should be > %d.", message, n1, n2), failure);
+            fail(format("%s: should be larger: %d <= %d", message, n1, n2));
         }
     }
 
-    public static void assertIntLessOrEqual(int n1, int n2, String message, Failure failure) throws WasmException {
+    public static void assertLongGreater(long n1, long n2, String message) throws BinaryParserException {
+        if (n1 <= n2) {
+            fail(format("%s: should be larger: %d <= %d", message, n1, n2));
+        }
+    }
+
+    public static void assertIntLessOrEqual(int n1, int n2, String message) throws BinaryParserException {
         if (n1 > n2) {
-            fail(format("%s: %d should be <= %d.", message, n1, n2), failure);
+            fail(format("%s: should be less or equal: %d > %d", message, n1, n2));
         }
     }
 
-    public static void assertLongLessOrEqual(long n1, long n2, String message, Failure failure) throws WasmException {
+    public static void assertLongLessOrEqual(long n1, long n2, String message) throws BinaryParserException {
         if (n1 > n2) {
-            fail(format("%s: %d should be <= %d.", message, n1, n2), failure);
+            fail(format("%s: should be less or equal: %d > %d", message, n1, n2));
         }
     }
 
-    public static void assertNotNull(Object object, String message, Failure failure) throws WasmException {
+    public static void assertNotNull(Object object, String message) throws BinaryParserException {
         if (object == null) {
-            fail(format("%s: expected a non-null value.", message), failure);
+            fail(format("%s: expected a non-null value", message));
         }
     }
 
-    public static void assertTrue(boolean condition, String message, Failure failure) throws WasmException {
+    public static void assertTrue(boolean condition, String message) throws BinaryParserException {
         if (!condition) {
-            fail(format("%s: condition is supposed to be true.", message), failure);
+            fail(format("%s: condition is supposed to be true", message));
         }
     }
 
-    @TruffleBoundary
-    public static RuntimeException fail(String message, Failure failure) throws WasmException {
-        throw WasmException.create(failure, message);
+    public static RuntimeException fail(String message) throws BinaryParserException {
+        throw new BinaryParserException(message);
     }
 
     @TruffleBoundary

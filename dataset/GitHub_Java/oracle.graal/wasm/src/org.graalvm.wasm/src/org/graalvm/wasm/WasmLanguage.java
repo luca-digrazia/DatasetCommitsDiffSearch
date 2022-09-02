@@ -44,11 +44,10 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
-import org.graalvm.wasm.nodes.WasmEmptyRootNode;
+import org.graalvm.wasm.nodes.WasmUndefinedFunctionRootNode;
 import org.graalvm.options.OptionDescriptors;
 
-@TruffleLanguage.Registration(id = "wasm", name = "WebAssembly", defaultMimeType = "application/wasm", byteMimeTypes = "application/wasm", contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE, fileTypeDetectors = WasmFileDetector.class, //
-                interactive = false)
+@TruffleLanguage.Registration(id = "wasm", name = "WebAssembly", defaultMimeType = "application/wasm", byteMimeTypes = "application/wasm", contextPolicy = TruffleLanguage.ContextPolicy.EXCLUSIVE, fileTypeDetectors = WasmFileDetector.class)
 public final class WasmLanguage extends TruffleLanguage<WasmContext> {
 
     @Override
@@ -68,9 +67,14 @@ public final class WasmLanguage extends TruffleLanguage<WasmContext> {
         final byte[] data = request.getSource().getBytes().toByteArray();
         final WasmModule module = new WasmModule(moduleName, data);
         final BinaryParser reader = new BinaryParser(this, module, data);
-        reader.readModule(context);
+        reader.readModule();
         context.registerModule(module);
-        return Truffle.getRuntime().createCallTarget(new WasmEmptyRootNode(this));
+        final WasmFunction startFunction = module.symbolTable().startFunction();
+        if (startFunction != null) {
+            return startFunction.resolveCallTarget();
+        } else {
+            return Truffle.getRuntime().createCallTarget(new WasmUndefinedFunctionRootNode(this));
+        }
     }
 
     @Override
