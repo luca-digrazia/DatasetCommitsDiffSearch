@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.runtime.interop.access;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
@@ -55,7 +54,6 @@ public abstract class LLVMInteropInvokeNode extends LLVMNode {
     }
 
     @Specialization
-    @GenerateAOT.Exclude
     Object doClazz(LLVMPointer receiver, LLVMInteropType.Clazz type, String method, Object[] arguments,
                     @Cached LLVMInteropMethodInvokeNode invoke,
                     @Cached LLVMSelfArgumentPackNode selfPackNode,
@@ -74,7 +72,6 @@ public abstract class LLVMInteropInvokeNode extends LLVMNode {
      * @param type
      */
     @Specialization(guards = "!isClass(type)")
-    @GenerateAOT.Exclude
     Object doStruct(LLVMPointer receiver, LLVMInteropType.Struct type, String member, Object[] arguments,
                     @CachedLibrary(limit = "5") InteropLibrary interop)
                     throws UnsupportedMessageException, UnknownIdentifierException, UnsupportedTypeException, ArityException {

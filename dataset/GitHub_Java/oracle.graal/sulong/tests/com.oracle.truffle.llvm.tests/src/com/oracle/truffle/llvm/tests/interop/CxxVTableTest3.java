@@ -49,8 +49,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.tests.interop.CxxVTableTest3Factory.CallNodeGen;
 import com.oracle.truffle.tck.TruffleRunner;
 import com.oracle.truffle.tck.TruffleRunner.Inject;
-import org.junit.Rule;
-import org.junit.rules.ExpectedException;
 
 @RunWith(TruffleRunner.class)
 public class CxxVTableTest3 extends InteropTestBase {
@@ -165,13 +163,8 @@ public class CxxVTableTest3 extends InteropTestBase {
         Assert.assertEquals(28, getA4.execute().invokeMember("a4", 14).asInt());
     }
 
-    @Rule public ExpectedException expectedException = ExpectedException.none();
-
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void testNonExisting() {
-        expectedException.expect(UnsupportedOperationException.class);
-        expectedException.expectMessage("Non readable or non-existent member key 'a3'");
-
         getA2.execute().invokeMember("a3");
     }
 }
