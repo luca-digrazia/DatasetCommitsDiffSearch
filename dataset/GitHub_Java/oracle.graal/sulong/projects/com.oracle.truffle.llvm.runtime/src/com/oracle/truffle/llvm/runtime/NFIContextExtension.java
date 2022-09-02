@@ -142,8 +142,10 @@ public final class NFIContextExtension implements ContextExtension {
             addNativeLibrary(externalLibrary);
             internalLibrariesAdded = true;
         }
-        for (ExternalLibrary l : nativeLibraries) {
-            addLibrary(l, context);
+        synchronized (nativeLibraries) {
+            for (ExternalLibrary l : nativeLibraries) {
+                addLibrary(l, context);
+            }
         }
     }
 
@@ -281,9 +283,8 @@ public final class NFIContextExtension implements ContextExtension {
     public NativeLookupResult getNativeFunctionOrNull(LLVMContext context, String name) {
         CompilerAsserts.neverPartOfCompilation();
         synchronized (libraryHandles) {
-            synchronized (nativeLibraries) {
-                addLibraries(context);
-            }
+            addLibraries(context);
+
             MapCursor<ExternalLibrary, Object> cursor = libraryHandles.getEntries();
             while (cursor.advance()) {
                 Object symbol = getNativeFunctionOrNull(cursor.getValue(), name);
@@ -303,9 +304,8 @@ public final class NFIContextExtension implements ContextExtension {
     private NativeLookupResult getNativeDataObjectOrNull(LLVMContext context, String name) {
         CompilerAsserts.neverPartOfCompilation();
         synchronized (libraryHandles) {
-            synchronized (nativeLibraries) {
-                addLibraries(context);
-            }
+            addLibraries(context);
+
             MapCursor<ExternalLibrary, Object> cursor = libraryHandles.getEntries();
             while (cursor.advance()) {
                 Object symbol = getNativeDataObjectOrNull(cursor.getValue(), name);
