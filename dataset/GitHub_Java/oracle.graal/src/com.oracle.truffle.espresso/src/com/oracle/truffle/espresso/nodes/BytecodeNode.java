@@ -1128,7 +1128,10 @@ public final class BytecodeNode extends EspressoMethodNode {
                     if (stackOverflowErrorInfo != null) {
                         for (int i = 0; i < stackOverflowErrorInfo.length; i += 3) {
                             if (curBCI >= stackOverflowErrorInfo[i] && curBCI < stackOverflowErrorInfo[i + 1]) {
-                                clearOperandStack(primitives, refs, top);
+                                // Release all references from the operand stack.
+                                while (--top >= 0) {
+                                    EspressoFrame.clear(primitives, refs, top);
+                                }
                                 top = 0;
                                 putObject(refs, 0, wrappedStackOverflowError.getExceptionObject());
                                 top++;
@@ -1172,7 +1175,6 @@ public final class BytecodeNode extends EspressoMethodNode {
                         }
                     }
                     if (handler != null) {
-                        clearOperandStack(primitives, refs, top);
                         top = 0;
                         putObject(refs, 0, wrappedException.getExceptionObject());
                         top++;
@@ -1216,13 +1218,6 @@ public final class BytecodeNode extends EspressoMethodNode {
             }
             edgeLocalAnalysis(primitives, refs, curBCI, targetBCI);
             curBCI = targetBCI;
-        }
-    }
-
-    @ExplodeLoop
-    private static void clearOperandStack(long[] primitives, Object[] refs, int top) {
-        for (int slot = top - 1; slot >= 0; --slot) {
-            EspressoFrame.clear(primitives, refs, slot);
         }
     }
 

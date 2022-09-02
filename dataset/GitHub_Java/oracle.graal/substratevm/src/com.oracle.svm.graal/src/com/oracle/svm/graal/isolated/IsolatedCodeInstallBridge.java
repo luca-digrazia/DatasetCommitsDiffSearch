@@ -34,29 +34,25 @@ import jdk.vm.ci.code.InstalledCode;
 
 /**
  * A helper to pass information for installing code in the compilation client through a Truffle
- * compilation. It does not implement {@link InstalledCode} or {@link OptimizedAssumptionDependency}
- * in any meaningful way.
+ * compilation. It does not implement {@link InstalledCode} in any meaningful way.
  */
 public final class IsolatedCodeInstallBridge extends InstalledCode implements OptimizedAssumptionDependency {
-    private final ClientHandle<? extends SubstrateInstalledCode.Factory> factoryHandle;
-    private ClientHandle<? extends SubstrateInstalledCode> installedCodeHandle;
+    private final ClientHandle<? extends SubstrateInstalledCode.Factory> installedCodeFactoryHandle;
+    private final ClientHandle<? extends OptimizedAssumptionDependency.Access> dependencyAccessHandle;
 
-    public IsolatedCodeInstallBridge(ClientHandle<? extends SubstrateInstalledCode.Factory> factoryHandle) {
+    public IsolatedCodeInstallBridge(ClientHandle<? extends SubstrateInstalledCode.Factory> installedCodeFactoryHandle,
+                    ClientHandle<? extends OptimizedAssumptionDependency.Access> dependencyAccessHandle) {
         super(IsolatedCodeInstallBridge.class.getSimpleName());
-        this.factoryHandle = factoryHandle;
+        this.installedCodeFactoryHandle = installedCodeFactoryHandle;
+        this.dependencyAccessHandle = dependencyAccessHandle;
     }
 
-    public ClientHandle<? extends SubstrateInstalledCode.Factory> getSubstrateInstalledCodeFactoryHandle() {
-        return factoryHandle;
+    public ClientHandle<? extends SubstrateInstalledCode.Factory> getInstalledCodeFactoryHandle() {
+        return installedCodeFactoryHandle;
     }
 
-    public void setSubstrateInstalledCodeHandle(ClientHandle<? extends SubstrateInstalledCode> installedCodeHandle) {
-        this.installedCodeHandle = installedCodeHandle;
-    }
-
-    public ClientHandle<? extends SubstrateInstalledCode> getSubstrateInstalledCodeHandle() {
-        assert installedCodeHandle.notEqual(IsolatedHandles.nullHandle()) : "must have been initialized";
-        return installedCodeHandle;
+    public ClientHandle<? extends Access> getDependencyAccessHandle() {
+        return dependencyAccessHandle;
     }
 
     private static final String DO_NOT_CALL_REASON = IsolatedCodeInstallBridge.class.getSimpleName() +

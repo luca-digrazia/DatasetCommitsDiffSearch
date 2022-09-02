@@ -27,6 +27,7 @@ package com.oracle.svm.core.code;
 import static com.oracle.svm.core.snippets.KnownIntrinsics.readCallerStackPointer;
 
 import org.graalvm.compiler.options.Option;
+import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.IsolateThread;
@@ -61,9 +62,12 @@ public class RuntimeCodeCache {
     public static class Options {
         @Option(help = "Print logging information for runtime code cache modifications")//
         public static final RuntimeOptionKey<Boolean> TraceCodeCache = new RuntimeOptionKey<>(false);
+
+        @Option(help = "Allocate code cache with write access, allowing inlining of objects", type = OptionType.Expert)//
+        public static final RuntimeOptionKey<Boolean> WriteableCodeCache = new RuntimeOptionKey<>(false);
     }
 
-    private final RingBuffer<CodeCacheLogEntry> recentCodeCacheOperations = new RingBuffer<>(30, () -> new CodeCacheLogEntry());
+    private final RingBuffer<CodeCacheLogEntry> recentCodeCacheOperations = new RingBuffer<>(30, CodeCacheLogEntry::new);
     private long codeCacheOperationSequenceNumber;
 
     private final Counter.Group counters = new Counter.Group(CodeInfoTable.Options.CodeCacheCounters, "RuntimeCodeInfo");
@@ -90,7 +94,8 @@ public class RuntimeCodeCache {
         NonmovableArrays.releaseUnmanagedArray(codeInfos);
         codeInfos = NonmovableArrays.nullArray();
 
-        RuntimeCodeInfoMemory.singleton().tearDown(); // releases all CodeInfos from our table too
+        // releases all CodeInfos from our table too
+        RuntimeCodeInfoMemory.singleton().tearDown();
     }
 
     /**
@@ -211,13 +216,14 @@ public class RuntimeCodeCache {
          */
         Deoptimizer.deoptimizeInRange(CodeInfoAccess.getCodeStart(info), CodeInfoAccess.getCodeEnd(info), false);
 
-        finishInvalidation(info);
+        finishInvalidation(info, true);
     }
 
     protected void invalidateNonStackMethod(CodeInfo info) {
+        assert VMOperation.isGCInProgress() : "must only be called by the GC";
         prepareInvalidation(info);
         assert codeNotOnStackVerifier.verify(info);
-        finishInvalidation(info);
+        finishInvalidation(info, false);
     }
 
     private void prepareInvalidation(CodeInfo info) {
@@ -225,25 +231,24 @@ public class RuntimeCodeCache {
         invalidateMethodCount.inc();
         assert verifyTable();
         if (Options.TraceCodeCache.getValue()) {
-            Log.log().string("[" + INFO_INVALIDATE + " method: ");
+            Log.log().string("[").string(INFO_INVALIDATE).string(" method: ");
             logCodeInfo(Log.log(), info);
             Log.log().string("]").newline();
         }
 
         SubstrateInstalledCode installedCode = RuntimeCodeInfoAccess.getInstalledCode(info);
         if (installedCode != null) {
-            assert !installedCode.isValid() || CodeInfoAccess.getCodeStart(info).rawValue() == installedCode.getAddress();
+            assert !installedCode.isAlive() || CodeInfoAccess.getCodeStart(info).rawValue() == installedCode.getAddress();
             /*
-             * Until this point, the InstalledCode is valid. It can be invoked, and frames can be on
-             * the stack. All the metadata must be valid until this point. Make it non-entrant,
-             * i.e., ensure it cannot be invoked any more.
+             * Until here, the InstalledCode may be valid (can be invoked) or alive (frames can be
+             * on the stack). All the metadata must be valid until this point. Ensure it is
+             * non-entrant, that is, it cannot be invoked any more.
              */
             installedCode.clearAddress();
         }
-
     }
 
-    private void finishInvalidation(CodeInfo info) {
+    private void finishInvalidation(CodeInfo info, boolean notifyGC) {
         /*
          * Now it is guaranteed that the InstalledCode is not on the stack and cannot be invoked
          * anymore, so we can free the code and all metadata.
@@ -256,7 +261,7 @@ public class RuntimeCodeCache {
         numCodeInfos--;
         NonmovableArrays.setWord(codeInfos, numCodeInfos, WordFactory.nullPointer());
 
-        RuntimeCodeInfoAccess.partialReleaseAfterInvalidate(info);
+        RuntimeCodeInfoAccess.partialReleaseAfterInvalidate(info, notifyGC);
 
         if (Options.TraceCodeCache.getValue()) {
             logTable();
@@ -412,7 +417,7 @@ public class RuntimeCodeCache {
         }
     }
 
-    private static final class CodeNotOnStackVerifier implements StackFrameVisitor {
+    private static final class CodeNotOnStackVerifier extends StackFrameVisitor {
         private CodeInfo codeInfoToCheck;
 
         @Platforms(Platform.HOSTED_ONLY.class)
