@@ -25,8 +25,6 @@
 
 package com.oracle.svm.core.jdk;
 
-import com.oracle.svm.core.annotate.TargetElement;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CLibrary;
@@ -49,10 +47,8 @@ public class JDKLibZipSubstitutions {
     public static boolean initIDs() {
         try {
             System.loadLibrary(CLibraryName);
-            if (JavaVersionUtil.JAVA_SPEC <= 8) {
-                Target_java_util_zip_Inflater.initIDs();
-                Target_java_util_zip_Deflater.initIDs();
-            }
+            Target_java_util_zip_Inflater.initIDs();
+            Target_java_util_zip_Deflater.initIDs();
             return true;
         } catch (UnsatisfiedLinkError e) {
             Log.log().string("System.loadLibrary failed, " + e).newline();
@@ -62,14 +58,12 @@ public class JDKLibZipSubstitutions {
 
     @TargetClass(className = "java.util.zip.Inflater")
     static final class Target_java_util_zip_Inflater {
-        @TargetElement(onlyWith = JDK8OrEarlier.class)
         @Alias
         static native void initIDs();
     }
 
     @TargetClass(className = "java.util.zip.Deflater")
     static final class Target_java_util_zip_Deflater {
-        @TargetElement(onlyWith = JDK8OrEarlier.class)
         @Alias
         static native void initIDs();
     }
@@ -90,25 +84,18 @@ class JDKLibZipFeature implements Feature {
         try {
             JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("needDict"));
             JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("finished"));
-            if (JavaVersionUtil.JAVA_SPEC >= 11) {
-                JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("inputConsumed"));
-                JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("outputConsumed"));
-            } else {
-                JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("buf"));
-                JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("off"));
-                JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("len"));
-            }
+            JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("buf"));
+            JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("off"));
+            JNIRuntimeAccess.register(java.util.zip.Inflater.class.getDeclaredField("len"));
 
             JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("level"));
             JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("strategy"));
             JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("setParams"));
             JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("finish"));
             JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("finished"));
-            if (JavaVersionUtil.JAVA_SPEC < 11) {
-                JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("buf"));
-                JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("off"));
-                JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("len"));
-            }
+            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("buf"));
+            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("off"));
+            JNIRuntimeAccess.register(java.util.zip.Deflater.class.getDeclaredField("len"));
         } catch (NoSuchFieldException e) {
             VMError.shouldNotReachHere("LibZipFeature: Error in registering jni access:", e);
         }

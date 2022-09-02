@@ -24,8 +24,8 @@
  */
 package com.oracle.svm.core.jdk;
 
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.graalvm.nativeimage.ImageSingletons;
@@ -53,14 +53,10 @@ public interface PlatformNativeLibrarySupport {
 
     PointerBase findBuiltinSymbol(String name);
 
-    List<String> builtInLibraries = new ArrayList<>(Arrays.asList("java", "nio", "net", "zip"));
-
-    default void addBuiltInLibrary(String libName) {
-        builtInLibraries.add(libName);
-    }
+    List<String> defaultBuiltInLibraries = Collections.unmodifiableList(Arrays.asList("java", "nio", "net", "zip"));
 
     default boolean isBuiltinLibrary(String name) {
-        return builtInLibraries.contains(name);
+        return defaultBuiltInLibraries.contains(name);
     }
 
     String[] builtInPkgNatives = {
