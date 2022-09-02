@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.jdwp.api;
 import java.nio.file.Path;
 import java.util.List;
 
+import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.nodes.Node;
@@ -481,6 +482,15 @@ public interface JDWPContext {
      * @param exitCode the system exit code
      */
     void abort(int exitCode);
+
+    /**
+     * Returns the nearest {@link com.oracle.truffle.api.instrumentation.InstrumentableNode node} or
+     * <code>null</code>. The nodes are traversed by walking the parent node hierarchy.
+     *
+     * @param node the node
+     * @return the nearest instrumentable node
+     */
+    Node getInstrumentableNode(Node node);
 
     /**
      * Determines if the current thread is a VM internal thread.
