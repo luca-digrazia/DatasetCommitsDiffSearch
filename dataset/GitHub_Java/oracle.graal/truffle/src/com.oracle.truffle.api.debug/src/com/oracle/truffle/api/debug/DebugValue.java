@@ -105,11 +105,7 @@ public abstract class DebugValue {
      * @param primitiveValue a primitive value to set
      * @throws DebugException when guest language code throws an exception
      * @since 19.0
-     * @deprecated in 21.2. Use {@link #set(DebugValue)
-     *             set}({@link #getSession()}{@link DebuggerSession#createPrimitiveValue(Object, Languageinfo)
-     *             .createPrimitiveValue(primitiveValue, null)}) instead.
      */
-    @Deprecated
     public abstract void set(Object primitiveValue) throws DebugException;
 
     /**
@@ -1253,85 +1249,6 @@ public abstract class DebugValue {
     }
 
     /**
-     * Provides hash code of the value.
-     *
-     * @return {@link InteropLibrary#identityHashCode(Object) identity hash code} of the guest
-     *         object, if the object {@link InteropLibrary#hasIdentity(Object) has identity}.
-     * @throws DebugException when guest language code throws an exception
-     * @since 21.2
-     */
-    @Override
-    public int hashCode() throws DebugException {
-        if (isReadable()) {
-            Object value = get();
-            return valueHashCode(value);
-        } else {
-            return unreadableHashCode();
-        }
-    }
-
-    /**
-     * Indicates whether another {@link DebugValue} is equal to this. Two {@link DebugValue} objects
-     * are equal if and only if their guest objects are
-     * {@link InteropLibrary#isIdentical(Object, Object, InteropLibrary) identical}.
-     *
-     * @throws DebugException when guest language code throws an exception
-     * @since 21.2
-     */
-    @Override
-    public boolean equals(Object obj) throws DebugException {
-        if (!(obj instanceof DebugValue)) {
-            return false;
-        }
-        if (obj == this) {
-            return true;
-        }
-        DebugValue other = (DebugValue) obj;
-        boolean thisReadable = isReadable();
-        boolean otherReadable = other.isReadable();
-        if (!thisReadable || !otherReadable) {
-            if (thisReadable != otherReadable) {
-                return false;
-            } else {
-                return unreadableEquals(other);
-            }
-        }
-        Object value1 = get();
-        Object value2 = other.get();
-        return valueEquals(value1, value2);
-    }
-
-    int valueHashCode(Object value) throws DebugException {
-        try {
-            if (INTEROP.hasIdentity(value)) {
-                return INTEROP.identityHashCode(value);
-            }
-        } catch (ThreadDeath td) {
-            throw td;
-        } catch (Throwable ex) {
-            throw DebugException.create(getSession(), ex, resolveLanguage(), null, true, null);
-        }
-        return System.identityHashCode(value);
-    }
-
-    boolean valueEquals(Object value1, Object value2) throws DebugException {
-        if (value1 == value2) {
-            return true;
-        }
-        try {
-            return INTEROP.isIdentical(value1, value2, INTEROP);
-        } catch (ThreadDeath td) {
-            throw td;
-        } catch (Throwable ex) {
-            throw DebugException.create(getSession(), ex, resolveLanguage(), null, true, null);
-        }
-    }
-
-    abstract int unreadableHashCode();
-
-    abstract boolean unreadableEquals(DebugValue var);
-
-    /**
      * Get the original language that created the value, if any. This method will return
      * <code>null</code> for values representing a primitive value, or objects that are not
      * associated with any language.
@@ -1381,12 +1298,7 @@ public abstract class DebugValue {
 
     abstract DebugValue createAsInLanguage(LanguageInfo language);
 
-    /**
-     * Get the debugger session associated with this value.
-     *
-     * @since 21.2
-     */
-    public abstract DebuggerSession getSession();
+    abstract DebuggerSession getSession();
 
     final Debugger getDebugger() {
         return getSession().getDebugger();
@@ -1444,11 +1356,11 @@ public abstract class DebugValue {
             if (clazz.isInstance(val)) {
                 return clazz.cast(val);
             }
-            return clazz.cast(Debugger.ACCESSOR.hostSupport().convertPrimitiveLossLess(val, clazz));
+            return clazz.cast(Debugger.ACCESSOR.engineSupport().convertPrimitive(val, clazz));
         }
 
         @Override
-        public final DebuggerSession getSession() {
+        final DebuggerSession getSession() {
             return session;
         }
     }
@@ -1456,7 +1368,7 @@ public abstract class DebugValue {
     static class HeapValue extends AbstractDebugValue {
 
         private final String name;
-        private final Object value;
+        private Object value;
 
         HeapValue(DebuggerSession session, String name, Object value) {
             this(session, null, name, value);
@@ -1476,13 +1388,13 @@ public abstract class DebugValue {
 
         @Override
         public void set(DebugValue expression) {
-            throw DebugException.create(getSession(), "Can not modify read-only value.");
+            value = expression.get();
         }
 
         @Override
-        @SuppressWarnings("deprecation")
         public void set(Object primitiveValue) {
-            throw DebugException.create(getSession(), "Can not modify read-only value.");
+            checkPrimitive(primitiveValue);
+            value = primitiveValue;
         }
 
         @Override
@@ -1497,7 +1409,7 @@ public abstract class DebugValue {
 
         @Override
         public boolean isWritable() {
-            return false;
+            return true;
         }
 
         @Override
@@ -1518,16 +1430,6 @@ public abstract class DebugValue {
         @Override
         DebugValue createAsInLanguage(LanguageInfo language) {
             return new HeapValue(session, language, name, value);
-        }
-
-        @Override
-        int unreadableHashCode() {
-            throw new UnsupportedOperationException("HeapValue is always readable.");
-        }
-
-        @Override
-        boolean unreadableEquals(DebugValue var) {
-            throw new UnsupportedOperationException("HeapValue is always readable.");
         }
 
     }
@@ -1643,7 +1545,6 @@ public abstract class DebugValue {
         }
 
         @Override
-        @SuppressWarnings("deprecation")
         public void set(Object primitiveValue) {
             checkValid();
             checkPrimitive(primitiveValue);
@@ -1658,23 +1559,6 @@ public abstract class DebugValue {
         @Override
         DebugValue createAsInLanguage(LanguageInfo language) {
             return new ObjectMemberValue(session, language, scope, object, member);
-        }
-
-        @Override
-        int unreadableHashCode() {
-            int hash = 7;
-            hash = 29 * hash + valueHashCode(object);
-            hash = 29 * hash + member.hashCode();
-            return hash;
-        }
-
-        @Override
-        boolean unreadableEquals(DebugValue var) {
-            if (!(var instanceof ObjectMemberValue)) {
-                return false;
-            }
-            ObjectMemberValue other = (ObjectMemberValue) var;
-            return valueEquals(object, other.object) && member.equals(other.member);
         }
 
         private void checkValid() {
@@ -1765,7 +1649,6 @@ public abstract class DebugValue {
         }
 
         @Override
-        @SuppressWarnings("deprecation")
         public void set(Object primitiveValue) {
             checkValid();
             checkPrimitive(primitiveValue);
@@ -1782,23 +1665,6 @@ public abstract class DebugValue {
             return new ArrayElementValue(session, language, scope, array, index);
         }
 
-        @Override
-        int unreadableHashCode() {
-            int hash = 7;
-            hash = 29 * hash + valueHashCode(array);
-            hash = 29 * hash + Long.hashCode(index);
-            return hash;
-        }
-
-        @Override
-        boolean unreadableEquals(DebugValue var) {
-            if (!(var instanceof ArrayElementValue)) {
-                return false;
-            }
-            ArrayElementValue other = (ArrayElementValue) var;
-            return valueEquals(array, other.array) && index == other.index;
-        }
-
         private void checkValid() {
             if (scope != null) {
                 scope.verifyValidState();
@@ -1806,7 +1672,7 @@ public abstract class DebugValue {
         }
     }
 
-    static void checkPrimitive(Object value) {
+    private static void checkPrimitive(Object value) {
         Class<?> clazz;
         if (value == null || !((clazz = value.getClass()) == Byte.class ||
                         clazz == Short.class ||
