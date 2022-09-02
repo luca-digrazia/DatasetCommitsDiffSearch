@@ -182,6 +182,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     Method(Method method) {
         super(method.getRawSignature(), method.getName());
         this.declaringKlass = method.declaringKlass;
+        this.methodVersion = method.methodVersion;
 
         try {
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
@@ -190,14 +191,14 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             throw Meta.throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
         }
 
-        // Proxy the method, so that we have the same callTarget if it is not yet initialized.
-        // Allows for not duplicating the methodVersion
-        this.proxy = method.proxy == null ? method : method.proxy;
-        this.poisonPill = method.poisonPill;
-        this.isLeaf = method.isLeaf;
         this.exceptionsAttribute = (ExceptionsAttribute) getAttribute(ExceptionsAttribute.NAME);
 
         initRefKind();
+        // Proxy the method, so that we have the same callTarget if it is not yet initialized.
+        // Allows for not duplicating the codeAttribute
+        this.proxy = method.proxy == null ? method : method.proxy;
+        this.poisonPill = method.poisonPill;
+        this.isLeaf = method.isLeaf;
     }
 
     private Method(Method method, CodeAttribute split) {
@@ -211,14 +212,15 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw Meta.throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
         }
+
+        this.exceptionsAttribute = (ExceptionsAttribute) getAttribute(ExceptionsAttribute.NAME);
+
+        initRefKind();
         // Proxy the method, so that we have the same callTarget if it is not yet initialized.
         // Allows for not duplicating the codeAttribute
         this.proxy = method.proxy == null ? method : method.proxy;
         this.poisonPill = method.poisonPill;
         this.isLeaf = method.isLeaf;
-        this.exceptionsAttribute = (ExceptionsAttribute) getAttribute(ExceptionsAttribute.NAME);
-
-        initRefKind();
     }
 
     Method(ObjectKlass declaringKlass, LinkedMethod linkedMethod, RuntimeConstantPool pool) {
@@ -989,9 +991,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     public MethodVersion getMethodVersion() {
-        if (proxy != null) {
-            return proxy.getMethodVersion();
-        }
         // block execution during class redefinition
         ClassRedefinition.check();
 
