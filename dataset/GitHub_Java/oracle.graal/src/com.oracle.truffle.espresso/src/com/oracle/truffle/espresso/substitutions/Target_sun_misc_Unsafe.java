@@ -28,6 +28,7 @@ import java.security.ProtectionDomain;
 import java.util.Arrays;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -64,7 +65,6 @@ public final class Target_sun_misc_Unsafe {
         }
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static @Host(Class.class) StaticObject defineAnonymousClass(
                     @Host(Unsafe.class) StaticObject self,
@@ -90,6 +90,7 @@ public final class Target_sun_misc_Unsafe {
     }
 
     private static ObjectKlass defineAnonymousKlass(ParserKlass parserKlass, EspressoContext context, StaticObject classLoader, int thisKlassIndex, Klass hostKlass) {
+
         Symbol<Symbol.Type> superKlassType = parserKlass.getSuperKlass();
         ClassRegistries classRegistry = context.getRegistries();
 
@@ -120,7 +121,6 @@ public final class Target_sun_misc_Unsafe {
         LinkedKlass linkedKlass = new LinkedKlass(parserKlass, superKlass == null ? null : superKlass.getLinkedKlass(), linkedInterfaces);
 
         ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, classLoader, hostKlass);
-
         klass.getConstantPool().setKlassAt(thisKlassIndex, klass);
 
         return klass;
@@ -217,7 +217,6 @@ public final class Target_sun_misc_Unsafe {
         }
     }
 
-    @TruffleBoundary
     @Substitution(hasReceiver = true)
     public static @Host(Class.class) StaticObject defineClass(@SuppressWarnings("unused") @Host(Unsafe.class) StaticObject self, @Host(String.class) StaticObject name,
                     @Host(byte[].class) StaticObject guestBuf, int offset, int len, @Host(ClassLoader.class) StaticObject loader,
@@ -225,7 +224,7 @@ public final class Target_sun_misc_Unsafe {
         // TODO(peterssen): Protection domain is ignored.
         byte[] buf = guestBuf.unwrap();
         byte[] bytes = Arrays.copyOfRange(buf, offset, len);
-        return self.getKlass().getMeta().getRegistries().defineKlass(self.getKlass().getTypes().fromClassGetName(Meta.toHostString(name)), bytes, loader).mirror();
+        return EspressoLanguage.getCurrentContext().getRegistries().defineKlass(self.getKlass().getTypes().fromClassGetName(Meta.toHostString(name)), bytes, loader).mirror();
     }
 
     // region compareAndSwap*
