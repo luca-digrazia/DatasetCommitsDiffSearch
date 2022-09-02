@@ -128,7 +128,7 @@ import org.graalvm.compiler.nodes.java.StoreIndexedNode;
 import org.graalvm.compiler.nodes.java.UnsafeCompareAndExchangeNode;
 import org.graalvm.compiler.nodes.java.UnsafeCompareAndSwapNode;
 import org.graalvm.compiler.nodes.java.ValueCompareAndSwapNode;
-import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.ReadNode;
 import org.graalvm.compiler.nodes.memory.VolatileReadNode;
 import org.graalvm.compiler.nodes.memory.WriteNode;
@@ -374,12 +374,12 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         GraphUtil.removeFixedWithUnusedInputs(n);
     }
 
-    public AddressNode createOffsetAddress(StructuredGraph graph, ValueNode object, long offset) {
+    protected AddressNode createOffsetAddress(StructuredGraph graph, ValueNode object, long offset) {
         ValueNode o = ConstantNode.forIntegerKind(target.wordJavaKind, offset, graph);
         return graph.unique(new OffsetAddressNode(object, o));
     }
 
-    public AddressNode createFieldAddress(StructuredGraph graph, ValueNode object, ResolvedJavaField field) {
+    protected AddressNode createFieldAddress(StructuredGraph graph, ValueNode object, ResolvedJavaField field) {
         int offset = fieldOffset(field);
         if (offset >= 0) {
             return createOffsetAddress(graph, object, offset);
@@ -896,7 +896,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 }
             }
 
-            finishAllocatedObjects(tool, commit, commit, allocations);
+            finishAllocatedObjects(tool, commit, allocations);
             graph.removeFixed(commit);
 
             for (AbstractNewObjectNode recursiveLowering : recursiveLowerings) {
@@ -914,14 +914,12 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
         return new NewArrayNode(((VirtualArrayNode) virtual).componentType(), length, true);
     }
 
-    public void finishAllocatedObjects(LoweringTool tool, FixedWithNextNode insertAfter, CommitAllocationNode commit, ValueNode[] allocations) {
-        FixedWithNextNode insertionPoint = insertAfter;
+    public void finishAllocatedObjects(LoweringTool tool, CommitAllocationNode commit, ValueNode[] allocations) {
         StructuredGraph graph = commit.graph();
         for (int objIndex = 0; objIndex < commit.getVirtualObjects().size(); objIndex++) {
             FixedValueAnchorNode anchor = graph.add(new FixedValueAnchorNode(allocations[objIndex]));
             allocations[objIndex] = anchor;
-            graph.addAfterFixed(insertionPoint, anchor);
-            insertionPoint = anchor;
+            graph.addBeforeFixed(commit, anchor);
         }
         /*
          * Note that the FrameState that is assigned to these MonitorEnterNodes isn't the correct
@@ -947,8 +945,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 assert lastDepth < monitorId.getLockDepth();
                 lastDepth = monitorId.getLockDepth();
                 MonitorEnterNode enter = graph.add(new MonitorEnterNode(allocations[objIndex], monitorId));
-                graph.addAfterFixed(insertionPoint, enter);
-                insertionPoint = enter;
+                graph.addBeforeFixed(commit, enter);
                 if (enters == null) {
                     enters = new ArrayList<>();
                 }
@@ -971,7 +968,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
             }
         }
         assert commit.hasNoUsages();
-        insertAllocationBarrier(insertAfter, commit, graph);
+        insertAllocationBarrier(commit, graph);
     }
 
     /**
@@ -979,7 +976,7 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
      * include the {@link MemoryBarriers#LOAD_STORE} required for final fields if any final fields
      * are being written, as if {@link FinalFieldBarrierNode} were emitted.
      */
-    private static void insertAllocationBarrier(FixedWithNextNode insertAfter, CommitAllocationNode commit, StructuredGraph graph) {
+    private static void insertAllocationBarrier(CommitAllocationNode commit, StructuredGraph graph) {
         int barrier = MemoryBarriers.STORE_STORE;
         outer: for (VirtualObjectNode vobj : commit.getVirtualObjects()) {
             for (ResolvedJavaField field : vobj.type().getInstanceFields(true)) {
@@ -989,24 +986,24 @@ public abstract class DefaultJavaLoweringProvider implements LoweringProvider {
                 }
             }
         }
-        graph.addAfterFixed(insertAfter, graph.add(new MembarNode(barrier, LocationIdentity.init())));
+        graph.addAfterFixed(commit, graph.add(new MembarNode(barrier, LocationIdentity.init())));
     }
 
     /**
      * @param field the field whose barrier type should be returned
      */
-    public BarrierType fieldLoadBarrierType(ResolvedJavaField field) {
+    protected BarrierType fieldLoadBarrierType(ResolvedJavaField field) {
         return BarrierType.NONE;
     }
 
-    public BarrierType fieldStoreBarrierType(ResolvedJavaField field) {
+    protected BarrierType fieldStoreBarrierType(ResolvedJavaField field) {
         if (getStorageKind(field) == JavaKind.Object) {
             return BarrierType.FIELD;
         }
         return BarrierType.NONE;
     }
 
-    public BarrierType arrayStoreBarrierType(JavaKind elementKind) {
+    protected BarrierType arrayStoreBarrierType(JavaKind elementKind) {
         if (elementKind == JavaKind.Object) {
             return BarrierType.ARRAY;
         }
