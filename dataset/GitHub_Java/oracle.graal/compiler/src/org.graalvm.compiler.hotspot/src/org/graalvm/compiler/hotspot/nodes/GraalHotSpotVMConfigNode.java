@@ -118,14 +118,6 @@ public class GraalHotSpotVMConfigNode extends FloatingNode implements LIRLowerab
         return loadBoolConfigValue(HotSpotMarkId.VERIFY_OOPS);
     }
 
-    public static long verifyOopBits() {
-        return loadLongConfigValue(HotSpotMarkId.VERIFY_OOP_BITS);
-    }
-
-    public static long verifyOopMask() {
-        return loadLongConfigValue(HotSpotMarkId.VERIFY_OOP_MASK);
-    }
-
     public static long verifyOopCounterAddress() {
         return loadLongConfigValue(HotSpotMarkId.VERIFY_OOP_COUNT_ADDRESS);
     }
@@ -141,7 +133,7 @@ public class GraalHotSpotVMConfigNode extends FloatingNode implements LIRLowerab
 
     @Override
     public Node canonical(CanonicalizerTool tool) {
-        boolean generatePIC = GeneratePIC.getValue(tool.getOptions());
+        Boolean generatePIC = GeneratePIC.getValue(tool.getOptions());
         if (!generatePIC || !markId.isAvailable()) {
             if (markId == HotSpotMarkId.CARD_TABLE_ADDRESS) {
                 return ConstantNode.forLong(config.cardtableStartAddress);
@@ -151,10 +143,6 @@ public class GraalHotSpotVMConfigNode extends FloatingNode implements LIRLowerab
                 return ConstantNode.forInt(config.logOfHRGrainBytes);
             } else if (markId == HotSpotMarkId.VERIFY_OOPS) {
                 return ConstantNode.forBoolean(config.verifyOops);
-            } else if (markId == HotSpotMarkId.VERIFY_OOP_BITS) {
-                return ConstantNode.forLong(config.verifyOopBits);
-            } else if (markId == HotSpotMarkId.VERIFY_OOP_MASK) {
-                return ConstantNode.forLong(config.verifyOopMask);
             } else if (markId == HotSpotMarkId.VERIFY_OOP_COUNT_ADDRESS) {
                 return ConstantNode.forLong(config.verifyOopCounterAddress);
             } else {
