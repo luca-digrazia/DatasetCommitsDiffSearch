@@ -132,8 +132,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
     class DarwinCCLinkerInvocation extends CCLinkerInvocation {
 
         DarwinCCLinkerInvocation() {
-            additionalPreOptions.add("-Wl,-no_compact_unwind");
-
             if (removeUnusedSymbols()) {
                 /* Remove functions and data unreachable by entry points. */
                 additionalPreOptions.add("-Wl,-dead_strip");
@@ -164,7 +162,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             additionalPreOptions.add("-arch");
             if (Platform.includedIn(Platform.AMD64.class)) {
                 additionalPreOptions.add("x86_64");
-            } else if (Platform.includedIn(Platform.AARCH64.class)) {
+            } else if (Platform.includedIn(Platform.AArch64.class)) {
                 additionalPreOptions.add("arm64");
             }
         }
@@ -176,7 +174,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                     throw UserError.abort(OS.getCurrent().name() + " does not support building static executable images.");
                 case SHARED_LIBRARY:
                     cmd.add("-shared");
-                    if (Platform.includedIn(InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class)) {
+                    if (Platform.includedIn(InternalPlatform.DARWIN_AND_JNI.class)) {
                         cmd.add("-undefined");
                         cmd.add("dynamic_lookup");
                     }
