@@ -37,7 +37,6 @@ import java.nio.file.Paths;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.UnmodifiableEconomicMap;
 import org.graalvm.compiler.api.replacements.Fold;
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionStability;
@@ -72,10 +71,6 @@ public class SubstrateOptions {
     @APIOption(name = "static")//
     @Option(help = "Build statically linked executable (requires static libc and zlib)")//
     public static final HostedOptionKey<Boolean> StaticExecutable = new HostedOptionKey<>(false);
-
-    @APIOption(name = "target")//
-    @Option(help = "Selects native-image compilation target (in <OS>-<architecture> format). Defaults to host's OS-architecture pair.")//
-    public static final HostedOptionKey<String> TargetPlatform = new HostedOptionKey<>("");
 
     @Option(help = "Builds a statically linked executable with libc dynamically linked", type = Expert, stability = OptionStability.EXPERIMENTAL)//
     public static final HostedOptionKey<Boolean> StaticExecutableWithDynamicLibC = new HostedOptionKey<Boolean>(false) {
@@ -144,9 +139,6 @@ public class SubstrateOptions {
 
     @Option(help = "Path passed to the linker as the -rpath (list of comma-separated directories)")//
     public static final HostedOptionKey<String[]> LinkerRPath = new HostedOptionKey<>(null);
-
-    @Option(help = "String which would be appended to the linker call")//
-    public static final HostedOptionKey<String> AdditionalLinkerOptions = new HostedOptionKey<>("");
 
     @Option(help = "Directory of the image file to be generated", type = OptionType.User)//
     public static final HostedOptionKey<String> Path = new HostedOptionKey<>(null);
@@ -362,9 +354,8 @@ public class SubstrateOptions {
         @Override
         protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, String oldValue, String newValue) {
             if ("llvm".equals(newValue)) {
-                if (JavaVersionUtil.JAVA_SPEC >= 9) {
-                    /* See GR-14405, https://github.com/oracle/graal/issues/1056 */
-                    GraalOptions.EmitStringSubstitutions.update(values, false);
+                if (JavaVersionUtil.JAVA_SPEC > 8) {
+                    EmitStringEncodingSubstitutions.update(values, false);
                 }
                 /*
                  * The code information is filled before linking, which means that stripping dead
@@ -383,6 +374,12 @@ public class SubstrateOptions {
     public static boolean useLLVMBackend() {
         return "llvm".equals(CompilerBackend.getValue());
     }
+
+    @Option(help = "Revert to using previous native-image type check.")//
+    public static final HostedOptionKey<Boolean> UseLegacyTypeCheck = new HostedOptionKey<>(false);
+
+    @Option(help = "Emit substitutions for UTF16 and latin1 compression", type = OptionType.Debug)//
+    public static final HostedOptionKey<Boolean> EmitStringEncodingSubstitutions = new HostedOptionKey<>(true);
 
     @Option(help = "Determines if VM operations should be executed in a dedicated thread.", type = OptionType.Expert)//
     public static final HostedOptionKey<Boolean> UseDedicatedVMOperationThread = new HostedOptionKey<>(false);
