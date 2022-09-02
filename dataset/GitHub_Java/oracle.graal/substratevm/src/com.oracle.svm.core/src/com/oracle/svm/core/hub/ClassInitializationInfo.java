@@ -27,13 +27,17 @@ package com.oracle.svm.core.hub;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 
-import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.InvokeJavaFunctionPointer;
 import com.oracle.svm.core.annotate.NeverInline;
+
+// Checkstyle: stop
+import sun.misc.Unsafe;
+// Checkstyle: resume
 
 /**
  * Information about the runtime class initialization state of a {@link DynamicHub class}, and
@@ -46,11 +50,16 @@ import com.oracle.svm.core.annotate.NeverInline;
  */
 public final class ClassInitializationInfo {
 
+    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
+
     /**
      * Singleton for classes that are already initialized during image building and do not need
      * class initialization at runtime.
      */
-    public static final ClassInitializationInfo INITIALIZED_INFO_SINGLETON = new ClassInitializationInfo();
+    public static final ClassInitializationInfo INITIALIZED_INFO_SINGLETON = new ClassInitializationInfo(InitState.FullyInitialized);
+
+    /** Singleton for classes that failed to link during image building. */
+    public static final ClassInitializationInfo FAILED_INFO_SINGLETON = new ClassInitializationInfo(InitState.InitializationError);
 
     enum InitState {
         /**
@@ -75,7 +84,7 @@ public final class ClassInitializationInfo {
      * Isolates require that all function pointers to image methods are in immutable classes.
      * {@link ClassInitializationInfo} is mutable, so we use this class as an immutable indirection.
      */
-    static class ClassInitializerFunctionPointerHolder {
+    public static class ClassInitializerFunctionPointerHolder {
         /**
          * We cannot declare the field to have type {@link ClassInitializerFunctionPointer} because
          * during image building the field refers to a wrapper object that cannot implement custom
@@ -115,10 +124,10 @@ public final class ClassInitializationInfo {
     private Condition initCondition;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    private ClassInitializationInfo() {
+    private ClassInitializationInfo(InitState initState) {
         this.classInitializer = null;
-        this.initState = InitState.FullyInitialized;
-        this.initLock = null;
+        this.initState = initState;
+        this.initLock = initState == InitState.FullyInitialized ? null : new ReentrantLock();
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -325,7 +334,7 @@ public final class ClassInitializationInfo {
             this.initState = state;
             this.initThread = null;
             /* Make sure previous stores are all done, notably the initState. */
-            UnsafeAccess.UNSAFE.storeFence();
+            UNSAFE.storeFence();
 
             if (initCondition != null) {
                 initCondition.signalAll();

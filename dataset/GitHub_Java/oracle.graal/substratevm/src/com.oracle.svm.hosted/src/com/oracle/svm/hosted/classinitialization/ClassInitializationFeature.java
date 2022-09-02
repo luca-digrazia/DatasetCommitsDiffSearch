@@ -285,14 +285,8 @@ public class ClassInitializationFeature implements Feature {
                         .forEach(c -> {
                             AnalysisType type = metaAccess.lookupJavaType(c);
                             if (!initGraph.isUnsafe(type)) {
-                                classInitializationSupport.forceInitializeHosted(c, "proven safe to initialize", true);
-                                /*
-                                 * See if initialization worked--it can fail due to implicit
-                                 * exceptions.
-                                 */
-                                if (!classInitializationSupport.shouldInitializeAtRuntime(c)) {
-                                    provenSafe.add(type);
-                                }
+                                provenSafe.add(type);
+                                classInitializationSupport.forceInitializeHosted(c, "proven safe to initialize");
                             }
                         });
         return provenSafe;
