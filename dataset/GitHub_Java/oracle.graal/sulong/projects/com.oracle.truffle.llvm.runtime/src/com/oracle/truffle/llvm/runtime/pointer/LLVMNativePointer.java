@@ -94,7 +94,11 @@ public interface LLVMNativePointer extends LLVMPointer {
      * the regular Java {@code instanceof} operator.
      */
     static boolean isInstance(Object object) {
-        return object instanceof LLVMPointerImpl && ((LLVMPointerImpl) object).isNative();
+        if (object instanceof LLVMPointerImpl) {
+            return ((LLVMPointerImpl) object).isNative();
+        } else {
+            return false;
+        }
     }
 
     /**

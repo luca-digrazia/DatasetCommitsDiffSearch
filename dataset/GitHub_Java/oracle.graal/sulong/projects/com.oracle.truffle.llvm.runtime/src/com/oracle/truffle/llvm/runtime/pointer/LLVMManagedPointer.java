@@ -96,7 +96,11 @@ public interface LLVMManagedPointer extends LLVMPointer {
      * the regular Java {@code instanceof} operator.
      */
     static boolean isInstance(Object object) {
-        return object instanceof LLVMPointerImpl && ((LLVMPointerImpl) object).isManaged();
+        if (object instanceof LLVMPointerImpl) {
+            return ((LLVMPointerImpl) object).isManaged();
+        } else {
+            return false;
+        }
     }
 
     /**
