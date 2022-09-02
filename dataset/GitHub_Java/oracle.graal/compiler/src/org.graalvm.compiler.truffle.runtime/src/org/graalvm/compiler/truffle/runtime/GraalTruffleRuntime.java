@@ -650,10 +650,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 if (blockTarget.isValid()) {
                     continue;
                 }
-                listeners.onCompilationQueued(blockTarget, task.tier());
+                listeners.onCompilationQueued(blockTarget, task.isFirstTier() ? 1 : 2);
                 int nodeCount = blockTarget.getNonTrivialNodeCount();
                 if (nodeCount > callTarget.engine.getEngineOptions().get(PolyglotCompilerOptions.PartialBlockMaximumSize)) {
-                    listeners.onCompilationDequeued(blockTarget, null, "Partial block is too big to be compiled.", task.tier());
+                    listeners.onCompilationDequeued(blockTarget, null, "Partial block is too big to be compiled.", task.isFirstTier() ? 1 : 2);
                     continue;
                 }
                 compileImpl(debug, blockTarget, task);
@@ -664,7 +664,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         if (oldBlockCompilations == null && callTarget.blockCompilations != null) {
             // retry with block compilations
             ((CompilationTask) task).reset();
-            listeners.onCompilationQueued(callTarget, task.tier());
+            listeners.onCompilationQueued(callTarget, task.isFirstTier() ? 1 : 2);
             doCompile(callTarget, task);
         }
     }
@@ -682,7 +682,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 }
                 try {
                     compilationStarted = true;
-                    listeners.onCompilationStarted(callTarget, task.tier());
+                    listeners.onCompilationStarted(callTarget, task.isFirstTier() ? 1 : 2);
                     TruffleInlining inlining = new TruffleInlining();
                     try (AutoCloseable s = debug.scope("Truffle", new TruffleDebugJavaMethod(callTarget))) {
                         // Open the "Truffle::methodName" dump group if dumping is enabled.
@@ -716,10 +716,10 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             // Listeners already notified
             throw e;
         } catch (RuntimeException | Error e) {
-            notifyCompilationFailure(callTarget, e, compilationStarted, task.tier());
+            notifyCompilationFailure(callTarget, e, compilationStarted, task.isFirstTier() ? 1 : 2);
             throw e;
         } catch (Throwable e) {
-            notifyCompilationFailure(callTarget, e, compilationStarted, task.tier());
+            notifyCompilationFailure(callTarget, e, compilationStarted, task.isFirstTier() ? 1 : 2);
             throw new InternalError(e);
         }
     }

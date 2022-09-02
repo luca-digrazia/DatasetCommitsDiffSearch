@@ -35,7 +35,6 @@ import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLi
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.CancelCompilation;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.CompilableToString;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.ConsumeOptimizedAssumptionDependency;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.CountInlinedCalls;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.CreateInliningPlan;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.CreateStringSupplier;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.DequeueInlined;
@@ -135,11 +134,6 @@ final class TruffleFromLibGraalEntryPoints {
     @TruffleFromLibGraal(ConsumeOptimizedAssumptionDependency)
     static void consumeOptimizedAssumptionDependency(Consumer<OptimizedAssumptionDependency> consumer, Object dep) {
         consumer.accept((OptimizedAssumptionDependency) dep);
-    }
-
-    @TruffleFromLibGraal(CountInlinedCalls)
-    static int countInlinedCalls(Object provider) {
-        return ((TruffleMetaAccessProvider) provider).countInlinedCalls();
     }
 
     @TruffleFromLibGraal(GetCallTargetForCallNode)

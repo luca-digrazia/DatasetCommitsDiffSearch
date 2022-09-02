@@ -24,70 +24,65 @@
  */
 package org.graalvm.compiler.truffle.test;
 
-import com.oracle.truffle.api.nodes.RootNode;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Map;
+
 import org.graalvm.compiler.debug.TTY;
-import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
-import org.graalvm.compiler.truffle.common.TruffleCompilation;
-import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
-import org.graalvm.compiler.truffle.common.TruffleDebugContext;
-import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
+import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
+import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.polyglot.Context;
+import org.junit.Assert;
 import org.junit.Test;
+
+import com.oracle.truffle.api.nodes.RootNode;
 
 public class CompilerLoggingTest extends TruffleCompilerImplTest {
 
     private static final String FORMAT_FAILURE = "Failed to compile %s due to %s";
     private static final String FORMAT_SUCCESS = "Compiled %s";
+    private static final String MESSAGE_TO_STREAM = "begin";
+    private static final String MESSAGE_TO_TTY = "end";
 
     @Test
     public void testLogging() throws IOException {
         try (ByteArrayOutputStream logOut = new ByteArrayOutputStream()) {
-            Context.Builder builder = Context.newBuilder().logHandler(logOut);
-            setupContext(builder);
+            setupContext(Context.newBuilder().logHandler(logOut).option("engine.CompileImmediately", "true").option("engine.MultiTier", "false").option("engine.BackgroundCompilation", "false"));
             GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
-            OptimizedCallTarget compilable = (OptimizedCallTarget) runtime.createCallTarget(RootNode.createConstantNode(true));
-            TruffleCompiler truffleCompiler = getTruffleCompiler(compilable);
-            try (TruffleCompilation compilation = truffleCompiler.openCompilation(compilable)) {
-                Map<String, Object> options = TruffleRuntimeOptions.getOptionsForCompiler(compilable);
-                try (TruffleDebugContext debug = truffleCompiler.openDebugContext(options, compilation)) {
-                    TruffleInliningPlan inliningPlan = runtime.createInliningPlan(compilable, null);
-                    TruffleCompilerListener testListener = new TestListener();
-                    truffleCompiler.doCompile(debug, compilation, options, inliningPlan, null, testListener);
-                }
+            TestListener listener = new TestListener();
+            try {
+                runtime.addListener(listener);
+                OptimizedCallTarget compilable = (OptimizedCallTarget) runtime.createCallTarget(RootNode.createConstantNode(true));
+                compilable.call();
+                String logContent = new String(logOut.toByteArray());
+                String expected = String.format(FORMAT_SUCCESS + "%s%s%n", compilable.getName(), MESSAGE_TO_STREAM, MESSAGE_TO_TTY);
+                Assert.assertEquals("Expected " + expected + " in " + logContent, expected, logContent);
+            } finally {
+                runtime.removeListener(listener);
             }
-            String logContent = new String(logOut.toByteArray());
-            String expected = String.format(FORMAT_SUCCESS, compilable.getName());
-            assertTrue("Expected " + expected + " in " + logContent, logContent.contains(expected));
         }
     }
 
-    private static final class TestListener implements TruffleCompilerListener {
+    private static final class TestListener implements GraalTruffleRuntimeListener {
 
         @Override
-        public void onGraalTierFinished(CompilableTruffleAST compilable, GraphInfo graph) {
+        public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, TruffleCompilerListener.GraphInfo graph,
+                        TruffleCompilerListener.CompilationResultInfo result, int tier) {
+            TTY.printf(FORMAT_SUCCESS, target.getName());
+            printCommon();
         }
 
         @Override
-        public void onTruffleTierFinished(CompilableTruffleAST compilable, TruffleInliningPlan inliningPlan, GraphInfo graph) {
+        public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanentBailout, int tier) {
+            TTY.printf(FORMAT_FAILURE, target.getName(), reason);
+            printCommon();
         }
 
-        @Override
-        public void onSuccess(CompilableTruffleAST compilable, TruffleInliningPlan inliningPlan, GraphInfo graph, CompilationResultInfo compilationResultInfo) {
-            TTY.printf(FORMAT_SUCCESS, compilable.getName());
-            TTY.flush();
-        }
-
-        @Override
-        public void onFailure(CompilableTruffleAST compilable, String reason, boolean bailout, boolean permanentBailout) {
-            TTY.printf(FORMAT_FAILURE, compilable.getName(), reason);
-            TTY.flush();
+        private static void printCommon() {
+            TTY.out().out().print(MESSAGE_TO_STREAM);
+            TTY.println(MESSAGE_TO_TTY);
         }
     }
 }
