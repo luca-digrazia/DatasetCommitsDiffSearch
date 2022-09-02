@@ -26,7 +26,6 @@ import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
@@ -54,21 +53,10 @@ public final class DebuggerConnection implements Commands {
         commandProcessor.start();
         activeThreads.add(commandProcessor);
 
-        jdwpTransport = new Thread(new JDWPTransportThread(), "jdwp-transport");
+        jdwpTransport = new Thread(new JDWPTransportThread(suspend), "jdwp-transport");
         jdwpTransport.setDaemon(true);
         jdwpTransport.start();
         activeThreads.add(jdwpTransport);
-
-        if (suspend) {
-            // check if this is called from a guest thread
-            Object guestThread = context.asGuestThread(Thread.currentThread());
-            if (guestThread == null) {
-                // a reconnect, meaning no suspend
-                return;
-            }
-            // only a JDWP resume/resumeAll command can resume this thread
-            controller.suspend(null, context.asGuestThread(Thread.currentThread()), SuspendStrategy.EVENT_THREAD, Collections.emptyList(), null, false);
-        }
     }
 
     public void close() {
@@ -206,13 +194,47 @@ public final class DebuggerConnection implements Commands {
     }
 
     private class JDWPTransportThread implements Runnable {
+
+        private boolean started;
         private RequestedJDWPEvents requestedJDWPEvents = new RequestedJDWPEvents(connection, controller);
+        // constant used to allow for initial startup sequence debugger commands to occur before
+        // waking up the main Espresso startup thread
+        private static final int GRACE_PERIOD = 100;
+
+        JDWPTransportThread(boolean suspend) {
+            this.started = !suspend;
+        }
 
         @Override
         public void run() {
+            long time = -1;
+            long limit = 0;
+
             while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    processPacket(Packet.fromByteArray(connection.readPacket()));
+                    if (!started) {
+                        // in startup sequence
+                        if (time == -1) {
+                            // setup the grace period
+                            time = System.currentTimeMillis();
+                            limit = time + GRACE_PERIOD;
+                        } else {
+                            long currentTime = System.currentTimeMillis();
+                            if (currentTime > limit) {
+                                started = true;
+                                processPacket(Packet.fromByteArray(connection.readPacket()));
+                            } else {
+                                // check if a packet is available
+                                if (connection.isAvailable()) {
+                                    processPacket(Packet.fromByteArray(connection.readPacket()));
+                                    time = System.currentTimeMillis();
+                                    limit = time + GRACE_PERIOD;
+                                }
+                            }
+                        }
+                    } else {
+                        processPacket(Packet.fromByteArray(connection.readPacket()));
+                    }
                 } catch (IOException e) {
                     if (!Thread.currentThread().isInterrupted()) {
                         JDWPLogger.log("Failed to process jdwp packet with message: %s", JDWPLogger.LogLevel.ALL, e.getMessage());
