@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,25 +24,27 @@ package com.oracle.truffle.espresso.substitutions;
 
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
-import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.security.ProtectionDomain;
 
-import com.oracle.truffle.espresso.impl.ObjectKlass;
+import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
+import com.oracle.truffle.espresso.vm.UnsafeAccess;
 
 import sun.misc.Unsafe;
 
 @EspressoSubstitutions
 public class Target_java_lang_ref_Reference {
 
-    private final static Class<?> PUBLIC_FINAL_REFERENCE;
+    static final Class<?> PUBLIC_FINAL_REFERENCE;
 
     /**
      * Compiled {@link java.lang.ref.PublicFinalReference} without the poisoned static initializer.
      */
-    private final static byte[] PUBLIC_FINAL_REFERENCE_BYTES = new byte[]{-54, -2, -70, -66, 0, 0, 0, 52, 0, 28, 7, 0, 2, 1, 0, 34, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 114, 101, 102, 47, 80,
+    private static final byte[] PUBLIC_FINAL_REFERENCE_BYTES = new byte[]{-54, -2, -70, -66, 0, 0, 0, 52, 0, 28, 7, 0, 2, 1, 0, 34, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 114, 101, 102, 47, 80,
                     117, 98, 108, 105, 99, 70, 105, 110, 97, 108, 82, 101, 102, 101, 114, 101, 110, 99, 101, 7, 0, 4, 1, 0, 28, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 114, 101, 102, 47, 70, 105,
                     110, 97, 108, 82, 101, 102, 101, 114, 101, 110, 99, 101, 1, 0, 6, 60, 105, 110, 105, 116, 62, 1, 0, 51, 40, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 79, 98, 106, 101, 99,
                     116, 59, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 114, 101, 102, 47, 82, 101, 102, 101, 114, 101, 110, 99, 101, 81, 117, 101, 117, 101, 59, 41, 86, 1, 0, 9, 83, 105, 103,
@@ -63,55 +65,83 @@ public class Target_java_lang_ref_Reference {
                     0, 18, 0, 0, 0, 2, 0, 25, 0, 0, 0, 2, 0, 26, 0, 7, 0, 0, 0, 2, 0, 27};
 
     static {
-        try {
-            Field f = Unsafe.class.getDeclaredField("theUnsafe");
-            f.setAccessible(true);
-            Unsafe unsafe = (Unsafe) f.get(null);
-            PUBLIC_FINAL_REFERENCE = unsafe.defineClass("java/lang/ref/PublicFinalReference",
-                            PUBLIC_FINAL_REFERENCE_BYTES, 0, PUBLIC_FINAL_REFERENCE_BYTES.length, null, null);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw EspressoError.shouldNotReachHere(e);
+        PUBLIC_FINAL_REFERENCE = injectClassInBootClassLoader("java/lang/ref/PublicFinalReference", PUBLIC_FINAL_REFERENCE_BYTES);
+    }
+
+    public static void ensureInitialized() {
+        /* nop */
+    }
+
+    /**
+     * Inject raw class in the host boot class loader.
+     */
+    private static Class<?> injectClassInBootClassLoader(String className, byte[] classBytes) {
+        EspressoError.guarantee(JavaVersionUtil.JAVA_SPEC == 8 || JavaVersionUtil.JAVA_SPEC == 11, "Unsupported host Java version: {}", JavaVersionUtil.JAVA_SPEC);
+        if (JavaVersionUtil.JAVA_SPEC == 8) {
+            // Inject class via sun.misc.Unsafe#defineClass.
+            // The use of reflection here is deliberate, so the code compiles with both Java 8/11.
+            try {
+                java.lang.reflect.Method defineClass = Unsafe.class.getDeclaredMethod("defineClass",
+                                String.class, byte[].class, int.class, int.class, ClassLoader.class, ProtectionDomain.class);
+                defineClass.setAccessible(true);
+                return (Class<?>) defineClass.invoke(UnsafeAccess.get(), className, classBytes, 0, classBytes.length, null, null);
+            } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                throw EspressoError.shouldNotReachHere(e);
+            }
+        } else if (JavaVersionUtil.JAVA_SPEC == 11 /* removal of sun.misc.Unsafe#defineClass */) {
+            // Inject class via j.l.ClassLoader#defineClass1.
+            try {
+                java.lang.reflect.Method defineClass1 = ClassLoader.class.getDeclaredMethod("defineClass1",
+                                ClassLoader.class, String.class, byte[].class, int.class, int.class, ProtectionDomain.class, String.class);
+                defineClass1.setAccessible(true);
+                return (Class<?>) defineClass1.invoke(null, null, className, classBytes, 0, classBytes.length, null, null);
+            } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+                throw EspressoError.shouldNotReachHere(e);
+            }
+        } else {
+            throw EspressoError.shouldNotReachHere("Java version not supported: " + JavaVersionUtil.JAVA_SPEC);
         }
     }
 
     @Substitution(hasReceiver = true, methodName = "<init>")
     public static void init(@Host(java.lang.ref.Reference.class) StaticObject self,
-                    @Host(Object.class) StaticObject referent, @Host(ReferenceQueue.class) StaticObject queue) {
-        Meta meta = self.getKlass().getMeta();
+                    @Host(Object.class) StaticObject referent, @Host(ReferenceQueue.class) StaticObject queue,
+                    @InjectMeta Meta meta) {
         // Guest referent field is ignored for weak/soft/final/phantom references.
-        EspressoReference ref = null;
-        if (InterpreterToVM.instanceOf(self, meta.WeakReference)) {
-            ref = new EspressoWeakReference(self, referent, meta.getContext().REFERENCE_QUEUE);
-        } else if (InterpreterToVM.instanceOf(self, meta.SoftReference)) {
-            ref = new EspressoSoftReference(self, referent, meta.getContext().REFERENCE_QUEUE);
-        } else if (InterpreterToVM.instanceOf(self, meta.FinalReference)) {
-            ref = new EspressoFinalReference(self, referent, meta.getContext().REFERENCE_QUEUE);
-        } else if (InterpreterToVM.instanceOf(self, meta.PhantomReference)) {
-            ref = new EspressoPhantomReference(self, referent, meta.getContext().REFERENCE_QUEUE);
+        EspressoReference<StaticObject> ref = null;
+        if (InterpreterToVM.instanceOf(self, meta.java_lang_ref_WeakReference)) {
+            ref = new EspressoWeakReference(self, referent, meta.getContext().getReferenceQueue());
+        } else if (InterpreterToVM.instanceOf(self, meta.java_lang_ref_SoftReference)) {
+            ref = new EspressoSoftReference(self, referent, meta.getContext().getReferenceQueue());
+        } else if (InterpreterToVM.instanceOf(self, meta.java_lang_ref_FinalReference)) {
+            ref = new EspressoFinalReference(self, referent, meta.getContext().getReferenceQueue());
+        } else if (InterpreterToVM.instanceOf(self, meta.java_lang_ref_PhantomReference)) {
+            ref = new EspressoPhantomReference(self, referent, meta.getContext().getReferenceQueue());
         }
         if (ref != null) {
             // Weak/Soft/Final/Phantom reference.
             self.setHiddenField(meta.HIDDEN_HOST_REFERENCE, ref);
         } else {
             // Strong reference.
-            meta.Reference_referent.set(self, referent);
+            meta.java_lang_ref_Reference_referent.set(self, referent);
         }
 
         if (StaticObject.isNull(queue)) {
-            meta.Reference_queue.set(self,
-                            meta.ReferenceQueue_NULL.get(meta.ReferenceQueue.tryInitializeAndGetStatics()));
+            meta.java_lang_ref_Reference_queue.set(self,
+                            meta.java_lang_ref_ReferenceQueue_NULL.get(meta.java_lang_ref_ReferenceQueue.tryInitializeAndGetStatics()));
         } else {
-            meta.Reference_queue.set(self, queue);
+            meta.java_lang_ref_Reference_queue.set(self, queue);
         }
     }
 
+    @SuppressWarnings("rawtypes")
     @Substitution(hasReceiver = true)
-    public static @Host(Object.class) StaticObject get(@Host(java.lang.ref.Reference.class) StaticObject self) {
-        Meta meta = self.getKlass().getMeta();
-        assert !InterpreterToVM.instanceOf(self, meta.PhantomReference) : "Cannot call Reference.get on PhantomReference";
-        if (InterpreterToVM.instanceOf(self, meta.WeakReference) //
-                        || InterpreterToVM.instanceOf(self, meta.SoftReference) //
-                        || InterpreterToVM.instanceOf(self, meta.FinalReference)) {
+    public static @Host(Object.class) StaticObject get(@Host(java.lang.ref.Reference.class) StaticObject self,
+                    @InjectMeta Meta meta) {
+        assert !InterpreterToVM.instanceOf(self, meta.java_lang_ref_PhantomReference) : "Cannot call Reference.get on PhantomReference";
+        if (InterpreterToVM.instanceOf(self, meta.java_lang_ref_WeakReference) //
+                        || InterpreterToVM.instanceOf(self, meta.java_lang_ref_SoftReference) //
+                        || InterpreterToVM.instanceOf(self, meta.java_lang_ref_FinalReference)) {
             // Ignore guest referent field.
             EspressoReference ref = (EspressoReference) self.getHiddenField(meta.HIDDEN_HOST_REFERENCE);
             if (ref == null) {
@@ -121,17 +151,18 @@ public class Target_java_lang_ref_Reference {
             StaticObject obj = (StaticObject) ref.get();
             return obj == null ? StaticObject.NULL : obj;
         } else {
-            return (StaticObject) meta.Reference_referent.get(self);
+            return (StaticObject) meta.java_lang_ref_Reference_referent.get(self);
         }
     }
 
+    @SuppressWarnings("rawtypes")
     @Substitution(hasReceiver = true)
-    public static void clear(@Host(java.lang.ref.Reference.class) StaticObject self) {
-        Meta meta = self.getKlass().getMeta();
-        if (InterpreterToVM.instanceOf(self, meta.WeakReference) //
-                        || InterpreterToVM.instanceOf(self, meta.SoftReference) //
-                        || InterpreterToVM.instanceOf(self, meta.PhantomReference) //
-                        || InterpreterToVM.instanceOf(self, meta.FinalReference)) {
+    public static void clear(@Host(java.lang.ref.Reference.class) StaticObject self,
+                    @InjectMeta Meta meta) {
+        if (InterpreterToVM.instanceOf(self, meta.java_lang_ref_WeakReference) //
+                        || InterpreterToVM.instanceOf(self, meta.java_lang_ref_SoftReference) //
+                        || InterpreterToVM.instanceOf(self, meta.java_lang_ref_PhantomReference) //
+                        || InterpreterToVM.instanceOf(self, meta.java_lang_ref_FinalReference)) {
             EspressoReference ref = (EspressoReference) self.getHiddenField(meta.HIDDEN_HOST_REFERENCE);
             if (ref != null) {
                 assert ref instanceof Reference;
@@ -140,7 +171,39 @@ public class Target_java_lang_ref_Reference {
                 self.setHiddenField(meta.HIDDEN_HOST_REFERENCE, null);
             }
         } else {
-            meta.Reference_referent.set(self, StaticObject.NULL);
+            meta.java_lang_ref_Reference_referent.set(self, StaticObject.NULL);
         }
+    }
+
+    @SuppressWarnings("rawtypes")
+    @Substitution(hasReceiver = true)
+    public static boolean enqueue(@Host(java.lang.ref.Reference.class) StaticObject self,
+                    @InjectMeta Meta meta) {
+        if (meta.getJavaVersion().java9OrLater()) {
+            /*
+             * In java 9 or later, the referent field is cleared. We must replicate this behavior on
+             * our own implementation.
+             */
+            if (InterpreterToVM.instanceOf(self, meta.java_lang_ref_WeakReference) //
+                            || InterpreterToVM.instanceOf(self, meta.java_lang_ref_SoftReference) //
+                            || InterpreterToVM.instanceOf(self, meta.java_lang_ref_PhantomReference) //
+                            || InterpreterToVM.instanceOf(self, meta.java_lang_ref_FinalReference)) {
+                EspressoReference ref = (EspressoReference) self.getHiddenField(meta.HIDDEN_HOST_REFERENCE);
+                if (ref != null) {
+                    ref.clear();
+                }
+            }
+        }
+
+        // TODO(garcia): Give substitutions the power of calling the original method they
+        // substitute.
+
+        // Replicates the behavior of guest Reference.enqueue()
+        if (meta.getJavaVersion().java9OrLater()) {
+            meta.java_lang_ref_Reference_referent.set(self, StaticObject.NULL);
+        }
+        StaticObject queue = (StaticObject) meta.java_lang_ref_Reference_queue.get(self);
+        Method m = queue.getKlass().vtableLookup(meta.java_lang_ref_ReferenceQueue_enqueue.getVTableIndex());
+        return (boolean) m.invokeDirect(queue, self);
     }
 }
