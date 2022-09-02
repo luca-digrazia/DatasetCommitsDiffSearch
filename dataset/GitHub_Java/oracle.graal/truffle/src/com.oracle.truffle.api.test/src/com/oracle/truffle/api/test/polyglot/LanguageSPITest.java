@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.api.test.polyglot;
 
-import static com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest.assertFails;
-import static com.oracle.truffle.tck.tests.ValueAssert.assertValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -50,6 +48,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import static com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest.assertFails;
+import static com.oracle.truffle.tck.tests.ValueAssert.assertValue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -100,18 +101,19 @@ import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextPolicy;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.LanguageInfo;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
@@ -282,13 +284,7 @@ public class LanguageSPITest {
     }
 
     @SuppressWarnings("serial")
-    @ExportLibrary(InteropLibrary.class)
     static class Interrupted extends AbstractTruffleException {
-
-        @ExportMessage
-        ExceptionType getExceptionType() {
-            return ExceptionType.INTERRUPT;
-        }
     }
 
     @SuppressWarnings({"serial"})
@@ -363,14 +359,6 @@ public class LanguageSPITest {
                 if (!(cause instanceof PolyglotException)) {
                     throw new AssertionError(cause);
                 }
-                /*
-                 * If interrupt is caused by polyglot context cancel, then the polyglot exception
-                 * should have isCancelled() == true, but that does not currently work (GR-28789)
-                 * and isInterrupted() != true either, because the exception type cannot be obtained
-                 * from interop, because context cancel made the context invalid.
-                 */
-                // PolyglotException polyglotException = (PolyglotException) cause;
-                // assertTrue(polyglotException.isCancelled());
             }
             engine.close();
         } finally {
@@ -471,7 +459,7 @@ public class LanguageSPITest {
                 LanguageContext outerLangContext = LanguageSPITestLanguage.getContext();
                 Object config = new Object();
                 TruffleContext innerContext = env.newContextBuilder().config("config", config).build();
-                Object p = innerContext.enter(null);
+                Object p = innerContext.enter();
                 LanguageContext innerLangContext = LanguageSPITestLanguage.getContext();
                 try {
 
@@ -490,7 +478,7 @@ public class LanguageSPITest {
                     if (assertions) {
                         boolean leaveFailed = false;
                         try {
-                            innerContext.leave(null, "foo");
+                            innerContext.leave("foo");
                         } catch (AssertionError e) {
                             leaveFailed = true;
                         }
@@ -499,13 +487,13 @@ public class LanguageSPITest {
                         }
                     }
                 } finally {
-                    innerContext.leave(null, p);
+                    innerContext.leave(p);
                 }
                 assertSame(outerLangContext, LanguageSPITestLanguage.getContext());
                 innerContext.close();
 
                 try {
-                    innerContext.enter(null);
+                    innerContext.enter();
                     fail("cannot be entered after closing");
                 } catch (IllegalStateException e) {
                 }
@@ -547,13 +535,13 @@ public class LanguageSPITest {
 
                         TruffleContext truffleContext = env.getContext();
                         // attach the Thread
-                        Object prev = truffleContext.enter(null);
+                        Object prev = truffleContext.enter();
                         try {
                             // execute Truffle code
                             env.parsePublic(source).call();
                         } finally {
                             // detach the Thread
-                            truffleContext.leave(null, prev);
+                            truffleContext.leave(prev);
                         }
                     } catch (Throwable t) {
                         error[0] = t;
@@ -571,7 +559,7 @@ public class LanguageSPITest {
                 boolean leaveFailed = false;
                 try {
                     TruffleContext truffleContext = env.getContext();
-                    truffleContext.leave(null, null);
+                    truffleContext.leave(null);
                 } catch (AssertionError e) {
                     leaveFailed = true;
                 }
@@ -591,9 +579,9 @@ public class LanguageSPITest {
         LanguageContext returnedInnerContext = eval(context, new Function<Env, Object>() {
             public Object apply(Env env) {
                 TruffleContext innerContext = env.newContextBuilder().build();
-                Object p = innerContext.enter(null);
+                Object p = innerContext.enter();
                 LanguageContext innerLangContext = LanguageSPITestLanguage.getContext();
-                innerContext.leave(null, p);
+                innerContext.leave(p);
                 return env.asGuestValue(innerLangContext);
             }
         }).asHostObject();
@@ -773,7 +761,7 @@ public class LanguageSPITest {
         assertEquals(source1.getCharacters(), lang.parseCalled.get(0).getCharacters());
 
         TruffleContext innerContext = env.newContextBuilder().build();
-        Object prev = innerContext.enter(null);
+        Object prev = innerContext.enter();
         Env innerEnv = MultiContextLanguage.getCurrentContext().env;
         innerEnv.parsePublic(truffleSource1);
         assertEquals(1, lang.parseCalled.size());
@@ -789,7 +777,7 @@ public class LanguageSPITest {
         innerEnv.parsePublic(truffleSource2);
         assertEquals(2, lang.parseCalled.size());
 
-        innerContext.leave(null, prev);
+        innerContext.leave(prev);
         innerContext.close();
 
         context.eval(source2);
@@ -825,7 +813,7 @@ public class LanguageSPITest {
         assertEquals(source1.getCharacters(), lang.parseCalled.get(0).getCharacters());
 
         TruffleContext innerContext = env.newContextBuilder().build();
-        Object prev = innerContext.enter(null);
+        Object prev = innerContext.enter();
 
         MultiContextLanguage innerLang = OneContextLanguage.getCurrentLanguage();
         assertNotSame(innerLang, lang);
@@ -842,7 +830,7 @@ public class LanguageSPITest {
         innerEnv.parsePublic(truffleSource2);
         assertEquals(2, innerLang.parseCalled.size());
 
-        innerContext.leave(null, prev);
+        innerContext.leave(prev);
         innerContext.close();
 
         assertEquals(1, lang.parseCalled.size());
@@ -2015,8 +2003,19 @@ public class LanguageSPITest {
 
     }
 
-    @SuppressWarnings("serial")
-    static class TestError extends RuntimeException {
+    static final Source TEST_SOURCE = Source.newBuilder("", "", "testLanguageErrorDuringInitialization").build();
+
+    @SuppressWarnings({"serial", "deprecation"})
+    static class TestError extends RuntimeException implements com.oracle.truffle.api.TruffleException {
+
+        public SourceSection getSourceLocation() {
+            return TEST_SOURCE.createSection(0, 0);
+        }
+
+        public Node getLocation() {
+            return null;
+        }
+
     }
 
     @Test
@@ -2034,6 +2033,7 @@ public class LanguageSPITest {
             fail();
         } catch (PolyglotException e) {
             assertTrue(e.isGuestException());
+            assertEquals("testLanguageErrorDuringInitialization", e.getSourceLocation().getSource().getName());
         }
         context.close();
     }

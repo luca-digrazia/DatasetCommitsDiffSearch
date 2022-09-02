@@ -40,6 +40,8 @@
  */
 package com.oracle.truffle.api.exception;
 
+import static com.oracle.truffle.api.exception.AbstractTruffleException.isTruffleException;
+
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.TruffleStackTraceElement;
@@ -52,6 +54,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,6 +81,11 @@ final class ExceptionAccessor extends Accessor {
         }
 
         @Override
+        public Object createDefaultStackTraceElementObject(RootNode rootNode, SourceSection sourceSection) {
+            return new DefaultStackTraceElementObject(rootNode, sourceSection);
+        }
+
+        @Override
         public boolean isException(Object receiver) {
             return receiver instanceof AbstractTruffleException;
         }
@@ -85,11 +93,6 @@ final class ExceptionAccessor extends Accessor {
         @Override
         public RuntimeException throwException(Object receiver) {
             throw (AbstractTruffleException) receiver;
-        }
-
-        @Override
-        public boolean isExceptionUnwind(Object receiver) {
-            return false;
         }
 
         @Override
@@ -109,13 +112,13 @@ final class ExceptionAccessor extends Accessor {
 
         @Override
         public boolean hasExceptionCause(Object receiver) {
-            return ((AbstractTruffleException) receiver).getCause() != null;
+            return isTruffleException(((AbstractTruffleException) receiver).getCause());
         }
 
         @Override
         public Object getExceptionCause(Object receiver) {
             Throwable throwable = ((AbstractTruffleException) receiver).getCause();
-            if (throwable != null) {
+            if (isTruffleException(throwable)) {
                 return throwable;
             } else {
                 throw throwUnsupportedMessageException();
@@ -197,11 +200,6 @@ final class ExceptionAccessor extends Accessor {
                 throw throwUnsupportedMessageException();
             }
             return sourceSection;
-        }
-
-        @SuppressWarnings("deprecation")
-        private static boolean isTruffleException(Throwable t) {
-            return t instanceof com.oracle.truffle.api.TruffleException;
         }
 
         private static RuntimeException throwUnsupportedMessageException() {

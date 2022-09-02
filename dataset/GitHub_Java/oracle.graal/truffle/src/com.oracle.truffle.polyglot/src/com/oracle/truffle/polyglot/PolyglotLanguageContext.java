@@ -279,14 +279,6 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         }
     }
 
-    PolyglotLanguageInstance getLanguageInstanceOrNull() {
-        Lazy l = this.lazy;
-        if (l == null) {
-            return null;
-        }
-        return l.languageInstance;
-    }
-
     PolyglotLanguageInstance getLanguageInstance() {
         assert env != null;
         return lazy.languageInstance;
@@ -339,13 +331,13 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         if (this.hostBindings == null) {
             synchronized (this) {
                 if (this.hostBindings == null) {
-                    Object prev = language.engine.enterIfNeeded(context);
+                    Object prev = context.engine.enterIfNeeded(context);
                     try {
                         Object scope = LANGUAGE.getScope(env);
                         assert InteropLibrary.getUncached().hasMembers(scope) : "Scope object must have members.";
                         this.hostBindings = this.asValue(scope);
                     } finally {
-                        language.engine.leaveIfNeeded(prev, context);
+                        context.engine.leaveIfNeeded(prev, context);
                     }
                 }
             }
@@ -420,17 +412,17 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         language.freeInstance(lazy.languageInstance);
     }
 
-    PolyglotContextImpl enterThread(PolyglotThread thread) {
+    Object enterThread(PolyglotThread thread) {
         assert isInitialized();
         assert Thread.currentThread() == thread;
         synchronized (context) {
-            PolyglotContextImpl prev = context.engine.enter(context);
+            Object prev = context.engine.enter(context);
             lazy.activePolyglotThreads.add(thread);
             return prev;
         }
     }
 
-    void leaveThread(PolyglotContextImpl prev, PolyglotThread thread) {
+    void leaveThread(Object prev, PolyglotThread thread) {
         assert isInitialized();
         assert Thread.currentThread() == thread;
         synchronized (context) {
@@ -446,7 +438,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                 }
             }
             lazy.activePolyglotThreads.remove(thread);
-            language.engine.leave(prev, context);
+            context.engine.leave(prev, context);
             seenThreads.remove(thread);
         }
         EngineAccessor.INSTRUMENT.notifyThreadFinished(context.engine, context.creatorTruffleContext, thread);
@@ -658,6 +650,14 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                 LOG.log(Level.FINE, "Failed to patch context of language: {0}", this.language.getId());
                 return false;
             } catch (Throwable t) {
+                InteropLibrary interop = InteropLibrary.getUncached();
+                try {
+                    if (interop.isException(t)) {
+                        throw interop.throwException(t);
+                    }
+                } catch (UnsupportedMessageException um) {
+                    CompilerDirectives.shouldNotReachHere(um);
+                }
                 LOG.log(Level.FINE, "Exception during patching context of language: {0}", this.language.getId());
                 // The conversion to the host exception happens in the
                 // PolyglotEngineImpl.createContext
@@ -853,7 +853,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             if (cachedClassLocal != Generic.class) {
                 if (cachedClassLocal == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    if (languageContext.context.engine.singleContext.isValid()) {
+                    if (languageContext.context.engine.boundEngine) {
                         cachedClass = receiver.getClass();
                         cache = languageContext.lazy.valueCache.get(receiver.getClass());
                         if (cache == null) {

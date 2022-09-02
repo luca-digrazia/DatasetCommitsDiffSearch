@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.api.test;
 
-import static com.oracle.truffle.api.test.RootNodeTest.verifyStackTraceElementGuestObject;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -55,30 +53,24 @@ import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
-import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ControlFlowException;
-import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
+import java.util.function.Function;
 import java.util.logging.Handler;
 import java.util.logging.LogRecord;
-import java.util.regex.Pattern;
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.PolyglotException;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -97,131 +89,23 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
         setupEnv(createContext(verifyingHandler), new ProxyLanguage() {
             @Override
             protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                return createAST(AbstractTruffleException.class, languageInstance, (n) -> new TruffleExceptionImpl("Test exception", n), false);
+                return createAST(AbstractTruffleException.class, languageInstance, (n) -> new TruffleExceptionImpl("Test exception", n));
             }
         });
         verifyingHandler.expect(BlockNode.Kind.TRY, BlockNode.Kind.CATCH, BlockNode.Kind.FINALLY);
         context.eval(ProxyLanguage.ID, "Test");
-    }
-
-    @Test
-    public void testTruffleExceptionCustomGuestObject() {
-        setupEnv(createContext(verifyingHandler), new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                return createAST(AbstractTruffleException.class, languageInstance, (n) -> new TruffleExceptionImpl("Test exception", n), true);
-            }
-        });
-        verifyingHandler.expect(BlockNode.Kind.TRY, BlockNode.Kind.CATCH, BlockNode.Kind.FINALLY);
-        context.eval(ProxyLanguage.ID, "Test");
-    }
-
-    @Test
-    public void testPolyglotStackTrace() {
-        testStackTraceImpl(new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                ThrowNode throwNode = new ThrowNode((n) -> {
-                    return new TruffleExceptionImpl("Test exception", n);
-                });
-                return Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test", null, throwNode));
-            }
-        },
-                        "<proxyLanguage> test",
-                        "(org.graalvm.sdk/)?org.graalvm.polyglot.Context.eval");
-    }
-
-    @Test
-    public void testPolyglotStackTrace2() {
-        testStackTraceImpl(new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                ThrowNode throwNode = new ThrowNode((n) -> {
-                    return new TruffleExceptionImpl("Test exception", n);
-                });
-                CallTarget throwTarget = Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test-throw", null, throwNode));
-                CallTarget innerInvokeTarget = Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test-call-inner", null, new InvokeNode(throwTarget)));
-                CallTarget outerInvokeTarget = Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test-call-outer", null, new InvokeNode(innerInvokeTarget)));
-                return outerInvokeTarget;
-            }
-        },
-                        "<proxyLanguage> test-throw",
-                        "<proxyLanguage> test-call-inner",
-                        "<proxyLanguage> test-call-outer",
-                        "(org.graalvm.sdk/)?org.graalvm.polyglot.Context.eval");
-    }
-
-    @Test
-    public void testPolyglotStackTraceExplicitFillIn() {
-        testStackTraceImpl(new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                ThrowNode throwNode = new ThrowNode((n) -> {
-                    TruffleExceptionImpl e = new TruffleExceptionImpl("Test exception", n);
-                    TruffleStackTrace.fillIn(e);
-                    return e;
-                });
-                return Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test", null, throwNode));
-            }
-        },
-                        "<proxyLanguage> test",
-                        "(org.graalvm.sdk/)?org.graalvm.polyglot.Context.eval");
-    }
-
-    @Test
-    public void testPolyglotStackTraceInternalError() {
-        testStackTraceImpl(new ProxyLanguage() {
-            @Override
-            protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-                ThrowNode throwNode = new ThrowNode(new InternalExceptionFactory());
-                return Truffle.getRuntime().createCallTarget(new TestRootNode(languageInstance, "test", null, throwNode));
-            }
-        },
-                        Pattern.quote("com.oracle.truffle.api.test.TruffleExceptionTest$InternalExceptionFactory.apply"),
-                        Pattern.quote("com.oracle.truffle.api.test.TruffleExceptionTest$ThrowNode.executeVoid"),
-                        Pattern.quote("com.oracle.truffle.api.test.TruffleExceptionTest$TestRootNode.execute"),
-                        "<proxyLanguage> test",
-                        "(org.graalvm.sdk/)?org.graalvm.polyglot.Context.eval");
-    }
-
-    private void testStackTraceImpl(ProxyLanguage proxy, String... patterns) {
-        setupEnv(Context.create(), proxy);
-        assertFails(() -> context.eval(ProxyLanguage.ID, "Test"), PolyglotException.class, (pe) -> {
-            verifyStackTrace(pe, patterns);
-        });
-    }
-
-    static void verifyStackTrace(PolyglotException pe, String... patterns) {
-        StringWriter buffer = new StringWriter();
-        try (PrintWriter out = new PrintWriter(buffer)) {
-            pe.printStackTrace(out);
-        }
-        String[] lines = Arrays.stream(buffer.toString().split(System.lineSeparator())).map((l) -> l.trim()).filter((l) -> l.startsWith("at ")).map((l) -> {
-            int end = l.lastIndexOf('(');
-            if (end < 0) {
-                end = l.length();
-            }
-            return l.substring(3, end);
-        }).toArray((len) -> new String[len]);
-        Assert.assertTrue("Not enough lines " + Arrays.toString(lines), patterns.length <= lines.length);
-        for (int i = 0; i < lines.length && i < patterns.length; i++) {
-            String line = lines[i];
-            Pattern pattern = Pattern.compile(patterns[i]);
-            Assert.assertTrue("Expected " + patterns[i] + " but got " + line, pattern.matcher(line).matches());
-        }
     }
 
     static Context createContext(VerifyingHandler handler) {
         return Context.newBuilder().option(String.format("log.%s.level", handler.loggerName), "FINE").logHandler(handler).build();
     }
 
-    static CallTarget createAST(Class<?> testClass, TruffleLanguage<ProxyLanguage.LanguageContext> lang,
-                    ExceptionFactory exceptionObjectFactroy, boolean customStackTraceElementGuestObject) {
+    static CallTarget createAST(Class<?> testClass, TruffleLanguage<ProxyLanguage.LanguageContext> lang, Function<Node, Object> exceptionObjectFactroy) {
         ThrowNode throwNode = new ThrowNode(exceptionObjectFactroy);
         TryCatchNode tryCatch = new TryCatchNode(new BlockNode(testClass, BlockNode.Kind.TRY, throwNode),
                         new BlockNode(testClass, BlockNode.Kind.CATCH),
                         new BlockNode(testClass, BlockNode.Kind.FINALLY));
-        return Truffle.getRuntime().createCallTarget(new TestRootNode(lang, "test", customStackTraceElementGuestObject ? "unnamed" : null, tryCatch));
+        return Truffle.getRuntime().createCallTarget(new TestRootNode(lang, "test", tryCatch));
     }
 
     @SuppressWarnings({"unchecked", "unused"})
@@ -229,24 +113,15 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
         throw (T) t;
     }
 
-    static final class TestRootNode extends RootNode {
+    private static final class TestRootNode extends RootNode {
 
         private final String name;
-        private final String ownerName;
-        private final StackTraceElementGuestObject customStackTraceElementGuestObject;
         @Child StatementNode body;
 
-        TestRootNode(TruffleLanguage<?> language, String name, String ownerName, StatementNode body) {
+        TestRootNode(TruffleLanguage<?> language, String name, StatementNode body) {
             super(language);
             this.name = name;
-            this.ownerName = ownerName;
             this.body = body;
-            this.customStackTraceElementGuestObject = ownerName != null ? new StackTraceElementGuestObject(name, ownerName) : null;
-        }
-
-        @Override
-        public String getQualifiedName() {
-            return ownerName != null ? ownerName + '.' + name : name;
         }
 
         @Override
@@ -259,84 +134,9 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
             body.executeVoid(frame);
             return true;
         }
-
-        @Override
-        protected Object translateStackTraceElement(TruffleStackTraceElement element) {
-            if (customStackTraceElementGuestObject != null) {
-                return customStackTraceElementGuestObject;
-            } else {
-                return super.translateStackTraceElement(element);
-            }
-        }
     }
 
-    @ExportLibrary(InteropLibrary.class)
-    static final class StackTraceElementGuestObject implements TruffleObject {
-
-        private final String name;
-        private final Object owner;
-
-        StackTraceElementGuestObject(String name, String ownerName) {
-            this.name = name;
-            this.owner = new OwnerMetaObject(ownerName);
-        }
-
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        boolean hasExecutableName() {
-            return true;
-        }
-
-        @ExportMessage
-        Object getExecutableName() {
-            return name;
-        }
-
-        @ExportMessage
-        @SuppressWarnings("static-method")
-        boolean hasDeclaringMetaObject() {
-            return true;
-        }
-
-        @ExportMessage
-        Object getDeclaringMetaObject() {
-            return owner;
-        }
-
-        @ExportLibrary(InteropLibrary.class)
-        static final class OwnerMetaObject implements TruffleObject {
-
-            private final String name;
-
-            OwnerMetaObject(String name) {
-                this.name = name;
-            }
-
-            @ExportMessage
-            @SuppressWarnings("static-method")
-            boolean isMetaObject() {
-                return true;
-            }
-
-            @ExportMessage
-            @SuppressWarnings({"static-method", "unused"})
-            boolean isMetaInstance(Object object) {
-                return false;
-            }
-
-            @ExportMessage
-            Object getMetaQualifiedName() {
-                return name;
-            }
-
-            @ExportMessage
-            Object getMetaSimpleName() {
-                return name;
-            }
-        }
-    }
-
-    abstract static class StatementNode extends Node {
+    private abstract static class StatementNode extends Node {
         abstract void executeVoid(VirtualFrame frame);
     }
 
@@ -389,43 +189,41 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
         @Child private InteropLibrary exceptions = InteropLibrary.getFactory().createDispatched(5);
         private final BranchProfile exceptionProfile = BranchProfile.create();
 
-        TryCatchNode(BlockNode block, BlockNode catchBlock, BlockNode finallyBlock) {
+        TryCatchNode(BlockNode block, BlockNode catchBlock, BlockNode finalizerBlock) {
             this.block = block;
             this.catchBlock = catchBlock;
-            this.finallyBlock = finallyBlock;
+            this.finallyBlock = finalizerBlock;
         }
 
         @Override
         void executeVoid(VirtualFrame frame) {
             Throwable exception = null;
             try {
-                block.executeVoid(frame);
-            } catch (Throwable ex) {
-                exception = executeCatchBlock(frame, ex, catchBlock);
-            }
-            // Java finally blocks that execute nodes are not allowed for
-            // compilation as code in finally blocks is duplicated
-            // by the Java bytecode compiler. This can lead to
-            // exponential code growth in worst cases.
-            if (finallyBlock != null) {
-                finallyBlock.executeVoid(frame);
-            }
-            if (exception != null) {
-                if (exception instanceof ControlFlowException) {
-                    throw (ControlFlowException) exception;
-                }
                 try {
-                    throw exceptions.throwException(exception);
-                } catch (UnsupportedMessageException ie) {
-                    throw CompilerDirectives.shouldNotReachHere(ie);
+                    block.executeVoid(frame);
+                } catch (Throwable ex) {
+                    exception = executeCatchBlock(frame, ex, catchBlock);
                 }
+                // Java finally blocks that execute nodes are not allowed for
+                // compilation as they might duplicate the finally block code
+                if (finallyBlock != null) {
+                    finallyBlock.executeVoid(frame);
+                }
+                if (exception != null) {
+                    if (exception instanceof ControlFlowException) {
+                        throw (ControlFlowException) exception;
+                    }
+                    throw exceptions.throwException(exception);
+                }
+            } catch (UnsupportedMessageException | InvalidArrayIndexException ie) {
+                throw CompilerDirectives.shouldNotReachHere(ie);
             }
         }
 
         @SuppressWarnings("unchecked")
-        private <T extends Throwable> Throwable executeCatchBlock(VirtualFrame frame, Throwable ex, BlockNode catchBlk) throws T {
+        private <T extends Throwable> Throwable executeCatchBlock(VirtualFrame frame, Throwable ex, BlockNode catchBlk) throws T, UnsupportedMessageException, InvalidArrayIndexException {
             if (ex instanceof ControlFlowException) {
-                // run finally blocks for control flow
+                // only needed if the language uses control flow exceptions
                 return ex;
             }
             exceptionProfile.enter();
@@ -439,100 +237,60 @@ public class TruffleExceptionTest extends AbstractPolyglotTest {
                         return executeCatchBlock(frame, catchEx, null);
                     }
                 } else {
-                    // run finally blocks for any interop exception
+                    // run finally block
                     return ex;
                 }
             } else {
-                // do not run finally blocks for internal errors or unwinds
+                // no finally blocks for internal errors or unwinds
                 throw (T) ex;
             }
         }
 
         @TruffleBoundary
-        private void assertTruffleExceptionProperties(Throwable ex) {
-            try {
-                Assert.assertEquals(ExceptionType.RUNTIME_ERROR, exceptions.getExceptionType(ex));
-                AbstractPolyglotTest.assertFails(() -> {
-                    exceptions.getExceptionExitStatus(ex);
-                    return null;
-                }, UnsupportedMessageException.class);
-                if (ex.getMessage() != null) {
-                    Assert.assertTrue(exceptions.hasExceptionMessage(ex));
-                    Assert.assertEquals(ex.getMessage(), exceptions.getExceptionMessage(ex));
-                } else {
-                    Assert.assertFalse(exceptions.hasExceptionMessage(ex));
-                }
-                assertStackTrace(ex);
-            } catch (InteropException ie) {
-                CompilerDirectives.shouldNotReachHere(ie);
+        private void assertTruffleExceptionProperties(Throwable ex) throws UnsupportedMessageException, InvalidArrayIndexException {
+            Assert.assertEquals(ExceptionType.RUNTIME_ERROR, exceptions.getExceptionType(ex));
+            AbstractPolyglotTest.assertFails(() -> {
+                exceptions.getExceptionExitStatus(ex);
+                return null;
+            }, UnsupportedMessageException.class);
+            if (ex.getMessage() != null) {
+                Assert.assertTrue(exceptions.hasExceptionMessage(ex));
+                Assert.assertEquals(ex.getMessage(), exceptions.getExceptionMessage(ex));
+            } else {
+                Assert.assertFalse(exceptions.hasExceptionMessage(ex));
             }
+            assertStackTrace(ex);
         }
 
         private void assertStackTrace(Throwable t) throws UnsupportedMessageException, InvalidArrayIndexException {
             List<TruffleStackTraceElement> stack = TruffleStackTrace.getStackTrace(t);
             Object stackGuestObject = exceptions.getExceptionStackTrace(t);
-            Assert.assertTrue(exceptions.hasArrayElements(stackGuestObject));
             Assert.assertEquals(stack.size(), exceptions.getArraySize(stackGuestObject));
             for (int i = 0; i < stack.size(); i++) {
                 Object stackTraceElementObject = exceptions.readArrayElement(stackGuestObject, i);
-                verifyStackTraceElementGuestObject(stackTraceElementObject);
                 Assert.assertTrue(exceptions.hasExecutableName(stackTraceElementObject));
-                String executableName = exceptions.asString(exceptions.getExecutableName(stackTraceElementObject));
-                Assert.assertEquals(stack.get(i).getTarget().getRootNode().getName(), executableName);
-                String qualifiedName;
-                if (exceptions.hasDeclaringMetaObject(stackTraceElementObject)) {
-                    qualifiedName = exceptions.asString(exceptions.getMetaQualifiedName(exceptions.getDeclaringMetaObject(stackTraceElementObject))) + '.' + executableName;
-                } else {
-                    qualifiedName = executableName;
-                }
-                Assert.assertEquals(stack.get(i).getTarget().getRootNode().getQualifiedName(), qualifiedName);
+                Assert.assertEquals(stack.get(i).getTarget().getRootNode().getName(), exceptions.getExecutableName(stackTraceElementObject));
             }
         }
     }
 
-    interface ExceptionFactory {
-        Object apply(Node t);
-    }
+    private static class ThrowNode extends StatementNode {
 
-    static final class InternalExceptionFactory implements ExceptionFactory {
-        @Override
-        public Object apply(Node t) {
-            CompilerDirectives.transferToInterpreter();
-            throw new RuntimeException();
-        }
-    }
-
-    static class ThrowNode extends StatementNode {
-
-        private final ExceptionFactory exceptionObjectFactory;
+        private final Object exceptionObject;
         @Child InteropLibrary interop;
 
-        ThrowNode(ExceptionFactory exceptionObjectFactroy) {
-            this.exceptionObjectFactory = exceptionObjectFactroy;
-            this.interop = InteropLibrary.getFactory().createDispatched(1);
+        ThrowNode(Function<Node, Object> exceptionObjectFactroy) {
+            this.exceptionObject = exceptionObjectFactroy.apply(this);
+            interop = InteropLibrary.getFactory().create(exceptionObject);
         }
 
         @Override
         void executeVoid(VirtualFrame frame) {
             try {
-                throw interop.throwException(exceptionObjectFactory.apply(this));
+                throw interop.throwException(exceptionObject);
             } catch (UnsupportedMessageException um) {
                 throw CompilerDirectives.shouldNotReachHere(um);
             }
-        }
-    }
-
-    static class InvokeNode extends StatementNode {
-
-        private final DirectCallNode call;
-
-        InvokeNode(CallTarget target) {
-            this.call = Truffle.getRuntime().createDirectCallNode(target);
-        }
-
-        @Override
-        void executeVoid(VirtualFrame frame) {
-            this.call.call();
         }
     }
 

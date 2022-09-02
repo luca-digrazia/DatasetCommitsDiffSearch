@@ -1025,7 +1025,7 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     ExceptionType getExceptionType(@Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
         if (isException()) {
-            return obj instanceof InterruptedException ? ExceptionType.INTERRUPT : ExceptionType.RUNTIME_ERROR;
+            return ExceptionType.RUNTIME_ERROR;
         }
         error.enter();
         throw UnsupportedMessageException.create();
@@ -1048,13 +1048,11 @@ final class HostObject implements TruffleObject {
     }
 
     @ExportMessage
-    @TruffleBoundary
     boolean hasExceptionMessage() {
         return isException() && ((Throwable) obj).getMessage() != null;
     }
 
     @ExportMessage
-    @TruffleBoundary
     Object getExceptionMessage(@Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
         String message = isException() ? ((Throwable) obj).getMessage() : null;
         if (message != null) {
@@ -1080,6 +1078,21 @@ final class HostObject implements TruffleObject {
             if (cause instanceof com.oracle.truffle.api.TruffleException) {
                 return cause;
             }
+        }
+        throw UnsupportedMessageException.create();
+    }
+
+    @ExportMessage
+    @TruffleBoundary
+    boolean hasExceptionSuppressed() {
+        return isException() && EngineAccessor.EXCEPTION.hasExceptionSuppressed(obj);
+    }
+
+    @ExportMessage
+    @TruffleBoundary
+    Object getExceptionSuppressed() throws UnsupportedMessageException {
+        if (isException()) {
+            return EngineAccessor.EXCEPTION.getExceptionSuppressed(obj);
         }
         throw UnsupportedMessageException.create();
     }
@@ -1225,11 +1238,11 @@ final class HostObject implements TruffleObject {
         if (isClass()) {
             Class<?> c = asClass();
             if (HostObject.isInstance(other)) {
-                Object otherHostObj = HostObject.valueOf(other);
-                if (otherHostObj == null) {
+                HostObject otherHost = ((HostObject) other);
+                if (otherHost.isNull()) {
                     return false;
                 } else {
-                    return c.isInstance(otherHostObj);
+                    return c.isInstance(otherHost.obj);
                 }
             } else if (PolyglotProxy.isProxyGuestObject(other)) {
                 PolyglotProxy otherHost = (PolyglotProxy) other;

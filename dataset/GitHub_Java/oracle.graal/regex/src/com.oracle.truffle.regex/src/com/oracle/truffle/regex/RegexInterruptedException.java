@@ -40,28 +40,8 @@
  */
 package com.oracle.truffle.regex;
 
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
 
 @SuppressWarnings("serial")
-public class RegexInterruptedException extends ThreadDeath implements TruffleException {
-
-    @Override
-    public Node getLocation() {
-        return null;
-    }
-
-    /**
-     * For performance reasons, this exception does not record any stack trace information.
-     */
-    @SuppressWarnings("sync-override")
-    @Override
-    public final Throwable fillInStackTrace() {
-        return this;
-    }
-
-    @Override
-    public boolean isCancelled() {
-        return true;
-    }
+public class RegexInterruptedException extends AbstractTruffleException {
 }
