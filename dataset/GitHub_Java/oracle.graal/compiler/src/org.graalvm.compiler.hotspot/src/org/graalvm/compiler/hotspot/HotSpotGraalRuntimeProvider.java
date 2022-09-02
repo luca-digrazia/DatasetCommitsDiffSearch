@@ -107,6 +107,4 @@ public interface HotSpotGraalRuntimeProvider extends GraalRuntime, RuntimeProvid
      * which configuration is in use.
      */
     String getCompilerConfigurationName();
-
-    Instrumentation getInstrumentation();
 }

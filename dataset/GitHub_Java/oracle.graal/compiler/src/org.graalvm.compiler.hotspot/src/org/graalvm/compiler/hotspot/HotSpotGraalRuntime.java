@@ -175,14 +175,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
             management = GraalServices.loadSingle(HotSpotGraalManagementRegistration.class, false);
         }
         if (management != null) {
-            try {
-                management.initialize(this, config);
-            } catch (ThreadDeath td) {
-                throw td;
-            } catch (Throwable error) {
-                TTY.println("Cannot install GraalVM MBean due to " + error.getMessage());
-                management = null;
-            }
+            management.initialize(this, config);
         }
 
         BackendMap backendMap = compilerConfigurationFactory.createBackendMap();
@@ -460,7 +453,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     // ------- Management interface ---------
 
-    private HotSpotGraalManagementRegistration management;
+    private final HotSpotGraalManagementRegistration management;
 
     /**
      * @returns the management object for this runtime or {@code null}
