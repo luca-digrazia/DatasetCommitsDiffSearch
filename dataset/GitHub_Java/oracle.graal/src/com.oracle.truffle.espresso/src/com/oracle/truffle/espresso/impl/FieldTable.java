@@ -28,8 +28,6 @@ import java.util.Arrays;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.JavaKind;
 
 class FieldTable {
     static class CreationResult {
@@ -54,27 +52,6 @@ class FieldTable {
         }
     }
 
-    private static int N_PRIMITIVES = 8;
-
-    private static int indexFromKind(JavaKind kind) {
-        // @formatter:off
-        // Checkstyle: stop
-        switch (kind) {
-            case Boolean: return 7;
-            case Byte   : return 6;
-            case Short  : return 4;
-            case Char   : return 5;
-            case Int    : return 2;
-            case Float  : return 3;
-            case Long   : return 0;
-            case Double : return 1;
-            default:
-                throw EspressoError.shouldNotReachHere();
-        }
-        // @formatter:on
-        // Checkstyle: resume
-    }
-
     public static CreationResult create(ObjectKlass superKlass, ObjectKlass thisKlass, LinkedKlass linkedKlass) {
         ArrayList<Field> tmpFields;
         ArrayList<Field> tmpStatics = new ArrayList<>();
@@ -83,10 +60,6 @@ class FieldTable {
         int primitiveStaticFieldTotalByteCount = 0;
         int objectFields = 0;
         int staticObjectFields = 0;
-
-        int[] primitiveCounts = new int[N_PRIMITIVES];
-
-        // TODO Locally count each primitive kind
 
         if (superKlass != null) {
             tmpFields = new ArrayList<>(Arrays.asList(superKlass.getFieldTable()));
@@ -123,9 +96,6 @@ class FieldTable {
                 tmpFields.add(f);
             }
         }
-
-        // TODO Balance field loadout by filling superKlass' table holes. Should be no need to
-        // synchronize.
 
         objectFields += setHiddenFields(thisKlass.getType(), tmpFields, thisKlass, objectFields);
 
