@@ -64,6 +64,7 @@ import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.llvm.api.Toolchain;
+import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.llvm.instruments.trace.LLVMTracerInstrument;
 import com.oracle.truffle.llvm.runtime.LLVMArgumentBuffer.LLVMArgumentArray;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage.Loader;
@@ -132,8 +133,7 @@ public final class LLVMContext {
     // we are not able to clean up ThreadLocals properly, so we are using maps instead
     private final Map<Thread, Object> tls = new ConcurrentHashMap<>();
 
-    // private for storing the globals of each bcode file;
-    private LLVMPointer[][] globalStorage = new LLVMPointer[10][];
+    private final DynamicObject globalStorage;
 
     // signals
     private final LLVMNativePointer sigDfl;
@@ -189,6 +189,7 @@ public final class LLVMContext {
         this.interopTypeRegistry = new LLVMInteropType.InteropTypeRegistry();
         this.sourceContext = new LLVMSourceContext();
         this.toolchain = toolchain;
+        this.globalStorage = language.emptyGlobalShape.newInstance();
 
         this.internalLibraryNames = Collections.unmodifiableList(Arrays.asList(language.getCapability(PlatformCapability.class).getSulongDefaultLibraries()));
         assert !internalLibraryNames.isEmpty() : "No internal libraries?";
@@ -604,22 +605,8 @@ public final class LLVMContext {
         return globalScope;
     }
 
-    public LLVMPointer[] findGlobal(int id) {
-        return globalStorage[id];
-    }
-
-    @TruffleBoundary
-    public void registerGlobalMap(int index, LLVMPointer[] target) {
-        synchronized (globalStorage) {
-            if (index < globalStorage.length) {
-                globalStorage[index] = target;
-            } else {
-                LLVMPointer[][] temp = new LLVMPointer[index + 1][];
-                System.arraycopy(globalStorage, 0, temp, 0, globalStorage.length);
-                globalStorage = temp;
-                globalStorage[index] = target;
-            }
-        }
+    public DynamicObject getGlobalStorage() {
+        return globalStorage;
     }
 
     @TruffleBoundary

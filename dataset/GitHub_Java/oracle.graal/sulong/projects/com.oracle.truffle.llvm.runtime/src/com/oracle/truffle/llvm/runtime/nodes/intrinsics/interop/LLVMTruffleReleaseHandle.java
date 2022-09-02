@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -53,9 +53,9 @@ public abstract class LLVMTruffleReleaseHandle extends LLVMIntrinsic {
                     @CachedLanguage LLVMLanguage language) {
         long address = handle.asNative();
         if (!language.getNoDerefHandleAssumption().isValid() && LLVMNativeMemory.isDerefHandleMemory(address)) {
-            context.getDerefHandleContainer().free(this, address);
+            context.getDerefHandleContainer().free(address);
         } else {
-            context.getHandleContainer().free(this, address);
+            context.getHandleContainer().free(address);
         }
         return null;
     }
