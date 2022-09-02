@@ -61,7 +61,6 @@ import com.oracle.svm.hosted.FeatureImpl;
 import com.oracle.svm.hosted.analysis.Inflation;
 import com.oracle.svm.hosted.meta.MethodPointer;
 import com.oracle.svm.hosted.phases.SubstrateClassInitializationPlugin;
-import com.oracle.svm.hosted.SVMHost;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -289,7 +288,6 @@ public class ClassInitializationFeature implements Feature {
                                  */
                                 if (!classInitializationSupport.shouldInitializeAtRuntime(c)) {
                                     provenSafe.add(type);
-                                    ((SVMHost) universe.hostVM()).dynamicHub(type).setClassInitializationInfo(ClassInitializationInfo.INITIALIZED_INFO_SINGLETON);
                                 }
                             }
                         });
