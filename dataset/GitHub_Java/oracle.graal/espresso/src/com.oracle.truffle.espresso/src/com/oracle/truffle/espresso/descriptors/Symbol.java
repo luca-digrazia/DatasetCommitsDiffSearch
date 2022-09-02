@@ -273,14 +273,11 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> lineNumber = StaticSymbols.putName("lineNumber");
 
         // j.l.System
-        public static final Symbol<Name> err = StaticSymbols.putName("err");
         public static final Symbol<Name> getProperty = StaticSymbols.putName("getProperty");
-        public static final Symbol<Name> in = StaticSymbols.putName("in");
         public static final Symbol<Name> initializeSystemClass = StaticSymbols.putName("initializeSystemClass");
         public static final Symbol<Name> initPhase1 = StaticSymbols.putName("initPhase1");
         public static final Symbol<Name> initPhase2 = StaticSymbols.putName("initPhase2");
         public static final Symbol<Name> initPhase3 = StaticSymbols.putName("initPhase3");
-        public static final Symbol<Name> out = StaticSymbols.putName("out");
         public static final Symbol<Name> security = StaticSymbols.putName("security");
         public static final Symbol<Name> setProperty = StaticSymbols.putName("setProperty");
 
@@ -410,7 +407,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> MethodParameters = StaticSymbols.putName("MethodParameters");
         public static final Symbol<Name> NestHost = StaticSymbols.putName("NestHost");
         public static final Symbol<Name> NestMembers = StaticSymbols.putName("NestMembers");
-        public static final Symbol<Name> PermittedSubclasses = StaticSymbols.putName("PermittedSubclasses");
         public static final Symbol<Name> RuntimeVisibleAnnotations = StaticSymbols.putName("RuntimeVisibleAnnotations");
         public static final Symbol<Name> RuntimeInvisibleAnnotations = StaticSymbols.putName("RuntimeInvisibleAnnotations");
         public static final Symbol<Name> RuntimeVisibleTypeAnnotations = StaticSymbols.putName("RuntimeVisibleTypeAnnotations");

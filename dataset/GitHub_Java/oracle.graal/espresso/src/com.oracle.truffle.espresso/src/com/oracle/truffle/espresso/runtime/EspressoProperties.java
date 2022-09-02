@@ -275,6 +275,8 @@ public interface EspressoProperties {
 
         Path espressoHome = HomeFinder.getInstance().getLanguageHomes().get(EspressoLanguage.ID);
 
+        boolean isJava8 = builder.bootClassPathVersion().getJavaVersion() == 8;
+
         // Inject hotswap.jar
         if (options.get(EspressoOptions.JDWPOptions) != null) {
             Path hotswapJar = espressoHome.resolve("lib").resolve("hotswap.jar");
