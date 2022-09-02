@@ -417,13 +417,16 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    public void vmStarted(Object mainThread) {
+    public void vmStarted() {
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
         stream.writeByte(SuspendStrategy.NONE);
         stream.writeInt(1);
         stream.writeByte(RequestedJDWPEvents.VM_START);
         stream.writeInt(vmStartRequestId != -1 ? vmStartRequestId : 0);
-        stream.writeLong(context.getIds().getIdAsLong(mainThread));
+        // using a new object (that will be GC'ed soon) as representation for the
+        // initial thread, which is the thread used to load early bootstrap/system classes
+        // during VM startup before the main thread is created.
+        stream.writeLong(context.getIds().getIdAsLong(new Object()));
         connection.queuePacket(stream);
     }
 
