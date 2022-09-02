@@ -245,8 +245,8 @@ class VirtualizerToolImpl implements VirtualizerTool, CanonicalizerTool {
 
     private ValueNode getIllegalConstant() {
         if (illegalConstant == null) {
-            /* Try not to spawn a second illegal constant in the graph. */
-            illegalConstant = ConstantNode.forConstant(JavaConstant.forIllegal(), getMetaAccess(), closure.cfg.graph);
+            illegalConstant = ConstantNode.forConstant(JavaConstant.forIllegal(), getMetaAccess());
+            addNode(illegalConstant);
         }
         return illegalConstant;
     }

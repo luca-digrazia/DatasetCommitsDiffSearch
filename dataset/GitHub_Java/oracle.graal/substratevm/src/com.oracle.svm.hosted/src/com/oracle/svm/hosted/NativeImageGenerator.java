@@ -443,15 +443,22 @@ public class NativeImageGenerator {
                     ImageSingletons.add(RuntimeOptionValues.class, new RuntimeOptionValues(optionProvider.getRuntimeValues(), allOptionNames));
 
                     doRun(entryPoints, javaMainSupport, imageName, k, harnessSubstitutions, compilationExecutor, analysisExecutor);
-                } catch (Throwable t) {
+                } finally {
                     try {
-                        cleanup();
-                    } catch (Throwable ecleanup) {
-                        t.addSuppressed(ecleanup);
+                        /*
+                         * Make sure we clean up after ourselves even in the case of an exception.
+                         */
+                        if (deleteTempDirectory) {
+                            deleteAll(tempDirectory());
+                        }
+                        featureHandler.forEachFeature(Feature::cleanup);
+                    } catch (Throwable e) {
+                        /*
+                         * Suppress subsequent errors so that we unwind the original error brought
+                         * us here.
+                         */
                     }
-                    throw t;
                 }
-                cleanup();
             }).get();
         } catch (InterruptedException | CancellationException e) {
             System.out.println("Interrupted!");
@@ -465,13 +472,6 @@ public class NativeImageGenerator {
         } finally {
             shutdownPoolSafe();
         }
-    }
-
-    private void cleanup() {
-        if (deleteTempDirectory) {
-            deleteAll(tempDirectory());
-        }
-        featureHandler.forEachFeature(Feature::cleanup);
     }
 
     protected static void setSystemPropertiesForImageEarly() {
