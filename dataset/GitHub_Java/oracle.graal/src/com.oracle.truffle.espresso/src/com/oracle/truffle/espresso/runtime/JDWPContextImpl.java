@@ -267,9 +267,9 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean verifyArrayLength(Object array, int maxIndex) {
+    public boolean verifyArrayLength(Object array, int length) {
         StaticObject staticObject = (StaticObject) array;
-        return maxIndex <= staticObject.length();
+        return staticObject.length() < length;
     }
 
     @Override
@@ -328,11 +328,6 @@ public final class JDWPContextImpl implements JDWPContext {
     public void setArrayValue(Object array, int index, Object value) {
         StaticObject arrayRef = (StaticObject) array;
         arrayRef.putObject((StaticObject) value, index, context.getMeta());
-    }
-
-    @Override
-    public Object newArray(KlassRef klass, int length) {
-        return StaticObject.createArray((ArrayKlass) klass, new StaticObject[length]);
     }
 
     @Override
