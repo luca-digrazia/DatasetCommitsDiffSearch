@@ -789,7 +789,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         // should never be remove twice
         assert !context.weakReference.removed;
         context.weakReference.removed = true;
-        context.weakReference.freeInstances.clear();
         contexts.remove(context.weakReference);
         workContextReferenceQueue();
     }
@@ -802,7 +801,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 for (PolyglotLanguageInstance instance : contextRef.freeInstances) {
                     instance.language.freeInstance(instance);
                 }
-                contextRef.freeInstances.clear();
             }
         }
     }
@@ -1005,9 +1003,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 }
                 ENGINES.remove(this);
                 closed = true;
-                for (PolyglotLanguage language : idToLanguage.values()) {
-                    language.close();
-                }
             } else if (logHandler != null) {
                 // called from shutdown hook, at least flush the logging handler
                 logHandler.flush();

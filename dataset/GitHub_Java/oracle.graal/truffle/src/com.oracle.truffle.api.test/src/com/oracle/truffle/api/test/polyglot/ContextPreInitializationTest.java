@@ -1685,7 +1685,15 @@ public class ContextPreInitializationTest {
             return Truffle.getRuntime().createCallTarget(new RootNode(this) {
                 @Override
                 public Object execute(VirtualFrame frame) {
-                    executeImpl(lookupContextReference(languageClass).get(), getLanguageInfo());
+                    String msg = parseStdOutOutput.get(getLanguageInfo().getId());
+                    if (msg != null) {
+                        write(lookupContextReference(languageClass).get().environment().out(), msg);
+                    }
+                    msg = parseStdErrOutput.get(getLanguageInfo().getId());
+                    if (msg != null) {
+                        write(lookupContextReference(languageClass).get().environment().err(), msg);
+                    }
+                    assertEquals(0, lookupContextReference(languageClass).get().disposeContextCount);
                     return result;
                 }
             });
@@ -1697,18 +1705,6 @@ public class ContextPreInitializationTest {
         }
 
         @CompilerDirectives.TruffleBoundary
-        private static void executeImpl(CountingContext ctx, LanguageInfo info) {
-            String msg = parseStdOutOutput.get(info.getId());
-            if (msg != null) {
-                write(ctx.environment().out(), msg);
-            }
-            msg = parseStdErrOutput.get(info.getId());
-            if (msg != null) {
-                write(ctx.environment().err(), msg);
-            }
-            assertEquals(0, ctx.disposeContextCount);
-        }
-
         private static void write(final OutputStream out, final String content) {
             try {
                 out.write(content.getBytes("UTF-8"));
