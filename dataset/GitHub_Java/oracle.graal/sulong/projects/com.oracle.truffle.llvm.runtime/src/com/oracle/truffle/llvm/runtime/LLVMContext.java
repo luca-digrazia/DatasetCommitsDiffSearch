@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm.runtime;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -39,7 +40,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Random;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -245,31 +245,10 @@ public final class LLVMContext {
 
     public void initialize() {
         assert this.threadingStack == null;
-        this.threadingStack = new LLVMThreadingStack(Thread.currentThread(), parseStackSize(env.getOptions().get(SulongEngineOption.STACK_SIZE)));
+        this.threadingStack = new LLVMThreadingStack(Thread.currentThread(), env.getOptions().get(SulongEngineOption.STACK_SIZE_KB));
         for (ContextExtension ext : contextExtensions) {
             ext.initialize();
         }
-    }
-
-    public static long parseStackSize(String v) {
-        String valueString = v.trim().toLowerCase();
-        long scale = 1;
-        if (valueString.endsWith("k")) {
-            scale = 1024L;
-        } else if (valueString.endsWith("m")) {
-            scale = 1024L * 1024L;
-        } else if (valueString.endsWith("g")) {
-            scale = 1024L * 1024L * 1024L;
-        } else if (valueString.endsWith("t")) {
-            scale = 1024L * 1024L * 1024L * 1024L;
-        }
-
-        if (scale != 1) {
-            /* Remove trailing scale character. */
-            valueString = valueString.substring(0, valueString.length() - 1);
-        }
-
-        return Long.parseLong(valueString) * scale;
     }
 
     public boolean isInitialized() {
@@ -309,12 +288,12 @@ public final class LLVMContext {
     @TruffleBoundary
     private LLVMManagedPointer getRandomValues() {
         byte[] result = new byte[16];
-        random().nextBytes(result);
+        secureRandom().nextBytes(result);
         return toManagedPointer(toTruffleObject(result));
     }
 
-    private static Random random() {
-        return new Random();
+    private static SecureRandom secureRandom() {
+        return new SecureRandom();
     }
 
     private LLVMManagedPointer toTruffleObjects(String[] values) {
@@ -444,27 +423,19 @@ public final class LLVMContext {
         return addExternalLibrary(ExternalLibrary.internal(path, isNative));
     }
 
-    /**
-     * @return null if already loaded
-     */
     public ExternalLibrary addExternalLibrary(String lib, boolean isNative) {
         CompilerAsserts.neverPartOfCompilation();
         Path path = locateExternalLibrary(lib);
-        ExternalLibrary newLib = ExternalLibrary.external(path, isNative);
-        ExternalLibrary existingLib = addExternalLibrary(newLib);
-        return existingLib == newLib ? newLib : null;
+        return addExternalLibrary(ExternalLibrary.external(path, isNative));
     }
 
     private ExternalLibrary addExternalLibrary(ExternalLibrary externalLib) {
         int index = externalLibraries.indexOf(externalLib);
-        if (index >= 0) {
-            ExternalLibrary ret = externalLibraries.get(index);
-            assert ret.equals(externalLib);
-            return ret;
-        } else {
+        if (index < 0) {
             externalLibraries.add(externalLib);
             return externalLib;
         }
+        return null;
     }
 
     public List<ExternalLibrary> getExternalLibraries(Predicate<ExternalLibrary> filter) {
@@ -730,17 +701,14 @@ public final class LLVMContext {
         return globalsReverseMap.get(pointer);
     }
 
-    @TruffleBoundary
     public void registerReadOnlyGlobals(LLVMPointer nonPointerStore) {
         globalsReadOnlyStore.add(nonPointerStore);
     }
 
-    @TruffleBoundary
     public void registerGlobals(LLVMPointer nonPointerStore) {
         globalsNonPointerStore.add(nonPointerStore);
     }
 
-    @TruffleBoundary
     public void registerGlobalReverseMap(LLVMGlobal global, LLVMPointer target) {
         globalsReverseMap.put(target, global);
     }
@@ -749,7 +717,6 @@ public final class LLVMContext {
         cleanupNecessary = value;
     }
 
-    @TruffleBoundary
     public LLVMInteropType getInteropType(LLVMSourceType sourceType) {
         return interopTypeRegistry.get(sourceType);
     }
