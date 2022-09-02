@@ -26,8 +26,6 @@
 // @formatter:off
 package com.oracle.svm.core.jdk8.containers;
 
-import com.oracle.svm.core.SubstrateUtil;
-
 /**
  * Data structure to hold info from /proc/self/cgroup
  *
@@ -60,7 +58,7 @@ class CgroupInfo {
     }
 
     static CgroupInfo fromCgroupsLine(String line) {
-        String[] tokens = SubstrateUtil.split(line, "\t");
+        String[] tokens = line.split("\t");
         if (tokens.length != 4) {
             return null;
         }

@@ -32,7 +32,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.jdk8.containers.CgroupSubsystem;
 import com.oracle.svm.core.jdk8.containers.CgroupSubsystemController;
 import com.oracle.svm.core.jdk8.containers.CgroupUtil;
@@ -65,7 +64,7 @@ public class CgroupV2Subsystem implements CgroupSubsystem {
         try {
             for (String line : CgroupUtil.readAllLinesPrivileged(Paths.get("/proc/self/mountinfo"))) {
                 if (line.contains(" - cgroup2 ")) {
-                    String[] tokens = SubstrateUtil.split(line, " ");
+                    String[] tokens = line.split(" ");
                     mountPath = tokens[4];
                 }
             }
@@ -76,7 +75,7 @@ public class CgroupV2Subsystem implements CgroupSubsystem {
         try {
             List<String> lines = CgroupUtil.readAllLinesPrivileged(Paths.get("/proc/self/cgroup"));
             for (String line: lines) {
-                String[] tokens = SubstrateUtil.split(line, ":");
+                String[] tokens = line.split(":");
                 if (tokens.length != 3) {
                     return null; // something is not right.
                 }
@@ -154,7 +153,7 @@ public class CgroupV2Subsystem implements CgroupSubsystem {
             return CgroupSubsystem.LONG_RETVAL_UNLIMITED;
         }
         // $MAX $PERIOD
-        String[] tokens = SubstrateUtil.split(cpuMaxRaw, " ");
+        String[] tokens = cpuMaxRaw.split(" ");
         if (tokens.length != 2) {
             return CgroupSubsystem.LONG_RETVAL_UNLIMITED;
         }
@@ -336,10 +335,10 @@ public class CgroupV2Subsystem implements CgroupSubsystem {
         if (line == null || EMPTY_STR.equals(line)) {
             return Long.valueOf(0);
         }
-        String[] tokens = SubstrateUtil.split(line, " ");
+        String[] tokens = line.split(" ");
         long retval = 0;
         for (String t: tokens) {
-            String[] valKeys = SubstrateUtil.split(t, "=");
+            String[] valKeys = t.split("=");
             if (valKeys.length != 2) {
                 // ignore device ids $MAJ:$MIN
                 continue;
