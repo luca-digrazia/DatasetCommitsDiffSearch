@@ -854,11 +854,11 @@ public class NativeImageGenerator {
 
                 prepareLibC();
 
-                if (!(SubstrateOptions.useLLVMBackend() && NativeImageOptions.ExitAfterRelocatableImageWrite.getValue() && CAnnotationProcessorCache.Options.UseCAPCache.getValue())) {
-                    CCompilerInvoker compilerInvoker = CCompilerInvoker.create(tempDirectory());
+                CCompilerInvoker compilerInvoker = CCompilerInvoker.create(tempDirectory());
+                if (!("llvm".equals(SubstrateOptions.CompilerBackend.getValue()) && NativeImageOptions.ExitAfterRelocatableImageWrite.getValue())) {
                     compilerInvoker.verifyCompiler();
-                    ImageSingletons.add(CCompilerInvoker.class, compilerInvoker);
                 }
+                ImageSingletons.add(CCompilerInvoker.class, compilerInvoker);
 
                 nativeLibraries = setupNativeLibraries(imageName, aConstantReflection, aMetaAccess, aSnippetReflection, cEnumProcessor, classInitializationSupport, debug);
 

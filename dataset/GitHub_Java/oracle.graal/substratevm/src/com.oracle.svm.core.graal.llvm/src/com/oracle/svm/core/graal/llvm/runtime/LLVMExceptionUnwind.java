@@ -49,6 +49,7 @@ import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.graal.llvm.util.LLVMDirectives;
 import com.oracle.svm.core.snippets.ExceptionUnwind;
 import com.oracle.svm.core.stack.StackOverflowCheck;
+import com.oracle.svm.core.thread.ThreadingSupportImpl;
 import com.oracle.svm.hosted.code.CEntryPointCallStubSupport;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -102,6 +103,7 @@ public class LLVMExceptionUnwind {
         } else if ((action & _UA_CLEANUP_PHASE()) != 0) {
             setIP(context, functionStart.add(handlerOffset.intValue()));
 
+            ThreadingSupportImpl.resumeRecurringCallbackAtNextSafepoint();
             StackOverflowCheck.singleton().protectYellowZone();
             return _URC_INSTALL_CONTEXT();
         } else {

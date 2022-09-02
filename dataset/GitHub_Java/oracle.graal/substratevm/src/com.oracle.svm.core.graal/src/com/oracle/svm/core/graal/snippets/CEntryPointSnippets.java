@@ -31,8 +31,6 @@ import static com.oracle.svm.core.graal.nodes.WriteCurrentVMThreadNode.writeCurr
 import static com.oracle.svm.core.graal.nodes.WriteHeapBaseNode.writeCurrentVMHeapBase;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.Map;
 
 import org.graalvm.compiler.api.replacements.Fold;
@@ -506,16 +504,14 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
     }
 
     private static void logException(Throwable exception) {
-        Log log = Log.log();
-        if (log.isEnabled()) {
-            if (NoAllocationVerifier.isActive()) {
-                log.exception(exception).newline();
-            } else {
-                StringWriter writer = new StringWriter();
-                exception.printStackTrace(new PrintWriter(writer));
-                log.string(writer.toString()); // no newline needed
+        Log.log().string(exception.getClass().getName());
+        if (!NoAllocationVerifier.isActive()) {
+            String detail = exception.getMessage();
+            if (detail != null) {
+                Log.log().string(": ").string(detail);
             }
         }
+        Log.log().newline();
     }
 
     @Snippet

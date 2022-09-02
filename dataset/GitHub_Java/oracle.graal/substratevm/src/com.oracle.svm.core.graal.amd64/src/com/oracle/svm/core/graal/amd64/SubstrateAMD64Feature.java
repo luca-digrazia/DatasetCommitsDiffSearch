@@ -24,10 +24,7 @@
  */
 package com.oracle.svm.core.graal.amd64;
 
-import static com.oracle.svm.core.SubstrateOptions.CompilerBackend;
-
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
-import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
 import org.graalvm.compiler.replacements.TargetGraphBuilderPlugins;
@@ -37,6 +34,7 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.code.SubstrateBackend;
 import com.oracle.svm.core.graal.code.SubstrateBackendFactory;
@@ -63,7 +61,7 @@ class SubstrateAMD64Feature implements Feature {
             }
         });
 
-        if (CompilerBackend.getValue().equals("lir")) {
+        if (!SubstrateOptions.useLLVMBackend()) {
             AMD64CalleeSavedRegisters.createAndRegister();
 
             ImageSingletons.add(SubstrateBackendFactory.class, new SubstrateBackendFactory() {
@@ -75,9 +73,8 @@ class SubstrateAMD64Feature implements Feature {
 
             ImageSingletons.add(SubstrateLoweringProviderFactory.class, new SubstrateLoweringProviderFactory() {
                 @Override
-                public DefaultJavaLoweringProvider newLoweringProvider(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, PlatformConfigurationProvider platformConfig,
-                                TargetDescription target) {
-                    return new SubstrateAMD64LoweringProvider(metaAccess, foreignCalls, platformConfig, target);
+                public DefaultJavaLoweringProvider newLoweringProvider(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, TargetDescription target) {
+                    return new SubstrateAMD64LoweringProvider(metaAccess, foreignCalls, target);
                 }
             });
 
