@@ -40,6 +40,8 @@
  */
 package org.graalvm.launcher;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -99,7 +101,11 @@ public abstract class AbstractLanguageLauncher extends Launcher {
             nativeAccess.maybeExec(args, false, polyglotOptions, getDefaultVMType());
         }
 
-        parsePolyglotOptions(getLanguageId(), polyglotOptions, unrecognizedArgs);
+        for (String arg : unrecognizedArgs) {
+            if (!parsePolyglotOption(getLanguageId(), polyglotOptions, arg)) {
+                throw abortUnrecognizedArgument(arg);
+            }
+        }
 
         if (runPolyglotAction()) {
             return;
@@ -114,11 +120,28 @@ public abstract class AbstractLanguageLauncher extends Launcher {
         } else {
             builder = Context.newBuilder(getDefaultLanguages()).options(polyglotOptions);
         }
-
         builder.allowAllAccess(true);
-        setupLogHandler(builder);
+
+        final Path logFile = getLogFile();
+        if (logFile != null) {
+            try {
+                builder.logHandler(newLogStream(logFile));
+            } catch (IOException ioe) {
+                throw abort(ioe);
+            }
+        }
 
         launch(builder);
+    }
+
+    /**
+     * This is called to abort execution when an argument can neither be recognized by the launcher
+     * or as an option for the polyglot engine.
+     *
+     * @param argument the argument that was not recognized.
+     */
+    protected AbortException abortUnrecognizedArgument(String argument) {
+        throw abortInvalidArgument(argument, "Unrecognized argument: '" + argument + "'. Use --help for usage instructions.");
     }
 
     /**
