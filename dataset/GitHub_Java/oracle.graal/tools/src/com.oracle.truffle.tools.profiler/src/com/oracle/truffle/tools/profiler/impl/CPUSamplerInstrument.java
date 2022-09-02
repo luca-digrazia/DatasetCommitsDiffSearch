@@ -24,6 +24,8 @@
  */
 package com.oracle.truffle.tools.profiler.impl;
 
+import static com.oracle.truffle.tools.profiler.impl.CPUSamplerCLI.GATHER_HIT_TIMES;
+
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
@@ -37,7 +39,7 @@ import com.oracle.truffle.tools.profiler.CPUSampler;
  *
  * @since 0.30
  */
-@TruffleInstrument.Registration(id = CPUSamplerInstrument.ID, name = "CPU Sampler", version = "0.1", services = {CPUSampler.class})
+@TruffleInstrument.Registration(id = CPUSamplerInstrument.ID, name = "CPU Sampler", version = CPUSamplerInstrument.VERSION, services = {CPUSampler.class})
 public class CPUSamplerInstrument extends TruffleInstrument {
 
     /**
@@ -54,6 +56,7 @@ public class CPUSamplerInstrument extends TruffleInstrument {
      * @since 0.30
      */
     public static final String ID = "cpusampler";
+    static final String VERSION = "0.5.0";
     private CPUSampler sampler;
     private static ProfilerToolFactory<CPUSampler> factory;
 
@@ -84,24 +87,6 @@ public class CPUSamplerInstrument extends TruffleInstrument {
      * Does a lookup in the runtime instruments of the engine and returns an instance of the
      * {@link CPUSampler}.
      *
-     * @since 0.30
-     * @deprecated use {@link #getSampler(Engine)} instead.
-     */
-    @Deprecated
-    @SuppressWarnings("deprecation")
-    public static CPUSampler getSampler(com.oracle.truffle.api.vm.PolyglotEngine engine) {
-        com.oracle.truffle.api.vm.PolyglotRuntime.Instrument instrument = engine.getRuntime().getInstruments().get(ID);
-        if (instrument == null) {
-            throw new IllegalStateException("Sampler is not installed.");
-        }
-        instrument.setEnabled(true);
-        return instrument.lookup(CPUSampler.class);
-    }
-
-    /**
-     * Does a lookup in the runtime instruments of the engine and returns an instance of the
-     * {@link CPUSampler}.
-     *
      * @since 0.33
      */
     public static CPUSampler getSampler(Engine engine) {
@@ -126,20 +111,19 @@ public class CPUSamplerInstrument extends TruffleInstrument {
             sampler.setDelay(env.getOptions().get(CPUSamplerCLI.DELAY_PERIOD));
             sampler.setStackLimit(env.getOptions().get(CPUSamplerCLI.STACK_LIMIT));
             sampler.setFilter(getSourceSectionFilter(env));
-            sampler.setMode(env.getOptions().get(CPUSamplerCLI.MODE));
+            sampler.setGatherSelfHitTimes(env.getOptions().get(GATHER_HIT_TIMES));
             sampler.setCollecting(true);
         }
         env.registerService(sampler);
     }
 
     private static SourceSectionFilter getSourceSectionFilter(Env env) {
-        final CPUSampler.Mode mode = env.getOptions().get(CPUSamplerCLI.MODE);
-        final boolean statements = mode == CPUSampler.Mode.STATEMENTS;
         final boolean internals = env.getOptions().get(CPUSamplerCLI.SAMPLE_INTERNAL);
         final Object[] filterRootName = env.getOptions().get(CPUSamplerCLI.FILTER_ROOT);
         final Object[] filterFile = env.getOptions().get(CPUSamplerCLI.FILTER_FILE);
+        final String filterMimeType = env.getOptions().get(CPUSamplerCLI.FILTER_MIME_TYPE);
         final String filterLanguage = env.getOptions().get(CPUSamplerCLI.FILTER_LANGUAGE);
-        return CPUSamplerCLI.buildFilter(true, statements, false, internals, filterRootName, filterFile, filterLanguage);
+        return CPUSamplerCLI.buildFilter(true, false, false, internals, filterRootName, filterFile, filterMimeType, filterLanguage);
     }
 
     /**
