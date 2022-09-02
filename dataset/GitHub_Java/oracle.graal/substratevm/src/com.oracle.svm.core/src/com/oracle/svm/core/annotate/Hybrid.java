@@ -49,7 +49,7 @@ import com.oracle.svm.core.hub.DynamicHub;
  *    +--------------------------------+
  *    | Array length                   |
  *    +--------------------------------+
- *    | bits | type id slots (optional)|
+ *    | bits (optional)                |
  *    |     ...                        |
  *    +--------------------------------+
  *    | instance fields                |
@@ -73,14 +73,6 @@ public @interface Hybrid {
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.FIELD)
     public @interface Array {
-    }
-
-    /**
-     * Specifies a single member type slots.
-     */
-    @Retention(RetentionPolicy.RUNTIME)
-    @Target(ElementType.FIELD)
-    public @interface TypeIDSlots {
     }
 
     /**
