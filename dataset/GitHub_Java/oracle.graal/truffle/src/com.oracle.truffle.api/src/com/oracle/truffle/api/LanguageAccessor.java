@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -576,11 +576,6 @@ final class LanguageAccessor extends Accessor {
         }
 
         @Override
-        public Object getLoggersSPI(Object loggerCache) {
-            return ((TruffleLogger.LoggerCache) loggerCache).getSPI();
-        }
-
-        @Override
         public void closeEngineLoggers(Object loggers) {
             ((TruffleLogger.LoggerCache) loggers).close();
         }
@@ -600,39 +595,5 @@ final class LanguageAccessor extends Accessor {
             return truffleFile.getSPIPath();
         }
 
-        @Override
-        public boolean isSynchronousTLAction(ThreadLocalAction action) {
-            return action.isSynchronous();
-        }
-
-        @Override
-        public boolean isSideEffectingTLAction(ThreadLocalAction action) {
-            return action.hasSideEffects();
-        }
-
-        @Override
-        public void performTLAction(ThreadLocalAction action, ThreadLocalAction.Access access) {
-            action.perform(access);
-        }
-
-        @Override
-        public ClassLoader getSomClassloader(TruffleLanguage<?> language) {
-            return engineAccess().getSomClassloader(language.polyglotLanguageInstance);
-        }
-
-        @Override
-        public void setSomClassloader(TruffleLanguage<?> language, ClassLoader cl) {
-            engineAccess().setSomClassloader(language.polyglotLanguageInstance, cl);
-        }
-
-        @Override
-        public boolean areSomSafetyChecksRelaxed(TruffleLanguage<?> language) {
-            return engineAccess().areSomSafetyChecksRelaxed(language.polyglotLanguageInstance);
-        }
-
-        @Override
-        public String getSomStorageStrategy(TruffleLanguage<?> language) {
-            return engineAccess().getSomStorageStrategy(language.polyglotLanguageInstance);
-        }
     }
 }
