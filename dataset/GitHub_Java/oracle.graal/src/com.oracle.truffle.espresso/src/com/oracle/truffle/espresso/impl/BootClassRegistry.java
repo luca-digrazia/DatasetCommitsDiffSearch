@@ -46,16 +46,6 @@ public final class BootClassRegistry extends ClassRegistry {
     static final DebugCounter loadKlassCount = DebugCounter.create("BCL loadKlassCount");
     static final DebugCounter loadKlassCacheHits = DebugCounter.create("BCL loadKlassCacheHits");
 
-    @Override
-    protected void loadKlassCountInc() {
-        loadKlassCount.inc();
-    }
-
-    @Override
-    protected void loadKlassCacheHitsInc() {
-        loadKlassCacheHits.inc();
-    }
-
     private final Map<String, String> packageMap = new ConcurrentHashMap<>();
 
     public BootClassRegistry(EspressoContext context) {
@@ -69,17 +59,37 @@ public final class BootClassRegistry extends ClassRegistry {
     }
 
     @Override
-    public Klass loadKlassImpl(Symbol<Type> type) {
+    public Klass loadKlass(Symbol<Type> type) {
+        if (Types.isArray(type)) {
+            Symbol<Type> elemental = getTypes().getElementalType(type);
+            Klass elementalKlass = loadKlass(elemental);
+            if (elementalKlass == null) {
+                return null;
+            }
+            return elementalKlass.getArrayClass(Types.getArrayDimensions(type));
+        }
+
+        loadKlassCount.inc();
+
+        Klass klass = classes.get(type);
+        if (klass != null) {
+            loadKlassCacheHits.inc();
+            return klass;
+        }
+
         EspressoError.guarantee(!Types.isPrimitive(type), "Primitives must be in the registry");
+
         ClasspathFile classpathFile = getContext().getBootClasspath().readClassFile(type);
         if (classpathFile == null) {
             return null;
         }
+
         // Defining a class also loads the superclass and the superinterfaces which excludes the
         // use of computeIfAbsent to insert the class since the map is modified.
         ObjectKlass result = defineKlass(type, classpathFile.contents);
         getRegistries().recordConstraint(type, result, getClassLoader());
         packageMap.put(result.getRuntimePackage(), classpathFile.classpathEntry.path());
+
         return result;
     }
 
@@ -88,8 +98,8 @@ public final class BootClassRegistry extends ClassRegistry {
         return result;
     }
 
-    public String[] getPackagePaths() {
-        return packageMap.values().toArray(new String[0]);
+    public String[] getPackages() {
+        return packageMap.keySet().toArray(new String[0]);
     }
 
     @Override
