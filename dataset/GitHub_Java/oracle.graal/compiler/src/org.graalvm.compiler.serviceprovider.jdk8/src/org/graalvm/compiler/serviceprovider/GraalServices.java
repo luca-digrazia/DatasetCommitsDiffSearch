@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,11 +28,27 @@ import static java.lang.Thread.currentThread;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.management.RuntimeMXBean;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.math.BigDecimal;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceConfigurationError;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import jdk.vm.ci.code.DebugInfo;
+import jdk.vm.ci.code.VirtualObject;
+import jdk.vm.ci.code.site.Infopoint;
+import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.meta.ConstantPool;
+import jdk.vm.ci.meta.EncodedSpeculationReason;
+import jdk.vm.ci.meta.JavaType;
+import jdk.vm.ci.meta.ResolvedJavaType;
+import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
 import jdk.vm.ci.services.JVMCIPermission;
 import jdk.vm.ci.services.Services;
 
@@ -40,31 +56,6 @@ import jdk.vm.ci.services.Services;
  * JDK 8 version of {@link GraalServices}.
  */
 public final class GraalServices {
-
-    private static int getJavaSpecificationVersion() {
-        String value = System.getProperty("java.specification.version");
-        if (value.startsWith("1.")) {
-            value = value.substring(2);
-        }
-        return Integer.parseInt(value);
-    }
-
-    /**
-     * The integer value corresponding to the value of the {@code java.specification.version} system
-     * property after any leading {@code "1."} has been stripped.
-     */
-    public static final int JAVA_SPECIFICATION_VERSION = getJavaSpecificationVersion();
-
-    /**
-     * Determines if the Java runtime is version 8 or earlier.
-     */
-    public static final boolean Java8OrEarlier = JAVA_SPECIFICATION_VERSION <= 8;
-
-    /**
-     * Determines if the Java runtime is version 11 or earlier.
-     */
-    public static final boolean Java11OrEarlier = JAVA_SPECIFICATION_VERSION <= 11;
-
     private GraalServices() {
     }
 
@@ -140,13 +131,21 @@ public final class GraalServices {
         return cl == null || cl == JVMCI_LOADER || cl == JVMCI_PARENT_LOADER;
     }
 
+    static SpeculationReason createSpeculationReason(int groupId, String groupName, Object... context) {
+        SpeculationEncodingAdapter adapter = new SpeculationEncodingAdapter();
+        return new EncodedSpeculationReason(groupId, groupName, adapter.flatten(context));
+    }
+
     /**
      * Gets a unique identifier for this execution such as a process ID or a
      * {@linkplain #getGlobalTimeStamp() fixed timestamp}.
      */
     public static String getExecutionID() {
         try {
-            String runtimeName = java.lang.management.ManagementFactory.getRuntimeMXBean().getName();
+            if (Lazy.runtimeMXBean == null) {
+                return String.valueOf(getGlobalTimeStamp());
+            }
+            String runtimeName = Lazy.runtimeMXBean.getName();
             try {
                 int index = runtimeName.indexOf('@');
                 if (index != -1) {
@@ -178,7 +177,22 @@ public final class GraalServices {
      * Lazy initialization of Java Management Extensions (JMX).
      */
     static class Lazy {
-        static final com.sun.management.ThreadMXBean threadMXBean = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+        static final com.sun.management.ThreadMXBean threadMXBean;
+        static final RuntimeMXBean runtimeMXBean;
+        static {
+            com.sun.management.ThreadMXBean resultThread;
+            RuntimeMXBean resultRuntime;
+            try {
+                /* Trigger loading of the management library using the bootstrap class loader. */
+                resultThread = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+                resultRuntime = java.lang.management.ManagementFactory.getRuntimeMXBean();
+            } catch (UnsatisfiedLinkError | NoClassDefFoundError | UnsupportedOperationException e) {
+                resultThread = null;
+                resultRuntime = null;
+            }
+            threadMXBean = resultThread;
+            runtimeMXBean = resultRuntime;
+        }
     }
 
     /**
@@ -206,6 +220,9 @@ public final class GraalServices {
      *             measurement.
      */
     public static long getThreadAllocatedBytes(long id) {
+        if (Lazy.threadMXBean == null) {
+            throw new UnsupportedOperationException();
+        }
         return Lazy.threadMXBean.getThreadAllocatedBytes(id);
     }
 
@@ -214,7 +231,7 @@ public final class GraalServices {
      * current thread.
      */
     public static long getCurrentThreadAllocatedBytes() {
-        return Lazy.threadMXBean.getThreadAllocatedBytes(currentThread().getId());
+        return getThreadAllocatedBytes(currentThread().getId());
     }
 
     /**
@@ -231,6 +248,9 @@ public final class GraalServices {
      *             the current thread
      */
     public static long getCurrentThreadCpuTime() {
+        if (Lazy.threadMXBean == null) {
+            throw new UnsupportedOperationException();
+        }
         return Lazy.threadMXBean.getCurrentThreadCpuTime();
     }
 
@@ -239,6 +259,9 @@ public final class GraalServices {
      * measurement.
      */
     public static boolean isThreadAllocatedMemorySupported() {
+        if (Lazy.threadMXBean == null) {
+            return false;
+        }
         return Lazy.threadMXBean.isThreadAllocatedMemorySupported();
     }
 
@@ -246,6 +269,9 @@ public final class GraalServices {
      * Determines if the Java virtual machine supports CPU time measurement for the current thread.
      */
     public static boolean isCurrentThreadCpuTimeSupported() {
+        if (Lazy.threadMXBean == null) {
+            return false;
+        }
         return Lazy.threadMXBean.isCurrentThreadCpuTimeSupported();
     }
 
@@ -264,6 +290,153 @@ public final class GraalServices {
      * @return the input arguments to the JVM or {@code null} if they are unavailable
      */
     public static List<String> getInputArguments() {
-        return java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments();
+        if (Lazy.runtimeMXBean == null) {
+            return null;
+        }
+        return Lazy.runtimeMXBean.getInputArguments();
+    }
+
+    /**
+     * Returns the fused multiply add of the three arguments; that is, returns the exact product of
+     * the first two arguments summed with the third argument and then rounded once to the nearest
+     * {@code float}.
+     */
+    public static float fma(float a, float b, float c) {
+        // Copy from JDK 9
+        float result = (float) (((double) a * (double) b) + c);
+        return result;
+    }
+
+    /**
+     * Returns the fused multiply add of the three arguments; that is, returns the exact product of
+     * the first two arguments summed with the third argument and then rounded once to the nearest
+     * {@code double}.
+     */
+    public static double fma(double a, double b, double c) {
+        // Copy from JDK 9
+        if (Double.isNaN(a) || Double.isNaN(b) || Double.isNaN(c)) {
+            return Double.NaN;
+        } else { // All inputs non-NaN
+            boolean infiniteA = Double.isInfinite(a);
+            boolean infiniteB = Double.isInfinite(b);
+            boolean infiniteC = Double.isInfinite(c);
+            double result;
+
+            if (infiniteA || infiniteB || infiniteC) {
+                if (infiniteA && b == 0.0 || infiniteB && a == 0.0) {
+                    return Double.NaN;
+                }
+                double product = a * b;
+                if (Double.isInfinite(product) && !infiniteA && !infiniteB) {
+                    assert Double.isInfinite(c);
+                    return c;
+                } else {
+                    result = product + c;
+                    assert !Double.isFinite(result);
+                    return result;
+                }
+            } else { // All inputs finite
+                BigDecimal product = (new BigDecimal(a)).multiply(new BigDecimal(b));
+                if (c == 0.0) {
+                    if (a == 0.0 || b == 0.0) {
+                        return a * b + c;
+                    } else {
+                        return product.doubleValue();
+                    }
+                } else {
+                    return product.add(new BigDecimal(c)).doubleValue();
+                }
+            }
+        }
+    }
+
+    @SuppressWarnings("unused")
+    public static VirtualObject createVirtualObject(ResolvedJavaType type, int id, boolean isAutoBox) {
+        return VirtualObject.get(type, id, isAutoBox);
+    }
+
+    public static int getJavaUpdateVersion() {
+        // JDK 8: Only simplified patterns like 25.242-b08 or 25.241-b07-jvmci-20.1-b01
+        // are being recognized. Update represents the numerical value after the first
+        // dot and before the first dash
+        Pattern p = Pattern.compile("\\d+\\.([^-]+)-.*");
+        String vmVersion = Services.getSavedProperties().get("java.vm.version");
+        Matcher matcher = p.matcher(vmVersion);
+        if (!matcher.matches()) {
+            throw new InternalError("Unexpected java.vm.version value: " + vmVersion);
+        }
+        return Integer.parseInt(matcher.group(1));
+    }
+
+    private static final Method constantPoolLookupReferencedType;
+
+    static {
+        Method lookupReferencedType = null;
+        Class<?> constantPool = ConstantPool.class;
+        try {
+            lookupReferencedType = constantPool.getDeclaredMethod("lookupReferencedType", Integer.TYPE, Integer.TYPE);
+        } catch (NoSuchMethodException e) {
+        }
+        constantPoolLookupReferencedType = lookupReferencedType;
+    }
+
+    public static JavaType lookupReferencedType(ConstantPool constantPool, int cpi, int opcode) {
+        if (constantPoolLookupReferencedType != null) {
+            try {
+                return (JavaType) constantPoolLookupReferencedType.invoke(constantPool, cpi, opcode);
+            } catch (Error e) {
+                throw e;
+            } catch (Throwable throwable) {
+                throw new InternalError(throwable);
+            }
+        }
+        throw new InternalError("This JVMCI version doesn't support ConstantPool.lookupReferencedType()");
+    }
+
+    public static boolean hasLookupReferencedType() {
+        return constantPoolLookupReferencedType != null;
+    }
+
+    private static final Constructor<?> implicitExceptionDispatchConstructor;
+
+    static {
+        Constructor<?> tempConstructor;
+        try {
+            Class<?> implicitExceptionDispatch = Class.forName("jdk.vm.ci.code.site.ImplicitExceptionDispatch");
+            tempConstructor = implicitExceptionDispatch.getConstructor(int.class, int.class, DebugInfo.class);
+        } catch (ClassNotFoundException | NoSuchMethodException e) {
+            tempConstructor = null;
+        }
+        implicitExceptionDispatchConstructor = tempConstructor;
+    }
+
+    /**
+     * Returns true if JVMCI supports arbitrary implicit exception dispatch.
+     */
+    public static boolean supportsArbitraryImplicitException() {
+        return implicitExceptionDispatchConstructor != null && !"sparcv9".equals(Services.getSavedProperties().get("os.arch"));
+    }
+
+    /**
+     * Construct an implicit exception dispatch. If this JVMCI does not support arbitrary implicit
+     * exception dispatch, then throws an exception when {@code pcOffset} is not the same as
+     * {@code dispatchOffset}.
+     *
+     * @param pcOffset the exceptional PC offset
+     * @param dispatchOffset the continuation PC offset
+     * @param debugInfo debugging information at the exceptional PC
+     */
+    public static Infopoint genImplicitException(int pcOffset, int dispatchOffset, DebugInfo debugInfo) {
+        if (implicitExceptionDispatchConstructor == null) {
+            if (pcOffset != dispatchOffset) {
+                throw new InternalError("This JVMCI version doesn't support dispatching implicit exception to an arbitrary address.");
+            }
+            return new Infopoint(pcOffset, debugInfo, InfopointReason.IMPLICIT_EXCEPTION);
+        }
+        try {
+            return (Infopoint) implicitExceptionDispatchConstructor.newInstance(pcOffset, dispatchOffset, debugInfo);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw new InternalError("Exception when instantiating implicit exception dispatch", e);
+        }
     }
 }
