@@ -30,13 +30,12 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.stack.StackOverflowCheck;
-import com.oracle.svm.core.windows.headers.MemoryAPI;
+import com.oracle.svm.core.windows.headers.WinBase;
 
 @Platforms({Platform.WINDOWS.class})
 class WindowsStackOverflowSupport implements StackOverflowCheck.OSSupport {
@@ -44,16 +43,16 @@ class WindowsStackOverflowSupport implements StackOverflowCheck.OSSupport {
     @Uninterruptible(reason = "Called while thread is being attached to the VM, i.e., when the thread state is not yet set up.")
     @Override
     public UnsignedWord lookupStackEnd() {
-        MemoryAPI.MEMORY_BASIC_INFORMATION minfo = StackValue.get(MemoryAPI.MEMORY_BASIC_INFORMATION.class);
+        WinBase.MEMORY_BASIC_INFORMATION minfo = StackValue.get(WinBase.MEMORY_BASIC_INFORMATION.class);
 
         /*
          * We find the boundary of the stack by looking at the base of the memory block that
          * contains a (random known) address of the current stack. The stack-allocated memory where
          * the function result is placed in is just the easiest way to get such an address.
          */
-        MemoryAPI.VirtualQuery(minfo, minfo, SizeOf.unsigned(MemoryAPI.MEMORY_BASIC_INFORMATION.class));
+        WinBase.VirtualQuery(minfo, minfo, SizeOf.unsigned(WinBase.MEMORY_BASIC_INFORMATION.class));
 
-        return (Pointer) minfo.AllocationBase();
+        return minfo.AllocationBase();
     }
 }
 
