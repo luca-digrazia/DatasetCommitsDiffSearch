@@ -71,7 +71,6 @@ import org.graalvm.collections.Equivalence;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.io.FileSystem;
@@ -97,8 +96,9 @@ import com.oracle.truffle.api.instrumentation.ThreadsListener;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.polyglot.PolyglotContextImpl.ContextWeakReference;
+import org.graalvm.polyglot.HostAccess;
 
-final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractEngineImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
+class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractEngineImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
     /**
      * Context index for the host language.
@@ -157,8 +157,8 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
     // Data used by the runtime to enable "global" state per Engine
     volatile Object runtimeData;
     Map<String, Level> logLevels;    // effectively final
-    private HostClassCache hostClassCache; // effectively final
     private volatile Object engineLoggers;
+    private HostClassCache conf; // effectively final
 
     PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, Map<String, String> options,
                     boolean allowExperimentalOptions, boolean useSystemProperties, ClassLoader contextClassLoader, boolean boundEngine,
@@ -609,7 +609,7 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
                                         duplicateId, className1, className2));
     }
 
-    void checkState() {
+    final void checkState() {
         if (closed) {
             throw new IllegalStateException("Engine is already closed.");
         }
@@ -938,24 +938,19 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
         ENGINES.clear();
     }
 
-    void assignHostAccess(HostAccess policy) {
-        assert Thread.holdsLock(this);
-        HostAccess nonNullAccess = policy == null ? HostAccess.EXPLICIT : policy;
-        if (hostClassCache != null) {
-            if (!hostClassCache.checkHostAccess(nonNullAccess)) {
+    void assignHostAccess(HostAccess hostAccess) {
+        HostAccess nonNullAccess = hostAccess == null ? HostAccess.EXPLICIT : hostAccess;
+        if (conf != null) {
+            if (!conf.checkHostAccess(nonNullAccess)) {
                 throw new IllegalStateException("Cannot share engine between contexts with different HostAccess");
             }
         } else {
-            hostClassCache = HostClassCache.find(getAPIAccess(), nonNullAccess);
+            conf = HostClassCache.find(getAPIAccess(), nonNullAccess);
         }
     }
 
-    HostClassCache getHostClassCache() {
-        return hostClassCache;
-    }
-
-    HostClassDesc findHostClassDesc(Class<?> clazz) {
-        return hostClassCache.forClass(clazz);
+    final HostClassDesc findHostClassDesc(Class<?> clazz) {
+        return conf.forClass(clazz);
     }
 
     private static final class PolyglotShutDownHook implements Runnable {
@@ -1106,7 +1101,7 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
 
     @Override
     @SuppressWarnings({"all"})
-    public synchronized Context createContext(OutputStream configOut, OutputStream configErr, InputStream configIn, boolean allowHostLookup,
+    public synchronized Context createContext(OutputStream configOut, OutputStream configErr, InputStream configIn, boolean allowHostAccess,
                     HostAccess access,
                     boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO, boolean allowHostClassLoading,
                     boolean allowExperimentalOptions, Predicate<String> classFilter, Map<String, String> options, Map<String, String[]> arguments,
@@ -1154,7 +1149,7 @@ final class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglo
         final InputStream useIn = configIn == null ? this.in : configIn;
 
         PolyglotContextConfig config = new PolyglotContextConfig(this, useOut, useErr, useIn,
-                        allowHostLookup, allowNativeAccess, allowCreateThread, allowHostClassLoading,
+                        allowHostAccess, allowNativeAccess, allowCreateThread, allowHostClassLoading,
                         allowExperimentalOptions, classFilter, arguments, allowedLanguages, options, fs, useHandler);
 
         PolyglotContextImpl context = loadPreinitializedContext(config);

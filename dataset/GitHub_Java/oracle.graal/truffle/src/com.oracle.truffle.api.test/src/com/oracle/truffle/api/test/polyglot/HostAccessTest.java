@@ -40,18 +40,11 @@
  */
 package com.oracle.truffle.api.test.polyglot;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.HostAccessPolicy;
-import org.graalvm.polyglot.PolyglotException;
+import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
 import org.junit.Assert;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import org.junit.Test;
 
 public class HostAccessTest {
@@ -65,96 +58,17 @@ public class HostAccessTest {
 
     @Test
     public void usefulToStringExplicit() {
-        Assert.assertEquals("HostAccess.EXPLICIT", HostAccessPolicy.EXPLICIT.toString());
+        Assert.assertEquals("HostAccess.EXPLICIT", HostAccess.EXPLICIT.toString());
     }
 
     @Test
     public void usefulToStringPublic() {
-        Assert.assertEquals("HostAccess.PUBLIC", HostAccessPolicy.PUBLIC.toString());
-    }
-
-    public static class MyEquals {
-
-        @Override
-        public boolean equals(Object arg0) {
-            return arg0 != null && getClass() == arg0.getClass();
-        }
-
-        @Override
-        public int hashCode() {
-            return getClass().hashCode();
-        }
-    }
-
-    @Test
-    public void banAccessToReflection() throws Exception {
-        HostAccessPolicy config = HostAccessPolicy.newBuilder().allowPublicAccess(true).preventAccess(Class.class).preventAccess(Method.class).preventAccess(Field.class).preventAccess(
-                        Proxy.class).preventAccess(
-                                        Object.class).build();
-
-        Context c = Context.newBuilder().allowHostAccess(config).build();
-
-        Value readValue = c.eval("sl", "" + "function readValue(x, y) {\n" + "  return x.equals(y);\n" + "}\n" + "function main() {\n" + "  return readValue;\n" + "}\n");
-
-        MyEquals myEquals = new MyEquals();
-        assertTrue("MyEquals.equals method is accessible", readValue.execute(myEquals, myEquals).asBoolean());
-
-        Value res;
-        try {
-            res = readValue.execute(new Object());
-        } catch (PolyglotException ex) {
-            return;
-        }
-        fail("expecting no result: " + res);
-    }
-
-    @Test
-    public void banAccessToEquals() throws Exception {
-        HostAccessPolicy config = HostAccessPolicy.newBuilder().allowPublicAccess(true).preventAccess(Object.class.getMethod("equals", Object.class)).build();
-
-        Context c = Context.newBuilder().allowHostAccess(config).build();
-
-        Value readValue = c.eval("sl", "" + "function readValue(x, y) {\n" + "  return x.equals(y);\n" + "}\n" + "function main() {\n" + "  return readValue;\n" + "}\n");
-
-        MyEquals myEquals = new MyEquals();
-        assertTrue("MyEquals.equals method is accessible", readValue.execute(myEquals, myEquals).asBoolean());
-
-        Value res;
-        try {
-            res = readValue.execute(new Object());
-        } catch (PolyglotException ex) {
-            return;
-        }
-        fail("expecting no result: " + res);
-    }
-
-    @Test
-    public void publicCanAccessObjectEquals() throws Exception {
-        HostAccessPolicy config = HostAccessPolicy.PUBLIC;
-
-        Context c = Context.newBuilder().allowHostAccess(config).build();
-
-        Value readValue = c.eval("sl", "" + "function readValue(x, y) {\n" + "  return x.equals(y);\n" + "}\n" + "function main() {\n" + "  return readValue;\n" + "}\n");
-        assertFalse("Cannot read equals 1", readValue.execute(new Object(), new Object()).asBoolean());
-        Object same = new Object();
-        assertTrue("Cannot read equals 2", readValue.execute(same, same).asBoolean());
-    }
-
-    @Test
-    public void inheritFromPublic() throws Exception {
-        HostAccessPolicy config = HostAccessPolicy.newBuilder().allowPublicAccess(true).build();
-
-        Context c = Context.newBuilder().allowHostAccess(config).build();
-
-        Value readValue = c.eval("sl", "" + "function readValue(x, y) {\n" + "  return x.equals(y);\n" + "}\n" + "function main() {\n" + "  return readValue;\n" + "}\n");
-        assertFalse("Cannot read equals 1", readValue.execute(new Object(), new Object()).asBoolean());
-        Object same = new Object();
-        assertTrue("Cannot read equals 2", readValue.execute(same, same).asBoolean());
+        Assert.assertEquals("HostAccess.PUBLIC", HostAccess.PUBLIC.toString());
     }
 
     @Test
     public void useOneHostAccessByTwoContexts() throws Exception {
-        HostAccessPolicy config = HostAccessPolicy.newBuilder().allowAccess(OK.class.getField("value")).build();
+        HostAccess config = HostAccess.newBuilder().allowAccess(OK.class.getField("value")).build();
 
         Context c1 = Context.newBuilder().allowHostAccess(config).build();
         Context c2 = Context.newBuilder().allowHostAccess(config).build();
@@ -173,12 +87,12 @@ public class HostAccessTest {
     public void onlyOneHostAccessPerEngine() throws Exception {
         Engine shared = Engine.create();
 
-        HostAccessPolicy config = HostAccessPolicy.newBuilder().allowAccess(OK.class.getField("value")).build();
+        HostAccess config = HostAccess.newBuilder().allowAccess(OK.class.getField("value")).build();
 
         Context c1 = Context.newBuilder().engine(shared).allowHostAccess(config).build();
         Context c2;
         try {
-            c2 = Context.newBuilder().engine(shared).allowHostAccess(HostAccessPolicy.PUBLIC).build();
+            c2 = Context.newBuilder().engine(shared).allowHostAccess(HostAccess.PUBLIC).build();
         } catch (IllegalStateException ex) {
             Assert.assertNotEquals("Can't have one engine between two HostAccess configs: " + ex.getMessage(), -1, ex.getMessage().indexOf("Cannot share engine"));
             return;
