@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -57,12 +57,8 @@ import org.graalvm.word.WordFactory;
 import com.oracle.svm.core.MonitorSupport;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
-import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.c.CGlobalData;
-import com.oracle.svm.core.c.CGlobalDataFactory;
 import com.oracle.svm.core.c.function.CEntryPointActions;
-import com.oracle.svm.core.c.function.CEntryPointErrors;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.c.function.CEntryPointOptions.Publish;
 import com.oracle.svm.core.log.Log;
@@ -70,7 +66,9 @@ import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.thread.VMThreads;
 import com.oracle.svm.core.util.Utf8;
 import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.jni.JNIGlobalHandles;
 import com.oracle.svm.jni.JNIObjectHandles;
+import com.oracle.svm.jni.JNIThreadLocalHandles;
 import com.oracle.svm.jni.JNIThreadLocalPendingException;
 import com.oracle.svm.jni.JNIThreadLocalPinnedObjects;
 import com.oracle.svm.jni.JNIThreadOwnedMonitors;
@@ -87,6 +85,7 @@ import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIExceptionHandlerRetu
 import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIExceptionHandlerReturnNullWord;
 import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIExceptionHandlerReturnZero;
 import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIExceptionHandlerVoid;
+import com.oracle.svm.jni.functions.JNIFunctions.Support.JNIJavaVMEnterAttachThreadPrologue;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIErrors;
 import com.oracle.svm.jni.nativeapi.JNIFieldId;
@@ -132,7 +131,7 @@ final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerReturnNullHandle.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static JNIObjectHandle NewLocalRef(JNIEnvironment env, JNIObjectHandle ref) {
-        return JNIObjectHandles.newLocalRef(ref);
+        return JNIThreadLocalHandles.get().create(JNIObjectHandles.getObject(ref));
     }
 
     /*
@@ -142,7 +141,7 @@ final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerVoid.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static void DeleteLocalRef(JNIEnvironment env, JNIObjectHandle localRef) {
-        JNIObjectHandles.deleteLocalRef(localRef);
+        JNIThreadLocalHandles.get().delete(localRef);
     }
 
     /*
@@ -155,7 +154,7 @@ final class JNIFunctions {
         if (capacity < 0) {
             return JNIErrors.JNI_ERR();
         }
-        JNIObjectHandles.ensureLocalCapacity(capacity);
+        JNIThreadLocalHandles.get().ensureCapacity(capacity);
         return 0;
     }
 
@@ -169,7 +168,7 @@ final class JNIFunctions {
         if (capacity < 0) {
             return JNIErrors.JNI_ERR();
         }
-        JNIObjectHandles.pushLocalFrame(capacity);
+        JNIThreadLocalHandles.get().pushFrame(capacity);
         return 0;
     }
 
@@ -181,8 +180,8 @@ final class JNIFunctions {
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static JNIObjectHandle PopLocalFrame(JNIEnvironment env, JNIObjectHandle handle) {
         Object obj = JNIObjectHandles.getObject(handle);
-        JNIObjectHandles.popLocalFrame();
-        return JNIObjectHandles.createLocal(obj);
+        JNIThreadLocalHandles.get().popFrame();
+        return JNIThreadLocalHandles.get().create(obj);
     }
 
     /*
@@ -222,7 +221,7 @@ final class JNIFunctions {
     static JNIObjectHandle GetObjectClass(JNIEnvironment env, JNIObjectHandle handle) {
         Object obj = JNIObjectHandles.getObject(handle);
         Class<?> clazz = obj.getClass();
-        return JNIObjectHandles.createLocal(clazz);
+        return JNIThreadLocalHandles.get().create(clazz);
     }
 
     /*
@@ -233,7 +232,7 @@ final class JNIFunctions {
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static JNIObjectHandle GetSuperclass(JNIEnvironment env, JNIObjectHandle handle) {
         Class<?> clazz = JNIObjectHandles.getObject(handle);
-        return JNIObjectHandles.createLocal(clazz.getSuperclass());
+        return JNIThreadLocalHandles.get().create(clazz.getSuperclass());
     }
 
     /*
@@ -255,7 +254,12 @@ final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerReturnNullHandle.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static JNIObjectHandle NewGlobalRef(JNIEnvironment env, JNIObjectHandle handle) {
-        return JNIObjectHandles.newGlobalRef(handle);
+        JNIObjectHandle result = JNIObjectHandles.nullHandle();
+        Object obj = JNIObjectHandles.getObject(handle);
+        if (obj != null) {
+            result = (JNIObjectHandle) JNIGlobalHandles.singleton().create(obj);
+        }
+        return result;
     }
 
     /*
@@ -265,7 +269,7 @@ final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerVoid.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static void DeleteGlobalRef(JNIEnvironment env, JNIObjectHandle globalRef) {
-        JNIObjectHandles.deleteGlobalRef(globalRef);
+        JNIGlobalHandles.singleton().destroy(globalRef);
     }
 
     /*
@@ -275,7 +279,12 @@ final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerReturnNullHandle.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static JNIObjectHandle NewWeakGlobalRef(JNIEnvironment env, JNIObjectHandle handle) {
-        return JNIObjectHandles.newWeakGlobalRef(handle);
+        JNIObjectHandle result = JNIObjectHandles.nullHandle();
+        Object obj = JNIObjectHandles.getObject(handle);
+        if (obj != null) {
+            result = (JNIObjectHandle) JNIGlobalHandles.singleton().createWeak(obj);
+        }
+        return result;
     }
 
     /*
@@ -285,7 +294,7 @@ final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerVoid.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static void DeleteWeakGlobalRef(JNIEnvironment env, JNIObjectHandle weak) {
-        JNIObjectHandles.deleteWeakGlobalRef(weak);
+        JNIGlobalHandles.singleton().destroyWeak(weak);
     }
 
     /*
@@ -317,7 +326,7 @@ final class JNIFunctions {
         if (clazz == null) {
             throw new NoClassDefFoundError(name);
         }
-        return JNIObjectHandles.createLocal(clazz);
+        return JNIThreadLocalHandles.get().create(clazz);
     }
 
     /*
@@ -412,7 +421,7 @@ final class JNIFunctions {
         } catch (InstantiationException e) {
             instance = null;
         }
-        return JNIObjectHandles.createLocal(instance);
+        return JNIThreadLocalHandles.get().create(instance);
     }
 
     /*
@@ -429,7 +438,7 @@ final class JNIFunctions {
             chars[i] = (char) value;
         }
         str = new String(chars);
-        return JNIObjectHandles.createLocal(str);
+        return JNIThreadLocalHandles.get().create(str);
     }
 
     /*
@@ -447,7 +456,7 @@ final class JNIFunctions {
             } catch (CharConversionException ignore) {
             }
         }
-        return JNIObjectHandles.createLocal(str);
+        return JNIThreadLocalHandles.get().create(str);
     }
 
     /*
@@ -596,7 +605,7 @@ final class JNIFunctions {
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static JNIObjectHandle NewDirectByteBuffer(JNIEnvironment env, WordPointer address, long capacity) {
         Target_java_nio_DirectByteBuffer bb = new Target_java_nio_DirectByteBuffer(address.rawValue(), (int) capacity);
-        return JNIObjectHandles.createLocal(bb);
+        return JNIThreadLocalHandles.get().create(bb);
     }
 
     /*
@@ -648,7 +657,7 @@ final class JNIFunctions {
             array = (Object[]) Array.newInstance(elementClass, length);
             Arrays.fill(array, initialElement);
         }
-        return JNIObjectHandles.createLocal(array);
+        return JNIThreadLocalHandles.get().create(array);
     }
 
     /*
@@ -659,7 +668,7 @@ final class JNIFunctions {
     static JNIObjectHandle GetObjectArrayElement(JNIEnvironment env, JNIObjectHandle harray, int index) {
         Object[] array = JNIObjectHandles.getObject(harray);
         Object value = array[index];
-        return JNIObjectHandles.createLocal(value);
+        return JNIThreadLocalHandles.get().create(value);
     }
 
     /*
@@ -722,7 +731,7 @@ final class JNIFunctions {
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerReturnNullHandle.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     static JNIObjectHandle ExceptionOccurred(JNIEnvironment env) {
-        return JNIObjectHandles.createLocal(JNIThreadLocalPendingException.get());
+        return JNIThreadLocalHandles.get().create(JNIThreadLocalPendingException.get());
     }
 
     /*
@@ -789,7 +798,6 @@ final class JNIFunctions {
      */
     @CEntryPoint(exceptionHandler = JNIExceptionHandlerVoid.class)
     @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-    @NeverInline("Access of caller frame.")
     static void FatalError(JNIEnvironment env, CCharPointer message) {
         Log log = Log.log().autoflush(true);
         log.string("Fatal error reported via JNI: ").string(message).newline();
@@ -845,7 +853,7 @@ final class JNIFunctions {
                 }
             }
         }
-        return JNIObjectHandles.createLocal(field);
+        return JNIThreadLocalHandles.get().create(field);
     }
 
     /*
@@ -897,7 +905,7 @@ final class JNIFunctions {
                 }
             }
         }
-        return JNIObjectHandles.createLocal(result);
+        return JNIThreadLocalHandles.get().create(result);
     }
 
     /*
@@ -947,19 +955,9 @@ final class JNIFunctions {
             }
         }
 
-        static class JNIJavaVMEnterAttachThreadEnsureJavaThreadPrologue {
+        static class JNIJavaVMEnterAttachThreadPrologue {
             static void enter(JNIJavaVM vm) {
-                if (CEntryPointActions.enterAttachThread(vm.getFunctions().getIsolate(), true) != CEntryPointErrors.NO_ERROR) {
-                    CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_ERR());
-                }
-            }
-        }
-
-        static class JNIJavaVMEnterAttachThreadManualJavaThreadPrologue {
-            static void enter(JNIJavaVM vm) {
-                if (CEntryPointActions.enterAttachThread(vm.getFunctions().getIsolate(), false) != CEntryPointErrors.NO_ERROR) {
-                    CEntryPointActions.bailoutInPrologue(JNIErrors.JNI_ERR());
-                }
+                CEntryPointActions.enterAttachThread(vm.getFunctions().getIsolate());
             }
         }
 
@@ -1080,25 +1078,13 @@ final class JNIFunctions {
         }
     }
 
-    static final CGlobalData<CCharPointer> UNIMPLEMENTED_UNATTACHED_ERROR_MESSAGE = CGlobalDataFactory.createCString(
-                    "An unimplemented JNI function was called in a way or at a time when no error reporting could be performed.");
-
-    static class JNIEnvUnimplementedPrologue {
-        static void enter(JNIEnvironment env) {
-            int error = CEntryPointActions.enter((IsolateThread) env);
-            if (error != CEntryPointErrors.NO_ERROR) {
-                CEntryPointActions.failFatally(error, UNIMPLEMENTED_UNATTACHED_ERROR_MESSAGE.get());
-            }
-        }
-    }
-
     static class UnimplementedWithJNIEnvArgument {
         /**
          * Stub for unimplemented JNI functionality with a JNIEnv argument.
          */
         @CEntryPoint
-        @CEntryPointOptions(prologue = JNIEnvUnimplementedPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-        static int unimplemented(JNIEnvironment env) {
+        @CEntryPointOptions(prologue = JNIEnvironmentEnterPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
+        static void unimplemented(JNIEnvironment env) {
             /*
              * We do not catch and preserve this exception like we normally would with JNI because
              * it is unlikely that native code checks for a pending exception after each JNI
@@ -1106,16 +1092,7 @@ final class JNIFunctions {
              * encounter the pending exception in an unrelated context, making this unnecessarily
              * difficult to debug.
              */
-            throw VMError.shouldNotReachHere("An unimplemented JNI function was called. Please refer to the stack trace.");
-        }
-    }
-
-    static class JNIJavaVMUnimplementedPrologue {
-        static void enter(JNIJavaVM vm) {
-            int error = CEntryPointActions.enterAttachThread(vm.getFunctions().getIsolate(), true);
-            if (error != CEntryPointErrors.NO_ERROR) {
-                CEntryPointActions.failFatally(error, UNIMPLEMENTED_UNATTACHED_ERROR_MESSAGE.get());
-            }
+            VMError.shouldNotReachHere("An unimplemented JNI function was called. Please refer to the stack trace.");
         }
     }
 
@@ -1124,9 +1101,9 @@ final class JNIFunctions {
          * Stub for unimplemented JNI functionality with a JavaVM argument.
          */
         @CEntryPoint
-        @CEntryPointOptions(prologue = JNIJavaVMUnimplementedPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
-        static int unimplemented(JNIJavaVM vm) {
-            throw VMError.shouldNotReachHere("An unimplemented JNI function was called. Please refer to the stack trace.");
+        @CEntryPointOptions(prologue = JNIJavaVMEnterAttachThreadPrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
+        static void unimplemented(JNIJavaVM vm) {
+            VMError.shouldNotReachHere("An unimplemented JNI function was called. Please refer to the stack trace.");
         }
     }
 }
