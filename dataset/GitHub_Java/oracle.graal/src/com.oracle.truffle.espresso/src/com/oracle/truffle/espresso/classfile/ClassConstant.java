@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.UTF8;
 import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveKlassCount;
 
 import java.util.Objects;
@@ -35,7 +34,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoException;
 
 /**
  * Interface denoting a class entry in a constant pool.
@@ -113,12 +111,6 @@ public interface ClassConstant extends PoolConstant {
 
                 return new Resolved(klass);
 
-            } catch (EspressoException e) {
-                CompilerDirectives.transferToInterpreter();
-                if (pool.getContext().getMeta().ClassNotFoundException.isAssignableFrom(e.getException().getKlass())) {
-                    throw pool.getContext().getMeta().throwEx(NoClassDefFoundError.class);
-                }
-                throw e;
             } catch (VirtualMachineError e) {
                 // Comment from Hotspot:
                 // Just throw the exception and don't prevent these classes from
@@ -145,13 +137,6 @@ public interface ClassConstant extends PoolConstant {
                 return true;
             }
             return (klass.getMeta().MagicAccessorImpl.isAssignableFrom(accessingKlass));
-        }
-
-        @Override
-        public void checkValidity(ConstantPool pool) {
-            if (pool.at(classNameIndex).tag() != UTF8) {
-                throw new VerifyError("Ill-formed constant: " + tag());
-            }
         }
     }
 

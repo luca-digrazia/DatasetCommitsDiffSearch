@@ -55,7 +55,7 @@ public final class Target_java_lang_System {
                     Klass destType = dest.getKlass().getComponentType();
                     Klass srcType = src.getKlass().getComponentType();
                     if (destType.isPrimitive() || srcType.isPrimitive()) {
-                        // primitives -> System.arrayCopy detects the arrayStoreException for us
+                        // primitives -> System.arrayCopy detects the arrayStoreException
                         System.arraycopy(src.unwrap(), srcPos, dest.unwrap(), destPos, length);
                     } else if (destType.isAssignableFrom(srcType)) {
                         // We have guarantee we can copy, as all elements in src conform to dest.
@@ -88,7 +88,7 @@ public final class Target_java_lang_System {
                 assert dest.getClass().isArray();
                 System.arraycopy(src, srcPos, dest, destPos, length);
             }
-        } catch (NullPointerException | ArrayStoreException | IndexOutOfBoundsException e) {
+        } catch (Exception e) {
             // Should catch NPE if src or dest is null, and ArrayStoreException.
             throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(e.getClass(), e.getMessage());
         }
