@@ -118,12 +118,6 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
         return HotSpotGraalServices.newHotSpotSpeculationLog(cachedFailedSpeculationsAddress);
     }
 
-    @Override
-    public JavaConstant getNodeRewritingAssumptionConstant() {
-        // TODO: Implement.
-        return null;
-    }
-
     @SVMToHotSpot(AsJavaConstant)
     @Override
     public JavaConstant asJavaConstant() {
