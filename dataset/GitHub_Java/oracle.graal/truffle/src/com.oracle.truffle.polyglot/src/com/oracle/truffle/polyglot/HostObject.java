@@ -1200,7 +1200,7 @@ final class HostObject implements TruffleObject {
     PolyglotEngineImpl getEngine() {
         PolyglotContextImpl context = languageContext != null ? languageContext.context : null;
         if (context == null) {
-            context = PolyglotContextImpl.currentNotEntered();
+            context = PolyglotContextImpl.requireContext();
         }
         return context.engine;
     }
