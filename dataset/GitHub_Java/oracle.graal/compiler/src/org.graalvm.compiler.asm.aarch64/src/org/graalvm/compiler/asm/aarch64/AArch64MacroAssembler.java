@@ -32,8 +32,8 @@ import static jdk.vm.ci.aarch64.AArch64.sp;
 import static jdk.vm.ci.aarch64.AArch64.zr;
 import static org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode.BASE_REGISTER_ONLY;
 import static org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode.EXTENDED_REGISTER_OFFSET;
-import static org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode.IMMEDIATE_UNSIGNED_SCALED;
-import static org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode.IMMEDIATE_SIGNED_UNSCALED;
+import static org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode.IMMEDIATE_SCALED;
+import static org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode.IMMEDIATE_UNSCALED;
 import static org.graalvm.compiler.asm.aarch64.AArch64Address.AddressingMode.REGISTER_OFFSET;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.LDP;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.STP;
@@ -109,7 +109,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
             this.isStore = isStore;
             this.position = position;
             AArch64Address.AddressingMode addressingMode = address.getAddressingMode();
-            assert addressingMode == IMMEDIATE_UNSIGNED_SCALED || addressingMode == IMMEDIATE_SIGNED_UNSCALED : "Invalid address mode" +
+            assert addressingMode == IMMEDIATE_SCALED || addressingMode == IMMEDIATE_UNSCALED : "Invalid address mode" +
                             "to merge: " + addressingMode;
         }
 
@@ -118,7 +118,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         }
 
         int getOffset() {
-            if (address.getAddressingMode() == IMMEDIATE_SIGNED_UNSCALED) {
+            if (address.getAddressingMode() == IMMEDIATE_UNSCALED) {
                 return address.getImmediateRaw();
             }
             return address.getImmediate() * sizeInBytes;
@@ -193,9 +193,9 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                 }
             } else {
                 if (displacementScalable && NumUtil.isUnsignedNbit(12, scaledDisplacement)) {
-                    return new AddressGenerationPlan(NO_WORK, IMMEDIATE_UNSIGNED_SCALED, false);
+                    return new AddressGenerationPlan(NO_WORK, IMMEDIATE_SCALED, false);
                 } else if (NumUtil.isSignedNbit(9, displacement)) {
-                    return new AddressGenerationPlan(NO_WORK, IMMEDIATE_SIGNED_UNSCALED, false);
+                    return new AddressGenerationPlan(NO_WORK, IMMEDIATE_UNSCALED, false);
                 } else {
                     boolean needsScratch = !isArithmeticImmediate(displacement);
                     return new AddressGenerationPlan(ADD_TO_BASE, REGISTER_OFFSET, needsScratch);
@@ -234,7 +234,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         int immediate;
         switch (plan.workPlan) {
             case NO_WORK:
-                if (plan.addressingMode == IMMEDIATE_UNSIGNED_SCALED) {
+                if (plan.addressingMode == IMMEDIATE_SCALED) {
                     immediate = (int) scaledDisplacement;
                 } else {
                     immediate = (int) displacement;
@@ -329,7 +329,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         assert dst.getRegisterCategory().equals(CPU);
         int shiftAmt = NumUtil.log2Ceil(transferSize);
         switch (address.getAddressingMode()) {
-            case IMMEDIATE_UNSIGNED_SCALED:
+            case IMMEDIATE_SCALED:
                 int scaledImmediate = address.getImmediateRaw() << shiftAmt;
                 int lowerBits = scaledImmediate & NumUtil.getNbitNumberInt(12);
                 int higherBits = scaledImmediate & ~NumUtil.getNbitNumberInt(12);
@@ -343,15 +343,15 @@ public class AArch64MacroAssembler extends AArch64Assembler {
                     add(64, dst, src, higherBits);
                 }
                 break;
-            case IMMEDIATE_SIGNED_UNSCALED:
+            case IMMEDIATE_UNSCALED:
                 int immediate = address.getImmediateRaw();
                 add(64, dst, address.getBase(), immediate);
                 break;
             case REGISTER_OFFSET:
-                add(64, dst, address.getBase(), address.getOffset(), ShiftType.LSL, address.isRegisterOffsetScaled() ? shiftAmt : 0);
+                add(64, dst, address.getBase(), address.getOffset(), ShiftType.LSL, address.isScaled() ? shiftAmt : 0);
                 break;
             case EXTENDED_REGISTER_OFFSET:
-                add(64, dst, address.getBase(), address.getOffset(), address.getExtendType(), address.isRegisterOffsetScaled() ? shiftAmt : 0);
+                add(64, dst, address.getBase(), address.getOffset(), address.getExtendType(), address.isScaled() ? shiftAmt : 0);
                 break;
             case PC_LITERAL: {
                 addressOf(dst);
@@ -374,7 +374,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         // Only immediate scaled/unscaled address can be merged.
         // Pre-index and post-index mode can't be merged.
         AArch64Address.AddressingMode addressMode = address.getAddressingMode();
-        if (addressMode != IMMEDIATE_UNSIGNED_SCALED && addressMode != IMMEDIATE_SIGNED_UNSCALED) {
+        if (addressMode != IMMEDIATE_SCALED && addressMode != IMMEDIATE_UNSCALED) {
             return false;
         }
 
@@ -410,7 +410,7 @@ public class AArch64MacroAssembler extends AArch64Assembler {
 
         // Offset checking. Offsets of the two ldrs/strs must be continuous.
         int curOffset = address.getImmediateRaw();
-        if (addressMode == IMMEDIATE_UNSIGNED_SCALED) {
+        if (addressMode == IMMEDIATE_SCALED) {
             curOffset = curOffset * sizeInBytes;
         }
         int preOffset = lastImmLoadStoreEncoding.getOffset();
@@ -474,8 +474,8 @@ public class AArch64MacroAssembler extends AArch64Assembler {
 
         // Save last ldr/str if it is not merged.
         AArch64Address.AddressingMode addressMode = address.getAddressingMode();
-        if (addressMode == IMMEDIATE_UNSIGNED_SCALED || addressMode == IMMEDIATE_SIGNED_UNSCALED) {
-            if (addressMode == IMMEDIATE_SIGNED_UNSCALED) {
+        if (addressMode == IMMEDIATE_SCALED || addressMode == IMMEDIATE_UNSCALED) {
+            if (addressMode == IMMEDIATE_UNSCALED) {
                 long mask = sizeInBytes - 1;
                 int offset = address.getImmediateRaw();
                 if ((offset & mask) != 0) {
@@ -1763,6 +1763,22 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      */
     public void fcmov(int size, Register result, Register trueValue, Register falseValue, ConditionFlag condition) {
         super.fcsel(size, result, trueValue, falseValue, condition);
+    }
+
+    /**
+     * dst = src1 % src2.
+     *
+     * @param size register size. Has to be 32 or 64.
+     * @param dst floating-point register. May not be null.
+     * @param n numerator. Floating-point register. May not be null.
+     * @param d denominator. Floating-point register. May not be null.
+     */
+    public void frem(int size, Register dst, Register n, Register d) {
+        // There is no frem instruction, instead we compute the remainder using the relation:
+        // rem = n - Truncating(n / d) * d
+        super.fdiv(size, dst, n, d);
+        super.frintz(size, dst, dst);
+        super.fmsub(size, dst, dst, d, n);
     }
 
     /**
