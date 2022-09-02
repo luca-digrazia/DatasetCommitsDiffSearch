@@ -1028,10 +1028,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         if (context == null) {
             return null;
         }
-        if (context.isCreated()) {
-            return context.getLanguageInstance();
-        }
-        return null;
+        return context.getLanguageInstance();
     }
 
     void ensureClosed(boolean cancelIfExecuting, boolean inShutdownHook) {
