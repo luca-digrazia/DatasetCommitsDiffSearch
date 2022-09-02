@@ -37,34 +37,63 @@ import com.oracle.truffle.api.library.ExportMessage;
 
 @ExportLibrary(InteropLibrary.class)
 public class WasmFunction implements TruffleObject {
-    private SymbolTable symbolTable;
-    private int typeIndex;
+
+    private final SymbolTable symbolTable;
+    private int index;
+    private ImportDescriptor importDescriptor;
+    private WasmCodeEntry codeEntry;
+    private final String name;
+    private final int typeIndex;
     private RootCallTarget callTarget;
 
-    private byte[] locals;
-    private int offset;
-
-    public WasmFunction(SymbolTable symbolTable, int typeIndex) {
+    /**
+     * Represents a WebAssembly function.
+     *
+     * If a Wasm function has a
+     */
+    public WasmFunction(SymbolTable symbolTable, int index, int typeIndex, ImportDescriptor importDescriptor) {
         this.symbolTable = symbolTable;
+        this.index = index;
+        this.importDescriptor = importDescriptor;
+        this.codeEntry = null;
+        // TODO: Establish a valid naming convention (integers are not valid identifiers), or remove this.
+        this.name = String.valueOf(index);
         this.typeIndex = typeIndex;
         this.callTarget = null;
     }
 
-    public byte returnType() {
-        return symbolTable.getFunctionReturnType(typeIndex);
+    public int numArguments() {
+        return symbolTable.functionTypeArgumentCount(typeIndex);
     }
 
-    void setCallTarget(RootCallTarget callTarget) {
+    public byte argumentTypeAt(int index) {
+        return symbolTable.getFunctionTypeArgumentTypeAt(typeIndex, index);
+    }
+
+    public byte returnType() {
+        return symbolTable.getFunctionTypeReturnType(typeIndex);
+    }
+
+    public int returnTypeLength() {
+        return symbolTable.getFunctionTypeReturnTypeLength(typeIndex);
+    }
+
+    public void setCallTarget(RootCallTarget callTarget) {
         this.callTarget = callTarget;
     }
 
-    public void registerLocal(byte type) {
-        locals[offset] = type;
-        offset++;
+    public RootCallTarget resolveCallTarget() {
+        if (callTarget == null) {
+            // TODO: If this is an imported function, the call target might not yet be resolved.
+            //  Check this, and wait until the call target gets resolved.
+            throw new RuntimeException("Call target was not resolved.");
+        }
+        return callTarget;
     }
 
-    public RootCallTarget getCallTarget() {
-        return callTarget;
+    @Override
+    public String toString() {
+        return name;
     }
 
     @ExportMessage
@@ -74,6 +103,37 @@ public class WasmFunction implements TruffleObject {
 
     @ExportMessage
     Object execute(Object[] arguments) {
-        return callTarget.call(arguments);
+        return resolveCallTarget().call(arguments);
+    }
+
+    public WasmCodeEntry codeEntry() {
+        return codeEntry;
+    }
+
+    public void setCodeEntry(WasmCodeEntry codeEntry) {
+        if (isImported()) {
+            throw new RuntimeException("Cannot set the code entry for an imported function.");
+        }
+        this.codeEntry = codeEntry;
+    }
+
+    public boolean isImported() {
+        return importDescriptor != null;
+    }
+
+    public String importedModuleName() {
+        return isImported() ? importDescriptor.moduleName : null;
+    }
+
+    public String importedFunctionName() {
+        return isImported() ? importDescriptor.memberName : null;
+    }
+
+    public int typeIndex() {
+        return typeIndex;
+    }
+
+    public int index() {
+        return index;
     }
 }

@@ -203,18 +203,18 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.NOP;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.RETURN;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.SELECT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.UNREACHABLE;
-import static com.oracle.truffle.wasm.binary.constants.Section.CODE;
-import static com.oracle.truffle.wasm.binary.constants.Section.CUSTOM;
-import static com.oracle.truffle.wasm.binary.constants.Section.DATA;
-import static com.oracle.truffle.wasm.binary.constants.Section.ELEMENT;
-import static com.oracle.truffle.wasm.binary.constants.Section.EXPORT;
-import static com.oracle.truffle.wasm.binary.constants.Section.FUNCTION;
-import static com.oracle.truffle.wasm.binary.constants.Section.GLOBAL;
-import static com.oracle.truffle.wasm.binary.constants.Section.IMPORT;
-import static com.oracle.truffle.wasm.binary.constants.Section.MEMORY;
-import static com.oracle.truffle.wasm.binary.constants.Section.START;
-import static com.oracle.truffle.wasm.binary.constants.Section.TABLE;
-import static com.oracle.truffle.wasm.binary.constants.Section.TYPE;
+import static com.oracle.truffle.wasm.binary.constants.Sections.CODE;
+import static com.oracle.truffle.wasm.binary.constants.Sections.CUSTOM;
+import static com.oracle.truffle.wasm.binary.constants.Sections.DATA;
+import static com.oracle.truffle.wasm.binary.constants.Sections.ELEMENT;
+import static com.oracle.truffle.wasm.binary.constants.Sections.EXPORT;
+import static com.oracle.truffle.wasm.binary.constants.Sections.FUNCTION;
+import static com.oracle.truffle.wasm.binary.constants.Sections.GLOBAL;
+import static com.oracle.truffle.wasm.binary.constants.Sections.IMPORT;
+import static com.oracle.truffle.wasm.binary.constants.Sections.MEMORY;
+import static com.oracle.truffle.wasm.binary.constants.Sections.START;
+import static com.oracle.truffle.wasm.binary.constants.Sections.TABLE;
+import static com.oracle.truffle.wasm.binary.constants.Sections.TYPE;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -281,7 +281,7 @@ public class BinaryReader extends BinaryStreamReader {
             int startOffset = offset;
             switch (sectionID) {
                 case CUSTOM:
-                    readCustomSection(size);
+                    readCustomSection();
                     break;
                 case TYPE:
                     readTypeSection();
@@ -323,9 +323,7 @@ public class BinaryReader extends BinaryStreamReader {
         }
     }
 
-    private void readCustomSection(int size) {
-        // TODO: We skip the custom section for now, but we should see what we could typically pick up here.
-        offset += size;
+    private void readCustomSection() {
     }
 
     private void readTypeSection() {
@@ -1463,7 +1461,6 @@ public class BinaryReader extends BinaryStreamReader {
     /**
      * Reset the state of the globals in a module that had already been parsed and linked.
      */
-    @SuppressWarnings("unused")
     void resetGlobalState() {
         int globalIndex = 0;
         if (tryJumpToSection(IMPORT)) {
@@ -1566,12 +1563,6 @@ public class BinaryReader extends BinaryStreamReader {
                 final int address = module.symbolTable().globalAddress(globalIndex);
                 globals.storeLong(address, value);
             }
-        }
-    }
-
-    void resetMemoryState() {
-        if (tryJumpToSection(DATA)) {
-
         }
     }
 }
