@@ -57,6 +57,7 @@ import org.graalvm.polyglot.PolyglotException.StackFrame;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractExceptionImpl;
 import org.graalvm.polyglot.proxy.Proxy;
@@ -65,17 +66,16 @@ import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.TruffleStackTraceElement;
 
-final class PolyglotExceptionImpl extends AbstractExceptionImpl {
+final class PolyglotExceptionImpl extends AbstractExceptionImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
     private static final String CAUSE_CAPTION = "Caused by host exception: ";
 
     private static final boolean TRACE_STACK_TRACE_WALKING = false;
 
-    private PolyglotException impl;
+    private PolyglotException api;
 
-    final PolyglotImpl polyglot;
-    final PolyglotEngineImpl engine;
     final PolyglotContextImpl context;
+    private final PolyglotEngineImpl engine;
     final Throwable exception;
     private final List<TruffleStackTraceElement> guestFrames;
 
@@ -95,21 +95,17 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
 
     // Exception coming from a language
     PolyglotExceptionImpl(PolyglotLanguageContext languageContext, Throwable original) {
-        this(languageContext.getImpl(), languageContext.context.engine, languageContext, original);
+        this(languageContext.getImpl(), languageContext.getEngine(), languageContext, original);
     }
 
+    // Exception coming from an instrument
     PolyglotExceptionImpl(PolyglotEngineImpl engine, Throwable original) {
         this(engine.impl, engine, null, original);
     }
 
-    // Exception coming from an instrument
-    PolyglotExceptionImpl(PolyglotImpl polyglot, Throwable original) {
-        this(polyglot, null, null, original);
-    }
-
-    private PolyglotExceptionImpl(PolyglotImpl polyglot, PolyglotEngineImpl engine, PolyglotLanguageContext languageContext, Throwable original) {
-        super(polyglot);
-        this.polyglot = polyglot;
+    private PolyglotExceptionImpl(AbstractPolyglotImpl impl, PolyglotEngineImpl engine, PolyglotLanguageContext languageContext, Throwable original) {
+        super(impl);
+        Objects.requireNonNull(engine);
         this.engine = engine;
         this.context = (languageContext != null) ? languageContext.context : null;
         this.exception = original;
@@ -129,14 +125,14 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
                 com.oracle.truffle.api.source.Source truffleSource = section.getSource();
                 String language = truffleSource.getLanguage();
                 if (language == null) {
-                    Objects.requireNonNull(engine, "Source location can not be accepted without language context.");
-                    PolyglotLanguage foundLanguage = engine.findLanguage(null, language, truffleSource.getMimeType(), false, true);
+                    Objects.requireNonNull(languageContext, "Source location can not be accepted without language context.");
+                    PolyglotLanguage foundLanguage = languageContext.getEngine().findLanguage(null, language, truffleSource.getMimeType(), false, true);
                     if (foundLanguage != null) {
                         language = foundLanguage.getId();
                     }
                 }
-                Source source = polyglot.getAPIAccess().newSource(language, truffleSource);
-                this.sourceLocation = polyglot.getAPIAccess().newSourceSection(source, section);
+                Source source = getAPIAccess().newSource(language, truffleSource);
+                this.sourceLocation = getAPIAccess().newSourceSection(source, section);
             } else {
                 this.sourceLocation = null;
             }
@@ -199,7 +195,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
 
     @Override
     public void onCreate(PolyglotException instance) {
-        this.impl = instance;
+        this.api = instance;
     }
 
     @Override
@@ -210,7 +206,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
     @Override
     public Throwable asHostException() {
         if (!(exception instanceof HostException)) {
-            throw PolyglotEngineException.unsupported(
+            throw new PolyglotUnsupportedException(
                             String.format("Unsupported operation %s.%s. You can ensure that the operation is supported using %s.%s.",
                                             PolyglotException.class.getSimpleName(), "asHostException()",
                                             PolyglotException.class.getSimpleName(), "isHostException()"));
@@ -234,7 +230,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
         synchronized (s.lock()) {
             // Print our stack trace
             if (isInternalError() || getMessage() == null || getMessage().isEmpty()) {
-                s.println(impl);
+                s.println(api);
             } else {
                 s.println(getMessage());
             }
@@ -243,12 +239,12 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
             int languageIdLength = 0; // java
             for (StackFrame traceElement : getPolyglotStackTrace()) {
                 if (!traceElement.isHostFrame()) {
-                    languageIdLength = Math.max(languageIdLength, polyglot.getAPIAccess().getImpl(traceElement).getLanguage().getId().length());
+                    languageIdLength = Math.max(languageIdLength, getAPIAccess().getImpl(traceElement).getLanguage().getId().length());
                 }
             }
 
             for (StackFrame traceElement : getPolyglotStackTrace()) {
-                s.println("\tat " + polyglot.getAPIAccess().getImpl(traceElement).toStringImpl(languageIdLength));
+                s.println("\tat " + getAPIAccess().getImpl(traceElement).toStringImpl(languageIdLength));
             }
 
             // Print cause, if any
@@ -291,6 +287,11 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
     @Override
     public StackTraceElement[] getStackTrace() {
         return getJavaStackTrace().clone();
+    }
+
+    @Override
+    public PolyglotEngineImpl getEngine() {
+        return engine;
     }
 
     @Override
@@ -439,7 +440,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
 
         StackFrameIterator(PolyglotExceptionImpl impl) {
             this.impl = impl;
-            this.apiAccess = impl.polyglot.getAPIAccess();
+            this.apiAccess = impl.getAPIAccess();
 
             Throwable cause = impl.exception;
             while (cause.getCause() != null && cause.getStackTrace().length == 0) {
@@ -478,7 +479,7 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
                 throw new NoSuchElementException();
             }
             fetchedNext = null;
-            return apiAccess.newPolyglotStackTraceElement(impl.impl, next);
+            return apiAccess.newPolyglotStackTraceElement(impl.api, next);
         }
 
         PolyglotExceptionFrame fetchNext() {
