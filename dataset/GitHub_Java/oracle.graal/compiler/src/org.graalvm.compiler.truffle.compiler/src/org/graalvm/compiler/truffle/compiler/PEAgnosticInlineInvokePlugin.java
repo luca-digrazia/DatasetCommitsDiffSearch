@@ -31,14 +31,13 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
-import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import org.graalvm.compiler.truffle.common.TruffleCallNode;
 import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class PEAgnosticInlineInvokePlugin implements InlineInvokePlugin {
+public class PEAgnosticInlineInvokePlugin extends PEInlineInvokePlugin {
     private final EconomicMap<TruffleCallNode, Invoke> truffleCallNodeToInvoke;
     private final List<Invoke> indirectInvokes = new ArrayList<>();
     private final TruffleMetaAccessProvider truffleMetaAccessProvider;
@@ -54,7 +53,7 @@ public class PEAgnosticInlineInvokePlugin implements InlineInvokePlugin {
 
     @Override
     public InlineInfo shouldInlineInvoke(GraphBuilderContext builder, ResolvedJavaMethod original, ValueNode[] arguments) {
-        InlineInfo inlineInfo = PartialEvaluator.asInlineInfo(original);
+        InlineInfo inlineInfo = asInlineInfo(original);
         if (original.equals(partialEvaluator.callDirectMethod)) {
             ValueNode arg0 = arguments[1];
             if (!arg0.isConstant()) {

@@ -30,7 +30,6 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
-import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
 import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.compiler.nodes.TruffleAssumption;
@@ -46,9 +45,9 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Maxim
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumInlineNodeCount;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceInlining;
 
-final class PEInliningPlanInvokePlugin implements InlineInvokePlugin {
+class PEInliningPlanInvokePlugin extends PEInlineInvokePlugin {
 
-    private final PartialEvaluator partialEvaluator;
+    private PartialEvaluator partialEvaluator;
     private final Deque<TruffleInliningPlan> inlining;
     private final int nodeLimit;
     private final StructuredGraph graph;
@@ -71,7 +70,7 @@ final class PEInliningPlanInvokePlugin implements InlineInvokePlugin {
         if (graph.getNodeCount() > nodeLimit) {
             throw builder.bailout("Graph too big to safely compile. Node count: " + graph.getNodeCount() + ". Limit: " + nodeLimit);
         }
-        InlineInfo inlineInfo = PartialEvaluator.asInlineInfo(original);
+        InlineInfo inlineInfo = asInlineInfo(original);
         if (!inlineInfo.allowsInlining()) {
             return inlineInfo;
         }
