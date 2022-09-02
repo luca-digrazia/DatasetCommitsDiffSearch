@@ -90,7 +90,7 @@ public class HighTier extends BaseTier<HighTierContext> {
             appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, false));
         }
 
-        LoopPolicies loopPolicies = createLoopPolicies(options);
+        LoopPolicies loopPolicies = createLoopPolicies();
         appendPhase(new LoopFullUnrollPhase(canonicalizer, loopPolicies));
 
         if (LoopPeeling.getValue(options)) {
@@ -117,7 +117,7 @@ public class HighTier extends BaseTier<HighTierContext> {
     }
 
     @Override
-    public LoopPolicies createLoopPolicies(OptionValues options) {
+    public LoopPolicies createLoopPolicies() {
         return new DefaultLoopPolicies();
     }
 }

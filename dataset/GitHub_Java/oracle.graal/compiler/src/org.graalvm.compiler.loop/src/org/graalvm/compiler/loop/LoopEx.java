@@ -163,14 +163,6 @@ public class LoopEx {
         return size;
     }
 
-    public void resetCounted() {
-        assert countedLoopChecked;
-        assert counted != null;
-        ivs = null;
-        counted = null;
-        countedLoopChecked = false;
-    }
-
     @Override
     public String toString() {
         return (countedLoopChecked && isCounted() ? "CountedLoop [" + counted() + "] " : "Loop ") + "(depth=" + loop().getDepth() + ") " + loopBegin();

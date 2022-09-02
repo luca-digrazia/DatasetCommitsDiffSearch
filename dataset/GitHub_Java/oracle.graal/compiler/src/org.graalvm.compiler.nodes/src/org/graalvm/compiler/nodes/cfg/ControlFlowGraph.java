@@ -41,7 +41,6 @@ import org.graalvm.compiler.graph.NodeMap;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractEndNode;
-import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.ControlSinkNode;
 import org.graalvm.compiler.nodes.ControlSplitNode;
 import org.graalvm.compiler.nodes.EndNode;
@@ -51,6 +50,7 @@ import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopEndNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
+import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 
 public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
@@ -442,7 +442,6 @@ public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
             assert nodeToBlock.get(cur) == null;
             nodeToBlock.set(cur, block);
             FixedNode next = cur.next();
-            assert next != null : cur;
             if (next instanceof AbstractBeginNode) {
                 block.endNode = cur;
                 return;
@@ -524,8 +523,8 @@ public final class ControlFlowGraph implements AbstractControlFlowGraph<Block> {
                 AbstractBeginNode beginNode = block.getBeginNode();
                 if (beginNode instanceof LoopBeginNode) {
                     computeLoopPredecessors(nodeMap, block, (LoopBeginNode) beginNode);
-                } else if (beginNode instanceof AbstractMergeNode) {
-                    AbstractMergeNode mergeNode = (AbstractMergeNode) beginNode;
+                } else if (beginNode instanceof MergeNode) {
+                    MergeNode mergeNode = (MergeNode) beginNode;
                     int forwardEndCount = mergeNode.forwardEndCount();
                     Block[] predecessors = new Block[forwardEndCount];
                     for (int i = 0; i < forwardEndCount; ++i) {
