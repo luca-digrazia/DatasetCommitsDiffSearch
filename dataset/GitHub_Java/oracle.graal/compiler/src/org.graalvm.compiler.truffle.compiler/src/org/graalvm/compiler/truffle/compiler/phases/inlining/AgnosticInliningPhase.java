@@ -77,17 +77,12 @@ public final class AgnosticInliningPhase extends BasePhase<CoreProviders> {
         final InliningPolicy policy = getInliningPolicyProvider().get(request.options, coreProviders);
         final CallTree tree = new CallTree(partialEvaluator, request, policy);
         tree.dumpBasic("Before Inline");
-        if (optionsAllowInlining()) {
+        if (getPolyglotOptionValue(request.options, PolyglotCompilerOptions.Inlining)) {
             policy.run(tree);
             tree.dumpBasic("After Inline");
             tree.collectTargetsToDequeue(request.inliningPlan);
         }
         tree.finalizeGraph();
         tree.trace();
-    }
-
-    private Boolean optionsAllowInlining() {
-        return getPolyglotOptionValue(request.options, PolyglotCompilerOptions.Inlining) &&
-                        (getPolyglotOptionValue(request.options, PolyglotCompilerOptions.Mode) != PolyglotCompilerOptions.EngineModeEnum.LATENCY);
     }
 }

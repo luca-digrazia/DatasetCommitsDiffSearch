@@ -29,7 +29,6 @@ import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPo
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime;
-import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
@@ -117,10 +116,5 @@ public final class CallTree extends Graph {
 
     void collectTargetsToDequeue(TruffleMetaAccessProvider provider) {
         root.collectTargetsToDequeue(provider);
-    }
-
-    public void updateTracingInfo(TruffleInliningPlan inliningPlan) {
-        inliningPlan.setCallCount(root.callCount());
-        inliningPlan.setInlinedCallCount(root.inlinedCallCount());
     }
 }
