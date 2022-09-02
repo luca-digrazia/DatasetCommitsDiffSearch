@@ -48,7 +48,6 @@ import java.util.ServiceLoader;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.object.Shape.Allocator;
 
@@ -278,7 +277,7 @@ public abstract class Layout {
          *
          * Must be {@link DynamicObject} or a subclass thereof.
          *
-         * @see Shape.Builder#layout(Class)
+         * @see Shape.Builder#layout(Layout)
          * @since 20.2.0
          */
         public Builder type(Class<? extends DynamicObject> layoutClass) {
@@ -348,15 +347,6 @@ public abstract class Layout {
         /** @since 20.2.0 */
         public final Shape getShape(DynamicObject object) {
             return object.getShape();
-        }
-
-        /** @since 20.2.0 */
-        public final DynamicObject objectClone(DynamicObject object) {
-            try {
-                return object.objectClone();
-            } catch (CloneNotSupportedException e) {
-                throw CompilerDirectives.shouldNotReachHere(e);
-            }
         }
 
         /** @since 20.2.0 */
