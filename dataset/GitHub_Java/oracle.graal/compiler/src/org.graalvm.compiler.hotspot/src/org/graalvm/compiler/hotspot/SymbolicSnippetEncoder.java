@@ -25,6 +25,7 @@
 package org.graalvm.compiler.hotspot;
 
 import static jdk.vm.ci.services.Services.IS_BUILDING_NATIVE_IMAGE;
+import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.compiler.core.common.GraalOptions.UseEncodedGraphs;
 import static org.graalvm.compiler.hotspot.EncodedSnippets.methodKey;
 import static org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin.InlineInfo.createIntrinsicInlineInfo;
@@ -70,7 +71,6 @@ import org.graalvm.compiler.hotspot.EncodedSnippets.SymbolicResolvedJavaMethod;
 import org.graalvm.compiler.hotspot.EncodedSnippets.SymbolicResolvedJavaMethodBytecode;
 import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallsProvider;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
-import org.graalvm.compiler.hotspot.stubs.ForeignCallStub;
 import org.graalvm.compiler.hotspot.word.HotSpotWordTypes;
 import org.graalvm.compiler.java.BytecodeParser;
 import org.graalvm.compiler.java.GraphBuilderPhase;
@@ -127,7 +127,6 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MemoryAccessProvider;
 import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.MetaUtil;
 import jdk.vm.ci.meta.MethodHandleAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -140,9 +139,6 @@ import jdk.vm.ci.meta.UnresolvedJavaType;
  * This class performs graph encoding using {@link GraphEncoder} but also converts JVMCI type and
  * method references into a symbolic form that can be resolved at graph decode time using
  * {@link SymbolicJVMCIReference}.
- *
- * This class only exists when {@link jdk.vm.ci.services.Services#IS_BUILDING_NATIVE_IMAGE} is true
- * or the option {@link org.graalvm.compiler.core.common.GraalOptions#UseEncodedGraphs} is enabled.
  */
 public class SymbolicSnippetEncoder {
 
@@ -351,8 +347,7 @@ public class SymbolicSnippetEncoder {
         }
     }
 
-    SymbolicSnippetEncoder(HotSpotReplacementsImpl replacements, OptionValues options) {
-        assert IS_BUILDING_NATIVE_IMAGE || UseEncodedGraphs.getValue(options);
+    SymbolicSnippetEncoder(HotSpotReplacementsImpl replacements) {
         this.originalReplacements = replacements;
         GraphBuilderConfiguration.Plugins plugins = replacements.getGraphBuilderPlugins();
         InvocationPlugins invocationPlugins = plugins.getInvocationPlugins();
@@ -509,42 +504,44 @@ public class SymbolicSnippetEncoder {
     }
 
     synchronized void registerSnippet(ResolvedJavaMethod method, ResolvedJavaMethod original, Object receiver, boolean trackNodeSourcePosition, OptionValues options) {
-        assert method.getAnnotation(Snippet.class) != null : "Snippet must be annotated with @" + Snippet.class.getSimpleName();
-        SnippetKey key = new SnippetKey(method, original, receiver);
-        findSnippetMethod(method);
+        if (IS_BUILDING_NATIVE_IMAGE || UseEncodedGraphs.getValue(options)) {
+            assert method.getAnnotation(Snippet.class) != null : "Snippet must be annotated with @" + Snippet.class.getSimpleName();
+            SnippetKey key = new SnippetKey(method, original, receiver);
+            findSnippetMethod(method);
 
-        if (!preparedSnippetGraphs.containsKey(key)) {
-            if (original != null) {
-                originalMethods.put(key.keyString(), methodKey(original));
-            }
-            StructuredGraph snippet = buildGraph(method, original, null, receiver, true, trackNodeSourcePosition, INLINE_AFTER_PARSING, options);
-            preparedSnippetGraphs.put(key, snippet);
-            SnippetParameterInfo value = new SnippetParameterInfo(method);
-            snippetParameterInfos.put(key.keyString(), value);
-            int i = 0;
-            int offset = 0;
-            if (!method.isStatic()) {
-                assert value.isConstantParameter(0) : "receiver is always constant";
-                ensureSnippetTypeAvailable(method.getDeclaringClass());
-                i++;
-                offset = 1;
-            }
-            for (; i < value.getParameterCount(); i++) {
-                if (value.isConstantParameter(i) || value.isVarargsParameter(i)) {
-                    JavaType type = method.getSignature().getParameterType(i - offset, method.getDeclaringClass());
-                    if (type instanceof ResolvedJavaType) {
-                        ResolvedJavaType resolvedJavaType = (ResolvedJavaType) type;
-                        if (value.isVarargsParameter(i)) {
-                            resolvedJavaType = resolvedJavaType.getElementalType();
+            if (!preparedSnippetGraphs.containsKey(key)) {
+                if (original != null) {
+                    originalMethods.put(key.keyString(), methodKey(original));
+                }
+                StructuredGraph snippet = buildGraph(method, original, null, receiver, true, trackNodeSourcePosition, INLINE_AFTER_PARSING, options);
+                preparedSnippetGraphs.put(key, snippet);
+                SnippetParameterInfo value = new SnippetParameterInfo(method);
+                snippetParameterInfos.put(key.keyString(), value);
+                int i = 0;
+                int offset = 0;
+                if (!method.isStatic()) {
+                    assert value.isConstantParameter(0) : "receiver is always constant";
+                    ensureSnippetTypeAvailable(method.getDeclaringClass());
+                    i++;
+                    offset = 1;
+                }
+                for (; i < value.getParameterCount(); i++) {
+                    if (value.isConstantParameter(i) || value.isVarargsParameter(i)) {
+                        JavaType type = method.getSignature().getParameterType(i - offset, method.getDeclaringClass());
+                        if (type instanceof ResolvedJavaType) {
+                            if (type.getName().equals("Ljava/lang/String;")) {
+                                throw new InternalError("Need " + type + " in snippet " + method);
+                            } else {
+                                ensureSnippetTypeAvailable((ResolvedJavaType) type);
+                            }
+                        } else {
+                            throw new InternalError(type.toString());
                         }
-                        assert resolvedJavaType.isPrimitive() || isGraalClass(resolvedJavaType) : method + ": only Graal classes can be @ConstantParameter or @VarargsParameter: " + type;
-                        ensureSnippetTypeAvailable(resolvedJavaType);
-                    } else {
-                        throw new InternalError(type.toString());
                     }
                 }
             }
         }
+
     }
 
     ResolvedJavaMethod findSnippetMethod(ResolvedJavaMethod method) {
@@ -559,7 +556,7 @@ public class SymbolicSnippetEncoder {
 
     private void ensureSnippetTypeAvailable(ResolvedJavaType type) {
         if (!type.getElementalType().isPrimitive()) {
-            Objects.requireNonNull(getSnippetType(type));
+            getSnippetType(type);
         }
     }
 
@@ -610,7 +607,6 @@ public class SymbolicSnippetEncoder {
         lookupSnippetType(GraalHotSpotVMConfig.class);
         lookupSnippetType(NamedLocationIdentity.class);
         lookupSnippetType(SnippetTemplate.EagerSnippetInfo.class);
-        lookupSnippetType(ForeignCallStub.class);
 
         SnippetObjectFilter filter = new SnippetObjectFilter(originalReplacements.getProviders());
         byte[] snippetEncoding = encoder.getEncoding();
@@ -629,10 +625,12 @@ public class SymbolicSnippetEncoder {
      */
     @SuppressWarnings("try")
     public synchronized boolean encode(OptionValues options) {
-        EncodedSnippets encodedSnippets = maybeEncodeSnippets(options);
-        if (encodedSnippets != null) {
-            HotSpotReplacementsImpl.setEncodedSnippets(encodedSnippets);
-            return true;
+        if (!IS_IN_NATIVE_IMAGE) {
+            EncodedSnippets encodedSnippets = maybeEncodeSnippets(options);
+            if (encodedSnippets != null) {
+                HotSpotReplacementsImpl.setEncodedSnippets(encodedSnippets);
+                return true;
+            }
         }
         return false;
     }
@@ -1105,26 +1103,15 @@ public class SymbolicSnippetEncoder {
         }
     }
 
-    private static boolean isGraalClass(ResolvedJavaType type) {
-        return isGraalClass(MetaUtil.internalNameToJava(type.getName(), true, true));
-    }
-
-    private static boolean isGraalClass(Class<?> clazz) {
-        return isGraalClass(clazz.getName());
-    }
-
-    private static boolean isGraalClass(String className) {
-        return className.contains("jdk.vm.ci") ||
-                        className.contains("org.graalvm.") ||
-                        className.contains("com.oracle.graal") ||
-                        className.contains("com.oracle.truffle");
-    }
-
     private static final Map<Class<?>, SnippetResolvedJavaType> snippetTypes = new HashMap<>();
 
     private static SnippetResolvedJavaType lookupSnippetType(Class<?> clazz) {
         SnippetResolvedJavaType type = null;
-        if (isGraalClass(clazz)) {
+        String className = clazz.getName();
+        if (className.contains("jdk.vm.ci") ||
+                        className.contains("org.graalvm.") ||
+                        className.contains("com.oracle.graal") ||
+                        className.contains("com.oracle.truffle")) {
             type = snippetTypes.get(clazz);
             if (type == null) {
                 type = createType(clazz);
@@ -1134,6 +1121,11 @@ public class SymbolicSnippetEncoder {
     }
 
     private static SnippetResolvedJavaType createType(Class<?> clazz) {
+        if (IS_IN_NATIVE_IMAGE) {
+            // Should we require all types to be known at image build time or allow them to
+            // be allocated lazily for any visible type?
+            // throw new NoClassDefFoundError(clazz.getName());
+        }
         SnippetResolvedJavaType type;
         type = new SnippetResolvedJavaType(clazz);
         snippetTypes.put(clazz, type);
@@ -1151,10 +1143,10 @@ public class SymbolicSnippetEncoder {
         return type;
     }
 
-    private class MetaAccessProviderDelegate implements MetaAccessProvider {
+    private class Delegate implements MetaAccessProvider {
         MetaAccessProvider delegate;
 
-        MetaAccessProviderDelegate(MetaAccessProvider metaAccess) {
+        Delegate(MetaAccessProvider metaAccess) {
             this.delegate = metaAccess;
         }
 
@@ -1231,11 +1223,10 @@ public class SymbolicSnippetEncoder {
 
     }
 
-    /**
-     * Returns a proxy {@link MetaAccessProvider} that can log types which are looked up during
-     * normal processing. This is used to ensure that types needed for libgraal are available.
-     */
     public MetaAccessProvider noticeTypes(MetaAccessProvider metaAccess) {
-        return new MetaAccessProviderDelegate(metaAccess);
+        if (IS_BUILDING_NATIVE_IMAGE) {
+            return new Delegate(metaAccess);
+        }
+        return metaAccess;
     }
 }

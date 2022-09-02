@@ -83,6 +83,8 @@ import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.graph.Position;
 import org.graalvm.compiler.graph.spi.Simplifiable;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
+import org.graalvm.compiler.loop.LoopEx;
+import org.graalvm.compiler.loop.LoopsData;
 import org.graalvm.compiler.loop.phases.LoopTransformations;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeCycles;
@@ -129,7 +131,6 @@ import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
 import org.graalvm.compiler.nodes.java.LoadIndexedNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
-import org.graalvm.compiler.nodes.loop.LoopEx;
 import org.graalvm.compiler.nodes.memory.MemoryAccess;
 import org.graalvm.compiler.nodes.memory.MemoryAnchorNode;
 import org.graalvm.compiler.nodes.memory.MemoryKill;
@@ -728,7 +729,6 @@ public class SnippetTemplate {
         boolean shouldTrackNodeSourcePosition1 = trackNodeSourcePosition || (providers.getCodeCache() != null && providers.getCodeCache().shouldDebugNonSafepoints());
         StructuredGraph snippetGraph = providers.getReplacements().getSnippet(args.info.method, args.info.original, constantArgs, shouldTrackNodeSourcePosition1, replacee.getNodeSourcePosition(),
                         options);
-        assert snippetGraph.getAssumptions() == null : snippetGraph;
 
         ResolvedJavaMethod method = snippetGraph.method();
         Signature signature = method.getSignature();
@@ -1130,7 +1130,7 @@ public class SnippetTemplate {
                 // altogether
                 LoopBeginNode loopBegin = explodeLoop.findLoopBegin();
                 if (loopBegin != null) {
-                    LoopEx loop = providers.getLoopsDataProvider().getLoopsData(snippetCopy).loop(loopBegin);
+                    LoopEx loop = new LoopsData(snippetCopy).loop(loopBegin);
                     Mark mark = snippetCopy.getMark();
                     CanonicalizerPhase canonicalizer = null;
                     if (GraalOptions.ImmutableCode.getValue(snippetCopy.getOptions())) {

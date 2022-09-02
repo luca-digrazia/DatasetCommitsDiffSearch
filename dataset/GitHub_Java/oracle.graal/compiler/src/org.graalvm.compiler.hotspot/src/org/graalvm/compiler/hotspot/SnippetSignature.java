@@ -50,17 +50,13 @@ public final class SnippetSignature implements Signature {
 
     @NativeImageReinitialize private static EnumMap<JavaKind, ResolvedJavaType> primitiveTypes = null;
 
-    static synchronized void initPrimitiveKindCache(MetaAccessProvider metaAccess) {
-        if (primitiveTypes == null) {
-            // Create the cache
-            EnumMap<JavaKind, ResolvedJavaType> types = new EnumMap<>(JavaKind.class);
-            for (JavaKind kind : JavaKind.values()) {
-                if (kind.isPrimitive()) {
-                    types.put(kind, metaAccess.lookupJavaType(kind.toJavaClass()));
-                }
+    static void initPrimitiveKindCache(MetaAccessProvider metaAccess) {
+        // Fill in the cache
+        primitiveTypes = new EnumMap<>(JavaKind.class);
+        for (JavaKind kind : JavaKind.values()) {
+            if (kind.isPrimitive()) {
+                primitiveTypes.put(kind, metaAccess.lookupJavaType(kind.toJavaClass()));
             }
-            // Publish it
-            primitiveTypes = types;
         }
     }
 
