@@ -70,6 +70,7 @@ import org.graalvm.compiler.nodes.java.ArrayLengthNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
 import org.graalvm.compiler.nodes.type.NarrowOopStamp;
+import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.replacements.nodes.BasicObjectCloneNode;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
@@ -126,7 +127,6 @@ import com.oracle.svm.hosted.FallbackFeature;
 import com.oracle.svm.hosted.GraalEdgeUnsafePartition;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
-import com.oracle.svm.hosted.nodes.DeoptProxyNode;
 import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
 
 import jdk.vm.ci.meta.ConstantReflectionProvider;
@@ -279,7 +279,7 @@ public class SubstrateGraphBuilderPlugins {
      */
     static Class<?>[] extractClassArray(AnnotationSubstitutionProcessor annotationSubstitutions, SnippetReflectionProvider snippetReflection, ValueNode arrayNode, boolean exact) {
         /* Use the original value in case we are in a deopt target method. */
-        ValueNode originalArrayNode = getDeoptProxyOriginalValue(arrayNode);
+        ValueNode originalArrayNode = GraphUtil.originalValue(arrayNode);
         if (originalArrayNode.isConstant() && !exact) {
             /*
              * The array is a constant, however that doesn't make the array immutable, i.e., its
@@ -318,7 +318,7 @@ public class SubstrateGraphBuilderPlugins {
             FixedNode successor = unwrapNode(newArray.next());
             while (successor instanceof StoreIndexedNode) {
                 StoreIndexedNode store = (StoreIndexedNode) successor;
-                assert getDeoptProxyOriginalValue(store.array()).equals(newArray);
+                assert GraphUtil.originalValue(store.array()).equals(newArray);
                 ValueNode valueNode = store.value();
                 if (valueNode.isConstant() && !valueNode.isNullConstant()) {
                     Class<?> clazz = snippetReflection.asObject(Class.class, valueNode.asJavaConstant());
@@ -345,14 +345,6 @@ public class SubstrateGraphBuilderPlugins {
             return classList != null && classList.size() == newArrayLength ? classList.toArray(new Class<?>[0]) : null;
         }
         return null;
-    }
-
-    private static ValueNode getDeoptProxyOriginalValue(ValueNode node) {
-        ValueNode original = node;
-        while (original instanceof DeoptProxyNode) {
-            original = ((DeoptProxyNode) original).getOriginalNode();
-        }
-        return original;
     }
 
     /**
