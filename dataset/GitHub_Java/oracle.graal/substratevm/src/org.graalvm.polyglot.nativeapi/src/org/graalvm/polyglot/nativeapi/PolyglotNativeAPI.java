@@ -134,10 +134,7 @@ public final class PolyglotNativeAPI {
 
     private static class ErrorStateHolder {
         public PolyglotExtendedErrorInfo info = WordFactory.nullPointer();
-
-        // will be assigned to CTypeConversionSupportImpl::NULL_HOLDER by default
-        public CCharPointerHolder messageHolder = CTypeConversion.toCString(null);
-
+        public CCharPointerHolder messageHolder = CTypeConversion.toCString("");
         public PolyglotException polyglotException = null;
     }
 
