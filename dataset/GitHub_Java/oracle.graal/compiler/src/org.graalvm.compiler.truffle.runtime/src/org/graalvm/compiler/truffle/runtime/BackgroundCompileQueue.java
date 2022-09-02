@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
+import org.graalvm.compiler.truffle.runtime.collection.TraversingBlockingQueue;
 
 /**
  * The compilation queue accepts compilation requests, and schedules compilations.
@@ -153,7 +154,7 @@ public class BackgroundCompileQueue {
 
     private void initQueue(OptimizedCallTarget callTarget) {
         if (callTarget.getOptionValue(PolyglotCompilerOptions.TraversingCompilationQueue)) {
-            this.compilationQueue = new TraversingBlockingQueue();
+            this.compilationQueue = new TraversingBlockingQueue<>();
         } else {
             this.compilationQueue = new IdlingPriorityBlockingQueue<>();
         }
