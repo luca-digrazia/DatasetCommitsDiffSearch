@@ -33,7 +33,7 @@ public interface VMEventListener {
     void classUnloaded(KlassRef klass);
     void threadStarted(Object thread);
     void threadDied(Object thread);
-    void vmStarted(Object mainThread);
+    void vmStarted();
     void vmDied();
 
     void breakpointHIt(BreakpointInfo info, Object currentThread);

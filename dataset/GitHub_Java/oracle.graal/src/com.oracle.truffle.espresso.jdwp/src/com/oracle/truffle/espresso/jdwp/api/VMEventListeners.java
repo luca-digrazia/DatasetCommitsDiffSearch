@@ -57,9 +57,9 @@ public class VMEventListeners {
         this.listener = vmEventListener;
     }
 
-    public void vmStarted(Object mainThread) {
+    public void vmStarted() {
         if (listener != null) {
-            listener.vmStarted(mainThread);
+            listener.vmStarted();
         }
     }
 
