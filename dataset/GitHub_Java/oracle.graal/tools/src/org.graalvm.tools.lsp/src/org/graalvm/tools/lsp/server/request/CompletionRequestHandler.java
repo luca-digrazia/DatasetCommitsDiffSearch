@@ -59,11 +59,12 @@ import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogateMap;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.Scope;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.NodeLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.LanguageInfo;
@@ -224,18 +225,10 @@ public final class CompletionRequestHandler extends AbstractRequestHandler {
                 if (!evalResult.isError()) {
                     fillCompletionsFromTruffleObject(completions, surrogate.getLanguageInfo(), evalResult.getResult());
                 } else {
-                    Object result = evalResult.getResult();
-                    if (result != null && INTEROP.isException(result)) {
-                        SourceSection sourceLocation;
-                        String exceptionMessage;
-                        try {
-                            sourceLocation = INTEROP.hasSourceLocation(result) ? INTEROP.getSourceLocation(result) : null;
-                            exceptionMessage = INTEROP.hasExceptionMessage(result) ? INTEROP.asString(INTEROP.getExceptionMessage(result)) : null;
-                        } catch (UnsupportedMessageException um) {
-                            throw CompilerDirectives.shouldNotReachHere(um);
-                        }
+                    if (evalResult.getResult() instanceof TruffleException) {
+                        TruffleException te = (TruffleException) evalResult.getResult();
                         throw DiagnosticsNotification.create(surrogate.getUri(),
-                                        Diagnostic.create(SourceUtils.sourceSectionToRange(sourceLocation), "An error occurred during execution: " + exceptionMessage,
+                                        Diagnostic.create(SourceUtils.sourceSectionToRange(te.getSourceLocation()), "An error occurred during execution: " + te.toString(),
                                                         DiagnosticSeverity.Warning, null, "Graal", null));
                     } else {
                         ((Exception) evalResult.getResult()).printStackTrace(err);
@@ -281,59 +274,41 @@ public final class CompletionRequestHandler extends AbstractRequestHandler {
     }
 
     private void fillCompletionsWithLocals(final TextDocumentSurrogate surrogate, Node nearestNode, List<CompletionItem> completions, MaterializedFrame frame) {
-        NodeLibrary nodeLibrary = NodeLibrary.getUncached(nearestNode);
-        if (nodeLibrary.hasScope(nearestNode, frame)) {
-            try {
-                Object scope = nodeLibrary.getScope(nearestNode, frame, true);
-                fillCompletionsWithScopesValues(surrogate, completions, scope, CompletionItemKind.Variable, SORTING_PRIORITY_LOCALS);
-            } catch (UnsupportedMessageException e) {
-                throw CompilerDirectives.shouldNotReachHere(e);
-            }
-        }
+        fillCompletionsWithScopesValues(surrogate, completions, env.findLocalScopes(nearestNode, frame), CompletionItemKind.Variable, SORTING_PRIORITY_LOCALS);
     }
 
     private void fillCompletionsWithGlobals(final TextDocumentSurrogate surrogate, List<CompletionItem> completions) {
-        Object scope = env.getScope(surrogate.getLanguageInfo());
-        if (scope != null) {
-            fillCompletionsWithScopesValues(surrogate, completions, scope, null, SORTING_PRIORITY_GLOBALS);
-        }
+        fillCompletionsWithScopesValues(surrogate, completions, env.findTopScopes(surrogate.getLanguageId()), null, SORTING_PRIORITY_GLOBALS);
     }
 
-    private void fillCompletionsWithScopesValues(TextDocumentSurrogate surrogate, List<CompletionItem> completions, Object scopeOriginal,
+    private void fillCompletionsWithScopesValues(TextDocumentSurrogate surrogate, List<CompletionItem> completions, Iterable<Scope> scopes,
                     CompletionItemKind completionItemKindDefault, int displayPriority) {
         LanguageInfo langInfo = surrogate.getLanguageInfo();
         String[] existingCompletions = completions.stream().map((item) -> item.getLabel()).toArray(String[]::new);
         // Filter duplicates
         Set<String> completionKeys = new HashSet<>(Arrays.asList(existingCompletions));
         int scopeCounter = 0;
-        Object scope = scopeOriginal;
-        while (scope != null) {
-            Object scopeParent = null;
-            if (INTEROP.hasScopeParent(scope)) {
-                try {
-                    scopeParent = INTEROP.getScopeParent(scope);
-                } catch (UnsupportedMessageException e) {
-                    throw CompilerDirectives.shouldNotReachHere(e);
-                }
-            }
+        for (Scope scope : scopes) {
             ++scopeCounter;
+            Object variables = scope.getVariables();
             Object keys;
             long size;
             try {
-                keys = INTEROP.getMembers(scope, false);
-                size = INTEROP.getArraySize(keys);
-                if (scopeParent != null) {
-                    size -= INTEROP.getArraySize(INTEROP.getMembers(scopeParent, false));
+                keys = INTEROP.getMembers(variables, false);
+                boolean hasSize = INTEROP.hasArrayElements(keys);
+                if (!hasSize) {
+                    continue;
                 }
+                size = INTEROP.getArraySize(keys);
             } catch (Exception ex) {
                 logger.log(Level.INFO, ex.getLocalizedMessage(), ex);
-                break;
+                continue;
             }
             for (long i = 0; i < size; i++) {
                 String key;
                 Object object;
                 try {
-                    key = INTEROP.asString(INTEROP.readArrayElement(keys, i));
+                    key = INTEROP.readArrayElement(keys, i).toString();
                     if (completionKeys.contains(key)) {
                         // Scopes are provided from inner to outer, so we need to detect duplicate
                         // keys and only take those from the most inner scope
@@ -341,11 +316,11 @@ public final class CompletionRequestHandler extends AbstractRequestHandler {
                     } else {
                         completionKeys.add(key);
                     }
-                    object = INTEROP.readMember(scope, key);
+                    object = INTEROP.readMember(variables, key);
                 } catch (ThreadDeath td) {
                     throw td;
                 } catch (Throwable t) {
-                    logger.log(Level.CONFIG, scope.toString(), t);
+                    logger.log(Level.CONFIG, variables.toString(), t);
                     continue;
                 }
                 CompletionItem completion = CompletionItem.create(key);
@@ -358,15 +333,10 @@ public final class CompletionRequestHandler extends AbstractRequestHandler {
                     completion.setKind(findCompletionItemKind(object));
                 }
                 completion.setDetail(createCompletionDetail(object, langInfo));
-                try {
-                    completion.setDocumentation(createDocumentation(object, surrogate.getLanguageInfo(), "in " + INTEROP.asString(INTEROP.toDisplayString(scope))));
-                } catch (UnsupportedMessageException e) {
-                    throw CompilerDirectives.shouldNotReachHere(e);
-                }
+                completion.setDocumentation(createDocumentation(object, surrogate.getLanguageInfo(), "in " + scope.getName()));
 
                 completions.add(completion);
             }
-            scope = scopeParent;
         }
     }
 
