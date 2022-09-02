@@ -29,7 +29,6 @@ import java.lang.reflect.Field;
 import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.graal.pointsto.meta.AnalysisField;
-import com.oracle.svm.core.SubstrateGCOptions;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.util.VMError;
@@ -47,10 +46,9 @@ public class HostedOptionFeature implements Feature {
          * all those options.
          */
         BeforeAnalysisAccessImpl accessImpl = (BeforeAnalysisAccessImpl) access;
-        accessImpl.registerAsUsed(SubstrateGCOptions.class);
-        registerOptionAsRead(accessImpl, SubstrateGCOptions.class, SubstrateGCOptions.MaxHeapSize.getName());
-        registerOptionAsRead(accessImpl, SubstrateGCOptions.class, SubstrateGCOptions.MinHeapSize.getName());
-        registerOptionAsRead(accessImpl, SubstrateGCOptions.class, SubstrateGCOptions.MaxNewSize.getName());
+        registerOptionAsRead(accessImpl, SubstrateOptions.class, SubstrateOptions.MaxHeapSize.getName());
+        registerOptionAsRead(accessImpl, SubstrateOptions.class, SubstrateOptions.MinHeapSize.getName());
+        registerOptionAsRead(accessImpl, SubstrateOptions.class, SubstrateOptions.MaxNewSize.getName());
         registerOptionAsRead(accessImpl, SubstrateOptions.class, SubstrateOptions.StackSize.getName());
     }
 
