@@ -1275,7 +1275,7 @@ public abstract class InteropLibrary extends Library {
      * {@link InteropLibrarySnippets.TryCatchNode}
      *
      * @see #throwException(Object)
-     * @see com.oracle.truffle.api.exception.AbstractTruffleException
+     * @see com.oracle.truffle.api.TruffleException#getExceptionObject()
      * @since 19.3
      */
     @Abstract(ifExported = {"throwException"})
@@ -1364,8 +1364,8 @@ public abstract class InteropLibrary extends Library {
      * Returns exception exit status of the receiver. Throws {@code UnsupportedMessageException}
      * when the receiver is not an {@link #isException(Object) exception} of the
      * {@link ExceptionType#EXIT exit type}. A return value zero indicates that the execution of the
-     * application was successful, a non-zero value that it failed. The individual interpretation of
-     * non-zero values depends on the application.
+     * application was successful, a non-zero value that it it failed. The individual interpretation
+     * of non-zero values is depends on the application.
      *
      * @see #isException(Object)
      * @see #getExceptionType(Object)
@@ -1422,6 +1422,48 @@ public abstract class InteropLibrary extends Library {
             return InteropAccessor.EXCEPTION.getExceptionCause(receiver);
         } else if (LegacyTruffleExceptionSupport.isException(receiver)) {
             return LegacyTruffleExceptionSupport.getExceptionCause(receiver);
+        } else {
+            throw UnsupportedMessageException.create();
+        }
+    }
+
+    /**
+     * Returns {@code true} if the receiver is an exception with attached suppressed exceptions.
+     * Invoking this message does not cause any observable side-effects. Returns {@code false} by
+     * default.
+     *
+     * @see #isException(Object)
+     * @see #getExceptionSuppressed(Object)
+     * @since 20.3
+     */
+    @Abstract(ifExported = {"getExceptionSuppressed"})
+    public boolean hasExceptionSuppressed(Object receiver) {
+        // A workaround for missing inheritance feature for default exports.
+        if (InteropAccessor.EXCEPTION.isException(receiver)) {
+            return InteropAccessor.EXCEPTION.hasExceptionSuppressed(receiver);
+        } else if (LegacyTruffleExceptionSupport.isException(receiver)) {
+            return LegacyTruffleExceptionSupport.hasExceptionSuppressed(receiver);
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Returns suppressed exceptions of the receiver. Returns an {@link #hasArrayElements(Object)
+     * array} of suppressed exceptions. Throws {@code UnsupportedMessageException} when the receiver
+     * is not an {@link #isException(Object) exception} or has no suppressed exceptions.
+     *
+     * @see #isException(Object)
+     * @see #hasExceptionSuppressed(Object)
+     * @since 20.3
+     */
+    @Abstract(ifExported = {"hasExceptionSuppressed"})
+    public Object getExceptionSuppressed(Object receiver) throws UnsupportedMessageException {
+        // A workaround for missing inheritance feature for default exports.
+        if (InteropAccessor.EXCEPTION.isException(receiver)) {
+            return InteropAccessor.EXCEPTION.getExceptionSuppressed(receiver);
+        } else if (LegacyTruffleExceptionSupport.isException(receiver)) {
+            return LegacyTruffleExceptionSupport.getExceptionSuppressed(receiver);
         } else {
             throw UnsupportedMessageException.create();
         }
@@ -1491,12 +1533,12 @@ public abstract class InteropLibrary extends Library {
 
     /**
      * Returns the exception stack trace of the receiver that is of type exception. Returns an
-     * {@link #hasArrayElements(Object) array} of objects with potentially
-     * {@link #hasExecutableName(Object) executable name}, {@link #hasDeclaringMetaObject(Object)
-     * declaring meta object} and {@link #hasSourceLocation(Object) source location} of the caller.
-     * Throws {@code UnsupportedMessageException} when the receiver is not an
-     * {@link #isException(Object) exception} or has no stack trace. Invoking this message or
-     * accessing the stack trace elements array must not cause any observable side-effects.
+     * {@link #hasArrayElements(Object) array} of objects with {@link #hasExecutableName(Object)
+     * executable name} and potentially {@link #hasDeclaringMetaObject(Object) declaring meta
+     * object} and {@link #hasSourceLocation(Object) source location} of the caller. Throws
+     * {@code UnsupportedMessageException} when the receiver is not an {@link #isException(Object)
+     * exception} or has no stack trace. Invoking this message or accessing the stack trace elements
+     * array must not cause any observable side-effects.
      * <p>
      * The default implementation of {@link #getExceptionStackTrace(Object)} calls
      * {@link TruffleStackTrace#getStackTrace(Throwable)} on the underlying exception object and
@@ -3155,48 +3197,16 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public boolean isExceptionIncompleteSource(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.isExceptionIncompleteSource(receiver);
-            }
             assert preCondition(receiver);
-            boolean wasParseError;
-            try {
-                wasParseError = delegate.getExceptionType(receiver) == ExceptionType.PARSE_ERROR;
-            } catch (UnsupportedMessageException e) {
-                wasParseError = false;
-            }
-            try {
-                boolean result = delegate.isExceptionIncompleteSource(receiver);
-                assert !result || wasParseError : violationInvariant(receiver);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasParseError : violationInvariant(receiver);
-                throw e;
-            }
+            boolean result = delegate.isExceptionIncompleteSource(receiver);
+            return result;
         }
 
         @Override
         public int getExceptionExitStatus(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getExceptionExitStatus(receiver);
-            }
             assert preCondition(receiver);
-            boolean wasExit;
-            try {
-                wasExit = delegate.getExceptionType(receiver) == ExceptionType.EXIT;
-            } catch (UnsupportedMessageException e) {
-                wasExit = false;
-            }
-            try {
-                int result = delegate.getExceptionExitStatus(receiver);
-                assert wasExit : violationInvariant(receiver);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasExit : violationInvariant(receiver);
-                throw e;
-            }
+            int result = delegate.getExceptionExitStatus(receiver);
+            return result;
         }
 
         @Override
@@ -3235,27 +3245,25 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Object getExceptionCause(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getExceptionCause(receiver);
-            }
             assert preCondition(receiver);
-            boolean wasHasExceptionCause = delegate.hasExceptionCause(receiver);
-            try {
-                Object result = delegate.getExceptionCause(receiver);
-                assert wasHasExceptionCause : violationInvariant(receiver);
-                assert assertException(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasHasExceptionCause : violationInvariant(receiver);
-                throw e;
-            }
+            Object result = delegate.getExceptionCause(receiver);
+            assert validReturn(receiver, result);
+            return result;
         }
 
-        private static boolean assertException(Object receiver, Object exception) {
-            InteropLibrary uncached = InteropLibrary.getUncached(exception);
-            assert uncached.isException(exception) : violationPost(receiver, exception);
-            return true;
+        @Override
+        public boolean hasExceptionSuppressed(Object receiver) {
+            assert preCondition(receiver);
+            boolean result = delegate.hasExceptionSuppressed(receiver);
+            return result;
+        }
+
+        @Override
+        public Object getExceptionSuppressed(Object receiver) throws UnsupportedMessageException {
+            assert preCondition(receiver);
+            Object result = delegate.getExceptionSuppressed(receiver);
+            assert validReturn(receiver, result);
+            return result;
         }
 
         @Override
@@ -3267,21 +3275,10 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Object getExceptionMessage(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getExceptionMessage(receiver);
-            }
             assert preCondition(receiver);
-            boolean wasHasExceptionMessage = delegate.hasExceptionMessage(receiver);
-            try {
-                Object result = delegate.getExceptionMessage(receiver);
-                assert wasHasExceptionMessage : violationInvariant(receiver);
-                assert assertString(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasHasExceptionMessage : violationInvariant(receiver);
-                throw e;
-            }
+            Object result = delegate.getExceptionMessage(receiver);
+            assert validReturn(receiver, result);
+            return result;
         }
 
         @Override
@@ -3293,28 +3290,10 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Object getExceptionStackTrace(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getExceptionStackTrace(receiver);
-            }
             assert preCondition(receiver);
-            boolean wasHasExceptionStackTrace = delegate.hasExceptionStackTrace(receiver);
-            try {
-                Object result = delegate.getExceptionStackTrace(receiver);
-                assert wasHasExceptionStackTrace : violationInvariant(receiver);
-                assert verifyStackTrace(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasHasExceptionStackTrace : violationInvariant(receiver);
-                throw e;
-            }
-        }
-
-        private static boolean verifyStackTrace(Object receiver, Object stackTrace) {
-            assert stackTrace != null : violationPost(receiver, stackTrace);
-            InteropLibrary stackTraceLib = InteropLibrary.getFactory().getUncached(stackTrace);
-            assert stackTraceLib.hasArrayElements(stackTrace) : violationPost(receiver, stackTrace);
-            return true;
+            Object result = delegate.getExceptionStackTrace(receiver);
+            assert validReturn(receiver, result);
+            return result;
         }
 
         @Override
@@ -3326,21 +3305,10 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Object getExecutableName(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getExecutableName(receiver);
-            }
             assert preCondition(receiver);
-            boolean wasHasExecutableName = delegate.hasExecutableName(receiver);
-            try {
-                Object result = delegate.getExecutableName(receiver);
-                assert wasHasExecutableName : violationInvariant(receiver);
-                assert assertString(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasHasExecutableName : violationInvariant(receiver);
-                throw e;
-            }
+            Object result = delegate.getExecutableName(receiver);
+            assert validReturn(receiver, result);
+            return result;
         }
 
         @Override
@@ -3352,34 +3320,10 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Object getDeclaringMetaObject(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getDeclaringMetaObject(receiver);
-            }
             assert preCondition(receiver);
-            boolean wasHasDeclaringMetaObject = delegate.hasDeclaringMetaObject(receiver);
-            try {
-                Object result = delegate.getDeclaringMetaObject(receiver);
-                assert wasHasDeclaringMetaObject : violationInvariant(receiver);
-                assert verifyDeclaringMetaObject(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasHasDeclaringMetaObject : violationInvariant(receiver);
-                throw e;
-            }
-        }
-
-        private static boolean verifyDeclaringMetaObject(Object receiver, Object meta) {
-            assert meta != null : violationPost(receiver, meta);
-            InteropLibrary metaLib = InteropLibrary.getFactory().getUncached(meta);
-            assert metaLib.isMetaObject(meta) : violationPost(receiver, meta);
-            try {
-                assert metaLib.getMetaSimpleName(meta) != null : violationPost(receiver, meta);
-                assert metaLib.getMetaQualifiedName(meta) != null : violationPost(receiver, meta);
-            } catch (UnsupportedMessageException e) {
-                assert false : violationPost(receiver, meta);
-            }
-            return true;
+            Object result = delegate.getDeclaringMetaObject(receiver);
+            assert validReturn(receiver, result);
+            return result;
         }
 
         @Override
@@ -3511,6 +3455,7 @@ public abstract class InteropLibrary extends Library {
             assert meta != null : violationPost(receiver, meta);
             InteropLibrary metaLib = InteropLibrary.getFactory().getUncached(meta);
             assert metaLib.isMetaObject(meta) : violationPost(receiver, meta);
+            assert metaLib.isMetaInstance(meta, receiver) : violationPost(receiver, meta);
             assert metaLib.getMetaSimpleName(meta) != null : violationPost(receiver, meta);
             assert metaLib.getMetaQualifiedName(meta) != null : violationPost(receiver, meta);
             return true;
@@ -3816,10 +3761,10 @@ class InteropLibrarySnippets {
         private final BranchProfile exceptionProfile;
 
         TryCatchNode(BlockNode block, BlockNode catchBlock,
-                        BlockNode finallyBlock) {
+                        BlockNode finalizerBlock) {
             this.block = block;
             this.catchBlock = catchBlock;
-            this.finallyBlock = finallyBlock;
+            this.finallyBlock = finalizerBlock;
             this.exceptions = InteropLibrary.getFactory().createDispatched(5);
             this.exceptionProfile = BranchProfile.create();
         }
