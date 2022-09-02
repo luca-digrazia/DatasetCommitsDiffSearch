@@ -24,61 +24,38 @@
  */
 package com.oracle.svm.configure.trace;
 
+import java.util.Arrays;
+
 import org.graalvm.compiler.phases.common.LazyValue;
 
-import com.oracle.svm.configure.filters.RuleNode;
-
-public final class AccessAdvisor {
-
-    private static final RuleNode internalsFilter;
-    static {
-        internalsFilter = RuleNode.createRoot();
-        internalsFilter.addOrGetChildren("**", RuleNode.Inclusion.Include);
-        internalsFilter.addOrGetChildren("java.**", RuleNode.Inclusion.Exclude);
-        internalsFilter.addOrGetChildren("javax.**", RuleNode.Inclusion.Exclude);
-        internalsFilter.addOrGetChildren("sun.**", RuleNode.Inclusion.Exclude);
-        internalsFilter.addOrGetChildren("com.sun.**", RuleNode.Inclusion.Exclude);
-        internalsFilter.addOrGetChildren("jdk.**", RuleNode.Inclusion.Exclude);
-        internalsFilter.addOrGetChildren("org.graalvm.compiler.**", RuleNode.Inclusion.Exclude);
-        internalsFilter.removeRedundantNodes();
-    }
-
-    public static RuleNode copyBuiltinFilterTree() {
-        return internalsFilter.copy();
-    }
-
-    private RuleNode callerFilter = internalsFilter;
-    private boolean heuristicsEnabled = true;
+public class AccessAdvisor {
+    private boolean ignoreInternalAccesses = true;
     private boolean isInLivePhase = false;
     private int launchPhase = 0;
 
-    private boolean filterExcludesCaller(String qualifiedClass) {
-        assert qualifiedClass == null || qualifiedClass.indexOf('/') == -1 : "expecting Java-format qualifiers, not internal format";
-        return qualifiedClass != null && !callerFilter.treeIncludes(qualifiedClass);
-    }
-
-    public void setHeuristicsEnabled(boolean enable) {
-        heuristicsEnabled = enable;
-    }
-
-    public void setCallerFilterTree(RuleNode rootNode) {
-        callerFilter = rootNode;
+    public void setIgnoreInternalAccesses(boolean enabled) {
+        ignoreInternalAccesses = enabled;
     }
 
     public void setInLivePhase(boolean live) {
         isInLivePhase = live;
     }
 
-    public boolean shouldIgnoreCaller(LazyValue<String> qualifiedClass) {
-        return (heuristicsEnabled && !isInLivePhase) || filterExcludesCaller(qualifiedClass.get());
+    private static boolean isInternalClass(String qualifiedClass) {
+        assert qualifiedClass == null || qualifiedClass.indexOf('/') == -1 : "expecting Java-format qualifiers, not internal format";
+        return qualifiedClass != null && Arrays.asList("java.", "javax.", "sun.", "com.sun.", "jdk.", "org.graalvm.compiler.").stream().anyMatch(qualifiedClass::startsWith);
+    }
+
+    public boolean shouldIgnore(LazyValue<String> callerClass) {
+        return ignoreInternalAccesses && (!isInLivePhase || isInternalClass(callerClass.get()));
     }
 
     public boolean shouldIgnoreJniMethodLookup(LazyValue<String> queriedClass, LazyValue<String> name, LazyValue<String> signature, LazyValue<String> callerClass) {
-        if (shouldIgnoreCaller(callerClass)) {
-            return true;
-        }
-        if (!heuristicsEnabled) {
+        if (!ignoreInternalAccesses) {
             return false;
+        }
+        if (shouldIgnore(callerClass)) {
+            return true;
         }
         // Heuristic to ignore this sequence during startup:
         // 1. Lookup of LauncherHelper.getApplicationClass()
@@ -119,11 +96,11 @@ public final class AccessAdvisor {
     }
 
     public boolean shouldIgnoreJniClassLookup(LazyValue<String> name, LazyValue<String> callerClass) {
-        if (shouldIgnoreCaller(callerClass)) {
-            return true;
-        }
-        if (!heuristicsEnabled) {
+        if (!ignoreInternalAccesses) {
             return false;
+        }
+        if (shouldIgnore(callerClass)) {
+            return true;
         }
         // Ignore libjvmcicompiler internal JNI calls: jdk.vm.ci.services.Services
         if (callerClass.get() == null && "jdk.vm.ci.services.Services".equals(name.get())) {
@@ -133,10 +110,10 @@ public final class AccessAdvisor {
     }
 
     public boolean shouldIgnoreJniNewObjectArray(LazyValue<String> arrayClass, LazyValue<String> callerClass) {
-        if (!heuristicsEnabled) {
+        if (!ignoreInternalAccesses) {
             return false;
         }
-        if (shouldIgnoreCaller(callerClass)) {
+        if (shouldIgnore(callerClass)) {
             return true;
         }
         if (callerClass.get() == null && "[Ljava.lang.String;".equals(arrayClass.get())) {
