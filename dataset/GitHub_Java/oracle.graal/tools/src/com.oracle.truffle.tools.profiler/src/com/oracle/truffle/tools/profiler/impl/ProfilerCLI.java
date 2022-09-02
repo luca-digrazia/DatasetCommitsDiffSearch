@@ -81,7 +81,6 @@ abstract class ProfilerCLI {
 
                         }
                     });
-    public static final String UNKNOWN = "<Unknown>";
 
     static SourceSectionFilter buildFilter(boolean roots, boolean statements, boolean calls, boolean internals,
                     Object[] filterRootName, Object[] filterFile, String filterMimeType, String filterLanguage) {
@@ -136,12 +135,12 @@ abstract class ProfilerCLI {
     // custom version of SourceSection#getShortDescription
     static String getShortDescription(SourceSection sourceSection) {
         if (sourceSection == null) {
-            return UNKNOWN;
+            return "unknown";
         }
         if (sourceSection.getSource() == null) {
             // TODO the source == null branch can be removed if the deprecated
             // SourceSection#createUnavailable has be removed.
-            return UNKNOWN;
+            return "<Unknown>";
         }
         StringBuilder b = new StringBuilder();
         if (sourceSection.getSource().getPath() == null) {
@@ -163,7 +162,7 @@ abstract class ProfilerCLI {
 
     static String formatIndices(SourceSection sourceSection, boolean needsColumnSpecifier) {
         if (sourceSection == null) {
-            return UNKNOWN;
+            return "unknown";
         }
         StringBuilder b = new StringBuilder();
         boolean singleLine = sourceSection.getStartLine() == sourceSection.getEndLine();

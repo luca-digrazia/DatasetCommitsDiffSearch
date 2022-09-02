@@ -128,7 +128,6 @@ public final class CPUSampler implements Closeable {
     private SamplingTimerTask samplerTask;
     private volatile SafepointStack safepointStack;
     private boolean gatherSelfHitTimes = false;
-    private boolean sampleLanguageInit = false;
 
     CPUSampler(Env env) {
         this.env = env;
@@ -195,20 +194,16 @@ public final class CPUSampler implements Closeable {
 
     @SuppressWarnings("unused")
     private void pushSyntheticFrame(TruffleContext context, LanguageInfo info, String message) {
-        if (sampleLanguageInit) {
-            List<StackTraceEntry> stack = new ArrayList<>(1);
-            stack.add(new StackTraceEntry(info.getName() + ":" + message));
-            List<StackSample> sample = new ArrayList<>(1);
-            sample.add(new StackSample(Thread.currentThread(), stack, 0, 0, false));
-            syntheticFrames.put(context, sample);
-        }
+        List<StackTraceEntry> stack = new ArrayList<>(1);
+        stack.add(new StackTraceEntry(info.getName() + ":" + message));
+        List<StackSample> sample = new ArrayList<>(1);
+        sample.add(new StackSample(Thread.currentThread(), stack, 0, 0, false));
+        syntheticFrames.put(context, sample);
     }
 
     @SuppressWarnings("unused")
     private void popSyntheticFrame(TruffleContext context, LanguageInfo info) {
-        if (sampleLanguageInit) {
-            syntheticFrames.remove(context);
-        }
+        syntheticFrames.remove(context);
     }
 
     /**
@@ -217,25 +212,6 @@ public final class CPUSampler implements Closeable {
      */
     public synchronized boolean isCollecting() {
         return collecting;
-    }
-
-    /**
-     *
-     * @return Does the profile include the samples taken during language context initialization.
-     * @since 21.3.0
-     */
-    public synchronized boolean isSampleLanguageInit() {
-        return sampleLanguageInit;
-    }
-
-    /**
-     * Should the profile include the samples taken during language context initialization.
-     *
-     * @since 21.3.0
-     */
-    public synchronized void setSampleLanguageInit(boolean sampleContextInit) {
-        enterChangeConfig();
-        this.sampleLanguageInit = sampleContextInit;
     }
 
     /**
