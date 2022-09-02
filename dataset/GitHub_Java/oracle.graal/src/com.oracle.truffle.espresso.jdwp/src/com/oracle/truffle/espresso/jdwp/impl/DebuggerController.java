@@ -66,7 +66,7 @@ public final class DebuggerController implements ContextsListener {
     // justification for all of the hash maps is that lookups only happen when at a breakpoint
     private final Map<Object, SimpleLock> suspendLocks = new HashMap<>();
     private final Map<Object, SuspendedInfo> suspendedInfos = new HashMap<>();
-    private final Map<Object, SteppingInfo> commandRequestIds = new HashMap<>();
+    private final Map<Object, Integer> commandRequestIds = new HashMap<>();
     private final Map<Object, ThreadJob> threadJobs = new HashMap<>();
     private final Map<Object, FieldBreakpointEvent> fieldBreakpointExpected = new HashMap<>();
     private final Map<Breakpoint, BreakpointInfo> breakpointInfos = new HashMap<>();
@@ -137,8 +137,8 @@ public final class DebuggerController implements ContextsListener {
         return options.transport;
     }
 
-    public void setCommandRequestId(Object thread, int commandRequestId, byte suspendPolicy) {
-        commandRequestIds.put(thread, new SteppingInfo(commandRequestId, suspendPolicy));
+    public void setCommandRequestId(Object thread, int commandRequestId) {
+        commandRequestIds.put(thread, commandRequestId);
     }
 
     /**
@@ -151,7 +151,7 @@ public final class DebuggerController implements ContextsListener {
         try {
             Breakpoint bp = Breakpoint.newBuilder(location.getSource()).lineIs(location.getLineNumber()).build();
             bp.setEnabled(true);
-            int ignoreCount = command.getRequestFilter().getIgnoreCount();
+            int ignoreCount = command.getBreakpointInfo().getFilter().getIgnoreCount();
             if (ignoreCount > 0) {
                 bp.setIgnoreCount(ignoreCount);
             }
@@ -163,30 +163,6 @@ public final class DebuggerController implements ContextsListener {
             // perhaps the debugger's view on the source is out of sync, in which case
             // the bytecode and source does not match.
             JDWPLogger.log("Failed submitting breakpoint at non-existing location: %s", JDWPLogger.LogLevel.ALL, location);
-        }
-    }
-
-    public void submitMethodEntryBreakpoint(DebuggerCommand debuggerCommand) {
-        // method entry breakpoints are limited per class, so we must
-        // install a first line breakpoint into each method in the class
-        KlassRef[] klasses = debuggerCommand.getRequestFilter().getKlassRefPatterns();
-        List<Breakpoint> breakpoints = new ArrayList<>();
-        for (KlassRef klass : klasses) {
-            for (MethodRef method : klass.getDeclaredMethods()) {
-                int line = method.getFirstLine();
-                Breakpoint bp;
-                if (line != -1) {
-                    bp = Breakpoint.newBuilder(method.getSource()).lineIs(line).build();
-                } else {
-                    bp = Breakpoint.newBuilder(method.getSource().createUnavailableSection()).build();
-                }
-                breakpoints.add(bp);
-            }
-        }
-        BreakpointInfo breakpointInfo = debuggerCommand.getBreakpointInfo();
-        for (Breakpoint breakpoint : breakpoints) {
-            mapBreakpoint(breakpoint, breakpointInfo);
-            debuggerSession.install(breakpoint);
         }
     }
 
@@ -205,7 +181,7 @@ public final class DebuggerController implements ContextsListener {
     @CompilerDirectives.TruffleBoundary
     private void mapBreakpoint(Breakpoint bp, BreakpointInfo info) {
         breakpointInfos.put(bp, info);
-        info.addBreakpoint(bp);
+        info.setBreakpoint(bp);
     }
 
     public void clearBreakpoints() {
@@ -519,9 +495,9 @@ public final class DebuggerController implements ContextsListener {
         JDWPLogger.log("Suspending event thread: %s with new suspension count: %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
 
         // if during stepping, send a step completed event back to the debugger
-        SteppingInfo info = commandRequestIds.get(thread);
-        if (info != null) {
-            eventListener.stepCompleted(info.getRequestId(), info.getSuspendPolicy(), thread, currentFrame);
+        Integer id = commandRequestIds.get(thread);
+        if (id != null) {
+            eventListener.stepCompleted(id, currentFrame);
         }
         // reset
         commandRequestIds.put(thread, null);
@@ -620,7 +596,7 @@ public final class DebuggerController implements ContextsListener {
                         jobs.add(new Callable<Void>() {
                             @Override
                             public Void call() {
-                                eventListener.breakpointHit(info, callFrames[0], currentThread);
+                                eventListener.breakpointHit(info, currentThread);
                                 return null;
                             }
                         });
@@ -720,10 +696,10 @@ public final class DebuggerController implements ContextsListener {
         }
 
         private boolean checkExclusionFilters(SuspendedEvent event, Object thread, CallFrame frame) {
-            SteppingInfo info = commandRequestIds.get(thread);
+            Integer id = commandRequestIds.get(thread);
 
-            if (info != null) {
-                RequestFilter requestFilter = eventFilters.getRequestFilter(info.getRequestId());
+            if (id != null) {
+                RequestFilter requestFilter = eventFilters.getRequestFilter(id);
 
                 if (requestFilter != null && requestFilter.getStepInfo() != null) {
                     // we're currently stepping, so check if suspension point

@@ -24,28 +24,36 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.api.CompilerDirectives;
 
-public class ThreadSuspension {
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
-    @CompilerDirectives.CompilationFinal(dimensions = 1)
-    private static Object[] threads = new Object[0];
+public final class ThreadSuspension {
 
-    @CompilerDirectives.CompilationFinal(dimensions = 1)
-    private static int[] suspensionCount = new int[0];
+    private Object[] threads = new Object[0];
 
-    public static void suspendThread(Object thread) {
+    private int[] suspensionCount = new int[0];
+
+    private final Set<Object> hardSuspendedThreads = new HashSet<>();
+
+    public void suspendThread(Object thread) {
         for (int i = 0; i < threads.length; i++) {
             if (thread == threads[i]) {
                 // increase the suspension count
                 suspensionCount[i]++;
+                return;
             }
         }
+        expandCapacity(thread);
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private void expandCapacity(Object thread) {
         // not yet registered, so add to array
-        Object[] expanded = new Object[threads.length + 1];
-        System.arraycopy(threads, 0, expanded, 0, threads.length);
+        Object[] expanded = Arrays.copyOf(threads, threads.length + 1);
         expanded[threads.length] = thread;
 
-        int[] temp = new int[threads.length + 1];
-        System.arraycopy(suspensionCount, 0, temp, 0, threads.length);
+        int[] temp = Arrays.copyOf(suspensionCount, threads.length + 1);
         // set the thread as suspended with suspension count 1
         temp[threads.length] = 1;
 
@@ -53,40 +61,54 @@ public class ThreadSuspension {
         suspensionCount = temp;
     }
 
-    public static void resumeThread(Object thread) {
+    public void resumeThread(Object thread) {
+        removeHardSuspendedThread(thread);
         for (int i = 0; i < threads.length; i++) {
             if (thread == threads[i]) {
                 if (suspensionCount[i] > 0) {
                     suspensionCount[i]--;
-                    // only decrease the suspension count once!
-                    break;
+                    return;
                 }
             }
         }
     }
 
-    public static int isSuspended(Object thread) {
-        for (int i = 0; i < threads.length; i++) {
-            if (thread == threads[i]) {
-                return suspensionCount[i] > 0 ? 1 : 0;
-            }
-        }
-        return 0;
-    }
+    public int getSuspensionCount(Object thread) {
+        // check if thread has been hard suspended
+        if (hardSuspendedThreads.contains(thread)) {
+            // suspended through a hard suspension, which means that thread is
+            // still running until the callback from the Debug API is fired
+            // or it's blocked or waiting
 
-    public static int getSuspensionCount(Object thread) {
+            // return the real suspension count unless it's 0
+            // in which case the hard suspension counts as 1
+            for (int i = 0; i < threads.length; i++) {
+                if (thread == threads[i]) {
+                    int count = suspensionCount[i];
+                    return count + 1; // add the hard suspension
+                }
+            }
+            return 1; // hard suspended
+        }
+
         for (int i = 0; i < threads.length; i++) {
             if (thread == threads[i]) {
                 return suspensionCount[i];
             }
         }
-        // this should never be reached
+        // in case the thread has not been suspended ever
         return 0;
     }
 
-    public static void resumeAll() {
-        for (int i = 0; i < suspensionCount.length; i++) {
-            suspensionCount[i] = 0;
-        }
+    public void addHardSuspendedThread(Object thread) {
+        // register the thread by calling suspend, but leave the suspension
+        // count untouched by calling resume afterwards.
+        suspendThread(thread);
+        resumeThread(thread);
+        hardSuspendedThreads.add(thread);
+    }
+
+    public void removeHardSuspendedThread(Object thread) {
+        hardSuspendedThreads.remove(thread);
     }
 }
