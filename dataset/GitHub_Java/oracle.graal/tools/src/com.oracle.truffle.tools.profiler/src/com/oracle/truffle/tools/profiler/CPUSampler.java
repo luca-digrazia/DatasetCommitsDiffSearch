@@ -210,7 +210,7 @@ public final class CPUSampler implements Closeable {
 
     private int stackLimit = 10000;
 
-    private SourceSectionFilter filter = DEFAULT_FILTER;
+    private SourceSectionFilter filter;
 
     private AtomicLong samplesTaken = new AtomicLong(0);
 
@@ -219,6 +219,8 @@ public final class CPUSampler implements Closeable {
     private TimerTask samplerTask;
 
     private volatile SafepointStack safepointStack;
+
+    private final Map<Thread, ProfilerNode<Payload>> rootNodes = new HashMap<>();
 
     private final Env env;
 
@@ -446,7 +448,7 @@ public final class CPUSampler implements Closeable {
      * @since 0.30
      */
     public boolean hasStackOverflowed() {
-        return safepointStack.hasOverflowed();
+        return stackOverflowed;
     }
 
     /**
@@ -457,11 +459,8 @@ public final class CPUSampler implements Closeable {
      */
     public synchronized Collection<ProfilerNode<Payload>> getRootNodes() {
         ProfilerNode<Payload> mergedRoot = new ProfilerNode<>();
-        Map<Thread, Collection<ProfilerNode<Payload>>> threadToNodes = getThreadToNodesMap();
-        for (Collection<ProfilerNode<Payload>> nodes : threadToNodes.values()) {
-            for (ProfilerNode<Payload> node : nodes) {
-                mergedRoot.deepMergeNodeToChildren(node, MERGE_PAYLOAD, PAYLOAD_FACTORY);
-            }
+        for (ProfilerNode<Payload> node : rootNodes.values()) {
+            mergedRoot.deepMergeChildrenFrom(node, MERGE_PAYLOAD, PAYLOAD_FACTORY);
         }
         return mergedRoot.getChildren();
     }
@@ -506,6 +505,7 @@ public final class CPUSampler implements Closeable {
      * @since 19.0
      */
     public synchronized Map<Thread, Collection<ProfilerNode<Payload>>> getThreadToNodesMap() {
+
         if (activeContexts.isEmpty()) {
             return Collections.emptyMap();
         }
@@ -518,10 +518,6 @@ public final class CPUSampler implements Closeable {
         return Collections.unmodifiableMap(returnValue);
     }
 
-    /**
-     * TODO: Write javaodc
-     * @return
-     */
     public synchronized Map<TruffleContext, Map<Thread, Collection<ProfilerNode<Payload>>>> getContextData() {
         if (activeContexts.isEmpty()) {
             return Collections.emptyMap();
@@ -546,8 +542,16 @@ public final class CPUSampler implements Closeable {
      */
     public synchronized void clearData() {
         samplesTaken.set(0);
+
         for (TruffleContext context : activeContexts.keySet()) {
             activeContexts.get(context).clear();
+        }
+
+        for (ProfilerNode<Payload> node : rootNodes.values()) {
+            Map<StackTraceEntry, ProfilerNode<Payload>> rootChildren = node.children;
+            if (rootChildren != null) {
+                rootChildren.clear();
+            }
         }
     }
 
@@ -556,7 +560,12 @@ public final class CPUSampler implements Closeable {
      * @since 0.30
      */
     public synchronized boolean hasData() {
-        return samplesTaken.get() > 0;
+        boolean hasData = false;
+        for (ProfilerNode<Payload> node : rootNodes.values()) {
+            Map<StackTraceEntry, ProfilerNode<Payload>> rootChildren = node.children;
+            hasData = hasData || (rootChildren != null && !rootChildren.isEmpty());
+        }
+        return hasData;
     }
 
     /**
@@ -628,7 +637,6 @@ public final class CPUSampler implements Closeable {
         if (samplerThread == null) {
             samplerThread = new Timer("Sampling thread", true);
         }
-        this.safepointStack = new SafepointStack(stackLimit, filter);
         this.samplerTask = new SamplingTimerTask();
         this.samplerThread.schedule(samplerTask, delay, period);
     }
