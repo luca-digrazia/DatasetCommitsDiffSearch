@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -93,7 +93,7 @@ public final class SubstitutionProcessor extends EspressoProcessor {
         final TypeMirror nameProvider;
         final TypeMirror versionFilter;
 
-        SubstitutorHelper(EspressoProcessor processor, Element target, String targetClassName, String guestMethodName, List<String> guestTypeNames, String returnType,
+        public SubstitutorHelper(EspressoProcessor processor, Element target, String targetClassName, String guestMethodName, List<String> guestTypeNames, String returnType,
                         boolean hasReceiver, TypeMirror nameProvider, TypeMirror versionFilter) {
             super(processor, target, processor.getTypeElement(SUBSTITUTION));
             this.targetClassName = targetClassName;
@@ -256,7 +256,7 @@ public final class SubstitutionProcessor extends EspressoProcessor {
     void processSubstitution(Element element, String className, TypeMirror defaultNameProvider) {
         assert element.getKind() == ElementKind.METHOD || element.getKind() == ElementKind.CLASS;
         TypeElement declaringClass = (TypeElement) element.getEnclosingElement();
-        String targetPackage = env().getElementUtils().getPackageOf(declaringClass).getQualifiedName().toString();
+        String targetPackage = env().getElementUtils().getPackageOf(declaringClass).toString();
 
         // Find the methods annotated with @Substitution.
         AnnotationMirror subst = getAnnotation(element, substitutionAnnotation);
@@ -536,7 +536,7 @@ public final class SubstitutionProcessor extends EspressoProcessor {
     String generateImports(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         SubstitutorHelper h = (SubstitutorHelper) helper;
-        str.append("import ").append(substitutorPackage + "." + SUBSTITUTOR).append(";\n");
+        str.append("import ").append(SUBSTITUTOR_PACKAGE + "." + SUBSTITUTOR).append(";\n");
         if (parameterTypeName.contains("StaticObject") || h.returnType.equals("V")) {
             str.append(IMPORT_STATIC_OBJECT);
         }
