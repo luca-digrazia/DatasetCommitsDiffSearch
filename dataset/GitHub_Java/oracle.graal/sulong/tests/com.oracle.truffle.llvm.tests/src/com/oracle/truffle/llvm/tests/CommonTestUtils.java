@@ -239,7 +239,7 @@ public abstract class CommonTestUtils {
      */
     public static class ExcludingRunner extends BlockJUnit4ClassRunner {
 
-        private final TestCaseCollector.ExcludeMap excludes;
+        private final Map<String, String> excludes;
 
         public ExcludingRunner(Class<?> klass) throws InitializationError {
             super(klass);
@@ -248,7 +248,7 @@ public abstract class CommonTestUtils {
 
         @Override
         protected boolean isIgnored(FrameworkMethod method) {
-            if (excludes.get(method.getName()) != null) {
+            if (excludes.containsKey(method.getName())) {
                 return true;
             }
             return super.isIgnored(method);
