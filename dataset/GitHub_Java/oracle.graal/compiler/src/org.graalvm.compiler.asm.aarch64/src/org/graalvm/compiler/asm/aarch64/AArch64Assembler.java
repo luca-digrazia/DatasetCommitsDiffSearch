@@ -637,9 +637,7 @@ public abstract class AArch64Assembler extends Assembler {
 
     public enum SystemRegister {
         FPCR(0b11, 0b011, 0b0100, 0b0100, 0b000),
-        FPSR(0b11, 0b011, 0b0100, 0b0100, 0b001),
-        /* Counter-timer Virtual Count register */
-        CNTVCT_EL0(0b11, 0b011, 0b110, 0b0000, 0b010);
+        FPSR(0b11, 0b011, 0b0100, 0b0100, 0b001);
 
         SystemRegister(int op0, int op1, int crn, int crm, int op2) {
             this.op0 = op0;
@@ -1077,20 +1075,10 @@ public abstract class AArch64Assembler extends Assembler {
     /**
      * Returns the log2 size of the number of bytes expected to be transferred.
      */
-    protected static int getLog2TransferSize(int bitMemoryTransferSize) {
-        switch (bitMemoryTransferSize) {
-            case 8:
-                return 0;
-            case 16:
-                return 1;
-            case 32:
-                return 2;
-            case 64:
-                return 3;
-            case 128:
-                return 4;
-        }
-        throw GraalError.shouldNotReachHere("Unexpected transfer size.");
+    protected static int getLog2TransferSize(int bitSize) {
+        assert bitSize >= 0 && bitSize % 8 == 0; // bit size must be multiple of 8
+        int byteSize = bitSize / 8;
+        return NumUtil.log2Ceil(byteSize);
     }
 
     /* Load-Store Single Register (5.3.1) */
@@ -1253,7 +1241,6 @@ public abstract class AArch64Assembler extends Assembler {
 
     private void loadStoreInstruction(Instruction instr, Register reg, AArch64Address address, boolean isFP, int log2TransferSize, int extraEncoding) {
         assert log2TransferSize >= 0 && log2TransferSize < (isFP ? 5 : 4);
-        assert address.getBitMemoryTransferSize() == AArch64Address.ANY_SIZE || getLog2TransferSize(address.getBitMemoryTransferSize()) == log2TransferSize;
 
         int transferSizeEncoding;
         if (address.getAddressingMode() == AddressingMode.PC_LITERAL) {
@@ -1281,7 +1268,7 @@ public abstract class AArch64Assembler extends Assembler {
             case EXTENDED_REGISTER_OFFSET:
             case REGISTER_OFFSET:
                 ExtendType extendType = address.getAddressingMode() == AddressingMode.EXTENDED_REGISTER_OFFSET ? address.getExtendType() : ExtendType.UXTX;
-                int shouldScaleFlag = (address.isRegisterOffsetScaled() ? 1 : 0) << LoadStoreScaledRegOffset;
+                int shouldScaleFlag = (address.isRegisterOffsetScaled() && log2TransferSize != 0 ? 1 : 0) << LoadStoreScaledRegOffset;
                 emitInt(memOp | LoadStoreRegisterOp | rs2(address.getOffset()) | extendType.encoding << ExtendTypeOffset | shouldScaleFlag | rs1(address.getBase()));
                 break;
             case PC_LITERAL:
@@ -1331,8 +1318,6 @@ public abstract class AArch64Assembler extends Assembler {
 
     private static int generateLoadStorePairInstructionEncoding(Instruction instr, Register rt, Register rt2, AArch64Address address, boolean isFP, int log2TransferSize) {
         assert log2TransferSize >= 2 && log2TransferSize < (isFP ? 5 : 4);
-        assert getLog2TransferSize(address.getBitMemoryTransferSize()) == log2TransferSize;
-
         int transferSizeEncoding = (log2TransferSize - 2) << (isFP ? 30 : 31);
         int floatFlag = isFP ? 1 << LoadStoreFpFlagOffset : 0;
         // LDP/STP uses a 7-bit scaled offset
@@ -3080,20 +3065,10 @@ public abstract class AArch64Assembler extends Assembler {
         emitInt(ISB.encoding | BarrierOp | BarrierKind.SYSTEM.encoding << BarrierKindOffset);
     }
 
-    /**
-     * C.6.2.194 Move System Register<br>
-     * <p>
-     * Reads an AArch64 System register into a general-purpose register.
-     */
     public void mrs(Register dst, SystemRegister systemRegister) {
         emitInt(MRS.encoding | systemRegister.encoding() | rt(dst));
     }
 
-    /**
-     * C.6.2.196 Move general-purpose register to System Register<br>
-     * <p>
-     * Writes an AArch64 System register from general-purpose register.
-     */
     public void msr(SystemRegister systemRegister, Register src) {
         emitInt(MRS.encoding | systemRegister.encoding() | rt(src));
     }

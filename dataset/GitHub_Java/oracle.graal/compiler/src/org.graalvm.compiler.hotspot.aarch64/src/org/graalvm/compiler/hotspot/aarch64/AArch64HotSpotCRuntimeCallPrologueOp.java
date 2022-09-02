@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2018, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,7 +28,6 @@ package org.graalvm.compiler.hotspot.aarch64;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 import static jdk.vm.ci.aarch64.AArch64.sp;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
-import static jdk.vm.ci.hotspot.aarch64.AArch64HotSpotRegisterConfig.fp;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
@@ -62,11 +63,11 @@ public class AArch64HotSpotCRuntimeCallPrologueOp extends AArch64LIRInstruction 
         // Save last Java frame.
         // We cannot save the SP directly so use a temporary register.
         Register scratchRegister = asRegister(scratch);
-        masm.movx(scratchRegister, sp);
-        masm.str(64, scratchRegister, masm.makeAddress(thread, threadLastJavaSpOffset, 8));
+        masm.mov(64, scratchRegister, sp);
+        masm.str(64, scratchRegister, masm.makeAddress(64, thread, threadLastJavaSpOffset));
 
         // Get the current PC. Use a label to patch the return address.
         masm.adr(scratchRegister, label);
-        masm.str(64, scratchRegister, masm.makeAddress(thread, threadLastJavaPcOffset, 8));
+        masm.str(64, scratchRegister, masm.makeAddress(64, thread, threadLastJavaPcOffset));
     }
 }

@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,7 +27,7 @@ package org.graalvm.compiler.asm.aarch64.test;
 
 import org.graalvm.compiler.asm.AbstractAddress;
 import org.graalvm.compiler.asm.Label;
-import org.graalvm.compiler.asm.aarch64.AArch64Address;
+import org.graalvm.compiler.asm.aarch64.AArch64ASIMDAssembler;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler;
 
 import jdk.vm.ci.code.Register;
@@ -36,8 +38,11 @@ import jdk.vm.ci.code.TargetDescription;
  */
 class TestProtectedAssembler extends AArch64Assembler {
 
+    public final TestProtectedASIMDAssembler neon;
+
     TestProtectedAssembler(TargetDescription target) {
         super(target);
+        this.neon = new TestProtectedASIMDAssembler(this);
     }
 
     @Override
@@ -48,11 +53,6 @@ class TestProtectedAssembler extends AArch64Assembler {
     @Override
     protected void cbz(int size, Register reg, int imm21, int pos) {
         super.cbz(size, reg, imm21, pos);
-    }
-
-    @Override
-    public void ands(int size, Register dst, Register src, long bimm) {
-        super.ands(size, dst, src, bimm);
     }
 
     @Override
@@ -86,38 +86,8 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public void bl(int imm28) {
-        super.bl(imm28);
-    }
-
-    @Override
-    public void blr(Register reg) {
-        super.blr(reg);
-    }
-
-    @Override
     protected void br(Register reg) {
         super.br(reg);
-    }
-
-    @Override
-    public void ret(Register reg) {
-        super.ret(reg);
-    }
-
-    @Override
-    public void ldr(int srcSize, Register rt, AArch64Address address) {
-        super.ldr(srcSize, rt, address);
-    }
-
-    @Override
-    public void ldrs(int targetSize, int srcSize, Register rt, AArch64Address address) {
-        super.ldrs(targetSize, srcSize, rt, address);
-    }
-
-    @Override
-    public void str(int destSize, Register rt, AArch64Address address) {
-        super.str(destSize, rt, address);
     }
 
     @Override
@@ -128,31 +98,6 @@ class TestProtectedAssembler extends AArch64Assembler {
     @Override
     protected void stxr(int size, Register rs, Register rt, Register rn) {
         super.stxr(size, rs, rt, rn);
-    }
-
-    @Override
-    protected void ldar(int size, Register rt, Register rn) {
-        super.ldar(size, rt, rn);
-    }
-
-    @Override
-    protected void stlr(int size, Register rt, Register rn) {
-        super.stlr(size, rt, rn);
-    }
-
-    @Override
-    public void ldaxr(int size, Register rt, Register rn) {
-        super.ldaxr(size, rt, rn);
-    }
-
-    @Override
-    public void stlxr(int size, Register rs, Register rt, Register rn) {
-        super.stlxr(size, rs, rt, rn);
-    }
-
-    @Override
-    public void adr(Register dst, int imm21) {
-        super.adr(dst, imm21);
     }
 
     @Override
@@ -176,21 +121,6 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public void and(int size, Register dst, Register src, long bimm) {
-        super.and(size, dst, src, bimm);
-    }
-
-    @Override
-    public void eor(int size, Register dst, Register src, long bimm) {
-        super.eor(size, dst, src, bimm);
-    }
-
-    @Override
-    protected void orr(int size, Register dst, Register src, long bimm) {
-        super.orr(size, dst, src, bimm);
-    }
-
-    @Override
     protected void movz(int size, Register dst, int uimm16, int shiftAmt) {
         super.movz(size, dst, uimm16, shiftAmt);
     }
@@ -206,33 +136,8 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    protected void bfm(int size, Register dst, Register src, int r, int s) {
-        super.bfm(size, dst, src, r, s);
-    }
-
-    @Override
-    protected void ubfm(int size, Register dst, Register src, int r, int s) {
-        super.ubfm(size, dst, src, r, s);
-    }
-
-    @Override
-    protected void sbfm(int size, Register dst, Register src, int r, int s) {
-        super.sbfm(size, dst, src, r, s);
-    }
-
-    @Override
     protected void extr(int size, Register dst, Register src1, Register src2, int lsb) {
         super.extr(size, dst, src1, src2, lsb);
-    }
-
-    @Override
-    public void adds(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int imm) {
-        super.adds(size, dst, src1, src2, shiftType, imm);
-    }
-
-    @Override
-    public void subs(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int imm) {
-        super.subs(size, dst, src1, src2, shiftType, imm);
     }
 
     @Override
@@ -246,28 +151,8 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public void add(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
-        super.add(size, dst, src1, src2, extendType, shiftAmt);
-    }
-
-    @Override
     protected void adds(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
         super.adds(size, dst, src1, src2, extendType, shiftAmt);
-    }
-
-    @Override
-    protected void sub(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
-        super.sub(size, dst, src1, src2, extendType, shiftAmt);
-    }
-
-    @Override
-    public void subs(int size, Register dst, Register src1, Register src2, ExtendType extendType, int shiftAmt) {
-        super.subs(size, dst, src1, src2, extendType, shiftAmt);
-    }
-
-    @Override
-    protected void and(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.and(size, dst, src1, src2, shiftType, shiftAmt);
     }
 
     @Override
@@ -276,53 +161,13 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    protected void bic(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.bic(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    @Override
     protected void bics(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
         super.bics(size, dst, src1, src2, shiftType, shiftAmt);
     }
 
     @Override
-    protected void eon(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.eon(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    @Override
-    protected void eor(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.eor(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    @Override
-    protected void orr(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.orr(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    @Override
-    protected void orn(int size, Register dst, Register src1, Register src2, ShiftType shiftType, int shiftAmt) {
-        super.orn(size, dst, src1, src2, shiftType, shiftAmt);
-    }
-
-    @Override
-    protected void asr(int size, Register dst, Register src1, Register src2) {
-        super.asr(size, dst, src1, src2);
-    }
-
-    @Override
-    protected void lsl(int size, Register dst, Register src1, Register src2) {
-        super.lsl(size, dst, src1, src2);
-    }
-
-    @Override
-    protected void lsr(int size, Register dst, Register src1, Register src2) {
-        super.lsr(size, dst, src1, src2);
-    }
-
-    @Override
-    protected void ror(int size, Register dst, Register src1, Register src2) {
-        super.ror(size, dst, src1, src2);
+    protected void rorv(int size, Register dst, Register src1, Register src2) {
+        super.rorv(size, dst, src1, src2);
     }
 
     @Override
@@ -331,63 +176,8 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public void clz(int size, Register dst, Register src) {
-        super.clz(size, dst, src);
-    }
-
-    @Override
-    public void rbit(int size, Register dst, Register src) {
-        super.rbit(size, dst, src);
-    }
-
-    @Override
-    public void rev(int size, Register dst, Register src) {
-        super.rev(size, dst, src);
-    }
-
-    @Override
-    protected void csel(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
-        super.csel(size, dst, src1, src2, condition);
-    }
-
-    @Override
-    protected void csneg(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
-        super.csneg(size, dst, src1, src2, condition);
-    }
-
-    @Override
     protected void csinc(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
         super.csinc(size, dst, src1, src2, condition);
-    }
-
-    @Override
-    protected void madd(int size, Register dst, Register src1, Register src2, Register src3) {
-        super.madd(size, dst, src1, src2, src3);
-    }
-
-    @Override
-    protected void msub(int size, Register dst, Register src1, Register src2, Register src3) {
-        super.msub(size, dst, src1, src2, src3);
-    }
-
-    @Override
-    public void sdiv(int size, Register dst, Register src1, Register src2) {
-        super.sdiv(size, dst, src1, src2);
-    }
-
-    @Override
-    public void udiv(int size, Register dst, Register src1, Register src2) {
-        super.udiv(size, dst, src1, src2);
-    }
-
-    @Override
-    public void fldr(int size, Register rt, AArch64Address address) {
-        super.fldr(size, rt, address);
-    }
-
-    @Override
-    public void fstr(int size, Register rt, AArch64Address address) {
-        super.fstr(size, rt, address);
     }
 
     @Override
@@ -411,88 +201,8 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public void fcvt(int srcSize, Register dst, Register src) {
-        super.fcvt(srcSize, dst, src);
-    }
-
-    @Override
-    public void fcvtzs(int targetSize, int srcSize, Register dst, Register src) {
-        super.fcvtzs(targetSize, srcSize, dst, src);
-    }
-
-    @Override
-    public void scvtf(int targetSize, int srcSize, Register dst, Register src) {
-        super.scvtf(targetSize, srcSize, dst, src);
-    }
-
-    @Override
-    protected void frintz(int size, Register dst, Register src) {
-        super.frintz(size, dst, src);
-    }
-
-    @Override
-    public void fabs(int size, Register dst, Register src) {
-        super.fabs(size, dst, src);
-    }
-
-    @Override
-    public void fneg(int size, Register dst, Register src) {
-        super.fneg(size, dst, src);
-    }
-
-    @Override
-    public void fsqrt(int size, Register dst, Register src) {
-        super.fsqrt(size, dst, src);
-    }
-
-    @Override
-    public void fadd(int size, Register dst, Register src1, Register src2) {
-        super.fadd(size, dst, src1, src2);
-    }
-
-    @Override
-    public void fsub(int size, Register dst, Register src1, Register src2) {
-        super.fsub(size, dst, src1, src2);
-    }
-
-    @Override
-    public void fmul(int size, Register dst, Register src1, Register src2) {
-        super.fmul(size, dst, src1, src2);
-    }
-
-    @Override
-    public void fdiv(int size, Register dst, Register src1, Register src2) {
-        super.fdiv(size, dst, src1, src2);
-    }
-
-    @Override
-    protected void fmadd(int size, Register dst, Register src1, Register src2, Register src3) {
-        super.fmadd(size, dst, src1, src2, src3);
-    }
-
-    @Override
     protected void fmsub(int size, Register dst, Register src1, Register src2, Register src3) {
         super.fmsub(size, dst, src1, src2, src3);
-    }
-
-    @Override
-    public void fcmp(int size, Register src1, Register src2) {
-        super.fcmp(size, src1, src2);
-    }
-
-    @Override
-    public void fccmp(int size, Register src1, Register src2, int uimm4, ConditionFlag condition) {
-        super.fccmp(size, src1, src2, uimm4, condition);
-    }
-
-    @Override
-    public void fcmpZero(int size, Register src) {
-        super.fcmpZero(size, src);
-    }
-
-    @Override
-    protected void fcsel(int size, Register dst, Register src1, Register src2, ConditionFlag condition) {
-        super.fcsel(size, dst, src1, src2, condition);
     }
 
     @Override
@@ -516,11 +226,6 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public void dmb(BarrierKind barrierKind) {
-        super.dmb(barrierKind);
-    }
-
-    @Override
     public void align(int modulus) {
     }
 
@@ -534,7 +239,7 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public AbstractAddress makeAddress(Register base, int displacement) {
+    public AbstractAddress makeAddress(int transferSize, Register base, int displacement) {
         throw new UnsupportedOperationException();
     }
 
@@ -546,5 +251,12 @@ class TestProtectedAssembler extends AArch64Assembler {
     @Override
     public void ensureUniquePC() {
         throw new UnsupportedOperationException();
+    }
+
+    public static class TestProtectedASIMDAssembler extends AArch64ASIMDAssembler {
+
+        protected TestProtectedASIMDAssembler(AArch64Assembler asm) {
+            super(asm);
+        }
     }
 }
