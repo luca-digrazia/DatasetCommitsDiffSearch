@@ -223,15 +223,8 @@ public abstract class ArrayCopySnippets implements Snippets {
 
                 counters.objectCheckcastDifferentTypeCounter.inc();
                 counters.objectCheckcastDifferentTypeCopiedCounter.add(length);
-                int copiedElements = CheckcastArrayCopyCallNode.checkcastArraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length, superCheckOffset, destElemKlass, false);
-                if (probability(SLOW_PATH_PROBABILITY, copiedElements != 0)) {
-                    /*
-                     * the stub doesn't throw the ArrayStoreException, but returns the number of
-                     * copied elements (xor'd with -1).
-                     */
-                    copiedElements ^= -1;
-                    System.arraycopy(nonNullSrc, srcPos + copiedElements, nonNullDest, destPos + copiedElements, length - copiedElements);
-                }
+
+                System.arraycopy(nonNullSrc, srcPos, nonNullDest, destPos, length);
             }
         }
     }
@@ -382,6 +375,7 @@ public abstract class ArrayCopySnippets implements Snippets {
 
         private ResolvedJavaMethod originalArraycopy;
         private final Counters counters;
+        private boolean expandArraycopyLoop;
 
         public Templates(ArrayCopySnippets receiver, OptionValues options, Iterable<DebugHandlersFactory> factories, Factory factory, Providers providers,
                         SnippetReflectionProvider snippetReflection, TargetDescription target) {
@@ -404,7 +398,7 @@ public abstract class ArrayCopySnippets implements Snippets {
         }
 
         public void lower(ArrayCopyNode arraycopy, LoweringTool tool) {
-            lower(arraycopy, false, tool);
+            lower(arraycopy, this.expandArraycopyLoop, tool);
         }
 
         public void lower(ArrayCopyNode arraycopy, boolean mayExpandThisArraycopy, LoweringTool tool) {
@@ -466,7 +460,7 @@ public abstract class ArrayCopySnippets implements Snippets {
                 }
             }
 
-            if (mayExpandThisArraycopy && snippetInfo == arraycopyExactStubCallSnippet) {
+            if (this.expandArraycopyLoop && mayExpandThisArraycopy && snippetInfo == arraycopyExactStubCallSnippet) {
                 snippetInfo = arraycopyExactSnippet;
             }
 
@@ -504,13 +498,9 @@ public abstract class ArrayCopySnippets implements Snippets {
         }
 
         public void lower(ArrayCopyWithDelayedLoweringNode arraycopy, LoweringTool tool) {
-            lower(arraycopy, false, tool);
-        }
-
-        public void lower(ArrayCopyWithDelayedLoweringNode arraycopy, boolean mayExpandArraycopyLoops, LoweringTool tool) {
             StructuredGraph graph = arraycopy.graph();
 
-            if (arraycopy.getSnippet() == exactArraycopyWithSlowPathWork && mayExpandArraycopyLoops) {
+            if (arraycopy.getSnippet() == exactArraycopyWithSlowPathWork && this.expandArraycopyLoop) {
                 if (!graph.getGuardsStage().areDeoptsFixed()) {
                     // Don't lower until floating guards are fixed.
                     return;
@@ -580,7 +570,7 @@ public abstract class ArrayCopySnippets implements Snippets {
                         throw new GraalError("unexpected invoke %s in snippet", call.targetMethod());
                     }
                     // Here we need to fix the bci of the invoke
-                    invoke.setBci(arraycopy.getBci());
+                    invoke.replaceBci(arraycopy.getBci());
                     invoke.setStateDuring(null);
                     invoke.setStateAfter(null);
                     if (arraycopy.stateDuring() != null) {
@@ -594,8 +584,7 @@ public abstract class ArrayCopySnippets implements Snippets {
                 } else if (originalNode instanceof ArrayCopyWithDelayedLoweringNode) {
                     ArrayCopyWithDelayedLoweringNode slowPath = (ArrayCopyWithDelayedLoweringNode) replacements.get(originalNode);
                     assert arraycopy.stateAfter() != null : arraycopy;
-                    assert slowPath.stateAfter() == arraycopy.stateAfter() : "States do not match for slowpath=" + slowPath + " and array copy=" + arraycopy + " slowPathState=" +
-                                    slowPath.stateAfter() + " and arraycopyState=" + arraycopy.stateAfter();
+                    assert slowPath.stateAfter() == arraycopy.stateAfter();
                     slowPath.setBci(arraycopy.getBci());
                 }
             }
@@ -611,6 +600,10 @@ public abstract class ArrayCopySnippets implements Snippets {
                 }
             }
             return originalArraycopy;
+        }
+
+        public void setExpandArraycopyLoop(boolean b) {
+            this.expandArraycopyLoop = b;
         }
     }
 }
