@@ -50,8 +50,6 @@ import static org.junit.Assert.assertTrue;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -80,7 +78,7 @@ import com.oracle.truffle.api.nodes.LanguageInfo;
 public class ContextLocalTest extends AbstractPolyglotTest {
 
     private static final int PARALLELISM = 32;
-    private static final int ITERATIONS = 50;
+    private static final int ITERATIONS = 5000;
     static final String VALID_EXCLUSIVE_LANGUAGE = "ContextLocalTest_ValidExclusiveLanguage";
     static final String VALID_SHARED_LANGUAGE = "ContextLocalTest_ValidSharedLanguage";
     static final String VALID_INSTRUMENT = "ContextLocalTest_ValidInstrument";
@@ -743,20 +741,6 @@ public class ContextLocalTest extends AbstractPolyglotTest {
             this.thread = t;
         }
 
-        @Override
-        public boolean equals(Object obj) {
-            if (!(obj instanceof InstrumentThreadLocalValue)) {
-                return false;
-            }
-            InstrumentThreadLocalValue key = (InstrumentThreadLocalValue) obj;
-            return this.context == key.context && this.thread == key.thread;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(context, thread);
-        }
-
     }
 
     @TruffleLanguage.Registration(id = VALID_SHARED_LANGUAGE, name = VALID_SHARED_LANGUAGE, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
@@ -809,8 +793,6 @@ public class ContextLocalTest extends AbstractPolyglotTest {
 
         private Env environment;
 
-        private final ConcurrentHashMap<InstrumentThreadLocalValue, String> seenValues = new ConcurrentHashMap<>();
-
         @Override
         protected void onCreate(Env env) {
             this.environment = env;
@@ -820,14 +802,7 @@ public class ContextLocalTest extends AbstractPolyglotTest {
         InstrumentThreadLocalValue newInstrumentThreadLocal(TruffleContext context, Thread t) {
             // must be guaranteed that onCreate is called before any context thread local inits
             assertNotNull(environment);
-
-            InstrumentThreadLocalValue local = new InstrumentThreadLocalValue(context, t);
-
-            if (seenValues.containsKey(local)) {
-                throw new AssertionError("duplicate thread local factory invocation");
-            }
-            seenValues.put(local, "");
-            return local;
+            return new InstrumentThreadLocalValue(context, t);
         }
 
         TruffleContext createInstrumentContextLocal(TruffleContext context) {

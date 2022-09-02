@@ -211,6 +211,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     final AtomicLong volatileStatementCounter = new AtomicLong();
     long statementCounter;
+    long elapsedTime;
     final long statementLimit;
 
     /*
@@ -536,7 +537,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
             // enter the thread info already
             prev = (PolyglotContextImpl) singleContextState.contextThreadLocal.setReturnParent(this);
-            threadInfo.enter(engine, this, !closed);
+            threadInfo.enter(engine, this);
 
             if (transitionToMultiThreading) {
                 // we need to verify that all languages give access
@@ -618,7 +619,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             if (cancelling && info.isLastActive()) {
                 notifyThreadClosed();
             }
-            info.leave(engine, this, !closed);
+            info.leave(engine, this);
             if (!closed && !cancelling && !invalid) {
                 setCachedThreadInfo(threadInfo);
             }
@@ -1245,9 +1246,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 EngineAccessor.INSTRUMENT.notifyContextClosed(engine, creatorTruffleContext);
             }
             synchronized (this) {
-                if (!isActive()) {
-                    setCachedThreadInfo(PolyglotThreadInfo.NULL);
-
+                if (!currentThreadActive) {
                     if (contexts != null) {
                         for (PolyglotLanguageContext langContext : contexts) {
                             langContext.close();
@@ -1346,7 +1345,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     Object getLocal(LocalLocation l) {
         assert l.engine == this.engine : invalidSharingError(this.engine, l.engine);
-        return l.readLocal(this, this.contextLocals);
+        return l.readLocal(this.contextLocals);
     }
 
     private Object[] getCurrentThreadLocals(PolyglotEngineImpl e) {
@@ -1407,7 +1406,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         assert l.engine == this.engine : invalidSharingError(this.engine, l.engine);
         // thread id is guaranteed to be unique
         if (CompilerDirectives.isPartialEvaluationConstant(l)) {
-            return l.readLocal(this, getCurrentThreadLocals(l.engine));
+            return l.readLocal(getCurrentThreadLocals(l.engine));
         } else {
             return getThreadLocalBoundary(l);
         }
@@ -1415,7 +1414,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     @TruffleBoundary
     private Object getThreadLocalBoundary(LocalLocation l) {
-        return l.readLocal(this, getCurrentThreadLocals(l.engine));
+        return l.readLocal(getCurrentThreadLocals(l.engine));
     }
 
     /*
@@ -1430,7 +1429,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         if (threadLocals == null) {
             return null;
         }
-        return l.readLocal(this, threadLocals);
+        return l.readLocal(threadLocals);
     }
 
     void initializeThreadLocals(PolyglotThreadInfo threadInfo) {
@@ -1755,41 +1754,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         public Object[] get() {
             return super.get();
         }
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder b = new StringBuilder();
-        b.append("PolyglotContextImpl[");
-        b.append("state=");
-        if (closed) {
-            b.append("closed");
-            if (this.invalid) {
-                b.append(" invalid");
-            }
-        }
-        if (cancelling) {
-            b.append("cancelling");
-        } else {
-            if (isActive()) {
-                b.append("active");
-            } else {
-                b.append("inactive");
-            }
-        }
-
-        b.append(" languages=[");
-        String sep = "";
-        for (PolyglotLanguageContext languageContext : contexts) {
-            if (languageContext.isInitialized() || languageContext.isCreated()) {
-                b.append(sep);
-                b.append(languageContext.language.getId());
-                sep = ", ";
-            }
-        }
-        b.append("]");
-        b.append("]");
-        return b.toString();
     }
 
 }
