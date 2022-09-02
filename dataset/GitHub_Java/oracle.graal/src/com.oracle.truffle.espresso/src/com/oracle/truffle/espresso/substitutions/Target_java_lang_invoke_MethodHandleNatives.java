@@ -58,7 +58,6 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
@@ -220,38 +219,17 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
         return StaticObject.createArray(meta.java_lang_Object_array, result);
     }
 
-    @Substitution
-    public static @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject resolve(
-                    @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self,
-                    @Host(value = Class.class) StaticObject caller,
-                    boolean speculativeResolve,
-                    // Checkstyle: stop
-                    @GuestCall(target = "java_lang_invoke_MemberName_getSignature") DirectCallNode mnGetSignature,
-                    // Checkstyle: resume
-                    @InjectMeta Meta meta,
-                    @InjectProfile SubstitutionProfiler profiler) {
-        try {
-            return resolve(self, caller, mnGetSignature, meta, profiler);
-        } catch (EspressoException e) {
-            if (speculativeResolve) {
-                return StaticObject.NULL;
-            }
-            throw e;
-
-        }
-    }
-
     /**
      * Complete resolution of a memberName, full with method lookup, flags overwriting and planting
      * target.
      * 
-     * @param memberName The memberName to resolve
+     * @param self The memberName to resolve
      * @param caller the class that commands the resolution
      * @return The resolved memberName. Note that it should be the same reference as self
      */
     @Substitution
     public static @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject resolve(
-                    @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject memberName,
+                    @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self,
                     @Host(value = Class.class) StaticObject caller,
                     // Checkstyle: stop
                     @GuestCall(target = "java_lang_invoke_MemberName_getSignature") DirectCallNode mnGetSignature,
@@ -259,8 +237,9 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
                     @InjectMeta Meta meta,
                     @InjectProfile SubstitutionProfiler profiler) {
         // TODO(Garcia) Perhaps perform access checks ?
+        StaticObject memberName = self;
         if (memberName.getHiddenField(meta.HIDDEN_VMTARGET) != null) {
-            return memberName; // Already planted
+            return self; // Already planted
         }
         StaticObject clazz = memberName.getField(meta.java_lang_invoke_MemberName_clazz);
         Klass defKlass = clazz.getMirrorKlass();
@@ -281,7 +260,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
                 throw Meta.throwException(meta.java_lang_NoSuchMethodException);
             }
         }
-        StaticObject type = (StaticObject) mnGetSignature.call(memberName);
+        StaticObject type = (StaticObject) mnGetSignature.call(self);
 
         if (defKlass == null) {
             return StaticObject.NULL;
