@@ -22,9 +22,6 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import static com.oracle.truffle.espresso.vm.VM.StackElement.NATIVE_BCI;
-import static com.oracle.truffle.espresso.vm.VM.StackElement.UNKNOWN_BCI;
-
 import java.util.Arrays;
 
 import com.oracle.truffle.api.frame.Frame;
@@ -164,9 +161,9 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         if (isBytecodeNode()) {
             return ((BytecodeNode) getMethodNode()).readBCI(frame);
         } else if (getMethod().isNative()) {
-            return NATIVE_BCI; // native
+            return -2; // native
         } else {
-            return UNKNOWN_BCI; // unknown
+            return -1; // unknown
         }
     }
 

@@ -171,7 +171,6 @@ public class StackWalk {
         }
 
         public void anchor() {
-            assert !isAnchored();
             anchor = walkerIds.getAndIncrement();
         }
 
