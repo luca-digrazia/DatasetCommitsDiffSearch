@@ -23,8 +23,6 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.api.debug.Breakpoint;
-import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
-import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
@@ -165,7 +163,7 @@ public class VMEventListenerImpl implements VMEventListener {
     public void breakpointHIt(BreakpointInfo info, Object currentThread) {
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
-        stream.writeByte(SuspendStrategy.EVENT_THREAD);
+        stream.writeByte(SuspendStrategy.EVENT_THREAD); // TODO(Gregersen) - implemented suspend policies
         stream.writeInt(1); // # events in reply
 
         stream.writeByte(RequestedJDWPEvents.BREAKPOINT);
@@ -178,35 +176,6 @@ public class VMEventListenerImpl implements VMEventListener {
         stream.writeLong(info.getClassId());
         stream.writeLong(info.getMethodId());
         stream.writeLong(info.getBci());
-        connection.queuePacket(stream);
-    }
-
-    @Override
-    public void exceptionThrown(BreakpointInfo info, Object currentThread, Object exception, JDWPCallFrame callFrame) {
-        PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
-
-        stream.writeByte(SuspendStrategy.EVENT_THREAD);
-        stream.writeInt(1); // # events in reply
-
-        stream.writeByte(RequestedJDWPEvents.EXCEPTION);
-        stream.writeInt(info.getRequestId());
-        stream.writeLong(ids.getIdAsLong(currentThread));
-
-        // location
-        stream.writeByte(callFrame.getTypeTag());
-        stream.writeLong(callFrame.getClassId());
-        stream.writeLong(callFrame.getMethodId());
-        stream.writeLong(callFrame.getCodeIndex());
-
-        // exception
-        stream.writeByte(TagConstants.OBJECT);
-        stream.writeLong(context.getIds().getIdAsLong(exception));
-
-        // catch-location. TODO(Gregersen) - figure out how to implement this
-        stream.writeByte((byte) 1);
-        stream.writeLong(0);
-        stream.writeLong(0);
-        stream.writeLong(0);
         connection.queuePacket(stream);
     }
 

@@ -64,7 +64,17 @@ public final class InterpreterToVM implements ContextAccess {
         return context;
     }
 
-    private static final Unsafe UNSAFE = UnsafeAccess.get();
+    private static final Unsafe hostUnsafe;
+
+    static {
+        try {
+            java.lang.reflect.Field f = Unsafe.class.getDeclaredField("theUnsafe");
+            f.setAccessible(true);
+            hostUnsafe = (Unsafe) f.get(null);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
+    }
 
     // region Get (array) operations
 
@@ -193,11 +203,11 @@ public final class InterpreterToVM implements ContextAccess {
     @SuppressWarnings({"deprecation"})
     @TruffleBoundary
     public static void monitorEnter(@Host(Object.class) StaticObject obj) {
-        if (!UNSAFE.tryMonitorEnter(obj)) {
+        if (!hostUnsafe.tryMonitorEnter(obj)) {
             Meta meta = obj.getKlass().getMeta();
             StaticObject thread = meta.getContext().getCurrentThread();
             Target_java_lang_Thread.fromRunnable(thread, meta, Target_java_lang_Thread.State.BLOCKED);
-            UNSAFE.monitorEnter(obj);
+            hostUnsafe.monitorEnter(obj);
             Target_java_lang_Thread.toRunnable(thread, meta, Target_java_lang_Thread.State.RUNNABLE);
         }
     }
@@ -210,7 +220,7 @@ public final class InterpreterToVM implements ContextAccess {
             // Espresso has its own monitor handling.
             throw EspressoLanguage.getCurrentContext().getMeta().throwEx(IllegalMonitorStateException.class);
         }
-        UNSAFE.monitorExit(obj);
+        hostUnsafe.monitorExit(obj);
     }
     // endregion
 
@@ -379,14 +389,9 @@ public final class InterpreterToVM implements ContextAccess {
      *
      * The following rules define the direct supertype relation among array types:
      *
-     * <ul>
-     * <li>If S and T are both reference types, then S[] >1 T[] iff S >1 T.
-     * <li>Object >1 Object[]
-     * <li>Cloneable >1 Object[]
-     * <li>java.io.Serializable >1 Object[]
-     * <li>If P is a primitive type, then: Object >1 P[] Cloneable >1 P[] java.io.Serializable >1
-     * P[]
-     * </ul>
+     * - If S and T are both reference types, then S[] >1 T[] iff S >1 T. - Object >1 Object[] -
+     * Cloneable >1 Object[] - java.io.Serializable >1 Object[] - If P is a primitive type, then:
+     * Object >1 P[] Cloneable >1 P[] java.io.Serializable >1 P[]
      */
     public static boolean instanceOf(StaticObject instance, Klass typeToCheck) {
         if (StaticObject.isNull(instance)) {

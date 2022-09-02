@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.espresso.jdwp.api.LineBreakpointInfo;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
@@ -91,7 +90,6 @@ public class RequestedJDWPEvents {
             case METHOD_EXIT_WITH_RETURN_VALUE:
             case BREAKPOINT:
             case CLASS_PREPARE:
-            case EXCEPTION:
                 reply = toReply(packet);
                 break;
             case THREAD_START:
@@ -154,7 +152,7 @@ public class RequestedJDWPEvents {
                 long classId = input.readLong();
                 long methodId = input.readLong();
                 long bci = input.readLong();
-                LineBreakpointInfo info = new LineBreakpointInfo(filter, typeTag, classId, methodId, bci);
+                BreakpointInfo info = new BreakpointInfo(filter, typeTag, classId, methodId, bci);
 
                 KlassRef klass = (KlassRef) ids.fromId((int) classId);
                 String slashName = klass.getTypeAsString();
@@ -164,18 +162,7 @@ public class RequestedJDWPEvents {
                 eventListener.addBreakpointRequest(filter.getRequestId(), info);
                 break;
             case 8:
-                refTypeId = input.readLong();
-                klass = null;
-                if (refTypeId != 0) {
-                    klass = (KlassRef) context.getIds().fromId((int) refTypeId);
-                }
-
-                boolean caught = input.readBoolean();
-                boolean unCaught = input.readBoolean();
-
-                ExceptionBreakpointInfo exceptionBreakpointInfo = new ExceptionBreakpointInfo(filter.getRequestId(), klass, caught, unCaught);
-                callback.createExceptionBreakpoint(exceptionBreakpointInfo);
-                eventListener.addBreakpointRequest(filter.getRequestId(), exceptionBreakpointInfo);
+                System.err.println("unhandled modKind 8");
                 break;
             case 9:
                 System.err.println("unhandled modKind 9");
@@ -212,7 +199,7 @@ public class RequestedJDWPEvents {
         return null;
     }
 
-    public JDWPResult clearRequest(Packet packet) {
+    public JDWPResult clearRequest(Packet packet, DebuggerConnection debuggerConnection) {
         PacketStream reply = new PacketStream().id(packet.id).replyPacket();
         PacketStream input = new PacketStream(packet);
 
@@ -252,12 +239,12 @@ public class RequestedJDWPEvents {
                         break;
                 }
             } else {
-                reply.errorCode(JDWPErrorCodes.INVALID_EVENT_TYPE);
+                reply.errorCode(102);
             }
         } else {
-            reply.errorCode(JDWPErrorCodes.INVALID_EVENT_TYPE);
+            reply.errorCode(102); // TODO(Gregersen) - add INVALID_EVENT_TYPE constant
         }
 
-        return new JDWPResult(reply);
+        return new JDWPResult(reply, null);
     }
 }

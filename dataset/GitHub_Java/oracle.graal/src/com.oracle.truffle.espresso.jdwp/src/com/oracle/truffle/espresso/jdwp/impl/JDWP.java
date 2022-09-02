@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.JDWPVirtualMachine;
@@ -39,6 +38,8 @@ import java.util.concurrent.Callable;
 import static com.oracle.truffle.espresso.jdwp.impl.TagConstants.BOOLEAN;
 
 class JDWP {
+
+    public static Object suspendStartupLock = new Object();
 
     public static final String JAVA_LANG_OBJECT = "Ljava/lang/Object;";
 
@@ -117,7 +118,7 @@ class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeInt(vm.getSizeOfFieldRef());
                 reply.writeInt(vm.getSizeOfMethodRef());
-                reply.writeInt(vm.getSizeofObjectRef());
+                reply.writeInt(vm.getSizeofObjectRefRef());
                 reply.writeInt(vm.getSizeOfClassRef());
                 reply.writeInt(vm.getSizeOfFrameRef());
                 return new JDWPResult(reply);
@@ -288,7 +289,7 @@ class JDWP {
                     Object value = context.getStaticFieldValue(field);
 
                     if (tag == TagConstants.OBJECT) {
-                        tag = context.getTag(value);
+                        tag = context.getSpecificObjectTag(value);
                     }
                     writeValue(tag, value, reply, true, context);
                 }
@@ -551,10 +552,10 @@ class JDWP {
                     byte tag = field.getTagConstant();
 
                     if (tag == TagConstants.OBJECT) {
-                        tag = context.getTag(field.getTypeAsString());
+                        tag = context.getSpecificObjectTag(field.getTypeAsString());
                     }
                     Object value = readValue(tag, input, context);
-                    context.setStaticFieldValue(field, value);
+                    context.setStaticFieldValue(field, klass, value);
                 }
                 return new JDWPResult(reply);
             }
@@ -595,6 +596,7 @@ class JDWP {
                 if (method == null) {
                     return new JDWPResult(reply);
                 }
+                //System.out.println("asked for lines for: " + refType.getName().toString() + "." + method.getName());
 
                 LineNumberTableRef table = method.getLineNumberTable();
 
@@ -766,7 +768,7 @@ class JDWP {
                     byte tag = field.getTagConstant();
 
                     if (tag == TagConstants.OBJECT) {
-                        tag = context.getTag(value);
+                        tag = context.getSpecificObjectTag(value);
                     }
                     writeValue(tag, value, reply, true, context);
                 }
@@ -801,7 +803,7 @@ class JDWP {
 
                     byte tag = field.getTagConstant();
                     if (tag == TagConstants.OBJECT) {
-                        tag = context.getTag(field.getTypeAsString());
+                        tag = context.getSpecificObjectTag(field.getTypeAsString());
                     }
                     Object value = readValue(tag, input, context);
                     field.setValue(object, value);
@@ -838,6 +840,7 @@ class JDWP {
                 for (int i = 0; i < arguments; i++) {
                     byte valueKind = input.readByte();
                     args[i] = readValue(valueKind, input, context);
+                    // TODO(Gregersen) - convert to guest objects and locate real objects by IDs
                 }
                 int options = input.readInt(); // TODO(Gregersen) - handle invocation options
 
@@ -849,21 +852,17 @@ class JDWP {
                 }
 
                 try {
-                    Object value = context.toGuest(method.invokeMethod(callee, args));
-
+                    Object value = method.invokeMethod(callee, args);
                     if (value != null) {
                         byte tag = context.getTag(value);
                         writeValue(tag, value, reply, true, context);
-
                     } else { // return value is null
                         reply.writeByte(TagConstants.OBJECT);
                         reply.writeLong(0);
                     }
-                    // no exception, so zero object ID
-                    reply.writeByte(TagConstants.OBJECT);
-                    reply.writeLong(0);
+                } catch (ClassCastException ex) {
+                    throw new RuntimeException("Not implemented yet!");
                 } catch (Throwable t) {
-                    reply.writeByte(TagConstants.OBJECT);
                     reply.writeLong(0);
                     reply.writeByte(TagConstants.OBJECT);
                     reply.writeLong(context.getIds().getIdAsLong(t));
@@ -1063,6 +1062,7 @@ class JDWP {
                 int jvmtiThreadStatus = context.getThreadStatus(thread);
                 int threadStatus = getThreadStatus(jvmtiThreadStatus);
                 reply.writeInt(threadStatus);
+                //System.out.println("suspended thread? " + ThreadSuspension.isSuspended(thread) + " with status: " + threadStatus);
                 reply.writeInt(ThreadSuspension.getSuspensionCount(thread) > 0 ? 1 : 0);
                 return new JDWPResult(reply, null);
             }
@@ -1437,7 +1437,7 @@ class JDWP {
                             reply.writeByte(sigbyte);
                             reply.writeLong(context.getIds().getIdAsLong(value));
                         } else if (sigbyte == TagConstants.OBJECT) {
-                            sigbyte = context.getTag(value);
+                            sigbyte = context.getSpecificObjectTag(value);
                             reply.writeByte(sigbyte);
                             reply.writeLong(context.getIds().getIdAsLong(value));
                         } else {
@@ -1573,7 +1573,7 @@ class JDWP {
         }
         switch (tag) {
             case BOOLEAN:
-                boolean theValue = (boolean) value;
+                boolean theValue = (long) value > 0 ? true : false;
                 reply.writeBoolean(theValue);
                 break;
             case TagConstants.BYTE:

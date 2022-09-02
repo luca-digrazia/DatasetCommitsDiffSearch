@@ -583,11 +583,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     @Override
     public int getModifiers() {
-        return linkedMethod.getFlags();
-    }
-
-    public int getMethodModifiers() {
-         return linkedMethod.getFlags() & Constants.JVM_RECOGNIZED_METHOD_MODIFIERS;
+        return linkedMethod.getFlags() & Constants.JVM_RECOGNIZED_METHOD_MODIFIERS;
     }
 
     @Override
