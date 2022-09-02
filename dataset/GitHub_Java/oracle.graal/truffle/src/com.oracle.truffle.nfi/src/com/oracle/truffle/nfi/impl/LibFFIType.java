@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,6 +44,8 @@ import java.lang.reflect.Array;
 import java.nio.ByteOrder;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
@@ -61,7 +63,6 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.nfi.impl.ClosureArgumentNode.BufferClosureArgumentNode;
-import com.oracle.truffle.nfi.impl.ClosureArgumentNode.InjectedClosureArgumentNode;
 import com.oracle.truffle.nfi.impl.ClosureArgumentNode.ObjectClosureArgumentNode;
 import com.oracle.truffle.nfi.impl.ClosureArgumentNode.StringClosureArgumentNode;
 import com.oracle.truffle.nfi.impl.LibFFIType.ArrayType.HostObjectHelperNode.WrongTypeException;
@@ -69,20 +70,12 @@ import com.oracle.truffle.nfi.impl.LibFFITypeFactory.ArrayTypeFactory.CachedHost
 import com.oracle.truffle.nfi.impl.NativeArgumentBuffer.TypeTag;
 import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
-/**
- * Runtime object representing native types. Instances of this class can not be cached in shared AST
- * nodes, since they contain references to native datastructures of libffi.
- *
- * All information that is context and process independent is collected in a separate object,
- * {@link CachedTypeInfo}. Two {@link LibFFIType} objects that have the same {@link CachedTypeInfo}
- * are guaranteed to behave the same semantically.
- */
-final class LibFFIType {
+abstract class LibFFIType {
 
-    static CachedTypeInfo createSimpleTypeInfo(NFILanguageImpl language, NativeSimpleType simpleType, int size, int alignment) {
+    static LibFFIType createSimpleType(NFIContext ctx, NativeSimpleType simpleType, int size, int alignment, long ffiType) {
         switch (simpleType) {
             case VOID:
-                return new VoidType(language, size, alignment);
+                return new VoidType(ctx, size, alignment, ffiType);
             case UINT8:
             case SINT8:
             case UINT16:
@@ -94,19 +87,17 @@ final class LibFFIType {
             case FLOAT:
             case DOUBLE:
             case POINTER:
-                return new SimpleType(language, simpleType, size, alignment);
+                return new SimpleType(ctx, simpleType, size, alignment, ffiType);
             case STRING:
-                return new StringType(language, size, alignment);
+                return new StringType(ctx, size, alignment, ffiType);
             case OBJECT:
-                return new ObjectType(language, size, alignment);
-            case NULLABLE:
-                return new NullableType(language, size, alignment);
+                return new ObjectType(ctx, size, alignment, ffiType);
             default:
                 throw new AssertionError(simpleType.name());
         }
     }
 
-    static CachedTypeInfo createArrayTypeInfo(CachedTypeInfo ptrType, NativeSimpleType simpleType) {
+    static LibFFIType createArrayType(NFIContext ctx, NativeSimpleType simpleType) {
         switch (simpleType) {
             case UINT8:
             case SINT8:
@@ -118,84 +109,22 @@ final class LibFFIType {
             case SINT64:
             case FLOAT:
             case DOUBLE:
-                return new ArrayType(ptrType, simpleType);
+                return new ArrayType(ctx.lookupSimpleType(NativeSimpleType.POINTER), simpleType);
             default:
                 return null;
         }
     }
 
-    protected final long type; // native pointer
-    protected final CachedTypeInfo typeInfo;
-
-    protected LibFFIType(CachedTypeInfo typeInfo, long type) {
-        this.typeInfo = typeInfo;
-        this.type = type;
-    }
-
-    enum Direction {
-        JAVA_TO_NATIVE_ONLY,
-        NATIVE_TO_JAVA_ONLY,
-        BOTH;
-
-        Direction reverse() {
-            switch (this) {
-                case JAVA_TO_NATIVE_ONLY:
-                    return NATIVE_TO_JAVA_ONLY;
-                case NATIVE_TO_JAVA_ONLY:
-                    return JAVA_TO_NATIVE_ONLY;
-                case BOTH:
-                    return BOTH;
-                default:
-                    return null;
-            }
-        }
-    }
-
-    /**
-     * This class contains all information about native types that can be shared across contexts.
-     * Instances of this class can safely be cached in shared AST. Code that is specialized for
-     * operating on particular types can only rely on information in this class. That way, the
-     * specialized code can also be shared.
-     */
-    abstract static class CachedTypeInfo {
-        protected final int size;
-        protected final int alignment;
-        protected final int objectCount;
-
-        protected final Direction allowedDataFlowDirection;
-        protected final boolean injectedArgument;
-
-        protected CachedTypeInfo(int size, int alignment, int objectCount, Direction direction, boolean injectedArgument) {
-            this.size = size;
-            this.alignment = alignment;
-            this.objectCount = objectCount;
-            this.allowedDataFlowDirection = direction;
-            this.injectedArgument = injectedArgument;
-        }
-
-        public abstract ClosureArgumentNode createClosureArgumentNode();
-
-        public abstract Object deserializeRet(NativeArgumentBuffer buffer, NFILanguageImpl language);
-
-        public CachedTypeInfo overrideClosureRetType() {
-            return this;
-        }
-    }
-
     @ExportLibrary(NativeArgumentLibrary.class)
-    abstract static class BasicType extends CachedTypeInfo {
+    abstract static class BasicType extends LibFFIType {
 
-        final NFILanguageImpl nfiLanguage;
+        final NFIContext ctx;
         final NativeSimpleType simpleType;
 
-        BasicType(NFILanguageImpl language, NativeSimpleType simpleType, int size, int alignment, int objectCount, Direction direction) {
-            super(size, alignment, objectCount, direction, false);
-            this.nfiLanguage = language;
+        BasicType(NFIContext ctx, NativeSimpleType simpleType, int size, int alignment, int objectCount, long ffiType) {
+            super(size, alignment, objectCount, ffiType, Direction.BOTH, false);
+            this.ctx = ctx;
             this.simpleType = simpleType;
-        }
-
-        BasicType(NFILanguageImpl language, NativeSimpleType simpleType, int size, int alignment, int objectCount) {
-            this(language, simpleType, size, alignment, objectCount, Direction.BOTH);
         }
 
         @ExportMessage
@@ -206,8 +135,7 @@ final class LibFFIType {
         @ExportMessage
         void serialize(NativeArgumentBuffer buffer, Object value,
                         @Shared("cachedType") @Cached("this.simpleType") NativeSimpleType cachedType,
-                        @CachedLibrary(limit = "3") SerializeArgumentLibrary serialize,
-                        @CachedLibrary(limit = "1") InteropLibrary interop) throws UnsupportedTypeException {
+                        @CachedLibrary(limit = "3") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
             buffer.align(alignment);
             switch (cachedType) {
                 case UINT8:
@@ -249,13 +177,6 @@ final class LibFFIType {
                 case OBJECT:
                     buffer.putObject(TypeTag.OBJECT, value, size);
                     break;
-                case NULLABLE:
-                    if (interop.isNull(value)) {
-                        buffer.putPointer(0L, size);
-                    } else {
-                        buffer.putObject(TypeTag.OBJECT, value, size);
-                    }
-                    break;
                 case VOID:
                 default:
                     CompilerDirectives.transferToInterpreter();
@@ -294,7 +215,6 @@ final class LibFFIType {
                     return NativePointer.create(language, buffer.getPointer(size));
                 case STRING:
                     return new NativeString(buffer.getPointer(size));
-                case NULLABLE:
                 case OBJECT:
                     Object ret = buffer.getObject(size);
                     if (ret == null) {
@@ -302,7 +222,6 @@ final class LibFFIType {
                     } else {
                         return ret;
                     }
-
                 default:
                     CompilerDirectives.transferToInterpreter();
                     throw new AssertionError(simpleType.name());
@@ -317,14 +236,14 @@ final class LibFFIType {
 
     static final class SimpleType extends BasicType {
 
-        SimpleType(NFILanguageImpl language, NativeSimpleType simpleType, int size, int alignment) {
-            super(language, simpleType, size, alignment, simpleType == NativeSimpleType.POINTER ? 1 : 0);
+        SimpleType(NFIContext ctx, NativeSimpleType simpleType, int size, int alignment, long ffiType) {
+            super(ctx, simpleType, size, alignment, 0, ffiType);
         }
 
         public Object fromPrimitive(long primitive) {
             switch (simpleType) {
                 case VOID:
-                    return NativePointer.create(nfiLanguage, 0);
+                    return NativePointer.create(ctx.language, 0);
                 case UINT8:
                     return primitive & (short) 0xFF;
                 case SINT8:
@@ -357,7 +276,7 @@ final class LibFFIType {
                 case DOUBLE:
                     return Double.longBitsToDouble(primitive);
                 case POINTER:
-                    return NativePointer.create(nfiLanguage, primitive);
+                    return NativePointer.create(ctx.language, primitive);
                 default:
                     CompilerDirectives.transferToInterpreter();
                     throw new AssertionError(simpleType.name());
@@ -370,17 +289,17 @@ final class LibFFIType {
         }
 
         @Override
-        public CachedTypeInfo overrideClosureRetType() {
+        public LibFFIType overrideClosureRetType() {
             // special handling for small integers: return them as long (native type: ffi_arg)
             switch (simpleType) {
                 case UINT8:
                 case UINT16:
                 case UINT32:
-                    return nfiLanguage.lookupSimpleTypeInfo(NativeSimpleType.UINT64);
+                    return ctx.lookupSimpleType(NativeSimpleType.UINT64);
                 case SINT8:
                 case SINT16:
                 case SINT32:
-                    return nfiLanguage.lookupSimpleTypeInfo(NativeSimpleType.SINT64);
+                    return ctx.lookupSimpleType(NativeSimpleType.SINT64);
                 default:
                     return this;
             }
@@ -394,8 +313,8 @@ final class LibFFIType {
 
     static final class VoidType extends BasicType {
 
-        private VoidType(NFILanguageImpl language, int size, int alignment) {
-            super(language, NativeSimpleType.VOID, size, alignment, 0);
+        private VoidType(NFIContext ctx, int size, int alignment, long ffiType) {
+            super(ctx, NativeSimpleType.VOID, size, alignment, 0, ffiType);
         }
 
         @Override
@@ -411,8 +330,8 @@ final class LibFFIType {
 
     static final class StringType extends BasicType {
 
-        private StringType(NFILanguageImpl language, int size, int alignment) {
-            super(language, NativeSimpleType.STRING, size, alignment, 1);
+        private StringType(NFIContext ctx, int size, int alignment, long ffiType) {
+            super(ctx, NativeSimpleType.STRING, size, alignment, 1, ffiType);
         }
 
         @Override
@@ -423,8 +342,8 @@ final class LibFFIType {
 
     static final class ObjectType extends BasicType {
 
-        ObjectType(NFILanguageImpl language, int size, int alignment) {
-            super(language, NativeSimpleType.OBJECT, size, alignment, 1);
+        ObjectType(NFIContext ctx, int size, int alignment, long ffiType) {
+            super(ctx, NativeSimpleType.OBJECT, size, alignment, 1, ffiType);
         }
 
         @Override
@@ -433,22 +352,10 @@ final class LibFFIType {
         }
     }
 
-    static final class NullableType extends BasicType {
+    abstract static class BasePointerType extends LibFFIType {
 
-        NullableType(NFILanguageImpl language, int size, int alignment) {
-            super(language, NativeSimpleType.NULLABLE, size, alignment, 1, Direction.JAVA_TO_NATIVE_ONLY);
-        }
-
-        @Override
-        public ClosureArgumentNode createClosureArgumentNode() {
-            return new ObjectClosureArgumentNode();
-        }
-    }
-
-    abstract static class BasePointerType extends CachedTypeInfo {
-
-        protected BasePointerType(CachedTypeInfo pointerType, Direction direction, boolean injectedArgument) {
-            super(pointerType.size, pointerType.alignment, 1, direction, injectedArgument);
+        protected BasePointerType(LibFFIType pointerType, Direction direction, boolean injectedArgument) {
+            super(pointerType.size, pointerType.alignment, 1, pointerType.type, direction, injectedArgument);
         }
     }
 
@@ -458,7 +365,7 @@ final class LibFFIType {
         final NativeSimpleType elementType;
         final HostObjectHelperNode uncachedHelper;
 
-        ArrayType(CachedTypeInfo pointerType, NativeSimpleType elementType) {
+        ArrayType(LibFFIType pointerType, NativeSimpleType elementType) {
             super(pointerType, Direction.JAVA_TO_NATIVE_ONLY, false);
             switch (elementType) {
                 case UINT8:
@@ -639,10 +546,10 @@ final class LibFFIType {
 
             @Override
             void execute(NativeArgumentBuffer buffer, Object value) throws UnsupportedTypeException, WrongTypeException {
-                if (CompilerDirectives.isExact(value, arrayClass1)) {
+                if (arrayClass1 == value.getClass()) {
                     assert uncachedLib1.accepts(value);
                     uncachedLib1.putPointer(CompilerDirectives.castExact(value, arrayClass1), buffer, size);
-                } else if (CompilerDirectives.isExact(value, arrayClass2)) {
+                } else if (arrayClass2 == value.getClass()) {
                     assert uncachedLib2.accepts(value);
                     uncachedLib2.putPointer(CompilerDirectives.castExact(value, arrayClass2), buffer, size);
                 } else {
@@ -666,10 +573,99 @@ final class LibFFIType {
     }
 
     @ExportLibrary(NativeArgumentLibrary.class)
+    static final class ClosureType extends BasePointerType {
+
+        final LibFFISignature signature;
+        final boolean asRetType;
+
+        ClosureType(LibFFIType pointerType, LibFFISignature signature, boolean asRetType) {
+            super(pointerType, signature.getAllowedCallDirection().reverse(), false);
+            this.signature = signature;
+            this.asRetType = asRetType;
+        }
+
+        @ExportMessage
+        @SuppressWarnings("unused")
+        static class Serialize {
+
+            @Specialization
+            static void doClosure(LibFFIType.ClosureType type, NativeArgumentBuffer buffer, LibFFIClosure closure) {
+                buffer.align(type.alignment);
+                if (type.asRetType) {
+                    /*
+                     * The closure is passed as return type from a callback down to native code. In
+                     * that case we transfer ownership of the native pointer to the caller, so we
+                     * have to increase the reference count.
+                     */
+                    closure.nativePointer.addRef();
+                } else {
+                    /*
+                     * The closure is passed as argument down to native code. Keep it alive for the
+                     * duration of the call by storing it in the object arguments array. The native
+                     * code will ignore this entry in the array.
+                     */
+                    buffer.putObject(TypeTag.CLOSURE, closure, 0);
+                }
+
+                buffer.putPointer(closure.nativePointer.getCodePointer(), type.size);
+            }
+
+            static boolean isOther(Object value) {
+                return !(value instanceof LibFFIClosure);
+            }
+
+            @Specialization(limit = "3", guards = {"value == cachedValue", "isOther(cachedValue)", "interop.isExecutable(cachedValue)"})
+            static void doExecutableCached(LibFFIType.ClosureType type, NativeArgumentBuffer buffer, Object value,
+                            @Cached("value") Object cachedValue,
+                            @CachedLibrary("cachedValue") InteropLibrary interop,
+                            @CachedContext(NFILanguageImpl.class) ContextReference<NFIContext> ctxRef,
+                            @Cached("create(type.signature, value, ctxRef)") LibFFIClosure cachedClosure) {
+                doClosure(type, buffer, cachedClosure);
+            }
+
+            @Specialization(limit = "0", replaces = "doExecutableCached", guards = {"isOther(value)", "interop.isExecutable(value)"})
+            @TruffleBoundary
+            static void doExecutableSlowPath(LibFFIType.ClosureType type, NativeArgumentBuffer buffer, Object value,
+                            @CachedContext(NFILanguageImpl.class) ContextReference<NFIContext> ctxRef,
+                            @CachedLibrary("value") InteropLibrary interop) {
+                // TODO performance warning
+                LibFFIClosure closure = LibFFIClosure.create(type.signature, value, ctxRef);
+                doClosure(type, buffer, closure);
+            }
+
+            @Specialization(limit = "3", guards = {"isOther(value)", "!interop.isExecutable(value)"})
+            static void doPointer(LibFFIType.ClosureType type, NativeArgumentBuffer buffer, Object value,
+                            @CachedLibrary("value") InteropLibrary interop,
+                            @CachedLibrary("value") SerializeArgumentLibrary serialize) throws UnsupportedTypeException {
+                buffer.align(type.alignment);
+                serialize.putPointer(value, buffer, type.size);
+            }
+        }
+
+        @ExportMessage(name = "deserialize")
+        @Override
+        public Object deserializeRet(NativeArgumentBuffer buffer,
+                        @CachedLanguage NFILanguageImpl language) {
+            long functionPointer = buffer.getPointer(size);
+            if (functionPointer == 0) {
+                // cannot bind null pointer
+                return NativePointer.create(language, 0);
+            } else {
+                return NativePointer.createBound(language, functionPointer, signature);
+            }
+        }
+
+        @Override
+        public ClosureArgumentNode createClosureArgumentNode() {
+            return new BufferClosureArgumentNode(this);
+        }
+    }
+
+    @ExportLibrary(NativeArgumentLibrary.class)
     @SuppressWarnings("unused")
     static final class EnvType extends BasePointerType {
 
-        EnvType(CachedTypeInfo pointerType) {
+        EnvType(LibFFIType pointerType) {
             super(pointerType, Direction.BOTH, true);
         }
 
@@ -688,7 +684,52 @@ final class LibFFIType {
 
         @Override
         public ClosureArgumentNode createClosureArgumentNode() {
-            return new InjectedClosureArgumentNode();
+            throw new AssertionError("createClosureArgumentNode should not be called on injected argument");
         }
+    }
+
+    enum Direction {
+        JAVA_TO_NATIVE_ONLY,
+        NATIVE_TO_JAVA_ONLY,
+        BOTH;
+
+        Direction reverse() {
+            switch (this) {
+                case JAVA_TO_NATIVE_ONLY:
+                    return NATIVE_TO_JAVA_ONLY;
+                case NATIVE_TO_JAVA_ONLY:
+                    return JAVA_TO_NATIVE_ONLY;
+                case BOTH:
+                    return BOTH;
+                default:
+                    return null;
+            }
+        }
+    }
+
+    protected final int size;
+    protected final int alignment;
+    protected final int objectCount;
+
+    protected final long type;
+
+    protected final Direction allowedDataFlowDirection;
+    protected final boolean injectedArgument;
+
+    protected LibFFIType(int size, int alignment, int objectCount, long type, Direction direction, boolean injectedArgument) {
+        this.size = size;
+        this.alignment = alignment;
+        this.objectCount = objectCount;
+        this.type = type;
+        this.allowedDataFlowDirection = direction;
+        this.injectedArgument = injectedArgument;
+    }
+
+    public abstract ClosureArgumentNode createClosureArgumentNode();
+
+    public abstract Object deserializeRet(NativeArgumentBuffer buffer, NFILanguageImpl language);
+
+    public LibFFIType overrideClosureRetType() {
+        return this;
     }
 }
