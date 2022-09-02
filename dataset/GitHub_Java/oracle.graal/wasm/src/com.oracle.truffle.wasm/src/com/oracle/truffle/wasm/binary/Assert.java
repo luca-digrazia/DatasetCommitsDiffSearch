@@ -34,12 +34,6 @@ import com.oracle.truffle.wasm.binary.exception.BinaryReaderException;
 
 public class Assert {
 
-    public static void assertEquals(byte b1, byte b2, String message) throws BinaryReaderException {
-        if (b1 != b2) {
-            fail(format("%s: should be equal: 0x%02X != 0x%02X", message, b1, b2));
-        }
-    }
-
     public static void assertEquals(int n1, int n2, String message) throws BinaryReaderException {
         if (n1 != n2) {
             fail(format("%s: should be equal: %d != %d", message, n1, n2));
@@ -76,15 +70,15 @@ public class Assert {
         }
     }
 
-    public static void assertLessEqual(int n1, int n2, String message) throws BinaryReaderException {
+    public static void assertLess(int n1, int n2, String message) throws BinaryReaderException {
         if (n1 > n2) {
-            fail(format("%s: should be less or equal: %d > %d", message, n1, n2));
+            fail(format("%s: should be less: %d > %d", message, n1, n2));
         }
     }
 
-    public static void assertLessEqual(long n1, long n2, String message) throws BinaryReaderException {
+    public static void assertLess(long n1, long n2, String message) throws BinaryReaderException {
         if (n1 > n2) {
-            fail(format("%s: should be less or equal: %d > %d", message, n1, n2));
+            fail(format("%s: should be less: %d > %d", message, n1, n2));
         }
     }
 
