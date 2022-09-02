@@ -28,10 +28,10 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.DoubleSummaryStatistics;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.LongSummaryStatistics;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Timer;
@@ -87,6 +87,13 @@ public final class CPUSampler implements Closeable {
 
         int selfCompiledHitCount;
         int selfInterpretedHitCount;
+
+        int selfSamples;
+        int totalSamples;
+
+        int[] tierTotalStatistics;
+        int[] tierSelfStatistics;
+        int inlinedSamples;
 
         final List<Long> selfHitTimes = new ArrayList<>();
 
@@ -200,11 +207,11 @@ public final class CPUSampler implements Closeable {
 
     private SourceSectionFilter filter = DEFAULT_FILTER;
 
-    private Map<TruffleContext, AtomicLong> samplesTaken = new HashMap<>(0);
+    private AtomicLong samplesTaken = new AtomicLong(0);
 
     private Timer samplerThread;
 
-    private SamplingTimerTask samplerTask;
+    private TimerTask samplerTask;
 
     private volatile SafepointStack safepointStack;
 
@@ -227,7 +234,6 @@ public final class CPUSampler implements Closeable {
             public void onContextCreated(TruffleContext context) {
                 synchronized (CPUSampler.this) {
                     activeContexts.put(context, new LinkedHashMap<>());
-                    samplesTaken.put(context, new AtomicLong(0));
                 }
             }
 
@@ -428,11 +434,7 @@ public final class CPUSampler implements Closeable {
      * @since 0.30
      */
     public long getSampleCount() {
-        long sum = 0;
-        for (AtomicLong value : samplesTaken.values()) {
-            sum += value.get();
-        }
-        return sum;
+        return samplesTaken.get();
     }
 
     /**
@@ -513,15 +515,13 @@ public final class CPUSampler implements Closeable {
     }
 
     /**
-     * Get per-context profiling data.
-     * @return a map from {@link TruffleContext} to {@link CPUSamplerData}.
-     * @since 21.3.0
+     * TODO: Write javadoc.
      */
-    public synchronized Map<TruffleContext, CPUSamplerData> getContextData() {
+    public synchronized Map<TruffleContext, Map<Thread, Collection<ProfilerNode<Payload>>>> getContextData() {
         if (activeContexts.isEmpty()) {
             return Collections.emptyMap();
         }
-        Map<TruffleContext, CPUSamplerData> contextToData = new HashMap<>();
+        Map<TruffleContext, Map<Thread, Collection<ProfilerNode<Payload>>>> contexts = new HashMap<>();
         for (Entry<TruffleContext, Map<Thread, ProfilerNode<Payload>>> contextEntry : this.activeContexts.entrySet()) {
             Map<Thread, Collection<ProfilerNode<Payload>>> threads = new HashMap<>();
             for (Map.Entry<Thread, ProfilerNode<Payload>> threadEntry : contextEntry.getValue().entrySet()) {
@@ -529,10 +529,9 @@ public final class CPUSampler implements Closeable {
                 copy.deepCopyChildrenFrom(threadEntry.getValue(), COPY_PAYLOAD);
                 threads.put(threadEntry.getKey(), copy.getChildren());
             }
-            TruffleContext context = contextEntry.getKey();
-            contextToData.put(context, new CPUSamplerData(context, threads, samplerTask.biasStatistic, samplerTask.durationStatistic, samplesTaken.get(context).get(), period));
+            contexts.put(contextEntry.getKey(), threads);
         }
-        return contextToData;
+        return contexts;
     }
 
     /**
@@ -541,7 +540,7 @@ public final class CPUSampler implements Closeable {
      * @since 0.30
      */
     public synchronized void clearData() {
-        samplesTaken.clear();
+        samplesTaken.set(0);
         for (TruffleContext context : activeContexts.keySet()) {
             activeContexts.get(context).clear();
         }
@@ -552,12 +551,7 @@ public final class CPUSampler implements Closeable {
      * @since 0.30
      */
     public synchronized boolean hasData() {
-        for (AtomicLong value : samplesTaken.values()) {
-            if (value != null && value.get() > 0) {
-                return true;
-            }
-        }
-        return false;
+        return samplesTaken.get() > 0;
     }
 
     /**
@@ -659,14 +653,16 @@ public final class CPUSampler implements Closeable {
 
     private class SamplingTimerTask extends TimerTask {
 
-        private final LongSummaryStatistics biasStatistic = new LongSummaryStatistics();
-        private final LongSummaryStatistics durationStatistic = new LongSummaryStatistics();
+        private final DoubleSummaryStatistics biasStatistic = new DoubleSummaryStatistics();
+        private final DoubleSummaryStatistics durationStatistic = new DoubleSummaryStatistics();
 
         @Override
         public void run() {
             if (delaySamplingUntilNonInternalLangInit && !nonInternalLanguageContextInitialized) {
                 return;
             }
+
+            boolean sampleTaken = false;
 
             long timestamp = System.currentTimeMillis();
             TruffleContext[] contexts;
@@ -700,14 +696,18 @@ public final class CPUSampler implements Closeable {
                                 return new ProfilerNode<>();
                             }
                         });
-                        sample(context, sample, threadNode, timestamp);
+                        sampleTaken |= sample(sample, threadNode, timestamp);
                     }
                 }
             }
 
+            if (sampleTaken) {
+                samplesTaken.incrementAndGet();
+            }
+
         }
 
-        private void sample(TruffleContext context, StackSample sample, ProfilerNode<Payload> threadNode, long timestamp) {
+        private boolean sample(StackSample sample, ProfilerNode<Payload> threadNode, long timestamp) {
             synchronized (CPUSampler.this) {
                 // now traverse the stack and insert the path into the tree
                 ProfilerNode<Payload> treeNode = threadNode;
@@ -735,7 +735,8 @@ public final class CPUSampler implements Closeable {
                     }
                 }
             }
-            samplesTaken.get(context).incrementAndGet();
+
+            return true;
         }
 
         private ProfilerNode<Payload> addOrUpdateChild(ProfilerNode<Payload> treeNode, StackTraceEntry location) {
