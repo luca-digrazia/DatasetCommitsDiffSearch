@@ -28,16 +28,13 @@ import jdk.vm.ci.services.Services;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.nativebridge.jni.NativeBridgeSupport;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
-public final class LibGraalNativeBridgeSupport implements NativeBridgeSupport {
+public class LibGraalNativeBridgeSupport implements NativeBridgeSupport {
 
     private static final String JNI_LIBGRAAL_TRACE_LEVEL_PROPERTY_NAME = "JNI_LIBGRAAL_TRACE_LEVEL";
-    private static final int UNINITIALIZED_TRACE_LEVEL = Integer.MIN_VALUE;
 
     private final ThreadLocal<Boolean> inTrace = ThreadLocal.withInitial(() -> false);
 
-    private final AtomicInteger traceLevel = new AtomicInteger(UNINITIALIZED_TRACE_LEVEL);
+    private Integer traceLevel;
 
     @Override
     public String getFeatureName() {
@@ -68,21 +65,19 @@ public final class LibGraalNativeBridgeSupport implements NativeBridgeSupport {
     }
 
     private int traceLevel() {
-        int res = traceLevel.get();
-        if (res == UNINITIALIZED_TRACE_LEVEL) {
+        if (traceLevel == null) {
             String var = Services.getSavedProperties().get(JNI_LIBGRAAL_TRACE_LEVEL_PROPERTY_NAME);
             if (var != null) {
                 try {
-                    res = Integer.parseInt(var);
+                    traceLevel = Integer.parseInt(var);
                 } catch (NumberFormatException e) {
                     TTY.printf("Invalid value for %s: %s%n", JNI_LIBGRAAL_TRACE_LEVEL_PROPERTY_NAME, e);
-                    res = 0;
+                    traceLevel = 0;
                 }
             } else {
-                res = 0;
+                traceLevel = 0;
             }
-            traceLevel.set(res);
         }
-        return res;
+        return traceLevel;
     }
 }
