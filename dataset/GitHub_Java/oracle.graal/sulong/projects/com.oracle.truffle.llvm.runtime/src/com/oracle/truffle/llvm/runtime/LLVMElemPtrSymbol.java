@@ -72,11 +72,11 @@ public final class LLVMElemPtrSymbol extends LLVMSymbol {
         throw new IllegalStateException("GetElementPointerConstant " + getName() + " has to be resolved and might not be a global variable.");
     }
 
-    public Type getType() {
+    public final Type getType() {
         return type;
     }
 
-    public Supplier<LLVMExpressionNode> createGetElementPtrNode() {
+    public final Supplier<LLVMExpressionNode> createGetElementPtrNode() {
         return createGetElementPtrNode;
     }
 
