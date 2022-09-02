@@ -50,7 +50,6 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.List;
-import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
@@ -80,40 +79,31 @@ final class HostObject implements TruffleObject {
     static final int LIMIT = 5;
 
     private static final ZoneId UTC = ZoneId.of("UTC");
-    static final HostObject NULL = new HostObject(null, null, null);
+    static final HostObject NULL = new HostObject(null, null, false);
 
     final Object obj;
     final PolyglotLanguageContext languageContext;
-    /**
-     * Either null (default), the Class if this is a static class, or an optional HostException if
-     * the object is an instance of Throwable.
-     */
-    private final Object extraInfo;
+    private final boolean staticClass;
 
-    private HostObject(Object obj, PolyglotLanguageContext languageContext, Object extraInfo) {
+    private HostObject(Object obj, PolyglotLanguageContext languageContext, boolean staticClass) {
         this.obj = obj;
         this.languageContext = languageContext;
-        this.extraInfo = extraInfo;
+        this.staticClass = staticClass;
     }
 
     static HostObject forClass(Class<?> clazz, PolyglotLanguageContext languageContext) {
         assert clazz != null;
-        return new HostObject(clazz, languageContext, null);
+        return new HostObject(clazz, languageContext, false);
     }
 
     static HostObject forStaticClass(Class<?> clazz, PolyglotLanguageContext languageContext) {
         assert clazz != null;
-        return new HostObject(clazz, languageContext, clazz);
+        return new HostObject(clazz, languageContext, true);
     }
 
     static HostObject forObject(Object object, PolyglotLanguageContext languageContext) {
         assert object != null && !(object instanceof Class<?>);
-        return new HostObject(object, languageContext, null);
-    }
-
-    static HostObject forException(Throwable object, PolyglotLanguageContext languageContext, HostException hostException) {
-        Objects.requireNonNull(object);
-        return new HostObject(object, languageContext, hostException);
+        return new HostObject(object, languageContext, false);
     }
 
     static boolean isInstance(Object obj) {
@@ -125,7 +115,7 @@ final class HostObject implements TruffleObject {
     }
 
     HostObject withContext(PolyglotLanguageContext context) {
-        return new HostObject(this.obj, context, this.extraInfo);
+        return new HostObject(this.obj, context, this.staticClass);
     }
 
     static boolean isJavaInstance(Class<?> targetType, Object javaObject) {
@@ -951,17 +941,13 @@ final class HostObject implements TruffleObject {
     @ExportMessage
     RuntimeException throwException() throws UnsupportedMessageException {
         if (isException()) {
-            HostException ex = (HostException) extraInfo;
-            if (ex == null) {
-                ex = new HostException((Throwable) obj);
-            }
-            throw ex;
+            throw new HostException((Throwable) obj);
         }
         throw UnsupportedMessageException.create();
     }
 
     boolean isStaticClass() {
-        return extraInfo instanceof Class<?>;
+        return staticClass;
     }
 
     Class<?> getObjectClass() {
