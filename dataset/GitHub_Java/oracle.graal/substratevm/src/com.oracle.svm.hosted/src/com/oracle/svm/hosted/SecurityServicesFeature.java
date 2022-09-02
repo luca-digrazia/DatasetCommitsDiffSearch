@@ -109,11 +109,6 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
         ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.provider.SeedGenerator"), "for substitutions");
         ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.provider.SecureRandom$SeederHolder"), "for substitutions");
 
-        if(JavaVersionUtil.JAVA_SPEC >= 11) {
-            /* sun.security.provider.AbstractDrbg$SeederHolder has a static final EntropySource seeder field. */
-            ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.provider.AbstractDrbg$SeederHolder"), "for substitutions");
-        }
-
         if (JavaVersionUtil.JAVA_SPEC > 8) {
             ImageSingletons.lookup(RuntimeClassInitializationSupport.class).rerunInitialization(clazz(access, "sun.security.provider.FileInputStreamPool"), "for substitutions");
         }
@@ -285,20 +280,11 @@ public class SecurityServicesFeature extends JNIRegistrationUtil implements Feat
             try {
                 /*
                  * Access the Provider.knownEngines map and extract the EngineDescription
-                 * corresponding to the serviceType. Note that the map holds EngineDescription(s) of
-                 * only those service types that are shipped in the JDK. From the EngineDescription
-                 * object extract the value of the constructorParameterClassName field then, if the
-                 * class name is not null, get the corresponding Class<?> object and return it.
+                 * corresponding to the serviceType. From the EngineDescription object extract the
+                 * value of the constructorParameterClassName field then, if the class name is not
+                 * null, get the corresponding Class<?> object and return it.
                  */
                 /* EngineDescription */Object engineDescription = knownEngines.get(serviceType);
-                /*
-                 * This isn't an engine known to the Provider (which actually means that it isn't
-                 * one that's shipped in the JDK), so we don't have the predetermined knowledge of
-                 * the constructor param class.
-                 */
-                if (engineDescription == null) {
-                    return null;
-                }
                 String constrParamClassName = (String) consParamClassNameField.get(engineDescription);
                 if (constrParamClassName != null) {
                     return access.findClassByName(constrParamClassName);
