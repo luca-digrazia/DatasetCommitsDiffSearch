@@ -148,8 +148,8 @@ public class GraalHotSpotVMConfigAccess {
         JVMCI = JVMCI_VERSION != null || JVMCI_PRERELEASE;
     }
 
-    private final List<String> missing = new ArrayList<>();
-    private final List<String> unexpected = new ArrayList<>();
+    private List<String> missing;
+    private List<String> unexpected;
 
     /**
      * Records an error if {@code map.contains(name) != expectPresent}. That is, it's an error if
@@ -160,52 +160,44 @@ public class GraalHotSpotVMConfigAccess {
     private boolean isPresent(String name, Map<String, ?> map, boolean expectPresent) {
         if (map.containsKey(name)) {
             if (!expectPresent) {
-                recordError(name, unexpected, String.valueOf(map.get(name)));
+                unexpected = recordError(name, unexpected, String.valueOf(map.get(name)));
             }
             return true;
         }
         if (expectPresent) {
-            recordError(name, missing, null);
+            missing = recordError(name, missing, null);
         }
 
         return false;
     }
 
-    // Only defer errors while in the GraalHotSpotVMConfig
-    // constructor until reportErrors() is called.
-    private boolean deferErrors = this instanceof GraalHotSpotVMConfig;
-
-    private void recordError(String name, List<String> list, String unexpectedValue) {
+    private static List<String> recordError(String name, List<String> list, String unexpectedValue) {
         if (JVMCI_PRERELEASE) {
-            return;
+            return list;
         }
+        List<String> result = list == null ? new ArrayList<>() : list;
+        StackTraceElement[] trace = new Exception().getStackTrace();
         String message = name;
-        if (deferErrors) {
-            StackTraceElement[] trace = new Exception().getStackTrace();
-            for (StackTraceElement e : trace) {
-                if (e.getClassName().equals(GraalHotSpotVMConfigAccess.class.getName())) {
-                    // Skip methods in GraalHotSpotVMConfigAccess
-                    continue;
-                }
-                // Looking for the field assignment in a constructor
-                if (e.getMethodName().equals("<init>")) {
-                    message += " at " + e;
-                    break;
-                }
+        for (StackTraceElement e : trace) {
+            if (e.getClassName().equals(GraalHotSpotVMConfigAccess.class.getName())) {
+                // Skip methods in GraalHotSpotVMConfigAccess
+                continue;
+            }
+            // Looking for the field assignment in a constructor
+            if (e.getMethodName().equals("<init>")) {
+                message += " at " + e;
+                break;
             }
         }
         if (unexpectedValue != null) {
             message += " [value: " + unexpectedValue + "]";
         }
-        list.add(message);
-        if (!deferErrors) {
-            reportErrors();
-        }
+        result.add(message);
+        return result;
     }
 
     protected void reportErrors() {
-        deferErrors = false;
-        if (!missing.isEmpty() || !unexpected.isEmpty()) {
+        if (missing != null || unexpected != null) {
             String jvmci = JVMCI_VERSION == null ? "" : " jvmci-" + JVMCI_VERSION;
             String runtime = String.format("JDK %d%s %s-%s (java.home=%s, java.vm.name=%s, java.vm.version=%s)",
                             JDK, jvmci, osName, osArch,
@@ -213,11 +205,11 @@ public class GraalHotSpotVMConfigAccess {
                             getProperty("java.vm.name"),
                             getProperty("java.vm.version"));
             List<String> messages = new ArrayList<>();
-            if (!missing.isEmpty()) {
+            if (missing != null) {
                 messages.add(String.format("VM config values missing that should be present in %s:%n    %s", runtime,
                                 missing.stream().sorted().collect(Collectors.joining(System.lineSeparator() + "    "))));
             }
-            if (!unexpected.isEmpty()) {
+            if (unexpected != null) {
                 messages.add(String.format("VM config values not expected to be present in %s:%n    %s", runtime,
                                 unexpected.stream().sorted().collect(Collectors.joining(System.lineSeparator() + "    "))));
             }
@@ -342,7 +334,7 @@ public class GraalHotSpotVMConfigAccess {
         try {
             return access.getFlag(name, type);
         } catch (JVMCIError e) {
-            recordError(name, missing, null);
+            missing = recordError(name, missing, null);
             return getDefault(type);
         }
     }
@@ -377,10 +369,10 @@ public class GraalHotSpotVMConfigAccess {
             }
             T value = access.getFlag(name, type, sentinel);
             if (value != sentinel) {
-                recordError(name, unexpected, String.valueOf(value));
+                unexpected = recordError(name, unexpected, String.valueOf(value));
             }
         }
-        return access.getFlag(name, type, notPresent);
+        return notPresent;
     }
 
     private static <T> T getDefault(Class<T> type) {
