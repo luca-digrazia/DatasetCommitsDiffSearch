@@ -617,15 +617,13 @@ public abstract class LLVMInteropType implements TruffleObject {
         public final long startOffset;
         public final long endOffset;
         public final LLVMInteropType type;
-        public final boolean isInheritanceMember;
 
-        StructMember(Struct struct, String name, long startOffset, long endOffset, LLVMInteropType type, boolean isInheritanceMember) {
+        StructMember(Struct struct, String name, long startOffset, long endOffset, LLVMInteropType type) {
             this.struct = struct;
             this.name = name;
             this.startOffset = startOffset;
             this.endOffset = endOffset;
             this.type = type;
-            this.isInheritanceMember = isInheritanceMember;
         }
 
         boolean contains(long offset) {
@@ -812,7 +810,7 @@ public abstract class LLVMInteropType implements TruffleObject {
                 LLVMSourceType memberType = member.getElementType();
                 long startOffset = member.getOffset() / 8;
                 long endOffset = startOffset + (memberType.getSize() + 7) / 8;
-                ret.members[i] = new StructMember(ret, member.getName(), startOffset, endOffset, get(memberType), false);
+                ret.members[i] = new StructMember(ret, member.getName(), startOffset, endOffset, get(memberType));
             }
             return ret;
         }
@@ -823,8 +821,7 @@ public abstract class LLVMInteropType implements TruffleObject {
             for (int i = 0; i < ret.members.length; i++) {
                 LLVMSourceMemberType member = type.getDynamicElement(i);
                 LLVMSourceType memberType = member.getElementType();
-                final boolean isInheritanceType = member instanceof LLVMSourceInheritanceType;
-                if (isInheritanceType) {
+                if (member instanceof LLVMSourceInheritanceType) {
                     assert memberType instanceof LLVMSourceClassLikeType;
                     LLVMSourceClassLikeType sourceSuperClazz = (LLVMSourceClassLikeType) memberType;
                     if (!typeCache.containsKey(sourceSuperClazz)) {
@@ -835,7 +832,7 @@ public abstract class LLVMInteropType implements TruffleObject {
                 }
                 long startOffset = member.getOffset() / 8;
                 long endOffset = startOffset + (memberType.getSize() + 7) / 8;
-                ret.members[i] = new StructMember(ret, member.getName(), startOffset, endOffset, get(memberType), isInheritanceType);
+                ret.members[i] = new StructMember(ret, member.getName(), startOffset, endOffset, get(memberType));
             }
             for (int i = 0; i < ret.methods.length; i++) {
                 ret.methods[i] = convertMethod(type.getMethod(i), ret);
