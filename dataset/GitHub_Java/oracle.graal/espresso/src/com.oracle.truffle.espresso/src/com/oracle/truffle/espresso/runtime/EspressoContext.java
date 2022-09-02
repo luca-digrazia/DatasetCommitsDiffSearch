@@ -31,6 +31,7 @@ import java.lang.ref.ReferenceQueue;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -150,12 +151,12 @@ public final class EspressoContext {
 
     // Behavior control
     public final boolean EnableManagement;
+    public final boolean MultiThreaded;
     public final EspressoOptions.VerifyMode Verify;
     public final EspressoOptions.SpecCompliancyMode SpecCompliancyMode;
     public final boolean IsolatedNamespace;
     public final boolean Polyglot;
     public final boolean ExitHost;
-    private final String multiThreadingDisabled;
 
     // Debug option
     public final com.oracle.truffle.espresso.jdwp.api.JDWPOptions JDWPOptions;
@@ -173,6 +174,7 @@ public final class EspressoContext {
     @CompilationFinal private JImageLibrary jimageLibrary;
     @CompilationFinal private EspressoProperties vmProperties;
     @CompilationFinal private JavaVersion javaVersion;
+    @CompilationFinal private AgentLibrairies agents;
     // endregion VM
 
     @CompilationFinal private EspressoException stackOverflow;
@@ -232,21 +234,13 @@ public final class EspressoContext {
         this.SpecCompliancyMode = env.getOptions().get(EspressoOptions.SpecCompliancy);
         this.livenessAnalysisMode = env.getOptions().get(EspressoOptions.LivenessAnalysis);
         this.EnableManagement = env.getOptions().get(EspressoOptions.EnableManagement);
-        String multiThreadingDisabledReason = null;
-        if (!env.getOptions().get(EspressoOptions.MultiThreaded)) {
-            multiThreadingDisabledReason = "java.MultiThreaded option is set to false";
+        Set<String> singleThreadedLanguages = knownSingleThreadedLanguages(env);
+        if (!env.getOptions().hasBeenSet(EspressoOptions.MultiThreaded) && !singleThreadedLanguages.isEmpty()) {
+            logger.warning(() -> "Disabling multi-threading since the context seems to contain single-threaded languages: " + singleThreadedLanguages);
+            this.MultiThreaded = false;
+        } else {
+            this.MultiThreaded = env.getOptions().get(EspressoOptions.MultiThreaded);
         }
-        if (!env.isCreateThreadAllowed()) {
-            multiThreadingDisabledReason = "polyglot context does not allow thread creation (`allowCreateThread(false)`)";
-        }
-        if (multiThreadingDisabledReason == null && !env.getOptions().hasBeenSet(EspressoOptions.MultiThreaded)) {
-            Set<String> singleThreadedLanguages = knownSingleThreadedLanguages(env);
-            if (!singleThreadedLanguages.isEmpty()) {
-                multiThreadingDisabledReason = "context seems to contain single-threaded languages: " + singleThreadedLanguages;
-                logger.warning(() -> "Disabling multi-threading since the context seems to contain single-threaded languages: " + singleThreadedLanguages);
-            }
-        }
-        this.multiThreadingDisabled = multiThreadingDisabledReason;
         this.Polyglot = env.getOptions().get(EspressoOptions.Polyglot);
 
         // Isolated (native) namespaces via dlmopen is only supported on Linux.
@@ -294,14 +288,6 @@ public final class EspressoContext {
 
     public EspressoLanguage getLanguage() {
         return language;
-    }
-
-    public boolean multiThreadingEnabled() {
-        return multiThreadingDisabled == null;
-    }
-
-    public String getMultiThreadingDisabledReason() {
-        return multiThreadingDisabled;
     }
 
     /**
@@ -401,6 +387,8 @@ public final class EspressoContext {
 
             this.interpreterToVM = new InterpreterToVM(this);
 
+            initializeAgents();
+
             try (DebugCloseable knownClassInit = KNOWN_CLASS_INIT.scope(timers)) {
                 initializeKnownClass(Type.java_lang_Object);
 
@@ -481,6 +469,16 @@ public final class EspressoContext {
             long elapsedNanos = initDoneTimeNanos - initStartTimeNanos;
             getLogger().log(Level.FINE, "VM booted in {0} ms", TimeUnit.NANOSECONDS.toMillis(elapsedNanos));
         }
+    }
+
+    private void initializeAgents() {
+        agents = new AgentLibrairies(this);
+        Set<Map.Entry<String, String>> entries = getEnv().getOptions().get(EspressoOptions.Agents).entrySet();
+        for (Map.Entry<String, String> entry : entries) {
+            String value = entry.getValue();
+            agents.registerAgent(value);
+        }
+        agents.initialize();
     }
 
     private void initVmProperties() {
@@ -588,6 +586,14 @@ public final class EspressoContext {
     public void prepareDispose() {
         jdwpContext.finalizeContext();
     }
+
+    // region Agents
+
+    public TruffleObject bindToAgent(Method method, String mangledName) {
+        return agents.bind(method, mangledName);
+    }
+
+    // endregion Agents
 
     // region Thread management
 
@@ -713,6 +719,19 @@ public final class EspressoContext {
 
     public int getExitStatus() {
         return shutdownManager.getExitStatus();
+    }
+
+    public EspressoError abort() {
+        if (ExitHost) {
+            System.exit(1);
+            throw EspressoError.shouldNotReachHere();
+        }
+        throw new EspressoExitException(1);
+    }
+
+    public EspressoError abort(String message) {
+        getLogger().severe(message);
+        throw abort();
     }
 
     // endregion Shutdown

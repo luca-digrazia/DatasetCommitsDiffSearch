@@ -39,6 +39,7 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.NativeEnv;
 import com.oracle.truffle.espresso.jni.NativeLibrary;
 import com.oracle.truffle.espresso.jni.RawBuffer;
+import com.oracle.truffle.espresso.meta.EspressoError;
 
 class AgentLibrairies {
 
@@ -48,21 +49,21 @@ class AgentLibrairies {
     private final EspressoContext context;
 
     private final List<AgentLibrary> agents = new ArrayList<>();
-    private InteropLibrary interop = InteropLibrary.getUncached();
+    private final InteropLibrary interop = InteropLibrary.getUncached();
+
+    AgentLibrairies(EspressoContext context) {
+        this.context = context;
+    }
 
     TruffleObject bind(Method method, String mangledName) {
         for (AgentLibrary agent : agents) {
             try {
                 return Method.bind(agent.lib, method, mangledName);
             } catch (UnknownIdentifierException e) {
-                /* Safe to ignore */
+                /* Not found in this library: Safe to ignore and check for the next one */
             }
         }
         return null;
-    }
-
-    AgentLibrairies(EspressoContext context) {
-        this.context = context;
     }
 
     void initialize() {
@@ -70,33 +71,49 @@ class AgentLibrairies {
         for (AgentLibrary agent : agents) {
             TruffleObject onLoad = lookupOnLoad(agent);
             if (onLoad == null || interop.isNull(onLoad)) {
-                throw abort();
+                throw context.abort("Unable to locate " + AGENT_ONLOAD + " in agent " + agent.name);
             }
             try (RawBuffer optionBuffer = RawBuffer.getNativeString(agent.options)) {
-                try {
-                    ret = interop.execute(onLoad, context.getVM().getJavaVM(), optionBuffer.pointer(), NativeEnv.RawPointer.nullInstance());
-                    if (!interop.fitsInInt(ret) || interop.asInt(ret) != JNI_OK) {
-                        throw abort();
-                    }
-                } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-                    throw abort();
+                ret = interop.execute(onLoad, context.getVM().getJavaVM(), optionBuffer.pointer(), NativeEnv.RawPointer.nullInstance());
+                assert interop.fitsInInt(ret);
+                if (interop.asInt(ret) != JNI_OK) {
+                    throw context.abort(AGENT_ONLOAD + " call for agent " + agent.name + " returned with error: " + interop.asInt(ret));
                 }
+            } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
+                throw EspressoError.shouldNotReachHere();
             }
         }
     }
 
     void registerAgent(String agent) {
+        /*
+         * The agent string given should be of the form:
+         * 
+         * {+/-}<name><=options>
+         * 
+         * If the string starts with a `+`, then the name is an absolute path to the agent library,
+         * otherwise, it is a library name to be loaded from standard library directories.
+         */
         assert agent.length() > 0;
         String name;
         String options;
-        boolean isAbsolutePath = (agent.charAt(0) == '+');
+        boolean isAbsolutePath;
+        char ch = agent.charAt(0);
+        if (ch == '+') {
+            isAbsolutePath = true;
+        } else if (ch == '-') {
+            isAbsolutePath = false;
+        } else {
+            // String starting with + or - should have been enforced by option parsing.
+            throw EspressoError.shouldNotReachHere();
+        }
         int eqIdx = agent.indexOf('=');
         if (eqIdx > 0) {
             name = agent.substring(1, eqIdx);
             options = agent.substring(eqIdx + 1);
         } else {
             name = agent.substring(1);
-            options = null;
+            options = "";
         }
         agents.add(new AgentLibrary(name, options, isAbsolutePath));
     }
@@ -107,7 +124,7 @@ class AgentLibrairies {
         if (agent.isAbsolutePath) {
             library = NativeLibrary.loadLibrary(Paths.get(agent.name));
         } else {
-            // Lookup standard dll directory
+            // Lookup standard directory
             library = NativeEnv.loadLibraryInternal(context.getVmProperties().bootLibraryPath(), agent.name);
             if (interop.isNull(library)) {
                 // Try library path directory
@@ -115,10 +132,9 @@ class AgentLibrairies {
             }
         }
         if (interop.isNull(library)) {
-            throw abort();
+            throw context.abort("Could not locate library for agent " + agent.name);
         }
         agent.lib = library;
-        agent.isValid = true;
 
         TruffleObject onLoad;
         try {
@@ -129,22 +145,16 @@ class AgentLibrairies {
         return onLoad;
     }
 
-    private EspressoExitException abort() {
-        throw new EspressoExitException(1);
-    }
-
     private static class AgentLibrary {
 
         final String name;
         final String options;
 
         final boolean isAbsolutePath;
-        boolean isValid = false;
-        boolean isStaticLib;
 
         TruffleObject lib;
 
-        public AgentLibrary(String name, String options, boolean isAbsolutePath) {
+        AgentLibrary(String name, String options, boolean isAbsolutePath) {
             this.name = name;
             this.options = options;
             this.isAbsolutePath = isAbsolutePath;
