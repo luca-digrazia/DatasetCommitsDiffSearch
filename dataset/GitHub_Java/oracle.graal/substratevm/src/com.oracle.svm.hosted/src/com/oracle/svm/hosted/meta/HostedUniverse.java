@@ -30,7 +30,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.GraalOptions;
@@ -46,6 +46,7 @@ import com.oracle.graal.pointsto.infrastructure.WrappedSignature;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
+import com.oracle.graal.pointsto.util.ConcurrentLightHashSet;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.analysis.Inflation;
@@ -68,6 +69,7 @@ import jdk.vm.ci.meta.Signature;
  * Nothing is added later on during compilation of methods.
  */
 public class HostedUniverse implements Universe {
+
     protected final Inflation bb;
 
     protected final Map<AnalysisType, HostedType> types = new HashMap<>();
@@ -75,7 +77,7 @@ public class HostedUniverse implements Universe {
     protected final Map<AnalysisMethod, HostedMethod> methods = new HashMap<>();
     protected final Map<Signature, WrappedSignature> signatures = new HashMap<>();
     protected final Map<ConstantPool, WrappedConstantPool> constantPools = new HashMap<>();
-    private volatile ConcurrentHashMap<AnalysisMethod, Boolean> methodsWithStackValues = new ConcurrentHashMap<>();
+    protected final ConcurrentLightHashSet<AnalysisMethod> methodsWithStackValues = new ConcurrentLightHashSet<>();
 
     protected EnumMap<JavaKind, HostedType> kindToType = new EnumMap<>(JavaKind.class);
 
@@ -245,11 +247,11 @@ public class HostedUniverse implements Universe {
     }
 
     public void recordMethodWithStackValues(AnalysisMethod analysisMethod) {
-        methodsWithStackValues.put(analysisMethod, Boolean.TRUE);
+        methodsWithStackValues.addElement(analysisMethod);
     }
 
-    public Collection<AnalysisMethod> getMethodsWithStackValues() {
-        return Collections.unmodifiableCollection(methodsWithStackValues.keySet());
+    public Set<AnalysisMethod> getMethodsWithStackValues() {
+        return Collections.unmodifiableSet(methodsWithStackValues.getElements());
     }
 
     @Override

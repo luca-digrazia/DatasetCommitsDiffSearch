@@ -41,10 +41,11 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import com.oracle.svm.hosted.code.SharedRuntimeConfigurationBuilder;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.nativeimage.hosted.Feature;
-import org.graalvm.nativeimage.hosted.Feature.DuringAnalysisAccess;
-import org.graalvm.nativeimage.hosted.RuntimeReflection;
+import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.Feature.DuringAnalysisAccess;
+import org.graalvm.nativeimage.RuntimeReflection;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.api.UnsafePartitionKind;
@@ -64,7 +65,6 @@ import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.hosted.analysis.Inflation;
 import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.code.CompilationInfoSupport;
-import com.oracle.svm.hosted.code.SharedRuntimeConfigurationBuilder;
 import com.oracle.svm.hosted.image.AbstractBootImage;
 import com.oracle.svm.hosted.image.AbstractBootImage.NativeImageKind;
 import com.oracle.svm.hosted.image.NativeImageHeap;
@@ -78,7 +78,6 @@ import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
-@SuppressWarnings("deprecation")
 public class FeatureImpl {
 
     public abstract static class FeatureAccessImpl implements Feature.FeatureAccess {
@@ -198,7 +197,7 @@ public class FeatureImpl {
          * {@link DuringAnalysisAccess#requireAnalysisIteration()} to trigger a new iteration of the
          * analysis.
          *
-         * @since 19.0
+         * @since 1.0
          */
         public void registerClassReachabilityListener(BiConsumer<DuringAnalysisAccess, Class<?>> listener) {
             getHostVM().registerClassReachabilityListener(listener);
