@@ -122,7 +122,7 @@ public class Token implements JsonConvertible {
         return new BackReference(groupNr);
     }
 
-    public static Quantifier createQuantifier(int min, int max, boolean greedy) {
+    public static Token createQuantifier(int min, int max, boolean greedy) {
         return new Quantifier(min, max, greedy);
     }
 
@@ -168,8 +168,6 @@ public class Token implements JsonConvertible {
         private final int min;
         private final int max;
         private final boolean greedy;
-        private short index = -1;
-        private short zeroWidthIndex = -1;
 
         public Quantifier(int min, int max, boolean greedy) {
             super(Kind.quantifier);
@@ -198,32 +196,6 @@ public class Token implements JsonConvertible {
 
         public boolean isGreedy() {
             return greedy;
-        }
-
-        public boolean hasIndex() {
-            return index >= 0;
-        }
-
-        public short getIndex() {
-            return index;
-        }
-
-        public void setIndex(int index) {
-            assert index <= Short.MAX_VALUE;
-            this.index = (short) index;
-        }
-
-        public boolean hasZeroWidthIndex() {
-            return zeroWidthIndex >= 0;
-        }
-
-        public short getZeroWidthIndex() {
-            return zeroWidthIndex;
-        }
-
-        public void setZeroWidthIndex(int zeroWidthIndex) {
-            assert zeroWidthIndex <= Short.MAX_VALUE;
-            this.zeroWidthIndex = (short) zeroWidthIndex;
         }
 
         @Override

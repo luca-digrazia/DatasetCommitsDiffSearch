@@ -69,14 +69,13 @@ import com.oracle.truffle.regex.tregex.util.json.JsonValue;
  * the priority of the alternatives: if matching with an earlier alternative is possible, that match
  * result is preferred to those from later alternatives.
  */
-public final class Group extends QuantifiableTerm implements RegexASTVisitorIterable {
+public final class Group extends Term implements RegexASTVisitorIterable {
 
     private ArrayList<Sequence> alternatives = new ArrayList<>();
     private short visitorIterationIndex = 0;
     private byte groupNumber = -1;
     private byte enclosedCaptureGroupsLow;
     private byte enclosedCaptureGroupsHigh;
-    private short zeroWidthQuantifierIndex = -1;
 
     /**
      * Creates an empty non-capturing group.
@@ -128,6 +127,39 @@ public final class Group extends QuantifiableTerm implements RegexASTVisitorIter
      */
     public void setLoop(boolean loop) {
         setFlag(FLAG_GROUP_LOOP, loop);
+    }
+
+    /**
+     * Indicates whether this {@link Group} was inserted into the AST as the result of expanding
+     * quantifier syntax (*, +, ?, {n,m}).
+     *
+     * E.g., if A is some group, then:
+     * <ul>
+     * <li>A* is expanded as (A|)*
+     * <li>A*? is expanded as (|A)*
+     * <li>A+ is expanded as A(A|)*
+     * <li>A+? is expanded as A(|A)*
+     * <li>A? is expanded as (A|)
+     * <li>A?? is expanded as (|A)
+     * <li>A{2,4} is expanded as AA(A|)(A|)
+     * <li>A{2,4}? is expanded as AA(|A)(|A)
+     * </ul>
+     * where (X|Y) is a group with alternatives X and Y and (X|Y)* is a looping group with
+     * alternatives X and Y. In the examples above, all of the occurrences of A in the expansions
+     * would be marked with this flag.
+     */
+    public boolean isExpandedQuantifier() {
+        return isFlagSet(FLAG_GROUP_EXPANDED_QUANTIFIER);
+    }
+
+    /**
+     * Marks this {@link Group} as being inserted into the AST as part of expanding quantifier
+     * syntax (*, +, ?, {n,m}).
+     *
+     * @see #isExpandedQuantifier()
+     */
+    public void setExpandedQuantifier(boolean expandedQuantifier) {
+        setFlag(FLAG_GROUP_EXPANDED_QUANTIFIER, expandedQuantifier);
     }
 
     /**
@@ -226,28 +258,6 @@ public final class Group extends QuantifiableTerm implements RegexASTVisitorIter
         return enclosedCaptureGroupsHigh > enclosedCaptureGroupsLow;
     }
 
-    public short getZeroWidthQuantifierIndex() {
-        return zeroWidthQuantifierIndex;
-    }
-
-    public void setZeroWidthQuantifierIndex(int zeroWidthQuantifierIndex) {
-        this.zeroWidthQuantifierIndex = (short) zeroWidthQuantifierIndex;
-    }
-
-    /**
-     * Returns {@code true} iff all alternatives of this group match only the empty string.
-     */
-    public boolean isAlwaysZeroWidth() {
-        for (Sequence s : alternatives) {
-            for (Term t : s.getTerms()) {
-                if (!(t instanceof PositionAssertion || t instanceof LookAroundAssertion || (t instanceof Group && ((Group) t).isAlwaysZeroWidth()))) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
     /**
      * Returns the list of alternatives that make up this {@link Group}.
      * <p>
@@ -263,10 +273,6 @@ public final class Group extends QuantifiableTerm implements RegexASTVisitorIter
             s.setParent(this);
         }
         this.alternatives = alternatives;
-    }
-
-    public Sequence getFirstAlternative() {
-        return alternatives.get(0);
     }
 
     public int size() {
