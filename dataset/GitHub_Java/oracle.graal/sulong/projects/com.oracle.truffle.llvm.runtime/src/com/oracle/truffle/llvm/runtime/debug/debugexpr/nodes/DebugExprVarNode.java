@@ -38,12 +38,13 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-public class DebugExprVarNode extends LLVMExpressionNode implements MemberAccessible {
+public class DebugExprVarNode extends LLVMExpressionNode {
 
     private final String name;
     private Iterable<Scope> scopes;
@@ -54,6 +55,7 @@ public class DebugExprVarNode extends LLVMExpressionNode implements MemberAccess
     }
 
     private Pair<Object, DebugExprType> findMemberAndType() {
+        LLVMLanguage.getLLVMContextReference().get();
         InteropLibrary library = InteropLibrary.getFactory().getUncached();
         for (Scope scope : scopes) {
             Object vars = scope.getVariables();
@@ -81,12 +83,10 @@ public class DebugExprVarNode extends LLVMExpressionNode implements MemberAccess
         return Pair.create(null, DebugExprType.getVoidType());
     }
 
-    @Override
     public DebugExprType getType() {
         return findMemberAndType().getRight();
     }
 
-    @Override
     public Object getMember() {
         return findMemberAndType().getLeft();
     }

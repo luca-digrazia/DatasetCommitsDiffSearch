@@ -30,8 +30,7 @@
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -40,15 +39,11 @@ public class DebugExprSizeofNode extends LLVMExpressionNode {
     private final int typeSize;
 
     public DebugExprSizeofNode(DebugExprType type) {
-        DataLayout datalayout = getDataLayout();
-        this.typeSize = type.getLLVMRuntimeType().getSize(datalayout);
+        this.typeSize = LLVMLanguage.getLLVMContextReference().get().getByteSize(type.getLLVMRuntimeType());
     }
 
     @Override
     public Object executeGeneric(VirtualFrame frame) {
-        if (typeSize < 0) {
-            throw DebugExprException.create(this, "Error while finding type size");
-        }
         return typeSize;
     }
 

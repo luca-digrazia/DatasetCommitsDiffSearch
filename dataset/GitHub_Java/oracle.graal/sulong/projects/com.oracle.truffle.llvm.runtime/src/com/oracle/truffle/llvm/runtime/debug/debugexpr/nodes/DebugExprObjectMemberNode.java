@@ -42,7 +42,7 @@ import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 @NodeInfo(shortName = ".")
-public class DebugExprObjectMemberNode extends LLVMExpressionNode implements MemberAccessible {
+public class DebugExprObjectMemberNode extends LLVMExpressionNode {
 
     @Child private LLVMExpressionNode baseNode;
     private final String fieldName;
@@ -52,22 +52,12 @@ public class DebugExprObjectMemberNode extends LLVMExpressionNode implements Mem
         this.baseNode = baseNode;
     }
 
-    @Override
-    public DebugExprType getType() {
-        if (baseNode instanceof MemberAccessible) {
-            Object baseMember = ((MemberAccessible) baseNode).getMember();
-            return findMemberAndType(baseMember).getRight();
-        }
-        throw DebugExprException.create(this, "member access not possible for " + baseNode + "." + fieldName);
+    public DebugExprType getType(Object baseMember) {
+        return findMemberAndType(baseMember).getRight();
     }
 
-    @Override
-    public Object getMember() {
-        if (baseNode instanceof MemberAccessible) {
-            Object baseMember = ((MemberAccessible) baseNode).getMember();
-            return findMemberAndType(baseMember).getLeft();
-        }
-        throw DebugExprException.create(this, "member access not possible for " + baseNode + "." + fieldName);
+    public Object getMember(Object baseMember) {
+        return findMemberAndType(baseMember).getLeft();
     }
 
     public String getFieldName() {
@@ -76,11 +66,12 @@ public class DebugExprObjectMemberNode extends LLVMExpressionNode implements Mem
 
     private Pair<Object, DebugExprType> findMemberAndType(Object baseMember) {
         InteropLibrary library = InteropLibrary.getFactory().getUncached();
-        if (baseMember != null && library.isMemberExisting(baseMember, fieldName)) {
+
+        if (library.isMemberExisting(baseMember, fieldName)) {
             try {
                 Object member = library.readMember(baseMember, fieldName);
                 LLVMDebuggerValue ldv = (LLVMDebuggerValue) member;
-                Object metaObj = ldv.resolveMetaObject();
+                Object metaObj = ldv.getMetaObject();
                 DebugExprType type = DebugExprType.getTypeFromSymbolTableMetaObject(metaObj);
                 return Pair.create(member, type);
             } catch (UnsupportedMessageException e1) {
@@ -100,9 +91,8 @@ public class DebugExprObjectMemberNode extends LLVMExpressionNode implements Mem
         Object baseMember = baseNode.executeGeneric(frame);
         Pair<Object, DebugExprType> pair = findMemberAndType(baseMember);
         Object member = pair.getLeft();
-        if (member != null) {
+        if (member != null)
             return pair.getRight().parse(member);
-        }
         throw DebugExprException.symbolNotFound(this, fieldName, baseMember);
     }
 }

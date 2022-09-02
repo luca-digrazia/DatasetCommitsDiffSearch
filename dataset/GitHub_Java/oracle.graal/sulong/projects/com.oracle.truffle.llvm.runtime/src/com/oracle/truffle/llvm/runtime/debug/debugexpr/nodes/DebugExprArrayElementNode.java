@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
@@ -51,7 +50,7 @@ public class DebugExprArrayElementNode extends LLVMExpressionNode {
     public DebugExprArrayElementNode(DebugExpressionPair basePair, LLVMExpressionNode indexNode) {
         this.indexNode = indexNode;
         this.baseNode = basePair.getNode();
-        this.type = basePair.getType() == null ? DebugExprType.getVoidType() : basePair.getType().getInnerType();
+        this.type = basePair.getType();
     }
 
     public DebugExprType getType() {
@@ -59,7 +58,6 @@ public class DebugExprArrayElementNode extends LLVMExpressionNode {
     }
 
     @Override
-    @TruffleBoundary
     public Object executeGeneric(VirtualFrame frame) {
         int idx;
         try {
@@ -82,8 +80,7 @@ public class DebugExprArrayElementNode extends LLVMExpressionNode {
                 if (library.isArrayElementReadable(getmembers, idx)) {
                     Object arrayElement = library.readArrayElement(getmembers, idx);
                     if (library.isMemberReadable(baseMember, arrayElement.toString())) {
-                        Object member = library.readMember(baseMember, arrayElement.toString());
-                        return type.parse(member);
+                        return library.readMember(baseMember, arrayElement.toString());
                     }
                 }
             } catch (UnsupportedMessageException e) {
