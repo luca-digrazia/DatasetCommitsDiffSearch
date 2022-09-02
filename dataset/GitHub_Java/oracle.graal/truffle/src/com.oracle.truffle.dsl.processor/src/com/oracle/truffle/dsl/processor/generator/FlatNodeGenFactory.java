@@ -2608,7 +2608,7 @@ public class FlatNodeGenFactory {
 
         List<CodeVariableElement> childParameters = new ArrayList<>();
         for (NodeChildData child : node.getChildren()) {
-            if (child.needsGeneratedField() && !child.isImplicit()) {
+            if (child.needsGeneratedField()) {
                 childParameters.add(new CodeVariableElement(child.getOriginalType(), child.getName()));
             }
         }
@@ -2647,25 +2647,20 @@ public class FlatNodeGenFactory {
             builder.string("this.").string(nodeFieldName(execution)).string(" = ");
 
             String name = childValues.get(node.getChildren().indexOf(execution.getChild()));
-            CodeTree accessor;
-            if (execution.getChild().isImplicit()) {
-                accessor = DSLExpressionGenerator.write(execution.getChild().getImplicitCreateExpression(), null, null);
-            } else {
-                CodeTreeBuilder accessorBuilder = builder.create();
-                accessorBuilder.string(name);
+            CodeTreeBuilder accessorBuilder = builder.create();
+            accessorBuilder.string(name);
 
-                if (execution.hasChildArrayIndex()) {
-                    accessorBuilder.string("[").string(String.valueOf(execution.getChildArrayIndex())).string("]");
-                }
-
-                accessor = accessorBuilder.build();
+            if (execution.hasChildArrayIndex()) {
+                accessorBuilder.string("[").string(String.valueOf(execution.getChildArrayIndex())).string("]");
             }
+
+            CodeTree accessor = accessorBuilder.build();
 
             if (createCast != null && execution.getChild().getCardinality().isOne()) {
                 accessor = callMethod(null, null, createCast.getMethod(), accessor);
             }
 
-            if (execution.hasChildArrayIndex() && !execution.getChild().isImplicit()) {
+            if (execution.hasChildArrayIndex()) {
                 CodeTreeBuilder nullCheck = builder.create();
                 nullCheck.string(name).string(" != null && ").string(String.valueOf(execution.getChildArrayIndex())).string(" < ").string(name).string(".length").string(" ? ");
                 nullCheck.tree(accessor);
