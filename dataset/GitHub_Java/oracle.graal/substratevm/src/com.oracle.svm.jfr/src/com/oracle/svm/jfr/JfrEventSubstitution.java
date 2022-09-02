@@ -51,6 +51,10 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import sun.misc.Unsafe;
 
+/**
+ * I think that most of the code in this class is unnecessary and can be implemented in a different
+ * way (i.e., without a SubstitutionProcessor).
+ */
 @Platforms(Platform.HOSTED_ONLY.class)
 public class JfrEventSubstitution extends SubstitutionProcessor {
 
@@ -87,11 +91,6 @@ public class JfrEventSubstitution extends SubstitutionProcessor {
         }
     }
 
-    /**
-     * The method EventWriter.reset() is private but it is called by the EventHandler classes, which
-     * are generated automatically. To prevent bytecode parsing issues, we patch the visibility of
-     * that method using the hacky way below.
-     */
     private static void changeWriterResetMethod(ResolvedJavaType eventWriterType) {
         for (ResolvedJavaMethod m : eventWriterType.getDeclaredMethods()) {
             if (m.getName().equals("reset")) {
@@ -103,10 +102,9 @@ public class JfrEventSubstitution extends SubstitutionProcessor {
     private static void setPublicModifier(ResolvedJavaMethod m) {
         try {
             Class<?> method = m.getClass();
-            Method metaspaceMethodM = method.getDeclaredMethod("getMetaspacePointer");
+            Method metaspaceMethodM = method.getDeclaredMethod("getMetaspaceMethod");
             metaspaceMethodM.setAccessible(true);
             long metaspaceMethod = (Long) metaspaceMethodM.invoke(m);
-            VMError.guarantee(metaspaceMethod != 0);
             // Checkstyle: stop
             Class<?> hotSpotVMConfigC = Class.forName("jdk.vm.ci.hotspot.HotSpotVMConfig");
             // Checkstyle: resume
