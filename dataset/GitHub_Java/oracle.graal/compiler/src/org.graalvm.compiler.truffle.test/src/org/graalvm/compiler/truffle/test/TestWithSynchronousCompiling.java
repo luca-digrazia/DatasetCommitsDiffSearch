@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,12 +28,11 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
+import java.util.Arrays;
+
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
+import org.graalvm.polyglot.Context;
+import org.junit.Before;
 
 /**
  * Base class for Truffle unit tests that require that there be no background compilation.
@@ -45,21 +44,32 @@ import org.junit.BeforeClass;
  *
  * These tests will be run by the {@code mx unittest} command.
  */
-public abstract class TestWithSynchronousCompiling {
+public abstract class TestWithSynchronousCompiling extends TestWithPolyglotOptions {
 
-    private static TruffleRuntimeOptionsOverrideScope backgroundCompilationScope;
-    private static TruffleRuntimeOptionsOverrideScope compilationThresholdScope;
+    private static final String[] DEFAULT_OPTIONS = {
+                    "engine.BackgroundCompilation", Boolean.FALSE.toString(), //
+                    "engine.SingleTierCompilationThreshold", "10", //
+                    "engine.LastTierCompilationThreshold", "10", //
+                    "engine.FirstTierCompilationThreshold", "5", //
+                    "engine.DynamicCompilationThresholds", Boolean.FALSE.toString(), //
+                    "engine.CompileImmediately", Boolean.FALSE.toString()
+    };
 
-    @BeforeClass
-    public static void before() {
-        backgroundCompilationScope = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleBackgroundCompilation, false);
-        compilationThresholdScope = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleCompilationThreshold, 10);
+    @Before
+    public void before() {
+        setupContext();
     }
 
-    @AfterClass
-    public static void after() {
-        backgroundCompilationScope.close();
-        compilationThresholdScope.close();
+    @Override
+    protected final Context setupContext(String... keyValuePairs) {
+        String[] newOptions;
+        if (keyValuePairs.length == 0) {
+            newOptions = DEFAULT_OPTIONS;
+        } else {
+            newOptions = Arrays.copyOf(DEFAULT_OPTIONS, DEFAULT_OPTIONS.length + keyValuePairs.length);
+            System.arraycopy(keyValuePairs, 0, newOptions, DEFAULT_OPTIONS.length, keyValuePairs.length);
+        }
+        return super.setupContext(newOptions);
     }
 
     protected static void assertCompiled(OptimizedCallTarget target) {
@@ -70,7 +80,7 @@ public abstract class TestWithSynchronousCompiling {
     protected static void assertNotCompiled(OptimizedCallTarget target) {
         if (target != null) {
             assertFalse(target.isValid());
-            assertFalse(target.isCompiling());
+            assertFalse(target.isSubmittedForCompilation());
         }
     }
 }
