@@ -33,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
@@ -42,7 +43,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.oracle.svm.core.option.OptionUtils;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
@@ -90,10 +90,10 @@ public class ServiceLoaderFeature implements Feature {
         public static final HostedOptionKey<Boolean> TraceServiceLoaderFeature = new HostedOptionKey<>(false);
 
         @Option(help = "Comma-separated list of services that should be excluded", type = OptionType.Expert) //
-        public static final HostedOptionKey<String[]> ServiceLoaderFeatureExcludeServices = new HostedOptionKey<>(null);
+        public static final HostedOptionKey<String[]> ServiceLoaderFeatureExcludeServices = new HostedOptionKey<>(new String[0]);
 
         @Option(help = "Comma-separated list of service providers that should be excluded", type = OptionType.Expert) //
-        public static final HostedOptionKey<String[]> ServiceLoaderFeatureExcludeServiceProviders = new HostedOptionKey<>(null);
+        public static final HostedOptionKey<String[]> ServiceLoaderFeatureExcludeServiceProviders = new HostedOptionKey<>(new String[0]);
 
     }
 
@@ -103,16 +103,8 @@ public class ServiceLoaderFeature implements Feature {
      */
     private static final Set<String> SERVICES_TO_SKIP = new HashSet<>(Arrays.asList(
                     "java.security.Provider",                       // see SecurityServicesFeature
-                    "sun.util.locale.provider.LocaleDataMetaInfo",  // see LocaleSubstitutions
-                    "org.graalvm.nativeimage.Platform"  // shouldn't be reachable after
-                                                        // intrinsification
+                    "sun.util.locale.provider.LocaleDataMetaInfo"   // see LocaleSubstitutions
     ));
-
-    // NOTE: Platform class had to be added to this list since our analysis discovers that
-    // Platform.includedIn is reachable regardless of fact that it is constant folded at
-    // registerPlatformPlugins method of SubstrateGraphBuilderPlugins. This issue hasn't manifested
-    // before because implementation classes were instantiated using runtime reflection instead of
-    // ServiceLoader (and thus weren't reachable in analysis).
 
     private static final Set<String> SERVICE_PROVIDERS_TO_SKIP = new HashSet<>(Arrays.asList(
                     "com.sun.jndi.rmi.registry.RegistryContextFactory"      // GR-26547
@@ -141,8 +133,8 @@ public class ServiceLoaderFeature implements Feature {
 
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
-        SERVICES_TO_SKIP.addAll(OptionUtils.flatten(",", Options.ServiceLoaderFeatureExcludeServices.getValue()));
-        SERVICE_PROVIDERS_TO_SKIP.addAll(OptionUtils.flatten(",", Options.ServiceLoaderFeatureExcludeServiceProviders.getValue()));
+        Collections.addAll(SERVICES_TO_SKIP, Options.ServiceLoaderFeatureExcludeServices.getValue());
+        Collections.addAll(SERVICE_PROVIDERS_TO_SKIP, Options.ServiceLoaderFeatureExcludeServiceProviders.getValue());
     }
 
     @Override
