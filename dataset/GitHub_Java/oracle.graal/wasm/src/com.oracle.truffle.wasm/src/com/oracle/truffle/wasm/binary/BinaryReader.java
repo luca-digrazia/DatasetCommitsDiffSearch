@@ -378,21 +378,16 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 }
                 case ImportIdentifier.MEMORY: {
+                    // TODO: This memory is normally supposed to be provided by the external environment (e.g. JS).
                     byte limitsPrefix = read1();
                     switch (limitsPrefix) {
                         case LimitsPrefix.NO_MAX: {
-                            // Read initial size (in number of entries).
-                            int initSize = readUnsignedInt32();
-                            int maxSize = -1;
-                            module.symbolTable().importMemory(context, moduleName, memberName, initSize, maxSize);
+                            readUnsignedInt32();  // initial size (in number of entries)
                             break;
                         }
                         case LimitsPrefix.WITH_MAX: {
-                            // Read initial size (in number of entries).
-                            int initSize = readUnsignedInt32();
-                            // Read max size (in number of entries).
-                            int maxSize = readUnsignedInt32();
-                            module.symbolTable().importMemory(context, moduleName, memberName, initSize, maxSize);
+                            readUnsignedInt32();  // initial size (in number of entries)
+                            readUnsignedInt32();  // max size (in number of entries)
                             break;
                         }
                         default:
@@ -405,8 +400,7 @@ public class BinaryReader extends BinaryStreamReader {
                     // See GlobalModifier.
                     byte mutability = read1();
                     int index = module.symbolTable().maxGlobalIndex() + 1;
-                    final GlobalResolution resolution = context.linker().tryResolveGlobal(module, moduleName, memberName, type, mutability);
-                    module.symbolTable().importGlobal(language.getContextReference().get(), moduleName, memberName, index, type, mutability, resolution);
+                    context.linker().importGlobal(module, index, moduleName, memberName, type, mutability);
                     break;
                 }
                 default: {
@@ -426,8 +420,7 @@ public class BinaryReader extends BinaryStreamReader {
 
     private void readTableSection() {
         int numTables = readVectorLength();
-        Assert.assertIntLessOrEqual(module.symbolTable().tableCount() + numTables, 1, "Can import or declare at most one table per module.");
-        // Since in the current version of WebAssembly supports at most one table instance per module.
+        // Since in the current version of WebAssembly supports at most one table instance,
         // this loop should be executed at most once.
         for (byte tableIndex = 0; tableIndex != numTables; ++tableIndex) {
             byte elemType = readElemType();
@@ -454,24 +447,18 @@ public class BinaryReader extends BinaryStreamReader {
 
     private void readMemorySection() {
         int numMemories = readVectorLength();
-        Assert.assertIntLessOrEqual(module.symbolTable().tableCount() + numMemories, 1, "Can import or declare at most one memory per module.");
-        // Since in the current version of WebAssembly supports at most one table instance per module.
-        // this loop should be executed at most once.
         for (int i = 0; i != numMemories; ++i) {
             byte limitsPrefix = readLimitsPrefix();
             switch (limitsPrefix) {
                 case LimitsPrefix.NO_MAX: {
-                    // Read initial size (in Wasm pages).
-                    int initSize = readUnsignedInt32();
-                    int maxSize = -1;
-                    module.symbolTable().allocateMemory(language.getContextReference().get(), initSize, maxSize);
+                    /* Return value ignored, as we don't rely on the memory definition for the memory size. */
+                    readUnsignedInt32();  // initial size (in Wasm pages)
                     break;
                 }
                 case LimitsPrefix.WITH_MAX: {
-                    // Read initial size (in Wasm pages).
-                    int initSize = readUnsignedInt32();
-                    // Read max size (in Wasm pages).
-                    int maxSize = readUnsignedInt32();
+                    /* Return values ignored, as we don't rely on the memory definition for the memory size. */
+                    readUnsignedInt32();  // initial size (in Wasm pages)
+                    readUnsignedInt32();  // max size (in Wasm pages)
                     break;
                 }
                 default:
@@ -1278,8 +1265,7 @@ public class BinaryReader extends BinaryStreamReader {
     }
 
     private void readDataSection() {
-        WasmMemory memory = module.symbolTable().memory();
-        Assert.assertNotNull(memory, "No memory declared or imported in the module.");
+        WasmMemory memory = WasmLanguage.getCurrentContext().memory();
         int numDataSections = readVectorLength();
         for (int i = 0; i != numDataSections; ++i) {
             int memIndex = readUnsignedInt32();

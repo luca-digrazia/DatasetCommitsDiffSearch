@@ -32,8 +32,6 @@ package com.oracle.truffle.wasm.binary;
 import com.oracle.truffle.wasm.binary.constants.GlobalModifier;
 import com.oracle.truffle.wasm.binary.constants.GlobalResolution;
 import com.oracle.truffle.wasm.binary.exception.WasmLinkerException;
-import com.oracle.truffle.wasm.binary.memory.WasmMemory;
-import com.oracle.truffle.wasm.binary.memory.WasmMemoryException;
 
 import static com.oracle.truffle.wasm.binary.constants.GlobalResolution.IMPORTED;
 import static com.oracle.truffle.wasm.binary.constants.GlobalResolution.UNRESOLVED_IMPORT;
@@ -85,17 +83,18 @@ public class Linker {
         reader.resetGlobalState();
     }
 
-    GlobalResolution tryResolveGlobal(WasmModule module, String importedModuleName, String globalName, int valueType, int mutability) {
+    int importGlobal(WasmModule module, int index, String importedModuleName, String importedGlobalName, int valueType, int mutability) {
         GlobalResolution resolution = UNRESOLVED_IMPORT;
         final WasmContext context = language.getContextReference().get();
         final WasmModule importedModule = context.modules().get(importedModuleName);
+        int address = -1;
 
         // Check that the imported module is available.
         if (importedModule != null) {
             // Check that the imported global is resolved in the imported module.
-            Integer exportedGlobalIndex = importedModule.symbolTable().exportedGlobals().get(globalName);
+            Integer exportedGlobalIndex = importedModule.symbolTable().exportedGlobals().get(importedGlobalName);
             if (exportedGlobalIndex == null) {
-                throw new WasmLinkerException("Global variable '" + globalName + "', imported into module '" + module.name() +
+                throw new WasmLinkerException("Global variable '" + importedGlobalName + "', imported into module '" + module.name() +
                                 "', was not exported in the module '" + importedModuleName + "'.");
             }
             GlobalResolution exportedResolution = importedModule.symbolTable().globalResolution(exportedGlobalIndex);
@@ -104,24 +103,27 @@ public class Linker {
             }
             int exportedValueType = importedModule.symbolTable().globalValueType(exportedGlobalIndex);
             if (exportedValueType != valueType) {
-                throw new WasmLinkerException("Global variable '" + globalName + "' is imported into module '" + module.name() +
+                throw new WasmLinkerException("Global variable '" + importedGlobalName + "' is imported into module '" + module.name() +
                                 "' with the type " + ValueTypes.asString(valueType) + ", " +
                                 "'but it was exported in the module '" + importedModuleName + "' with the type " + ValueTypes.asString(exportedValueType) + ".");
             }
             int exportedMutability = importedModule.symbolTable().globalMutability(exportedGlobalIndex);
             if (exportedMutability != mutability) {
-                throw new WasmLinkerException("Global variable '" + globalName + "' is imported into module '" + module.name() +
+                throw new WasmLinkerException("Global variable '" + importedGlobalName + "' is imported into module '" + module.name() +
                                 "' with the modifier " + GlobalModifier.asString(mutability) + ", " +
                                 "'but it was exported in the module '" + importedModuleName + "' with the modifier " + GlobalModifier.asString(exportedMutability) + ".");
             }
             if (importedModule.symbolTable().globalResolution(exportedGlobalIndex).isResolved()) {
                 resolution = IMPORTED;
+                address = importedModule.symbolTable().globalAddress(exportedGlobalIndex);
             }
         }
 
         // TODO: Once we support asynchronous parsing, we will need to record the dependency on the global.
 
-        return resolution;
+        module.symbolTable().importGlobal(importedModuleName, importedGlobalName, index, valueType, mutability, resolution, address);
+
+        return address;
     }
 
     void tryInitializeElements(WasmContext context, WasmModule module, int globalIndex, int[] contents) {
@@ -137,7 +139,7 @@ public class Linker {
         }
     }
 
-    int tryResolveTable(WasmContext context, WasmModule module, String importedModuleName, String importedTableName, int initSize, int maxSize) {
+    int importTable(WasmContext context, WasmModule module, String importedModuleName, String importedTableName, int initSize, int maxSize) {
         final WasmModule importedModule = context.modules().get(importedModuleName);
         if (importedModule == null) {
             // TODO: Record the fact that this table was not resolved, to be able to resolve it later during linking.
@@ -162,32 +164,9 @@ public class Linker {
                                 importedTableName, importedModuleName, declaredMaxSize, module.name(), maxSize));
             }
             context.tables().ensureSizeAtLeast(tableIndex, initSize);
+            module.symbolTable().setImportedTable(new ImportDescriptor(importedModuleName, importedTableName));
+            module.symbolTable().setTableIndex(tableIndex);
             return tableIndex;
-        }
-    }
-
-    WasmMemory tryResolveMemory(WasmContext context, WasmModule module, String importedModuleName, String importedMemoryName, int initSize, int maxSize) {
-        final WasmModule importedModule = context.modules().get(importedModuleName);
-        if (importedModule == null) {
-            throw new WasmLinkerException("Postponed memory resolution not yet implemented.");
-        } else {
-            final String exportedMemoryName = importedModule.symbolTable().exportedMemory();
-            if (exportedMemoryName == null) {
-                throw new WasmLinkerException(String.format("The imported module '%s' does not export any memories, so cannot resolve memory '%s' imported in module '%s'.",
-                                importedModuleName, importedMemoryName, module.name()));
-            }
-            if (!exportedMemoryName.equals(importedMemoryName)) {
-                throw new WasmLinkerException(String.format("The imported module '%s' exports a memory '%s', but module '%s' imports a memory '%s'.",
-                                importedModuleName, exportedMemoryName, module.name(), importedModuleName));
-            }
-            final WasmMemory memory = importedModule.symbolTable().memory();
-            if (memory.maxSize() >= 0 && (initSize > memory.maxSize() || maxSize > memory.maxSize())) {
-                // This requirement does not seem to be mentioned in the WebAssembly specification.
-                throw new WasmLinkerException(String.format("The memory '%s' in the imported module '%s' has maximum size %d, but module '%s' imports it with maximum size '%d'",
-                                importedMemoryName, importedModuleName, memory.maxSize(), module.name(), maxSize));
-            }
-            memory.grow(initSize);
-            return memory;
         }
     }
 }
