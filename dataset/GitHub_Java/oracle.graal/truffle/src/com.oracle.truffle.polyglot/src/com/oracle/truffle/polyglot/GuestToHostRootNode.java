@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -55,13 +55,13 @@ abstract class GuestToHostRootNode extends RootNode {
 
     private final String boundaryName;
 
-    static final CallInlined CALL_INLINED = EngineAccessor.ACCESSOR.getCallInlined();
+    static final CallInlined CALL_INLINED = VMAccessor.SPI.getCallInlined();
 
     protected GuestToHostRootNode(Class<?> targetType, String methodName) {
         super(null);
         this.boundaryName = targetType.getName() + "." + methodName;
         // this avoids a memory leak with the root node if it is shared globally
-        EngineAccessor.NODES.clearPolyglotEngine(this);
+        VMAccessor.NODES.makeSharableRoot(this);
     }
 
     @Override
