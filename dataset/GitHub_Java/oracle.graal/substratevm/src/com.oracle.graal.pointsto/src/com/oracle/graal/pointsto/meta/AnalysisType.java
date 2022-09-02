@@ -354,11 +354,21 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
                 /* Collect the field referenced types. */
                 for (AnalysisField field : getInstanceFields(true)) {
                     TypeState state = field.getInstanceFieldTypeState();
-                    for (AnalysisType type : state.types()) {
-                        /* Add the assignable types, as discovered by the static analysis. */
-                        type.getTypeFlow(bb, false).getState().types().forEach(referencedTypesSet::add);
+                    if (!state.isUnknown()) {
+                        /*
+                         * If the field state is unknown we don't process the state. Unknown means
+                         * that the state can contain any object of any type, but the core analysis
+                         * guarantees that there is no path on which the objects of an unknown type
+                         * state are converted to and used as java objects; they are just used as
+                         * data.
+                         */
+                        for (AnalysisType type : state.types()) {
+                            /* Add the assignable types, as discovered by the static analysis. */
+                            type.getTypeFlow(bb, false).getState().types().forEach(referencedTypesSet::add);
+                        }
                     }
                 }
+
             }
 
             referencedTypes = new ArrayList<>(referencedTypesSet);
@@ -402,41 +412,6 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     }
 
-    public static boolean verifyAssignableTypes(BigBang bb) {
-        List<AnalysisType> allTypes = bb.getUniverse().getTypes();
-        if (allTypes.size() > 5000) {
-            /*
-             * The verification has quadratic time complexity. With many reachable types, this is
-             * infeasible and slows down image building too much.
-             */
-            return true;
-        }
-
-        boolean pass = true;
-        for (AnalysisType t1 : allTypes) {
-            if (t1.assignableTypes != null) {
-                for (AnalysisType t2 : allTypes) {
-                    boolean expected;
-                    if (t2.isInstantiated()) {
-                        expected = t1.isAssignableFrom(t2);
-                    } else {
-                        expected = false;
-                    }
-                    boolean actual = t1.assignableTypes.getState().containsType(t2);
-
-                    if (actual != expected) {
-                        System.out.println("assignableTypes mismatch: " +
-                                        t1.toJavaName(true) + " (instantiated: " + t1.isInstantiated() + ") - " +
-                                        t2.toJavaName(true) + " (instantiated: " + t2.isInstantiated() + "): " +
-                                        "expected=" + expected + ", actual=" + actual);
-                        pass = false;
-                    }
-                }
-            }
-        }
-        return pass;
-    }
-
     public static void updateAssignableTypes(BigBang bb) {
         /*
          * Update the assignable-state for all types. So do not post any update operations before
@@ -449,15 +424,21 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
         Map<Integer, BitSet> newAssignableTypes = new HashMap<>();
         for (AnalysisType type : allTypes) {
             if (type.isInstantiated()) {
-                int arrayDimension = type.dimension;
-                AnalysisType elementalType = type.elementalType;
-
-                addTypeToAssignableLists(type.getId(), elementalType, arrayDimension, newAssignableTypes, true);
-                for (int i = 0; i < arrayDimension; i++) {
-                    addTypeToAssignableLists(type.getId(), type, i, newAssignableTypes, false);
+                int arrayDimension = 0;
+                AnalysisType elementalType = type;
+                while (elementalType.isArray()) {
+                    elementalType = elementalType.getComponentType();
+                    arrayDimension++;
                 }
-                if (arrayDimension > 0 && !elementalType.isPrimitive()) {
-                    addTypeToAssignableLists(type.getId(), bb.getObjectType(), arrayDimension, newAssignableTypes, true);
+                addTypeToAssignableLists(type.getId(), elementalType, arrayDimension, newAssignableTypes, true, bb);
+                if (arrayDimension > 0) {
+                    addTypeToAssignableLists(type.getId(), type, 0, newAssignableTypes, true, bb);
+                }
+                for (int i = 0; i < arrayDimension; i++) {
+                    addTypeToAssignableLists(type.getId(), bb.getObjectType(), i, newAssignableTypes, false, bb);
+                }
+                if (!elementalType.isPrimitive()) {
+                    addTypeToAssignableLists(type.getId(), bb.getObjectType(), arrayDimension, newAssignableTypes, false, bb);
                 }
             }
         }
@@ -483,18 +464,26 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
         }
     }
 
-    private static void addTypeToAssignableLists(int typeIdToAdd, AnalysisType elementalType, int arrayDimension, Map<Integer, BitSet> newAssignableTypes, boolean processType) {
+    private static void addTypeToAssignableLists(int typeIdToAdd, AnalysisType elementalType, int arrayDimension, Map<Integer, BitSet> newAssignableTypes, boolean processSuperclass, BigBang bb) {
         if (elementalType == null) {
             return;
         }
-        if (processType) {
-            int addToId = elementalType.getArrayClass(arrayDimension).getId();
-            BitSet addToBitSet = newAssignableTypes.computeIfAbsent(addToId, BitSet::new);
-            addToBitSet.set(typeIdToAdd);
+
+        AnalysisType addTo = elementalType;
+        for (int i = 0; i < arrayDimension; i++) {
+            addTo = addTo.getArrayClass();
         }
-        addTypeToAssignableLists(typeIdToAdd, elementalType.getSuperclass(), arrayDimension, newAssignableTypes, true);
+        int addToId = addTo.getId();
+        if (!newAssignableTypes.containsKey(addToId)) {
+            newAssignableTypes.put(addToId, new BitSet());
+        }
+        newAssignableTypes.get(addToId).set(typeIdToAdd);
+
+        if (processSuperclass) {
+            addTypeToAssignableLists(typeIdToAdd, elementalType.getSuperclass(), arrayDimension, newAssignableTypes, true, bb);
+        }
         for (AnalysisType interf : elementalType.getInterfaces()) {
-            addTypeToAssignableLists(typeIdToAdd, interf, arrayDimension, newAssignableTypes, true);
+            addTypeToAssignableLists(typeIdToAdd, interf, arrayDimension, newAssignableTypes, false, bb);
         }
     }
 

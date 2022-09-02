@@ -51,8 +51,6 @@ import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-import static com.oracle.graal.pointsto.util.AtomicUtils.atomicMark;
-
 public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
 
     @SuppressWarnings("rawtypes")//
@@ -75,9 +73,9 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
      */
     private FieldSinkTypeFlow instanceFieldFlow;
 
-    private AtomicBoolean isAccessed = new AtomicBoolean();
-    private AtomicBoolean isRead = new AtomicBoolean();
-    private AtomicBoolean isWritten = new AtomicBoolean();
+    private boolean isAccessed;
+    private boolean isRead;
+    private boolean isWritten;
     private boolean isJNIAccessed;
     private boolean isUsedInComparison;
     private AtomicBoolean isUnsafeAccessed;
@@ -146,27 +144,27 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
     }
 
     public void copyAccessInfos(AnalysisField other) {
-        this.isAccessed = new AtomicBoolean(other.isAccessed.get());
+        this.isAccessed = other.isAccessed;
         this.isUnsafeAccessed = other.isUnsafeAccessed;
         this.canBeNull = other.canBeNull;
-        this.isWritten = new AtomicBoolean(other.isWritten.get());
-        this.isRead = new AtomicBoolean(other.isRead.get());
+        this.isWritten = other.isWritten;
+        this.isRead = other.isRead;
         notifyUpdateAccessInfo();
     }
 
     public void intersectAccessInfos(AnalysisField other) {
-        this.isAccessed = new AtomicBoolean(this.isAccessed.get() && other.isAccessed.get());
+        this.isAccessed = this.isAccessed && other.isAccessed;
         this.canBeNull = this.canBeNull && other.canBeNull;
-        this.isWritten = new AtomicBoolean(this.isWritten.get() && other.isWritten.get());
-        this.isRead = new AtomicBoolean(this.isRead.get() && other.isRead.get());
+        this.isWritten = this.isWritten && other.isWritten;
+        this.isRead = this.isRead && other.isRead;
         notifyUpdateAccessInfo();
     }
 
     public void clearAccessInfos() {
-        this.isAccessed.set(false);
+        this.isAccessed = false;
         this.canBeNull = true;
-        this.isWritten.set(false);
-        this.isRead.set(false);
+        this.isWritten = false;
+        this.isRead = false;
         notifyUpdateAccessInfo();
     }
 
@@ -259,19 +257,17 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
         instanceFieldTypeState = null;
     }
 
-    public boolean registerAsAccessed() {
-        boolean firstAttempt = atomicMark(isAccessed);
+    public void registerAsAccessed() {
+        isAccessed = true;
         notifyUpdateAccessInfo();
-        return firstAttempt;
     }
 
-    public boolean registerAsRead(MethodTypeFlow method) {
-        boolean firstAttempt = atomicMark(isRead);
+    public void registerAsRead(MethodTypeFlow method) {
+        isRead = true;
         notifyUpdateAccessInfo();
         if (readBy != null && method != null) {
             readBy.put(method, Boolean.TRUE);
         }
-        return firstAttempt;
     }
 
     /**
@@ -280,13 +276,12 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
      * @param method The method where the field is written or null if the method is not known, e.g.
      *            for an unsafe accessed field.
      */
-    public boolean registerAsWritten(MethodTypeFlow method) {
-        boolean firstAttempt = atomicMark(isWritten);
+    public void registerAsWritten(MethodTypeFlow method) {
+        isWritten = true;
         notifyUpdateAccessInfo();
         if (writtenBy != null && method != null) {
             writtenBy.put(method, Boolean.TRUE);
         }
-        return firstAttempt;
     }
 
     public void registerAsUnsafeAccessed(AnalysisUniverse universe) {
@@ -374,15 +369,26 @@ public class AnalysisField implements ResolvedJavaField, OriginalFieldProvider {
      * DirectByteBuffer remains reachable.
      */
     public boolean isAccessed() {
-        return isAccessed.get() || isRead.get() || (isWritten.get() && (Modifier.isVolatile(getModifiers()) || getStorageKind() == JavaKind.Object));
+        return isAccessed || isRead || (isWritten && (Modifier.isVolatile(getModifiers()) || getStorageKind() == JavaKind.Object));
     }
 
-    public boolean isRead() {
-        return isAccessed.get() || isRead.get();
+    /**
+     * Returns true if the field needs to be preserved in the image heap. If this method returns
+     * false but {@link #isAccessed} is true, then memory for the field is still reserved. The value
+     * written into the image heap is then the default value for the field's type.
+     *
+     * This method is necessary for the handling of write-only fields: Not all write-only fields can
+     * be eliminated completely (see the comment in {@link #isAccessed}. But in the image heap, such
+     * field values do not need to be preserved because the write happens at image build time (so
+     * memory barriers are no issue) and the image heap is not garbage collected (so object
+     * reachability is no issue).
+     */
+    public boolean isInImageHeap() {
+        return isAccessed || isRead;
     }
 
     public boolean isWritten() {
-        return isAccessed.get() || isWritten.get();
+        return isAccessed || isWritten;
     }
 
     public void setCanBeNull(boolean canBeNull) {
