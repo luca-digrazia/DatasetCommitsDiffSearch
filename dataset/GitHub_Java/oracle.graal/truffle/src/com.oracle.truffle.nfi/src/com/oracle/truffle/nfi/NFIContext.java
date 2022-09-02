@@ -97,9 +97,9 @@ final class NFIContext {
                 NFIBackendFactory backendFactory = env.lookup(language, NFIBackendFactory.class);
                 if (backendFactory != null && backendFactory.getBackendId().equals(id)) {
                     // force initialization of the backend language
-                    Source source = Source.newBuilder(language.getId(), "", "").internal(true).build();
+                    Source source = Source.newBuilder(language.getId(), "", "").build();
                     try {
-                        env.parseInternal(source);
+                        env.parsePublic(source);
                     } catch (Exception ex) {
                         boolean rethrow = true;
                         if (ex instanceof TruffleException) {
