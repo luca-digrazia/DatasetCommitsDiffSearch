@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,26 +44,23 @@ public final class Constants {
 
     public static final int MAX_CODE_POINT = Character.MAX_CODE_POINT;
 
-    // 0x00 - 0xff
     public static final CodePointSet BYTE_RANGE = CodePointSet.createNoDedup(0x00, 0xff);
+    public static final CodePointSet BMP_RANGE = CodePointSet.createNoDedup(Character.MIN_VALUE, Character.MAX_VALUE);
+    public static final CodePointSet TRAIL_SURROGATE_RANGE = CodePointSet.createNoDedup(0xDC00, 0xDFFF);
 
-    // 0x00 - 0xffff
-    public static final CodePointSet BMP_RANGE = CodePointSet.createNoDedup(0x00, 0xffff);
+    public static final CodePointSet BMP_WITHOUT_SURROGATES = CodePointSet.createNoDedup(
+                    0x0000, 0xd7ff,
+                    0xe000, 0xffff);
 
-    public static final CodePointSet BMP_WITHOUT_SURROGATES = CodePointSet.createNoDedup(0x0000, 0xd7ff, 0xe000, 0xffff);
-
-    public static final CodePointSet ASTRAL_SYMBOLS = CodePointSet.createNoDedup(0x010000, 0x10ffff);
-
-    public static final CodePointSet SURROGATES = CodePointSet.createNoDedup(0xd800, 0xdfff);
+    public static final CodePointSet ASTRAL_SYMBOLS = CodePointSet.createNoDedup(0x10000, 0x10ffff);
 
     public static final CodePointSet LEAD_SURROGATES = CodePointSet.createNoDedup(0xd800, 0xdbff);
 
     public static final CodePointSet TRAIL_SURROGATES = CodePointSet.createNoDedup(0xdc00, 0xdfff);
 
-    // [0-9]
     public static final CodePointSet DIGITS = CodePointSet.createNoDedup('0', '9');
 
-    // [^0-9]
+    // inverse of DIGITS
     public static final CodePointSet NON_DIGITS = CodePointSet.createNoDedup(
                     0x0000, 0x002f,
                     0x003a, 0x10ffff);
@@ -75,7 +72,7 @@ public final class Constants {
                     0x005f, 0x005f,
                     0x0061, 0x007a);
 
-    // [^A-Za-z0-9_]
+    // inverse of WORD_CHARS
     public static final CodePointSet NON_WORD_CHARS = CodePointSet.createNoDedup(
                     0x0000, 0x002f,
                     0x003a, 0x0040,
@@ -206,7 +203,7 @@ public final class Constants {
                     0x000e, 0x2027,
                     0x202a, 0x10ffff);
 
-    public static final CodePointSet DOT_ALL = CodePointSet.getFull();
+    public static final CodePointSet DOT_ALL = CodePointSet.createNoDedup(Character.MIN_CODE_POINT, Character.MAX_CODE_POINT);
 
     // [A-Fa-f0-9]
     public static final CodePointSet HEX_CHARS = CodePointSet.createNoDedup(
@@ -215,7 +212,7 @@ public final class Constants {
                     0x0061, 0x0066);
 
     /**
-     * Used for deduplication in {@link CodePointSet}.
+     * Used for deduplication in {@link CodePointSet} and {@link CharSet}.
      */
     public static final CodePointSet[] CONSTANT_CODE_POINT_SETS = new CodePointSet[]{
                     DIGITS,

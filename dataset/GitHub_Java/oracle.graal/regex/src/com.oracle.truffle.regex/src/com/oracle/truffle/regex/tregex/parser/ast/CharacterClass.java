@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,7 +46,6 @@ import java.util.stream.Collectors;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.charset.CodePointSet;
-import com.oracle.truffle.regex.tregex.TRegexOptions;
 import com.oracle.truffle.regex.tregex.automaton.StateSet;
 import com.oracle.truffle.regex.tregex.buffer.CharArrayBuffer;
 import com.oracle.truffle.regex.tregex.parser.RegexParser;
@@ -68,7 +67,7 @@ import com.oracle.truffle.regex.tregex.util.json.JsonValue;
  * by {@link RegexParser} into a more complex expression which matches the individual code units
  * that would make up the UTF-16 encoding of those characters.
  */
-public class CharacterClass extends QuantifiableTerm {
+public class CharacterClass extends Term {
 
     private CodePointSet charSet;
     // look-behind groups which might match the same character as this CharacterClass node
@@ -121,14 +120,9 @@ public class CharacterClass extends QuantifiableTerm {
         setFlag(FLAG_CHARACTER_CLASS_WAS_SINGLE_CHAR, value);
     }
 
-    @Override
-    public boolean isUnrollingCandidate() {
-        return hasQuantifier() && getQuantifier().isWithinThreshold(TRegexOptions.TRegexQuantifierUnrollThresholdSingleCC);
-    }
-
     public void addLookBehindEntry(RegexAST ast, LookBehindAssertion lookBehindEntry) {
         if (lookBehindEntries == null) {
-            lookBehindEntries = StateSet.create(ast.getLookArounds());
+            lookBehindEntries = StateSet.create(ast.getLookBehinds());
         }
         lookBehindEntries.add(lookBehindEntry);
     }

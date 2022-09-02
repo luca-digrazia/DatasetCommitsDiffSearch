@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,13 +40,12 @@
  */
 package com.oracle.truffle.regex.tregex.nfa;
 
-import com.oracle.truffle.regex.charset.CodePointSet;
+import java.util.Arrays;
+
 import com.oracle.truffle.regex.tregex.buffer.ObjectArrayBuffer;
-import com.oracle.truffle.regex.tregex.parser.ast.CharacterClass;
 import com.oracle.truffle.regex.tregex.parser.ast.LookAheadAssertion;
-import com.oracle.truffle.regex.tregex.parser.ast.LookAroundAssertion;
-import com.oracle.truffle.regex.tregex.parser.ast.LookBehindAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.MatchFound;
+import com.oracle.truffle.regex.tregex.parser.ast.PositionAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexASTNode;
 import com.oracle.truffle.regex.tregex.parser.ast.Term;
@@ -55,7 +54,7 @@ import com.oracle.truffle.regex.tregex.parser.ast.visitors.NFATraversalRegexASTV
 public final class PureNFATransitionGenerator extends NFATraversalRegexASTVisitor {
 
     private final PureNFAGenerator nfaGen;
-    private final ObjectArrayBuffer<PureNFATransition> transitionBuffer = new ObjectArrayBuffer<>(8);
+    private final ObjectArrayBuffer transitionBuffer = new ObjectArrayBuffer(8);
     private PureNFAState curState;
 
     public PureNFATransitionGenerator(RegexAST ast, PureNFAGenerator nfaGen) {
@@ -66,7 +65,7 @@ public final class PureNFATransitionGenerator extends NFATraversalRegexASTVisito
     public void generateTransitions(PureNFAState state) {
         this.curState = state;
         Term root = (Term) ast.getState(state.getAstNodeId());
-        setCanTraverseCaret(state.isAnchoredInitialState() || state.isBackReference() || state.isLookAround());
+        setCanTraverseCaret(root instanceof PositionAssertion && ast.getNfaAnchoredInitialStates().contains(root));
         transitionBuffer.clear();
         run(root);
         curState.setSuccessors(transitionBuffer.toArray(new PureNFATransition[transitionBuffer.length()]));
@@ -74,12 +73,6 @@ public final class PureNFATransitionGenerator extends NFATraversalRegexASTVisito
 
     @Override
     protected void visit(RegexASTNode target) {
-        // Optimization: eagerly remove transitions that cannot match with their respective
-        // look-around assertions
-        if (pruneLookarounds(target)) {
-            return;
-        }
-
         PureNFAState targetState;
         if (target instanceof MatchFound) {
             targetState = dollarsOnPath() ? nfaGen.getAnchoredFinalState() : nfaGen.getUnAnchoredFinalState();
@@ -87,9 +80,14 @@ public final class PureNFATransitionGenerator extends NFATraversalRegexASTVisito
             targetState = nfaGen.getOrCreateState((Term) target);
         }
         targetState.incPredecessors();
-        transitionBuffer.add(new PureNFATransition((short) nfaGen.getTransitionIdCounter().inc(), curState, targetState, getGroupBoundaries(),
-                        curState.isBackReference() || curState.isLookAround() ? caretsOnPath() : false,
-                        target instanceof CharacterClass ? false : dollarsOnPath(), getQuantifierGuardsOnPath()));
+        QuantifierGuard[] quantifiers = getQuantifierGuardsOnPath();
+        transitionBuffer.add(new PureNFATransition((short) nfaGen.getTransitionIdCounter().inc(),
+                        curState,
+                        targetState,
+                        getGroupBoundaries(),
+                        getLookAheadsOnPath(),
+                        getLookBehindsOnPath(),
+                        quantifiers.length == 0 ? QuantifierGuard.NO_GUARDS : Arrays.copyOf(quantifiers, quantifiers.length)));
     }
 
     @Override
@@ -98,29 +96,5 @@ public final class PureNFATransitionGenerator extends NFATraversalRegexASTVisito
 
     @Override
     protected void leaveLookAhead(LookAheadAssertion assertion) {
-    }
-
-    private boolean pruneLookarounds(RegexASTNode target) {
-        if (curState.isLookAhead(ast) && target instanceof CharacterClass) {
-            LookAheadAssertion la = (LookAheadAssertion) ast.getState(curState.getAstNodeId());
-            if (la.startsWithCharClass()) {
-                return noLookAroundIntersection(la, ((CharacterClass) target).getCharSet(), ((CharacterClass) la.getGroup().getFirstAlternative().getFirstTerm()).getCharSet());
-            }
-        } else if (curState.isCharacterClass() && target instanceof LookBehindAssertion) {
-            LookBehindAssertion lb = (LookBehindAssertion) target;
-            if (lb.endsWithCharClass()) {
-                return noLookAroundIntersection(lb, curState.getCharSet(), ((CharacterClass) lb.getGroup().getFirstAlternative().getLastTerm()).getCharSet());
-            }
-        }
-        return false;
-    }
-
-    protected static boolean noLookAroundIntersection(LookAroundAssertion la, CodePointSet ccChars, CodePointSet laChars) {
-        return la.isNegated() ? laChars.contains(ccChars) : !laChars.intersects(ccChars);
-    }
-
-    @Override
-    protected boolean canTraverseLookArounds() {
-        return false;
     }
 }

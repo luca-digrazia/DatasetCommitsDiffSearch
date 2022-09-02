@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,7 +43,6 @@ package com.oracle.truffle.regex.tregex.parser.ast;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.stream.Stream;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
@@ -64,7 +63,6 @@ import com.oracle.truffle.regex.tregex.parser.Token;
 import com.oracle.truffle.regex.tregex.parser.ast.visitors.ASTDebugDumpVisitor;
 import com.oracle.truffle.regex.tregex.parser.ast.visitors.CopyVisitor;
 import com.oracle.truffle.regex.tregex.util.json.Json;
-import com.oracle.truffle.regex.tregex.util.json.JsonArray;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 import com.oracle.truffle.regex.util.CompilationFinalBitSet;
@@ -79,8 +77,6 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
     private final RegexOptions options;
     private final Counter.ThresholdCounter nodeCount = new Counter.ThresholdCounter(TRegexOptions.TRegexMaxParseTreeSize, "parse tree explosion");
     private final Counter.ThresholdCounter groupCount = new Counter.ThresholdCounter(TRegexOptions.TRegexMaxNumberOfCaptureGroups, "too many capture groups");
-    private final Counter quantifierCount = new Counter();
-    private final Counter zeroWidthQuantifierCount = new Counter();
     private final RegexProperties properties = new RegexProperties();
     private RegexASTNode[] nodes;
     /**
@@ -92,7 +88,8 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
      */
     private Group wrappedRoot;
     private Group[] captureGroups;
-    private final LookAroundIndex lookArounds = new LookAroundIndex();
+    private final LookAroundIndex<LookAheadAssertion> lookAheads = new LookAroundIndex<>();
+    private final LookAroundIndex<LookBehindAssertion> lookBehinds = new LookAroundIndex<>();
     private final List<PositionAssertion> reachableCarets = new ArrayList<>();
     private final List<PositionAssertion> reachableDollars = new ArrayList<>();
     private StateSet<PositionAssertion> nfaAnchoredInitialStates;
@@ -158,14 +155,6 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
         return groupCount.getCount();
     }
 
-    public Counter getQuantifierCount() {
-        return quantifierCount;
-    }
-
-    public Counter getZeroWidthQuantifierCount() {
-        return zeroWidthQuantifierCount;
-    }
-
     public Group getGroupByBoundaryIndex(int index) {
         if (captureGroups == null) {
             captureGroups = new Group[getNumberOfCaptureGroups()];
@@ -216,7 +205,7 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
             // The single alternative in the wrappedRoot is composed of N non-optional prefix
             // matchers, 1 group of optional matchers and the original root. By
             // taking size() - 2, we get the number of non-optional prefix matchers.
-            return wrappedRoot.getFirstAlternative().size() - 2;
+            return wrappedRoot.getAlternatives().get(0).size() - 2;
         }
         return 0;
     }
@@ -227,13 +216,25 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
      */
     public RegexASTNode getEntryAfterPrefix() {
         if (rootIsWrapped()) {
-            return wrappedRoot.getFirstAlternative().getTerms().get(getWrappedPrefixLength());
+            return wrappedRoot.getAlternatives().get(0).getTerms().get(getWrappedPrefixLength());
         }
         return wrappedRoot;
     }
 
-    public LookAroundIndex getLookArounds() {
-        return lookArounds;
+    public boolean hasLookAheads() {
+        return !lookAheads.isEmpty();
+    }
+
+    public LookAroundIndex<LookAheadAssertion> getLookAheads() {
+        return lookAheads;
+    }
+
+    public boolean hasLookBehinds() {
+        return !lookBehinds.isEmpty();
+    }
+
+    public LookAroundIndex<LookBehindAssertion> getLookBehinds() {
+        return lookBehinds;
     }
 
     public List<PositionAssertion> getReachableCarets() {
@@ -402,7 +403,7 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
         nfaAnchoredInitialStates.add(pos);
         pos.setNext(getEntryAfterPrefix());
         for (int i = getWrappedPrefixLength() - 1; i >= 0; i--) {
-            RegexASTNode prefixNode = getWrappedRoot().getFirstAlternative().getTerms().get(i);
+            RegexASTNode prefixNode = getWrappedRoot().getAlternatives().get(0).getTerms().get(i);
             hardPrefixNodes.add(prefixNode);
             mf = new MatchFound();
             initNodeId(mf, nextID++);
@@ -444,10 +445,7 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
             return;
         }
         int prefixLength = 0;
-        for (LookAroundAssertion lb : lookArounds) {
-            if (lb instanceof LookAheadAssertion) {
-                continue;
-            }
+        for (LookBehindAssertion lb : lookBehinds) {
             int minPath = lb.getMinPath();
             RegexASTSubtreeRootNode laParent = lb.getSubTreeParent();
             while (!(laParent instanceof RegexASTRootNode)) {
@@ -457,7 +455,7 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
                 minPath += laParent.getMinPath();
                 laParent = laParent.getSubTreeParent();
             }
-            prefixLength = Math.max(prefixLength, lb.getLiteralLength() - minPath);
+            prefixLength = Math.max(prefixLength, lb.getLength() - minPath);
         }
         if (prefixLength == 0) {
             wrappedRoot = root;
@@ -479,7 +477,7 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
             opt.setPrefix();
             opt.add(createSequence());
             opt.add(createSequence());
-            opt.getFirstAlternative().setPrefix();
+            opt.getAlternatives().get(0).setPrefix();
             opt.getAlternatives().get(1).setPrefix();
             opt.getAlternatives().get(1).add(createPrefixAnyMatcher());
             if (prevOpt != null) {
@@ -493,22 +491,9 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
         wrappedRoot = wrapRoot;
     }
 
-    public void hidePrefix() {
-        if (wrappedRoot != root) {
-            root.getSubTreeParent().setGroup(root);
-        }
-    }
-
-    public void unhidePrefix() {
-        if (wrappedRoot != root) {
-            root.getSubTreeParent().setGroup(wrappedRoot);
-        }
-    }
-
     public GroupBoundaries createGroupBoundaries(CompilationFinalBitSet updateIndices, CompilationFinalBitSet clearIndices) {
-        GroupBoundaries staticInstance = GroupBoundaries.getStaticInstance(updateIndices, clearIndices);
-        if (staticInstance != null) {
-            return staticInstance;
+        if (updateIndices.isEmpty() && clearIndices.isEmpty()) {
+            return GroupBoundaries.getEmptyInstance();
         }
         GroupBoundaries lookup = new GroupBoundaries(updateIndices, clearIndices);
         if (groupBoundariesDeduplicationMap.containsKey(lookup)) {
@@ -603,23 +588,5 @@ public class RegexAST implements StateIndex<RegexASTNode>, JsonConvertible {
                         Json.prop("endsWithDollar", root.endsWithDollar()),
                         Json.prop("reachableDollars", reachableDollars),
                         Json.prop("properties", properties));
-    }
-
-    @TruffleBoundary
-    public static JsonArray sourceSectionsToJson(List<SourceSection> sourceSections) {
-        if (sourceSections == null) {
-            return Json.array();
-        }
-        return sourceSectionsToJson(sourceSections.stream());
-    }
-
-    @TruffleBoundary
-    public static JsonArray sourceSectionsToJson(Stream<SourceSection> sourceSections) {
-        if (sourceSections == null) {
-            return Json.array();
-        }
-        return Json.array(sourceSections.map(x -> Json.obj(
-                        Json.prop("start", x.getCharIndex()),
-                        Json.prop("end", x.getCharEndIndex()))));
     }
 }

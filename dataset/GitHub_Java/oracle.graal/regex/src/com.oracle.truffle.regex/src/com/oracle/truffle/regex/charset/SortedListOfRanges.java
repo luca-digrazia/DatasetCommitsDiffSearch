@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -111,22 +111,6 @@ public interface SortedListOfRanges extends CharacterSet {
             return 1;
         }
         return (getLo(0) == getMinValue() ? 0 : 1) + size() - (getHi(size() - 1) == getMaxValue() ? 1 : 0);
-    }
-
-    /**
-     * Returns the smallest value contained in this set. Must not be called on empty sets.
-     */
-    default int getMin() {
-        assert !isEmpty();
-        return getLo(0);
-    }
-
-    /**
-     * Returns the largest value contained in this set. Must not be called on empty sets.
-     */
-    default int getMax() {
-        assert !isEmpty();
-        return getHi(size() - 1);
     }
 
     /**
@@ -326,7 +310,7 @@ public interface SortedListOfRanges extends CharacterSet {
     }
 
     /**
-     * Returns {@code true} if a given binary search result is equal to the range in list {@code o}
+     * Returns {@code true} if a given binary search result is equals to the range in list {@code o}
      * at index {@code ib}.
      *
      * @param searchResult the result of a call to {@link #binarySearch(int)} with

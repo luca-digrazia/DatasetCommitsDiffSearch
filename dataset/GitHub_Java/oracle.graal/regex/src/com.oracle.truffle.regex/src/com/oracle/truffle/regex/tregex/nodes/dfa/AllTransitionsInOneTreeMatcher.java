@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,181 +40,84 @@
  */
 package com.oracle.truffle.regex.tregex.nodes.dfa;
 
+import static com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.regex.charset.CompressedCodePointSet;
 import com.oracle.truffle.regex.charset.Constants;
-import com.oracle.truffle.regex.util.BitSets;
 
 /**
  * This class provides an alternative way of calculating the next transition - instead of checking
  * all transitions in sequential manner, all ranges of all transitions are merged into one sorted
  * array, which is then searched in tree-recursive fashion.
- *
- * @see CompressedCodePointSet
  */
 public final class AllTransitionsInOneTreeMatcher {
 
-    /**
-     * Data structure for optimized matching of multiple ranges in one lower byte range.
-     *
-     * @see CompressedCodePointSet
-     */
-    public static final class AllTransitionsInOneTreeLeafMatcher {
-
-        @CompilationFinal(dimensions = 2) private final long[][] bitSets;
-        @CompilationFinal(dimensions = 1) private final short[] successors;
-        @CompilationFinal(dimensions = 1) private final int[] ranges;
-
-        public AllTransitionsInOneTreeLeafMatcher(long[][] bitSets, short[] successors, int[] ranges) {
-            assert successors.length == bitSets.length + ranges.length + 1;
-            this.bitSets = bitSets;
-            this.successors = successors;
-            this.ranges = ranges;
-        }
-
-        @Override
-        @TruffleBoundary
-        public String toString() {
-            StringBuilder sb = new StringBuilder("ranges: ").append(rangesToString(ranges)).append("\nbitsets:\n");
-            for (int i = 0; i < bitSets.length; i++) {
-                sb.append(BitSets.toString(bitSets[i])).append("\n");
-            }
-            return sb.toString();
-        }
-    }
-
-    @CompilationFinal(dimensions = 1) private final int[] ranges;
-    @CompilationFinal(dimensions = 1) private final short[] successors;
-    @CompilationFinal(dimensions = 1) private final AllTransitionsInOneTreeLeafMatcher[] leafMatchers;
+    @CompilationFinal(dimensions = 1) private final char[] sortedRanges;
+    @CompilationFinal(dimensions = 1) private final short[] rangeTreeSuccessors;
 
     /**
      * Constructs a new {@link AllTransitionsInOneTreeMatcher}.
      *
-     * @param ranges a sorted list of adjacent character ranges, in the following format: Every
-     *            character in the array simultaneously represents the inclusive lower bound of a
-     *            range and the exclusive upper bound of a range. The algorithm adds an implicit
-     *            zero at the begin and an implicit {@link Constants#MAX_CODE_POINT} + 1 at the end
-     *            of the array. An array representing the ranges
-     *            {@code [0x00-0x10][0x10-0xff][0xff-0x2000][0x2000-0x10ffff]} (represented with
+     * @param sortedRanges a sorted list of adjacent character ranges, in the following format:
+     *            Every character in the array simultaneously represents the inclusive lower bound
+     *            of a range and the exclusive upper bound of a range. The algorithm adds an
+     *            implicit zero at the begin and an implicit {@link Constants#MAX_CODE_POINT} + 1 at
+     *            the end of the array. An array representing the ranges
+     *            {@code [0x00-0x10][0x10-0xff][0xff-0x2000][0x2000-0x10000]} (represented with
      *            exclusive upper bound) would be: {@code [0x10, 0xff, 0x2000]}.
-     * @param successors the list of successors corresponding to every range in the sorted list of
-     *            ranges. Every entry in this array is an index of
-     *            {@link DFAStateNode#getSuccessors()}, or a negative index. A negative index can
-     *            mean one of two things: {@code -1} denotes "no successor", indices below
-     *            {@code -1} denote {@link AllTransitionsInOneTreeLeafMatcher leaf matchers}. These
-     *            specialized matchers are used when many ranges lie in the same lower byte range,
-     *            i.e. all bytes of their numerical values except the lowest one are equal (e.g.
-     *            {@code [0x2020-0x2021][0x2030-0x2031]...}).
+     * @param rangeTreeSuccessors the list of successors corresponding to every range in the sorted
+     *            list of ranges. every entry in this array is an index of
+     *            {@link DFAStateNode#getSuccessors()}.
      */
-    public AllTransitionsInOneTreeMatcher(int[] ranges, short[] successors, AllTransitionsInOneTreeLeafMatcher[] leafMatchers) {
-        assert successors.length == ranges.length + 1;
-        this.ranges = ranges;
-        this.successors = successors;
-        this.leafMatchers = leafMatchers;
+    public AllTransitionsInOneTreeMatcher(char[] sortedRanges, short[] rangeTreeSuccessors) {
+        assert sortedRanges.length > 0 : "This class should never be used for trivial transitions, use a list of CharMatchers instead!";
+        assert rangeTreeSuccessors.length == sortedRanges.length + 1;
+        this.sortedRanges = sortedRanges;
+        this.rangeTreeSuccessors = rangeTreeSuccessors;
     }
 
-    public int checkMatchTree(int c) {
+    public int checkMatchTree(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor, DFAStateNode stateNode, char c) {
         CompilerAsserts.partialEvaluationConstant(this);
-        return checkMatchTree(0, ranges.length - 1, c);
+        CompilerAsserts.partialEvaluationConstant(stateNode);
+        return checkMatchTree(locals, executor, stateNode, 0, sortedRanges.length - 1, c);
     }
 
-    /**
-     * Recursive binary-search through {@code ranges}.
-     */
-    private int checkMatchTree(int fromIndex, int toIndex, int c) {
+    private int checkMatchTree(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor, DFAStateNode stateNode, int fromIndex, int toIndex, char c) {
+        CompilerAsserts.partialEvaluationConstant(stateNode);
         CompilerAsserts.partialEvaluationConstant(fromIndex);
         CompilerAsserts.partialEvaluationConstant(toIndex);
         if (fromIndex > toIndex) {
-            final short successor = successors[fromIndex];
-            if (successor < -1) {
-                return checkMatchLeaf((successor * -1) - 2, c);
+            final short successor = rangeTreeSuccessors[fromIndex];
+            if (successor != DFAStateNode.FS_RESULT_NO_SUCCESSOR) {
+                stateNode.successorFound(locals, executor, successor);
             }
             return successor;
         }
         final int mid = (fromIndex + toIndex) >>> 1;
         CompilerAsserts.partialEvaluationConstant(mid);
-        if (c < ranges[mid]) {
-            return checkMatchTree(fromIndex, mid - 1, c);
+        if (c < sortedRanges[mid]) {
+            return checkMatchTree(locals, executor, stateNode, fromIndex, mid - 1, c);
         } else {
-            return checkMatchTree(mid + 1, toIndex, c);
-        }
-    }
-
-    /**
-     * The search has been narrowed down to a byte range, continue in a leaf matcher. Here, we first
-     * check all bit sets, and if none match, we check the remaining ranges that did not get
-     * converted to bit sets.
-     */
-    @ExplodeLoop
-    private int checkMatchLeaf(int iLeaf, int c) {
-        CompilerAsserts.partialEvaluationConstant(iLeaf);
-        AllTransitionsInOneTreeLeafMatcher leafMatcher = leafMatchers[iLeaf];
-        int lowByte = BitSets.lowByte(c);
-        for (int i = 0; i < leafMatcher.bitSets.length; i++) {
-            CompilerAsserts.partialEvaluationConstant(i);
-            if (BitSets.get(leafMatcher.bitSets[i], lowByte)) {
-                final short successor = leafMatcher.successors[i];
-                CompilerAsserts.partialEvaluationConstant(successor);
-                return successor;
-            }
-        }
-        return checkMatchLeafSubTree(leafMatcher, 0, leafMatcher.ranges.length - 1, c);
-    }
-
-    /**
-     * Recursive binary-search through {@code ranges} of a {@link AllTransitionsInOneTreeLeafMatcher
-     * leaf matcher}.
-     */
-    private static int checkMatchLeafSubTree(AllTransitionsInOneTreeLeafMatcher leafMatcher, int fromIndex, int toIndex, int c) {
-        CompilerAsserts.partialEvaluationConstant(leafMatcher);
-        CompilerAsserts.partialEvaluationConstant(fromIndex);
-        CompilerAsserts.partialEvaluationConstant(toIndex);
-        if (fromIndex > toIndex) {
-            final short successor = leafMatcher.successors[leafMatcher.bitSets.length + fromIndex];
-            CompilerAsserts.partialEvaluationConstant(successor);
-            if (successor == -1) {
-                int lo = fromIndex == 0 ? 0 : leafMatcher.ranges[fromIndex - 1];
-                int hi = fromIndex == leafMatcher.ranges.length ? Character.MAX_CODE_POINT + 1 : leafMatcher.ranges[fromIndex];
-                CompilerAsserts.partialEvaluationConstant(lo);
-                CompilerAsserts.partialEvaluationConstant(hi);
-                // TODO: move bitset matches here. requires PE intrinsic.
-                return successor;
-            } else {
-                return successor;
-            }
-        }
-        final int mid = (fromIndex + toIndex) >>> 1;
-        CompilerAsserts.partialEvaluationConstant(mid);
-        if (c < leafMatcher.ranges[mid]) {
-            return checkMatchLeafSubTree(leafMatcher, fromIndex, mid - 1, c);
-        } else {
-            return checkMatchLeafSubTree(leafMatcher, mid + 1, toIndex, c);
+            return checkMatchTree(locals, executor, stateNode, mid + 1, toIndex, c);
         }
     }
 
     @TruffleBoundary
     @Override
     public String toString() {
-        return "AllTransitionsInOneTreeMatcher: " + rangesToString(ranges);
-    }
-
-    @TruffleBoundary
-    private static String rangesToString(int[] ranges) {
-        StringBuilder sb = new StringBuilder("[");
+        StringBuilder sb = new StringBuilder("AllTransitionsInOneTreeMatcher: [");
         boolean first = true;
-        for (int c : ranges) {
+        for (char c : sortedRanges) {
             if (first) {
                 first = false;
             } else {
                 sb.append(", ");
             }
             if (c > 0xff) {
-                sb.append(String.format("%04x", c));
+                sb.append(String.format("%04x", (int) c));
             } else {
-                sb.append(String.format("%02x", c));
+                sb.append(String.format("%02x", (int) c));
             }
         }
         sb.append("]");
