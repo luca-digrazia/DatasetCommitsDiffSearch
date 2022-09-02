@@ -317,7 +317,6 @@ public final class EspressoContext {
         return meta;
     }
 
-    @SuppressWarnings("try")
     private void spawnVM() {
         try (DebugCloseable spawn = SPAWN_VM.scope(timers)) {
 

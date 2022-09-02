@@ -26,104 +26,139 @@ package com.oracle.truffle.espresso.perf;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.espresso.meta.EspressoError;
 
-public abstract class DebugTimer {
-    static final boolean DEBUG_TIMER_ENABLED = true;
+public final class DebugTimer {
+    final String name;
+    private List<DebugTimer> children = null;
+    private final DebugTimer parent;
 
-    private static final List<DebugTimer> timers = new ArrayList<>();
-
-    protected final String name;
-
-    private DebugTimer(String name) {
+    private DebugTimer(String name, DebugTimer parent) {
         this.name = name;
+        this.parent = parent;
     }
 
     public static DebugTimer create(String name) {
-        if (DEBUG_TIMER_ENABLED) {
-            DebugTimer result = new Default(name);
-            timers.add(result);
-            return result;
-        } else {
-            return NoTimer.INSTANCE;
-        }
+        return create(name, null);
     }
 
-    public DebugCloseable scope() {
-        if (DebugTimer.DEBUG_TIMER_ENABLED) {
-            return new AutoTimer.Default(this);
-        } else {
-            return AutoTimer.NO_TIMER;
+    public static DebugTimer create(String name, DebugTimer parent) {
+        DebugTimer timer = new DebugTimer(name, parent);
+        if (parent != null) {
+            parent.registerChild(timer);
         }
+        return timer;
     }
 
-    public static void report(TruffleLogger logger) {
-        for (DebugTimer timer : timers) {
-            timer.doReport(logger);
-        }
+    public DebugCloseable scope(TimerCollection timers) {
+        return timers.scope(this);
     }
 
-    abstract void tick(long tick);
+    static DebugTimerImpl spawn() {
+        return new Default();
+    }
 
-    protected abstract void doReport(TruffleLogger logger);
+    private void registerChild(DebugTimer child) {
+        if (children == null) {
+            children = new ArrayList<>();
+        }
+        children.add(child);
+    }
 
-    private static final class Default extends DebugTimer {
+    List<DebugTimer> children() {
+        return children;
+    }
+
+    DebugTimer parent() {
+        return parent;
+    }
+
+    @Override
+    public int hashCode() {
+        return name.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        return obj instanceof DebugTimer && ((DebugTimer) obj).name.equals(name);
+    }
+
+    abstract static class DebugTimerImpl {
+        abstract void tick(long tick);
+
+        abstract void report(TruffleLogger logger, String name);
+
+        abstract void enter();
+    }
+
+    private static final class Default extends DebugTimerImpl {
         private final AtomicLong clock = new AtomicLong();
-
         private final AtomicLong counter = new AtomicLong();
-
-        Default(String name) {
-            super(name);
-        }
+        private final ThreadLocal<Boolean> entered = ThreadLocal.withInitial(new Supplier<Boolean>() {
+            @Override
+            public Boolean get() {
+                return false;
+            }
+        });
 
         @Override
         void tick(long tick) {
+            EspressoError.guarantee(entered.get(), "Not entered scope.");
             counter.getAndIncrement();
             clock.getAndAdd(tick);
+            entered.set(false);
         }
 
         @Override
-        protected void doReport(TruffleLogger logger) {
-            long count = counter.get();
-            long avg = (count == 0) ? 0 : (clock.get() / count);
-            logger.info(name + " avg: " + avg);
+        void report(TruffleLogger logger, String name) {
+            if (counter.get() == 0) {
+                logger.info(name + ": " + 0);
+            } else {
+                logger.info(name + " total : " + getAsMillis(total()) + " | avg : " + getAsMillis(avg()));
+            }
         }
 
+        @Override
+        void enter() {
+            // Ensure we are not counting twice.
+            EspressoError.guarantee(!entered.get(), "Counting twice for timer.");
+            entered.set(true);
+        }
+
+        private long total() {
+            return clock.get();
+        }
+
+        private long avg() {
+            return (counter.get() == 0) ? 0L : (total() / counter.get());
+        }
+
+        private static double getAsMillis(long value) {
+            return (value / 1_000L) / 1_000d;
+        }
     }
 
-    private static final class NoTimer extends DebugTimer {
-
-        private static final NoTimer INSTANCE = new NoTimer();
-
-        NoTimer() {
-            super(null);
-        }
-
-        @Override
-        void tick(long tick) {
-        }
-
-        @Override
-        protected void doReport(TruffleLogger logger) {
-        }
-
-    }
-
-    public abstract static class AutoTimer implements DebugCloseable {
-        private static final AutoTimer NO_TIMER = new NoTimer();
+    abstract static class AutoTimer implements DebugCloseable {
+        static final AutoTimer NO_TIMER = new NoTimer();
 
         private AutoTimer() {
+        }
+
+        static DebugCloseable scope(DebugTimerImpl impl) {
+            return new Default(impl);
         }
 
         @Override
         public abstract void close();
 
         private static final class Default extends AutoTimer {
-            private final DebugTimer timer;
+            private final DebugTimerImpl timer;
             private final long tick;
 
-            private Default(DebugTimer timer) {
+            private Default(DebugTimerImpl timer) {
                 this.timer = timer;
                 this.tick = System.nanoTime();
             }
