@@ -107,7 +107,7 @@ abstract class IntGetFieldNode extends AbstractGetFieldNode {
 
     @Specialization(guards = "receiver.isEspressoObject()")
     int doEspresso(StaticObject receiver) {
-        return field.getIntField(receiver);
+        return receiver.getIntField(field);
     }
 
     @Specialization(guards = {"receiver.isForeignObject()", "isValueField(context)"})
@@ -159,7 +159,7 @@ abstract class BooleanGetFieldNode extends AbstractGetFieldNode {
 
     @Specialization(guards = "receiver.isEspressoObject()")
     boolean doEspresso(StaticObject receiver) {
-        return field.getBooleanField(receiver);
+        return receiver.getBooleanField(field);
     }
 
     @Specialization(guards = {"receiver.isForeignObject()", "isValueField(context)"})
@@ -211,7 +211,7 @@ abstract class CharGetFieldNode extends AbstractGetFieldNode {
 
     @Specialization(guards = "receiver.isEspressoObject()")
     char doEspresso(StaticObject receiver) {
-        return field.getCharField(receiver);
+        return receiver.getCharField(field);
     }
 
     @Specialization(guards = {"receiver.isForeignObject()", "isValueField(context)"})
@@ -268,7 +268,7 @@ abstract class ShortGetFieldNode extends AbstractGetFieldNode {
 
     @Specialization(guards = "receiver.isEspressoObject()")
     short doEspresso(StaticObject receiver) {
-        return field.getShortField(receiver);
+        return receiver.getShortField(field);
     }
 
     @Specialization(guards = {"receiver.isForeignObject()", "isValueField(context)"})
@@ -320,7 +320,7 @@ abstract class ByteGetFieldNode extends AbstractGetFieldNode {
 
     @Specialization(guards = "receiver.isEspressoObject()")
     byte doEspresso(StaticObject receiver) {
-        return field.getByteField(receiver);
+        return receiver.getByteField(field);
     }
 
     @Specialization(guards = {"receiver.isForeignObject()", "isValueField(context)"})
@@ -372,7 +372,7 @@ abstract class LongGetFieldNode extends AbstractGetFieldNode {
 
     @Specialization(guards = "receiver.isEspressoObject()")
     long doEspresso(StaticObject receiver) {
-        return field.getLongField(receiver);
+        return receiver.getLongField(field);
     }
 
     @Specialization(guards = {"receiver.isForeignObject()", "isValueField(context)"})
@@ -424,7 +424,7 @@ abstract class FloatGetFieldNode extends AbstractGetFieldNode {
 
     @Specialization(guards = "receiver.isEspressoObject()")
     float doEspresso(StaticObject receiver) {
-        return field.getFloatField(receiver);
+        return receiver.getFloatField(field);
     }
 
     @Specialization(guards = {"receiver.isForeignObject()", "isValueField(context)"})
@@ -476,7 +476,7 @@ abstract class DoubleGetFieldNode extends AbstractGetFieldNode {
 
     @Specialization(guards = "receiver.isEspressoObject()")
     double doEspresso(StaticObject receiver) {
-        return field.getDoubleField(receiver);
+        return receiver.getDoubleField(field);
     }
 
     @Specialization(guards = {"receiver.isForeignObject()", "isValueField(context)"})
@@ -531,7 +531,7 @@ abstract class ObjectGetFieldNode extends AbstractGetFieldNode {
 
     @Specialization(guards = "receiver.isEspressoObject()")
     StaticObject doEspresso(StaticObject receiver) {
-        return field.getObjectField(receiver);
+        return receiver.getObjectField(field);
     }
 
     @Specialization(guards = "receiver.isForeignObject()", limit = "CACHED_LIBRARY_LIMIT")
