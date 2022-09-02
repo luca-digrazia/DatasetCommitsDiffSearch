@@ -62,10 +62,7 @@ public abstract class LLVMWriteGlobalVariableStorageNode extends LLVMNode {
     void doWrite(LLVMPointer value,
                     @CachedContext(LLVMLanguage.class) LLVMContext context,
                     @Cached WriteDynamicObjectHelper writeHelper) {
-        DynamicObject global = context.getGlobalStorage();
-        synchronized (global) {
-            writeHelper.execute(global, descriptor, value);
-        }
+        writeHelper.execute(context.getGlobalStorage(), descriptor, value);
     }
 
     abstract static class WriteDynamicObjectHelper extends LLVMNode {
@@ -93,8 +90,9 @@ public abstract class LLVMWriteGlobalVariableStorageNode extends LLVMNode {
                         @Cached("getLocationOrNull(cachedShape.getProperty(descriptor))") Location loc) {
             CompilerAsserts.partialEvaluationConstant(descriptor);
             try {
-                loc.set(object, value);
-
+                synchronized (loc) {
+                    loc.set(object, value);
+                }
             } catch (IncompatibleLocationException | FinalLocationException e) {
                 CompilerDirectives.transferToInterpreter();
                 // cannot happen due to guard
@@ -119,11 +117,12 @@ public abstract class LLVMWriteGlobalVariableStorageNode extends LLVMNode {
                         @Cached("getLocationOrNull(cachedShape.getProperty(descriptor))") Location loc,
                         @Cached("cachedShape.defineProperty(descriptor, value, 0)") Shape newShape,
                         @Cached("newShape.getValidAssumption()") Assumption newLayoutAssumption,
-                        @Cached("getLocationO" +
-                                        "rNull(newShape.getProperty(descriptor))") Location newLoc) {
+                        @Cached("getLocationOrNull(newShape.getProperty(descriptor))") Location newLoc) {
             CompilerAsserts.partialEvaluationConstant(descriptor);
             try {
-                newLoc.set(object, value, cachedShape, newShape);
+                synchronized (newLoc) {
+                    newLoc.set(object, value, cachedShape, newShape);
+                }
             } catch (IncompatibleLocationException e) {
                 CompilerDirectives.transferToInterpreter();
                 // cannot happen due to guard
@@ -136,7 +135,9 @@ public abstract class LLVMWriteGlobalVariableStorageNode extends LLVMNode {
                         "object.getShape().isValid()"
         }, replaces = {"doDirect", "defineDirect"})
         protected static void doIndirect(DynamicObject object, LLVMGlobal descriptor, LLVMPointer value) {
-            object.define(descriptor, value);
+            synchronized (object) {
+                object.define(descriptor, value);
+            }
         }
 
         @Specialization(guards = "!object.getShape().isValid()")
