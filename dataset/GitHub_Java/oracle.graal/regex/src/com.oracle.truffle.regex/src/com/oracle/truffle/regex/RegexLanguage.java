@@ -24,8 +24,6 @@
  */
 package com.oracle.truffle.regex;
 
-import java.util.Collections;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.Scope;
@@ -34,7 +32,9 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.regex.tregex.parser.RegexValidator;
+import com.oracle.truffle.regex.tregex.parser.RegexParser;
+
+import java.util.Collections;
 
 /**
  * Truffle Regular Expression Language
@@ -84,11 +84,11 @@ public final class RegexLanguage extends TruffleLanguage<RegexLanguage.RegexCont
     private final CallTarget getEngineBuilderCT = Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(engineBuilder));
 
     public static void validateRegex(String pattern, String flags) throws RegexSyntaxException {
-        RegexValidator.validate(new RegexSource(pattern, flags));
+        RegexParser.validate(new RegexSource(pattern, flags));
     }
 
     public static void validateRegex(RegexSource source) throws RegexSyntaxException {
-        RegexValidator.validate(source);
+        RegexParser.validate(source);
     }
 
     @Override
