@@ -33,7 +33,6 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -61,28 +60,28 @@ public abstract class InvokeEspressoNode extends Node {
     Object doCached(Method method, Object receiver, Object[] arguments,
                     @Cached("method") Method cachedMethod,
                     @Cached("createToEspresso(method.getParameterCount())") ToEspressoNode[] toEspressoNodes,
-                    @Cached(value = "createDirectCallNode(method.getCallTarget())") DirectCallNode directCallNode,
-                    @Cached BranchProfile badArityProfile)
+                    @Cached(value = "createDirectCallNode(method.getCallTarget())", allowUncached = true) DirectCallNode directCallNode)
                     throws ArityException, UnsupportedMessageException, UnsupportedTypeException {
 
         EspressoError.guarantee(method.isStatic() && receiver == null, "Espresso interop only supports static methods");
 
         int expectedArity = cachedMethod.getParameterCount();
         if (arguments.length != expectedArity) {
-            badArityProfile.enter();
             throw ArityException.create(expectedArity, arguments.length);
         }
 
         Klass[] parameterKlasses = method.resolveParameterKlasses();
 
-        Object[] convertedArguments = new Object[expectedArity];
-        for (int i = 0; i < expectedArity; i++) {
+        int parameterCount = arguments.length;
+        Object[] convertedArguments = new Object[parameterCount];
+        for (int i = 0; i < parameterCount; i++) {
             convertedArguments[i] = toEspressoNodes[i].execute(arguments[i], parameterKlasses[i]);
         }
 
         return directCallNode.call(/* static => no receiver */ convertedArguments);
     }
 
+    @ExplodeLoop
     @Specialization(replaces = "doCached")
     Object doGeneric(Method method, Object receiver, Object[] arguments,
                     @Cached ToEspressoNode toEspressoNode,
@@ -98,8 +97,9 @@ public abstract class InvokeEspressoNode extends Node {
 
         Klass[] parameterKlasses = method.resolveParameterKlasses();
 
-        Object[] convertedArguments = new Object[expectedArity];
-        for (int i = 0; i < expectedArity; i++) {
+        int parameterCount = arguments.length;
+        Object[] convertedArguments = new Object[parameterCount];
+        for (int i = 0; i < parameterCount; i++) {
             convertedArguments[i] = toEspressoNode.execute(arguments[i], parameterKlasses[i]);
         }
 
