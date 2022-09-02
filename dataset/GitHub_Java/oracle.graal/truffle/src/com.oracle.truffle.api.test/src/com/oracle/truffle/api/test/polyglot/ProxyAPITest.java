@@ -73,7 +73,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.test.polyglot.ValueAssert.Trait;
-import org.graalvm.polyglot.HostAccess;
 
 /**
  * Testing the behavior of proxies API and proxy interfaces.
@@ -84,7 +83,7 @@ public class ProxyAPITest {
 
     @Before
     public void setUp() {
-        context = Context.newBuilder().allowHostAccess(HostAccess.PUBLIC).build();
+        context = Context.create();
     }
 
     @After
