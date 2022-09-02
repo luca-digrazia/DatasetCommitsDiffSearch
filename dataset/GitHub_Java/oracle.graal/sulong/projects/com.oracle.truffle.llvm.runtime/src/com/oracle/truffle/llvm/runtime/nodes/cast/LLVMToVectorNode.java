@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,12 +29,16 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.cast;
 
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMToNativeNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
@@ -42,6 +46,7 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
 import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
+import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
 
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 @NodeField(name = "vectorLength", type = int.class)
@@ -430,6 +435,18 @@ public abstract class LLVMToVectorNode extends LLVMExpressionNode {
             final long[] vector = new long[getVectorLength()];
             for (int i = 0; i < getVectorLength(); i++) {
                 vector[i] = (long) from.getValue(i);
+            }
+            return LLVMI64Vector.create(vector);
+        }
+
+        @Specialization
+        @ExplodeLoop
+        protected LLVMI64Vector doPointer(LLVMPointerVector from,
+                        @Cached LLVMToNativeNode toNativeNode) {
+            assert from.getLength() == getVectorLength();
+            final long[] vector = new long[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                vector[i] = toNativeNode.executeWithTarget(from.getValue(i)).asNative();
             }
             return LLVMI64Vector.create(vector);
         }
@@ -1189,6 +1206,20 @@ public abstract class LLVMToVectorNode extends LLVMExpressionNode {
                 vector[i] = Double.doubleToRawLongBits(from.getValue(i));
             }
             return LLVMI64Vector.create(vector);
+        }
+    }
+
+    public abstract static class LLVMBitcastToPointerVectorNode extends LLVMToVectorNode {
+
+        @Specialization
+        @ExplodeLoop
+        protected LLVMPointerVector doI64Vector(LLVMI64Vector from) {
+            assert from.getLength() == getVectorLength();
+            LLVMPointer[] vector = new LLVMPointer[getVectorLength()];
+            for (int i = 0; i < getVectorLength(); i++) {
+                vector[i] = LLVMNativePointer.create(from.getValue(i));
+            }
+            return LLVMPointerVector.create(vector);
         }
     }
 
