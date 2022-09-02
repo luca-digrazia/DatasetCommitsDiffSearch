@@ -32,7 +32,6 @@ import java.util.List;
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.ReplaceObserver;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -45,7 +44,6 @@ import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.api.utilities.NeverValidAssumption;
 
 public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> implements ReplaceObserver {
@@ -297,7 +295,6 @@ public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> imple
         int currentBlockIndex = 0;
         int totalCount = 0;
         int[] blockRanges = null;
-        int[] blockSizes = null;
         for (int i = 0; i < array.length; i++) {
             Object child = array[i];
             if (child != null) {
@@ -312,12 +309,9 @@ public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> imple
                 } else {
                     if (blockRanges == null) {
                         blockRanges = new int[8];
-                        blockSizes = new int[8];
                     } else if (currentBlockIndex >= blockRanges.length) {
                         blockRanges = Arrays.copyOf(blockRanges, blockRanges.length * 2);
-                        blockSizes = Arrays.copyOf(blockSizes, blockSizes.length * 2);
                     }
-                    blockSizes[currentBlockIndex] = currentBlockSize;
                     blockRanges[currentBlockIndex++] = i;
                     currentBlockSize = childCount;
                 }
@@ -325,7 +319,6 @@ public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> imple
         }
 
         if (blockRanges != null) {
-            blockSizes[currentBlockIndex] = currentBlockSize;
             /*
              * parent blocks should not count partial child blocks. they can hardly do much better.
              */
@@ -333,7 +326,7 @@ public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> imple
 
             // trim block ranges
             blockRanges = blockRanges.length != currentBlockIndex ? Arrays.copyOf(blockRanges, currentBlockIndex) : blockRanges;
-            return new PartialBlocks<>(rootCompilation, currentBlock, blockRanges, blockSizes, visitor.blockIndex++);
+            return new PartialBlocks<>(rootCompilation, currentBlock, blockRanges, visitor.blockIndex++);
         }
         return null;
     }
@@ -462,7 +455,6 @@ public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> imple
         private final int startIndex;
         private final int endIndex;
         private final int blockIndex;
-        private SourceSection cachedSourceSection;
 
         PartialBlockRootNode(FrameDescriptor descriptor, OptimizedBlockNode<T> block, int startIndex, int endIndex, int blockIndex) {
             super(null, descriptor);
@@ -486,26 +478,6 @@ public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> imple
         @Override
         public boolean isInternal() {
             return true;
-        }
-
-        @Override
-        @TruffleBoundary
-        public SourceSection getSourceSection() {
-            SourceSection section = this.cachedSourceSection;
-            if (section == null) {
-                T[] elements = block.getElements();
-                SourceSection startSection = elements[startIndex].getSourceSection();
-                SourceSection endSection = elements[endIndex - 1].getSourceSection();
-                if (startSection != null && endSection != null && startSection.getSource().equals(endSection.getSource())) {
-                    section = startSection.getSource().createSection(startSection.getStartLine(), startSection.getStartColumn(), endSection.getEndLine(), endSection.getEndColumn());
-                } else if (startSection != null) {
-                    section = startSection;
-                } else {
-                    section = endSection;
-                }
-                this.cachedSourceSection = section;
-            }
-            return section;
         }
 
         @Override
@@ -581,7 +553,7 @@ public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> imple
         @CompilationFinal(dimensions = 1) final OptimizedCallTarget[] blockTargets;
         @CompilationFinal(dimensions = 1) final int[] blockRanges;
 
-        PartialBlocks(OptimizedCallTarget rootCompilation, OptimizedBlockNode<T> block, int[] blockRanges, int[] blockSizes, int blockIndex) {
+        PartialBlocks(OptimizedCallTarget rootCompilation, OptimizedBlockNode<T> block, int[] blockRanges, int blockIndex) {
             assert blockRanges.length > 0;
             this.block = block;
             this.blockRanges = blockRanges;
@@ -601,12 +573,7 @@ public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> imple
                 } else {
                     endIndex = block.getElements().length;
                 }
-
-                PartialBlockRootNode<T> partialRootNode = new PartialBlockRootNode<>(new FrameDescriptor(), block, startIndex, endIndex, blockIndex);
-                runtime.getTvmci().applyVMObject(rootNode, partialRootNode);
-
-                targets[i] = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(partialRootNode);
-                targets[i].setNonTrivialNodeCount(blockSizes[i]);
+                targets[i] = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new PartialBlockRootNode<>(new FrameDescriptor(), block, startIndex, endIndex, blockIndex));
                 // we know the parameter types for block compilations. No need to check, lets cast
                 // them unsafely.
                 targets[i].initializeArgumentTypes(new Class<?>[]{materializedFrameClass, Integer.class});
