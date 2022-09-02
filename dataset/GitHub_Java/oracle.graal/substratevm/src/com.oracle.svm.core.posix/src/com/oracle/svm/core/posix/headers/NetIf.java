@@ -46,9 +46,6 @@ import org.graalvm.word.PointerBase;
 public class NetIf {
 
     @CConstant
-    public static native int IFF_POINTOPOINT();
-
-    @CConstant
     public static native int IFF_UP();
 
     @CConstant

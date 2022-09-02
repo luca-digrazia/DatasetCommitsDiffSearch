@@ -126,9 +126,6 @@ class PosixJavaNetSubstitutionsFeature implements Feature {
             JNIRuntimeAccess.register(access.findClassByName("java.lang.Boolean").getDeclaredMethod("getBoolean", String.class));
 
             RuntimeReflection.register(access.findClassByName("java.net.InetAddressImpl"));
-            RuntimeReflection.register(access.findClassByName("[Ljava.net.NetworkInterface;"));
-            RuntimeReflection.register(access.findClassByName("[Ljava.net.InterfaceAddress;"));
-
             RuntimeReflection.register(access.findClassByName("java.net.Inet4AddressImpl"));
             RuntimeReflection.register(access.findClassByName("java.net.Inet6AddressImpl"));
             RuntimeReflection.registerForReflectiveInstantiation(access.findClassByName("java.net.Inet4AddressImpl"));
@@ -4793,6 +4790,21 @@ final class Target_java_net_NetworkInterface {
     private static boolean isLoopback0(String name, int index) {
         int ret = JavaNetNetworkInterface.getFlags0(name);
         return ((ret & NetIf.IFF_LOOPBACK()) != 0) ? true : false;
+    }
+
+
+    // 463   /*
+    // 464    * Class:     java_net_NetworkInterface
+    // 465    * Method:    isUp0
+    // 466    * Signature: (Ljava/lang/String;I)Z
+    // 467    */
+    @Substitute
+    @SuppressWarnings({"unused"})
+    private static boolean isUp0(String name, int ind) throws SocketException {
+        //    471    int ret = getFlags0(env, name);
+        int ret = JavaNetNetworkInterface.getFlags0(name);
+        //    472    return ((ret & IFF_UP) && (ret & IFF_RUNNING)) ? JNI_TRUE :  JNI_FALSE;
+        return (((ret & NetIf.IFF_UP()) != 0) && (ret & NetIf.IFF_RUNNING()) != 0);
     }
 
     /*
