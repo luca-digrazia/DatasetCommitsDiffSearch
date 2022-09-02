@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -138,7 +138,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                     context.eval(source);
                 }
             } catch (PolyglotException e) {
-                validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
+                validateThrown(testCase.data(), WasmCaseData.ErrorPhase.Parsing, e);
                 return;
             }
 
@@ -188,11 +188,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 } catch (PolyglotException e) {
                     // We cannot label the tests with polyglot errors, because they might
                     // semantically be return values of the test.
-                    if (testCase.data().expectedErrorTime() == WasmCaseData.ErrorType.Validation) {
-                        validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
-                        return;
-                    }
-                    validateThrown(testCase.data(), WasmCaseData.ErrorType.Runtime, e);
+                    validateThrown(testCase.data(), WasmCaseData.ErrorPhase.Running, e);
                 } catch (Throwable t) {
                     final RuntimeException e = new RuntimeException("Error during test phase '" + phaseLabel + "'", t);
                     e.setStackTrace(new StackTraceElement[0]);
@@ -303,10 +299,9 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         }
     }
 
-    private static void validateThrown(WasmCaseData data, WasmCaseData.ErrorType phase, PolyglotException e) throws PolyglotException {
-        if (data.expectedErrorMessage() == null) {
+    private static void validateThrown(WasmCaseData data, WasmCaseData.ErrorPhase phase, PolyglotException e) throws PolyglotException {
+        if (data.expectedErrorMessage() == null)
             throw e;
-        }
         Assert.assertEquals("Unexpected error message.", data.expectedErrorMessage(), e.getMessage());
         Assert.assertEquals("Unexpected error phase (should not have been thrown during the running phase).", data.expectedErrorTime(), phase);
     }
