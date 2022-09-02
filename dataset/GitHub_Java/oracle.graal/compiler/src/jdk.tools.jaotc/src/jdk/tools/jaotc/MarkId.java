@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,6 +25,7 @@
 
 package jdk.tools.jaotc;
 
+import java.util.HashMap;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
 
 /**
@@ -35,6 +38,7 @@ enum MarkId {
     OSR_ENTRY("CodeInstaller::OSR_ENTRY"),
     EXCEPTION_HANDLER_ENTRY("CodeInstaller::EXCEPTION_HANDLER_ENTRY"),
     DEOPT_HANDLER_ENTRY("CodeInstaller::DEOPT_HANDLER_ENTRY"),
+    FRAME_COMPLETE("CodeInstaller::FRAME_COMPLETE"),
     INVOKEINTERFACE("CodeInstaller::INVOKEINTERFACE"),
     INVOKEVIRTUAL("CodeInstaller::INVOKEVIRTUAL"),
     INVOKESTATIC("CodeInstaller::INVOKESTATIC"),
@@ -54,17 +58,31 @@ enum MarkId {
     INLINE_CONTIGUOUS_ALLOCATION_SUPPORTED("CodeInstaller::INLINE_CONTIGUOUS_ALLOCATION_SUPPORTED");
 
     private final int value;
+    private static HashMap<Integer, MarkId> lookup = new HashMap<>();
 
-    private MarkId(String name) {
-        this.value = (int) (long) HotSpotJVMCIRuntime.runtime().getConfigStore().getConstants().get(name);
+    static {
+        for (MarkId e : values()) {
+            if (e.value >= 0) {
+                assert !lookup.containsKey(e.value) : "No duplicates allowed";
+                lookup.put(e.value, e);
+            }
+        }
+    }
+
+    MarkId(String name) {
+        Object constant = HotSpotJVMCIRuntime.runtime().getConfigStore().getConstants().get(name);
+        if (constant != null) {
+            this.value = (int) (long) constant;
+        } else {
+            this.value = -1;
+        }
     }
 
     static MarkId getEnum(int value) {
-        for (MarkId e : values()) {
-            if (e.value == value) {
-                return e;
-            }
+        MarkId e = lookup.get(value);
+        if (e == null) {
+            throw new InternalError("Unknown enum value: " + value);
         }
-        throw new InternalError("Unknown enum value: " + value);
+        return e;
     }
 }
