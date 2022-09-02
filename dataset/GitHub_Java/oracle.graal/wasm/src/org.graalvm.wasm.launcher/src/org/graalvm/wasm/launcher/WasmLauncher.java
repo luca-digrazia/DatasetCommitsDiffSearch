@@ -56,7 +56,6 @@ import java.util.Set;
 
 public class WasmLauncher extends AbstractLanguageLauncher {
     private File file;
-    private VersionAction versionAction = VersionAction.None;
 
     public static void main(String[] args) {
         new WasmLauncher().launch(args);
@@ -69,17 +68,7 @@ public class WasmLauncher extends AbstractLanguageLauncher {
         while (argIterator.hasNext()) {
             final String argument = argIterator.next();
             if (argument.startsWith("-")) {
-                switch (argument) {
-                    case "--show-version":
-                        versionAction = VersionAction.PrintAndContinue;
-                        break;
-                    case "--version":
-                        versionAction = VersionAction.PrintAndExit;
-                        break;
-                    default:
-                        unrecognizedArguments.add(argument);
-                        break;
-                }
+                unrecognizedArguments.add(argument);
             } else {
                 file = new File(argument);
                 if (argIterator.hasNext()) {
@@ -91,25 +80,19 @@ public class WasmLauncher extends AbstractLanguageLauncher {
     }
 
     @Override
-    protected void validateArguments(Map<String, String> polyglotOptions) {
-        if (versionAction != VersionAction.PrintAndExit) {
-            if (file == null) {
-                throw abort("Must specify the binary name.");
-            }
-            if (!file.exists()) {
-                throw abort(String.format("WebAssembly binary '%s' does not exist.", file));
-            }
-        }
-    }
-
-    @Override
     protected void launch(Context.Builder contextBuilder) {
+        if (file == null) {
+            throw abort("Must specify the binary name.");
+        }
+        if (!file.exists()) {
+            throw abort(String.format("WebAssembly binary '%s' does not exist.", file));
+        }
+
         System.exit(execute(contextBuilder));
     }
 
     private int execute(Context.Builder contextBuilder) {
         try (Context context = contextBuilder.build()) {
-            runVersionAction(versionAction, context.getEngine());
             context.eval(Source.newBuilder(getLanguageId(), file).build());
             // Currently, the spec does not commit to a name for the entry points.
             // We speculate on the possible exported name.
