@@ -220,43 +220,24 @@ import static com.oracle.truffle.espresso.meta.JavaKind.Long;
 import static com.oracle.truffle.espresso.meta.JavaKind.Object;
 import static com.oracle.truffle.espresso.meta.JavaKind.Void;
 
-
-/**
- * Extremely light-weight java bytecode verifier. Performs only very basic verifications.
- *
- * In particular, it checks stack consistency (ie: checks that instructions do not pop an empty stack, or that they do not push further than maxStack)
- * This verifier also performs primitive type checks, where all references are considered to be of the Object class.
- *
- * The primary goal of this verifier is to detect class files that are blatantly ill-formed, and does not replace a complete bytecode verifier.
- */
 public class MethodVerifier {
-    private final BytecodeStream code;
     private final int maxStack;
+//    private final int maxLocals;
+//    private final int codeLength;
+    private final BytecodeStream code;
     private final ConstantPool pool;
     private final boolean[] verified;
 
-    /**
-     * Instanciates a MethodVerifier for the given method
-     *
-     * @param maxStack Maximum amount of operand on the stack during execution
-     * @param code Raw bytecode representation for the method to verify
-     * @param pool The constant pool to be used with this method.
-     */
-    public MethodVerifier(int maxStack, byte[] code, ConstantPool pool) {
-        this.code = new BytecodeStream(code);
+    public MethodVerifier(int maxStack/*, int maxLocals, int codeLength*/, byte[] code, ConstantPool pool) {
         this.maxStack = maxStack;
+//        this.maxLocals = maxLocals;
+//        this.codeLength = codeLength;
+        this.code = new BytecodeStream(code);
         this.pool = pool;
         this.verified = new boolean[code.length];
     }
 
-    /**
-     * Utility for ease of use in Espresso
-     *
-     * @param m The method obtained during parsing phase
-     * @param pool The constant pool of the declaring class
-     * @return true, or throws ClassFormatError or VerifyError.
-     */
-    static boolean verify(ParserMethod m, ConstantPool pool) {
+    public static boolean verify(ParserMethod m, ConstantPool pool) {
         CodeAttribute codeAttribute = (CodeAttribute)m.getAttribute(CodeAttribute.NAME);
         if (codeAttribute == null) {
             return true;
@@ -264,13 +245,7 @@ public class MethodVerifier {
         return new MethodVerifier(codeAttribute.getMaxStack(), codeAttribute.getCode(), pool).verify();
     }
 
-    /**
-     * Performs the verification for the method associated with this MethodVerifier.
-     *
-     * @return true or throws ClassFormatError or VerifyError
-     */
-    public synchronized boolean verify() {
-        clear();
+    private boolean verify() {
         int nextBCI = 0;
         Stack stack = new Stack(maxStack);
         while (!verified[nextBCI]) {
@@ -279,17 +254,11 @@ public class MethodVerifier {
         return true;
     }
 
-    private void clear() {
-        for (int i = 0; i<verified.length;i++) {
-            verified[i] = false;
-        }
-    }
-
     private boolean branch(int BCI, Stack stack) {
         if (verified[BCI]) {
             return true;
         }
-        // TODO(garcia) verify stack merging.
+
         Stack newStack = stack.copy();
         int nextBCI = BCI;
         while (!verified[nextBCI]) {
@@ -834,7 +803,7 @@ public class MethodVerifier {
 
         void dup() {
             if (isType2(stack[top-1])) {
-                throw new VerifyError("type 2 operand for dup.");
+                throw new ClassFormatException("type 2 operand for dup.");
             }
             stack[top] = stack[top-1];
             top++;
@@ -843,7 +812,7 @@ public class MethodVerifier {
         void pop() {
             JavaKind v1 = stack[top-1];
             if (isType2(v1)) {
-                throw new VerifyError("type 2 operand for pop.");
+                throw new ClassFormatException("type 2 operand for pop.");
             }
             top--;
         }
@@ -856,7 +825,7 @@ public class MethodVerifier {
             }
             JavaKind v2 = stack[top -2];
             if (isType2(v2)) {
-                throw new VerifyError("type 2 second operand for pop2.");
+                throw new ClassFormatException("type 2 second operand for pop2.");
             }
             top = top - 2;
         }
@@ -864,7 +833,7 @@ public class MethodVerifier {
         void dupx1() {
             JavaKind v1 = stack[top-1];
             if (isType2(v1) || isType2(stack[top-2])) {
-                throw new VerifyError("type 2 operand for dupx1.");
+                throw new ClassFormatException("type 2 operand for dupx1.");
             }
             System.arraycopy(stack, top-2, stack, top-1, 2);
             top++;
@@ -874,7 +843,7 @@ public class MethodVerifier {
         void dupx2() {
             JavaKind v1 = stack[top-1];
             if (isType2(v1)) {
-                throw new VerifyError("type 2 first operand for dupx2.");
+                throw new ClassFormatException("type 2 first operand for dupx2.");
             }
             JavaKind v2 = stack[top-2];
             if (isType2(v2)) {
@@ -883,7 +852,7 @@ public class MethodVerifier {
                 stack[top-3] = v1;
             } else {
                 if (isType2(stack[top -3])) {
-                    throw new VerifyError("type 2 third operand for dupx2.");
+                    throw new ClassFormatException("type 2 third operand for dupx2.");
                 }
                 System.arraycopy(stack, top-3, stack, top-2, 3);
                 top++;
@@ -898,7 +867,7 @@ public class MethodVerifier {
                 top++;
             } else {
                 if (isType2(stack[top-1])) {
-                    throw new VerifyError("type 2 second operand for dup2.");
+                    throw new ClassFormatException("type 2 second operand for dup2.");
                 }
                 System.arraycopy(stack, top -2, stack, top, 2);
                 top = top + 2;
@@ -909,7 +878,7 @@ public class MethodVerifier {
             JavaKind v1 = stack[top-1];
             JavaKind v2 = stack[top-2];
             if (isType2(v2)) {
-                throw new VerifyError("type 2 second operand for dup2x1");
+                throw new ClassFormatException("type 2 second operand for dup2x1");
             }
             if (isType2(v1)) {
                 System.arraycopy(stack, top-2, stack, top-1, 2);
@@ -918,7 +887,7 @@ public class MethodVerifier {
                 return;
             }
             if (isType2(stack[top-3])) {
-                throw new VerifyError("type 2 third operand for dup2x1.");
+                throw new ClassFormatException("type 2 third operand for dup2x1.");
             }
             System.arraycopy(stack, top-3, stack, top, 3);
             top = top + 2;
@@ -962,7 +931,7 @@ public class MethodVerifier {
                 top = top + 2;
                 return;
             }
-            throw new VerifyError("Seriously, what are you doing with dup2x2 ?");
+            throw new ClassFormatException("Seriously, what are you doing with dup2x2 ?");
 
         }
 
@@ -976,7 +945,7 @@ public class MethodVerifier {
                 stack[top - 2] = v1;
                 return;
             }
-            throw new VerifyError("Type 2 operand for SWAP");
+            throw new ClassFormatException("Type 2 operand for SWAP");
         }
 
         private boolean isType2(JavaKind k) {

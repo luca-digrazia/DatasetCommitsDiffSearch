@@ -499,7 +499,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
     @Override
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.MERGE_EXPLODE)
     public Object invokeNaked(VirtualFrame frame) {
-
         int curBCI = 0;
         int top = 0;
 
@@ -1334,7 +1333,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         NameAndTypeConstant specifier = pool.nameAndTypeAt(inDy.getNameAndTypeIndex());
 
         assert (bms != null);
-        // TODO(garcia) cache bootstrap method resolution
         // Bootstrap method resolution
         BootstrapMethodsAttribute.Entry bsEntry = bms.at(inDy.getBootstrapMethodAttrIndex());
 
@@ -1368,7 +1366,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         StaticObject methodType = signatureToMethodType(parsedInvokeSignature, declaringKlass, getMeta());
         StaticObject appendix = new StaticObject(meta.Object_array, new StaticObject[1]);
 
-        StaticObject memberName = (StaticObject) meta.linkCallSite.invokeDirect(
+        StaticObject memberName = (StaticObject) getMeta().linkCallSite.invokeDirect(
                         null,
                         declaringKlass.mirror(),
                         bootstrapmethodMethodHandle,
@@ -1378,7 +1376,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
         StaticObject unboxedAppendix = appendix.get(0);
 
-        // re-lock to check if someone did the job for us, since this was a heavy operation.
+        // re-lock to check if someone did the job for us.
         QuickNode quick;
         synchronized (this) {
             if (bs.currentBC(curBCI) == QUICK) {
@@ -1396,20 +1394,12 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         int pcount = Signatures.parameterCount(signature, false);
 
         StaticObject[] ptypes = new StaticObject[pcount];
-        try {
-            for (int i = 0; i < pcount; i++) {
-                Symbol<Type> paramType = Signatures.parameterType(signature, i);
-                ptypes[i] = meta.loadKlass(paramType, declaringKlass.getDefiningClassLoader()).mirror();
-            }
-        } catch (Throwable e) {
-            throw meta.throwEx(NoClassDefFoundError.class);
+        for (int i = 0; i < pcount; i++) {
+            Symbol<Type> paramType = Signatures.parameterType(signature, i);
+            ptypes[i] = meta.loadKlass(paramType, declaringKlass.getDefiningClassLoader()).mirror();
         }
-        StaticObject rtype;
-        try {
-            rtype = meta.loadKlass(rt, declaringKlass.getDefiningClassLoader()).mirror();
-        } catch (Throwable e) {
-            throw meta.throwEx(BootstrapMethodError.class);
-        }
+        StaticObject rtype = meta.loadKlass(rt, declaringKlass.getDefiningClassLoader()).mirror();
+
         return (StaticObject) meta.findMethodHandleType.invokeDirect(
                         null,
                         rtype, new StaticObject(meta.Class_Array, ptypes));
@@ -1457,7 +1447,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
     }
 
     private static StaticObject allocateInstance(Klass klass) {
-        // klass.safeInitialize();
+        klass.safeInitialize();
         return InterpreterToVM.newObject(klass);
     }
 
