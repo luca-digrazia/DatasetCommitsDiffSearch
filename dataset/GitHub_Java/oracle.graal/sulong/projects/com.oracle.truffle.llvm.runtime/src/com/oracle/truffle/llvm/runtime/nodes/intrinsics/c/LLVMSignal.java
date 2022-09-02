@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -64,7 +64,7 @@ import sun.misc.SignalHandler;
 public abstract class LLVMSignal extends LLVMExpressionNode {
 
     @Specialization
-    protected LLVMPointer doSignal(int signal, Object handler,
+    protected LLVMPointer doSignal(int signal, LLVMPointer handler,
                     @CachedContext(LLVMLanguage.class) LLVMContext context,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative) {
         return setSignalHandler(context, signal, toNative.executeWithTarget(handler));
@@ -76,12 +76,11 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
             return setSignalHandler(context, decodedSignal.signal(), function);
         } catch (NoSuchElementException e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            System.err.println(e.getMessage());
             return context.getSigErr();
         }
     }
 
-    private static Lock globalSignalHandlerLock = new ReentrantLock();
+    private static final Lock globalSignalHandlerLock = new ReentrantLock();
 
     private static final Map<Integer, LLVMSignalHandler> registeredSignals = new HashMap<>();
 
@@ -123,12 +122,12 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
     }
 
     /**
-     * Registers a signal handler using sun.misc.SignalHandler. Unfortunately, using signals in java
+     * Registers a signal handler using sun.misc.SignalHandler. Unfortunately, using signals in Java
      * leads to some problems which are not resolved in our implementation yet.
      *
-     * One of this issue is, that signals are executed in an asynchronous way, which means raise()
-     * exits before the signal was handled. Another Issue is that Java already registered some
-     * signal handlers, which therefore cannot be used in sulong.
+     * One of these issues is that signals are executed in an asynchronous way which means raise()
+     * exits before the signal was handled. Another issue is that Java already registers some signal
+     * handlers, which therefore cannot be used in Sulong.
      *
      * Therefore, our implementation does not comply with the ANSI C standard and could lead to
      * timing issues when calling multiple signals in a defined sequence, or when a program has to
@@ -153,10 +152,10 @@ public abstract class LLVMSignal extends LLVMExpressionNode {
 
             lock.lock();
             try {
-                if (function.equals(context.getSigDfl())) {
+                if (function.isSame(context.getSigDfl())) {
                     this.handler = function;
                     Signal.handle(signal, SignalHandler.SIG_DFL);
-                } else if (function.equals(context.getSigIgn())) {
+                } else if (function.isSame(context.getSigIgn())) {
                     this.handler = function;
                     Signal.handle(signal, SignalHandler.SIG_IGN);
                 } else {

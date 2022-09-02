@@ -186,11 +186,7 @@ public class Driver {
         }
     }
 
-    /**
-     * @param inputStream
-     * @param outputStream
-     * @param errorStream
-     */
+    @SuppressWarnings("unused")
     protected void processIO(InputStream inputStream, OutputStream outputStream, InputStream errorStream) {
     }
 
