@@ -41,14 +41,14 @@ import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.ValueProxyNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.phases.VerifyPhase;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public class VerifyGraphAddUsage extends VerifyPhase<CoreProviders> {
+public class VerifyGraphAddUsage extends VerifyPhase<PhaseContext> {
     private static final Method ADD_OR_UNIQUE;
     private static final Method CONSTRUCTOR_NEW_INSTANCE;
     private static final EconomicSet<Class<?>> ALLOWED_CLASSES = EconomicSet.create();
@@ -66,7 +66,7 @@ public class VerifyGraphAddUsage extends VerifyPhase<CoreProviders> {
     }
 
     @Override
-    protected void verify(StructuredGraph graph, CoreProviders context) {
+    protected void verify(StructuredGraph graph, PhaseContext context) {
         boolean allowed = false;
         for (Class<?> cls : ALLOWED_CLASSES) {
             ResolvedJavaType declaringClass = graph.method().getDeclaringClass();
@@ -87,7 +87,7 @@ public class VerifyGraphAddUsage extends VerifyPhase<CoreProviders> {
         }
     }
 
-    private void checkNonFactory(StructuredGraph graph, EconomicSet<Node> seen, CoreProviders context, ValueNode node) {
+    private void checkNonFactory(StructuredGraph graph, EconomicSet<Node> seen, PhaseContext context, ValueNode node) {
         if (seen.contains(node)) {
             return;
         }

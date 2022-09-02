@@ -32,10 +32,10 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.ObjectEqualsNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.UncheckedInterfaceProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.phases.VerifyPhase;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 
 import jdk.vm.ci.meta.JavaField;
 import jdk.vm.ci.meta.JavaKind;
@@ -51,7 +51,7 @@ import jdk.vm.ci.meta.Signature;
  * checks the correct usage of the given type. Equality checks with == or != (except null checks)
  * results in an {@link AssertionError}.
  */
-public class VerifyUsageWithEquals extends VerifyPhase<CoreProviders> {
+public class VerifyUsageWithEquals extends VerifyPhase<PhaseContext> {
 
     @Override
     public boolean checkContract() {
@@ -143,7 +143,7 @@ public class VerifyUsageWithEquals extends VerifyPhase<CoreProviders> {
     }
 
     @Override
-    protected void verify(StructuredGraph graph, CoreProviders context) {
+    protected void verify(StructuredGraph graph, PhaseContext context) {
         for (ObjectEqualsNode cn : graph.getNodes().filter(ObjectEqualsNode.class)) {
             // bail out if we compare an object of type klass with == or != (except null checks)
             ResolvedJavaMethod method = graph.method();

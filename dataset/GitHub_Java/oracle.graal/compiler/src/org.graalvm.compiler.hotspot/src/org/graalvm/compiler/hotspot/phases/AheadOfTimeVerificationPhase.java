@@ -53,12 +53,7 @@ public class AheadOfTimeVerificationPhase extends VerifyPhase<PhaseContext> {
     }
 
     public static boolean isIllegalObjectConstant(ConstantNode node) {
-        return isObject(node) &&
-                        !isNullReference(node) &&
-                        !isInternedString(node) &&
-                        !isDirectMethodHandle(node) &&
-                        !isBoundMethodHandle(node) &&
-                        !isVarHandle(node);
+        return isObject(node) && !isNullReference(node) && !isInternedString(node) && !isDirectMethodHandle(node) && !isBoundMethodHandle(node);
     }
 
     private static boolean isObject(ConstantNode node) {
@@ -81,14 +76,6 @@ public class AheadOfTimeVerificationPhase extends VerifyPhase<PhaseContext> {
             return false;
         }
         return StampTool.typeOrNull(node).getName().startsWith("Ljava/lang/invoke/BoundMethodHandle");
-    }
-
-    private static boolean isVarHandle(ConstantNode node) {
-        if (!isObject(node)) {
-            return false;
-        }
-        String name = StampTool.typeOrNull(node).getName();
-        return name.equals("Ljava/lang/invoke/VarHandle$AccessDescriptor;");
     }
 
     private static boolean isInternedString(ConstantNode node) {

@@ -31,8 +31,8 @@ import java.lang.annotation.Annotation;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.phases.VerifyPhase;
+import org.graalvm.compiler.phases.tiers.PhaseContext;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -40,7 +40,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 /**
  * Verifies a method is annotated with CallerSensitive iff it calls Reflection#getCallerClass().
  */
-public class VerifyCallerSensitiveMethods extends VerifyPhase<CoreProviders> {
+public class VerifyCallerSensitiveMethods extends VerifyPhase<PhaseContext> {
 
     Class<? extends Annotation> callerSensitiveClass;
     Class<?> reflectionClass;
@@ -67,7 +67,7 @@ public class VerifyCallerSensitiveMethods extends VerifyPhase<CoreProviders> {
     }
 
     @Override
-    protected void verify(StructuredGraph graph, CoreProviders context) {
+    protected void verify(StructuredGraph graph, PhaseContext context) {
         Invoke invoke = callsReflectionGetCallerClass(graph, context);
         Annotation annotation = graph.method().getAnnotation(callerSensitiveClass);
         if (invoke != null) {
@@ -81,7 +81,7 @@ public class VerifyCallerSensitiveMethods extends VerifyPhase<CoreProviders> {
         }
     }
 
-    private Invoke callsReflectionGetCallerClass(StructuredGraph graph, CoreProviders context) {
+    private Invoke callsReflectionGetCallerClass(StructuredGraph graph, PhaseContext context) {
         ResolvedJavaType reflectionType = context.getMetaAccess().lookupJavaType(reflectionClass);
         for (MethodCallTargetNode t : graph.getNodes(MethodCallTargetNode.TYPE)) {
             ResolvedJavaMethod callee = t.targetMethod();
