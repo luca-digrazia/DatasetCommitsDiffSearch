@@ -40,14 +40,12 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 
 import java.util.Arrays;
-import java.util.List;
 
 public final class ClassRedefinition {
 
     private enum RedefinitionSupport {
         METHOD_BODY,
         ADD_METHOD,
-        REMOVE_METHOD,
         ARBITRARY
     }
 
@@ -57,15 +55,15 @@ public final class ClassRedefinition {
         ADD_METHOD,
         SCHEMA_CHANGE,
         HIERARCHY_CHANGE,
-        REMOVE_METHOD,
+        DELETE_METHOD,
         CLASS_MODIFIERS_CHANGE,
         METHOD_MODIFIERS_CHANGE,
         CONSTANT_POOL_CHANGE
     }
 
-    private static final RedefinitionSupport REDEFINITION_SUPPORT = RedefinitionSupport.REMOVE_METHOD;
+    private static final RedefinitionSupport REDEFINITION_SUPPORT = RedefinitionSupport.METHOD_BODY;
 
-    public static int redefineClass(Klass klass, byte[] bytes, EspressoContext context, Ids<Object> ids, List<ObjectKlass> refreshSubClasses) {
+    public static int redefineClass(Klass klass, byte[] bytes, EspressoContext context, Ids<Object> ids) {
         try {
             ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), klass.getTypeAsString(), null, context);
             ClassChange classChange;
@@ -75,7 +73,6 @@ public final class ClassRedefinition {
                 ParserKlass oldParserKlass = objectKlass.getLinkedKlass().getParserKlass();
                 classChange = detectClassChanges(parserKlass, oldParserKlass, detectedChange);
             } else if (klass instanceof ArrayKlass) {
-                // array klass, should never happen
                 classChange = ClassChange.SCHEMA_CHANGE;
             } else {
                 // primitive klass, should never happen
@@ -84,40 +81,40 @@ public final class ClassRedefinition {
 
             switch (classChange) {
                 case METHOD_BODY_CHANGE:
-                    return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
+                    return redefineChangedMethodBodies(parserKlass, (ObjectKlass) klass, detectedChange, ids);
                 case ADD_METHOD:
                     if (isAddMethodSupported()) {
-                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
+                        return redefineAddMethod(parserKlass, klass, detectedChange);
                     } else {
                         return ErrorCodes.ADD_METHOD_NOT_IMPLEMENTED;
                     }
-                case REMOVE_METHOD:
-                    if (isRemoveMethodSupported()) {
-                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
-                    } else {
-                        return ErrorCodes.DELETE_METHOD_NOT_IMPLEMENTED;
-                    }
                 case SCHEMA_CHANGE:
                     if (isArbitraryChangesSupported()) {
-                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, klass, detectedChange);
                     } else {
                         return ErrorCodes.SCHEMA_CHANGE_NOT_IMPLEMENTED;
                     }
+                case DELETE_METHOD:
+                    if (isArbitraryChangesSupported()) {
+                        return redefineClass(parserKlass, klass, detectedChange);
+                    } else {
+                        return ErrorCodes.DELETE_METHOD_NOT_IMPLEMENTED;
+                    }
                 case CLASS_MODIFIERS_CHANGE:
                     if (isArbitraryChangesSupported()) {
-                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, klass, detectedChange);
                     } else {
                         return ErrorCodes.CLASS_MODIFIERS_CHANGE_NOT_IMPLEMENTED;
                     }
                 case METHOD_MODIFIERS_CHANGE:
                     if (isArbitraryChangesSupported()) {
-                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, klass, detectedChange);
                     } else {
                         return ErrorCodes.METHOD_MODIFIERS_CHANGE_NOT_IMPLEMENTED;
                     }
                 case HIERARCHY_CHANGE:
                     if (isArbitraryChangesSupported()) {
-                        return redefineClass(parserKlass, (ObjectKlass) klass, detectedChange, ids, refreshSubClasses);
+                        return redefineClass(parserKlass, klass, detectedChange);
                     } else {
                         return ErrorCodes.HIERARCHY_CHANGE_NOT_IMPLEMENTED;
                     }
@@ -136,11 +133,7 @@ public final class ClassRedefinition {
     }
 
     private static boolean isAddMethodSupported() {
-        return REDEFINITION_SUPPORT == RedefinitionSupport.ADD_METHOD || isRemoveMethodSupported() || isArbitraryChangesSupported();
-    }
-
-    private static boolean isRemoveMethodSupported() {
-        return REDEFINITION_SUPPORT == RedefinitionSupport.REMOVE_METHOD || isArbitraryChangesSupported();
+        return REDEFINITION_SUPPORT == RedefinitionSupport.ADD_METHOD || isArbitraryChangesSupported();
     }
 
     // detect all types of class changes, but return early when a change that require arbitrary
@@ -184,15 +177,11 @@ public final class ClassRedefinition {
         ParserMethod[] oldMethods = oldParserKlass.getMethods();
         ParserMethod[] newMethods = newParserKlass.getMethods();
 
-        if (ClassRedefinition.REDEFINITION_SUPPORT == RedefinitionSupport.METHOD_BODY) {
-            // we only need to hunt down method bodies changes then
-            // so return immediately when we see an added/removed method
-            if (oldMethods.length < newMethods.length) {
-                return ClassChange.ADD_METHOD;
-            }
-            if (oldMethods.length > newMethods.length) {
-                return ClassChange.REMOVE_METHOD;
-            }
+        if (oldMethods.length > newMethods.length) {
+            return ClassChange.DELETE_METHOD;
+        }
+        if (oldMethods.length < newMethods.length) {
+            return ClassChange.ADD_METHOD;
         }
 
         boolean constantPoolChanged = false;
@@ -203,7 +192,7 @@ public final class ClassRedefinition {
 
         for (int i = 0; i < oldMethods.length; i++) {
             ParserMethod oldMethod = oldMethods[i];
-            // verify that there is a new corresponding method
+            // verify that there is a new corresponding field
             boolean found = false;
             for (int j = 0; j < newMethods.length; j++) {
                 ParserMethod newMethod = newMethods[j];
@@ -231,31 +220,10 @@ public final class ClassRedefinition {
                 }
             }
             if (!found) {
-                collectedChanges.addRemovedMethod(oldMethod);
+                return ClassChange.DELETE_METHOD;
             }
         }
 
-        // find the added methods if any
-        if (oldMethods.length < newMethods.length) {
-            for (int i = 0; i < newMethods.length; i++) {
-                ParserMethod newMethod = newMethods[i];
-                boolean found = false;
-                for (int j = 0; j < oldMethods.length; j++) {
-                    ParserMethod oldMethod = oldMethods[j];
-                    if (isSameMethod(oldMethod, newMethod)) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    collectedChanges.addNewMethod(newMethod);
-                }
-            }
-            result = ClassChange.ADD_METHOD;
-        }
-        if (collectedChanges.getRemovedMethods().size() > 0) {
-            result = ClassChange.REMOVE_METHOD;
-        }
         return result;
     }
 
@@ -290,8 +258,10 @@ public final class ClassRedefinition {
     }
 
     private static ClassChange detectMethodChanges(ParserMethod oldMethod, ParserMethod newMethod) {
-        // check method attributes that would constitute a higher-level
-        // class redefinition than a method body change
+        if (oldMethod.getFlags() != newMethod.getFlags()) {
+            return ClassChange.METHOD_MODIFIERS_CHANGE;
+        }
+        // check method attributes
         if (checkAttribute(oldMethod, newMethod, Symbol.Name.RuntimeVisibleTypeAnnotations)) {
             return ClassChange.SCHEMA_CHANGE;
         }
@@ -416,15 +386,15 @@ public final class ClassRedefinition {
         return false;
     }
 
-    private static int redefineClass(ParserKlass parserKlass, ObjectKlass oldKlass, DetectedChange change, Ids<Object> ids, List<ObjectKlass> refreshSubClasses) {
-        List<ParserMethod> changedMethodBodies = change.getChangedMethodBodies();
+    private static int redefineChangedMethodBodies(ParserKlass parserKlass, ObjectKlass oldKlass, DetectedChange change, Ids<Object> ids) {
+        ParserMethod[] changedMethodBodies = change.getChangedMethodBodies();
 
         for (ParserMethod changedMethod : changedMethodBodies) {
             // find the old real method
             Method method = getDeclaredMethod(oldKlass, changedMethod);
             method.redefine(changedMethod, parserKlass, ids);
         }
-        oldKlass.redefineClass(parserKlass, change, refreshSubClasses, ids);
+        oldKlass.redefineClass(parserKlass);
         return 0;
     }
 
@@ -436,4 +406,15 @@ public final class ClassRedefinition {
         }
         return null;
     }
+
+    @SuppressWarnings("unused")
+    private static int redefineAddMethod(ParserKlass parserKlass, Klass oldKlass, DetectedChange change) {
+        return 0;
+    }
+
+    @SuppressWarnings("unused")
+    private static int redefineClass(ParserKlass parserKlass, Klass oldKlass, DetectedChange change) {
+        return 0;
+    }
+
 }
