@@ -43,21 +43,13 @@ public final class ClassForNameSupport {
         ImageSingletons.lookup(ClassForNameSupport.class).knownClasses.put(clazz.getName(), clazz);
     }
 
-    public static Class<?> forNameOrNull(String className, boolean initialize) {
+    public static Class<?> forName(String className, boolean initialize) throws ClassNotFoundException {
         Class<?> result = ImageSingletons.lookup(ClassForNameSupport.class).knownClasses.get(className);
         if (result == null) {
-            return null;
+            throw new ClassNotFoundException(className);
         }
         if (initialize) {
             DynamicHub.fromClass(result).ensureInitialized();
-        }
-        return result;
-    }
-
-    public static Class<?> forName(String className, boolean initialize) throws ClassNotFoundException {
-        Class<?> result = forNameOrNull(className, initialize);
-        if (result == null) {
-            throw new ClassNotFoundException(className);
         }
         return result;
     }
