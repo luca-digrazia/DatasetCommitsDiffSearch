@@ -44,15 +44,20 @@ import com.oracle.svm.core.util.VMError;
 public abstract class VMOperation {
     private final String name;
     private final SystemEffect systemEffect;
+    private final boolean allowJavaSynchronization;
 
-    protected VMOperation(String name, SystemEffect systemEffect) {
+    protected VMOperation(String name, SystemEffect systemEffect, boolean allowJavaSynchronization) {
         this.name = name;
         this.systemEffect = systemEffect;
+        this.allowJavaSynchronization = allowJavaSynchronization;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public final String getName() {
         return name;
+    }
+
+    public boolean isJavaSynchronizationAllowed() {
+        return allowJavaSynchronization;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -62,7 +67,7 @@ public abstract class VMOperation {
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public final boolean getCausesSafepoint() {
-        return SystemEffect.getCausesSafepoint(systemEffect);
+        return systemEffect == SystemEffect.SAFEPOINT;
     }
 
     protected final void execute(NativeVMOperationData data) {
@@ -84,7 +89,7 @@ public abstract class VMOperation {
         IsolateThread prevQueuingThread = control.getInProgress().getQueuingThread();
         IsolateThread prevExecutingThread = control.getInProgress().getExecutingThread();
 
-        control.setInProgress(this, getQueuingThread(data), CurrentIsolate.getCurrentThread(), true);
+        control.setInProgress(this, getQueuingThread(data), CurrentIsolate.getCurrentThread());
         try {
             trace.string("[Executing operation ").string(name);
             operate(data);
@@ -93,7 +98,7 @@ public abstract class VMOperation {
             trace.string("[VMOperation.execute caught: ").string(t.getClass().getName()).string("]").newline();
             throw VMError.shouldNotReachHere(t);
         } finally {
-            control.setInProgress(prevOperation, prevQueuingThread, prevExecutingThread, false);
+            control.setInProgress(prevOperation, prevQueuingThread, prevExecutingThread);
         }
     }
 
@@ -117,7 +122,7 @@ public abstract class VMOperation {
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    private static boolean isInProgress(OpInProgress inProgress) {
+    static boolean isInProgress(OpInProgress inProgress) {
         return inProgress.getExecutingThread() == CurrentIsolate.getCurrentThread();
     }
 
@@ -177,11 +182,6 @@ public abstract class VMOperation {
 
     public enum SystemEffect {
         NONE,
-        SAFEPOINT;
-
-        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-        public static boolean getCausesSafepoint(SystemEffect value) {
-            return value == SAFEPOINT;
-        }
+        SAFEPOINT
     }
 }
