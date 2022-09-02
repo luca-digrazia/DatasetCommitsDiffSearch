@@ -54,6 +54,7 @@ import static org.graalvm.word.WordFactory.nullPointer;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -77,6 +78,7 @@ import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.c.type.WordPointer;
+import org.graalvm.word.WordBase;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.c.function.CEntryPointOptions;
@@ -98,6 +100,7 @@ import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiEventCallbacks;
 import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiEventMode;
 import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiFrameInfo;
 import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiLocationFormat;
+import com.oracle.svm.util.SerializationChecksumCalculator;
 
 /**
  * Intercepts events of interest via breakpoints in Java code.
@@ -140,6 +143,9 @@ final class BreakpointInterceptor {
 
     /** Enables experimental support for instrumenting class lookups via {@code ClassLoader}. */
     private static boolean experimentalClassLoaderSupport = false;
+
+    /* Write checksums into serialization-config.json file */
+    private static boolean writeSerializationChecksums = false;
 
     /**
      * Locations in methods where explicit calls to {@code ClassLoader.loadClass} have been found.
@@ -920,6 +926,44 @@ final class BreakpointInterceptor {
         return true;
     }
 
+    static class CheckSumCalculator extends SerializationChecksumCalculator.JVMCIAgentCalculator {
+        private final JNIEnvironment jni;
+        private final Breakpoint bp;
+
+        CheckSumCalculator(JNIEnvironment jni, Breakpoint bp) {
+            this.jni = jni;
+            this.bp = bp;
+        }
+
+        @Override
+        protected WordBase getSuperClass(WordBase clazz) {
+            return jniFunctions().getGetSuperclass().invoke(jni, (JNIObjectHandle) clazz);
+        }
+
+        @Override
+        public Long calculateFromComputeDefaultSUID(WordBase clazz) {
+            JNIMethodId computeDefaultSUIDMId = agent.handles().getJavaIoObjectStreamClassComputeDefaultSUID(jni, bp.clazz);
+            JNIValue args = StackValue.get(1, JNIValue.class);
+            args.setObject((JNIObjectHandle) clazz);
+            return jniFunctions().getCallStaticLongMethodA().invoke(jni, bp.clazz, computeDefaultSUIDMId, args);
+        }
+
+        @Override
+        protected boolean isClassAbstract(WordBase clazz) {
+            CIntPointer modifiers = StackValue.get(CIntPointer.class);
+            if (jvmtiFunctions().GetClassModifiers().invoke(jvmtiEnv(), (JNIObjectHandle) clazz, modifiers) != JvmtiError.JVMTI_ERROR_NONE) {
+                return false;
+            }
+            // Checkstyle: allow reflection
+            return (modifiers.read() & java.lang.reflect.Modifier.ABSTRACT) != 0;
+        }
+
+        @Override
+        public String getClassName(WordBase clazz) {
+            return getClassNameOrNull(jni, (JNIObjectHandle) clazz);
+        }
+    }
+
     private static boolean objectStreamClassConstructor(JNIEnvironment jni, Breakpoint bp) {
         JNIObjectHandle serializeTargetClass = getObjectArgument(1);
         String serializeTargetClassName = getClassNameOrNull(jni, serializeTargetClass);
@@ -935,8 +979,22 @@ final class BreakpointInterceptor {
             return true;
         }
 
-        List<String> transitiveSerializeTargets = new ArrayList<>();
-        transitiveSerializeTargets.add(serializeTargetClassName);
+        String checksum = null;
+        CheckSumCalculator checkSumCalculator = null;
+        if (writeSerializationChecksums) {
+            checksum = "0";
+            if (validObjectStreamClassInstance) {
+                try {
+                    checkSumCalculator = new CheckSumCalculator(jni, bp);
+                    checksum = checkSumCalculator.calculateChecksum(getConsClassName(jni, bp.clazz, objectStreamClassInstance), serializeTargetClassName, serializeTargetClass);
+                } catch (NoSuchAlgorithmException e) {
+                    throw VMError.shouldNotReachHere("Building serialization checksum failed", e);
+                }
+            }
+        }
+
+        List<SerializationInfo> traceCandidates = new ArrayList<>();
+        traceCandidates.add(new SerializationInfo(serializeTargetClassName, checksum));
 
         /*
          * When the ObjectStreamClass instance is created for the given serializeTargetClass, some
@@ -961,13 +1019,22 @@ final class BreakpointInterceptor {
                         if (!jniFunctions().getIsSameObject().invoke(jni, oscInstanceInSlot, objectStreamClassInstance)) {
                             JNIObjectHandle oscClazz = callObjectMethod(jni, oscInstanceInSlot, javaIoObjectStreamClassForClassMId);
                             String oscClassName = getClassNameOrNull(jni, oscClazz);
-                            transitiveSerializeTargets.add(oscClassName);
+                            String calculatedChecksum = null;
+                            if (checkSumCalculator != null) {
+                                try {
+                                    calculatedChecksum = checkSumCalculator.calculateChecksum(getConsClassName(jni,
+                                                    bp.clazz, oscInstanceInSlot), oscClassName, oscClazz);
+                                } catch (NoSuchAlgorithmException e) {
+                                    throw VMError.shouldNotReachHere("Building serialization checksum failed", e);
+                                }
+                            }
+                            traceCandidates.add(new SerializationInfo(oscClassName, calculatedChecksum));
                         }
                     }
                 }
             }
         }
-        for (String className : transitiveSerializeTargets) {
+        for (SerializationInfo serializationInfo : traceCandidates) {
             if (traceWriter != null) {
                 traceWriter.traceCall("serialization",
                                 "ObjectStreamClass.<init>",
@@ -975,8 +1042,8 @@ final class BreakpointInterceptor {
                                 null,
                                 null,
                                 validObjectStreamClassInstance,
-                                /*- String serializationTargetClass, String customTargetConstructorClass */
-                                className, null);
+                                // serializeTargetClassName, checksum);
+                                serializationInfo.className, serializationInfo.checksum);
                 guarantee(!testException(jni));
             }
         }
@@ -1071,11 +1138,12 @@ final class BreakpointInterceptor {
                     JvmtiEnv.class, JNIEnvironment.class, JNIObjectHandle.class, JNIObjectHandle.class);
 
     public static void onLoad(JvmtiEnv jvmti, JvmtiEventCallbacks callbacks, TraceWriter writer, NativeImageAgent nativeImageTracingAgent,
-                    boolean exptlClassLoaderSupport) {
+                    boolean exptlClassLoaderSupport, boolean serializationChecksums) {
 
         BreakpointInterceptor.traceWriter = writer;
         BreakpointInterceptor.agent = nativeImageTracingAgent;
         BreakpointInterceptor.experimentalClassLoaderSupport = exptlClassLoaderSupport;
+        BreakpointInterceptor.writeSerializationChecksums = serializationChecksums;
 
         JvmtiCapabilities capabilities = UnmanagedMemory.calloc(SizeOf.get(JvmtiCapabilities.class));
         check(jvmti.getFunctions().GetCapabilities().invoke(jvmti, capabilities));
@@ -1470,6 +1538,16 @@ final class BreakpointInterceptor {
         @Override
         public int hashCode() {
             return 31 * Long.hashCode(method.rawValue()) + bci;
+        }
+    }
+
+    private static final class SerializationInfo {
+        private final String className;
+        private final String checksum;
+
+        SerializationInfo(String serializeTargetClassName, String checksum) {
+            this.className = serializeTargetClassName;
+            this.checksum = checksum;
         }
     }
 
