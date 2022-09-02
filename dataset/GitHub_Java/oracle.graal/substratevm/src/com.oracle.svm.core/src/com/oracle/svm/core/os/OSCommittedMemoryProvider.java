@@ -64,12 +64,10 @@ public class OSCommittedMemoryProvider extends AbstractCommittedMemoryProvider {
     @Uninterruptible(reason = "Still being initialized.")
     public int initialize(WordPointer isolatePointer, CEntryPointCreateIsolateParameters parameters) {
         if (!SubstrateOptions.SpawnIsolates.getValue()) {
-            int result = protectSingleIsolateImageHeap();
-            if (result == CEntryPointErrors.NO_ERROR) {
-                isolatePointer.write(CEntryPointSetup.SINGLE_ISOLATE_SENTINEL);
-            }
-            return result;
+            isolatePointer.write(CEntryPointSetup.SINGLE_ISOLATE_SENTINEL);
+            return CEntryPointErrors.NO_ERROR;
         }
+
         return ImageHeapProvider.get().initialize(nullPointer(), zero(), isolatePointer, nullPointer());
     }
 
