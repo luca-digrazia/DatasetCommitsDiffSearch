@@ -56,7 +56,6 @@ import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CSIN
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.CSNEG;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.DC;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.DMB;
-import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.DSB;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.EON;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.EOR;
 import static org.graalvm.compiler.asm.aarch64.AArch64Assembler.Instruction.EXTR;
@@ -674,7 +673,6 @@ public abstract class AArch64Assembler extends Assembler {
         CLREX(0xd5033f5f),
         HINT(0xD503201F),
         DMB(0x000000A0),
-        DSB(0x00000080),
 
         MRS(0xD5300000),
         MSR(0xD5100000),
@@ -1230,8 +1228,8 @@ public abstract class AArch64Assembler extends Assembler {
      * @param address only displacement addressing modes allowed. May not be null.
      */
     public void prfm(AArch64Address address, PrefetchMode mode) {
-        assert (address.getAddressingMode() == AddressingMode.IMMEDIATE_UNSIGNED_SCALED ||
-                        address.getAddressingMode() == AddressingMode.IMMEDIATE_SIGNED_UNSCALED ||
+        assert (address.getAddressingMode() == AddressingMode.IMMEDIATE_SCALED ||
+                        address.getAddressingMode() == AddressingMode.IMMEDIATE_UNSCALED ||
                         address.getAddressingMode() == AddressingMode.REGISTER_OFFSET);
         assert mode != null;
         final int srcSize = 64;
@@ -1269,11 +1267,11 @@ public abstract class AArch64Assembler extends Assembler {
         int isFloat = !type.isGeneral ? 1 << LoadStoreFpFlagOffset : 0;
         int memop = instr.encoding | transferSizeEncoding | is32Bit | isFloat | rt(reg);
         switch (address.getAddressingMode()) {
-            case IMMEDIATE_UNSIGNED_SCALED:
+            case IMMEDIATE_SCALED:
                 annotatePatchingImmediate(position(), instr, 12, LoadStoreScaledImmOffset, log2TransferSize);
                 emitInt(memop | LoadStoreScaledOp | address.getImmediate() << LoadStoreScaledImmOffset | rs1(address.getBase()));
                 break;
-            case IMMEDIATE_SIGNED_UNSCALED:
+            case IMMEDIATE_UNSCALED:
                 annotatePatchingImmediate(position(), instr, 9, LoadStoreUnscaledImmOffset, 0);
                 emitInt(memop | LoadStoreUnscaledOp | address.getImmediate() << LoadStoreUnscaledImmOffset | rs1(address.getBase()));
                 break;
@@ -1283,7 +1281,7 @@ public abstract class AArch64Assembler extends Assembler {
             case EXTENDED_REGISTER_OFFSET:
             case REGISTER_OFFSET:
                 ExtendType extendType = address.getAddressingMode() == AddressingMode.EXTENDED_REGISTER_OFFSET ? address.getExtendType() : ExtendType.UXTX;
-                boolean shouldScale = address.isRegisterOffsetScaled() && log2TransferSize != 0;
+                boolean shouldScale = address.isScaled() && log2TransferSize != 0;
                 emitInt(memop | LoadStoreRegisterOp | rs2(address.getOffset()) | extendType.encoding << ExtendTypeOffset | (shouldScale ? 1 : 0) << LoadStoreScaledRegOffset | rs1(address.getBase()));
                 break;
             case PC_LITERAL:
@@ -1338,16 +1336,24 @@ public abstract class AArch64Assembler extends Assembler {
     private void loadStorePairInstruction(int size, Instruction instr, Register rt, Register rt2, AArch64Address address) {
         InstructionType type = generalFromSize(size);
         // LDP/STP uses a 7-bit scaled offset
-        int offset = address.getImmediate();
-        int memop = type.encoding | instr.encoding | offset << LoadStorePairImm7Offset | rt2(rt2) | rn(address.getBase()) | rt(rt);
+        int offset = address.getImmediateRaw();
+        if (address.getAddressingMode() == AddressingMode.IMMEDIATE_UNSCALED) {
+            int sizeInBytes = size / Byte.SIZE;
+            long mask = sizeInBytes - 1;
+            assert (offset & mask) == 0 : "LDP/STP only supports aligned offset.";
+            offset = offset / sizeInBytes;
+        }
+        int scaledOffset = maskField(7, offset);
+        int memop = type.encoding | instr.encoding | scaledOffset << LoadStorePairImm7Offset | rt2(rt2) | rn(address.getBase()) | rt(rt);
         switch (address.getAddressingMode()) {
-            case IMMEDIATE_PAIR_SIGNED_SCALED:
+            case IMMEDIATE_SCALED:
+            case IMMEDIATE_UNSCALED:
                 emitInt(memop | LoadStorePairOp | (0b010 << 23));
                 break;
-            case IMMEDIATE_PAIR_POST_INDEXED:
+            case IMMEDIATE_POST_INDEXED:
                 emitInt(memop | LoadStorePairOp | (0b001 << 23));
                 break;
-            case IMMEDIATE_PAIR_PRE_INDEXED:
+            case IMMEDIATE_PRE_INDEXED:
                 emitInt(memop | LoadStorePairOp | (0b011 << 23));
                 break;
             default:
@@ -1844,7 +1850,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param r must be in the range 0 to size - 1
      * @param s must be in the range 0 to size - 1
      */
-    public void sbfm(int size, Register dst, Register src, int r, int s) {
+    protected void sbfm(int size, Register dst, Register src, int r, int s) {
         bitfieldInstruction(SBFM, dst, src, r, s, generalFromSize(size));
     }
 
@@ -3004,15 +3010,6 @@ public abstract class AArch64Assembler extends Assembler {
      */
     public void dmb(BarrierKind barrierKind) {
         emitInt(DMB.encoding | BarrierOp | barrierKind.encoding << BarrierKindOffset);
-    }
-
-    /**
-     * Data Synchronization Barrier.
-     *
-     * @param barrierKind barrier that is issued. May not be null.
-     */
-    public void dsb(BarrierKind barrierKind) {
-        emitInt(DSB.encoding | BarrierOp | barrierKind.encoding << BarrierKindOffset);
     }
 
     /**

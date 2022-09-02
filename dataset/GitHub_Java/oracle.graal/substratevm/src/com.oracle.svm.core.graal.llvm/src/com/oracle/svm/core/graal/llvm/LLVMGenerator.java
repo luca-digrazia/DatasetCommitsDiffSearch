@@ -75,7 +75,6 @@ import org.graalvm.nativeimage.c.constant.CEnum;
 import org.graalvm.util.GuardedAnnotationAccess;
 
 import com.oracle.svm.core.FrameAccess;
-import com.oracle.svm.core.ReservedRegisters;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
@@ -736,18 +735,18 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
     @Override
     public Variable emitReadRegister(Register register, ValueKind<?> kind) {
         LLVMValueRef value;
-        if (register.equals(ReservedRegisters.singleton().getThreadRegister())) {
+        if (register.equals(getRegisterConfig().getThreadRegister())) {
             if (isEntryPoint || canModifySpecialRegisters) {
                 return new LLVMPendingSpecialRegisterRead(this, SpecialRegister.ThreadPointer);
             }
             value = getSpecialRegister(SpecialRegister.ThreadPointer);
-        } else if (register.equals(ReservedRegisters.singleton().getHeapBaseRegister())) {
+        } else if (register.equals(getRegisterConfig().getHeapBaseRegister())) {
             if (isEntryPoint || canModifySpecialRegisters) {
                 return new LLVMPendingSpecialRegisterRead(this, SpecialRegister.HeapBase);
             }
             value = getSpecialRegister(SpecialRegister.HeapBase);
-        } else if (register.equals(ReservedRegisters.singleton().getFrameRegister())) {
-            value = builder.buildReadRegister(builder.register(ReservedRegisters.singleton().getFrameRegister().name));
+        } else if (register.equals(getRegisterConfig().getFrameRegister())) {
+            value = builder.buildReadRegister(builder.register(getRegisterConfig().getFrameRegister().name));
         } else {
             throw VMError.shouldNotReachHere();
         }
@@ -756,7 +755,7 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
 
     @Override
     public void emitWriteRegister(Register dst, Value src, ValueKind<?> kind) {
-        if (dst.equals(ReservedRegisters.singleton().getThreadRegister())) {
+        if (dst.equals(getRegisterConfig().getThreadRegister())) {
             VMError.guarantee(isEntryPoint || canModifySpecialRegisters, "Can only write to registers in a method where it is expected.");
             if (LLVMOptions.ReturnSpecialRegs.getValue()) {
                 setSpecialRegisterValue(SpecialRegister.ThreadPointer, getVal(src));
@@ -764,7 +763,7 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
                 builder.buildStore(getVal(src), getSpecialRegisterPointer(SpecialRegister.ThreadPointer));
             }
             return;
-        } else if (dst.equals(ReservedRegisters.singleton().getHeapBaseRegister())) {
+        } else if (dst.equals(getRegisterConfig().getHeapBaseRegister())) {
             VMError.guarantee(isEntryPoint || canModifySpecialRegisters, "Can only write to registers in a method where it is expected.");
             if (LLVMOptions.ReturnSpecialRegs.getValue()) {
                 setSpecialRegisterValue(SpecialRegister.HeapBase, getVal(src));
@@ -1541,12 +1540,7 @@ public class LLVMGenerator implements LIRGeneratorTool, SubstrateLIRGenerator {
             LLVMValueRef convert;
             switch (op.getCategory()) {
                 case FloatingPointToInteger:
-                    /* NaNs are converted to 0 in Java, but are undefined in LLVM */
-                    LLVMValueRef value = getVal(inputVal);
-                    LLVMValueRef isNan = builder.buildCompare(Condition.NE, value, value, true);
-                    LLVMValueRef converted = builder.buildFPToSI(getVal(inputVal), destType);
-                    LLVMValueRef zero = builder.constantInteger(0, LLVMIRBuilder.integerTypeWidth(destType));
-                    convert = builder.buildSelect(isNan, zero, converted);
+                    convert = builder.buildFPToSI(getVal(inputVal), destType);
                     break;
                 case IntegerToFloatingPoint:
                     convert = builder.buildSIToFP(getVal(inputVal), destType);

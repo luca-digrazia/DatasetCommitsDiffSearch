@@ -208,7 +208,7 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public void sbfm(int size, Register dst, Register src, int r, int s) {
+    protected void sbfm(int size, Register dst, Register src, int r, int s) {
         super.sbfm(size, dst, src, r, s);
     }
 
@@ -526,7 +526,7 @@ class TestProtectedAssembler extends AArch64Assembler {
     }
 
     @Override
-    public AbstractAddress makeAddress(int transferSize, Register base, int displacement) {
+    public AbstractAddress makeAddress(Register base, int displacement) {
         throw new UnsupportedOperationException();
     }
 
