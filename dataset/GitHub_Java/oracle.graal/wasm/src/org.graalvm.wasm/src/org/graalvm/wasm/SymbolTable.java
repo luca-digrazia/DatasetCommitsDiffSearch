@@ -75,6 +75,7 @@ public abstract class SymbolTable {
     private static final int INITIAL_FUNCTION_TYPES_SIZE = 128;
     private static final int GLOBAL_MUTABLE_BIT = 0x0100;
     private static final int GLOBAL_EXPORT_BIT = 0x0200;
+    private static final int GLOBAL_INITIALIZED_BIT = 0x0400;
     private static final int UNINITIALIZED_GLOBAL_ADDRESS = -1;
     private static final int NO_EQUIVALENCE_CLASS = 0;
     static final int FIRST_EQUIVALENCE_CLASS = NO_EQUIVALENCE_CLASS + 1;
@@ -274,6 +275,11 @@ public abstract class SymbolTable {
      */
     @CompilationFinal private String exportedMemory;
 
+    /**
+     * List of all custom sections.
+     */
+    private final List<WasmCustomSection> customSections;
+
     SymbolTable() {
         this.typeData = new int[INITIAL_DATA_SIZE];
         this.typeOffsets = new int[INITIAL_TYPE_SIZE];
@@ -296,6 +302,7 @@ public abstract class SymbolTable {
         this.memory = null;
         this.importedMemoryDescriptor = null;
         this.exportedMemory = null;
+        this.customSections = new ArrayList<>();
     }
 
     private void checkNotParsed() {
@@ -657,6 +664,15 @@ public abstract class SymbolTable {
         return (byte) (globalTypes[index] & 0xff);
     }
 
+    void initializeGlobal(int index) {
+        checkNotParsed();
+        globalTypes[index] |= GLOBAL_INITIALIZED_BIT;
+    }
+
+    boolean isGlobalInitialized(int index) {
+        return (globalTypes[index] & GLOBAL_INITIALIZED_BIT) != 0;
+    }
+
     public Map<String, Integer> exportedGlobals() {
         return exportedGlobals;
     }
@@ -829,4 +845,13 @@ public abstract class SymbolTable {
     public String exportedMemory() {
         return exportedMemory;
     }
+
+    void allocateCustomSection(String name, int offset, int length) {
+        customSections.add(new WasmCustomSection(name, offset, length));
+    }
+
+    public List<WasmCustomSection> customSections() {
+        return customSections;
+    }
+
 }
