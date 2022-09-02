@@ -44,7 +44,6 @@ import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -58,11 +57,10 @@ public class JDWPDebuggerController {
     private JDWPOptions options;
     private DebuggerSession debuggerSession;
     private final JDWPInstrument instrument;
-    private Map<Object, Object> suspendLocks = new HashMap<>();
-    private Map<Object, SuspendedInfo> suspendedInfos = new HashMap<>();
-    private Map<Object, Integer> commandRequestIds = new HashMap<>();
+    private Object suspendLock = new Object();
+    private SuspendedInfo suspendedInfo;
+    private volatile int commandRequestId = -1;
     private Ids ids;
-    private Method suspendMethod;
 
     // justification for this being a map is that lookups only happen when at a breakpoint
     private Map<Breakpoint, BreakpointInfo> breakpointInfos = new HashMap<>();
@@ -84,21 +82,14 @@ public class JDWPDebuggerController {
         debuggerSession = debugger.startSession(new SuspendedCallbackImpl(), SourceElement.ROOT, SourceElement.STATEMENT);
         debuggerSession.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(true).build());
         debuggerSession.suspendNextExecution();
-
-        try {
-            suspendMethod = DebuggerSession.class.getDeclaredMethod("suspend", Thread.class);
-            suspendMethod.setAccessible(true);
-        } catch (NoSuchMethodException e) {
-            throw new RuntimeException("Unable to obtain thread suspend method", e);
-        }
     }
 
     public JDWPContext getContext() {
         return instrument.getContext();
     }
 
-    public SuspendedInfo getSuspendedInfo(Object thread) {
-        return suspendedInfos.get(thread);
+    public SuspendedInfo getSuspendedInfo() {
+        return suspendedInfo;
     }
 
     public boolean shouldWaitForAttach() {
@@ -113,8 +104,8 @@ public class JDWPDebuggerController {
         return options.transport;
     }
 
-    public void setCommandRequestId(Object thread, int commandRequestId) {
-        commandRequestIds.put(thread, commandRequestId);
+    public void setCommandRequestId(int commandRequestId) {
+        this.commandRequestId = commandRequestId;
     }
 
     /**
@@ -133,6 +124,7 @@ public class JDWPDebuggerController {
         } catch (NoSuchSourceLineException ex) {
             // perhaps the debugger's view on the source is out of sync, in which case
             // the bytecode and source does not match.
+            // TODO(Gregersen) - do nothing for now, but probably should handle this nicely later
         }
     }
 
@@ -142,77 +134,42 @@ public class JDWPDebuggerController {
         info.setBreakpoint(bp);
     }
 
-    public void stepOver(Object thread) {
-        SuspendedInfo susp = suspendedInfos.get(thread);
+    public void resume() {
+        SuspendedInfo susp = suspendedInfo;
+        if (susp != null) {
+            doResume(suspendedInfo.getThread());
+        }
+    }
+
+    public void stepOver() {
+        SuspendedInfo susp = suspendedInfo;
         if (susp != null) {
             susp.getEvent().prepareStepOver(STEP_CONFIG);
             susp.recordStep(DebuggerCommand.Kind.STEP_OVER);
         }
     }
 
-    public void stepInto(Object thread) {
-        SuspendedInfo susp = suspendedInfos.get(thread);
+    public void stepInto() {
+        SuspendedInfo susp = suspendedInfo;
         if (susp != null) {
             susp.getEvent().prepareStepInto(STEP_CONFIG);
             susp.recordStep(DebuggerCommand.Kind.STEP_INTO);
         }
     }
 
-    public void stepOut(Object thread) {
-        SuspendedInfo susp = suspendedInfos.get(thread);
+    public void stepOut() {
+        SuspendedInfo susp = suspendedInfo;
         if (susp != null) {
             susp.getEvent().prepareStepOut(STEP_CONFIG);
             susp.recordStep(DebuggerCommand.Kind.STEP_OUT);
         }
     }
 
-    public void resume(Object thread) {
-        ThreadSuspension.resumeThread(thread);
-        int suspensionCount = ThreadSuspension.getSuspensionCount(thread);
-
-        if (suspensionCount == 0) {
-            // only resume when suspension count reaches 0
-            Object lock = getSuspendLock(thread);
-            synchronized (lock) {
-                lock.notifyAll();
-            }
+    private void doResume(Object thread) {
+        synchronized (suspendLock) {
+            ThreadSuspension.resumeThread(thread);
+            suspendLock.notifyAll();
         }
-    }
-
-    public void resumeAll() {
-        // first clear the suspension counts on all threads
-        ThreadSuspension.resumeAll();
-
-        for (Object thread : getContext().getAllGuestThreads()) {
-            resume(thread);
-        }
-    }
-
-    public boolean suspend(Object thread) {
-        // TODO(Gregersen) - call method directly when it becomes available
-        try {
-            suspendMethod.invoke(debuggerSession, getContext().getGuest2HostThread(thread));
-
-            // wait up to below timeout for the thread to become suspended before
-            // returning, thus sending a reply packet
-            long timeout = System.currentTimeMillis() + 1000;
-            while (suspendedInfos.get(thread) == null && System.currentTimeMillis() < timeout) {
-                Thread.sleep(10);
-            }
-            return suspendedInfos.get(thread) != null;
-        } catch (Exception e) {
-            System.err.println("not able to suspend thread: " + thread);
-            return false;
-        }
-    }
-
-    private Object getSuspendLock(Object thread) {
-        Object lock = suspendLocks.get(thread);
-        if (lock == null) {
-            lock = new Object();
-            suspendLocks.put(thread, lock);
-        }
-        return lock;
     }
 
     public void disposeDebugger() {
@@ -247,8 +204,8 @@ public class JDWPDebuggerController {
 
             Object currentThread = getContext().getHost2GuestThread(Thread.currentThread());
 
-            if (commandRequestIds.get(currentThread) != null) {
-                if (checkExclusionFilters(event, currentThread)) {
+            if (commandRequestId != -1) {
+                if (checkExclusionFilters(event)) {
                     //System.out.println("not suspending here: " + event.getSourceSection());
                     return;
                 }
@@ -256,55 +213,51 @@ public class JDWPDebuggerController {
 
             //System.out.println("Suspended at: " + event.getSourceSection().toString() + " in thread: " + currentThread);
 
+            byte strategy = SuspendStrategy.EVENT_THREAD;
             JDWPCallFrame[] callFrames = createCallFrames(ids.getIdAsLong(currentThread), event.getStackFrames());
-            SuspendedInfo suspendedInfo = new SuspendedInfo(event, callFrames, currentThread);
-            suspendedInfos.put(currentThread, suspendedInfo);
+            suspendedInfo = new SuspendedInfo(event, strategy, callFrames, currentThread);
 
             boolean alreadySuspended = false;
             for (Breakpoint bp : event.getBreakpoints()) {
                 //System.out.println("BP at suspension point: " + bp.getLocationDescription());
                 // register the thread as suspended before sending the breakpoint hit event.
                 // The debugger will verify thread status as part of registering if a breakpoint is hit
-                if (!alreadySuspended) {
+                if (strategy == SuspendStrategy.EVENT_THREAD && !alreadySuspended) {
                     alreadySuspended = true;
                     ThreadSuspension.suspendThread(currentThread);
                 }
                 VMEventListeners.getDefault().breakpointHit(breakpointInfos.get(bp), currentThread);
             }
             // now, suspend the current thread until resumed by e.g. a debugger command
-            suspend(callFrames[0], currentThread, alreadySuspended);
+            suspend(strategy, callFrames[0], currentThread, alreadySuspended);
         }
 
-        private boolean checkExclusionFilters(SuspendedEvent event, Object thread) {
-            Integer id = commandRequestIds.get(thread);
+        private boolean checkExclusionFilters(SuspendedEvent event) {
+            RequestFilter requestFilter = EventFilters.getDefault().getRequestFilter(commandRequestId);
 
-            if (id != null) {
-                RequestFilter requestFilter = EventFilters.getDefault().getRequestFilter(id);
+            if (requestFilter != null && requestFilter.isStepping()) {
+            // we're currently stepping, so check if suspension point
+            // matches any exclusion filters
 
-                if (requestFilter != null && requestFilter.isStepping()) {
-                    // we're currently stepping, so check if suspension point
-                    // matches any exclusion filters
+                DebugStackFrame topFrame = event.getTopStackFrame();
 
-                    DebugStackFrame topFrame = event.getTopStackFrame();
+                if (topFrame.getSourceSection() != null) {
+                    RootNode root = findCurrentRoot(topFrame);
 
-                    if (topFrame.getSourceSection() != null) {
-                        RootNode root = findCurrentRoot(topFrame);
+                    KlassRef klass = getContext().getKlassFromRootNode(root);
 
-                        KlassRef klass = getContext().getKlassFromRootNode(root);
-
-                        if (klass != null && requestFilter.isKlassExcluded(klass)) {
-                            // should not suspend here then, tell the event to keep going
-                            continueStepping(event, thread);
-                            return true;
-                        }
+                    if (klass != null && requestFilter.isKlassExcluded(klass)) {
+                        // should not suspend here then, tell the event to keep going
+                        continueStepping(event);
+                        return true;
                     }
                 }
             }
             return false;
         }
 
-        private void continueStepping(SuspendedEvent event, Object thread) {
-            switch (suspendedInfos.get(thread).getStepKind()) {
+        private void continueStepping(SuspendedEvent event) {
+            switch (suspendedInfo.getStepKind()) {
                 case STEP_INTO:
                     // stepping into unwanted code which was filtered
                     // so step out and try step into again
@@ -398,26 +351,36 @@ public class JDWPDebuggerController {
             return null;
         }
 
-        private void suspend(JDWPCallFrame currentFrame, Object thread, boolean alreadySuspended) {
-            Object lock = getSuspendLock(thread);
-            try {
-                if (!alreadySuspended) {
-                    ThreadSuspension.suspendThread(thread);
-                }
+        private void suspend(byte strategy, JDWPCallFrame currentFrame, Object thread, boolean alreadySuspended) {
+            switch(strategy) {
+                case SuspendStrategy.NONE:
+                    // nothing to suspend
+                    break;
+                case SuspendStrategy.EVENT_THREAD:
+                    synchronized (suspendLock) {
+                        try {
+                            if (!alreadySuspended) {
+                                ThreadSuspension.suspendThread(thread);
+                            }
 
-                // if during stepping, send a step completed event back to the debugger
-                Integer id = commandRequestIds.get(thread);
-                if (id != null) {
-                    VMEventListeners.getDefault().stepCompleted(id, currentFrame);
-                }
-                // reset
-                commandRequestIds.put(thread, null);
+                            // if during stepping, send a step completed event back to the debugger
+                            if (commandRequestId != -1) {
+                                VMEventListeners.getDefault().stepCompleted(commandRequestId, currentFrame);
+                            }
+                            // reset
+                            commandRequestId = -1;
+                            //System.out.println("suspending...");
+                            suspendLock.wait();
+                        } catch (InterruptedException e) {
 
-                synchronized (lock) {
-                    lock.wait();
-                }
-            } catch (InterruptedException e) {
-
+                        }
+                    }
+                    break;
+                case SuspendStrategy.ALL:
+                    //TODO(Gregersen) - not implemented
+                    break;
+                default:
+                    break;
             }
         }
     }

@@ -74,7 +74,8 @@ public class EspressoScope {
         String identifier = slot.getIdentifier().toString();
         for (Local local : liveLocals) {
             try {
-                if (local.getSlot() == Integer.parseInt(identifier)) {
+                // Note: shifting by 1, because monitor uses slot 0
+                if (local.getSlot() == Integer.parseInt(identifier) -1) {
                     return local.getName().toString();
                 }
             } catch (NumberFormatException nf) {
