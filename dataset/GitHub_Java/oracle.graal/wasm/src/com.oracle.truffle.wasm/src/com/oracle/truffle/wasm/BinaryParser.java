@@ -236,7 +236,6 @@ import com.oracle.truffle.wasm.nodes.WasmBlockNode;
 import com.oracle.truffle.wasm.nodes.WasmCallStubNode;
 import com.oracle.truffle.wasm.nodes.WasmEmptyNode;
 import com.oracle.truffle.wasm.nodes.WasmIfNode;
-import com.oracle.truffle.wasm.nodes.WasmIndirectCallNode;
 import com.oracle.truffle.wasm.nodes.WasmLoopNode;
 import com.oracle.truffle.wasm.nodes.WasmNode;
 import com.oracle.truffle.wasm.nodes.WasmRootNode;
@@ -752,7 +751,7 @@ public class BinaryParser extends BinaryStreamParser {
                     state.pop();
                     state.pop(numArguments);
                     state.push(returnLength);
-                    callNodes.add(WasmIndirectCallNode.create());
+                    callNodes.add(Truffle.getRuntime().createIndirectCallNode());
                     Assert.assertIntEqual(read1(), CallIndirect.ZERO_TABLE, "CALL_INDIRECT: Instruction must end with 0x00");
                     break;
                 }
