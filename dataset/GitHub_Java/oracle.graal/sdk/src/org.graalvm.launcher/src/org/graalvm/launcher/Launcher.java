@@ -1063,11 +1063,7 @@ public abstract class Launcher {
                         throw abort("'--jvm' and '--native' options can not be used together.");
                     }
                     if (!isGraalVMAvailable()) {
-                        if (arg.equals("--jvm")) {
-                            throw abort("'--jvm' is only supported when this launcher is part of a GraalVM.");
-                        } else {
-                            throw abort("'--jvm.*' options are deprecated and only supported when this launcher is part of a GraalVM.");
-                        }
+                        throw abort("'--jvm.*' options are deprecated and only supported when this launcher is part of a GraalVM.");
                     }
                     if (arg.equals("--jvm.help")) {
                         if (defaultVmType == VMType.JVM) {
