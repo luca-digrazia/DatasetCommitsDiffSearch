@@ -258,7 +258,7 @@ public abstract class BaseSuiteHarness {
     }
 
     protected Predicate<? super Path> getIsSulongFilter() {
-        return CommonTestUtils.isSulong;
+        return p -> CommonTestUtils.isSulong.test(p) && TestEngineConfig.getInstance().canExecute(p);
     }
 
     protected Predicate<? super Path> getIsExecutableFilter() {

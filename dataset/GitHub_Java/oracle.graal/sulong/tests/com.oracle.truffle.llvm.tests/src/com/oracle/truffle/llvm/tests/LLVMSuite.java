@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,45 +29,31 @@
  */
 package com.oracle.truffle.llvm.tests;
 
-import java.io.File;
-import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collection;
 
 import org.junit.AfterClass;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
 import com.oracle.truffle.llvm.tests.options.TestOptions;
 
 @RunWith(Parameterized.class)
+@Parameterized.UseParametersRunnerFactory(CommonTestUtils.ExcludingParametersFactory.class)
 public final class LLVMSuite extends BaseSuiteHarness {
 
-    private static final Path LLVM_SUITE_DIR = new File(TestOptions.EXTERNAL_TEST_SUITE_PATH).toPath();
-    private static final Path LLVM_SOURCE_DIR = new File(TestOptions.TEST_SOURCE_PATH).toPath();
-    private static final Path LLVM_CONFIG_DIR = new File(TestOptions.TEST_CONFIG_PATH).toPath();
-
-    @Parameter(value = 0) public Path path;
-    @Parameter(value = 1) public String testName;
+    public static final String TEST_DISTRIBUTION = "SULONG_LLVM_TEST_SUITE";
+    public static final String SOURCE = "LLVM_TEST_SUITE";
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
-        return collectTestCases(LLVM_CONFIG_DIR, LLVM_SUITE_DIR, LLVM_SOURCE_DIR);
-    }
-
-    @Override
-    protected Path getTestDirectory() {
-        return path;
+        Collection<Object[]> testlist = TestCaseCollector.collectTestCases(LLVMSuite.class, Paths.get(TestOptions.getTestDistribution(TEST_DISTRIBUTION)), CommonTestUtils.isSulong);
+        return testlist;
     }
 
     @AfterClass
     public static void printStatistics() {
-        printStatistics("LLVM", LLVM_SOURCE_DIR, LLVM_CONFIG_DIR, f -> true);
-    }
-
-    @Override
-    protected String getTestName() {
-        return testName;
+        printStatistics("LLVM", Paths.get(TestOptions.getSourcePath(SOURCE)), TestCaseCollector.getConfigDirectory(LLVMSuite.class), f -> true);
     }
 }

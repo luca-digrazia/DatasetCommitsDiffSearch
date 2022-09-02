@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.oracle.truffle.llvm.tests.CommonTestUtils;
 import org.graalvm.polyglot.Context;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -50,7 +51,6 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
 
-import com.oracle.truffle.llvm.tests.CommonTestUtils;
 import com.oracle.truffle.llvm.tests.TestCaseCollector;
 import com.oracle.truffle.llvm.tests.options.TestOptions;
 import com.oracle.truffle.llvm.tests.pipe.CaptureNativeOutput;
@@ -92,7 +92,7 @@ public class BitcodeFormatTest {
 
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() throws IOException {
-        TestCaseCollector.ExcludeMap excluded = TestCaseCollector.getExcludedTests(BitcodeFormatTest.class);
+        Map<String, String> excluded = TestCaseCollector.getExcludedTests(BitcodeFormatTest.class);
         return Files.list(testBase).map(f -> new Object[]{f, f.getFileName().toString(), excluded.get(f.getFileName().toString())}).collect(Collectors.toList());
     }
 
