@@ -24,9 +24,6 @@
  */
 package org.graalvm.compiler.nodes.java;
 
-import static org.graalvm.compiler.nodeinfo.InputType.Association;
-import static org.graalvm.compiler.nodeinfo.InputType.Memory;
-
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.InputType;
@@ -35,7 +32,7 @@ import org.graalvm.compiler.nodes.DeoptimizingNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.AbstractMemoryCheckpoint;
-import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
+import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
 
 import jdk.vm.ci.code.BailoutException;
 
@@ -45,30 +42,13 @@ import jdk.vm.ci.code.BailoutException;
  * The Java bytecode specification allows non-balanced locking. Graal does not handle such cases and
  * throws a {@link BailoutException} instead during graph building.
  */
-@NodeInfo(allowedUsageTypes = {Memory})
-public abstract class AccessMonitorNode extends AbstractMemoryCheckpoint implements SingleMemoryKill, DeoptimizingNode.DeoptBefore, DeoptimizingNode.DeoptAfter {
+@NodeInfo(allowedUsageTypes = {InputType.Memory})
+public abstract class AccessMonitorNode extends AbstractMemoryCheckpoint implements MemoryCheckpoint, DeoptimizingNode.DeoptBefore, DeoptimizingNode.DeoptAfter {
 
     public static final NodeClass<AccessMonitorNode> TYPE = NodeClass.create(AccessMonitorNode.class);
     @OptionalInput(InputType.State) FrameState stateBefore;
     @Input ValueNode object;
-    @Input(Association) MonitorIdNode monitorId;
-
-    /**
-     * Additional information already loaded from {@link #object} in an early lowering stage to
-     * facilitate value numbering and high-level optimizations. The value is VM-dependent.
-     */
-    @OptionalInput private ValueNode objectData;
-
-    protected AccessMonitorNode(NodeClass<? extends AccessMonitorNode> c, ValueNode object, MonitorIdNode monitorId, boolean biasable) {
-        super(c, StampFactory.forVoid());
-        this.object = object;
-        this.monitorId = monitorId;
-        this.biasable = biasable;
-    }
-
-    protected AccessMonitorNode(NodeClass<? extends AccessMonitorNode> c, ValueNode object, MonitorIdNode monitorId) {
-        this(c, object, monitorId, true);
-    }
+    @Input(InputType.Association) MonitorIdNode monitorId;
 
     @Override
     public boolean canDeoptimize() {
@@ -95,15 +75,6 @@ public abstract class AccessMonitorNode extends AbstractMemoryCheckpoint impleme
         this.object = lockedObject;
     }
 
-    public ValueNode getObjectData() {
-        return objectData;
-    }
-
-    public void setObjectData(ValueNode objectData) {
-        updateUsages(this.objectData, objectData);
-        this.objectData = objectData;
-    }
-
     public MonitorIdNode getMonitorId() {
         return monitorId;
     }
@@ -117,5 +88,21 @@ public abstract class AccessMonitorNode extends AbstractMemoryCheckpoint impleme
     }
 
     protected boolean biasable = true;
+
+    /**
+     * Creates a new AccessMonitor instruction.
+     *
+     * @param object the instruction producing the object
+     */
+    protected AccessMonitorNode(NodeClass<? extends AccessMonitorNode> c, ValueNode object, MonitorIdNode monitorId, boolean biasable) {
+        super(c, StampFactory.forVoid());
+        this.object = object;
+        this.monitorId = monitorId;
+        this.biasable = biasable;
+    }
+
+    protected AccessMonitorNode(NodeClass<? extends AccessMonitorNode> c, ValueNode object, MonitorIdNode monitorId) {
+        this(c, object, monitorId, true);
+    }
 
 }
