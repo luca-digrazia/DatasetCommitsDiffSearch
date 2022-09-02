@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,12 +41,10 @@
 package com.oracle.truffle.api.library.test;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 
 import org.junit.Test;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -55,11 +53,9 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.test.ExportNodeTest.MultiNodeExportLibrary;
 import com.oracle.truffle.api.library.test.otherPackage.OtherPackageNode;
 import com.oracle.truffle.api.library.test.otherPackage.OtherPackageNode.InnerDSLNode;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.test.AbstractLibraryTest;
 import com.oracle.truffle.api.test.ExpectError;
 
 @SuppressWarnings({"unused", "static-method"})
@@ -260,7 +256,7 @@ public class ExportMethodTest extends AbstractLibraryTest {
     @Test
     public void testExportsInstanceWithCachedNode() {
         ExportsTestInstanceWithCachedNode obj = new ExportsTestInstanceWithCachedNode();
-        assertEquals("cached", adoptNode(createCached(ExportsTestLibrary1.class, obj)).get().foo(obj, 42));
+        assertEquals("cached", AbstractLibraryTest.adopt(createCached(ExportsTestLibrary1.class, obj)).foo(obj, 42));
         assertEquals("uncached", getUncached(ExportsTestLibrary1.class, obj).foo(obj, 42));
     }
 
@@ -315,26 +311,6 @@ public class ExportMethodTest extends AbstractLibraryTest {
         ExportsTestStaticWithLibrary obj = new ExportsTestStaticWithLibrary();
         assertEquals("cached", createCached(ExportsTestLibrary1.class, obj).foo(obj, 42));
         assertEquals("uncached", getUncached(ExportsTestLibrary1.class, obj).foo(obj, 42));
-    }
-
-    @Test
-    public void testWeakReference() {
-        WeakReferenceMethodTest weak = new WeakReferenceMethodTest();
-        MultiNodeExportLibrary cachedLib = createCached(MultiNodeExportLibrary.class, weak);
-        assertEquals("s0", cachedLib.m0(weak, "arg"));
-    }
-
-    @ExportLibrary(MultiNodeExportLibrary.class)
-    public static final class WeakReferenceMethodTest {
-
-        @ExportMessage
-        @TruffleBoundary
-        String m0(String arg,
-                        @Cached(value = "this", weak = true) WeakReferenceMethodTest cachedObject) {
-            assertNotNull(cachedObject);
-            return "s0";
-        }
-
     }
 
     abstract static class NoLibrary extends Library {
