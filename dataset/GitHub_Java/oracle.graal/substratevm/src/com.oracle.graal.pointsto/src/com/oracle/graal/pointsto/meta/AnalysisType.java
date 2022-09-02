@@ -50,6 +50,7 @@ import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.BigBang.ConstantObjectsProfiler;
 import com.oracle.graal.pointsto.api.DefaultUnsafePartition;
 import com.oracle.graal.pointsto.api.PointstoOptions;
+import com.oracle.graal.pointsto.api.UnsafePartitionKind;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.flow.AllInstantiatedTypeFlow;
 import com.oracle.graal.pointsto.flow.TypeFlow;
@@ -59,7 +60,6 @@ import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
 import com.oracle.graal.pointsto.infrastructure.WrappedJavaType;
 import com.oracle.graal.pointsto.typestate.TypeState;
 import com.oracle.graal.pointsto.util.AnalysisFuture;
-import com.oracle.svm.util.UnsafePartitionKind;
 
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Assumptions.AssumptionResult;
@@ -70,7 +70,6 @@ import jdk.vm.ci.meta.PrimitiveConstant;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
-import jdk.vm.ci.meta.Signature;
 
 public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Comparable<AnalysisType> {
 
@@ -1054,16 +1053,6 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     @Override
     public AnalysisMethod[] getDeclaredMethods() {
         return universe.lookup(wrapped.getDeclaredMethods());
-    }
-
-    @Override
-    public AnalysisMethod findMethod(String name, Signature signature) {
-        for (AnalysisMethod method : getDeclaredMethods()) {
-            if (method.getName().equals(name) && method.getSignature().equals(signature)) {
-                return method;
-            }
-        }
-        return null;
     }
 
     @Override

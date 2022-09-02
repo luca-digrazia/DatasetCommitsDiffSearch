@@ -132,7 +132,6 @@ import com.oracle.svm.core.identityhashcode.SubstrateIdentityHashCodeNode;
 import com.oracle.svm.core.jdk.proxy.DynamicProxyRegistry;
 import com.oracle.svm.core.meta.SharedMethod;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
-import com.oracle.svm.core.OS;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.UserError;
@@ -563,7 +562,8 @@ public class SubstrateGraphBuilderPlugins {
                             unsafe.get();
 
                             LogicNode lengthNegative = b.append(IntegerLessThanNode.create(lengthNode, ConstantNode.forInt(0), NodeView.DEFAULT));
-                            b.emitBytecodeExceptionCheck(lengthNegative, false, BytecodeExceptionNode.BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION_NEGATIVE_LENGTH);
+                            b.emitBytecodeExceptionCheck(lengthNegative, false, BytecodeExceptionNode.BytecodeExceptionKind.ILLEGAL_ARGUMENT_EXCEPTION,
+                                            ConstantNode.forConstant(snippetReflection.forObject("Negative length"), b.getMetaAccess(), b.getGraph()));
                             b.addPush(JavaKind.Object, new NewArrayNode(componentType, lengthNode, false));
                             return true;
                         }
@@ -660,6 +660,17 @@ public class SubstrateGraphBuilderPlugins {
                 return false;
             }
         });
+
+        /*
+         * We have our own Java-level implementation of Array.getLength(), so we just disable the
+         * plugin defined in StandardGraphBuilderPlugins.
+         */
+        r.register1("getLength", Object.class, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver type, ValueNode array) {
+                return false;
+            }
+        });
     }
 
     private static void registerArraysPlugins(InvocationPlugins plugins, boolean analysis) {
@@ -718,6 +729,13 @@ public class SubstrateGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 b.addPush(JavaKind.Object, ReadReservedRegister.createReadHeapBaseNode(b.getGraph()));
+                return true;
+            }
+        });
+        r.register1("readArrayLength", Object.class, new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode array) {
+                b.addPush(JavaKind.Int, new ArrayLengthNode(array));
                 return true;
             }
         });
@@ -1031,23 +1049,21 @@ public class SubstrateGraphBuilderPlugins {
         });
     }
 
-    /**
-     * To prevent AWT linkage error on {@link OS#LINUX} that happens with 'awt_headless' in headless
-     * mode, we eliminate native methods that depend on 'awt_xawt' library in the call-tree.
+    /*
+     * To prevent AWT linkage error that happens with 'awt_headless' in headless mode, we eliminate
+     * native methods that depend on 'awt_xawt' library in the call-tree.
      */
     private static void registerAWTPlugins(InvocationPlugins plugins) {
-        if (OS.getCurrent() == OS.LINUX) {
-            Registration r = new Registration(plugins, GraphicsEnvironment.class);
-            r.register0("isHeadless", new InvocationPlugin() {
-                @SuppressWarnings("unchecked")
-                @Override
-                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                    boolean isHeadless = GraphicsEnvironment.isHeadless();
-                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(isHeadless));
-                    return true;
-                }
-            });
-        }
+        Registration r = new Registration(plugins, GraphicsEnvironment.class);
+        r.register0("isHeadless", new InvocationPlugin() {
+            @SuppressWarnings("unchecked")
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                boolean isHeadless = GraphicsEnvironment.isHeadless();
+                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(isHeadless));
+                return true;
+            }
+        });
     }
 
     private static void registerSizeOfPlugins(SnippetReflectionProvider snippetReflection, InvocationPlugins plugins) {
