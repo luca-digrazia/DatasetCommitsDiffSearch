@@ -27,6 +27,7 @@ package com.oracle.svm.truffle.api;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
+import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
@@ -40,6 +41,7 @@ import com.oracle.svm.core.deopt.SubstrateSpeculationLog;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.thread.VMOperation;
 import com.oracle.svm.core.util.VMError;
+import com.oracle.truffle.api.Truffle;
 
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -59,21 +61,20 @@ public class SubstrateOptimizedCallTargetInstalledCode extends InstalledCode imp
     }
 
     @Override
-    public final void invalidate() {
+    public void invalidate() {
         CodeInfoTable.invalidateInstalledCode(this); // calls clearAddress
-        callTarget.onInvalidate(null, null, true);
     }
 
     @Override
     public void onAssumptionInvalidated(Object source, CharSequence reason) {
-        boolean wasActive = false;
         if (isAlive()) {
-            CodeInfoTable.invalidateInstalledCode(this); // calls clearAddress
-            wasActive = true;
+            invalidate();
+
+            GraalTruffleRuntime runtime = (GraalTruffleRuntime) Truffle.getRuntime();
+            runtime.getListener().onCompilationInvalidated(callTarget, source, reason);
         } else {
             assert !isValid() : "Cannot be valid but not alive";
         }
-        callTarget.onInvalidate(source, reason, wasActive);
     }
 
     /**

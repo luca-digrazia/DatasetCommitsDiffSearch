@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,14 +30,19 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Stream;
 
-import org.graalvm.nativeimage.Feature;
+import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.util.GuardedAnnotationAccess;
 
 import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
+import com.oracle.svm.core.FrameAccess;
+import com.oracle.svm.core.SubstrateOptions;
+import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.BeforeCompilationAccessImpl;
@@ -50,8 +57,6 @@ import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedType;
 import com.oracle.svm.hosted.meta.MethodPointer;
-import com.oracle.svm.jni.JNIGlobalHandlesFeature;
-import com.oracle.svm.jni.JNIThreadLocalEnvironmentFeature;
 import com.oracle.svm.jni.access.JNIAccessFeature;
 import com.oracle.svm.jni.functions.JNIFunctions.UnimplementedWithJNIEnvArgument;
 import com.oracle.svm.jni.functions.JNIFunctions.UnimplementedWithJavaVMArgument;
@@ -78,15 +83,29 @@ public class JNIFunctionTablesFeature implements Feature {
     private final EnumSet<JavaKind> jniKinds = EnumSet.of(JavaKind.Object, JavaKind.Boolean, JavaKind.Byte, JavaKind.Char,
                     JavaKind.Short, JavaKind.Int, JavaKind.Long, JavaKind.Float, JavaKind.Double, JavaKind.Void);
 
+    /**
+     * Metadata about the table pointed to by the {@code JNIEnv*} C pointer.
+     * 
+     * @see <a href=
+     *      "https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/functions.html#interface_function_table">Documentation
+     *      for the Interface Function Table</a>
+     */
     private StructInfo functionTableMetadata;
 
+    /**
+     * Metadata about the table pointed to by the {@code JavaVM*} C pointer.
+     * 
+     * @see <a href=
+     *      "https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/invocation.html#invocation_api_functions">Documentation
+     *      for the Invocation API Function Table</a>
+     */
     private StructInfo invokeInterfaceMetadata;
 
     private ResolvedJavaMethod[] generatedMethods;
 
     @Override
     public List<Class<? extends Feature>> getRequiredFeatures() {
-        return Arrays.asList(JNIAccessFeature.class, JNIThreadLocalEnvironmentFeature.class, JNIGlobalHandlesFeature.class);
+        return Arrays.asList(JNIAccessFeature.class);
     }
 
     @Override
@@ -106,13 +125,19 @@ public class JNIFunctionTablesFeature implements Feature {
         AnalysisType invokes = metaAccess.lookupJavaType(JNIInvocationInterface.class);
         AnalysisType exports = metaAccess.lookupJavaType(JNIInvocationInterface.Exports.class);
         AnalysisType functions = metaAccess.lookupJavaType(JNIFunctions.class);
-        Stream<AnalysisMethod> analysisMethods = Stream.of(invokes, functions, exports).flatMap(t -> Stream.of(t.getDeclaredMethods()));
+        Stream<AnalysisMethod> analysisMethods = Stream.of(invokes, functions, exports).flatMap(type -> Stream.of(type.getDeclaredMethods()));
         Stream<AnalysisMethod> unimplementedMethods = Stream.of((AnalysisMethod) getSingleMethod(metaAccess, UnimplementedWithJNIEnvArgument.class),
                         (AnalysisMethod) getSingleMethod(metaAccess, UnimplementedWithJavaVMArgument.class));
         Stream.concat(analysisMethods, unimplementedMethods).forEach(method -> {
-            CEntryPoint annotation = method.getAnnotation(CEntryPoint.class);
+            CEntryPoint annotation = GuardedAnnotationAccess.getAnnotation(method, CEntryPoint.class);
             assert annotation != null : "only entry points allowed in class";
-            CEntryPointCallStubSupport.singleton().registerStubForMethod(method, () -> CEntryPointData.create(method));
+            CEntryPointCallStubSupport.singleton().registerStubForMethod(method, () -> {
+                CEntryPointData data = CEntryPointData.create(method);
+                if (!SubstrateOptions.JNIExportSymbols.getValue() && data.getPublishAs() != CEntryPointOptions.Publish.NotPublished) {
+                    data = data.copyWithPublishAs(CEntryPointOptions.Publish.NotPublished);
+                }
+                return data;
+            });
         });
 
         ArrayList<ResolvedJavaMethod> generated = new ArrayList<>();
@@ -126,7 +151,8 @@ public class JNIFunctionTablesFeature implements Feature {
             boolean[] trueFalse = {true, false};
             for (boolean isSetter : trueFalse) {
                 for (boolean isStatic : trueFalse) {
-                    JNIFieldAccessorMethod method = new JNIFieldAccessorMethod(kind, isSetter, isStatic, generatedMethodClass, constantPool, wrappedMetaAccess);
+                    JNIFieldAccessorMethod method = ImageSingletons.lookup(JNIFieldAccessorMethod.Factory.class).create(kind, isSetter, isStatic, generatedMethodClass, constantPool,
+                                    wrappedMetaAccess);
                     AnalysisMethod analysisMethod = access.getUniverse().lookup(method);
                     access.getBigBang().addRootMethod(analysisMethod).registerAsEntryPoint(method.createEntryPointData());
                     generated.add(method);
@@ -154,16 +180,14 @@ public class JNIFunctionTablesFeature implements Feature {
         HostedMetaAccess metaAccess = access.getMetaAccess();
 
         CFunctionPointer unimplementedWithJavaVMArgument = getStubFunctionPointer(access, (HostedMethod) getSingleMethod(metaAccess, UnimplementedWithJavaVMArgument.class));
-        JNIStructFunctionsInitializer<JNIInvokeInterface> invokesInitializer = buildInvokesInitializer(access, unimplementedWithJavaVMArgument);
+        fillJNIInvocationInterfaceTable(access, JNIFunctionTables.singleton().invokeInterfaceDataPrototype, unimplementedWithJavaVMArgument);
 
         CFunctionPointer unimplementedWithJNIEnvArgument = getStubFunctionPointer(access, (HostedMethod) getSingleMethod(metaAccess, UnimplementedWithJNIEnvArgument.class));
-        JNIStructFunctionsInitializer<JNINativeInterface> functionsInitializer = buildFunctionsInitializer(access, unimplementedWithJNIEnvArgument);
-
-        JNIFunctionTables.singleton().initialize(invokesInitializer, functionsInitializer);
+        fillJNIFunctionsTable(access, JNIFunctionTables.singleton().functionTableData, unimplementedWithJNIEnvArgument);
     }
 
-    private static CFunctionPointer prepareCallTrampoline(CompilationAccessImpl access, CallVariant variant) {
-        JNICallTrampolineMethod trampolineMethod = JNIAccessFeature.singleton().getCallTrampolineMethod(variant);
+    private static CFunctionPointer prepareCallTrampoline(CompilationAccessImpl access, CallVariant variant, boolean nonVirtual) {
+        JNICallTrampolineMethod trampolineMethod = JNIAccessFeature.singleton().getCallTrampolineMethod(variant, nonVirtual);
         AnalysisMethod analysisTrampoline = access.getUniverse().getBigBang().getUniverse().lookup(trampolineMethod);
         HostedMethod hostedTrampoline = access.getUniverse().lookup(analysisTrampoline);
         hostedTrampoline.compilationInfo.setCustomParseFunction(trampolineMethod.createCustomParseFunction());
@@ -182,36 +206,27 @@ public class JNIFunctionTablesFeature implements Feature {
         return MethodPointer.factory(access.getUniverse().lookup(stub));
     }
 
-    private JNIStructFunctionsInitializer<JNIInvokeInterface> buildInvokesInitializer(CompilationAccessImpl access, CFunctionPointer unimplemented) {
+    private void fillJNIInvocationInterfaceTable(CompilationAccessImpl access, CFunctionPointer[] table, CFunctionPointer defaultValue) {
+        initializeFunctionPointerTable(access, table, defaultValue);
+
         HostedType invokes = access.getMetaAccess().lookupJavaType(JNIInvocationInterface.class);
         HostedMethod[] methods = invokes.getDeclaredMethods();
-        int index = 0;
-        int[] offsets = new int[methods.length];
-        CFunctionPointer[] pointers = new CFunctionPointer[offsets.length];
         for (HostedMethod method : methods) {
             StructFieldInfo field = findFieldFor(invokeInterfaceMetadata, method.getName());
-            offsets[index] = field.getOffsetInfo().getProperty();
-            pointers[index] = getStubFunctionPointer(access, method);
-            index++;
+            int offset = field.getOffsetInfo().getProperty();
+            setFunctionPointerTable(table, offset, getStubFunctionPointer(access, method));
         }
-        VMError.guarantee(index == offsets.length && index == pointers.length);
-        return new JNIStructFunctionsInitializer<>(JNIInvokeInterface.class, offsets, pointers, unimplemented);
     }
 
-    private JNIStructFunctionsInitializer<JNINativeInterface> buildFunctionsInitializer(CompilationAccessImpl access, CFunctionPointer unimplemented) {
-        Class<JNIFunctions> clazz = JNIFunctions.class;
-        HostedType functions = access.getMetaAccess().lookupJavaType(clazz);
+    private void fillJNIFunctionsTable(CompilationAccessImpl access, CFunctionPointer[] table, CFunctionPointer defaultValue) {
+        initializeFunctionPointerTable(access, table, defaultValue);
+
+        HostedType functions = access.getMetaAccess().lookupJavaType(JNIFunctions.class);
         HostedMethod[] methods = functions.getDeclaredMethods();
-        int index = 0;
-        int count = methods.length + generatedMethods.length;
-        count += jniKinds.size() * 2 * 3; // per kind: Call and CallStatic: varargs, array, va_list
-        int[] offsets = new int[count];
-        CFunctionPointer[] pointers = new CFunctionPointer[offsets.length];
         for (HostedMethod method : methods) {
             StructFieldInfo field = findFieldFor(functionTableMetadata, method.getName());
-            offsets[index] = field.getOffsetInfo().getProperty();
-            pointers[index] = getStubFunctionPointer(access, method);
-            index++;
+            int offset = field.getOffsetInfo().getProperty();
+            setFunctionPointerTable(table, offset, getStubFunctionPointer(access, method));
         }
         for (ResolvedJavaMethod accessor : generatedMethods) {
             StructFieldInfo field = findFieldFor(functionTableMetadata, accessor.getName());
@@ -220,27 +235,38 @@ public class JNIFunctionTablesFeature implements Feature {
             AnalysisMethod analysisMethod = analysisUniverse.lookup(accessor);
             HostedMethod hostedMethod = access.getUniverse().lookup(analysisMethod);
 
-            offsets[index] = field.getOffsetInfo().getProperty();
-            pointers[index] = MethodPointer.factory(hostedMethod);
-            index++;
+            int offset = field.getOffsetInfo().getProperty();
+            setFunctionPointerTable(table, offset, MethodPointer.factory(hostedMethod));
         }
         for (CallVariant variant : CallVariant.values()) {
-            CFunctionPointer trampoline = prepareCallTrampoline(access, variant);
+            CFunctionPointer trampoline = prepareCallTrampoline(access, variant, false);
             String suffix = (variant == CallVariant.ARRAY) ? "A" : ((variant == CallVariant.VA_LIST) ? "V" : "");
-            String[] prefixes = {"Call", "CallStatic"};
-            for (String prefix : prefixes) {
-                for (JavaKind kind : jniKinds) {
+            CFunctionPointer nonvirtualTrampoline = prepareCallTrampoline(access, variant, true);
+            for (JavaKind kind : jniKinds) {
+                String[] prefixes = {"Call", "CallStatic"};
+                for (String prefix : prefixes) {
                     StructFieldInfo field = findFieldFor(functionTableMetadata, prefix + kind.name() + "Method" + suffix);
-                    offsets[index] = field.getOffsetInfo().getProperty();
-                    pointers[index] = trampoline;
-                    index++;
+                    int offset = field.getOffsetInfo().getProperty();
+                    setFunctionPointerTable(table, offset, trampoline);
                 }
+                StructFieldInfo field = findFieldFor(functionTableMetadata, "CallNonvirtual" + kind.name() + "Method" + suffix);
+                int offset = field.getOffsetInfo().getProperty();
+                setFunctionPointerTable(table, offset, nonvirtualTrampoline);
             }
+            StructFieldInfo field = findFieldFor(functionTableMetadata, "NewObject" + suffix);
+            int offset = field.getOffsetInfo().getProperty();
+            setFunctionPointerTable(table, offset, trampoline);
         }
-        VMError.guarantee(index == offsets.length && index == pointers.length);
-        return new JNIStructFunctionsInitializer<>(JNINativeInterface.class, offsets, pointers, unimplemented);
     }
 
+    /**
+     * Finds the field holding a pointer to a given method in a functions table.
+     * 
+     * @param info the functions table to search in
+     * @param name name of the method to search for
+     * @return information about the field holding a pointer to the method named {@code name} in
+     *         {@code info}
+     */
     private static StructFieldInfo findFieldFor(StructInfo info, String name) {
         for (ElementInfo element : info.getChildren()) {
             if (element instanceof StructFieldInfo) {
@@ -251,5 +277,22 @@ public class JNIFunctionTablesFeature implements Feature {
             }
         }
         throw VMError.shouldNotReachHere("Cannot find JNI function table field for: " + name);
+    }
+
+    private static void initializeFunctionPointerTable(CompilationAccessImpl access, CFunctionPointer[] table, CFunctionPointer defaultValue) {
+        for (int i = 0; i < table.length; i++) {
+            table[i] = defaultValue;
+        }
+        /*
+         * All objects in the image heap that have function pointers, i.e., relocations, must be
+         * immutable at run time.
+         */
+        access.registerAsImmutable(table);
+    }
+
+    private static void setFunctionPointerTable(CFunctionPointer[] table, int offsetInBytes, CFunctionPointer value) {
+        int wordSize = FrameAccess.wordSize();
+        VMError.guarantee(offsetInBytes % wordSize == 0);
+        table[offsetInBytes / wordSize] = value;
     }
 }
