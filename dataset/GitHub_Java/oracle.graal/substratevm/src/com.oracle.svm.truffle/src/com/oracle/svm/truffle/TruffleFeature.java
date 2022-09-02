@@ -107,6 +107,7 @@ import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
 import com.oracle.graal.pointsto.phases.SubstrateIntrinsicGraphBuilder;
 import com.oracle.svm.hosted.c.GraalAccess;
 import com.oracle.truffle.api.staticobject.StaticShape;
+import jdk.vm.ci.common.JVMCIError;
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
@@ -1074,7 +1075,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             try {
                 generator = generatorMethod.invoke(null, generatorCL, storageSuperClass, factoryInterface);
             } catch (ReflectiveOperationException e) {
-                throw VMError.shouldNotReachHere(e);
+                throw JVMCIError.shouldNotReachHere(e);
             }
             Class<?> storageClass = ReflectionUtil.readField(SHAPE_GENERATOR_CLASS, "generatedStorageClass", generator);
             Class<?> factoryClass = ReflectionUtil.readField(SHAPE_GENERATOR_CLASS, "generatedFactoryClass", generator);
@@ -1096,7 +1097,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
                 try {
                     newCL = ClassLoader.class.cast(constructor.newInstance(factoryInterface));
                 } catch (ReflectiveOperationException e) {
-                    throw VMError.shouldNotReachHere(e);
+                    throw JVMCIError.shouldNotReachHere(e);
                 }
                 cl = CLASS_LOADERS.putIfAbsent(factoryInterface, newCL);
                 if (cl == null) {
@@ -1110,7 +1111,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             try {
                 return Class.forName(name);
             } catch (ClassNotFoundException e) {
-                throw VMError.shouldNotReachHere(e);
+                throw JVMCIError.shouldNotReachHere(e);
             }
         }
 
