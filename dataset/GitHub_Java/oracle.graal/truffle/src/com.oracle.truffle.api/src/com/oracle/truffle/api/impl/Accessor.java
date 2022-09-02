@@ -368,10 +368,6 @@ public abstract class Accessor {
         public abstract Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> getFileTypeDetectorsSupplier(Object contextVMObject);
 
         public abstract boolean isPolyglotAccessAllowed(Object vmObject);
-
-        public abstract TruffleFile getTruffleFile(String path);
-
-        public abstract TruffleFile getTruffleFile(URI uri);
     }
 
     public abstract static class LanguageSupport {
@@ -481,10 +477,6 @@ public abstract class Accessor {
         public abstract TruffleFile getTruffleFile(String path, Object fileSystemContext);
 
         public abstract TruffleFile getTruffleFile(URI uri, Object fileSystemContext);
-
-        public abstract TruffleFile getTruffleFile(String path, FileSystem fileSystem, Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectorsSupplier);
-
-        public abstract TruffleFile getTruffleFile(URI uri, FileSystem fileSystem, Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectorsSupplier);
     }
 
     public abstract static class InstrumentSupport {
@@ -776,18 +768,6 @@ public abstract class Accessor {
 
         public abstract Object call(Node callNode, CallTarget target, Object... arguments);
 
-    }
-
-    public abstract static class CastUnsafe {
-
-        public abstract Object[] castArrayFixedLength(Object[] args, int length);
-
-        @SuppressWarnings({"unchecked"})
-        public abstract <T> T unsafeCast(Object value, Class<T> type, boolean condition, boolean nonNull, boolean exact);
-    }
-
-    protected CastUnsafe getCastUnsafe() {
-        return SUPPORT.getCastUnsafe();
     }
 
     protected CallInlined getCallInlined() {
