@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,13 +29,9 @@
  */
 package com.oracle.truffle.llvm.runtime.interop.export;
 
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
-
 public interface InteropNodeFactory {
 
-    LLVMLoadNode createLoadNode(LLVMInteropType.ValueKind kind);
+    // LLVMLoadNode createLoadNode(LLVMInteropType.ValueKind kind);
 
-    LLVMStoreNode createStoreNode(LLVMInteropType.ValueKind kind);
+    // LLVMStoreNode createStoreNode(LLVMInteropType.ValueKind kind);
 }
