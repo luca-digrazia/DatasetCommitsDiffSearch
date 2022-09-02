@@ -246,26 +246,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     }
 
     /**
-     * What can be the result of trying to parse a POSIX character class, e.g. [[:alpha:]].
-     */
-    private enum PosixClassParseResult {
-        /**
-         * We successfully parsed a (nested) POSIX character class.
-         */
-        WasNestedPosixClass,
-        /**
-         * We haven't found a POSIX character class, but we should check for a regular nested
-         * character class, e.g. [a[b]].
-         */
-        TryNestedClass,
-        /**
-         * We haven't found a POSIX character class. Furthermore, we should *not* treat this as a
-         * nested character class, but interpret the opening bracket as a literal character.
-         */
-        NotNestedClass
-    }
-
-    /**
      * Characters considered as whitespace in Ruby's regex verbose mode.
      */
     private static final CompilationFinalBitSet WHITESPACE = CompilationFinalBitSet.valueOf(' ', '\t', '\n', '\r', '\f');
@@ -1466,12 +1446,9 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     lowerBound = classEscape();
                     break;
                 case '[':
-                    if (nestedCharClass()) {
-                        wasNestedCharClass = true;
-                        lowerBound = Optional.empty();
-                    } else {
-                        lowerBound = Optional.of(ch);
-                    }
+                    nestedCharClass();
+                    wasNestedCharClass = true;
+                    lowerBound = Optional.empty();
                     break;
                 case '&':
                     if (match("&")) {
@@ -1506,12 +1483,9 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                         upperBound = classEscape();
                         break;
                     case '[':
-                        if (nestedCharClass()) {
-                            wasNestedCharClass = true;
-                            upperBound = Optional.empty();
-                        } else {
-                            upperBound = Optional.of(ch);
-                        }
+                        nestedCharClass();
+                        wasNestedCharClass = true;
+                        upperBound = Optional.empty();
                         break;
                     case '&':
                         if (match("&")) {
@@ -1563,39 +1537,27 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         charClassPool.add(accumulator);
     }
 
-    /**
-     * Parses a nested character class.
-     *
-     * @return true iff a nested character class was found, otherwise, the input should be treated
-     *         as literal characters
-     */
-    private boolean nestedCharClass() {
+    private void nestedCharClass() {
         CodePointSetAccumulator curCharClassBackup = curCharClass;
         curCharClass = acquireCodePointSetAccumulator();
-        PosixClassParseResult parseResult = collectPosixCharClass();
-        if (parseResult == PosixClassParseResult.TryNestedClass) {
+        if (!collectPosixCharClass()) {
             collectCharClass();
         }
         curCharClassBackup.addSet(curCharClass.get());
         releaseCodePointSetAccumulator(curCharClass);
         curCharClass = curCharClassBackup;
-        return parseResult != PosixClassParseResult.NotNestedClass;
     }
 
-    private PosixClassParseResult collectPosixCharClass() {
+    private boolean collectPosixCharClass() {
         int restorePosition = position;
         if (!match(":")) {
-            return PosixClassParseResult.TryNestedClass;
+            return false;
         }
         boolean negated = false;
         if (match("^")) {
             negated = true;
         }
-        String className = getMany(c -> c != '\\' && c != ':' && c != ']');
-        if (className.length() > 20) {
-            position = restorePosition;
-            return PosixClassParseResult.NotNestedClass;
-        }
+        String className = getMany(c -> c != ':' && c != ']');
         if (match(":]")) {
             if (!UNICODE_POSIX_CHAR_CLASSES.containsKey(className)) {
                 throw syntaxError("invalid POSIX bracket type");
@@ -1611,10 +1573,10 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             if (negated) {
                 negateCharClass();
             }
-            return PosixClassParseResult.WasNestedPosixClass;
+            return true;
         } else {
             position = restorePosition;
-            return PosixClassParseResult.TryNestedClass;
+            return false;
         }
     }
 
