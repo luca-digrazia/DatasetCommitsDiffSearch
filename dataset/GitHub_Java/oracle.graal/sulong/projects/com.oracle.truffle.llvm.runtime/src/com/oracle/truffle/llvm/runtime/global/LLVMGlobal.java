@@ -44,6 +44,7 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 
 public final class LLVMGlobal implements LLVMSymbol {
 
+    private final LLVMContext context;
     private final LLVMSourceSymbol sourceSymbol;
     private final boolean readOnly;
 
@@ -60,11 +61,12 @@ public final class LLVMGlobal implements LLVMSymbol {
     @CompilationFinal private boolean interopTypeCached;
     @CompilationFinal private LLVMInteropType interopType;
 
-    public static LLVMGlobal create(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly) {
-        return new LLVMGlobal(name, type, sourceSymbol, readOnly);
+    public static LLVMGlobal create(LLVMContext context, String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly) {
+        return new LLVMGlobal(context, name, type, sourceSymbol, readOnly);
     }
 
-    private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly) {
+    private LLVMGlobal(LLVMContext context, String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly) {
+        this.context = context;
         this.name = name;
         this.type = type;
         this.sourceSymbol = sourceSymbol;
@@ -90,7 +92,7 @@ public final class LLVMGlobal implements LLVMSymbol {
         return library;
     }
 
-    public LLVMInteropType getInteropType(LLVMContext context) {
+    public LLVMInteropType getInteropType() {
         if (!interopTypeCached) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             LLVMSourceType sourceType = sourceSymbol != null ? sourceSymbol.getType() : null;
