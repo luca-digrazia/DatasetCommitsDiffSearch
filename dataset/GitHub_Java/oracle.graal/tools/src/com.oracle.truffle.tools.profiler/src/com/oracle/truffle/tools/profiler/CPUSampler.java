@@ -553,10 +553,6 @@ public final class CPUSampler implements Closeable {
         }
     }
 
-    private synchronized TruffleContext[] contexts() {
-        return activeContexts.keySet().toArray(new TruffleContext[activeContexts.size()]);
-    }
-
     /**
      * Describes the different modes in which the CPU sampler can operate.
      *
@@ -682,46 +678,56 @@ public final class CPUSampler implements Closeable {
             if (delaySamplingUntilNonInternalLangInit && !nonInternalLanguageContextInitialized) {
                 return;
             }
-            long taskStartTime = System.currentTimeMillis();
-            for (TruffleContext context : contexts()) {
+
+            long timestamp = System.currentTimeMillis();
+            TruffleContext[] contexts;
+            synchronized (CPUSampler.this) {
+                contexts = activeContexts.keySet().toArray(new TruffleContext[activeContexts.size()]);
+            }
+
+            context: for (TruffleContext context : contexts) {
                 if (context.isClosed()) {
                     continue;
                 }
+
                 List<StackSample> samples = safepointStack.sample(env, context);
+
                 synchronized (CPUSampler.this) {
                     if (context.isClosed()) {
                         continue;
                     }
                     Map<Thread, ProfilerNode<Payload>> nodes = activeContexts.get(context);
-                    // TODO: Is this check really needed?
                     if (nodes == null) {
-                        continue;
+                        continue context;
                     }
+
                     for (StackSample sample : samples) {
                         biasStatistic.accept(sample.biasNs);
                         durationStatistic.accept(sample.durationNs);
+
                         ProfilerNode<Payload> threadNode = nodes.computeIfAbsent(sample.thread, new Function<Thread, ProfilerNode<Payload>>() {
                             @Override
                             public ProfilerNode<Payload> apply(Thread thread) {
                                 return new ProfilerNode<>();
                             }
                         });
-                        record(sample, threadNode, context, taskStartTime);
+                        sample(context, sample, threadNode, timestamp);
                     }
                 }
             }
 
         }
 
-        private void record(StackSample sample, ProfilerNode<Payload> threadNode, TruffleContext context, long timestamp) {
+        private void sample(TruffleContext context, StackSample sample, ProfilerNode<Payload> threadNode, long timestamp) {
             synchronized (CPUSampler.this) {
                 // now traverse the stack and insert the path into the tree
                 ProfilerNode<Payload> treeNode = threadNode;
+
                 for (int i = sample.stack.size() - 1; i >= 0; i--) {
                     StackTraceEntry location = sample.stack.get(i);
+                    boolean isCompiled = location.isCompiled();
                     treeNode = addOrUpdateChild(treeNode, location);
                     Payload payload = treeNode.getPayload();
-                    boolean isCompiled = location.isCompiled();
                     if (i == 0) {
                         if (isCompiled) {
                             payload.selfCompiledHitCount++;
