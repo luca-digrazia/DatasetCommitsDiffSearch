@@ -53,12 +53,34 @@ import com.oracle.truffle.api.interop.InteropLibrary.Asserts;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
+import com.oracle.truffle.api.library.Libraries;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.ResolvedLibrary;
 
 /**
  * Subclasses of this class represent guest language interoperability libraries. This class is only
  * a marker base class used for documentation purposes.
+ * <p>
+ * The following libraries are available:
+ * <ul>
+ * <li>{@link ValueLibrary}: contains messages for values, e.g. whether a value is
+ * <code>null</code>.
+ * <li>{@link ObjectLibrary}: contains messages for objects. e.g. whether a value represents an
+ * object and access to its members.
+ * <li>{@link ArrayLibrary}: contains messages for arrays. e.g. whether a value is an array and
+ * access to its elements.
+ * <li>{@link NumberLibrary}: contains messages for numbers. e.g. whether a value is a number and
+ * access to its primitive value.
+ * <li>{@link BooleanLibrary}: contains messages for booleans. e.g. whether a value is a boolean and
+ * access to its value.
+ * <li>{@link StringLibrary}: contains messages for strings.
+ * <li>{@link ExecutableLibrary}: contains contracts for executable values, e.g. functions, methods
+ * or promises.
+ * <li>{@link InstantiableLibrary}: contains contracts for instantiable values, e.g. constructors or
+ * meta-objects, like Java classes.
+ * <li>{@link NativeLibrary}: contains contracts for native values, e.g. pointers.
+ * </ul>
+ * Please see the individual subclass for details.
  * <p>
  * With interop libraries only certain values are allowed to be passed. The following Java types are
  * allowed to be passed as receiver or argument value:
@@ -80,8 +102,6 @@ import com.oracle.truffle.api.library.ResolvedLibrary;
  *
  * TODO examples.
  *
- * <h3>Implementing</h3>
- *
  * @since 1.0
  */
 @GenerateLibrary(assertions = Asserts.class, receiverType = TruffleObject.class)
@@ -101,25 +121,8 @@ public abstract class InteropLibrary extends Library {
     protected InteropLibrary() {
     }
 
-    /**
-     * Returns <code>true</code> if the receiver represents a <code>null</code> like value, else
-     * <code>false</code>. Most object oriented languages have one or many values representing null
-     * values. If a receiver represents a null then cannot represent any of the following types:
-     * <ul>
-     * <li>{@link #isString(Object) String}
-     * <li>{@link #isBoolean(Object) Boolean}
-     * <li>{@link #isExecutable(Object) Executable}
-     * <li>{@link #isInstantiable(Object) Instantiable}
-     * <li>{@link #isNumber(Object) Number}
-     * <li>{@link #isPointer(Object) Pointer}
-     * </ul>
-     * Null values may have {@link #hasMembers(Object) members} or {@link #hasArrayElements(Object)
-     * array elements}.
-     * <p>
-     * <b>Example Interpretations</b>:
-     *
-     * @since 1.0
-     */
+    // Value Messages
+
     public boolean isNull(Object receiver) {
         return false;
     }
@@ -242,11 +245,11 @@ public abstract class InteropLibrary extends Library {
 
     @Abstract(ifExported = {"getMembers", "isMemberReadable", "readMember", "isMemberModifiable", "isMemberInsertable", "writeMember", "isMemberRemovable", "removeMember", "isMemberInvokable",
                     "invokeMember", "isMemberInternal", "hasMemberReadSideEffects", "hasMemberWriteSideEffects"})
-    public boolean hasMembers(Object receiver) {
+    public boolean isObject(Object receiver) {
         return false;
     }
 
-    @Abstract(ifExported = "hasMembers")
+    @Abstract(ifExported = "isObject")
     public Object getMembers(Object receiver, boolean includeInternal) throws UnsupportedMessageException {
         throw UnsupportedMessageException.create();
     }
@@ -323,57 +326,57 @@ public abstract class InteropLibrary extends Library {
 
     // Array Messages
 
-    @Abstract(ifExported = {"readArrayElement", "writeArrayElement", "removeArrayElement", "isArrayElementModifiable", "isArrayElementRemovable", "isArrayElementReadable"})
-    public boolean hasArrayElements(Object receiver) {
+    @Abstract(ifExported = {"readElement", "writeElement", "removeElement", "isElementModifiable", "isElementRemovable", "isElementReadable"})
+    public boolean isArray(Object receiver) {
         return false;
     }
 
-    @Abstract(ifExported = {"hasArrayElements"})
-    public Object readArrayElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
+    @Abstract(ifExported = {"isArray"})
+    public Object readElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
         throw UnsupportedMessageException.create();
     }
 
-    @Abstract(ifExported = {"hasArrayElements"})
+    @Abstract(ifExported = {"isArray"})
     public long getArraySize(Object receiver) throws UnsupportedMessageException {
         throw UnsupportedMessageException.create();
     }
 
-    @Abstract(ifExported = {"hasArrayElements"})
-    public boolean isArrayElementReadable(Object receiver, long index) {
+    @Abstract(ifExported = {"isArray"})
+    public boolean isElementReadable(Object receiver, long index) {
         return false;
     }
 
-    @Abstract(ifExported = {"isArrayElementModifiable", "isArrayElementInsertable"})
-    public void writeArrayElement(Object receiver, long index, Object value) throws UnsupportedMessageException, UnsupportedTypeException, InvalidArrayIndexException {
+    @Abstract(ifExported = {"isElementModifiable", "isElementInsertable"})
+    public void writeElement(Object receiver, long index, Object value) throws UnsupportedMessageException, UnsupportedTypeException, InvalidArrayIndexException {
         throw UnsupportedMessageException.create();
     }
 
-    @Abstract(ifExported = "isArrayElementRemovable")
-    public void removeArrayElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
+    @Abstract(ifExported = "isElementRemovable")
+    public void removeElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
         throw UnsupportedMessageException.create();
     }
 
-    @Abstract(ifExported = "writeArrayElement")
-    public boolean isArrayElementModifiable(Object receiver, long index) {
+    @Abstract(ifExported = "writeElement")
+    public boolean isElementModifiable(Object receiver, long index) {
         return false;
     }
 
-    @Abstract(ifExported = "writeArrayElement")
-    public boolean isArrayElementInsertable(Object receiver, long index) {
+    @Abstract(ifExported = "writeElement")
+    public boolean isElementInsertable(Object receiver, long index) {
         return false;
     }
 
-    @Abstract(ifExported = "removeArrayElement")
-    public boolean isArrayElementRemovable(Object receiver, long index) {
+    @Abstract(ifExported = "removeElement")
+    public boolean isElementRemovable(Object receiver, long index) {
         return false;
     }
 
-    public final boolean isArrayElementWritable(Object receiver, long index) {
-        return isArrayElementModifiable(receiver, index) || isArrayElementInsertable(receiver, index);
+    public final boolean isElementWritable(Object receiver, long index) {
+        return isElementModifiable(receiver, index) || isElementInsertable(receiver, index);
     }
 
-    public final boolean isArrayElementExisting(Object receiver, long index) {
-        return isArrayElementModifiable(receiver, index) || isArrayElementReadable(receiver, index) || isArrayElementRemovable(receiver, index);
+    public final boolean isElementExisting(Object receiver, long index) {
+        return isElementModifiable(receiver, index) || isElementReadable(receiver, index) || isElementRemovable(receiver, index);
     }
 
     @Abstract(ifExported = {"asPointer"})
@@ -386,18 +389,24 @@ public abstract class InteropLibrary extends Library {
         throw UnsupportedMessageException.create();
     }
 
-    public void toNative(Object receiver) {
+    public Object toNative(Object receiver) throws UnsupportedMessageException {
+        throw UnsupportedMessageException.create();
     }
 
-    /**
-     * Returns the resolved language interoperability library that allows to instantiate libraries
-     * and inspect its messages. Short-cut for {@link ResolvedLibrary#resolve(Class)
-     * ResolvedLibrary.resolve(InteropLibrary.class)}.
-     *
-     * @see ResolvedLibrary#resolve(Class)
-     */
-    public static ResolvedLibrary<InteropLibrary> resolve() {
-        return Lazy.INTEROP_LIBRARY;
+    public static InteropLibrary createDispatched(int limit) {
+        return Lazy.INTEROP_LIBRARY.createCachedDispatch(limit);
+    }
+
+    public static InteropLibrary create(Object receiver) {
+        return Lazy.INTEROP_LIBRARY.createCached(receiver);
+    }
+
+    public static InteropLibrary getUncached() {
+        return Lazy.UNCACHED_DISPATCH;
+    }
+
+    public static InteropLibrary getUncached(Object receiver) {
+        return Lazy.INTEROP_LIBRARY.getUncached(receiver);
     }
 
     /*
@@ -410,7 +419,8 @@ public abstract class InteropLibrary extends Library {
             /* No instances */
         }
 
-        static final ResolvedLibrary<InteropLibrary> INTEROP_LIBRARY = ResolvedLibrary.resolve(InteropLibrary.class);
+        static final ResolvedLibrary<InteropLibrary> INTEROP_LIBRARY = ResolvedLibrary.lookup(InteropLibrary.class);
+        static final InteropLibrary UNCACHED_DISPATCH = INTEROP_LIBRARY.getUncachedDispatch();
 
     }
 
@@ -699,9 +709,9 @@ public abstract class InteropLibrary extends Library {
         }
 
         @Override
-        public boolean hasMembers(Object receiver) {
+        public boolean isObject(Object receiver) {
             assert preCondition(receiver);
-            return delegate.hasMembers(receiver);
+            return delegate.isObject(receiver);
         }
 
         @Override
@@ -711,7 +721,7 @@ public abstract class InteropLibrary extends Library {
             boolean wasReadable = ASSERTIONS_ENABLED && delegate.isMemberReadable(receiver, identifier);
             try {
                 Object result = delegate.readMember(receiver, identifier);
-                assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+                assert delegate.isObject(receiver) : violationInvariant(receiver, identifier);
                 assert wasReadable : violationInvariant(receiver, identifier);
                 assert validReturn(receiver, result);
                 return result;
@@ -729,7 +739,7 @@ public abstract class InteropLibrary extends Library {
             boolean wasWritable = ASSERTIONS_ENABLED && (delegate.isMemberModifiable(receiver, identifier) || delegate.isMemberInsertable(receiver, identifier));
             try {
                 delegate.writeMember(receiver, identifier, value);
-                assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+                assert delegate.isObject(receiver) : violationInvariant(receiver, identifier);
                 assert wasWritable : violationInvariant(receiver, identifier);
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException || e instanceof UnknownIdentifierException || e instanceof UnsupportedTypeException : violationPost(receiver, e);
@@ -744,7 +754,7 @@ public abstract class InteropLibrary extends Library {
             boolean wasRemovable = ASSERTIONS_ENABLED && delegate.isMemberRemovable(receiver, identifier);
             try {
                 delegate.removeMember(receiver, identifier);
-                assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+                assert delegate.isObject(receiver) : violationInvariant(receiver, identifier);
                 assert wasRemovable : violationInvariant(receiver, identifier);
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException || e instanceof UnknownIdentifierException : violationPost(receiver, e);
@@ -760,7 +770,7 @@ public abstract class InteropLibrary extends Library {
             boolean wasInvocable = ASSERTIONS_ENABLED && delegate.isMemberInvokable(receiver, identifier);
             try {
                 Object result = delegate.invokeMember(receiver, identifier, arguments);
-                assert delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+                assert delegate.isObject(receiver) : violationInvariant(receiver, identifier);
                 assert wasInvocable : violationInvariant(receiver, identifier);
                 assert validReturn(receiver, result);
                 return result;
@@ -787,8 +797,8 @@ public abstract class InteropLibrary extends Library {
 
         private static boolean assertMemberKeys(Object receiver, Object result, boolean internal) {
             assert result != null : violationPost(receiver, result);
-            InteropLibrary uncached = InteropLibrary.resolve().getUncached(result);
-            assert uncached.hasArrayElements(result) : violationPost(receiver, result);
+            InteropLibrary uncached = Libraries.getUncached(InteropLibrary.class, result);
+            assert uncached.isArray(result) : violationPost(receiver, result);
             long arraySize;
             try {
                 arraySize = uncached.getArraySize(result);
@@ -797,17 +807,18 @@ public abstract class InteropLibrary extends Library {
                 return true;
             }
             for (int i = 0; i < arraySize; i++) {
-                assert uncached.isArrayElementReadable(result, i) : violationPost(receiver, result);
+                assert uncached.isElementReadable(result, i) : violationPost(receiver, result);
                 Object element;
                 try {
-                    element = uncached.readArrayElement(result, i);
+                    element = uncached.readElement(result, i);
                 } catch (UnsupportedMessageException | InvalidArrayIndexException e) {
                     assert false : violationPost(receiver, result);
                     return true;
                 }
-                assert InteropLibrary.resolve().getUncachedDispatch().isString(element) : violationPost(receiver, element);
+                InteropLibrary uncachedElement = Libraries.getUncached(InteropLibrary.class, element);
+                assert uncachedElement.isString(element) : violationPost(receiver, element);
                 try {
-                    InteropLibrary.resolve().getUncachedDispatch().asString(element);
+                    uncachedElement.asString(element);
                 } catch (UnsupportedMessageException e) {
                     assert false : violationInvariant(result, i);
                 }
@@ -820,7 +831,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean result = delegate.hasMemberReadSideEffects(receiver, identifier);
-            assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isObject(receiver) : violationInvariant(receiver, identifier);
             assert !result || delegate.isMemberReadable(receiver, identifier) : violationInvariant(receiver, identifier);
             return result;
         }
@@ -830,7 +841,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean result = delegate.hasMemberWriteSideEffects(receiver, identifier);
-            assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isObject(receiver) : violationInvariant(receiver, identifier);
             assert !result || delegate.isMemberWritable(receiver, identifier) : violationInvariant(receiver, identifier);
             return result;
         }
@@ -840,7 +851,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean result = delegate.isMemberReadable(receiver, identifier);
-            assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isObject(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
@@ -849,7 +860,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean result = delegate.isMemberModifiable(receiver, identifier);
-            assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isObject(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
@@ -858,7 +869,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean result = delegate.isMemberInsertable(receiver, identifier);
-            assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isObject(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
@@ -867,7 +878,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean result = delegate.isMemberRemovable(receiver, identifier);
-            assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isObject(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
@@ -876,7 +887,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean result = delegate.isMemberInvokable(receiver, identifier);
-            assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isObject(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
@@ -885,23 +896,23 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean result = delegate.isMemberInternal(receiver, identifier);
-            assert !result || delegate.hasMembers(receiver) : violationInvariant(receiver, identifier);
+            assert !result || delegate.isObject(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
         @Override
-        public boolean hasArrayElements(Object receiver) {
+        public boolean isArray(Object receiver) {
             assert preCondition(receiver);
-            return delegate.hasArrayElements(receiver);
+            return delegate.isArray(receiver);
         }
 
         @Override
-        public Object readArrayElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
+        public Object readElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
             assert preCondition(receiver);
-            boolean wasReadable = ASSERTIONS_ENABLED && delegate.isArrayElementReadable(receiver, index);
+            boolean wasReadable = ASSERTIONS_ENABLED && delegate.isElementReadable(receiver, index);
             try {
-                Object result = delegate.readArrayElement(receiver, index);
-                assert delegate.hasArrayElements(receiver) : violationInvariant(receiver, index);
+                Object result = delegate.readElement(receiver, index);
+                assert delegate.isArray(receiver) : violationInvariant(receiver, index);
                 assert wasReadable : violationInvariant(receiver, index);
                 assert validReturn(receiver, result);
                 return result;
@@ -912,13 +923,13 @@ public abstract class InteropLibrary extends Library {
         }
 
         @Override
-        public void writeArrayElement(Object receiver, long index, Object value) throws UnsupportedMessageException, UnsupportedTypeException, InvalidArrayIndexException {
+        public void writeElement(Object receiver, long index, Object value) throws UnsupportedMessageException, UnsupportedTypeException, InvalidArrayIndexException {
             assert preCondition(receiver);
             assert validArgument(receiver, value);
-            boolean wasWritable = ASSERTIONS_ENABLED && delegate.isArrayElementModifiable(receiver, index) || delegate.isArrayElementInsertable(receiver, index);
+            boolean wasWritable = ASSERTIONS_ENABLED && delegate.isElementModifiable(receiver, index) || delegate.isElementInsertable(receiver, index);
             try {
-                delegate.writeArrayElement(receiver, index, value);
-                assert delegate.hasArrayElements(receiver) : violationInvariant(receiver, index);
+                delegate.writeElement(receiver, index, value);
+                assert delegate.isArray(receiver) : violationInvariant(receiver, index);
                 assert wasWritable : violationInvariant(receiver, index);
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException || e instanceof UnsupportedTypeException || e instanceof InvalidArrayIndexException : violationPost(receiver, e);
@@ -927,12 +938,12 @@ public abstract class InteropLibrary extends Library {
         }
 
         @Override
-        public void removeArrayElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
+        public void removeElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
             assert preCondition(receiver);
-            boolean wasRemovable = ASSERTIONS_ENABLED && delegate.isArrayElementRemovable(receiver, index);
+            boolean wasRemovable = ASSERTIONS_ENABLED && delegate.isElementRemovable(receiver, index);
             try {
-                delegate.removeArrayElement(receiver, index);
-                assert delegate.hasArrayElements(receiver) : violationInvariant(receiver, index);
+                delegate.removeElement(receiver, index);
+                assert delegate.isArray(receiver) : violationInvariant(receiver, index);
                 assert wasRemovable : violationInvariant(receiver, index);
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException || e instanceof InvalidArrayIndexException : violationPost(receiver, e);
@@ -945,7 +956,7 @@ public abstract class InteropLibrary extends Library {
             assert preCondition(receiver);
             try {
                 long result = delegate.getArraySize(receiver);
-                assert delegate.hasArrayElements(receiver) : violationInvariant(receiver);
+                assert delegate.isArray(receiver) : violationInvariant(receiver);
                 return result;
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException : violationPost(receiver, e);
@@ -954,34 +965,34 @@ public abstract class InteropLibrary extends Library {
         }
 
         @Override
-        public boolean isArrayElementReadable(Object receiver, long identifier) {
+        public boolean isElementReadable(Object receiver, long identifier) {
             assert preCondition(receiver);
-            boolean result = delegate.isArrayElementReadable(receiver, identifier);
-            assert !result || delegate.hasArrayElements(receiver) : violationInvariant(receiver, identifier);
+            boolean result = delegate.isElementReadable(receiver, identifier);
+            assert !result || delegate.isArray(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
         @Override
-        public boolean isArrayElementModifiable(Object receiver, long identifier) {
+        public boolean isElementModifiable(Object receiver, long identifier) {
             assert preCondition(receiver);
-            boolean result = delegate.isArrayElementModifiable(receiver, identifier);
-            assert !result || delegate.hasArrayElements(receiver) : violationInvariant(receiver, identifier);
+            boolean result = delegate.isElementModifiable(receiver, identifier);
+            assert !result || delegate.isArray(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
         @Override
-        public boolean isArrayElementInsertable(Object receiver, long identifier) {
+        public boolean isElementInsertable(Object receiver, long identifier) {
             assert preCondition(receiver);
-            boolean result = delegate.isArrayElementInsertable(receiver, identifier);
-            assert !result || delegate.hasArrayElements(receiver) : violationInvariant(receiver, identifier);
+            boolean result = delegate.isElementInsertable(receiver, identifier);
+            assert !result || delegate.isArray(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
         @Override
-        public boolean isArrayElementRemovable(Object receiver, long identifier) {
+        public boolean isElementRemovable(Object receiver, long identifier) {
             assert preCondition(receiver);
-            boolean result = delegate.isArrayElementRemovable(receiver, identifier);
-            assert !result || delegate.hasArrayElements(receiver) : violationInvariant(receiver, identifier);
+            boolean result = delegate.isElementRemovable(receiver, identifier);
+            assert !result || delegate.isArray(receiver) : violationInvariant(receiver, identifier);
             return result;
         }
 
@@ -993,11 +1004,16 @@ public abstract class InteropLibrary extends Library {
         }
 
         @Override
-        public void toNative(Object receiver) {
+        public Object toNative(Object receiver) throws UnsupportedMessageException {
             assert preCondition(receiver);
-            boolean wasPointer = delegate.isPointer(receiver);
-            delegate.toNative(receiver);
-            assert !wasPointer || delegate.isPointer(receiver) : violationInvariant(receiver);
+            try {
+                Object result = delegate.toNative(receiver);
+                assert validReturn(receiver, result);
+                return result;
+            } catch (InteropException e) {
+                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
+                throw e;
+            }
         }
 
         @Override

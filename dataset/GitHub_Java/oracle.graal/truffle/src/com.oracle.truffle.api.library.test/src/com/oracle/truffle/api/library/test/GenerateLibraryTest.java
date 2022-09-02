@@ -103,7 +103,7 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
         }
 
         @ExportMessage
-        static class Call {
+        static class CallNode extends Node {
             @Specialization
             static final String call(Sample s) {
                 if (s.name != null) {

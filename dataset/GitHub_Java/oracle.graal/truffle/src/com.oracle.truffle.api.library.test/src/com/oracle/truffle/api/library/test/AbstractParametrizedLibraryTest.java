@@ -45,7 +45,7 @@ import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.LibraryFactory;
+import com.oracle.truffle.api.library.ResolvedLibrary;
 
 @RunWith(Parameterized.class)
 public abstract class AbstractParametrizedLibraryTest extends AbstractLibraryTest {
@@ -61,16 +61,16 @@ public abstract class AbstractParametrizedLibraryTest extends AbstractLibraryTes
     public /* NOT private */ TestRun run;
 
     protected final <T extends Library> T createLibrary(Class<T> library, Object receiver) {
-        LibraryFactory<T> lib = LibraryFactory.resolve(library);
+        ResolvedLibrary<T> lib = ResolvedLibrary.lookup(library);
         switch (run) {
             case CACHED:
-                return adopt(lib.create(receiver));
+                return adopt(lib.createCached(receiver));
             case UNCACHED:
                 return lib.getUncached(receiver);
             case DISPATCHED_CACHED:
-                return adopt(lib.createDispatched(2));
+                return adopt(lib.createCachedDispatch(2));
             case DISPATCHED_UNCACHED:
-                return lib.getUncached();
+                return lib.getUncachedDispatch();
         }
 
         throw new AssertionError();

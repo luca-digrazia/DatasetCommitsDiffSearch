@@ -459,9 +459,8 @@ public class ExportMethodTest extends AbstractLibraryTest {
     @ExportLibrary(ExportsTestLibrary1.class)
     static class ExportTestObjectError13 {
         @ExportMessage
-        public String foo(int arg,
-                        @ExpectError("Error parsing expression 'create()': The method create is undefined for the enclosing scope.")//
-                        @Cached Node node) {
+        @ExpectError("Error parsing expression 'create()': The method create is undefined for the enclosing scope.")
+        public String foo(int arg, @Cached Node node) {
             return "42";
         }
     }
@@ -469,9 +468,8 @@ public class ExportMethodTest extends AbstractLibraryTest {
     @ExportLibrary(ExportsTestLibrary1.class)
     static class ExportTestObjectError14 {
         @ExportMessage
-        public String foo(int arg,
-                        @ExpectError("Invalid library type Node. Library is not a subclass of Library.")//
-                        @CachedLibrary("this") Node node) {
+        @ExpectError("Invalid library type Node. Library is not a subclass of Library.")
+        public String foo(int arg, @CachedLibrary("this") Node node) {
             return "42";
         }
     }
@@ -530,9 +528,8 @@ public class ExportMethodTest extends AbstractLibraryTest {
     @ExportLibrary(ExportsTestLibrary4.class)
     static class ExportsTestObjectError16 {
         @ExportMessage
-        public int intArg(int arg,
-                        @ExpectError("Failed to generate code for @GenerateUncached: %") //
-                        @Cached DSLNode node) {
+        @ExpectError("Failed to generate code for @GenerateUncached: %") //
+        public int intArg(int arg, @Cached DSLNode node) {
             return 42;
         }
     }
@@ -540,9 +537,8 @@ public class ExportMethodTest extends AbstractLibraryTest {
     @ExportLibrary(ExportsTestLibrary4.class)
     static class ExportsTestObjectError17 {
         @ExportMessage
-        public int intArg(int arg,
-                        @ExpectError("Failed to generate code for @GenerateUncached: %")//
-                        @Cached DSLNode node) {
+        @ExpectError("Failed to generate code for @GenerateUncached: %")
+        public int intArg(int arg, @Cached DSLNode node) {
             return 42;
         }
 
@@ -555,17 +551,6 @@ public class ExportMethodTest extends AbstractLibraryTest {
                 return arg;
             }
         }
-    }
-
-    @ExpectError("@ExportLibrary is not supported for interfaces at the moment.")
-    @ExportLibrary(ExportsTestLibrary4.class)
-    interface ExportsTestObjectError18 {
-
-        @ExportMessage
-        default int intArg(int arg) {
-            return 42;
-        }
-
     }
 
 }

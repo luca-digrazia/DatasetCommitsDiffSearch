@@ -45,26 +45,26 @@ import static org.junit.Assert.fail;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.LibraryFactory;
+import com.oracle.truffle.api.library.ResolvedLibrary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
 public abstract class AbstractLibraryTest {
 
     protected static final <T extends Library> T createCached(Class<T> library, Object receiver) {
-        return adopt(LibraryFactory.resolve(library).create(receiver));
+        return adopt(ResolvedLibrary.lookup(library).createCached(receiver));
     }
 
     protected static final <T extends Library> T createCachedDispatch(Class<T> library, int limit) {
-        return adopt(LibraryFactory.resolve(library).createDispatched(limit));
+        return adopt(ResolvedLibrary.lookup(library).createCachedDispatch(limit));
     }
 
     protected static final <T extends Library> T getUncached(Class<T> library, Object receiver) {
-        return LibraryFactory.resolve(library).getUncached(receiver);
+        return ResolvedLibrary.lookup(library).getUncached(receiver);
     }
 
     protected static final <T extends Library> T getUncachedDispatch(Class<T> library) {
-        return LibraryFactory.resolve(library).getUncached();
+        return ResolvedLibrary.lookup(library).getUncachedDispatch();
     }
 
     static <T extends Node> T adopt(T node) {

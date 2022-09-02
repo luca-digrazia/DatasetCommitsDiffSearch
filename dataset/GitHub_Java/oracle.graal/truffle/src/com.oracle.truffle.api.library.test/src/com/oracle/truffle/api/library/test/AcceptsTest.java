@@ -150,11 +150,7 @@ public class AcceptsTest extends AbstractParametrizedLibraryTest {
     @Test
     public void testInvalidAccepts1() {
         Object value = new InvalidAccepts1();
-        if (!run.isCached()) {
-            // the assertion only works with uncached libraries because verifying it might
-            // cause side-effects.
-            assertAssertionError(() -> createLibrary(AcceptsTestLibrary.class, value));
-        }
+        assertAssertionError(() -> createLibrary(AcceptsTestLibrary.class, value));
     }
 
     @ExportLibrary(value = AcceptsTestLibrary.class)

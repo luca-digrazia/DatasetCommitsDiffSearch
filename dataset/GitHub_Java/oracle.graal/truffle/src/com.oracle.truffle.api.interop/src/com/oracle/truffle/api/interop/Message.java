@@ -108,7 +108,7 @@ public abstract class Message {
      *
      * @since 0.8 or earlier
      * @deprecated use {@link ObjectLibrary#readMember(Object, String)} or
-     *             {@link ArrayLibrary#readArrayElement(Object, long)} instead. See
+     *             {@link ArrayLibrary#readElement(Object, long)} instead. See
      *             {@link InteropLibrary} for an overview of the new interop messages.
      */
     @Deprecated public static final Message READ = Read.INSTANCE;
@@ -182,7 +182,7 @@ public abstract class Message {
      *
      * @since 0.8 or earlier
      * @deprecated use {@link ObjectLibrary#writeMember(Object, String, Object)} or
-     *             {@link ArrayLibrary#writeArrayElement(Object, long, Object)} instead.
+     *             {@link ArrayLibrary#writeElement(Object, long, Object)} instead.
      */
     @Deprecated public static final Message WRITE = Write.INSTANCE;
 
@@ -216,7 +216,7 @@ public abstract class Message {
      *
      * @since 0.32
      * @deprecated use {@link ObjectLibrary#removeMember(Object, String)} or
-     *             {@link ArrayLibrary#removeArrayElement(Object, long)} instead.
+     *             {@link ArrayLibrary#removeElement(Object, long)} instead.
      */
     @Deprecated public static final Message REMOVE = Remove.INSTANCE;
 
@@ -493,7 +493,7 @@ public abstract class Message {
      * @since 0.8 or earlier
      * @see ForeignAccess#sendHasSize(com.oracle.truffle.api.nodes.Node,
      *      com.oracle.truffle.api.interop.TruffleObject)
-     * @deprecated use {@link ArrayLibrary#hasArrayElements(Object)} instead. See {@link InteropLibrary} for
+     * @deprecated use {@link ArrayLibrary#isArray(Object)} instead. See {@link InteropLibrary} for
      *             an overview of the new interop messages.
      */
     @Deprecated public static final Message HAS_SIZE = HasSize.INSTANCE;
@@ -575,16 +575,16 @@ public abstract class Message {
      * {@link Message#createNode() created node}.
      *
      * @since 0.26
-     * @deprecated for {@link ObjectLibrary#hasMembers(Object) objects} use
+     * @deprecated for {@link ObjectLibrary#isObject(Object) objects} use
      *             {@link ObjectLibrary#isMemberReadable(Object, String)},
      *             {@link ObjectLibrary#isMemberWritable(Object, String)},
      *             {@link ObjectLibrary#isMemberInsertable(Object, String)},
      *             {@link ObjectLibrary#isMemberRemovable(Object, String)} or
      *             {@link ObjectLibrary#isMemberInternal(Object, String)} instead. For
-     *             {@link ArrayLibrary#hasArrayElements(Object) arras} use
-     *             {@link ArrayLibrary#isArrayElementReadable(Object, long)},
-     *             {@link ArrayLibrary#isArrayElementWritable(Object, long)},
-     *             {@link ArrayLibrary#isArrayElementInsertable(Object, long)} instead. See
+     *             {@link ArrayLibrary#isArray(Object) arras} use
+     *             {@link ArrayLibrary#isElementReadable(Object, long)},
+     *             {@link ArrayLibrary#isElementWritable(Object, long)},
+     *             {@link ArrayLibrary#isElementInsertable(Object, long)} instead. See
      *             {@link InteropLibrary} for an overview of the new interop messages.
      */
     @Deprecated public static final Message KEY_INFO = KeyInfoMsg.INSTANCE;
@@ -604,7 +604,7 @@ public abstract class Message {
      * @since 0.30
      * @see ForeignAccess#sendHasKeys(com.oracle.truffle.api.nodes.Node,
      *      com.oracle.truffle.api.interop.TruffleObject)
-     * @deprecated use {@link ObjectLibrary#hasMembers(Object)} instead. See {@link InteropLibrary}
+     * @deprecated use {@link ObjectLibrary#isObject(Object)} instead. See {@link InteropLibrary}
      *             for an overview of the new interop messages.
      */
     @Deprecated public static final Message HAS_KEYS = HasKeys.INSTANCE;
@@ -749,7 +749,7 @@ public abstract class Message {
      *         {@link ForeignAccess#send(com.oracle.truffle.api.nodes.Node, com.oracle.truffle.api.interop.TruffleObject, java.lang.Object...)}
      *         method.
      * @since 0.8 or earlier
-     * @deprecated use {@link Library#create(Class)} or
+     * @deprecated use {@link Library#createCached(Class)} or
      *             {@link Library#getUncached(Class, Object)} instead. see {@link InteropLibrary}
      *             for examples.
      */

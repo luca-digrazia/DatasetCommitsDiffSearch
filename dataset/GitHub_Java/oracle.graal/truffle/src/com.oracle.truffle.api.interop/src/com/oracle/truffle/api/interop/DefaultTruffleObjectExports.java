@@ -43,20 +43,19 @@ package com.oracle.truffle.api.interop;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.ImportStatic;
-import com.oracle.truffle.api.dsl.Cached.Shared;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 
 @SuppressWarnings("deprecation")
-@ExportLibrary(value = InteropLibrary.class, receiverType = TruffleObject.class)
+@ExportLibrary(value = InteropLibrary.class, receiverClass = TruffleObject.class)
 @ImportStatic(Message.class)
 class DefaultTruffleObjectExports {
 
     @ExportMessage
     static boolean isBoolean(TruffleObject receiver,
-                    @Shared("isBoxed") @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox) {
+                    @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox) {
         if (LibraryToLegacy.sendIsBoxed(isBoxed, receiver)) {
             try {
                 return LibraryToLegacy.sendUnbox(unbox, receiver) instanceof Boolean;
@@ -69,7 +68,7 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static boolean asBoolean(TruffleObject receiver,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox) throws UnsupportedMessageException {
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox) throws UnsupportedMessageException {
         Object value = LibraryToLegacy.sendUnbox(unbox, receiver);
         if (value instanceof Boolean) {
             return (boolean) value;
@@ -79,8 +78,8 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static boolean isString(TruffleObject receiver,
-                    @Shared("isBoxed") @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox) {
+                    @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox) {
         if (LibraryToLegacy.sendIsBoxed(isBoxed, receiver)) {
             try {
                 Object unboxed = LibraryToLegacy.sendUnbox(unbox, receiver);
@@ -94,7 +93,7 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static String asString(TruffleObject receiver,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox)
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox)
                     throws UnsupportedMessageException {
         try {
             Object value = (LibraryToLegacy.sendUnbox(unbox, receiver));
@@ -115,74 +114,74 @@ class DefaultTruffleObjectExports {
     }
 
     @ExportMessage
-    static boolean hasMembers(TruffleObject receiver,
+    static boolean isObject(TruffleObject receiver,
                     @Cached(parameters = "HAS_KEYS") InteropAccessNode hasKeys) {
         return LibraryToLegacy.sendHasKeys(hasKeys, receiver);
     }
 
     @ExportMessage
     static Object readMember(TruffleObject receiver, String identifier,
-                    @Shared("read") @Cached(parameters = "READ") InteropAccessNode read) throws UnsupportedMessageException, UnknownIdentifierException {
+                    @Cached(parameters = "READ") InteropAccessNode read) throws UnsupportedMessageException, UnknownIdentifierException {
         return LibraryToLegacy.sendRead(read, receiver, identifier);
     }
 
     @ExportMessage
     static boolean isMemberReadable(TruffleObject receiver, String identifier,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isReadable(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, identifier));
     }
 
     @ExportMessage
     static boolean isMemberModifiable(TruffleObject receiver, String identifier,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isModifiable(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, identifier));
     }
 
     @ExportMessage
     static boolean isMemberInsertable(TruffleObject receiver, String identifier,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isInsertable(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, identifier));
     }
 
     @ExportMessage
     static boolean isMemberRemovable(TruffleObject receiver, String identifier,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isRemovable(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, identifier));
     }
 
     @ExportMessage
     static boolean isMemberInternal(TruffleObject receiver, String identifier,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isInternal(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, identifier));
     }
 
     @ExportMessage
     static boolean isMemberInvokable(TruffleObject receiver, String member,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isInvocable(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, member));
     }
 
     @ExportMessage
     static boolean hasMemberReadSideEffects(TruffleObject receiver, String member,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.hasReadSideEffects(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, member));
     }
 
     @ExportMessage
     static boolean hasMemberWriteSideEffects(TruffleObject receiver, String member,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.hasWriteSideEffects(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, member));
     }
 
     @ExportMessage
     static void writeMember(TruffleObject receiver, String member, Object value,
-                    @Shared("write") @Cached(parameters = "WRITE") InteropAccessNode write) throws UnsupportedMessageException, UnsupportedTypeException, UnknownIdentifierException {
+                    @Cached(parameters = "WRITE") InteropAccessNode write) throws UnsupportedMessageException, UnsupportedTypeException, UnknownIdentifierException {
         LibraryToLegacy.sendWrite(write, receiver, member, value);
     }
 
     @ExportMessage
     static void removeMember(TruffleObject receiver, String member,
-                    @Shared("remove") @Cached(parameters = "REMOVE") InteropAccessNode remove)
+                    @Cached(parameters = "REMOVE") InteropAccessNode remove)
                     throws UnsupportedMessageException, UnknownIdentifierException {
         boolean returnedValue = LibraryToLegacy.sendRemove(remove, receiver, member);
         if (!returnedValue) {
@@ -228,38 +227,38 @@ class DefaultTruffleObjectExports {
     }
 
     @ExportMessage
-    static boolean hasArrayElements(TruffleObject receiver,
+    static boolean isArray(TruffleObject receiver,
                     @Cached(parameters = "HAS_SIZE") InteropAccessNode hasSize) {
         return LibraryToLegacy.sendHasSize(hasSize, receiver);
     }
 
     @ExportMessage
-    static boolean isArrayElementReadable(TruffleObject receiver, long index,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+    static boolean isElementReadable(TruffleObject receiver, long index,
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isReadable(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, (int) index));
     }
 
     @ExportMessage
-    static boolean isArrayElementModifiable(TruffleObject receiver, long index,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+    static boolean isElementModifiable(TruffleObject receiver, long index,
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isModifiable(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, (int) index));
     }
 
     @ExportMessage
-    static boolean isArrayElementInsertable(TruffleObject receiver, long index,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+    static boolean isElementInsertable(TruffleObject receiver, long index,
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isInsertable(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, (int) index));
     }
 
     @ExportMessage
-    static boolean isArrayElementRemovable(TruffleObject receiver, long index,
-                    @Shared("keyInfo") @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
+    static boolean isElementRemovable(TruffleObject receiver, long index,
+                    @Cached(parameters = "KEY_INFO") InteropAccessNode keyInfo) {
         return KeyInfo.isRemovable(LibraryToLegacy.sendKeyInfo(keyInfo, receiver, (int) index));
     }
 
     @ExportMessage
-    static Object readArrayElement(TruffleObject receiver, long index,
-                    @Shared("read") @Cached(parameters = "READ") InteropAccessNode read) throws UnsupportedMessageException, InvalidArrayIndexException {
+    static Object readElement(TruffleObject receiver, long index,
+                    @Cached(parameters = "READ") InteropAccessNode read) throws UnsupportedMessageException, InvalidArrayIndexException {
         try {
             return LibraryToLegacy.sendRead(read, receiver, (int) index);
         } catch (UnknownIdentifierException e) {
@@ -278,8 +277,8 @@ class DefaultTruffleObjectExports {
     }
 
     @ExportMessage
-    static void writeArrayElement(TruffleObject receiver, long index, Object value,
-                    @Shared("write") @Cached(parameters = "WRITE") InteropAccessNode write) throws UnsupportedMessageException, UnsupportedTypeException, InvalidArrayIndexException {
+    static void writeElement(TruffleObject receiver, long index, Object value,
+                    @Cached(parameters = "WRITE") InteropAccessNode write) throws UnsupportedMessageException, UnsupportedTypeException, InvalidArrayIndexException {
         try {
             LibraryToLegacy.sendWrite(write, receiver, (int) index, value);
         } catch (UnknownIdentifierException e) {
@@ -288,8 +287,8 @@ class DefaultTruffleObjectExports {
     }
 
     @ExportMessage
-    static void removeArrayElement(TruffleObject receiver, long index,
-                    @Shared("remove") @Cached(parameters = "REMOVE") InteropAccessNode remove) throws UnsupportedMessageException, InvalidArrayIndexException {
+    static void removeElement(TruffleObject receiver, long index,
+                    @Cached(parameters = "REMOVE") InteropAccessNode remove) throws UnsupportedMessageException, InvalidArrayIndexException {
         try {
             boolean returnedValue = LibraryToLegacy.sendRemove(remove, receiver, (int) index);
             if (!returnedValue) {
@@ -319,19 +318,16 @@ class DefaultTruffleObjectExports {
     }
 
     @ExportMessage
-    static void toNative(TruffleObject receiver,
-                    @Cached(parameters = "TO_NATIVE") InteropAccessNode toNative) {
-        try {
-            LibraryToLegacy.sendToNative(toNative, receiver);
-        } catch (UnsupportedMessageException e) {
-        }
+    static Object toNative(TruffleObject receiver,
+                    @Cached(parameters = "TO_NATIVE") InteropAccessNode toNative) throws UnsupportedMessageException {
+        return LibraryToLegacy.sendToNative(toNative, receiver);
     }
 
     @ExportMessage
     static boolean isNumber(TruffleObject receiver,
-                    @Shared("isBoxed") @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) {
+                    @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) {
         if (LibraryToLegacy.sendIsBoxed(isBoxed, receiver)) {
             try {
                 return numbers.isNumber(LibraryToLegacy.sendUnbox(unbox, receiver));
@@ -344,9 +340,9 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static boolean fitsInByte(TruffleObject receiver,
-                    @Shared("isBoxed") @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) {
+                    @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) {
         if (LibraryToLegacy.sendIsBoxed(isBoxed, receiver)) {
             try {
                 return numbers.fitsInByte(LibraryToLegacy.sendUnbox(unbox, receiver));
@@ -359,9 +355,9 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static boolean fitsInShort(TruffleObject receiver,
-                    @Shared("isBoxed") @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) {
+                    @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) {
         if (LibraryToLegacy.sendIsBoxed(isBoxed, receiver)) {
             try {
                 return numbers.fitsInShort(LibraryToLegacy.sendUnbox(unbox, receiver));
@@ -374,9 +370,9 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static boolean fitsInInt(TruffleObject receiver,
-                    @Shared("isBoxed") @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) {
+                    @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) {
         if (LibraryToLegacy.sendIsBoxed(isBoxed, receiver)) {
             try {
                 return numbers.fitsInInt(LibraryToLegacy.sendUnbox(unbox, receiver));
@@ -389,9 +385,9 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static boolean fitsInLong(TruffleObject receiver,
-                    @Shared("isBoxed") @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) {
+                    @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) {
         if (LibraryToLegacy.sendIsBoxed(isBoxed, receiver)) {
             try {
                 return numbers.fitsInLong(LibraryToLegacy.sendUnbox(unbox, receiver));
@@ -404,9 +400,9 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static boolean fitsInFloat(TruffleObject receiver,
-                    @Shared("isBoxed") @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) {
+                    @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) {
         if (LibraryToLegacy.sendIsBoxed(isBoxed, receiver)) {
             try {
                 return numbers.fitsInFloat(LibraryToLegacy.sendUnbox(unbox, receiver));
@@ -419,9 +415,9 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static boolean fitsInDouble(TruffleObject receiver,
-                    @Shared("isBoxed") @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) {
+                    @Cached(parameters = "IS_BOXED") InteropAccessNode isBoxed,
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) {
         if (LibraryToLegacy.sendIsBoxed(isBoxed, receiver)) {
             try {
                 return numbers.fitsInDouble(LibraryToLegacy.sendUnbox(unbox, receiver));
@@ -434,43 +430,43 @@ class DefaultTruffleObjectExports {
 
     @ExportMessage
     static byte asByte(TruffleObject receiver,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
         return numbers.asByte(LibraryToLegacy.sendUnbox(unbox, receiver));
     }
 
     @ExportMessage
     static short asShort(TruffleObject receiver,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
         return numbers.asShort(LibraryToLegacy.sendUnbox(unbox, receiver));
     }
 
     @ExportMessage
     static int asInt(TruffleObject receiver,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
         return numbers.asInt(LibraryToLegacy.sendUnbox(unbox, receiver));
     }
 
     @ExportMessage
     static long asLong(TruffleObject receiver,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
         return numbers.asLong(LibraryToLegacy.sendUnbox(unbox, receiver));
     }
 
     @ExportMessage
     static float asFloat(TruffleObject receiver,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
         return numbers.asFloat(LibraryToLegacy.sendUnbox(unbox, receiver));
     }
 
     @ExportMessage
     static double asDouble(TruffleObject receiver,
-                    @Shared("unbox") @Cached(parameters = "UNBOX") InteropAccessNode unbox,
-                    @Shared("numbers") @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
+                    @Cached(parameters = "UNBOX") InteropAccessNode unbox,
+                    @CachedLibrary(limit = "5") InteropLibrary numbers) throws UnsupportedMessageException {
         return numbers.asDouble(LibraryToLegacy.sendUnbox(unbox, receiver));
     }
 
