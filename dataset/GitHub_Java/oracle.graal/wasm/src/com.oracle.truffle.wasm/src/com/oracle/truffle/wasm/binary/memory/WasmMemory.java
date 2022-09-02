@@ -110,60 +110,6 @@ public abstract class WasmMemory implements TruffleObject {
 
     public abstract void store_i64_32(long address, int value);
 
-    long[] view(long address, int length) {
-        long[] chunk = new long[length / 8];
-        for (long p = address; p < address + length; p += 8) {
-            chunk[(int) (p - address) / 8] = load_i64(p);
-        }
-        return chunk;
-    }
-
-    String viewByte(long address) {
-        final int value = load_i32_8u(address);
-        String result = Integer.toHexString(value);
-        if (result.length() == 1) {
-            result = "0" + result;
-        }
-        return result;
-    }
-
-    String hexView(long address, int length) {
-        long[] chunk = view(address, length);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < chunk.length; i++) {
-            sb.append("0x").append(hex(address + i * 8)).append(" | ");
-            for (int j = 0; j < 8; j++) {
-                sb.append(viewByte(address + i * 8 + j)).append(" ");
-            }
-            sb.append("| ");
-            sb.append(batch(hex(chunk[i]), 2)).append("\n");
-        }
-        return sb.toString();
-    }
-
-    private String hex(long value) {
-        return pad(Long.toHexString(value), 16);
-    }
-
-    private String batch(String s, int count) {
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-            result.insert(0, s.charAt(i));
-            if ((i + 1) % count == 0) {
-                result.insert(0, " ");
-            }
-        }
-        return result.reverse().toString();
-    }
-
-    private String pad(String s, int length) {
-        StringBuilder padded = new StringBuilder(s);
-        while (padded.length() < length) {
-            padded.insert(0, "0");
-        }
-        return padded.toString();
-    }
-
     @ExportMessage
     boolean hasArrayElements() {
         return true;
