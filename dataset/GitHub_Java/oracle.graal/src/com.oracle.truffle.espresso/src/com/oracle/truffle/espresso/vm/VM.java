@@ -73,7 +73,6 @@ import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameInstanceVisitor;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -118,8 +117,6 @@ import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
-import com.oracle.truffle.espresso.nodes.interop.ToEspressoNode;
-import com.oracle.truffle.espresso.nodes.interop.ToEspressoNodeGen;
 import com.oracle.truffle.espresso.runtime.Classpath;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
@@ -294,6 +291,11 @@ public final class VM extends NativeEnv implements ContextAccess {
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException | UnknownIdentifierException e) {
             throw EspressoError.shouldNotReachHere(e);
         }
+        if (getJavaVersion().java9OrLater()) {
+            stackWalk = new StackWalk();
+        } else {
+            stackWalk = null;
+        }
     }
 
     @Override
@@ -397,147 +399,18 @@ public final class VM extends NativeEnv implements ContextAccess {
         Target_java_lang_System.arraycopy(src, srcPos, dest, destPos, length, meta, profile);
     }
 
-    private static Object readForeignArrayElement(StaticObject array, int index, InteropLibrary interop,
-                    Meta meta, SubstitutionProfiler profiler, char exceptionBranch) {
-        try {
-            return interop.readArrayElement(array.rawForeignObject(), index);
-        } catch (UnsupportedMessageException e) {
-            profiler.profile(exceptionBranch);
-            throw Meta.throwExceptionWithMessage(meta.getMeta().java_lang_ClassCastException, "The foreign object is not a readable array");
-        } catch (InvalidArrayIndexException e) {
-            profiler.profile(exceptionBranch);
-            throw Meta.throwExceptionWithMessage(meta.java_lang_CloneNotSupportedException, "Foreign array length changed during clone");
-        }
-    }
-
-    private static StaticObject cloneForeignArray(StaticObject array, Meta meta, InteropLibrary interop, ToEspressoNode toEspressoNode, SubstitutionProfiler profiler, char exceptionBranch) {
-        assert array.isForeignObject();
-        assert array.isArray();
-        int length;
-        try {
-            long longLength = interop.getArraySize(array.rawForeignObject());
-            if (longLength > Integer.MAX_VALUE) {
-                profiler.profile(exceptionBranch);
-                throw Meta.throwExceptionWithMessage(meta.java_lang_CloneNotSupportedException, "Cannot clone a foreign array whose length does not fit in int");
-            }
-            if (longLength < 0) {
-                profiler.profile(exceptionBranch);
-                throw Meta.throwExceptionWithMessage(meta.java_lang_NegativeArraySizeException, "Cannot clone a foreign array with negative length");
-            }
-            length = (int) longLength;
-        } catch (UnsupportedMessageException e) {
-            profiler.profile(exceptionBranch);
-            throw Meta.throwExceptionWithMessage(meta.java_lang_CloneNotSupportedException, "Cannot clone a non-array foreign object as an array");
-        }
-
-        ArrayKlass arrayKlass = (ArrayKlass) array.getKlass();
-        Klass componentType = arrayKlass.getComponentType();
-        if (componentType.isPrimitive()) {
-            try {
-                switch (componentType.getJavaKind()) {
-                    case Boolean:
-                        boolean[] booleanArray = new boolean[length];
-                        for (int i = 0; i < length; ++i) {
-                            Object foreignElement = readForeignArrayElement(array, i, interop, meta, profiler, exceptionBranch);
-                            booleanArray[i] = (boolean) toEspressoNode.execute(foreignElement, componentType);
-                        }
-                        return StaticObject.createArray(arrayKlass, booleanArray);
-                    case Byte:
-                        byte[] byteArray = new byte[length];
-                        for (int i = 0; i < length; ++i) {
-                            Object foreignElement = readForeignArrayElement(array, i, interop, meta, profiler, exceptionBranch);
-                            byteArray[i] = (byte) toEspressoNode.execute(foreignElement, componentType);
-                        }
-                        return StaticObject.createArray(arrayKlass, byteArray);
-                    case Short:
-                        short[] shortArray = new short[length];
-                        for (int i = 0; i < length; ++i) {
-                            Object foreignElement = readForeignArrayElement(array, i, interop, meta, profiler, exceptionBranch);
-                            shortArray[i] = (short) toEspressoNode.execute(foreignElement, componentType);
-                        }
-                        return StaticObject.createArray(arrayKlass, shortArray);
-                    case Char:
-                        char[] charArray = new char[length];
-                        for (int i = 0; i < length; ++i) {
-                            Object foreignElement = readForeignArrayElement(array, i, interop, meta, profiler, exceptionBranch);
-                            charArray[i] = (char) toEspressoNode.execute(foreignElement, componentType);
-                        }
-                        return StaticObject.createArray(arrayKlass, charArray);
-                    case Int:
-                        int[] intArray = new int[length];
-                        for (int i = 0; i < length; ++i) {
-                            Object foreignElement = readForeignArrayElement(array, i, interop, meta, profiler, exceptionBranch);
-                            intArray[i] = (int) toEspressoNode.execute(foreignElement, componentType);
-                        }
-                        return StaticObject.createArray(arrayKlass, intArray);
-                    case Float:
-                        float[] floatArray = new float[length];
-                        for (int i = 0; i < length; ++i) {
-                            Object foreignElement = readForeignArrayElement(array, i, interop, meta, profiler, exceptionBranch);
-                            floatArray[i] = (float) toEspressoNode.execute(foreignElement, componentType);
-                        }
-                        return StaticObject.createArray(arrayKlass, floatArray);
-                    case Long:
-                        long[] longArray = new long[length];
-                        for (int i = 0; i < length; ++i) {
-                            Object foreignElement = readForeignArrayElement(array, i, interop, meta, profiler, exceptionBranch);
-                            longArray[i] = (long) toEspressoNode.execute(foreignElement, componentType);
-                        }
-                        return StaticObject.createArray(arrayKlass, longArray);
-                    case Double:
-                        double[] doubleArray = new double[length];
-                        for (int i = 0; i < length; ++i) {
-                            Object foreignElement = readForeignArrayElement(array, i, interop, meta, profiler, exceptionBranch);
-                            doubleArray[i] = (double) toEspressoNode.execute(foreignElement, componentType);
-                        }
-                        return StaticObject.createArray(arrayKlass, doubleArray);
-                    // formatter: off
-                    case Object:
-                    case Void:
-                    case ReturnAddress:
-                    case Illegal:
-                        CompilerDirectives.transferToInterpreter();
-                        throw EspressoError.shouldNotReachHere("Unexpected primitive kind: " + componentType.getJavaKind());
-                    // formatter: on
-                }
-
-            } catch (UnsupportedTypeException e) {
-                profiler.profile(exceptionBranch);
-                throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException, "Cannot cast an element of a foreign array to the declared component type");
-            }
-        }
-        StaticObject[] newArray = new StaticObject[length];
-        for (int i = 0; i < length; ++i) {
-            Object foreignElement = readForeignArrayElement(array, i, interop, meta, profiler, exceptionBranch);
-
-            try {
-                newArray[i] = (StaticObject) toEspressoNode.execute(foreignElement, componentType);
-            } catch (UnsupportedTypeException e) {
-                profiler.profile(exceptionBranch);
-                throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException, "Cannot cast an element of a foreign array to the declared component type");
-            }
-        }
-        return StaticObject.createArray(arrayKlass, newArray);
-    }
-
     @VmImpl
     @JniImpl
     public static @Host(Object.class) StaticObject JVM_Clone(@Host(Object.class) StaticObject self,
                     @GuestCall(target = "java_lang_ref_Finalizer_register") DirectCallNode finalizerRegister,
                     @InjectMeta Meta meta, @InjectProfile SubstitutionProfiler profiler) {
         assert StaticObject.notNull(self);
-        char exceptionBranch = 3;
+        if (self.isForeignObject()) {
+            throw Meta.throwExceptionWithMessage(meta.java_lang_CloneNotSupportedException, "Clone not supported for interop objects");
+        }
         if (self.isArray()) {
             // Arrays are always cloneable.
-            if (self.isForeignObject()) {
-                return cloneForeignArray(self, meta, InteropLibrary.getUncached(self.rawForeignObject()), ToEspressoNodeGen.getUncached(), profiler, exceptionBranch);
-            }
             return self.copy();
-        }
-
-        if (self.isForeignObject()) {
-            profiler.profile(exceptionBranch);
-            throw Meta.throwExceptionWithMessage(meta.java_lang_CloneNotSupportedException, "Clone not supported for non-array foreign objects");
         }
 
         if (!meta.java_lang_Cloneable.isAssignableFrom(self.getKlass())) {
@@ -754,6 +627,15 @@ public final class VM extends NativeEnv implements ContextAccess {
     // endregion JNI Invocation Interface
 
     public static class StackElement {
+        /**
+         * @see StackTraceElement#isNativeMethod()
+         */
+        public static int NATIVE_BCI = -2;
+        /**
+         * @see StackTraceElement#toString()
+         */
+        public static int UNKNOWN_BCI = -1;
+
         private final Method m;
         private final int bci;
 
@@ -1238,7 +1120,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @TruffleBoundary
-    private static EspressoRootNode getEspressoRootFromFrame(FrameInstance frameInstance) {
+    public static EspressoRootNode getEspressoRootFromFrame(FrameInstance frameInstance) {
         if (frameInstance.getCallTarget() instanceof RootCallTarget) {
             RootCallTarget callTarget = (RootCallTarget) frameInstance.getCallTarget();
             RootNode rootNode = callTarget.getRootNode();
@@ -1250,7 +1132,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @TruffleBoundary
-    private static Method getMethodFromFrame(FrameInstance frameInstance) {
+    public static Method getMethodFromFrame(FrameInstance frameInstance) {
         EspressoRootNode root = getEspressoRootFromFrame(frameInstance);
         if (root != null) {
             return root.getMethod();
@@ -2139,12 +2021,16 @@ public final class VM extends NativeEnv implements ContextAccess {
     public static final int JMM_VERSION_1_2 = 0x20010200; // JDK 7
     public static final int JMM_VERSION_1_2_1 = 0x20010201; // JDK 7 GA
     public static final int JMM_VERSION_1_2_2 = 0x20010202;
+    public static final int JMM_VERSION_2 = 0x20020000; // JDK 10
 
     public static final int JMM_VERSION = 0x20010203;
 
     @VmImpl
     public synchronized @Pointer TruffleObject JVM_GetManagement(int version) {
-        if (version != JMM_VERSION_1_0) {
+        if (version != JMM_VERSION_1_0 && getJavaVersion().java8OrEarlier()) {
+            return RawPointer.nullInstance();
+        }
+        if (version != JMM_VERSION_2 && getJavaVersion().java9OrLater()) {
             return RawPointer.nullInstance();
         }
         EspressoContext context = getContext();
@@ -2167,8 +2053,12 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @JniImpl
     @VmImpl
-    public static int GetVersion() {
-        return JMM_VERSION;
+    public int GetVersion() {
+        if (getJavaVersion().java8OrEarlier()) {
+            return JMM_VERSION;
+        } else {
+            return JMM_VERSION_2;
+        }
     }
 
     @JniImpl
@@ -2314,6 +2204,12 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     public @Host(String[].class) StaticObject GetInputArgumentArray() {
         return getMeta().java_lang_String.allocateReferenceArray(0);
+    }
+
+    @JniImpl
+    @VmImpl
+    public @Host(String[].class) StaticObject GetInputArguments() {
+        return GetInputArgumentArray();
     }
 
     @JniImpl
@@ -2507,6 +2403,41 @@ public final class VM extends NativeEnv implements ContextAccess {
             return StaticObject.NULL;
         }
         return result;
+    }
+
+    @VmImpl
+    @JniImpl
+    public void GetThreadAllocatedMemory(
+                    @Host(long[].class) StaticObject ids,
+                    @Host(long[].class) StaticObject sizeArray,
+                    @InjectProfile SubstitutionProfiler profiler) {
+        if (StaticObject.isNull(ids) || StaticObject.isNull(sizeArray)) {
+            profiler.profile(0);
+            throw Meta.throwException(getMeta().java_lang_NullPointerException);
+        }
+        validateThreadIdArray(getMeta(), ids, profiler);
+        if (ids.length() != sizeArray.length()) {
+            profiler.profile(1);
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException, "The length of the given long array does not match the length of the given array of thread IDs");
+        }
+        StaticObject[] activeThreads = getContext().getActiveThreads();
+
+        for (int i = 0; i < ids.length(); i++) {
+            long id = getInterpreterToVM().getArrayLong(i, ids);
+            StaticObject thread = StaticObject.NULL;
+
+            for (int j = 0; j < activeThreads.length; ++j) {
+                if ((long) getMeta().java_lang_Thread_tid.get(activeThreads[j]) == id) {
+                    thread = activeThreads[j];
+                    break;
+                }
+            }
+            if (StaticObject.isNull(thread)) {
+                getInterpreterToVM().setArrayLong(-1L, i, sizeArray);
+            } else {
+                getInterpreterToVM().setArrayLong(0L, i, sizeArray);
+            }
+        }
     }
 
     // endregion Management
@@ -2842,6 +2773,8 @@ public final class VM extends NativeEnv implements ContextAccess {
      * of precision.
      */
     public static long JVM_GetNanoTimeAdjustment(@Host(Class.class) StaticObject ignored, long offset) {
+        // Instant.now() uses System.currentTimeMillis() on a host Java 8. This might produce some
+        // loss of precision.
         Instant now = Instant.now();
         long secs = now.getEpochSecond();
         long nanos = now.getNano();
@@ -2864,8 +2797,22 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     @JniImpl
     @SuppressWarnings("unused")
-    public void JVM_InitStackTraceElement(@Host(StackTraceElement.class) StaticObject element, @Host(typeName = "Ljava/lang/StackFrameInfo;") StaticObject info) {
-        // TODO: this
+    public void JVM_InitStackTraceElement(@Host(StackTraceElement.class) StaticObject element, @Host(typeName = "Ljava/lang/StackFrameInfo;") StaticObject info,
+                    @GuestCall(target = "java_lang_Class_getName") DirectCallNode classGetName) {
+        if (StaticObject.isNull(element) || StaticObject.isNull(info)) {
+            throw Meta.throwException(getMeta().java_lang_NullPointerException);
+        }
+        StaticObject mname = info.getField(getMeta().java_lang_StackFrameInfo_memberName);
+        if (StaticObject.isNull(mname)) {
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_InternalError, "uninitialized StackFrameInfo !");
+        }
+        StaticObject clazz = mname.getField(getMeta().java_lang_invoke_MemberName_clazz);
+        Method m = (Method) mname.getHiddenField(getMeta().HIDDEN_VMTARGET);
+        if (m == null) {
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_InternalError, "uninitialized StackFrameInfo !");
+        }
+        int bci = info.getIntField(getMeta().java_lang_StackFrameInfo_bci);
+        fillInElement(element, new VM.StackElement(m, bci), classGetName);
     }
 
     @VmImpl
@@ -2925,6 +2872,41 @@ public final class VM extends NativeEnv implements ContextAccess {
         // Fill in source information
         ste.setField(getMeta().java_lang_StackTraceElement_fileName, getMeta().toGuestString(m.getSourceFile()));
         ste.setIntField(getMeta().java_lang_StackTraceElement_lineNumber, m.bciToLineNumber(element.getBCI()));
+    }
+
+    private final StackWalk stackWalk;
+
+    private void checkStackWalkArguments(int batchSize, int startIndex, @Host(Object[].class) StaticObject frames) {
+        if (StaticObject.isNull(frames)) {
+            throw Meta.throwException(getMeta().java_lang_NullPointerException);
+        }
+        assert frames.isArray();
+        int limit = startIndex + batchSize;
+        if (frames.length() < limit) {
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException, "Not enough space in buffers");
+        }
+    }
+
+    @VmImpl
+    @JniImpl
+    @TruffleBoundary
+    public @Host(Object.class) StaticObject JVM_CallStackWalk(
+                    @Host(typeName = "Ljava/lang/StackStreamFactory;") StaticObject stackStream, long mode, int skipframes,
+                    int batchSize, int startIndex,
+                    @Host(Object[].class) StaticObject frames) {
+        checkStackWalkArguments(batchSize, startIndex, frames);
+        return stackWalk.fetchFirstBatch(stackStream, mode, skipframes, batchSize, startIndex, frames, getMeta());
+    }
+
+    @VmImpl
+    @JniImpl
+    @TruffleBoundary
+    public int JVM_MoreStackWalk(
+                    @Host(typeName = "Ljava/lang/StackStreamFactory;") StaticObject stackStream, long mode, long anchor,
+                    int batchSize, int startIndex,
+                    @Host(Object[].class) StaticObject frames) {
+        checkStackWalkArguments(batchSize, startIndex, frames);
+        return stackWalk.fetchNextBatch(stackStream, mode, anchor, batchSize, startIndex, frames, getMeta());
     }
     // Checkstyle: resume method name check
 }
