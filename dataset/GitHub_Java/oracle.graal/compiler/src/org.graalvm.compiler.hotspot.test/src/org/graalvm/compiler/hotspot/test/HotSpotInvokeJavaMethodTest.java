@@ -30,8 +30,6 @@ import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
-import org.junit.Assume;
-import org.junit.Before;
 import org.junit.Test;
 
 import jdk.vm.ci.meta.JavaKind;
@@ -92,6 +90,22 @@ public class HotSpotInvokeJavaMethodTest extends HotSpotGraalCompilerTest {
         invocationPlugins.register(new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg) {
+                ForeignCallNode node = new ForeignCallNode(HotSpotHostForeignCallsProvider.TestForeignCalls.FLOAT_RETURNS_FLOAT, arg);
+                b.addPush(JavaKind.Float, node);
+                return true;
+            }
+        }, HotSpotInvokeJavaMethodTest.class, "floatReturnsFloat", float.class);
+        invocationPlugins.register(new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg) {
+                ForeignCallNode node = new ForeignCallNode(HotSpotHostForeignCallsProvider.TestForeignCalls.DOUBLE_RETURNS_DOUBLE, arg);
+                b.addPush(JavaKind.Double, node);
+                return true;
+            }
+        }, HotSpotInvokeJavaMethodTest.class, "doubleReturnsDouble", double.class);
+        invocationPlugins.register(new InvocationPlugin() {
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode arg) {
                 ForeignCallNode node = new ForeignCallNode(HotSpotHostForeignCallsProvider.TestForeignCalls.OBJECT_RETURNS_OBJECT, arg);
                 b.addPush(JavaKind.Object, node);
                 return true;
@@ -99,11 +113,6 @@ public class HotSpotInvokeJavaMethodTest extends HotSpotGraalCompilerTest {
         }, HotSpotInvokeJavaMethodTest.class, "objectReturnsObject", Object.class);
 
         super.registerInvocationPlugins(invocationPlugins);
-    }
-
-    @Before
-    public void before() {
-        Assume.assumeTrue("Invoke stub helper is missing", runtime().getVMConfig().invokeJavaMethodAddress != 0);
     }
 
     static boolean[] booleanValues = new boolean[]{Boolean.TRUE, Boolean.FALSE};
@@ -216,6 +225,30 @@ public class HotSpotInvokeJavaMethodTest extends HotSpotGraalCompilerTest {
 
     public static float floatReturnsFloatSnippet(float arg) {
         return floatReturnsFloat(arg);
+    }
+
+    @Test
+    public void testFloatReturnsFloat() {
+        for (float value : floatValues) {
+            test("floatReturnsFloatSnippet", value);
+        }
+    }
+
+    static double[] doubleValues = new double[]{Double.MAX_VALUE, -1, 0, 1, Double.MIN_VALUE};
+
+    static double doubleReturnsDouble(double arg) {
+        return arg;
+    }
+
+    public static double doubleReturnsDoubleSnippet(double arg) {
+        return doubleReturnsDouble(arg);
+    }
+
+    @Test
+    public void testDoubleReturnsDouble() {
+        for (double value : doubleValues) {
+            test("doubleReturnsDoubleSnippet", value);
+        }
     }
 
     static Object[] objectValues = new Object[]{null, "String", Integer.valueOf(-1)};
