@@ -44,7 +44,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.descriptors.Validation;
-import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
@@ -86,7 +85,7 @@ public final class Target_java_lang_Class {
             case "void":
                 return meta._void.mirror();
             default:
-                throw Meta.throwExceptionWithMessage(meta.java_lang_ClassNotFoundException, name);
+                throw meta.throwExWithMessage(meta.java_lang_ClassNotFoundException, name);
         }
     }
 
@@ -112,12 +111,12 @@ public final class Target_java_lang_Class {
         EspressoContext context = EspressoLanguage.getCurrentContext();
         Meta meta = context.getMeta();
         if (StaticObject.isNull(name)) {
-            throw meta.throwNullPointerException();
+            throw meta.throwExWithMessage(meta.java_lang_NullPointerException, name);
         }
 
         String hostName = Meta.toHostString(name);
         if (hostName.indexOf('/') >= 0) {
-            throw Meta.throwExceptionWithMessage(meta.java_lang_ClassNotFoundException, name);
+            throw meta.throwExWithMessage(meta.java_lang_ClassNotFoundException, name);
         }
 
         hostName = hostName.replace('.', '/');
@@ -127,7 +126,7 @@ public final class Target_java_lang_Class {
         }
 
         if (!Validation.validTypeDescriptor(ByteSequence.create(hostName), false)) {
-            throw Meta.throwExceptionWithMessage(meta.java_lang_ClassNotFoundException, name);
+            throw meta.throwExWithMessage(meta.java_lang_ClassNotFoundException, name);
         }
 
         Symbol<Type> type = meta.getTypes().fromClassGetName(hostName);
@@ -141,7 +140,7 @@ public final class Target_java_lang_Class {
             }
 
             if (klass == null) {
-                throw Meta.throwExceptionWithMessage(meta.java_lang_ClassNotFoundException, name);
+                throw meta.throwExWithMessage(meta.java_lang_ClassNotFoundException, name);
             }
 
             if (initialize) {
@@ -524,11 +523,11 @@ public final class Target_java_lang_Class {
 
     @Substitution(hasReceiver = true)
     public static @Host(Class.class) StaticObject getComponentType(@Host(Class.class) StaticObject self) {
-        if (self.getMirrorKlass().isArray()) {
-            Klass componentType = ((ArrayKlass) self.getMirrorKlass()).getComponentType();
-            return componentType.mirror();
+        Klass comp = self.getMirrorKlass().getComponentType();
+        if (comp == null) {
+            return StaticObject.NULL;
         }
-        return StaticObject.NULL;
+        return comp.mirror();
     }
 
     @Substitution(hasReceiver = true)
