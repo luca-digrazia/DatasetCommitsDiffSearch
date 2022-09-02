@@ -26,7 +26,6 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
-import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -37,9 +36,9 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
  */
 public abstract class MHInvokeBasicNode extends MethodHandleIntrinsicNode {
 
-    private final Field form;
-    private final Field vmentry;
-    private final Field hiddenVmtarget;
+    private final int form;
+    private final int vmentry;
+    private final int hiddenVmtarget;
 
     static final int INLINE_CACHE_SIZE_LIMIT = 5;
 
@@ -66,17 +65,17 @@ public abstract class MHInvokeBasicNode extends MethodHandleIntrinsicNode {
     public MHInvokeBasicNode(Method method) {
         super(method);
         Meta meta = getMeta();
-        this.form = meta.java_lang_invoke_MethodHandle_form;
-        this.vmentry = meta.java_lang_invoke_LambdaForm_vmentry;
-        this.hiddenVmtarget = meta.HIDDEN_VMTARGET;
+        this.form = meta.java_lang_invoke_MethodHandle_form.getOffset();
+        this.vmentry = meta.java_lang_invoke_LambdaForm_vmentry.getOffset();
+        this.hiddenVmtarget = meta.HIDDEN_VMTARGET.getOffset();
     }
 
     @Override
     public Object call(Object[] args) {
         StaticObject mh = (StaticObject) args[0];
-        StaticObject lform = mh.getObjectField(form);
-        StaticObject mname = lform.getObjectField(vmentry);
-        Method target = (Method) mname.getHiddenObjectField(hiddenVmtarget);
+        StaticObject lform = (StaticObject) mh.getUnsafeField(form);
+        StaticObject mname = (StaticObject) lform.getUnsafeField(vmentry);
+        Method target = (Method) mname.getUnsafeField(hiddenVmtarget);
         return executeCall(args, target);
     }
 }

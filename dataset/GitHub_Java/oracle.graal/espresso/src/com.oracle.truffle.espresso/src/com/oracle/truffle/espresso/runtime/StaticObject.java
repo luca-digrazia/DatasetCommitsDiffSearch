@@ -164,7 +164,7 @@ public final class StaticObject implements TruffleObject {
         this.primitiveFields = primitiveFieldCount > 0 ? new byte[primitiveFieldCount] : null;
         initInstanceFields(guestClass);
         if (klass.getContext().getJavaVersion().modulesEnabled()) {
-            setObjectField(klass.getMeta().java_lang_Class_classLoader, klass.getDefiningClassLoader());
+            setField(klass.getMeta().java_lang_Class_classLoader, klass.getDefiningClassLoader());
             setModule(klass);
         }
         setHiddenField(klass.getMeta().HIDDEN_MIRROR_KLASS, klass);
@@ -1562,12 +1562,12 @@ public final class StaticObject implements TruffleObject {
         StaticObject module = klass.module().module();
         if (StaticObject.isNull(module)) {
             if (klass.getRegistries().javaBaseDefined()) {
-                setObjectField(klass.getMeta().java_lang_Class_module, klass.getRegistries().getJavaBaseModule().module());
+                setField(klass.getMeta().java_lang_Class_module, klass.getRegistries().getJavaBaseModule().module());
             } else {
                 klass.getRegistries().addToFixupList(klass);
             }
         } else {
-            setObjectField(klass.getMeta().java_lang_Class_module, module);
+            setField(klass.getMeta().java_lang_Class_module, module);
         }
     }
 
@@ -1629,20 +1629,20 @@ public final class StaticObject implements TruffleObject {
     // Start non primitive field handling.
 
     @TruffleBoundary(allowInlining = true)
-    public StaticObject getObjectFieldVolatile(Field field) {
+    public StaticObject getFieldVolatile(Field field) {
         checkNotForeign();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return (StaticObject) UNSAFE.getObjectVolatile(CompilerDirectives.castExact(fields, Object[].class), field.getOffset());
     }
 
     // Not to be used to access hidden fields !
-    public StaticObject getObjectField(Field field) {
+    public StaticObject getField(Field field) {
         checkNotForeign();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert !field.getKind().isSubWord();
         Object result;
         if (field.isVolatile()) {
-            result = getObjectFieldVolatile(field);
+            result = getFieldVolatile(field);
         } else {
             result = UNSAFE.getObject(castExact(fields, Object[].class), (long) field.getOffset());
         }
@@ -1672,13 +1672,13 @@ public final class StaticObject implements TruffleObject {
     }
 
     @TruffleBoundary(allowInlining = true)
-    public void setObjectFieldVolatile(Field field, Object value) {
+    public void setFieldVolatile(Field field, Object value) {
         checkNotForeign();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         UNSAFE.putObjectVolatile(castExact(fields, Object[].class), field.getOffset(), value);
     }
 
-    public void setObjectField(Field field, Object value) {
+    public void setField(Field field, Object value) {
         checkNotForeign();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert !field.getKind().isSubWord();
@@ -1689,13 +1689,13 @@ public final class StaticObject implements TruffleObject {
                                         getKlass().getDefiningClassLoader(), getKlass().protectionDomain()) //
                                         .isAssignableFrom(((StaticObject) value).getKlass());
         if (field.isVolatile()) {
-            setObjectFieldVolatile(field, value);
+            setFieldVolatile(field, value);
         } else {
             UNSAFE.putObject(castExact(fields, Object[].class), (long) field.getOffset(), value);
         }
     }
 
-    public boolean compareAndSwapObjectField(Field field, Object before, Object after) {
+    public boolean compareAndSwapField(Field field, Object before, Object after) {
         checkNotForeign();
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.compareAndSwapObject(fields, field.getOffset(), before, after);
@@ -2032,7 +2032,7 @@ public final class StaticObject implements TruffleObject {
         }
         if (getKlass() == getKlass().getMeta().java_lang_String) {
             Meta meta = getKlass().getMeta();
-            StaticObject value = getObjectField(meta.java_lang_String_value);
+            StaticObject value = getField(meta.java_lang_String_value);
             if (value == null || isNull(value)) {
                 // Prevents debugger crashes when trying to inspect a string in construction.
                 return "<UNINITIALIZED>";
@@ -2058,7 +2058,7 @@ public final class StaticObject implements TruffleObject {
         }
         if (getKlass() == getKlass().getMeta().java_lang_String) {
             Meta meta = getKlass().getMeta();
-            StaticObject value = getObjectField(meta.java_lang_String_value);
+            StaticObject value = getField(meta.java_lang_String_value);
             if (value == null || isNull(value)) {
                 // Prevents debugger crashes when trying to inspect a string in construction.
                 return "<UNINITIALIZED>";

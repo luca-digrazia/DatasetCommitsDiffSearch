@@ -338,8 +338,7 @@ final class LinkedKlassFieldLayout {
                 };
             } else if (type == Type.java_lang_Throwable) {
                 return new Symbol[]{
-                                Name.HIDDEN_FRAMES,
-                                Name.HIDDEN_EXCEPTION_WRAPPER
+                                Name.HIDDEN_FRAMES
                 };
             } else if (type == Type.java_lang_Thread) {
                 return new Symbol[]{
