@@ -939,42 +939,16 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
         return universe.lookup(wrapped.findInstanceFieldWithOffset(offset, expectedKind));
     }
 
-    /**
-     * Cache to ensure that the final contents of AnalysisField[] are visible after the array gets
-     * visible.
-     */
-    private static class InstanceFieldsCache {
-        private volatile AnalysisField[] withSuper;
-        private volatile AnalysisField[] local;
-
-        public AnalysisField[] get(boolean includeSuperclasses) {
-            if (includeSuperclasses) {
-                return withSuper;
-            } else {
-                return local;
-            }
-        }
-
-        public AnalysisField[] put(boolean includeSuperclasses, AnalysisField[] value) {
-            if (includeSuperclasses) {
-                withSuper = value;
-            } else {
-                local = value;
-            }
-            return value;
-        }
-    }
-
-    private final InstanceFieldsCache instanceFieldsCache = new InstanceFieldsCache();
+    private final AnalysisField[][] instanceFieldsCache = new AnalysisField[2][];
 
     @Override
     public AnalysisField[] getInstanceFields(boolean includeSuperclasses) {
-        InstanceFieldsCache cache = instanceFieldsCache;
-        AnalysisField[] result = cache.get(includeSuperclasses);
+        int cacheIdx = includeSuperclasses ? 1 : 0;
+        AnalysisField[] result = instanceFieldsCache[cacheIdx];
         if (result != null) {
             return result;
         } else {
-            return cache.put(includeSuperclasses, convertInstanceFields(includeSuperclasses));
+            return instanceFieldsCache[cacheIdx] = convertInstanceFields(includeSuperclasses);
         }
     }
 
