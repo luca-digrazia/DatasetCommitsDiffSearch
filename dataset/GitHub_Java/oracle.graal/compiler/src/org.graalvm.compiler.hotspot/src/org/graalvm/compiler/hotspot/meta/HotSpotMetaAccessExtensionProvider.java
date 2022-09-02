@@ -28,7 +28,6 @@ import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class HotSpotMetaAccessExtensionProvider implements MetaAccessExtensionProvider {
@@ -45,10 +44,5 @@ public class HotSpotMetaAccessExtensionProvider implements MetaAccessExtensionPr
          * fold a non-initialized instance allocation.
          */
         return type.isArray() || type.isInitialized();
-    }
-
-    @Override
-    public boolean isGuaranteedSafepoint(ResolvedJavaMethod method, boolean isDirect) {
-        return true;
     }
 }

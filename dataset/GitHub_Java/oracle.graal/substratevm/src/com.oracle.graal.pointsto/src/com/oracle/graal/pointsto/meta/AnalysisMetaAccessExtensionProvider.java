@@ -40,7 +40,6 @@ public class AnalysisMetaAccessExtensionProvider implements MetaAccessExtensionP
 
     @Override
     public boolean canConstantFoldDynamicAllocation(ResolvedJavaType type) {
-        assert type instanceof AnalysisType : "AnalysisType is required; AnalysisType lazily creates array types of any depth, so type cannot be null";
         return true;
     }
 }
