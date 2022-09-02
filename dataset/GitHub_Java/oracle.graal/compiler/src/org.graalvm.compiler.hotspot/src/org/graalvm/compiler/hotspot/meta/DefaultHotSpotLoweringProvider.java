@@ -736,9 +736,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
          * the debug info. The foreign call needs a stateDuring instead so it can deopt with a
          * pending exception.
          */
-        foreignCallNode.setStateDuring(node.createStateDuring());
-        // Keep a proper stateAfter for use by FSA
-        foreignCallNode.setStateAfter(node.stateAfter());
+        foreignCallNode.setStateAfter(node.createStateDuring());
         graph.replaceFixedWithFixed(node, foreignCallNode);
     }
 

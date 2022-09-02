@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -233,7 +233,7 @@ public class MonitorSnippets implements Snippets {
 
     @Snippet
     public static void monitorenter(Object object, KlassPointer hub, @ConstantParameter int lockDepth, @ConstantParameter Register threadRegister, @ConstantParameter Register stackPointerRegister,
-                    @ConstantParameter boolean trace, @ConstantParameter Counters counters) {
+                    @ConstantParameter boolean trace, @ConstantParameter Counters counters, @ConstantParameter boolean biasable) {
         verifyOop(object);
 
         // Load the mark word - this includes a null-check on object
@@ -248,7 +248,7 @@ public class MonitorSnippets implements Snippets {
 
         incCounter();
 
-        if (useBiasedLocking(INJECTED_VMCONFIG)) {
+        if (biasable && useBiasedLocking(INJECTED_VMCONFIG)) {
             if (tryEnterBiased(object, hub, lock, mark, threadRegister, trace, counters)) {
                 return;
             }
@@ -488,10 +488,10 @@ public class MonitorSnippets implements Snippets {
 
     @Snippet
     public static void monitorexit(Object object, @ConstantParameter int lockDepth, @ConstantParameter Register threadRegister, @ConstantParameter boolean trace,
-                    @ConstantParameter Counters counters) {
+                    @ConstantParameter Counters counters, @ConstantParameter boolean biasable) {
         trace(trace, "           object: 0x%016lx\n", Word.objectToTrackedPointer(object));
         final Word mark = loadWordFromObject(object, markOffset(INJECTED_VMCONFIG));
-        if (useBiasedLocking(INJECTED_VMCONFIG)) {
+        if (biasable && useBiasedLocking(INJECTED_VMCONFIG)) {
             // Check for biased locking unlock case, which is a no-op
             // Note: we do not have to check the thread ID for two reasons.
             // First, the interpreter checks for IllegalMonitorStateException at
@@ -584,7 +584,6 @@ public class MonitorSnippets implements Snippets {
                     if (probability(FREQUENT_PROBABILITY, succ.isNonNull())) {
                         // There may be a thread spinning on this monitor. Temporarily setting
                         // the monitor owner to null, and hope that the other thread will grab it.
-                        memoryBarrier(LOAD_STORE | STORE_STORE);
                         monitor.writeWord(ownerOffset, zero());
                         memoryBarrier(STORE_STORE | STORE_LOAD);
                         succ = monitor.readWord(succOffset, OBJECT_MONITOR_SUCC_LOCATION);
@@ -789,6 +788,7 @@ public class MonitorSnippets implements Snippets {
                 args.addConst("stackPointerRegister", registers.getStackPointerRegister());
                 args.addConst("trace", isTracingEnabledForType(monitorenterNode.object()) || isTracingEnabledForMethod(graph));
                 args.addConst("counters", counters);
+                args.addConst("biasable", monitorenterNode.isBiasable());
             } else {
                 args = new Arguments(monitorenterStub, graph.getGuardsStage(), tool.getLoweringStage());
                 args.add("object", monitorenterNode.object());
@@ -814,6 +814,7 @@ public class MonitorSnippets implements Snippets {
             args.addConst("threadRegister", registers.getThreadRegister());
             args.addConst("trace", isTracingEnabledForType(monitorexitNode.object()) || isTracingEnabledForMethod(graph));
             args.addConst("counters", counters);
+            args.addConst("biasable", monitorexitNode.isBiasable());
 
             template(monitorexitNode, args).instantiate(providers.getMetaAccess(), monitorexitNode, DEFAULT_REPLACER, args);
         }
