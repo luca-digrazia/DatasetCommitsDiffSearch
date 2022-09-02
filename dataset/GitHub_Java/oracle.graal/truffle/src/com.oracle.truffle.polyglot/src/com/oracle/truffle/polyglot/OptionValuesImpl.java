@@ -55,6 +55,9 @@ import org.graalvm.options.OptionValues;
 
 final class OptionValuesImpl implements OptionValues {
 
+    // Temporary to help languages transition, see GR-13740
+    private static final boolean CHECK_EXPERIMENTAL_OPTIONS = Boolean.parseBoolean(System.getenv("GRAALVM_CHECK_EXPERIMENTAL_OPTIONS"));
+
     private static final float FUZZY_MATCH_THRESHOLD = 0.7F;
 
     // TODO is this too long? Make sure to update Engine#setUseSystemProperties javadoc.
@@ -183,7 +186,7 @@ final class OptionValuesImpl implements OptionValues {
         if (descriptor == null) {
             throw failNotFound(key);
         }
-        if (!allowExperimentalOptions && descriptor.getStability() == OptionStability.EXPERIMENTAL) {
+        if (CHECK_EXPERIMENTAL_OPTIONS && !allowExperimentalOptions && descriptor.getStability() == OptionStability.EXPERIMENTAL) {
             throw failExperimental(key);
         }
         return descriptor;
