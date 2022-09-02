@@ -454,10 +454,14 @@ public class LanguageSPITest {
                     boolean assertions = false;
                     assert (assertions = true) == true;
                     if (assertions) {
+                        boolean leaveFailed = false;
                         try {
                             innerContext.leave("foo");
-                            fail("no assertion error for leaving with the wrong object");
                         } catch (AssertionError e) {
+                            leaveFailed = true;
+                        }
+                        if (!leaveFailed) {
+                            fail("no assertion error for leaving with the wrong object");
                         }
                     }
                 } finally {
@@ -653,7 +657,7 @@ public class LanguageSPITest {
         boolean contextCachingEnabled = false;
         int executionIndex;
 
-        @Option(help = "", category = OptionCategory.INTERNAL) static final OptionKey<Integer> DummyOption = new OptionKey<>(0);
+        @Option(help = "", category = OptionCategory.DEBUG) static final OptionKey<Integer> DummyOption = new OptionKey<>(0);
 
         @Override
         protected OptionDescriptors getOptionDescriptors() {
@@ -1794,20 +1798,27 @@ public class LanguageSPITest {
             protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
                 Env env = ProxyLanguage.getCurrentContext().env;
                 LanguageInfo languageInfo = env.getLanguages().get(LanguageSPITestLanguage.ID);
-                boolean found = env.lookup(languageInfo, LanguageSPITestLanguageService.class) != null;
+                String className = request.getSource().getCharacters().toString();
+                boolean found = env.lookup(languageInfo, Class.forName(className)) != null;
                 return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(found));
             }
         });
         // Not loaded language
         try (Context context = Context.create(LanguageSPITestLanguage.ID, ProxyLanguage.ID)) {
-            Value result = context.eval(ProxyLanguage.ID, "");
+            Value result = context.eval(ProxyLanguage.ID, LanguageSPITestLanguageService.class.getName());
             assertTrue(result.isBoolean());
             assertFalse(result.asBoolean());
         }
         // Loaded language
         try (Context context = Context.create(LanguageSPITestLanguage.ID, ProxyLanguage.ID)) {
             context.initialize(LanguageSPITestLanguage.ID);
-            Value result = context.eval(ProxyLanguage.ID, "");
+            Value result = context.eval(ProxyLanguage.ID, LanguageSPITestLanguageService.class.getName());
+            assertTrue(result.isBoolean());
+            assertTrue(result.asBoolean());
+        }
+        // Registered service
+        try (Context context = Context.create(LanguageSPITestLanguage.ID, ProxyLanguage.ID)) {
+            Value result = context.eval(ProxyLanguage.ID, LanguageSPITestLanguageService2.class.getName());
             assertTrue(result.isBoolean());
             assertTrue(result.asBoolean());
         }

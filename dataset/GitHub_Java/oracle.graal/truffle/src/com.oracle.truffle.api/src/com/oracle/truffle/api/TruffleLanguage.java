@@ -422,7 +422,7 @@ public abstract class TruffleLanguage<C> {
          * createContext} method and instantiate and {@link Env#registerService(java.lang.Object)
          * register} all here in defined services.
          * <p>
-         * Languages automatically get created but not yet initialized when their registered
+         * Languages automatically get created when their registered
          * {@link Env#lookup(com.oracle.truffle.api.nodes.LanguageInfo, java.lang.Class) service is
          * requested}.
          *
@@ -485,10 +485,6 @@ public abstract class TruffleLanguage<C> {
      * for instrumentation, the instruments cannot receive any meta data about code executed during
      * context creation. Should there be a need to perform complex initialization, do it by
      * overriding the {@link #initializeContext(java.lang.Object)} method.
-     * <p>
-     * Additional services provided by the language must be
-     * {@link Env#registerService(java.lang.Object) registered} by this method otherwise
-     * {@link IllegalStateException} is thrown.
      * <p>
      * May return {@code null} if the language does not need any per-{@linkplain Context context}
      * state. Otherwise it should return a new object instance every time it is called.
@@ -719,12 +715,16 @@ public abstract class TruffleLanguage<C> {
      * @since 0.22
      */
     public static final class ParsingRequest {
+        private final Node node;
+        private final MaterializedFrame frame;
         private final Source source;
         private final String[] argumentNames;
         private boolean disposed;
 
-        ParsingRequest(Source source, String... argumentNames) {
+        ParsingRequest(Source source, Node node, MaterializedFrame frame, String... argumentNames) {
             Objects.requireNonNull(source);
+            this.node = node;
+            this.frame = frame;
             this.source = source;
             this.argumentNames = argumentNames;
         }
@@ -740,6 +740,49 @@ public abstract class TruffleLanguage<C> {
                 throw new IllegalStateException();
             }
             return source;
+        }
+
+        /**
+         * Specifies the code location for parsing. The location is specified as an instance of a
+         * {@link Node} in the AST. There doesn't have to be any specific location and in such case
+         * this method returns <code>null</code>. If the node is provided, it can be for example
+         * {@link com.oracle.truffle.api.instrumentation.EventContext#getInstrumentedNode()} when
+         * {@link com.oracle.truffle.api.instrumentation.EventContext#parseInContext} is called.
+         *
+         *
+         * @return a {@link Node} defining AST context for the parsing or <code>null</code>
+         * @since 0.22
+         * @deprecated {@link #parse(com.oracle.truffle.api.TruffleLanguage.InlineParsingRequest)}
+         *             and {@link InlineParsingRequest#getLocation()} is the preferred approach to
+         *             parse a source at a {@link Node} location.
+         */
+        @Deprecated
+        public Node getLocation() {
+            if (disposed) {
+                throw new IllegalStateException();
+            }
+            return node;
+        }
+
+        /**
+         * Specifies the execution context for parsing. If the parsing request is used for
+         * evaluation during halted execution, for example as in
+         * {@link com.oracle.truffle.api.debug.DebugStackFrame#eval(String)} method, this method
+         * provides access to current {@link MaterializedFrame frame} with local variables, etc.
+         *
+         * @return a {@link MaterializedFrame} exposing the current execution state or
+         *         <code>null</code> if there is none
+         * @since 0.22
+         * @deprecated {@link #parse(com.oracle.truffle.api.TruffleLanguage.InlineParsingRequest)}
+         *             and {@link InlineParsingRequest#getFrame()} is the preferred approach to
+         *             parse a source with a frame context.
+         */
+        @Deprecated
+        public MaterializedFrame getFrame() {
+            if (disposed) {
+                throw new IllegalStateException();
+            }
+            return frame;
         }
 
         /**
@@ -1198,8 +1241,8 @@ public abstract class TruffleLanguage<C> {
         this.reference = new ContextReference<>(vmObject);
     }
 
-    CallTarget parse(Source source, String... argumentNames) {
-        ParsingRequest request = new ParsingRequest(source, argumentNames);
+    CallTarget parse(Source source, Node context, MaterializedFrame frame, String... argumentNames) {
+        ParsingRequest request = new ParsingRequest(source, context, frame, argumentNames);
         CallTarget target;
         try {
             target = request.parse(this);
@@ -1846,7 +1889,10 @@ public abstract class TruffleLanguage<C> {
         /**
          * Returns an additional service provided by the given language, specified by type. For
          * services registered by {@link Registration#services()} the service lookup will ensure
-         * that the language is loaded and services are registered.
+         * that language is loaded and services are registered. For services extending the
+         * {@link TruffleLanguage} class if an language is not loaded, it will not be automatically
+         * loaded by requesting a service. In order to ensure a language to be loaded at least one
+         * {@link Source} must be {@link #parse(Source, String...) parsed} first.
          *
          * @param <S> the requested type
          * @param language the language to query
@@ -1862,7 +1908,7 @@ public abstract class TruffleLanguage<C> {
                 throw new IllegalArgumentException("Cannot request services from the current language.");
             }
 
-            S result = AccessAPI.engineAccess().lookupService(vmObject, language, this.getSpi().languageInfo, type);
+            S result = AccessAPI.engineAccess().lookupService(vmObject, language, type);
             if (result != null) {
                 return result;
             }
@@ -2002,16 +2048,14 @@ public abstract class TruffleLanguage<C> {
         }
 
         /**
-         * Registers additional services provided by the language. The registered services are made
-         * available to users via
+         * Registers additional service. This method can be called multiple time, but only in
+         * {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env) createContext method}.
+         * These services are made available to users via
          * {@link #lookup(com.oracle.truffle.api.nodes.LanguageInfo, java.lang.Class)} query method.
-         * <p>
-         * For each service interface enumerated in {@link Registration#services() language
-         * registration} the language has to register a single service implementation.
-         * <p>
-         * This method can be called only during the execution of the
-         * {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env) createContext method},
-         * then the services are collected and cannot be changed anymore.
+         *
+         * This method can only be called from
+         * {@link #createContext(com.oracle.truffle.api.TruffleLanguage.Env) } method - then the
+         * services are collected and cannot be changed anymore.
          *
          * @param service a service to be returned from associated
          *            {@link Env#lookup(com.oracle.truffle.api.nodes.LanguageInfo, java.lang.Class)
@@ -2022,7 +2066,7 @@ public abstract class TruffleLanguage<C> {
          */
         public void registerService(Object service) {
             if (languageServicesCollector == null) {
-                throw new IllegalStateException("The registerService method can only be called during the execution of the Env.createContext method.");
+                throw new IllegalStateException("The registerService can be called only from Env.createContext method.");
             }
             languageServicesCollector.add(service);
         }
@@ -2420,9 +2464,8 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        @SuppressWarnings("unused")
         public CallTarget parse(Env env, Source code, Node context, String... argumentNames) {
-            return env.getSpi().parse(code, argumentNames);
+            return env.getSpi().parse(code, context, null, argumentNames);
         }
 
         @Override
@@ -2467,7 +2510,7 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         public Object evalInContext(Source source, Node node, final MaterializedFrame mFrame) {
-            CallTarget target = API.nodes().getLanguage(node.getRootNode()).parse(source);
+            CallTarget target = API.nodes().getLanguage(node.getRootNode()).parse(source, node, mFrame);
             try {
                 if (target instanceof RootCallTarget) {
                     RootNode exec = ((RootCallTarget) target).getRootNode();
@@ -2616,11 +2659,6 @@ public abstract class TruffleLanguage<C> {
         @Override
         public TruffleLanguage<?> getLanguage(Env env) {
             return env.getSpi();
-        }
-
-        @Override
-        public TruffleFile getTruffleFile(FileSystem fs, String path) {
-            return new TruffleFile(fs, fs.parsePath(path));
         }
     }
 }

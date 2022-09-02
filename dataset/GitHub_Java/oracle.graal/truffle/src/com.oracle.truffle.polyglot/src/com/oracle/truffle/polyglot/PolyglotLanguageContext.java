@@ -304,8 +304,8 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                         try {
                             List<Object> languageServicesCollector = new ArrayList<>();
                             LANGUAGE.createEnvContext(localEnv, languageServicesCollector);
-                            String errorMessage;
-                            assert (errorMessage = verifyServices(language.info, languageServicesCollector, language.cache.serices())) == null : errorMessage;
+                            String errorMessage = verifyServices(language.info, languageServicesCollector, language.cache.serices());
+                            assert errorMessage == null : errorMessage;
                             this.languageServices = languageServicesCollector;
                             lang.language.profile.notifyContextCreate(this, localEnv);
                             if (eventsEnabled) {
@@ -333,15 +333,15 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
 
     private static String verifyServices(LanguageInfo info, List<Object> registeredServices, String[] expectedServices) {
         for (String expectedServiceClass : expectedServices) {
-            boolean found = false;
             for (Object registeredService : registeredServices) {
+                boolean found = false;
                 if (isSubType(registeredService.getClass(), expectedServiceClass)) {
                     found = true;
                     break;
                 }
-            }
-            if (!found) {
-                return String.format("Language %s declares service %s but doesn't register it", info.getName(), expectedServiceClass);
+                if (!found) {
+                    return String.format("Language %s declares service %s but doesn't register it", info.getName(), expectedServiceClass);
+                }
             }
         }
         return null;
