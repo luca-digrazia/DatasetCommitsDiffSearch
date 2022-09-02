@@ -127,10 +127,11 @@ public final class Method implements ModifiersProvider, ContextAccess {
         this.rawSignature = rawSignature;
         this.parsedSignature = getSignatures().parsed(this.rawSignature);
 
+
         this.codeAttribute = (CodeAttribute) getAttribute(CodeAttribute.NAME);
         this.exceptionsAttribute = (ExceptionsAttribute) getAttribute(ExceptionsAttribute.NAME);
 
-        if (isStatic()) {
+        if(isStatic()) {
             this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeStatic;
             return;
         }
@@ -138,7 +139,7 @@ public final class Method implements ModifiersProvider, ContextAccess {
             this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeSpecial;
             return;
         }
-        for (ObjectKlass klassInterface : declaringKlass.getInterfaces()) {
+        for (ObjectKlass klassInterface: declaringKlass.getInterfaces()) {
             if (klassInterface.lookupDeclaredMethod(this.name, this.rawSignature) != null) {
                 this.refKind = Target_java_lang_invoke_MethodHandleNatives.REF_invokeInterface;
                 return;
@@ -396,15 +397,14 @@ public final class Method implements ModifiersProvider, ContextAccess {
         int argsLength = args.length;
         int i;
         for (i = 0; i < pcount; i++) {
-            if (i == varargsPos)
-                break;
+            if (i == varargsPos) break;
             trueArgs[i] = args[i];
         }
         Object[] leftoverArgs = new Object[argsLength - i];
         for (int j = 0; j < leftoverArgs.length; j++) {
             leftoverArgs[j] = args[i + j];
         }
-        // trueArgs[varargsPos] = new StaticObjectArray(Type.Object, )
+//        trueArgs[varargsPos] = new StaticObjectArray(Type.Object, )
         throw EspressoError.unimplemented();
     }
 
@@ -416,7 +416,7 @@ public final class Method implements ModifiersProvider, ContextAccess {
      */
     @TruffleBoundary
     public Object invokeDirect(Object self, Object... args) {
-        getContext().getJNI().clearPendingException();
+    getContext().getJNI().clearPendingException();
         if (isStatic()) {
             assert args.length == Signatures.parameterCount(getParsedSignature(), false);
             getDeclaringKlass().safeInitialize();
@@ -430,11 +430,12 @@ public final class Method implements ModifiersProvider, ContextAccess {
         }
     }
 
+
     public final boolean isClassInitializer() {
-        // assert Signatures.returnKind(getParsedSignature()) == JavaKind.Void;
-        // assert isStatic();
-        // assert Signatures.parameterCount(getParsedSignature(), false) == 0;
-        // assert !Name.CLINIT.equals(getName()) || Signature._void.equals(getRawSignature());
+//        assert Signatures.returnKind(getParsedSignature()) == JavaKind.Void;
+//        assert isStatic();
+//        assert Signatures.parameterCount(getParsedSignature(), false) == 0;
+//        assert !Name.CLINIT.equals(getName()) || Signature._void.equals(getRawSignature());
         return Name.CLINIT.equals(getName());
     }
 
