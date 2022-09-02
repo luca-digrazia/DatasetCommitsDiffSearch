@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,26 +50,17 @@ public final class Field extends Member<Type> implements FieldRef {
     private final LinkedField linkedField;
     private final ObjectKlass holder;
     private volatile Klass typeKlassCache;
-    private final boolean hidden;
 
     @CompilationFinal private Symbol<ModifiedUTF8> genericSignature = null;
 
     public Field(ObjectKlass holder, LinkedField linkedField, boolean hidden) {
+        super(hidden ? null : linkedField.getType(), linkedField.getName());
         this.linkedField = linkedField;
         this.holder = holder;
-        this.hidden = hidden;
-    }
-
-    @Override
-    public Symbol<Name> getName() {
-        return linkedField.getName();
     }
 
     public Symbol<Type> getType() {
-        if (hidden) {
-            return null;
-        }
-        return linkedField.getType();
+        return descriptor;
     }
 
     public Attribute[] getAttributes() {
@@ -89,7 +80,7 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public boolean isHidden() {
-        return hidden;
+        return getDescriptor() == null;
     }
 
     public JavaKind getKind() {
@@ -625,12 +616,12 @@ public final class Field extends Member<Type> implements FieldRef {
 
     @Override
     public String getNameAsString() {
-        return getName().toString();
+        return super.getName().toString();
     }
 
     @Override
     public String getTypeAsString() {
-        return getType().toString();
+        return super.getDescriptor().toString();
     }
 
     @Override
