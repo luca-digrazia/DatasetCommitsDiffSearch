@@ -191,21 +191,20 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
                     int matchFlags,
                     @Host(Class.class) StaticObject originalCaller,
                     int skip,
-                    @Host(typeName = "[Ljava/lang/invoke/MemberName;") StaticObject resultsArr,
-                    @InjectMeta Meta meta) {
+                    @Host(typeName = "[Ljava/lang/invoke/MemberName;") StaticObject resultsArr) {
         if (StaticObject.isNull(defc) || StaticObject.isNull(resultsArr)) {
             return -1;
         }
-        EspressoContext context = meta.getContext();
+        EspressoContext context = defc.getKlass().getContext();
         StaticObject[] results = resultsArr.unwrap();
         Symbol<Name> name = null;
         if (!StaticObject.isNull(matchName)) {
-            name = context.getNames().lookup(meta.toHostString(matchName));
+            name = context.getNames().lookup(Meta.toHostString(matchName));
             if (name == null) {
                 return 0;
             }
         }
-        String sig = meta.toHostString(matchSig);
+        String sig = Meta.toHostString(matchSig);
         if (sig == null) {
             return 0;
         }
@@ -342,7 +341,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
         }
         Symbol<Name> methodName;
         try {
-            methodName = meta.getNames().lookup(meta.toHostString(name));
+            methodName = meta.getNames().lookup(Meta.toHostString(name));
         } catch (EspressoError e) {
             methodName = null;
         }
@@ -375,7 +374,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
         if (StaticObject.isNull(type)) {
             return StaticObject.NULL;
         }
-        String desc = meta.toHostString(type);
+        String desc = Meta.toHostString(type);
         switch (flags & ALL_KINDS) {
             case MN_IS_CONSTRUCTOR:
                 profiler.profile(1);

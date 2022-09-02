@@ -38,7 +38,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_invoke_MethodHandleNatives;
@@ -91,9 +90,9 @@ public class StackWalk {
         if (decoded < 1) {
             throw Meta.throwException(meta.java_lang_InternalError);
         }
-        register(fw);
-        Object result = meta.java_lang_AbstractStackWalker_doStackWalk.invokeDirect(stackStream, fw.anchor, skipframes, batchSize, startIndex, startIndex + decoded);
-        unAnchor(fw);
+        long id = anchor(fw);
+        Object result = meta.java_lang_AbstractStackWalker_doStackWalk.invokeDirect(stackStream, id, skipframes, batchSize, startIndex, startIndex + decoded);
+        unAnchor(id);
         return (StaticObject) result;
     }
 
@@ -114,27 +113,29 @@ public class StackWalk {
         fw.mode(mode);
         Integer decodedOrNull = fw.doStackWalk(frames);
         int decoded = decodedOrNull == null ? fw.decoded() : decodedOrNull;
-        return startIndex + decoded;
+        if (decoded < 1) {
+            throw Meta.throwException(meta.java_lang_InternalError);
+        }
+        return decoded;
     }
 
-    private void register(FrameWalker fw) {
-        walkers.put(fw.anchor, fw);
+    private long anchor(FrameWalker fw) {
+        long id = walkerIds.getAndIncrement();
+        walkers.put(id, fw);
+        return id;
     }
 
     private FrameWalker getAnchored(long id) {
         return walkers.get(id);
     }
 
-    private void unAnchor(FrameWalker fw) {
-        walkers.remove(fw.anchor);
+    private void unAnchor(long id) {
+        walkers.remove(id);
     }
 
-    private class FrameWalker implements FrameInstanceVisitor<Integer> {
-
+    private static class FrameWalker implements FrameInstanceVisitor<Integer> {
         protected final Meta meta;
         protected long mode;
-
-        private volatile long anchor = -1;
 
         private int state = 0;
         private int from = 0;
@@ -151,17 +152,9 @@ public class StackWalk {
         private static final int PROCESS = 3;
         private static final int HALT = 4;
 
-        FrameWalker(Meta meta, long mode) {
+        public FrameWalker(Meta meta, long mode) {
             this.meta = meta;
             this.mode = mode;
-        }
-
-        public void anchor() {
-            anchor = walkerIds.getAndIncrement();
-        }
-
-        public boolean isAnchored() {
-            return anchor > 0;
         }
 
         public int decoded() {
@@ -227,21 +220,12 @@ public class StackWalk {
         @SuppressWarnings("fallthrough")
         @Override
         public Integer visitFrame(FrameInstance frameInstance) {
-            EspressoRootNode root = VM.getEspressoRootFromFrame(frameInstance);
-            Method m = root == null ? null : root.getMethod();
+            Method m = VM.getMethodFromFrame(frameInstance);
             if (m != null) {
                 switch (state) {
                     case LOCATE_CALLSTACKWALk:
                         if (!isCallStackWalk(m)) {
                             break;
-                        }
-                        if (isAnchored()) {
-                            if (root.readStackAnchorOrZero(frameInstance.getFrame(FrameInstance.FrameAccess.READ_ONLY)) != anchor) {
-                                break;
-                            }
-                        } else {
-                            anchor();
-                            root.setStackWalkAnchor(frameInstance.getFrame(FrameInstance.FrameAccess.READ_WRITE), anchor);
                         }
                         // Found callStackWalk: start unwinding StackWalker API
                         state = LOCATE_STACK_BEGIN;
@@ -300,7 +284,6 @@ public class StackWalk {
             if (liveFrameInfo(mode)) {
                 fillFrame(frameInstance, m, index);
                 // TODO: extract stack, locals and monitors from the frame.
-                throw EspressoError.unimplemented();
             } else if (needMethodInfo(mode)) {
                 fillFrame(frameInstance, m, index);
             } else {
