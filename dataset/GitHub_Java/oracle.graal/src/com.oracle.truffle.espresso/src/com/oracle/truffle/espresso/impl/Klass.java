@@ -30,7 +30,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.function.IntFunction;
 
-import com.oracle.truffle.espresso.nodes.interop.LookupDeclaredMethod;
 import org.graalvm.collections.EconomicSet;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -50,7 +49,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.ModifiersProvider;
-import com.oracle.truffle.espresso.nodes.interop.InvokeEspressoNode;
+import com.oracle.truffle.espresso.nodes.helper.InvokeEspressoNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
@@ -117,15 +116,12 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     @ExportMessage
-    public Object invokeMember(String member,
-                    Object[] arguments,
-                    @Cached LookupDeclaredMethod lookupMethod,
-                    @Exclusive @Cached InvokeEspressoNode invoke)
+    public Object invokeMember(String member, Object[] arguments, @Exclusive @Cached InvokeEspressoNode invoke)
                     throws UnsupportedMessageException, ArityException, UnknownIdentifierException, UnsupportedTypeException {
-        Method m = lookupMethod.execute(this, member, true, true, arguments.length);
-        assert m.isStatic() && m.isPublic() && member.equals(m.getName().toString()) && m.getParameterCount() == arguments.length;
-        if (m != null) {
-            return invoke.execute(m, null, arguments);
+        for (Method m : getDeclaredMethods()) {
+            if (m.isStatic() && m.isPublic() && member.equals(m.getName().toString()) && m.getParameterCount() == arguments.length) {
+                return invoke.execute(m, null, arguments);
+            }
         }
         throw UnknownIdentifierException.create(member);
     }
@@ -136,7 +132,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     @ExportMessage
-    Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+    Object getMembers(boolean includeInternal) {
         EconomicSet<String> members = EconomicSet.create();
         members.add(STATIC_TO_CLASS);
         for (Field f : getDeclaredFields()) {
@@ -150,6 +146,66 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
             }
         }
         return new KeysArray(members.toArray(new String[members.size()]));
+    }
+
+    @ExportMessage
+    static class IsInstantiable {
+
+        @Specialization(guards = "receiver.isArray()")
+        static boolean doArray(@SuppressWarnings("unused") Klass receiver) {
+            return true;
+        }
+
+        @Specialization(replaces = "doArray")
+        static boolean doConstructor(Klass receiver) {
+            if (receiver.isAbstract()) {
+                return false;
+            }
+            for (Method m : receiver.getDeclaredMethods()) {
+                if (m.isPublic() && Name._init_.equals(m.getName())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    @ExportMessage
+    static class Instantiate {
+
+        @Specialization(guards = "receiver.isArray()")
+        static Object doArray(Klass receiver, Object[] args,
+                                    @CachedLibrary(limit = "1") InteropLibrary indexes) throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
+            if (args.length != 1) {
+                throw ArityException.create(1, args.length);
+            }
+            Object arg0 = args[0];
+            int length;
+            if (indexes.fitsInInt(arg0)) {
+                length = indexes.asInt(arg0);
+            } else {
+                throw UnsupportedTypeException.create(args);
+            }
+            Klass component = receiver.getComponentType();
+            // TODO(peterssen): Add specialization for primitive arrays.
+            if (component.isPrimitive()) {
+                byte jvmPrimitiveType = (byte) component.getJavaKind().getBasicType();
+                return InterpreterToVM.allocatePrimitiveArray(jvmPrimitiveType, length);
+            }
+            return component.allocateReferenceArray(length);
+        }
+
+        @Specialization
+        static Object doConstructor(Klass receiver, Object[] arguments,
+                                    @Exclusive @Cached InvokeEspressoNode invoke) throws UnsupportedMessageException, UnsupportedTypeException, ArityException {
+            for (Method m : receiver.getDeclaredMethods()) {
+                if (m.isPublic() && Name._init_.equals(m.getName()) && m.getParameterCount() == arguments.length) {
+                    StaticObject instance = receiver.allocateInstance();
+                    return invoke.execute(m, instance, arguments);
+                }
+            }
+            throw UnsupportedMessageException.create();
+        }
     }
 
     // endregion Interop
