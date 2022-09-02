@@ -105,7 +105,7 @@ public final class DirectoryMetaLoader extends ComponentPackageLoader {
 
         try {
             Files.walk(rootDir).forEachOrdered((Path en) -> {
-                String eName = SystemUtils.toCommonPath(en);
+                String eName = en.toString();
                 if (eName.startsWith(META_INF_PATH)) {
                     return;
                 }
@@ -164,7 +164,7 @@ public final class DirectoryMetaLoader extends ComponentPackageLoader {
 
         @Override
         public String getName() {
-            return SystemUtils.toCommonPath(rootDir.relativize(path));
+            return rootDir.relativize(path).toString();
         }
 
         @Override
@@ -179,7 +179,7 @@ public final class DirectoryMetaLoader extends ComponentPackageLoader {
 
         @Override
         public String getLinkTarget() throws IOException {
-            return SystemUtils.toCommonPath(Files.readSymbolicLink(path));
+            return Files.readSymbolicLink(path).toString();
         }
 
         @Override

@@ -38,7 +38,6 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.jar.JarFile;
 
 import org.graalvm.component.installer.Archive;
@@ -46,15 +45,12 @@ import org.graalvm.component.installer.CommonConstants;
 import org.graalvm.component.installer.DependencyException;
 import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.Feedback;
-import org.graalvm.component.installer.FileOperations;
 import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.TestBase;
 import org.graalvm.component.installer.jar.JarArchive;
 import org.graalvm.component.installer.jar.JarMetaLoader;
 import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.model.ComponentRegistry;
-import org.graalvm.component.installer.os.DefaultFileOperations;
-import org.graalvm.component.installer.os.WindowsFileOperations;
 import org.graalvm.component.installer.persist.ComponentPackageLoader;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -78,8 +74,6 @@ public class InstallerTest extends TestBase {
     private Installer installer;
     private ComponentInfo componentInfo;
 
-    protected FileOperations fileOps;
-
     private void setupComponentInstall(String relativePath) throws IOException {
         File f = dataFile(relativePath).toFile();
         JarFile jf = new JarFile(f);
@@ -90,7 +84,7 @@ public class InstallerTest extends TestBase {
         componentJarFile = new JarArchive(jf);
 
         loader.loadPaths();
-        installer = new Installer(fb(), fileOps, componentInfo, registry, registry, componentJarFile);
+        installer = new Installer(fb(), componentInfo, registry, registry, componentJarFile);
         installer.setInstallPath(targetPath);
         installer.setLicenseRelativePath(SystemUtils.fromCommonRelative(loader.getLicensePath()));
     }
@@ -115,9 +109,6 @@ public class InstallerTest extends TestBase {
         targetPath = folder.newFolder("inst").toPath();
         storage = new MockStorage();
         registry = new ComponentRegistry(this, storage);
-        fileOps = SystemUtils.isWindows() ? new WindowsFileOperations() : new DefaultFileOperations();
-        fileOps.init(this);
-        fileOps.setRootPath(targetPath);
     }
 
     @After
@@ -212,7 +203,7 @@ public class InstallerTest extends TestBase {
         ComponentInfo savedInfo = installer.getComponentInfo();
 
         // now uninstall, fileName a new installer.
-        Uninstaller uninstaller = new Uninstaller(fb(), fileOps, savedInfo, registry);
+        Uninstaller uninstaller = new Uninstaller(fb(), savedInfo, registry);
         uninstaller.setInstallPath(targetPath);
         uninstaller.uninstallContent();
 
@@ -242,7 +233,7 @@ public class InstallerTest extends TestBase {
         exception.expect(DirectoryNotEmptyException.class);
         exception.expectMessage("jre/languages/ruby/doc/user".replace(SystemUtils.DELIMITER, File.separator));
         // now uninstall, fileName a new installer.
-        Uninstaller uninstaller = new Uninstaller(fb(), fileOps, savedInfo, registry);
+        Uninstaller uninstaller = new Uninstaller(fb(), savedInfo, registry);
         uninstaller.setInstallPath(targetPath);
         uninstaller.uninstallContent();
 
@@ -257,9 +248,10 @@ public class InstallerTest extends TestBase {
         installer.setSymlinks(loader.loadSymlinks());
         // install
         installer.install();
-        PreRemoveProcess preRemove = new PreRemoveProcess(targetPath, fileOps, this);
+        ComponentInfo savedInfo = installer.getComponentInfo();
+        Uninstaller uninstaller = new Uninstaller(fb(), savedInfo, registry);
         Path langPath = targetPath.resolve(SystemUtils.fromCommonString("jre/languages/ruby"));
-        preRemove.deleteContentsRecursively(langPath);
+        uninstaller.deleteContentsRecursively(langPath);
 
         // the root dir still exists
         assertTrue(Files.exists(langPath));
@@ -281,13 +273,14 @@ public class InstallerTest extends TestBase {
         installer.setSymlinks(loader.loadSymlinks());
         // install
         installer.install();
+        ComponentInfo savedInfo = installer.getComponentInfo();
+        Uninstaller uninstaller = new Uninstaller(fb(), savedInfo, registry);
         Path langPath = targetPath.resolve(SystemUtils.fromCommonString("jre/languages/ruby"));
 
         Path roPath = langPath.resolve(SystemUtils.fromCommonString("doc/legal"));
         Files.setPosixFilePermissions(roPath, PosixFilePermissions.fromString("r-xr-xr-x"));
 
-        PreRemoveProcess preRemove = new PreRemoveProcess(targetPath, fileOps, this);
-        preRemove.deleteContentsRecursively(langPath);
+        uninstaller.deleteContentsRecursively(langPath);
         // the root dir still exists
         assertTrue(Files.exists(langPath));
         // but is empty:
@@ -310,7 +303,7 @@ public class InstallerTest extends TestBase {
         ComponentInfo savedInfo = installer.getComponentInfo();
 
         // now uninstall, fileName a new installer.
-        Uninstaller uninstaller = new Uninstaller(fb(), fileOps, savedInfo, registry);
+        Uninstaller uninstaller = new Uninstaller(fb(), savedInfo, registry);
         uninstaller.setInstallPath(targetPath);
         uninstaller.uninstallContent();
 
@@ -341,7 +334,7 @@ public class InstallerTest extends TestBase {
         Files.setPosixFilePermissions(roPath, PosixFilePermissions.fromString("r-xr-xr-x"));
 
         // now uninstall, fileName a new installer.
-        Uninstaller uninstaller = new Uninstaller(fb(), fileOps, savedInfo, registry);
+        Uninstaller uninstaller = new Uninstaller(fb(), savedInfo, registry);
         uninstaller.setInstallPath(targetPath);
         uninstaller.uninstallContent();
 
@@ -370,7 +363,7 @@ public class InstallerTest extends TestBase {
         Files.setPosixFilePermissions(p, PosixFilePermissions.fromString("r--r--r--"));
 
         // now uninstall, fileName a new installer.
-        Uninstaller uninstaller = new Uninstaller(fb(), fileOps, savedInfo, registry);
+        Uninstaller uninstaller = new Uninstaller(fb(), savedInfo, registry);
         uninstaller.setInstallPath(targetPath);
         uninstaller.setIgnoreFailedDeletions(true);
         uninstaller.uninstall();
@@ -397,7 +390,7 @@ public class InstallerTest extends TestBase {
         Files.setPosixFilePermissions(p, PosixFilePermissions.fromString("r--r--r--"));
 
         // now uninstall, fileName a new installer.
-        Uninstaller uninstaller = new Uninstaller(fb(), fileOps, savedInfo, registry);
+        Uninstaller uninstaller = new Uninstaller(fb(), savedInfo, registry);
         uninstaller.setInstallPath(targetPath);
 
         exception.expect(IOException.class);
@@ -436,33 +429,12 @@ public class InstallerTest extends TestBase {
     }
 
     /**
-     * Checks that components with explicit java requirement fail on non-matching graalvm.
-     */
-    @Test
-    public void testValidateRequirementsDifferentJava() throws Exception {
-        setupComponentInstall("truffleruby2-11.jar");
-
-        exception.expect(DependencyException.class);
-        exception.expectMessage("VERIFY_Dependency_Failed");
-        installer.validateRequirements();
-    }
-
-    /**
-     * Checks that components with explicit java requirement succeeds on the correct GraalVM.
-     */
-    @Test
-    public void testValidateRequirementsJavaMatches() throws Exception {
-        setupComponentInstall("truffleruby2-11.jar");
-        storage.graalInfo.put(CommonConstants.CAP_JAVA_VERSION, "11");
-        installer.validateRequirements();
-    }
-
-    /**
      * Checks that the component is installed despite the requirements.
      */
     @Test
     public void testSetIgnoreRequirements() throws Exception {
-        setupComponentInstall("truffleruby2-11.jar");
+
+        setupComponentInstall("truffleruby2.jar");
         // simulate different version of Graal installation
         storage.graalInfo.put(CommonConstants.CAP_GRAALVM_VERSION, "0.30");
 
@@ -684,7 +656,7 @@ public class InstallerTest extends TestBase {
         Path target = Files.readSymbolicLink(check);
 
         Path resolved = targetPath.relativize(check.resolveSibling(target).normalize());
-        assertEquals("jre/bin/ruby", SystemUtils.toCommonPath(resolved));
+        assertEquals("jre/bin/ruby", resolved.toString());
 
         installer.revertInstall();
 
@@ -797,9 +769,9 @@ public class InstallerTest extends TestBase {
             return;
         }
         setupComponentInstall("truffleruby2.jar");
-        Path jreRuby = targetPath.resolve(SystemUtils.fromCommonString("jre/bin/ruby"));
-        Files.createDirectories(jreRuby.getParent());
         installer.install();
+
+        Path jreRuby = targetPath.resolve(SystemUtils.fromCommonString("jre/bin/ruby"));
 
         assertTrue(Files.exists(jreRuby));
 
@@ -820,8 +792,8 @@ public class InstallerTest extends TestBase {
             delegateFeedback(fd);
             installer.revertInstall();
             // must report something
-            assertTrue(fd.errors.isEmpty());
-            assertFalse(Files.exists(jreRuby));
+            assertFalse(fd.errors.isEmpty());
+            assertTrue(Files.exists(jreRuby));
         } finally {
             Files.setPosixFilePermissions(
                             jreRuby.getParent(), PosixFilePermissions.fromString("rwxrwxrwx"));
@@ -834,9 +806,9 @@ public class InstallerTest extends TestBase {
             return;
         }
         setupComponentInstall("truffleruby2.jar");
-        Path jreLang = targetPath.resolve(SystemUtils.fromCommonString("jre/languages"));
-        Files.createDirectories(jreLang);
         installer.install();
+
+        Path jreLang = targetPath.resolve(SystemUtils.fromCommonString("jre/languages"));
 
         assertTrue(Files.exists(jreLang));
 
@@ -857,8 +829,8 @@ public class InstallerTest extends TestBase {
             delegateFeedback(fd);
             installer.revertInstall();
             // must report something
-            assertTrue(fd.errors.isEmpty());
-            assertFalse(Files.list(jreLang).iterator().hasNext());
+            assertFalse(fd.errors.isEmpty());
+            assertTrue(Files.exists(jreLang));
         } finally {
             Files.setPosixFilePermissions(
                             jreLang, PosixFilePermissions.fromString("rwxrwxrwx"));
@@ -978,55 +950,5 @@ public class InstallerTest extends TestBase {
         assertFalse(Files.exists(pythonList));
 
         assertTrue(Files.exists(other));
-    }
-
-    private static final String BLOCKED_CONTENT = "This is a blocked file"; // NOI18N
-    private static final String INSTALL_CONTENT = "Test content: ./jre/bin/ruby"; // NOI18N
-
-    /**
-     * Checks that install that wants to overwrite a 'blocked' file will succeed, but record the
-     * file as one which has to be copied over afterwards.
-     */
-    @Test
-    public void testOverwriteBlockedFile() throws Exception {
-        Path blockedFile = targetPath.resolve(SystemUtils.fromCommonString("jre/bin/ruby"));
-        Files.createDirectories(blockedFile.getParent());
-        Files.write(blockedFile, Arrays.asList(BLOCKED_CONTENT));
-
-        BlockedFileOps blockedOps = new BlockedFileOps();
-        fileOps = blockedOps;
-        fileOps.init(this);
-        fileOps.setRootPath(targetPath);
-
-        blockedOps.blockedPaths.add(blockedFile);
-        Path delayDeletes = folder.newFile("delayDeletes").toPath();
-        Path copiedFiles = folder.newFile("copiedDirs").toPath();
-        blockedOps.setDelayDeletedList(delayDeletes);
-        blockedOps.setCopyContents(copiedFiles);
-
-        setupComponentInstall("trufflerubyWork.jar");
-        installer.setSymlinks(loader.loadSymlinks());
-        installer.setPermissions(loader.loadPermissions());
-        installer.setReplaceDiferentFiles(true);
-        installer.install();
-
-        assertTrue(blockedOps.getDelayDeletedPaths().isEmpty());
-        Map<Path, Path> copies = blockedOps.getCopiedPaths();
-        Path copyDir = targetPath.resolve(SystemUtils.fromCommonString("jre/bin.new"));
-        Path copyFile = copyDir.resolve("ruby");
-        assertEquals(1, copies.size());
-        assertEquals(copyDir, copies.get(blockedFile.getParent()));
-        assertEquals(BLOCKED_CONTENT, Files.readAllLines(blockedFile).get(0));
-        assertEquals(INSTALL_CONTENT, Files.readAllLines(copyFile).get(0));
-
-        // check that the logfiles are OK
-        assertTrue(blockedOps.flush());
-
-        // no file is delay-deleted
-        assertEquals(0, Files.readAllLines(delayDeletes).size());
-
-        // one directory is post-moved
-        String l = blockedFile.getParent().toString() + "|" + copyDir.toString();
-        assertEquals(l, Files.readAllLines(copiedFiles).get(0));
     }
 }
