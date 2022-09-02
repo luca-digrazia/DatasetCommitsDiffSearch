@@ -76,11 +76,8 @@ public class JfrMethodRepository implements JfrRepository {
     }
 
     @Override
-    public int write(JfrChunkWriter writer) throws IOException {
+    public void write(JfrChunkWriter writer) throws IOException {
         assert VMOperation.isInProgressAtSafepoint();
-        if (count == 0) {
-            return 0;
-        }
         writer.writeCompressedLong(JfrTypes.Method.getId());
         writer.writeCompressedLong(count);
 
@@ -89,13 +86,12 @@ public class JfrMethodRepository implements JfrRepository {
             if (usedMethods[id]) {
                 usedMethods[id] = false;
                 writer.writeCompressedLong(classRepo.getClassId(method.getParentClass()));
-                writer.writeCompressedLong(symbolRepo.getSymbolId(method.getName(), false));
-                writer.writeCompressedLong(symbolRepo.getSymbolId(method.getSignature(), false));
+                writer.writeCompressedLong(symbolRepo.getSymbolId(method.getName()));
+                writer.writeCompressedLong(symbolRepo.getSymbolId(method.getSignature()));
                 writer.writeCompressedInt(0); // package id
                 writer.writeBoolean(false); // hidden
             }
         }
-        return 1;
     }
 
     // TODO: just a dummy implementation
