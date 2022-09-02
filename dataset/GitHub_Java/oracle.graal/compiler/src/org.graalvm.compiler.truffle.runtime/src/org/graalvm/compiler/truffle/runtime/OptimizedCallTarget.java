@@ -336,7 +336,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             // this assertion is needed to keep the values from being cleared as non-live locals
             assert frame != null && this != null;
             if (CompilerDirectives.inInterpreter() && inCompiled) {
-                getCompilationProfile().reportInvalidated();
                 notifyDeoptimized(frame);
             }
         }
