@@ -24,13 +24,13 @@
  */
 package org.graalvm.tools.lsp.instrument;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.ref.WeakReference;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.SocketAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -41,25 +41,21 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadFactory;
-import java.util.function.Consumer;
 
-import org.graalvm.collections.Pair;
-import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptors;
-import org.graalvm.options.OptionKey;
-import org.graalvm.options.OptionType;
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
 import org.graalvm.tools.lsp.server.ContextAwareExecutor;
 import org.graalvm.tools.lsp.exceptions.LSPIOException;
+import org.graalvm.tools.lsp.instrument.LSOptions.HostAndPort;
+import org.graalvm.tools.lsp.instrument.LSOptions.LanguageAndAddress;
 import org.graalvm.tools.lsp.server.LanguageServerImpl;
 import org.graalvm.tools.lsp.server.LSPFileSystem;
 import org.graalvm.tools.lsp.server.TruffleAdapter;
 import org.graalvm.tools.lsp.server.utils.CoverageEventNode;
 
-import com.oracle.truffle.api.Option;
 import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.EventContext;
 import com.oracle.truffle.api.instrumentation.ExecutionEventNode;
@@ -69,53 +65,16 @@ import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
+import org.graalvm.collections.Pair;
 
 @Registration(id = LSPInstrument.ID, name = "Language Server", version = "0.1", services = {EnvironmentProvider.class})
 public final class LSPInstrument extends TruffleInstrument implements EnvironmentProvider {
-
     public static final String ID = "lsp";
-    private static final int DEFAULT_PORT = 8123;
-    private static final HostAndPort DEFAULT_ADDRESS = new HostAndPort(null, DEFAULT_PORT);
 
     private OptionValues options;
     private Env environment;
     private EventBinding<ExecutionEventNodeFactory> eventFactoryBinding;
     private volatile boolean waitForClose = false;
-
-    static final OptionType<HostAndPort> ADDRESS_OR_BOOLEAN = new OptionType<>("[[host:]port]", (address) -> {
-        if (address.isEmpty() || address.equals("true")) {
-            return DEFAULT_ADDRESS;
-        } else {
-            return HostAndPort.parse(address);
-        }
-    }, (Consumer<HostAndPort>) (address) -> address.verify());
-
-    static final OptionType<List<LanguageAndAddress>> DELEGATES = new OptionType<>("[languageId@][[host:]port],...", (addresses) -> {
-        if (addresses.isEmpty()) {
-            return Collections.emptyList();
-        }
-        String[] array = addresses.split(",");
-        List<LanguageAndAddress> hostPorts = new ArrayList<>(array.length);
-        for (String address : array) {
-            hostPorts.add(LanguageAndAddress.parse(address));
-        }
-        return hostPorts;
-    }, (Consumer<List<LanguageAndAddress>>) (addresses) -> addresses.forEach((address) -> address.verify()));
-
-    @Option(help = "Enable features for language developers, e.g. hovering code snippets shows AST related information like the node class or tags. (default:false)", category = OptionCategory.INTERNAL) //
-    public static final OptionKey<Boolean> DeveloperMode = new OptionKey<>(false);
-
-    @Option(help = "Include internal sources in goto-definition, references and symbols search. (default:false)", category = OptionCategory.INTERNAL) //
-    public static final OptionKey<Boolean> Internal = new OptionKey<>(false);
-
-    @Option(name = "", help = "Start the Language Server on [[host:]port]. (default: <loopback address>:" + DEFAULT_PORT + ")", category = OptionCategory.USER) //
-    static final OptionKey<HostAndPort> Lsp = new OptionKey<>(DEFAULT_ADDRESS, ADDRESS_OR_BOOLEAN);
-
-    @Option(help = "Requested maximum length of the Socket queue of incoming connections. (default: -1)", category = OptionCategory.EXPERT) //
-    static final OptionKey<Integer> SocketBacklogSize = new OptionKey<>(-1);
-
-    @Option(help = "Delegate language servers", category = OptionCategory.USER) //
-    static final OptionKey<List<LanguageAndAddress>> Delegates = new OptionKey<>(Collections.emptyList(), DELEGATES);
 
     @Override
     protected void onCreate(Env env) {
@@ -124,7 +83,7 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
         options = env.getOptions();
         if (options.hasSetOptions()) {
             final TruffleAdapter truffleAdapter = launchServer(new PrintWriter(env.out(), true), new PrintWriter(env.err(), true));
-            SourceSectionFilter eventFilter = SourceSectionFilter.newBuilder().includeInternal(options.get(Internal)).build();
+            SourceSectionFilter eventFilter = SourceSectionFilter.newBuilder().includeInternal(options.get(LSOptions.Internal)).build();
             eventFactoryBinding = env.getInstrumenter().attachExecutionEventFactory(eventFilter, new ExecutionEventNodeFactory() {
                 private final long creatorThreadId = Thread.currentThread().getId();
 
@@ -161,7 +120,7 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
 
     @Override
     protected OptionDescriptors getOptionDescriptors() {
-        return new LSPInstrumentOptionDescriptors();
+        return new LSOptionsOptionDescriptors();
     }
 
     @Override
@@ -192,7 +151,9 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
         assert options != null;
         assert options.hasSetOptions();
 
-        TruffleAdapter truffleAdapter = new TruffleAdapter(environment, options.get(DeveloperMode));
+        setWaitForClose();
+
+        TruffleAdapter truffleAdapter = new TruffleAdapter(options.get(LSOptions.DeveloperMode));
 
         Context.Builder builder = Context.newBuilder();
         builder.allowAllAccess(true);
@@ -200,23 +161,22 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
         builder.fileSystem(LSPFileSystem.newReadOnlyFileSystem(truffleAdapter));
         ContextAwareExecutor executorWrapper = new ContextAwareExecutorImpl(builder);
 
-        setWaitForClose();
         executorWrapper.executeWithDefaultContext(() -> {
-            HostAndPort hostAndPort = options.get(Lsp);
+            Context context = builder.build();
+            context.enter();
+
+            Instrument instrument = context.getEngine().getInstruments().get(ID);
+            EnvironmentProvider envProvider = instrument.lookup(EnvironmentProvider.class);
+            truffleAdapter.register(envProvider.getEnvironment(), executorWrapper);
+
+            HostAndPort hostAndPort = options.get(LSOptions.Lsp);
             try {
-                Context context = builder.build();
-                context.enter();
-
-                Instrument instrument = context.getEngine().getInstruments().get(ID);
-                EnvironmentProvider envProvider = instrument.lookup(EnvironmentProvider.class);
-                truffleAdapter.register(envProvider.getEnvironment(), executorWrapper);
-
                 InetSocketAddress socketAddress = hostAndPort.createSocket();
                 int port = socketAddress.getPort();
-                Integer backlog = options.get(SocketBacklogSize);
+                Integer backlog = options.get(LSOptions.SocketBacklogSize);
                 InetAddress address = socketAddress.getAddress();
                 ServerSocket serverSocket = new ServerSocket(port, backlog, address);
-                List<Pair<String, SocketAddress>> delegates = createDelegateSockets(options.get(Delegates));
+                List<Pair<String, SocketAddress>> delegates = createDelegateSockets(options.get(LSOptions.Delegates));
                 LanguageServerImpl.create(truffleAdapter, info, err).start(serverSocket, delegates).thenRun(() -> {
                     try {
                         executorWrapper.executeWithDefaultContext(() -> {
@@ -227,16 +187,10 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
                     }
                     executorWrapper.shutdown();
                     notifyClose();
-                }).exceptionally((throwable) -> {
-                    throwable.printStackTrace(err);
-                    notifyClose();
-                    return null;
                 });
-            } catch (ThreadDeath td) {
-                throw td;
-            } catch (Throwable e) {
+            } catch (IOException e) {
                 String message = String.format("[Graal LSP] Starting server on %s failed: %s", hostAndPort.getHostPort(), e.getLocalizedMessage());
-                new LSPIOException(message, e).printStackTrace(err);
+                throw new LSPIOException(message, e);
             }
 
             return null;
@@ -343,117 +297,6 @@ public final class LSPInstrument extends TruffleInstrument implements Environmen
                 lastNestedContext.close();
             }
             lastNestedContext = contextBuilder.build();
-        }
-    }
-
-    static final class HostAndPort {
-
-        private final String host;
-        private String portStr;
-        private int port;
-        private InetAddress inetAddress;
-
-        private HostAndPort(String host, int port) {
-            this.host = host;
-            this.port = port;
-        }
-
-        private HostAndPort(String host, String portStr) {
-            this.host = host;
-            this.portStr = portStr;
-        }
-
-        static HostAndPort parse(String address) {
-            int colon = address.indexOf(':');
-            String port;
-            String host;
-            if (colon >= 0) {
-                port = address.substring(colon + 1);
-                host = address.substring(0, colon);
-            } else {
-                port = address;
-                host = null;
-            }
-            return new HostAndPort(host, port);
-        }
-
-        void verify() {
-            // Check port:
-            if (port == 0) {
-                try {
-                    port = Integer.parseInt(portStr);
-                } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("Port is not a number: " + portStr);
-                }
-            }
-            if (port <= 0 || port > 65535) {
-                throw new IllegalArgumentException("Invalid port number: " + port);
-            }
-            // Check host:
-            if (host != null && !host.isEmpty()) {
-                try {
-                    inetAddress = InetAddress.getByName(host);
-                } catch (UnknownHostException ex) {
-                    throw new IllegalArgumentException(ex.getLocalizedMessage(), ex);
-                }
-            }
-        }
-
-        String getHostPort() {
-            String hostName = host;
-            if (hostName == null || hostName.isEmpty()) {
-                if (inetAddress != null) {
-                    hostName = inetAddress.toString();
-                } else {
-                    hostName = InetAddress.getLoopbackAddress().toString();
-                }
-            }
-            return hostName + ":" + port;
-        }
-
-        InetSocketAddress createSocket() {
-            InetAddress ia;
-            if (inetAddress == null) {
-                ia = InetAddress.getLoopbackAddress();
-            } else {
-                ia = inetAddress;
-            }
-            return new InetSocketAddress(ia, port);
-        }
-    }
-
-    static final class LanguageAndAddress {
-
-        private final String languageId;
-        private final HostAndPort address;
-
-        private LanguageAndAddress(String languageId, HostAndPort address) {
-            this.languageId = languageId;
-            this.address = address;
-        }
-
-        static LanguageAndAddress parse(String la) {
-            int at = la.indexOf('@');
-            if (at < 0) {
-                return new LanguageAndAddress(null, HostAndPort.parse(la));
-            } else {
-                return new LanguageAndAddress(la.substring(0, at), HostAndPort.parse(la.substring(at + 1)));
-            }
-        }
-
-        void verify() {
-            if (languageId != null && languageId.isEmpty()) {
-                throw new IllegalArgumentException("Unknown empty language specified.");
-            }
-            address.verify();
-        }
-
-        String getLanguageId() {
-            return languageId;
-        }
-
-        HostAndPort getAddress() {
-            return address;
         }
     }
 }

@@ -37,7 +37,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -65,10 +64,6 @@ public class LanguageServer {
     }
 
     public void exit() {
-    }
-
-    // Window related methods
-    public void cancelProgress(@SuppressWarnings("unused") WorkDoneProgressCancelParams params) {
     }
 
     // Workspace related methods
@@ -109,7 +104,6 @@ public class LanguageServer {
     public void didClose(@SuppressWarnings("unused") DidCloseTextDocumentParams params) {
     }
 
-    // Language features related methods
     public CompletableFuture<CompletionList> completion(@SuppressWarnings("unused") CompletionParams params) {
         throw new UnsupportedOperationException();
     }
@@ -203,10 +197,6 @@ public class LanguageServer {
     }
 
     public CompletableFuture<List<? extends FoldingRange>> foldingRange(@SuppressWarnings("unused") FoldingRangeParams params) {
-        throw new UnsupportedOperationException();
-    }
-
-    public CompletableFuture<List<? extends SelectionRange>> selectionRange(@SuppressWarnings("unused") SelectionRangeParams params) {
         throw new UnsupportedOperationException();
     }
 
@@ -349,11 +339,6 @@ public class LanguageServer {
             }
         }
 
-        @Override
-        public String toString() {
-            return "Delegate LS " + (languageId != null ? languageId : "") + "@" + getAddress();
-        }
-
     }
 
     public static final class Session implements Runnable {
@@ -374,7 +359,7 @@ public class LanguageServer {
             this.server.connect(new LanguageClient() {
                 @Override
                 public void showMessage(ShowMessageParams params) {
-                    sendNotification("window/showMessage", params);
+                    sendNotification("window/showMessage", params.jsonData);
                 }
 
                 @Override
@@ -384,17 +369,12 @@ public class LanguageServer {
 
                 @Override
                 public void logMessage(LogMessageParams params) {
-                    sendNotification("window/logMessage", params);
+                    sendNotification("window/logMessage", params.jsonData);
                 }
 
                 @Override
                 public void event(Object object) {
                     sendNotification("telemetry/event", object);
-                }
-
-                @Override
-                public CompletableFuture<Void> createProgress(WorkDoneProgressCreateParams params) {
-                    throw new UnsupportedOperationException();
                 }
 
                 @Override
@@ -424,7 +404,7 @@ public class LanguageServer {
 
                 @Override
                 public void publishDiagnostics(PublishDiagnosticsParams params) {
-                    sendNotification("textDocument/publishDiagnostics", params);
+                    sendNotification("textDocument/publishDiagnostics", params.jsonData);
                 }
             });
         }
@@ -498,14 +478,14 @@ public class LanguageServer {
                     RequestMessage message = new RequestMessage(json);
                     if (server.getLogger().isLoggable(Level.FINER)) {
                         String format = "[Trace - %s] Received request '%s - (%s)'\nParams: %s";
-                        server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), message.getMethod(), message.getId(), message.getParams().toString()));
+                        server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), message.getMethod(), message.getId(), message.getJSONParams().toString()));
                     }
                     processRequest(message, messageBytes);
                 } else {
                     NotificationMessage message = new NotificationMessage(json);
                     if (server.getLogger().isLoggable(Level.FINER)) {
                         String format = "[Trace - %s] Received notification '%s'\nParams: %s";
-                        server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), message.getMethod(), message.getParams().toString()));
+                        server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), message.getMethod(), message.getJSONParams().toString()));
                     }
                     processNotification(message, messageBytes);
                 }
@@ -517,15 +497,15 @@ public class LanguageServer {
         private void processRequest(RequestMessage req, byte[] buffer) {
             final Object id = req.getId();
             try {
-                JSONObject params = req.getParams() instanceof JSONObject ? (JSONObject) req.getParams() : null;
+                JSONObject params = req.getJSONParams();
                 CompletableFuture<?> future = null;
                 String method = req.getMethod();
-                delegateServers.sendMessageToDelegates(buffer, id, method, params);
+                delegateServers.sendMessageToDelegates(buffer, id, method, params, server.getLogger());
                 if (server.supportsMethod(method, params)) {
                     switch (method) {
                         case "initialize":
                             future = server.initialize(new InitializeParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                sendResponse(id, result.jsonData);
                             });
                             break;
                         case "shutdown":
@@ -535,7 +515,11 @@ public class LanguageServer {
                             break;
                         case "workspace/symbol":
                             future = server.symbol(new WorkspaceSymbolParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (SymbolInformation si : result) {
+                                    json.put(si.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "workspace/executeCommand":
@@ -545,132 +529,195 @@ public class LanguageServer {
                             break;
                         case "textDocument/willSaveWaitUntil":
                             future = server.willSaveWaitUntil(new WillSaveTextDocumentParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (TextEdit textEdit : result) {
+                                    json.put(textEdit.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/completion":
                             future = server.completion(new CompletionParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                sendResponse(id, result.jsonData);
                             });
                             break;
                         case "completionItem/resolve":
                             future = server.resolveCompletion(new CompletionItem(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                sendResponse(id, result.jsonData);
                             });
                             break;
                         case "textDocument/hover":
-                            future = server.hover(new HoverParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                            future = server.hover(new TextDocumentPositionParams(params)).thenAccept((result) -> {
+                                sendResponse(id, result.jsonData);
                             });
                             break;
                         case "textDocument/signatureHelp":
-                            future = server.signatureHelp(new SignatureHelpParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                            future = server.signatureHelp(new TextDocumentPositionParams(params)).thenAccept((result) -> {
+                                sendResponse(id, result.jsonData);
                             });
                             break;
                         case "textDocument/declaration":
-                            future = server.declaration(new DeclarationParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                            future = server.declaration(new TextDocumentPositionParams(params)).thenAccept((result) -> {
+                                final JSONArray json = new JSONArray();
+                                for (Location location : result) {
+                                    json.put(location.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/definition":
-                            future = server.definition(new DefinitionParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                            future = server.definition(new TextDocumentPositionParams(params)).thenAccept((result) -> {
+                                final JSONArray json = new JSONArray();
+                                for (Location location : result) {
+                                    json.put(location.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/typeDefinition":
-                            future = server.typeDefinition(new TypeDefinitionParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                            future = server.typeDefinition(new TextDocumentPositionParams(params)).thenAccept((result) -> {
+                                final JSONArray json = new JSONArray();
+                                for (Location location : result) {
+                                    json.put(location.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/implementation":
-                            future = server.implementation(new ImplementationParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                            future = server.implementation(new TextDocumentPositionParams(params)).thenAccept((result) -> {
+                                final JSONArray json = new JSONArray();
+                                for (Location location : result) {
+                                    json.put(location.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/references":
                             future = server.references(new ReferenceParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (Location location : result) {
+                                    json.put(location.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/documentHighlight":
-                            future = server.documentHighlight(new DocumentHighlightParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                            future = server.documentHighlight(new TextDocumentPositionParams(params)).thenAccept((result) -> {
+                                final JSONArray json = new JSONArray();
+                                for (DocumentHighlight documentHighlight : result) {
+                                    json.put(documentHighlight.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/documentSymbol":
                             future = server.documentSymbol(new DocumentSymbolParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (SymbolInformation symbolInformation : result) {
+                                    json.put(symbolInformation.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/codeAction":
                             future = server.codeAction(new CodeActionParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (CodeAction codeAction : result) {
+                                    json.put(codeAction.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/codeLens":
                             future = server.codeLens(new CodeLensParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (CodeLens codeLens : result) {
+                                    json.put(codeLens.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "codeLens/resolve":
                             future = server.resolveCodeLens(new CodeLens(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                sendResponse(id, result.jsonData);
                             });
                             break;
                         case "textDocument/documentLink":
                             future = server.documentLink(new DocumentLinkParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (DocumentLink documentLink : result) {
+                                    json.put(documentLink);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "documentLink/resolve":
                             future = server.resolveDocumentLink(new DocumentLink(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                sendResponse(id, result.jsonData);
                             });
                             break;
                         case "textDocument/documentColor":
                             future = server.documentColor(new DocumentColorParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (ColorInformation colorInformation : result) {
+                                    json.put(colorInformation.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/colorPresentation":
                             future = server.colorPresentation(new ColorPresentationParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (ColorPresentation colorPresentation : result) {
+                                    json.put(colorPresentation.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/formatting":
                             future = server.formatting(new DocumentFormattingParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (TextEdit textEdit : result) {
+                                    json.put(textEdit.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/rangeFormatting":
                             future = server.rangeFormatting(new DocumentRangeFormattingParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (TextEdit textEdit : result) {
+                                    json.put(textEdit.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/onTypeFormatting":
                             future = server.onTypeFormatting(new DocumentOnTypeFormattingParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (TextEdit textEdit : result) {
+                                    json.put(textEdit.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         case "textDocument/rename":
                             future = server.rename(new RenameParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                sendResponse(id, result.jsonData);
                             });
                             break;
                         case "textDocument/prepareRename":
-                            future = server.prepareRename(new PrepareRenameParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                            future = server.prepareRename(new TextDocumentPositionParams(params)).thenAccept((result) -> {
+                                sendResponse(id, result.jsonData);
                             });
                             break;
                         case "textDocument/foldingRange":
                             future = server.foldingRange(new FoldingRangeParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
-                            });
-                            break;
-                        case "textDocument/selectionRange":
-                            future = server.selectionRange(new SelectionRangeParams(params)).thenAccept((result) -> {
-                                sendResponse(id, result);
+                                final JSONArray json = new JSONArray();
+                                for (FoldingRange foldingRange : result) {
+                                    json.put(foldingRange.jsonData);
+                                }
+                                sendResponse(id, json);
                             });
                             break;
                         default:
@@ -702,18 +749,15 @@ public class LanguageServer {
 
         private void processNotification(NotificationMessage msg, byte[] buffer) {
             try {
-                JSONObject params = (JSONObject) msg.getParams();
+                JSONObject params = msg.getJSONParams();
                 String method = msg.getMethod();
-                delegateServers.sendMessageToDelegates(buffer, null, method, params);
+                delegateServers.sendMessageToDelegates(buffer, null, method, params, server.getLogger());
                 switch (method) {
                     case "initialized":
                         server.initialized(new InitializedParams(params));
                         break;
                     case "exit":
                         server.exit();
-                        break;
-                    case "window/workDoneProgress/cancel":
-                        server.cancelProgress(new WorkDoneProgressCancelParams(params));
                         break;
                     case "workspace/didChangeWorkspaceFolders":
                         server.didChangeWorkspaceFolders(new DidChangeWorkspaceFoldersParams(params));
@@ -755,46 +799,54 @@ public class LanguageServer {
         }
 
         private void sendResponse(Object id, Object result) {
-            final ResponseMessage response = ResponseMessage.create(id, "2.0");
-            Object allResults = delegateServers.mergeResults(id, getJSONData(result));
-            response.setResult(allResults != null ? allResults : JSONObject.NULL);
+            final JSONObject response = new JSONObject();
+            Object allResults = delegateServers.mergeResults(id, result);
+            response.put("jsonrpc", "2.0");
+            response.put("id", id);
+            response.put("result", allResults != null ? allResults : JSONObject.NULL);
             if (server.getLogger().isLoggable(Level.FINER)) {
                 String format = "[Trace - %s] Sending response '(%s)'\nResult: %s";
-                server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), id, Objects.toString(allResults)));
+                server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), id, allResults.toString()));
             }
-            writeMessage(getJSONData(response).toString());
+            writeMessage(response.toString());
         }
 
         private void sendErrorResponse(Object id, ErrorCodes code, String message) {
-            final ResponseMessage response = ResponseMessage.create(id, "2.0");
+            final JSONObject response = new JSONObject();
+            response.put("jsonrpc", "2.0");
+            response.put("id", id);
             Object allResults = delegateServers.mergeResults(id, null);
             if (allResults != null) {
                 // Provide other results and ignore our error
-                response.setResult(allResults);
+                response.put("result", allResults);
                 if (server.getLogger().isLoggable(Level.FINER)) {
                     String format = "[Trace - %s] Sending response '(%s)'\nResult: %s";
                     server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), id, allResults.toString()));
                 }
             } else {
-                final ResponseErrorLiteral error = ResponseErrorLiteral.create(code.getIntValue(), message);
-                response.setError(error);
+                final JSONObject error = new JSONObject();
+                error.put("code", code.getIntValue());
+                error.put("message", message);
+                response.put("error", error);
                 if (server.getLogger().isLoggable(Level.FINER)) {
                     String format = "[Trace - %s] Sending error response '(%s)'\nError: %s";
-                    server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), id, getJSONData(error).toString()));
+                    server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), id, error.toString()));
                 }
             }
-            writeMessage(getJSONData(response).toString());
+            writeMessage(response.toString());
 
         }
 
         private void sendNotification(String method, Object params) {
-            final NotificationMessage notification = NotificationMessage.create(method, "2.0");
-            notification.setParams(getJSONData(params));
+            final JSONObject notification = new JSONObject();
+            notification.put("jsonrpc", "2.0");
+            notification.put("method", method);
+            notification.put("params", params);
             if (server.getLogger().isLoggable(Level.FINER)) {
                 String format = "[Trace - %s] Sending notification '%s'\nParams: %s";
-                server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), method, getJSONData(params).toString()));
+                server.getLogger().log(Level.FINER, String.format(format, Instant.now().toString(), method, params.toString()));
             }
-            writeMessage(getJSONData(notification).toString());
+            writeMessage(notification.toString());
         }
 
         private void writeMessage(String message) {
@@ -816,19 +868,6 @@ public class LanguageServer {
                 out.write(messageBytes);
                 out.flush();
             }
-        }
-
-        private static Object getJSONData(Object object) {
-            if (object instanceof List) {
-                final JSONArray json = new JSONArray();
-                for (Object obj : (List<?>) object) {
-                    json.put(getJSONData(obj));
-                }
-                return json;
-            } else if (object instanceof JSONBase) {
-                return ((JSONBase) object).jsonData;
-            }
-            return object;
         }
 
         private boolean isCancel(Throwable t) {

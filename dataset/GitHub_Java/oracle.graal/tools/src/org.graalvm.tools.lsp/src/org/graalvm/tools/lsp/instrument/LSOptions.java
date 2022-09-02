@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,9 @@ package org.graalvm.tools.lsp.instrument;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.function.Consumer;
 
 import org.graalvm.options.OptionCategory;
@@ -42,15 +45,11 @@ public final class LSOptions {
         // no instances
     }
 
-    @Option(name = "Languagespecific.hacks", help = "Enable language specific hacks to get features which are not supported by some languages yet. (default:true)", category = OptionCategory.EXPERT) //
-    // TODO: Remove
-    public static final OptionKey<Boolean> LanguageSpecificHacksOption = new OptionKey<>(true);
-
     @Option(help = "Enable features for language developers, e.g. hovering code snippets shows AST related information like the node class or tags. (default:false)", category = OptionCategory.INTERNAL) //
     public static final OptionKey<Boolean> DeveloperMode = new OptionKey<>(false);
 
-    @Option(help = "Include sources with isInternal()==true in goto-definition, references and symbols search. (default:false)", category = OptionCategory.INTERNAL) //
-    public static final OptionKey<Boolean> InternalSources = new OptionKey<>(false);
+    @Option(help = "Include internal sources in goto-definition, references and symbols search. (default:false)", category = OptionCategory.INTERNAL) //
+    public static final OptionKey<Boolean> Internal = new OptionKey<>(false);
 
     private static final int DEFAULT_PORT = 8123;
     private static final HostAndPort DEFAULT_ADDRESS = new HostAndPort(null, DEFAULT_PORT);
@@ -59,6 +58,49 @@ public final class LSOptions {
         if (address.isEmpty() || address.equals("true")) {
             return DEFAULT_ADDRESS;
         } else {
+            return HostAndPort.parse(address);
+        }
+    }, (Consumer<HostAndPort>) (address) -> address.verify());
+
+    static final OptionType<List<LanguageAndAddress>> DELEGATES = new OptionType<>("[languageId@][[host:]port],...", (addresses) -> {
+        if (addresses.isEmpty()) {
+            return Collections.emptyList();
+        }
+        String[] array = addresses.split(",");
+        List<LanguageAndAddress> hostPorts = new ArrayList<>(array.length);
+        for (String address : array) {
+            hostPorts.add(LanguageAndAddress.parse(address));
+        }
+        return hostPorts;
+    }, (Consumer<List<LanguageAndAddress>>) (addresses) -> addresses.forEach((address) -> address.verify()));
+
+    @Option(name = "", help = "Start the Language Server on [[host:]port]. (default: <loopback address>:" + DEFAULT_PORT + ")", category = OptionCategory.USER) //
+    static final OptionKey<HostAndPort> Lsp = new OptionKey<>(DEFAULT_ADDRESS, ADDRESS_OR_BOOLEAN);
+
+    @Option(help = "Requested maximum length of the Socket queue of incoming connections. (default: -1)", category = OptionCategory.EXPERT) //
+    static final OptionKey<Integer> SocketBacklogSize = new OptionKey<>(-1);
+
+    @Option(help = "Delegate language servers", category = OptionCategory.USER) //
+    static final OptionKey<List<LanguageAndAddress>> Delegates = new OptionKey<>(Collections.emptyList(), DELEGATES);
+
+    static final class HostAndPort {
+
+        private final String host;
+        private String portStr;
+        private int port;
+        private InetAddress inetAddress;
+
+        private HostAndPort(String host, int port) {
+            this.host = host;
+            this.port = port;
+        }
+
+        private HostAndPort(String host, String portStr) {
+            this.host = host;
+            this.portStr = portStr;
+        }
+
+        static HostAndPort parse(String address) {
             int colon = address.indexOf(':');
             String port;
             String host;
@@ -70,30 +112,6 @@ public final class LSOptions {
                 host = null;
             }
             return new HostAndPort(host, port);
-        }
-    }, (Consumer<HostAndPort>) (address) -> address.verify());
-
-    @Option(name = "", help = "Start the Language Server on [[host:]port]. (default: <loopback address>:" + DEFAULT_PORT + ")", category = OptionCategory.USER) //
-    static final OptionKey<HostAndPort> Lsp = new OptionKey<>(DEFAULT_ADDRESS, ADDRESS_OR_BOOLEAN);
-
-    @Option(help = "Requested maximum length of the Socket queue of incoming connections. (default: -1)", category = OptionCategory.EXPERT) //
-    static final OptionKey<Integer> SocketBacklogSize = new OptionKey<>(-1);
-
-    static final class HostAndPort {
-
-        private final String host;
-        private String portStr;
-        private int port;
-        private InetAddress inetAddress;
-
-        HostAndPort(String host, int port) {
-            this.host = host;
-            this.port = port;
-        }
-
-        HostAndPort(String host, String portStr) {
-            this.host = host;
-            this.portStr = portStr;
         }
 
         void verify() {
@@ -138,6 +156,41 @@ public final class LSOptions {
                 ia = inetAddress;
             }
             return new InetSocketAddress(ia, port);
+        }
+    }
+
+    static final class LanguageAndAddress {
+
+        private final String languageId;
+        private final HostAndPort address;
+
+        private LanguageAndAddress(String languageId, HostAndPort address) {
+            this.languageId = languageId;
+            this.address = address;
+        }
+
+        static LanguageAndAddress parse(String la) {
+            int at = la.indexOf('@');
+            if (at < 0) {
+                return new LanguageAndAddress(null, HostAndPort.parse(la));
+            } else {
+                return new LanguageAndAddress(la.substring(0, at), HostAndPort.parse(la.substring(at + 1)));
+            }
+        }
+
+        void verify() {
+            if (languageId != null && languageId.isEmpty()) {
+                throw new IllegalArgumentException("Unknown empty language specified.");
+            }
+            address.verify();
+        }
+
+        String getLanguageId() {
+            return languageId;
+        }
+
+        HostAndPort getAddress() {
+            return address;
         }
     }
 }
