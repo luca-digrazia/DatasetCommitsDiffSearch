@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,31 +30,30 @@
 package com.oracle.truffle.llvm.runtime.debug.scope;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugGenericValue;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObjectBuilder;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObject;
+import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugVector;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMFrameValueAccess;
+import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObjectBuilder;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMInstrumentableNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.control.LLVMDispatchBasicBlockNode;
+import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
+import com.oracle.truffle.llvm.runtime.types.PointerType;
+import com.oracle.truffle.llvm.runtime.types.symbols.LLVMIdentifier;
+import com.oracle.truffle.llvm.runtime.types.symbols.LocalVariableDebugInfo;
+import com.oracle.truffle.llvm.runtime.types.symbols.SSAValue;
 
 import java.util.ArrayList;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -62,8 +61,8 @@ public final class LLVMDebuggerScopeFactory {
 
     private static LLVMSourceLocation findSourceLocation(Node suspendedNode) {
         for (Node node = suspendedNode; node != null; node = node.getParent()) {
-            if (node instanceof LLVMNode) {
-                final LLVMSourceLocation sourceLocation = ((LLVMNode) node).getSourceLocation();
+            if (node instanceof LLVMInstrumentableNode) {
+                final LLVMSourceLocation sourceLocation = ((LLVMInstrumentableNode) node).getSourceLocation();
                 if (sourceLocation != null) {
                     return sourceLocation;
                 }
@@ -75,108 +74,115 @@ public final class LLVMDebuggerScopeFactory {
     }
 
     @TruffleBoundary
-    private static LLVMDebuggerScopeEntries getIRLevelEntries(Frame frame) {
+    private static LLVMDebuggerScopeEntries getIRLevelEntries(Frame frame, LLVMContext context, DataLayout dataLayout) {
         if (frame == null || frame.getFrameDescriptor().getSlots().isEmpty()) {
             return LLVMDebuggerScopeEntries.EMPTY_SCOPE;
         }
 
         final LLVMDebuggerScopeEntries entries = new LLVMDebuggerScopeEntries();
         for (final FrameSlot slot : frame.getFrameDescriptor().getSlots()) {
-            final Object slotValue = frame.getValue(slot);
-            LLVMDebuggerValue debuggerValue = LLVMDebugVector.create(slot.getInfo(), slotValue);
-            if (debuggerValue == null) {
-                debuggerValue = new LLVMDebugGenericValue(frame.getValue(slot), slot.getInfo());
+            if (slot.getInfo() instanceof SSAValue) {
+                SSAValue stackValue = (SSAValue) slot.getInfo();
+                String identifier = stackValue.getName();
+                Object slotValue = frame.getValue(slot);
+                if (slotValue == null) { // slots are null if they are cleared by LLVMFrameNuller
+                    slotValue = "<unavailable>";
+                }
+                Object value = CommonNodeFactory.toGenericDebuggerValue(stackValue.getType(), slotValue, dataLayout);
+                entries.add(convertIdentifier(identifier, context), value);
             }
-            entries.add(String.valueOf(slot.getIdentifier()), debuggerValue);
         }
 
         return entries;
     }
 
     @TruffleBoundary
-    private static LLVMDebuggerValue asValue(LLVMGlobal global) {
-        return new LLVMDebugGenericValue(String.valueOf(global.getTarget()), String.valueOf(global.getPointeeType()));
-    }
-
-    @TruffleBoundary
-    private static LLVMDebuggerScopeEntries toDebuggerScope(LLVMScope scope) {
+    private static LLVMDebuggerScopeEntries toDebuggerScope(LLVMScope scope, DataLayout dataLayout, LLVMContext context) {
         final LLVMDebuggerScopeEntries entries = new LLVMDebuggerScopeEntries();
         for (LLVMSymbol symbol : scope.values()) {
             if (symbol.isGlobalVariable()) {
-                entries.add(symbol.getName(), asValue(symbol.asGlobalVariable()));
+                LLVMGlobal global = symbol.asGlobalVariable();
+                Object value = CommonNodeFactory.toGenericDebuggerValue(global.getPointeeType(), context.getSymbol(global), dataLayout);
+                entries.add(LLVMIdentifier.toGlobalIdentifier(global.getName()), value);
             }
         }
         return entries;
     }
 
     @TruffleBoundary
-    private static LLVMDebuggerScopeEntries toDebuggerScope(LLVMSourceLocation.TextModule irScope) {
+    private static LLVMDebuggerScopeEntries toDebuggerScope(LLVMSourceLocation.TextModule irScope, DataLayout dataLayout, LLVMContext context) {
         final LLVMDebuggerScopeEntries entries = new LLVMDebuggerScopeEntries();
         for (LLVMGlobal global : irScope) {
-            entries.add(global.getName(), asValue(global));
+            if (global.hasValidIndexAndID()) {
+                Object value = CommonNodeFactory.toGenericDebuggerValue(new PointerType(global.getPointeeType()), context.getSymbol(global), dataLayout);
+                entries.add(LLVMIdentifier.toGlobalIdentifier(global.getName()), value);
+            }
         }
         return entries;
     }
 
     @TruffleBoundary
-    private static LLVMDebuggerScopeEntries getIRLevelEntries(Node node, LLVMScope llvmScope) {
+    private static LLVMDebuggerScopeEntries getIRLevelEntries(Node node, LLVMContext context, DataLayout dataLayout) {
         for (LLVMSourceLocation location = findSourceLocation(node); location != null; location = location.getParent()) {
             if (location instanceof LLVMSourceLocation.TextModule) {
-                return toDebuggerScope((LLVMSourceLocation.TextModule) location);
+                return toDebuggerScope((LLVMSourceLocation.TextModule) location, dataLayout, context);
             }
         }
-        return toDebuggerScope(llvmScope);
+        return toDebuggerScope(context.getGlobalScope(), dataLayout, context);
     }
 
     @TruffleBoundary
-    public static Iterable<Scope> createIRLevelScope(Node node, Frame frame, LLVMContext context) {
-        final Scope localScope = Scope.newBuilder("function", getIRLevelEntries(frame)).node(node).build();
-        final Scope globalScope = Scope.newBuilder("module", getIRLevelEntries(node, context.getGlobalScope())).build();
-        return Arrays.asList(localScope, globalScope);
+    public static Object createIRLevelScope(Node node, Frame frame, LLVMContext context) {
+        DataLayout dataLayout = LLVMNode.findDataLayout(node);
+        final LLVMDebuggerScopeEntries localScope = getIRLevelEntries(frame, context, dataLayout);
+        final LLVMDebuggerScopeEntries globalScope = getIRLevelEntries(node, context, dataLayout);
+        localScope.setParentScope(globalScope);
+        return localScope;
     }
 
     @TruffleBoundary
-    public static Iterable<Scope> createSourceLevelScope(Node node, Frame frame, LLVMContext context) {
+    public static Object createSourceLevelScope(Node node, Frame frame, LLVMContext context) {
         final LLVMSourceContext sourceContext = context.getSourceContext();
         final RootNode rootNode = node.getRootNode();
         LLVMSourceLocation scope = findSourceLocation(node);
 
         if (rootNode == null || scope == null) {
-            return Collections.singleton(new LLVMDebuggerScopeFactory(sourceContext, node).toScope(frame));
+            return new LLVMDebuggerScopeFactory(context, sourceContext, node).getVariables(frame);
         }
 
         final SourceSection sourceSection = scope.getSourceSection();
-
-        LLVMDebuggerScopeFactory baseScope = new LLVMDebuggerScopeFactory(sourceContext, new LinkedList<>(), rootNode);
+        LLVMDebuggerScopeFactory baseScope = new LLVMDebuggerScopeFactory(context, sourceContext, new ArrayList<>(), node);
         LLVMDebuggerScopeFactory staticScope = null;
 
         for (boolean isLocalScope = true; isLocalScope && scope != null; scope = scope.getParent()) {
-            final LLVMDebuggerScopeFactory next = toScope(scope, sourceContext, rootNode, sourceSection);
+            final LLVMDebuggerScopeFactory next = toScope(context, scope, sourceContext, node, sourceSection);
             copySymbols(next, baseScope);
             if (scope.getKind() == LLVMSourceLocation.Kind.FUNCTION) {
                 baseScope.setName(next.getName());
                 if (scope.getCompileUnit() != null) {
-                    staticScope = toScope(scope.getCompileUnit(), sourceContext, null, sourceSection);
+                    staticScope = toScope(context, scope.getCompileUnit(), sourceContext, null, sourceSection);
                 }
                 isLocalScope = false;
             }
         }
 
-        List<Scope> scopeList = new ArrayList<>();
-        scopeList.add(baseScope.toScope(frame));
+        LLVMDebuggerScopeEntries baseScopeEntry = baseScope.getVariables(frame);
+        LLVMDebuggerScopeEntries currentParentScopeEntry = baseScopeEntry;
         for (; scope != null; scope = scope.getParent()) {
             // e.g. lambdas are compiled to calls to a method in a locally defined class. We
             // cannot access the locals of the enclosing function since they do not lie on the
             // function's frame. They are still accessible from the calling function's frame, so
             // we can simply ignore this scope here. Also, any variables actually used in the
             // lambda would still be available as the members of the 'this' pointer.
-            final LLVMDebuggerScopeFactory next = toScope(scope, sourceContext, null, sourceSection);
+            final LLVMDebuggerScopeFactory next = toScope(context, scope, sourceContext, null, sourceSection);
+            LLVMDebuggerScopeEntries nextScopeEntry = next.getVariables(frame);
             switch (scope.getKind()) {
                 case NAMESPACE:
                 case FILE:
                 case BLOCK:
                     if (next.hasSymbols()) {
-                        scopeList.add(next.toScope(frame));
+                        currentParentScopeEntry.setParentScope(nextScopeEntry);
+                        currentParentScopeEntry = nextScopeEntry;
                     }
                     break;
 
@@ -191,10 +197,11 @@ public final class LLVMDebuggerScopeFactory {
         }
 
         if (staticScope != null && staticScope.hasSymbols()) {
-            scopeList.add(staticScope.toScope(frame));
+            // this is top level scope, there is no scope above this scope.
+            currentParentScopeEntry.setParentScope(staticScope.getVariables(frame));
         }
 
-        return Collections.unmodifiableList(scopeList);
+        return baseScopeEntry;
     }
 
     private static void copySymbols(LLVMDebuggerScopeFactory source, LLVMDebuggerScopeFactory target) {
@@ -205,23 +212,22 @@ public final class LLVMDebuggerScopeFactory {
         }
     }
 
-    private static LLVMDebuggerScopeFactory toScope(LLVMSourceLocation scope, LLVMSourceContext sourceContext, Node node, SourceSection sourceSection) {
+    private static LLVMDebuggerScopeFactory toScope(LLVMContext context, LLVMSourceLocation scope, LLVMSourceContext sourceContext, Node node, SourceSection sourceSection) {
         if (!scope.hasSymbols()) {
-            final LLVMDebuggerScopeFactory sourceScope = new LLVMDebuggerScopeFactory(sourceContext, node);
+            final LLVMDebuggerScopeFactory sourceScope = new LLVMDebuggerScopeFactory(context, sourceContext, node);
             sourceScope.setName(scope.getName());
             return sourceScope;
         }
 
-        final List<LLVMSourceSymbol> symbols = new LinkedList<>();
-        final LLVMDebuggerScopeFactory sourceScope = new LLVMDebuggerScopeFactory(sourceContext, symbols, node);
-        sourceScope.setName(scope.getName());
-
+        final ArrayList<LLVMSourceSymbol> symbols = new ArrayList<>();
         for (LLVMSourceSymbol symbol : scope.getSymbols()) {
             if (symbol.isStatic() || isDeclaredBefore(symbol, sourceSection)) {
                 symbols.add(symbol);
             }
         }
 
+        final LLVMDebuggerScopeFactory sourceScope = new LLVMDebuggerScopeFactory(context, sourceContext, symbols, node);
+        sourceScope.setName(scope.getName());
         return sourceScope;
     }
 
@@ -251,18 +257,20 @@ public final class LLVMDebuggerScopeFactory {
 
     private static final String DEFAULT_NAME = "<scope>";
 
-    private final LLVMSourceContext context;
-    private final List<LLVMSourceSymbol> symbols;
+    private final LLVMContext context;
+    private final LLVMSourceContext sourceContext;
+    private final ArrayList<LLVMSourceSymbol> symbols;
     private final Node node;
 
     private String name;
 
-    private LLVMDebuggerScopeFactory(LLVMSourceContext context, Node node) {
-        this(context, Collections.emptyList(), node);
+    private LLVMDebuggerScopeFactory(LLVMContext context, LLVMSourceContext sourceContext, Node node) {
+        this(context, sourceContext, new ArrayList<>(), node);
     }
 
-    private LLVMDebuggerScopeFactory(LLVMSourceContext context, List<LLVMSourceSymbol> symbols, Node node) {
+    private LLVMDebuggerScopeFactory(LLVMContext context, LLVMSourceContext sourceContext, ArrayList<LLVMSourceSymbol> symbols, Node node) {
         this.context = context;
+        this.sourceContext = sourceContext;
         this.symbols = symbols;
         this.node = node;
         this.name = DEFAULT_NAME;
@@ -280,49 +288,54 @@ public final class LLVMDebuggerScopeFactory {
         return name;
     }
 
+    private static String convertIdentifier(String identifier, LLVMContext context) {
+        if (context.getEnv().getOptions().get(SulongEngineOption.LL_DEBUG)) {
+            // IR-level debugging always expects "%" prefix
+            return LLVMIdentifier.toLocalIdentifier(identifier);
+        }
+        try {
+            Integer.parseInt(identifier);
+            return LLVMIdentifier.toLocalIdentifier(identifier);
+        } catch (NumberFormatException e) {
+            // don't prepend "%" for custom names
+            return identifier;
+        }
+    }
+
     @TruffleBoundary
-    private Object getVariables(Frame frame) {
+    private LLVMDebuggerScopeEntries getVariables(Frame frame) {
         if (symbols.isEmpty()) {
             return LLVMDebuggerScopeEntries.EMPTY_SCOPE;
         }
 
         final LLVMDebuggerScopeEntries vars = new LLVMDebuggerScopeEntries();
+        vars.setScopeName(getName());
 
-        if (frame != null) {
-            for (FrameSlot slot : frame.getFrameDescriptor().getSlots()) {
-                if (slot.getIdentifier() instanceof LLVMSourceSymbol && frame.getValue(slot) instanceof LLVMDebugObjectBuilder) {
-                    final LLVMSourceSymbol symbol = (LLVMSourceSymbol) slot.getIdentifier();
-                    final LLVMDebugObject value = ((LLVMDebugObjectBuilder) frame.getValue(slot)).getValue(symbol);
-                    if (symbols.contains(symbol)) {
-                        vars.add(symbol.getName(), value);
-                    }
+        LLVMDispatchBasicBlockNode dispatchBlock = LLVMNode.getParent(node, LLVMDispatchBasicBlockNode.class);
+
+        if (frame != null && dispatchBlock != null) {
+            LocalVariableDebugInfo debugInfo = dispatchBlock.getDebugInfo();
+            Map<LLVMSourceSymbol, Object> localVariables = debugInfo.getLocalVariables(frame, node);
+            for (Map.Entry<LLVMSourceSymbol, Object> entry : localVariables.entrySet()) {
+                LLVMSourceSymbol symbol = entry.getKey();
+                if (symbols.contains(symbol)) {
+                    vars.add(symbol.getName(), entry.getValue());
                 }
             }
         }
 
         for (LLVMSourceSymbol symbol : symbols) {
             if (!vars.contains(symbol.getName())) {
-                LLVMDebugObjectBuilder dbgVal = context.getStatic(symbol);
-
-                if (dbgVal == null) {
-                    final LLVMFrameValueAccess allocation = context.getFrameValue(symbol);
-                    if (allocation != null && frame != null) {
-                        dbgVal = allocation.getValue(frame);
-                    }
-                }
+                LLVMDebugObjectBuilder dbgVal = sourceContext.getStatic(symbol);
 
                 if (dbgVal == null) {
                     dbgVal = LLVMDebugObjectBuilder.UNAVAILABLE;
                 }
 
-                vars.add(symbol.getName(), dbgVal.getValue(symbol));
+                vars.add(convertIdentifier(symbol.getName(), context), dbgVal.getValue(symbol));
             }
         }
 
         return vars;
-    }
-
-    private Scope toScope(Frame frame) {
-        return Scope.newBuilder(name, getVariables(frame)).node(node).build();
     }
 }
