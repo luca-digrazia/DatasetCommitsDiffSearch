@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,15 @@
  */
 package com.oracle.truffle.espresso.jni;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.util.Arrays;
-
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.ForeignAccess;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
-class Callback implements TruffleObject {
+@ExportLibrary(InteropLibrary.class)
+public final class Callback implements TruffleObject {
 
     private final int arity;
     private final Function function;
@@ -43,53 +40,24 @@ class Callback implements TruffleObject {
         this.function = function;
     }
 
-    @CompilerDirectives.TruffleBoundary
-    Object call(Object... args) {
-        if (args.length == arity) {
-            Object ret = function.call(args);
-            return ret;
-        } else {
-            throw ArityException.raise(arity, args.length);
-        }
+    @SuppressWarnings("static-method")
+    @ExportMessage
+    boolean isExecutable() {
+        return true;
     }
 
-    @Override
-    public ForeignAccess getForeignAccess() {
-        return CallbackMessageResolutionForeign.ACCESS;
+    @ExportMessage
+    public Object execute(Object... arguments) throws ArityException {
+        if (arguments.length == arity) {
+            Object ret = function.call(arguments);
+            return ret;
+        } else {
+            CompilerDirectives.transferToInterpreter();
+            throw ArityException.create(arity, arguments.length);
+        }
     }
 
     public interface Function {
         Object call(Object... args);
-    }
-
-    private static Callback wrap(Object receiver, Method m) {
-        return new Callback(m.getParameterCount(), args -> {
-            try {
-                return m.invoke(receiver, args);
-            } catch (IllegalAccessException | InvocationTargetException e) {
-                throw new RuntimeException(e);
-            }
-        });
-    }
-
-    static Callback wrapStaticMethod(Class<?> clazz, String methodName, Class<?> parameterTypes) {
-        Method m;
-        try {
-            m = clazz.getDeclaredMethod(methodName, parameterTypes);
-            assert Modifier.isStatic(m.getModifiers());
-        } catch (NoSuchMethodException e) {
-            throw EspressoError.shouldNotReachHere(e);
-        }
-        return wrap(clazz, m);
-    }
-
-    static Callback wrapInstanceMethod(Object receiver, String methodName, Class<?> parameterTypes) {
-        Method m;
-        try {
-            m = receiver.getClass().getDeclaredMethod(methodName, parameterTypes);
-        } catch (NoSuchMethodException e) {
-            throw EspressoError.shouldNotReachHere(e);
-        }
-        return wrap(receiver, m);
     }
 }

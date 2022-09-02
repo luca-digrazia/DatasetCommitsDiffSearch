@@ -35,26 +35,21 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.Utils;
-import com.oracle.truffle.espresso.descriptors.ByteSequence;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.descriptors.Validation;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
@@ -77,8 +72,6 @@ import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
 public final class JniEnv extends NativeEnv implements ContextAccess {
 
-    private static final TruffleLogger JNILogger = TruffleLogger.getLogger(EspressoLanguage.ID, JniEnv.class);
-
     public static final int JNI_OK = 0; /* success */
     public static final int JNI_ERR = -1; /* unknown error */
     public static final int JNI_COMMIT = 1;
@@ -89,13 +82,13 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public static final int JNI_FALSE = 0;
 
     // enum jobjectRefType
-    public static final int JNIInvalidRefType = 0;
-    public static final int JNILocalRefType = 1;
-    public static final int JNIGlobalRefType = 2;
-    public static final int JNIWeakGlobalRefType = 3;
+    static final int JNIInvalidRefType = 0;
+    static final int JNILocalRefType = 1;
+    static final int JNIGlobalRefType = 2;
+    static final int JNIWeakGlobalRefType = 3;
 
-    // TODO(peterssen): Add user-configurable option.
-    private static final int MAX_JNI_LOCAL_CAPACITY = 1 << 16;
+    // This is an arbitrary constant. The hard limit is defined by the host VM.
+    private static final int MAX_JNI_LOCAL_CAPACITY = 1 << 16; // TODO(peterssen): User-configurable flag.
 
     private final EspressoContext context;
 
@@ -103,13 +96,13 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     private @Word long jniEnvPtr;
 
-    // Native library nespresso.dll (Windows) or libnespresso.so (Unixes) at runtime.
+    // Load native library nespresso.dll (Windows) or libnespresso.so (Unixes) at runtime.
     private final TruffleObject nespressoLibrary;
 
-    // Native methods in libenespresso.
     private final TruffleObject initializeNativeContext;
     private final TruffleObject disposeNativeContext;
     private final TruffleObject dupClosureRef;
+
     private final TruffleObject popBoolean;
     private final TruffleObject popByte;
     private final TruffleObject popChar;
@@ -157,6 +150,9 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             public Object call(Object... args) {
                 assert (long) args[0] == JniEnv.this.getNativePointer() : "Calling " + m + " from alien JniEnv";
                 try {
+                    // Substitute raw pointer by proper `this` reference.
+                    // System.err.print("Call DEFINED method: " + m.getName() +
+                    // Arrays.toString(shiftedArgs));
                     return m.invoke(JniEnv.this, args);
                 } catch (EspressoException targetEx) {
                     setPendingException(targetEx.getExceptionObject());
@@ -183,13 +179,13 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         try {
             // Dummy placeholder for unimplemented/unknown methods.
             if (m == null) {
-                JNILogger.log(Level.FINER, "Fetching unknown/unimplemented JNI method: {0}", methodName);
+                // System.err.println("Fetching unknown/unimplemented JNI method: " + methodName);
                 return (TruffleObject) InteropLibrary.getFactory().getUncached().execute(dupClosureRefAndCast("(pointer): void"),
                                 new Callback(1, new Callback.Function() {
                                     @Override
                                     public Object call(Object... args) {
                                         CompilerDirectives.transferToInterpreter();
-                                        JNILogger.log(Level.SEVERE, "Calling unimplemented JNI method: {0}", methodName);
+                                        System.err.println("Calling unimplemented JNI method: " + methodName);
                                         throw EspressoError.unimplemented("JNI method: " + methodName);
                                     }
                                 }));
@@ -342,13 +338,15 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     private JniEnv(EspressoContext context) {
-        EspressoProperties props = context.getVmProperties();
-        this.context = context;
         try {
+            EspressoProperties props = context.getVmProperties();
+            this.context = context;
             nespressoLibrary = loadLibrary(props.espressoLibraryPath(), "nespresso");
             dupClosureRef = NativeLibrary.lookup(nespressoLibrary, "dupClosureRef");
+
             initializeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary,
                             "initializeNativeContext", "(env, (string): pointer): sint64");
+
             disposeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary, "disposeNativeContext",
                             "(env, sint64): void");
 
@@ -361,7 +359,10 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             popFloat = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_float", "(sint64): float");
             popDouble = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_double", "(sint64): double");
             popLong = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_long", "(sint64): sint64");
-            popObject = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_object", "(sint64): sint64");
+            popObject = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_object", "(sint64): sint64" /*
+                                                                                                        * return
+                                                                                                        * word
+                                                                                                        */);
 
             Callback lookupJniImplCallback = new Callback(LOOKUP_JNI_IMPL_PARAMETER_COUNT, new Callback.Function() {
                 @Override
@@ -387,46 +388,8 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         }
     }
 
-    public JNIHandles getHandles() {
+    public final JNIHandles getHandles() {
         return handles;
-    }
-
-    private ByteBuffer allocateDirect(int capacity, JavaKind kind) {
-        return allocateDirect(Math.multiplyExact(capacity, kind.getByteCount()));
-    }
-
-    private ByteBuffer allocateDirect(int capacity) {
-        ByteBuffer bb = ByteBuffer.allocateDirect(capacity).order(ByteOrder.nativeOrder());
-        long address = byteBufferAddress(bb);
-        nativeBuffers.put(address, bb);
-        return bb;
-    }
-
-    private static String nfiSignature(final Symbol<Type>[] signature, boolean isJni) {
-
-        int argCount = Signatures.parameterCount(signature, false);
-        StringBuilder sb = new StringBuilder("(");
-
-        boolean first = true;
-        if (isJni) {
-            sb.append(NativeSimpleType.POINTER); // JNIEnv*
-            sb.append(",");
-            sb.append(Utils.kindToType(JavaKind.Object)); // Receiver or class (for static
-            // methods).
-            first = false;
-        }
-        for (int i = 0; i < argCount; ++i) {
-            JavaKind kind = Signatures.parameterKind(signature, i);
-            if (!first) {
-                sb.append(", ");
-            } else {
-                first = false;
-            }
-            sb.append(Utils.kindToType(kind));
-        }
-
-        sb.append("): ").append(Utils.kindToType(Signatures.returnKind(signature)));
-        return sb.toString();
     }
 
     private static Map<String, JniSubstitutor> buildJniMethods() {
@@ -469,6 +432,55 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     // Checkstyle: stop method name check
+
+    /**
+     * <h3>jint GetVersion(JNIEnv *env);</h3>
+     * <p>
+     * Returns the version of the native method interface.
+     *
+     * @return the major version number in the higher 16 bits and the minor version number in the
+     *         lower 16 bits.
+     *
+     *         <p>
+     *         <b>Error codes</b>
+     *         <ul>
+     *         <li>#define JNI_EDETACHED (-2) // thread detached from the VM
+     *         <li>#define JNI_EVERSION (-3) // JNI version error
+     *         </ul>
+     */
+    @JniImpl
+    public static int GetVersion() {
+        return JniVersion.JNI_VERSION_ESPRESSO;
+    }
+
+    /**
+     * <h3>jsize GetArrayLength(JNIEnv *env, jarray array);</h3>
+     * <p>
+     * Returns the number of elements in the array.
+     *
+     * @param array a Java array object.
+     * @return the length of the array.
+     */
+    @JniImpl
+    public static int GetArrayLength(@Host(Object.class) StaticObject array) {
+        return InterpreterToVM.arrayLength(array);
+    }
+
+    /**
+     * <h3>jsize GetStringLength(JNIEnv *env, jstring string);</h3>
+     * <p>
+     * Returns the length (the count of Unicode characters) of a Java string.
+     *
+     * @param string a Java string object.
+     * @return the length of the Java string.
+     */
+    @JniImpl
+    public int GetStringLength(@Host(String.class) StaticObject string) {
+        if (StaticObject.isNull(string)) {
+            return 0;
+        }
+        return (int) getMeta().String_length.invokeDirect(string);
+    }
 
     // region Get*ID
 
@@ -1145,66 +1157,12 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         Method method = methodIds.getObject(methodId);
         assert method.isStatic();
         assert (clazz.getMirrorKlass()) == method.getDeclaringKlass();
+        // System.err.println("CallStaticVoidMethod: " + method);
         method.invokeDirect(null, popVarArgs(varargsPtr, method.getParsedSignature()));
+        // System.err.println("return CallStaticVoidMethod: " + method);
     }
 
     // endregion CallStatic*Method
-
-    // region New*Array
-
-    @JniImpl
-    public static @Host(boolean[].class) StaticObject NewBooleanArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Boolean.getBasicType(), len);
-    }
-
-    @JniImpl
-    public static @Host(byte[].class) StaticObject NewByteArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Byte.getBasicType(), len);
-    }
-
-    @JniImpl
-    public static @Host(char[].class) StaticObject NewCharArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Char.getBasicType(), len);
-    }
-
-    @JniImpl
-    public static @Host(short[].class) StaticObject NewShortArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Short.getBasicType(), len);
-    }
-
-    @JniImpl
-    public static @Host(int[].class) StaticObject NewIntArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Int.getBasicType(), len);
-    }
-
-    @JniImpl
-    public static @Host(long[].class) StaticObject NewLongArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Long.getBasicType(), len);
-    }
-
-    @JniImpl
-    public static @Host(float[].class) StaticObject NewFloatArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Float.getBasicType(), len);
-    }
-
-    @JniImpl
-    public static @Host(double[].class) StaticObject NewDoubleArray(int len) {
-        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Double.getBasicType(), len);
-    }
-
-    @JniImpl
-    public @Host(Object[].class) StaticObject NewObjectArray(int length, @Host(Class.class) StaticObject elementClass, @Host(Object.class) StaticObject initialElement) {
-        assert !elementClass.getMirrorKlass().isPrimitive();
-        StaticObject arr = elementClass.getMirrorKlass().allocateArray(length);
-        if (length > 0) {
-            // Single store check
-            getInterpreterToVM().setArrayObject(initialElement, 0, arr);
-            Arrays.fill(arr.unwrap(), initialElement);
-        }
-        return arr;
-    }
-
-    // endregion New*Array
 
     // region Get*ArrayRegion
 
@@ -1355,22 +1313,159 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     // endregion Set*ArrayRegion
 
-    // region Strings
+    @JniImpl
+    public @Word long GetPrimitiveArrayCritical(StaticObject object, @Word long isCopyPtr) {
+        if (isCopyPtr != 0L) {
+            ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
+            isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
+        }
+        StaticObject array = object;
+        StaticObject clazz = GetObjectClass(array);
+        JavaKind componentKind = clazz.getMirrorKlass().getComponentType().getJavaKind();
+        assert componentKind.isPrimitive();
+        int length = GetArrayLength(array);
+
+        ByteBuffer region = allocateDirect(length, componentKind);
+        long address = byteBufferAddress(region);
+        // @formatter:off
+        // Checkstyle: stop
+        switch (componentKind) {
+            case Boolean : GetBooleanArrayRegion(array, 0, length, address);  break;
+            case Byte    : GetByteArrayRegion(array, 0, length, address);     break;
+            case Short   : GetShortArrayRegion(array, 0, length, address);    break;
+            case Char    : GetCharArrayRegion(array, 0, length, address);     break;
+            case Int     : GetIntArrayRegion(array, 0, length, address);      break;
+            case Float   : GetFloatArrayRegion(array, 0, length, address);    break;
+            case Long    : GetLongArrayRegion(array, 0, length, address);     break;
+            case Double  : GetDoubleArrayRegion(array, 0, length, address);   break;
+            case Object  : // fall through
+            case Void    : // fall through
+            case Illegal : // fall through
+            default      : throw EspressoError.shouldNotReachHere();
+        }
+        // @formatter:on
+        // Checkstyle: resume
+
+        return address;
+    }
+
+    @JniImpl
+    public void ReleasePrimitiveArrayCritical(@Host(Object.class) StaticObject object, @Word long carrayPtr, int mode) {
+        if (mode == 0 || mode == JNI_COMMIT) { // Update array contents.
+            StaticObject array = object;
+            StaticObject clazz = GetObjectClass(array);
+            JavaKind componentKind = clazz.getMirrorKlass().getComponentType().getJavaKind();
+            assert componentKind.isPrimitive();
+            int length = GetArrayLength(array);
+            // @formatter:off
+            // Checkstyle: stop
+            switch (componentKind) {
+                case Boolean : SetBooleanArrayRegion(array, 0, length, carrayPtr);   break;
+                case Byte    : SetByteArrayRegion(array, 0, length, carrayPtr);      break;
+                case Short   : SetShortArrayRegion(array, 0, length, carrayPtr);     break;
+                case Char    : SetCharArrayRegion(array, 0, length, carrayPtr);      break;
+                case Int     : SetIntArrayRegion(array, 0, length, carrayPtr);       break;
+                case Float   : SetFloatArrayRegion(array, 0, length, carrayPtr);     break;
+                case Long    : SetLongArrayRegion(array, 0, length, carrayPtr);      break;
+                case Double  : SetDoubleArrayRegion(array, 0, length, carrayPtr);    break;
+                default      : throw EspressoError.shouldNotReachHere();
+            }
+            // @formatter:on
+            // Checkstyle: resume
+        }
+        if (mode == 0 || mode == JNI_ABORT) { // Dispose copy.
+            assert nativeBuffers.containsKey(carrayPtr);
+            nativeBuffers.remove(carrayPtr);
+        }
+    }
+
+    // region New*Array
+
+    @JniImpl
+    public static @Host(boolean[].class) StaticObject NewBooleanArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Boolean.getBasicType(), len);
+    }
+
+    @JniImpl
+    public static @Host(byte[].class) StaticObject NewByteArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Byte.getBasicType(), len);
+    }
+
+    @JniImpl
+    public static @Host(char[].class) StaticObject NewCharArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Char.getBasicType(), len);
+    }
+
+    @JniImpl
+    public static @Host(short[].class) StaticObject NewShortArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Short.getBasicType(), len);
+    }
+
+    @JniImpl
+    public static @Host(int[].class) StaticObject NewIntArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Int.getBasicType(), len);
+    }
+
+    @JniImpl
+    public static @Host(long[].class) StaticObject NewLongArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Long.getBasicType(), len);
+    }
+
+    @JniImpl
+    public static @Host(float[].class) StaticObject NewFloatArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Float.getBasicType(), len);
+    }
+
+    @JniImpl
+    public static @Host(double[].class) StaticObject NewDoubleArray(int len) {
+        return InterpreterToVM.allocatePrimitiveArray((byte) JavaKind.Double.getBasicType(), len);
+    }
+
+    // endregion New*Array
 
     /**
-     * <h3>jsize GetStringLength(JNIEnv *env, jstring string);</h3>
-     * <p>
-     * Returns the length (the count of Unicode characters) of a Java string.
+     * <h3>jclass GetObjectClass(JNIEnv *env, jobject obj);</h3>
      *
-     * @param string a Java string object.
-     * @return the length of the Java string.
+     * Returns the class of an object.
+     *
+     * @param self a Java object (must not be NULL).
      */
     @JniImpl
-    public int GetStringLength(@Host(String.class) StaticObject string) {
-        if (StaticObject.isNull(string)) {
-            return 0;
+    public static @Host(Class.class) StaticObject GetObjectClass(@Host(Object.class) StaticObject self) {
+        return self.getKlass().mirror();
+    }
+
+    /**
+     * <h3>jclass GetSuperclass(JNIEnv *env, jclass clazz);</h3>
+     *
+     * If clazz represents any class other than the class Object, then this function returns the
+     * object that represents the superclass of the class specified by clazz. If clazz specifies the
+     * class Object, or clazz represents an interface, this function returns NULL.
+     *
+     * @param clazz a Java class object. Returns the superclass of the class represented by clazz,
+     *            or NULL.
+     */
+    @JniImpl
+    public static @Host(Class.class) StaticObject GetSuperclass(@Host(Class.class) StaticObject clazz) {
+        Klass klass = clazz.getMirrorKlass();
+        if (klass.isInterface() || klass.isJavaLangObject()) {
+            return StaticObject.NULL;
         }
-        return (int) getMeta().String_length.invokeDirect(string);
+        return klass.getSuperKlass().mirror();
+    }
+
+    @JniImpl
+    public @Host(Object.class) StaticObject NewObjectVarargs(@Host(Class.class) StaticObject clazz, @Word long methodId, @Word long varargsPtr) {
+        Method method = methodIds.getObject(methodId);
+        assert method.isConstructor();
+        Klass klass = clazz.getMirrorKlass();
+        if (klass.isInterface() || klass.isAbstract()) {
+            throw getMeta().throwEx(InstantiationException.class);
+        }
+        klass.initialize();
+        StaticObject instance = klass.allocateInstance();
+        method.invokeDirect(instance, popVarArgs(varargsPtr, method.getParsedSignature()));
+        return instance;
     }
 
     /**
@@ -1389,6 +1484,100 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public @Host(String.class) StaticObject NewStringUTF(@Word long bytesPtr) {
         String hostString = fromUTF8Ptr(bytesPtr);
         return getMeta().toGuestString(hostString);
+    }
+
+    /**
+     * <h3>jclass FindClass(JNIEnv *env, const char *name);</h3>
+     *
+     * <p>
+     * FindClass locates the class loader associated with the current native method; that is, the
+     * class loader of the class that declared the native method. If the native method belongs to a
+     * system class, no class loader will be involved. Otherwise, the proper class loader will be
+     * invoked to load and link the named class. Since Java 2 SDK release 1.2, when FindClass is
+     * called through the Invocation Interface, there is no current native method or its associated
+     * class loader. In that case, the result of {@link ClassLoader#getSystemClassLoader} is used.
+     * This is the class loader the virtual machine creates for applications, and is able to locate
+     * classes listed in the java.class.path property. The name argument is a fully-qualified class
+     * name or an array type signature .
+     * <p>
+     * For example, the fully-qualified class name for the {@code java.lang.String} class is:
+     *
+     * <pre>
+     * "java/lang/String"}
+     * </pre>
+     *
+     * <p>
+     * The array type signature of the array class {@code java.lang.Object[]} is:
+     *
+     * <pre>
+     * "[Ljava/lang/Object;"
+     * </pre>
+     *
+     * @param name a fully-qualified class name (that is, a package name, delimited by "/", followed
+     *            by the class name). If the name begins with "[" (the array signature character),
+     *            it returns an array class. The string is encoded in modified UTF-8.
+     * @return Returns a class object from a fully-qualified name, or NULL if the class cannot be
+     *         found.
+     * @throws ClassFormatError if the class data does not specify a valid class.
+     * @throws ClassCircularityError if a class or interface would be its own superclass or
+     *             superinterface.
+     * @throws NoClassDefFoundError if no definition for a requested class or interface can be
+     *             found.
+     * @throws OutOfMemoryError if the system runs out of memory.
+     */
+    @JniImpl
+    public @Host(Class.class) StaticObject FindClass(String name) {
+        if (name == null || name.contains(".")) {
+            throw getMeta().throwExWithMessage(NoClassDefFoundError.class, name);
+        }
+        StaticObject internalName = getMeta().toGuestString(name.replace("/", "."));
+        assert getMeta().Class_forName_String.isStatic();
+        try {
+            return (StaticObject) getMeta().Class_forName_String.invokeDirect(null, internalName);
+        } catch (EspressoException e) {
+            if (InterpreterToVM.instanceOf(e.getExceptionObject(), getMeta().ClassNotFoundException)) {
+                throw getMeta().throwExWithMessage(NoClassDefFoundError.class, e.getMessage());
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * <h3>jobject NewLocalRef(JNIEnv *env, jobject ref);</h3>
+     * <p>
+     * Creates a new local reference that refers to the same object as ref. The given ref may be a
+     * global or local reference. Returns NULL if ref refers to null.
+     */
+    @JniImpl
+    public static @Host(Object.class) StaticObject NewLocalRef(@Host(Object.class) StaticObject ref) {
+        // Local ref is allocated by host JNI on return.
+        return ref;
+    }
+
+    /**
+     * <h3>jboolean ExceptionCheck(JNIEnv *env);</h3>
+     * <p>
+     * A convenience function to check for pending exceptions without creating a local reference to
+     * the exception object.
+     *
+     * @return JNI_TRUE when there is a pending exception; otherwise, returns JNI_FALSE.
+     */
+    @JniImpl
+    public boolean ExceptionCheck() {
+        StaticObject ex = threadLocalPendingException.get();
+        assert !StaticObject.isEspressoNull(ex);
+        return ex != null;
+    }
+
+    /**
+     * <h3>void ExceptionClear(JNIEnv *env);</h3>
+     * <p>
+     * Clears any exception that is currently being thrown. If no exception is currently being
+     * thrown, this routine has no effect.
+     */
+    @JniImpl
+    public void ExceptionClear() {
+        clearPendingException();
     }
 
     /**
@@ -1420,6 +1609,17 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         long address = byteBufferAddress(criticalRegion);
         GetCharArrayRegion(stringChars, 0, len, address);
         return address;
+    }
+
+    private ByteBuffer allocateDirect(int capacity, JavaKind kind) {
+        return allocateDirect(Math.multiplyExact(capacity, kind.getByteCount()));
+    }
+
+    private ByteBuffer allocateDirect(int capacity) {
+        ByteBuffer bb = ByteBuffer.allocateDirect(capacity).order(ByteOrder.nativeOrder());
+        long address = byteBufferAddress(bb);
+        nativeBuffers.put(address, bb);
+        return bb;
     }
 
     @JniImpl
@@ -1489,79 +1689,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         nativeBuffers.remove(criticalRegionPtr);
     }
 
-    @JniImpl
-    public @Host(String.class) StaticObject NewString(@Word long unicodePtr, int len) {
-        StaticObject value = StaticObject.wrap(new char[len]);
-        SetCharArrayRegion(value, 0, len, unicodePtr);
-        StaticObject guestString = getMeta().String.allocateInstance();
-        getMeta().String_value.set(guestString, value);
-        return guestString;
-    }
-
-    /**
-     * <h3>void GetStringRegion(JNIEnv *env, jstring str, jsize start, jsize len, jchar *buf);</h3>
-     *
-     * Copies len number of Unicode characters beginning at offset start to the given buffer buf.
-     *
-     * Throws StringIndexOutOfBoundsException on index overflow.
-     */
-    @JniImpl
-    public void GetStringRegion(@Host(String.class) StaticObject str, int start, int len, @Word long bufPtr) {
-        char[] chars = ((StaticObject) getMeta().String_value.get(str)).unwrap();
-        if (start < 0 || start + (long) len > chars.length) {
-            throw getMeta().throwEx(StringIndexOutOfBoundsException.class);
-        }
-        CharBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Char).asCharBuffer();
-        buf.put(chars, start, len);
-    }
-
-    @JniImpl
-    public static int GetStringUTFLength(@Host(String.class) StaticObject string) {
-        return ModifiedUtf8.utfLength(Meta.toHostString(string));
-    }
-
-    @JniImpl
-    public void GetStringUTFRegion(@Host(String.class) StaticObject str, int start, int len, @Word long bufPtr) {
-        int length = ModifiedUtf8.utfLength(Meta.toHostString(str));
-        if (start < 0 || start + (long) len > length) {
-            throw getMeta().throwEx(StringIndexOutOfBoundsException.class);
-        }
-        byte[] bytes = ModifiedUtf8.asUtf(Meta.toHostString(str), start, len, true); // always 0
-        // terminated.
-        ByteBuffer buf = directByteBuffer(bufPtr, bytes.length, JavaKind.Byte);
-        buf.put(bytes);
-    }
-
-    // endregion Strings
-
-    // region Exception handling
-
-    /**
-     * <h3>jboolean ExceptionCheck(JNIEnv *env);</h3>
-     * <p>
-     * A convenience function to check for pending exceptions without creating a local reference to
-     * the exception object.
-     *
-     * @return JNI_TRUE when there is a pending exception; otherwise, returns JNI_FALSE.
-     */
-    @JniImpl
-    public boolean ExceptionCheck() {
-        StaticObject ex = threadLocalPendingException.get();
-        assert !StaticObject.isEspressoNull(ex);
-        return ex != null;
-    }
-
-    /**
-     * <h3>void ExceptionClear(JNIEnv *env);</h3>
-     * <p>
-     * Clears any exception that is currently being thrown. If no exception is currently being
-     * thrown, this routine has no effect.
-     */
-    @JniImpl
-    public void ExceptionClear() {
-        clearPendingException();
-    }
-
     /**
      * <h3>jint Throw(JNIEnv *env, jthrowable obj);</h3>
      * <p>
@@ -1615,41 +1742,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         return ex;
     }
 
-    /**
-     * <h3>void ExceptionDescribe(JNIEnv *env);</h3>
-     *
-     * Prints an exception and a backtrace of the stack to a system error-reporting channel, such as
-     * stderr. This is a convenience routine provided for debugging.
-     */
-    @JniImpl
-    public void ExceptionDescribe() {
-        StaticObject ex = getThreadLocalPendingException().get();
-        if (ex != null) {
-            assert InterpreterToVM.instanceOf(ex, getMeta().Throwable);
-            // Dynamic lookup.
-            Method printStackTrace = ex.getKlass().lookupMethod(Name.printStackTrace, Signature._void);
-            printStackTrace.invokeDirect(ex);
-            // Restore exception cleared by invokeDirect.
-            getThreadLocalPendingException().set(ex);
-        }
-    }
-
-    /**
-     * <h3>void FatalError(JNIEnv *env, const char *msg);</h3>
-     *
-     * Raises a fatal error and does not expect the VM to recover. This function does not return.
-     *
-     * @param msg an error message. The string is encoded in modified UTF-8.
-     */
-    @JniImpl
-    public static void FatalError(String msg) {
-        throw new EspressoError(msg);
-    }
-
-    // endregion Exception handling
-
-    // region Monitors
-
     @JniImpl
     public static int MonitorEnter(@Host(Object.class) StaticObject object) {
         InterpreterToVM.monitorEnter(object);
@@ -1668,9 +1760,190 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         return JNI_OK;
     }
 
-    // endregion Monitors
+    @JniImpl
+    public @Host(Object[].class) StaticObject NewObjectArray(int length, @Host(Class.class) StaticObject elementClass, @Host(Object.class) StaticObject initialElement) {
+        assert !elementClass.getMirrorKlass().isPrimitive();
+        StaticObject arr = elementClass.getMirrorKlass().allocateArray(length);
+        if (length > 0) {
+            // Single store check
+            getInterpreterToVM().setArrayObject(initialElement, 0, arr);
+            Arrays.fill(arr.unwrap(), initialElement);
+        }
+        return arr;
+    }
 
-    // region Get/SetObjectArrayElement
+    @JniImpl
+    public void SetObjectArrayElement(StaticObject array, int index, @Host(Object.class) StaticObject value) {
+        getInterpreterToVM().setArrayObject(value, index, array);
+    }
+
+    @JniImpl
+    public @Host(String.class) StaticObject NewString(@Word long unicodePtr, int len) {
+        StaticObject value = StaticObject.wrap(new char[len]);
+        SetCharArrayRegion(value, 0, len, unicodePtr);
+        StaticObject guestString = getMeta().String.allocateInstance();
+        getMeta().String_value.set(guestString, value);
+        return guestString;
+    }
+
+    /**
+     * <h3>void GetStringRegion(JNIEnv *env, jstring str, jsize start, jsize len, jchar *buf);</h3>
+     *
+     * Copies len number of Unicode characters beginning at offset start to the given buffer buf.
+     *
+     * Throws StringIndexOutOfBoundsException on index overflow.
+     */
+    @JniImpl
+    public void GetStringRegion(@Host(String.class) StaticObject str, int start, int len, @Word long bufPtr) {
+        char[] chars = ((StaticObject) getMeta().String_value.get(str)).unwrap();
+        if (start < 0 || start + (long) len > chars.length) {
+            throw getMeta().throwEx(StringIndexOutOfBoundsException.class);
+        }
+        CharBuffer buf = directByteBuffer(bufPtr, len, JavaKind.Char).asCharBuffer();
+        buf.put(chars, start, len);
+    }
+
+    private static String nfiSignature(final Symbol<Type>[] signature, boolean isJni) {
+
+        int argCount = Signatures.parameterCount(signature, false);
+        StringBuilder sb = new StringBuilder("(");
+
+        boolean first = true;
+        if (isJni) {
+            sb.append(NativeSimpleType.POINTER); // JNIEnv*
+            sb.append(",");
+            sb.append(Utils.kindToType(JavaKind.Object)); // Receiver or class (for static
+            // methods).
+            first = false;
+        }
+        for (int i = 0; i < argCount; ++i) {
+            JavaKind kind = Signatures.parameterKind(signature, i);
+            if (!first) {
+                sb.append(", ");
+            } else {
+                first = false;
+            }
+            sb.append(Utils.kindToType(kind));
+        }
+
+        sb.append("): ").append(Utils.kindToType(Signatures.returnKind(signature)));
+        return sb.toString();
+    }
+
+    @JniImpl
+    public int RegisterNative(@Host(Class.class) StaticObject clazz, String methodName, String methodSignature, @NFIType("POINTER") TruffleObject closure) {
+        assert methodName != null && methodSignature != null;
+
+        Symbol<Name> name = getNames().lookup(methodName);
+        Symbol<Signature> signature = getSignatures().lookupValidSignature(methodSignature);
+
+        if (name == null || signature == null) {
+            getThreadLocalPendingException().set(getMeta().initEx(NoSuchMethodError.class));
+            return JNI_ERR;
+        }
+
+        Method m = clazz.getMirrorKlass().lookupDeclaredMethod(name, signature);
+        if (m != null && m.isNative()) {
+            m.unregisterNative();
+            getSubstitutions().removeRuntimeSubstitution(m);
+        } else {
+            getThreadLocalPendingException().set(getMeta().initEx(NoSuchMethodError.class));
+            return JNI_ERR;
+        }
+
+        final TruffleObject boundNative = NativeLibrary.bind(closure, nfiSignature(getSignatures().parsed(signature), true));
+        Substitutions.EspressoRootNodeFactory factory = new Substitutions.EspressoRootNodeFactory() {
+            @Override
+            public EspressoRootNode spawnNode(Method method) {
+                return EspressoRootNode.create(null, new NativeRootNode(boundNative, method, true));
+            }
+        };
+        Symbol<Type> classType = clazz.getMirrorKlass().getType();
+        getSubstitutions().registerRuntimeSubstitution(classType, name, signature, factory, true);
+        return JNI_OK;
+    }
+
+    @JniImpl
+    public static int GetStringUTFLength(@Host(String.class) StaticObject string) {
+        return ModifiedUtf8.utfLength(Meta.toHostString(string));
+    }
+
+    @JniImpl
+    public void GetStringUTFRegion(@Host(String.class) StaticObject str, int start, int len, @Word long bufPtr) {
+        int length = ModifiedUtf8.utfLength(Meta.toHostString(str));
+        if (start < 0 || start + (long) len > length) {
+            throw getMeta().throwEx(StringIndexOutOfBoundsException.class);
+        }
+        byte[] bytes = ModifiedUtf8.asUtf(Meta.toHostString(str), start, len, true); // always 0
+                                                                                     // terminated.
+        ByteBuffer buf = directByteBuffer(bufPtr, bytes.length, JavaKind.Byte);
+        buf.put(bytes);
+    }
+
+    /**
+     * Loads a class from a buffer of raw class data. The buffer containing the raw class data is
+     * not referenced by the VM after the DefineClass call returns, and it may be discarded if
+     * desired.
+     *
+     * @param name the name of the class or interface to be defined. The string is encoded in
+     *            modified UTF-8.
+     * @param loader a class loader assigned to the defined class.
+     * @param bufPtr buffer containing the .class file data.
+     * @param bufLen buffer length.
+     * @return Returns a Java class object or NULL if an error occurs.
+     */
+    @JniImpl
+    public @Host(Class.class) StaticObject DefineClass(String name, @Host(ClassLoader.class) StaticObject loader, @Word long bufPtr, int bufLen) {
+        // TODO(peterssen): Propagate errors and verifications, e.g. no class in the java package.
+        return getVM().JVM_DefineClass(name, loader, bufPtr, bufLen, StaticObject.NULL);
+    }
+
+    // JavaVM **vm);
+
+    @JniImpl
+    public int GetJavaVM(@Word long vmPtr) {
+        ByteBuffer buf = directByteBuffer(vmPtr, 1, JavaKind.Long); // 64 bits pointer
+        buf.putLong(getVM().getJavaVM());
+        return JNI_OK;
+    }
+
+    /**
+     * <h3>jboolean IsAssignableFrom(JNIEnv *env, jclass clazz1, jclass clazz2);</h3>
+     * <p>
+     * Determines whether an object of clazz1 can be safely cast to clazz2.
+     *
+     * @param clazz1 the first class argument.
+     * @param clazz2 the second class argument.
+     * @return Returns JNI_TRUE if either of the following is true:
+     *         <ul>
+     *         <li>The first and second class arguments refer to the same Java class.
+     *         <li>The first class is a subclass of the second class.
+     *         <li>The first class has the second class as one of its interfaces.
+     *         </ul>
+     */
+    @JniImpl
+    public static boolean IsAssignableFrom(@Host(Class.class) StaticObject clazz1, @Host(Class.class) StaticObject clazz2) {
+        Klass klass2 = clazz2.getMirrorKlass();
+        return klass2.isAssignableFrom(clazz1.getMirrorKlass());
+    }
+
+    /**
+     * <h3>jboolean IsInstanceOf(JNIEnv *env, jobject obj, jclass clazz);</h3>
+     * <p>
+     * Tests whether an object is an instance of a class.
+     *
+     * @param obj a Java object.
+     * @param clazz a Java class object.
+     * @return Returns {@code JNI_TRUE} if obj can be cast to clazz; otherwise, returns
+     *         {@code JNI_FALSE}. <b>A NULL object can be cast to any class.</b>
+     */
+    @JniImpl
+    public static boolean IsInstanceOf(@Host(Object.class) StaticObject obj, @Host(Class.class) StaticObject clazz) {
+        if (StaticObject.isNull(obj)) {
+            return true;
+        }
+        return InterpreterToVM.instanceOf(obj, clazz.getMirrorKlass());
+    }
 
     /**
      * <h3>jobject GetObjectArrayElement(JNIEnv *env, jobjectArray array, jsize index);</h3>
@@ -1686,28 +1959,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     public @Host(Object.class) StaticObject GetObjectArrayElement(StaticObject array, int index) {
         return getInterpreterToVM().getArrayObject(index, array);
     }
-
-    /**
-     * <h3>void SetObjectArrayElement(JNIEnv *env, jobjectArray array, jsize index, jobject value);
-     * </h3>
-     *
-     * Sets an element of an Object array.
-     *
-     * @param array a Java array.
-     *
-     * @param index array index.
-     *
-     * @param value the new value.
-     * @throws ArrayIndexOutOfBoundsException if index does not specify a valid index in the array.
-     * @throws ArrayStoreException if the class of value is not a subclass of the element class of
-     *             the array.
-     */
-    @JniImpl
-    public void SetObjectArrayElement(StaticObject array, int index, @Host(Object.class) StaticObject value) {
-        getInterpreterToVM().setArrayObject(value, index, array);
-    }
-
-    // endregion Get/SetObjectArrayElement
 
     // region Get*ArrayElements
 
@@ -1899,37 +2150,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
 
     // endregion Release*ArrayElements
 
-    // region DirectBuffers
-
-    /**
-     * <h3>jobject NewDirectByteBuffer(JNIEnv* env, void* address, jlong capacity);</h3>
-     *
-     * Allocates and returns a direct java.nio.ByteBuffer referring to the block of memory starting
-     * at the memory address address and extending capacity bytes.
-     *
-     * Native code that calls this function and returns the resulting byte-buffer object to
-     * Java-level code should ensure that the buffer refers to a valid region of memory that is
-     * accessible for reading and, if appropriate, writing. An attempt to access an invalid memory
-     * location from Java code will either return an arbitrary value, have no visible effect, or
-     * cause an unspecified exception to be thrown.
-     *
-     * @param address the starting address of the memory region (must not be NULL)
-     *
-     * @param capacity the size in bytes of the memory region (must be positive)
-     *
-     * @return a local reference to the newly-instantiated java.nio.ByteBuffer object. Returns NULL
-     *         if an exception occurs, or if JNI access to direct buffers is not supported by this
-     *         virtual machine.
-     * @throws OutOfMemoryError if allocation of the ByteBuffer object fails
-     */
-    @JniImpl
-    public @Host(typeName = "Ljava/nio/DirectByteBuffer;") StaticObject NewDirectByteBuffer(@Word long address, long capacity) {
-        Meta meta = getMeta();
-        StaticObject instance = meta.java_nio_DirectByteBuffer.allocateInstance();
-        meta.java_nio_DirectByteBuffer_init_long_int.invokeDirect(instance, address, (int) capacity);
-        return instance;
-    }
-
     /**
      * <h3>void* GetDirectBufferAddress(JNIEnv* env, jobject buf);</h3>
      *
@@ -1988,41 +2208,92 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         return (int) getMeta().Buffer_capacity.get(buf);
     }
 
-    // endregion DirectBuffers
-
-    // region Register/Unregister natives
-
+    /**
+     * <h3>void ExceptionDescribe(JNIEnv *env);</h3>
+     *
+     * Prints an exception and a backtrace of the stack to a system error-reporting channel, such as
+     * stderr. This is a convenience routine provided for debugging.
+     */
     @JniImpl
-    public int RegisterNative(@Host(Class.class) StaticObject clazz, String methodName, String methodSignature, @NFIType("POINTER") TruffleObject closure) {
-        assert methodName != null && methodSignature != null;
-
-        Symbol<Name> name = getNames().lookup(methodName);
-        Symbol<Signature> signature = getSignatures().lookupValidSignature(methodSignature);
-
-        if (name == null || signature == null) {
-            getThreadLocalPendingException().set(getMeta().initEx(NoSuchMethodError.class));
-            return JNI_ERR;
+    public void ExceptionDescribe() {
+        StaticObject ex = getThreadLocalPendingException().get();
+        if (ex != null) {
+            assert InterpreterToVM.instanceOf(ex, getMeta().Throwable);
+            // Dynamic lookup.
+            Method printStackTrace = ex.getKlass().lookupMethod(Name.printStackTrace, Signature._void);
+            printStackTrace.invokeDirect(ex);
+            // Restore exception cleared by invokeDirect.
+            getThreadLocalPendingException().set(ex);
         }
+    }
 
-        Method m = clazz.getMirrorKlass().lookupDeclaredMethod(name, signature);
-        if (m != null && m.isNative()) {
-            m.unregisterNative();
-            getSubstitutions().removeRuntimeSubstitution(m);
+    /**
+     * <h3>jobject AllocObject(JNIEnv *env, jclass clazz);</h3>
+     *
+     * Allocates a new Java object without invoking any of the constructors for the object. Returns
+     * a reference to the object.
+     *
+     * The clazz argument must not refer to an array class.
+     *
+     * @param clazz a Java class object.
+     *
+     *            Returns a Java object, or NULL if the object cannot be constructed.
+     *
+     *            Throws InstantiationException if the class is an interface or an abstract class.
+     * @throws OutOfMemoryError if the system runs out of memory.
+     */
+    @JniImpl
+    public @Host(Object.class) StaticObject AllocObject(@Host(Class.class) StaticObject clazz) {
+        Klass klass = clazz.getMirrorKlass();
+        if (klass.isInterface() || klass.isAbstract()) {
+            throw getMeta().throwEx(InstantiationException.class);
+        }
+        return klass.allocateInstance();
+    }
+
+    /**
+     * <h3>jfieldID FromReflectedField(JNIEnv *env, jobject field);</h3>
+     *
+     * Converts a java.lang.reflect.Field to a field ID.
+     */
+    @JniImpl
+    public @Word long FromReflectedField(@Host(java.lang.reflect.Field.class) StaticObject field) {
+        assert InterpreterToVM.instanceOf(field, getMeta().Field);
+        Field guestField = Field.getReflectiveFieldRoot(field);
+        guestField.getDeclaringKlass().initialize();
+        return fieldIds.handlify(guestField);
+    }
+
+    /**
+     * <h3>jmethodID FromReflectedMethod(JNIEnv *env, jobject method);</h3>
+     *
+     * Converts a java.lang.reflect.Method or java.lang.reflect.Constructor object to a method ID.
+     */
+    @JniImpl
+    public @Word long FromReflectedMethod(@Host(java.lang.reflect.Executable.class) StaticObject method) {
+        assert InterpreterToVM.instanceOf(method, getMeta().Method) || InterpreterToVM.instanceOf(method, getMeta().Constructor);
+        Method guestMethod;
+        if (InterpreterToVM.instanceOf(method, getMeta().Method)) {
+            guestMethod = Method.getHostReflectiveMethodRoot(method);
+        } else if (InterpreterToVM.instanceOf(method, getMeta().Constructor)) {
+            guestMethod = Method.getHostReflectiveConstructorRoot(method);
         } else {
-            getThreadLocalPendingException().set(getMeta().initEx(NoSuchMethodError.class));
-            return JNI_ERR;
+            throw EspressoError.shouldNotReachHere();
         }
+        guestMethod.getDeclaringKlass().initialize();
+        return methodIds.handlify(guestMethod);
+    }
 
-        final TruffleObject boundNative = NativeLibrary.bind(closure, nfiSignature(getSignatures().parsed(signature), true));
-        Substitutions.EspressoRootNodeFactory factory = new Substitutions.EspressoRootNodeFactory() {
-            @Override
-            public EspressoRootNode spawnNode(Method method) {
-                return EspressoRootNode.create(null, new NativeRootNode(boundNative, method, true));
-            }
-        };
-        Symbol<Type> classType = clazz.getMirrorKlass().getType();
-        getSubstitutions().registerRuntimeSubstitution(classType, name, signature, factory, true);
-        return JNI_OK;
+    /**
+     * <h3>void FatalError(JNIEnv *env, const char *msg);</h3>
+     *
+     * Raises a fatal error and does not expect the VM to recover. This function does not return.
+     *
+     * @param msg an error message. The string is encoded in modified UTF-8.
+     */
+    @JniImpl
+    public static void FatalError(String msg) {
+        throw new EspressoError(msg);
     }
 
     /**
@@ -2049,10 +2320,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         }
         return JNI_OK;
     }
-
-    // endregion Register/Unregister natives
-
-    // region Reflection
 
     /**
      * <h3>jobject ToReflectedMethod(JNIEnv *env, jclass cls, jmethodID methodID, jboolean
@@ -2120,53 +2387,35 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     /**
-     * <h3>jfieldID FromReflectedField(JNIEnv *env, jobject field);</h3>
+     * <h3>jobject NewDirectByteBuffer(JNIEnv* env, void* address, jlong capacity);</h3>
      *
-     * Converts a java.lang.reflect.Field to a field ID.
+     * Allocates and returns a direct java.nio.ByteBuffer referring to the block of memory starting
+     * at the memory address address and extending capacity bytes.
+     *
+     * Native code that calls this function and returns the resulting byte-buffer object to
+     * Java-level code should ensure that the buffer refers to a valid region of memory that is
+     * accessible for reading and, if appropriate, writing. An attempt to access an invalid memory
+     * location from Java code will either return an arbitrary value, have no visible effect, or
+     * cause an unspecified exception to be thrown.
+     *
+     * @param address the starting address of the memory region (must not be NULL)
+     *
+     * @param capacity the size in bytes of the memory region (must be positive)
+     *
+     * @return a local reference to the newly-instantiated java.nio.ByteBuffer object. Returns NULL
+     *         if an exception occurs, or if JNI access to direct buffers is not supported by this
+     *         virtual machine.
+     * @throws OutOfMemoryError if allocation of the ByteBuffer object fails
      */
     @JniImpl
-    public @Word long FromReflectedField(@Host(java.lang.reflect.Field.class) StaticObject field) {
-        assert InterpreterToVM.instanceOf(field, getMeta().Field);
-        Field guestField = Field.getReflectiveFieldRoot(field);
-        guestField.getDeclaringKlass().initialize();
-        return fieldIds.handlify(guestField);
+    public @Host(typeName = "Ljava/nio/DirectByteBuffer;") StaticObject NewDirectByteBuffer(@Word long address, long capacity) {
+        Meta meta = getMeta();
+        StaticObject instance = meta.java_nio_DirectByteBuffer.allocateInstance();
+        meta.java_nio_DirectByteBuffer_init_long_int.invokeDirect(instance, address, (int) capacity);
+        return instance;
     }
-
-    /**
-     * <h3>jmethodID FromReflectedMethod(JNIEnv *env, jobject method);</h3>
-     *
-     * Converts a java.lang.reflect.Method or java.lang.reflect.Constructor object to a method ID.
-     */
-    @JniImpl
-    public @Word long FromReflectedMethod(@Host(java.lang.reflect.Executable.class) StaticObject method) {
-        assert InterpreterToVM.instanceOf(method, getMeta().Method) || InterpreterToVM.instanceOf(method, getMeta().Constructor);
-        Method guestMethod;
-        if (InterpreterToVM.instanceOf(method, getMeta().Method)) {
-            guestMethod = Method.getHostReflectiveMethodRoot(method);
-        } else if (InterpreterToVM.instanceOf(method, getMeta().Constructor)) {
-            guestMethod = Method.getHostReflectiveConstructorRoot(method);
-        } else {
-            throw EspressoError.shouldNotReachHere();
-        }
-        guestMethod.getDeclaringKlass().initialize();
-        return methodIds.handlify(guestMethod);
-    }
-
-    // endregion Reflection
 
     // region JNI handles
-
-    /**
-     * <h3>jobject NewLocalRef(JNIEnv *env, jobject ref);</h3>
-     * <p>
-     * Creates a new local reference that refers to the same object as ref. The given ref may be a
-     * global or local reference. Returns NULL if ref refers to null.
-     */
-    @JniImpl
-    public static @Host(Object.class) StaticObject NewLocalRef(@Host(Object.class) StaticObject ref) {
-        // Local ref is allocated on return.
-        return ref;
-    }
 
     /**
      * <h3>jobject NewGlobalRef(JNIEnv *env, jobject obj);</h3>
@@ -2362,322 +2611,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     }
 
     // endregion JNI handles
-
-    /**
-     * <h3>jint GetVersion(JNIEnv *env);</h3>
-     * <p>
-     * Returns the version of the native method interface.
-     *
-     * @return the major version number in the higher 16 bits and the minor version number in the
-     *         lower 16 bits.
-     *
-     *         <p>
-     *         <b>Error codes</b>
-     *         <ul>
-     *         <li>#define JNI_EDETACHED (-2) // thread detached from the VM
-     *         <li>#define JNI_EVERSION (-3) // JNI version error
-     *         </ul>
-     */
-    @JniImpl
-    public static int GetVersion() {
-        return JniVersion.JNI_VERSION_ESPRESSO;
-    }
-
-    /**
-     * <h3>jsize GetArrayLength(JNIEnv *env, jarray array);</h3>
-     * <p>
-     * Returns the number of elements in the array.
-     *
-     * @param array a Java array object.
-     * @return the length of the array.
-     */
-    @JniImpl
-    public static int GetArrayLength(@Host(Object.class) StaticObject array) {
-        return InterpreterToVM.arrayLength(array);
-    }
-
-    @JniImpl
-    public @Word long GetPrimitiveArrayCritical(StaticObject object, @Word long isCopyPtr) {
-        if (isCopyPtr != 0L) {
-            ByteBuffer isCopyBuf = directByteBuffer(isCopyPtr, 1);
-            isCopyBuf.put((byte) 1); // Always copy since pinning is not supported.
-        }
-        StaticObject array = object;
-        StaticObject clazz = GetObjectClass(array);
-        JavaKind componentKind = clazz.getMirrorKlass().getComponentType().getJavaKind();
-        assert componentKind.isPrimitive();
-        int length = GetArrayLength(array);
-
-        ByteBuffer region = allocateDirect(length, componentKind);
-        long address = byteBufferAddress(region);
-        // @formatter:off
-        // Checkstyle: stop
-        switch (componentKind) {
-            case Boolean : GetBooleanArrayRegion(array, 0, length, address);  break;
-            case Byte    : GetByteArrayRegion(array, 0, length, address);     break;
-            case Short   : GetShortArrayRegion(array, 0, length, address);    break;
-            case Char    : GetCharArrayRegion(array, 0, length, address);     break;
-            case Int     : GetIntArrayRegion(array, 0, length, address);      break;
-            case Float   : GetFloatArrayRegion(array, 0, length, address);    break;
-            case Long    : GetLongArrayRegion(array, 0, length, address);     break;
-            case Double  : GetDoubleArrayRegion(array, 0, length, address);   break;
-            case Object  : // fall through
-            case Void    : // fall through
-            case Illegal : // fall through
-            default      : throw EspressoError.shouldNotReachHere();
-        }
-        // @formatter:on
-        // Checkstyle: resume
-
-        return address;
-    }
-
-    @JniImpl
-    public void ReleasePrimitiveArrayCritical(@Host(Object.class) StaticObject object, @Word long carrayPtr, int mode) {
-        if (mode == 0 || mode == JNI_COMMIT) { // Update array contents.
-            StaticObject array = object;
-            StaticObject clazz = GetObjectClass(array);
-            JavaKind componentKind = clazz.getMirrorKlass().getComponentType().getJavaKind();
-            assert componentKind.isPrimitive();
-            int length = GetArrayLength(array);
-            // @formatter:off
-            switch (componentKind) {
-                case Boolean : SetBooleanArrayRegion(array, 0, length, carrayPtr);   break;
-                case Byte    : SetByteArrayRegion(array, 0, length, carrayPtr);      break;
-                case Short   : SetShortArrayRegion(array, 0, length, carrayPtr);     break;
-                case Char    : SetCharArrayRegion(array, 0, length, carrayPtr);      break;
-                case Int     : SetIntArrayRegion(array, 0, length, carrayPtr);       break;
-                case Float   : SetFloatArrayRegion(array, 0, length, carrayPtr);     break;
-                case Long    : SetLongArrayRegion(array, 0, length, carrayPtr);      break;
-                case Double  : SetDoubleArrayRegion(array, 0, length, carrayPtr);    break;
-                default      : throw EspressoError.shouldNotReachHere();
-            }
-            // @formatter:on
-        }
-        if (mode == 0 || mode == JNI_ABORT) { // Dispose copy.
-            assert nativeBuffers.containsKey(carrayPtr);
-            nativeBuffers.remove(carrayPtr);
-        }
-    }
-
-    /**
-     * <h3>jclass GetObjectClass(JNIEnv *env, jobject obj);</h3>
-     *
-     * Returns the class of an object.
-     *
-     * @param self a Java object (must not be NULL).
-     */
-    @JniImpl
-    public static @Host(Class.class) StaticObject GetObjectClass(@Host(Object.class) StaticObject self) {
-        return self.getKlass().mirror();
-    }
-
-    /**
-     * <h3>jclass GetSuperclass(JNIEnv *env, jclass clazz);</h3>
-     *
-     * If clazz represents any class other than the class Object, then this function returns the
-     * object that represents the superclass of the class specified by clazz. If clazz specifies the
-     * class Object, or clazz represents an interface, this function returns NULL.
-     *
-     * @param clazz a Java class object. Returns the superclass of the class represented by clazz,
-     *            or NULL.
-     */
-    @JniImpl
-    public static @Host(Class.class) StaticObject GetSuperclass(@Host(Class.class) StaticObject clazz) {
-        Klass klass = clazz.getMirrorKlass();
-        if (klass.isInterface() || klass.isJavaLangObject()) {
-            return StaticObject.NULL;
-        }
-        return klass.getSuperKlass().mirror();
-    }
-
-    @JniImpl
-    public @Host(Object.class) StaticObject NewObjectVarargs(@Host(Class.class) StaticObject clazz, @Word long methodId, @Word long varargsPtr) {
-        Method method = methodIds.getObject(methodId);
-        assert method.isConstructor();
-        Klass klass = clazz.getMirrorKlass();
-        if (klass.isInterface() || klass.isAbstract()) {
-            throw getMeta().throwEx(InstantiationException.class);
-        }
-        klass.initialize();
-        StaticObject instance = klass.allocateInstance();
-        method.invokeDirect(instance, popVarArgs(varargsPtr, method.getParsedSignature()));
-        return instance;
-    }
-
-    /**
-     * <h3>jclass FindClass(JNIEnv *env, const char *name);</h3>
-     *
-     * <p>
-     * FindClass locates the class loader associated with the current native method; that is, the
-     * class loader of the class that declared the native method. If the native method belongs to a
-     * system class, no class loader will be involved. Otherwise, the proper class loader will be
-     * invoked to load and link the named class. Since Java 2 SDK release 1.2, when FindClass is
-     * called through the Invocation Interface, there is no current native method or its associated
-     * class loader. In that case, the result of {@link ClassLoader#getSystemClassLoader} is used.
-     * This is the class loader the virtual machine creates for applications, and is able to locate
-     * classes listed in the java.class.path property. The name argument is a fully-qualified class
-     * name or an array type signature .
-     * <p>
-     * For example, the fully-qualified class name for the {@code java.lang.String} class is:
-     *
-     * <pre>
-     * "java/lang/String"}
-     * </pre>
-     *
-     * <p>
-     * The array type signature of the array class {@code java.lang.Object[]} is:
-     *
-     * <pre>
-     * "[Ljava/lang/Object;"
-     * </pre>
-     *
-     * @param name a fully-qualified class name (that is, a package name, delimited by "/", followed
-     *            by the class name). If the name begins with "[" (the array signature character),
-     *            it returns an array class. The string is encoded in modified UTF-8.
-     * @return Returns a class object from a fully-qualified name, or NULL if the class cannot be
-     *         found.
-     * @throws ClassFormatError if the class data does not specify a valid class.
-     * @throws ClassCircularityError if a class or interface would be its own superclass or
-     *             superinterface.
-     * @throws NoClassDefFoundError if no definition for a requested class or interface can be
-     *             found.
-     * @throws OutOfMemoryError if the system runs out of memory.
-     */
-    @JniImpl
-    public @Host(Class.class) StaticObject FindClass(String name) {
-        if (name == null || name.contains(".")) {
-            throw getMeta().throwExWithMessage(NoClassDefFoundError.class, name);
-        }
-
-        String internalName = name;
-        if (!name.startsWith("[")) {
-            // Force 'L' type.
-            internalName = "L" + name + ";";
-        }
-        internalName = internalName.replace(".", "/");
-        if (!Validation.validTypeDescriptor(ByteSequence.create(internalName), true)) {
-            throw getMeta().throwExWithMessage(NoClassDefFoundError.class, name);
-        }
-
-        Symbol<Type> type = getTypes().fromClassGetName(internalName);
-
-        assert getMeta().Class_forName_String.isStatic();
-
-        StaticObject protectionDomain = StaticObject.NULL;
-        StaticObject loader = StaticObject.NULL;
-
-        StaticObject caller = getVM().JVM_GetCallerClass(0); // security stack walk
-        if (StaticObject.notNull(caller)) {
-            Klass callerKlass = caller.getMirrorKlass();
-            loader = callerKlass.getDefiningClassLoader();
-            if (StaticObject.isNull(loader) && Type.ClassLoader_NativeLibrary.equals(callerKlass.getType())) {
-                StaticObject result = (StaticObject) getMeta().ClassLoader_NativeLibrary_getFromClass.invokeDirect(null);
-                loader = result.getMirrorKlass().getDefiningClassLoader();
-                protectionDomain = Target_java_lang_Class.getProtectionDomain0(result);
-            }
-        } else {
-            loader = (StaticObject) getMeta().ClassLoader_getSystemClassLoader.invokeDirect(null);
-        }
-
-        Klass foundKlass = getRegistries().loadKlass(type, loader);
-        if (foundKlass == null) {
-            throw getMeta().throwEx(getMeta().NoClassDefFoundError);
-        }
-        foundKlass.mirror().setHiddenField(getMeta().HIDDEN_PROTECTION_DOMAIN, protectionDomain);
-        foundKlass.safeInitialize();
-
-        return foundKlass.mirror();
-    }
-
-    /**
-     * Loads a class from a buffer of raw class data. The buffer containing the raw class data is
-     * not referenced by the VM after the DefineClass call returns, and it may be discarded if
-     * desired.
-     *
-     * @param name the name of the class or interface to be defined. The string is encoded in
-     *            modified UTF-8.
-     * @param loader a class loader assigned to the defined class.
-     * @param bufPtr buffer containing the .class file data.
-     * @param bufLen buffer length.
-     * @return Returns a Java class object or NULL if an error occurs.
-     */
-    @JniImpl
-    public @Host(Class.class) StaticObject DefineClass(String name, @Host(ClassLoader.class) StaticObject loader, @Word long bufPtr, int bufLen) {
-        // TODO(peterssen): Propagate errors and verifications, e.g. no class in the java package.
-        return getVM().JVM_DefineClass(name, loader, bufPtr, bufLen, StaticObject.NULL);
-    }
-
-    // JavaVM **vm);
-
-    @JniImpl
-    public int GetJavaVM(@Word long vmPtr) {
-        ByteBuffer buf = directByteBuffer(vmPtr, 1, JavaKind.Long); // 64 bits pointer
-        buf.putLong(getVM().getJavaVM());
-        return JNI_OK;
-    }
-
-    /**
-     * <h3>jobject AllocObject(JNIEnv *env, jclass clazz);</h3>
-     *
-     * Allocates a new Java object without invoking any of the constructors for the object. Returns
-     * a reference to the object.
-     *
-     * The clazz argument must not refer to an array class.
-     *
-     * @param clazz a Java class object.
-     *
-     *            Returns a Java object, or NULL if the object cannot be constructed.
-     *
-     *            Throws InstantiationException if the class is an interface or an abstract class.
-     * @throws OutOfMemoryError if the system runs out of memory.
-     */
-    @JniImpl
-    public @Host(Object.class) StaticObject AllocObject(@Host(Class.class) StaticObject clazz) {
-        Klass klass = clazz.getMirrorKlass();
-        if (klass.isInterface() || klass.isAbstract()) {
-            throw getMeta().throwEx(InstantiationException.class);
-        }
-        return klass.allocateInstance();
-    }
-
-    /**
-     * <h3>jboolean IsAssignableFrom(JNIEnv *env, jclass clazz1, jclass clazz2);</h3>
-     * <p>
-     * Determines whether an object of clazz1 can be safely cast to clazz2.
-     *
-     * @param clazz1 the first class argument.
-     * @param clazz2 the second class argument.
-     * @return Returns JNI_TRUE if either of the following is true:
-     *         <ul>
-     *         <li>The first and second class arguments refer to the same Java class.
-     *         <li>The first class is a subclass of the second class.
-     *         <li>The first class has the second class as one of its interfaces.
-     *         </ul>
-     */
-    @JniImpl
-    public static boolean IsAssignableFrom(@Host(Class.class) StaticObject clazz1, @Host(Class.class) StaticObject clazz2) {
-        Klass klass2 = clazz2.getMirrorKlass();
-        return klass2.isAssignableFrom(clazz1.getMirrorKlass());
-    }
-
-    /**
-     * <h3>jboolean IsInstanceOf(JNIEnv *env, jobject obj, jclass clazz);</h3>
-     * <p>
-     * Tests whether an object is an instance of a class.
-     *
-     * @param obj a Java object.
-     * @param clazz a Java class object.
-     * @return Returns {@code JNI_TRUE} if obj can be cast to clazz; otherwise, returns
-     *         {@code JNI_FALSE}. <b>A NULL object can be cast to any class.</b>
-     */
-    @JniImpl
-    public static boolean IsInstanceOf(@Host(Object.class) StaticObject obj, @Host(Class.class) StaticObject clazz) {
-        if (StaticObject.isNull(obj)) {
-            return true;
-        }
-        return InterpreterToVM.instanceOf(obj, clazz.getMirrorKlass());
-    }
-
+    
     // Checkstyle: resume method name check
 }

@@ -26,11 +26,10 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.StringJoiner;
 
-import com.oracle.truffle.espresso.jni.NativeEnv;
+import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
@@ -60,7 +59,7 @@ public final class Utils {
             case Object:
                 // TODO(peterssen): We don't want Interop null passed verbatim to native, but native
                 // NULL instead.
-                return NativeEnv.word();
+                return Method.word();
             default:
                 throw EspressoError.shouldNotReachHere();
         }
@@ -72,10 +71,6 @@ public final class Utils {
             list.add(Paths.get(p));
         }
         return list;
-    }
-
-    public static List<String> parseStrings(String strings) {
-        return new ArrayList<>(Arrays.asList(strings.split(File.pathSeparator)));
     }
 
     public static String stringify(List<Path> paths) {
