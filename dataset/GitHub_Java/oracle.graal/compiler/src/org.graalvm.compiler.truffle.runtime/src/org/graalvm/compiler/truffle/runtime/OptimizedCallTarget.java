@@ -24,6 +24,8 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ExceptionAction;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -38,8 +40,6 @@ import java.util.function.UnaryOperator;
 
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCallNode;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ExceptionAction;
 import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode.OSRRootNode;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionValues;
@@ -104,13 +104,13 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      * {@link #compile(boolean) compilation}. It is decremented for each real call to the call
      * target. Reset by TruffleFeature after boot image generation.
      */
-    private int callCount;
+    private int callThreshold;
     /**
      * The call and loop threshold is counted down for each real call and reported loop count until
      * it reaches zero and triggers a {@link #compile(boolean) compilation}. Reset by TruffleFeature
      * after boot image generation.
      */
-    private int callAndLoopCount;
+    private int callAndLoopThreshold;
 
     /*
      * Updating profiling information and its Assumption objects is done without synchronization and
@@ -263,8 +263,8 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     public final void resetCompilationProfile() {
-        this.callCount = 0;
-        this.callAndLoopCount = 0;
+        this.callThreshold = engine.firstTierCallThreshold;
+        this.callAndLoopThreshold = engine.firstTierCallAndLoopThreshold;
     }
 
     protected List<OptimizedAssumption> getProfiledTypesAssumptions() {
@@ -426,15 +426,11 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             runtime().bypassedInstalledCode(this);
         }
         ensureInitialized();
-
-        int intCallCount = this.callCount;
-        this.callCount = intCallCount == Integer.MAX_VALUE ? intCallCount : ++intCallCount;
-        int intAndLoopCallCount = callAndLoopCount;
-        this.callAndLoopCount = intAndLoopCallCount == Integer.MAX_VALUE ? intAndLoopCallCount : ++intAndLoopCallCount;
-
-        // Check if call target is hot enough to compile
-        if (intCallCount >= engine.firstTierCallThreshold //
-                        && intAndLoopCallCount >= engine.firstTierCallAndLoopThreshold //
+        int intCallCount = --callThreshold;
+        int intAndLoopCallCount = --callAndLoopThreshold;
+        // Check if call target is hot enough to compile, but took not too long to get hot.
+        if (intCallCount <= 0 //
+                        && intAndLoopCallCount <= 0 //
                         && !compilationFailed //
                         && !isCompiling()) {
             return compile(!engine.multiTier);
@@ -461,8 +457,8 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      */
     public final boolean firstTierCall() {
         // this is partially evaluated so the second part should fold to a constant.
-        int firstTierCallThreshold = ++callCount;
-        if (firstTierCallThreshold >= engine.lastTierCallThreshold && !isCompiling() && !compilationFailed) {
+        int firstTierCallThreshold = (--callThreshold) - engine.firstTierCallThreshold + engine.lastTierCallThreshold;
+        if (firstTierCallThreshold <= 0 && !isCompiling() && !compilationFailed) {
             return lastTierCompile(this);
         }
         return false;
@@ -791,7 +787,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     final void onLoopCount(int count) {
-        callAndLoopCount += count;
+        callAndLoopThreshold -= count;
     }
 
     @Override
@@ -838,11 +834,11 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     @Override
     public final int getCallCount() {
-        return callCount;
+        return -(callThreshold - engine.firstTierCallThreshold);
     }
 
     public final int getCallAndLoopCount() {
-        return callAndLoopCount;
+        return -(callAndLoopThreshold - engine.firstTierCallAndLoopThreshold);
     }
 
     public final long getInitializedTimestamp() {
