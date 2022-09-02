@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,26 +22,95 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.substitutions.Host;
+import com.oracle.truffle.espresso.vm.InterpreterToVM;
+import com.oracle.truffle.espresso.vm.VM;
 
-public class EspressoException extends RuntimeException {
+// TODO(peterssen): Fix deprecation, GR-26729
+@SuppressWarnings("deprecation")
+public final class EspressoException extends RuntimeException implements com.oracle.truffle.api.TruffleException {
     private static final long serialVersionUID = -7667957575377419520L;
     private final StaticObject exception;
 
-    public EspressoException(StaticObject exception) {
-        assert exception != null;
-        assert exception != StaticObject.NULL;
-        // TODO(peterssen): Check that exception is a real exception object (e.g. exception
-        // instanceof Exception)
-        this.exception = exception;
+    private EspressoException(@Host(Throwable.class) StaticObject throwable) {
+        assert StaticObject.notNull(throwable);
+        assert InterpreterToVM.instanceOf(throwable, throwable.getKlass().getMeta().java_lang_Throwable);
+        this.exception = throwable;
+    }
+
+    public static EspressoException wrap(@Host(Throwable.class) StaticObject throwable) {
+        return new EspressoException(throwable);
+    }
+
+    public static VM.StackTrace getFrames(StaticObject exception, Meta meta) {
+        return (VM.StackTrace) exception.getHiddenField(meta.HIDDEN_FRAMES);
     }
 
     @Override
     public String getMessage() {
-        return Meta.toHost((StaticObject) Meta.meta(exception).method("getMessage", String.class).invokeDirect());
+        return getMessage(exception);
     }
 
-    public StaticObject getException() {
+    public StaticObject getGuestMessage() {
+        return (StaticObject) exception.getKlass().lookupMethod(Name.getMessage, Signature.String).invokeDirect(exception);
+    }
+
+    public static String getMessage(StaticObject e) {
+        return Meta.toHostStringStatic((StaticObject) e.getKlass().lookupMethod(Name.getMessage, Signature.String).invokeDirect(e));
+    }
+
+    @SuppressWarnings("sync-override")
+    @Override
+    public Throwable fillInStackTrace() {
+        return this;
+    }
+
+    @Override
+    public StaticObject getExceptionObject() {
         return exception;
+    }
+
+    @Override
+    public Node getLocation() {
+        return null;
+    }
+
+    @Override
+    public SourceSection getSourceLocation() {
+        return null;
+    }
+
+    @Override
+    public String toString() {
+        return "EspressoException<" + getExceptionObject() + ": " + getMessage() + ">";
+    }
+
+    // Debug methods
+
+    @SuppressWarnings("unused")
+    private boolean match(String exceptionClass, String message) {
+        if (exceptionClass == null) {
+            return getMessage() != null && getMessage().contains(message);
+        }
+        if (getExceptionObject().getKlass().getType().toString().contains(exceptionClass)) {
+            if (message == null) {
+                return true;
+            }
+            if (getMessage() == null) {
+                return false;
+            }
+            return getMessage().contains(message);
+        }
+        return false;
+    }
+
+    @SuppressWarnings("unused")
+    private boolean match(String exceptionClass) {
+        return match(exceptionClass, null);
     }
 }

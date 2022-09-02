@@ -135,10 +135,10 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    String asString() throws UnsupportedMessageException {
+    String asString() {
         checkNotForeign();
         if (isNull(this)) {
-            throw UnsupportedMessageException.create();
+            return null;
         }
         return Meta.toHostStringStatic(this);
     }
