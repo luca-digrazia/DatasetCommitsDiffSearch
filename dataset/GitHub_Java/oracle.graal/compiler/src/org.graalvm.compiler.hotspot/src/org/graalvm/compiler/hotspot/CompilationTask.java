@@ -32,8 +32,6 @@ import static org.graalvm.compiler.core.phases.HighTier.Options.Inline;
 import static org.graalvm.compiler.java.BytecodeParserOptions.InlineDuringParsing;
 
 import java.io.PrintStream;
-import java.util.Collections;
-import java.util.List;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
@@ -44,9 +42,7 @@ import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.DebugContext.Description;
 import org.graalvm.compiler.debug.DebugDumpScope;
-import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
@@ -89,11 +85,9 @@ public class CompilationTask {
         }
 
         @Override
-        protected DebugContext createRetryDebugContext(DebugContext initialDebug, OptionValues retryOptions, PrintStream logStream) {
+        protected DebugContext createRetryDebugContext(OptionValues retryOptions, PrintStream logStream) {
             SnippetReflectionProvider snippetReflection = compiler.getGraalRuntime().getHostProviders().getSnippetReflection();
-            Description description = initialDebug.getDescription();
-            List<DebugHandlersFactory> factories = Collections.singletonList(new GraalDebugHandlersFactory(snippetReflection));
-            return DebugContext.create(retryOptions, description, initialDebug.getGlobalMetrics(), logStream, factories);
+            return DebugContext.create(retryOptions, logStream, new GraalDebugHandlersFactory(snippetReflection));
         }
 
         @Override
