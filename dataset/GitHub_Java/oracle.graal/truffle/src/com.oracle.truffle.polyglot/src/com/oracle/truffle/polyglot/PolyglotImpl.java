@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -70,7 +70,6 @@ import org.graalvm.polyglot.proxy.Proxy;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.DispatchOutputStream;
-import com.oracle.truffle.api.impl.TruffleJDKServices;
 import com.oracle.truffle.api.impl.TruffleLocator;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -238,16 +237,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
     public Class<?> loadLanguageClass(String className) {
         for (ClassLoader loader : TruffleLocator.loaders()) {
             try {
-                Class<?> c = loader.loadClass(className);
-                if (!TruffleOptions.AOT) {
-                    /*
-                     * In JDK 9+, the Truffle API packages must be dynamically exported to a Truffle
-                     * API client since the Truffle API module descriptor only exports these
-                     * packages to modules known at build time (such as the Graal module).
-                     */
-                    TruffleJDKServices.exportTo(loader, null);
-                }
-                return c;
+                return loader.loadClass(className);
             } catch (ClassNotFoundException e) {
             }
         }

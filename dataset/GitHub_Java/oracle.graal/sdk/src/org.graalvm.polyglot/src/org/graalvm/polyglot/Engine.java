@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -70,7 +70,6 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 
 import org.graalvm.collections.UnmodifiableEconomicSet;
-import org.graalvm.home.HomeFinder;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.polyglot.PolyglotException.StackFrame;
@@ -183,14 +182,8 @@ public final class Engine implements AutoCloseable {
      *
      * @since 19.0
      */
-    @SuppressWarnings("static-method")
     public String getVersion() {
-        String version = HomeFinder.getInstance().getVersion();
-        if (version.equals("snapshot")) {
-            return "Development Build";
-        } else {
-            return version;
-        }
+        return impl.getVersion();
     }
 
     /**
@@ -260,13 +253,11 @@ public final class Engine implements AutoCloseable {
     /**
      * Finds the GraalVM home folder.
      *
-     * This is equivalent to {@link HomeFinder#getHomeFolder()} which should be preferred.
-     *
      * @return the path to a folder containing the GraalVM or {@code null} if it cannot be found
      * @since 19.0
      */
     public static Path findHome() {
-        return HomeFinder.getInstance().getHomeFolder();
+        return getImpl().findHome();
     }
 
     static AbstractPolyglotImpl getImpl() {
@@ -521,7 +512,15 @@ public final class Engine implements AutoCloseable {
 
     static class APIAccessImpl extends AbstractPolyglotImpl.APIAccess {
 
-        APIAccessImpl() {
+        private final boolean useContextClassLoader;
+
+        APIAccessImpl(boolean useContextClassLoader) {
+            this.useContextClassLoader = useContextClassLoader;
+        }
+
+        @Override
+        public boolean useContextClassLoader() {
+            return useContextClassLoader;
         }
 
         @Override
@@ -678,6 +677,8 @@ public final class Engine implements AutoCloseable {
             public AbstractPolyglotImpl run() {
                 AbstractPolyglotImpl engine = null;
                 Class<?> servicesClass = null;
+                boolean useContextClassLoader = false;
+
                 if (Boolean.getBoolean("graalvm.ForcePolyglotInvalid")) {
                     engine = createInvalidPolyglotImpl();
                 } else {
@@ -699,14 +700,15 @@ public final class Engine implements AutoCloseable {
                 }
 
                 if (engine == null) {
-                    // >= JDK 9.
                     engine = searchServiceLoader();
+                    useContextClassLoader = true;
                 }
                 if (engine == null) {
                     engine = createInvalidPolyglotImpl();
                 }
+
                 if (engine != null) {
-                    engine.setConstructors(new APIAccessImpl());
+                    engine.setConstructors(new APIAccessImpl(useContextClassLoader));
                 }
                 return engine;
             }
@@ -866,6 +868,11 @@ public final class Engine implements AutoCloseable {
 
         @Override
         public void resetPreInitializedEngine() {
+        }
+
+        @Override
+        public Path findHome() {
+            return null;
         }
 
         @Override
