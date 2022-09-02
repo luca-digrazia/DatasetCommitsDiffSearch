@@ -56,12 +56,13 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.polyglot.PolyglotLanguageContext.ToGuestValueNode;
+import com.oracle.truffle.polyglot.PolyglotListFactory.CacheFactory.GetNodeGen;
 import com.oracle.truffle.polyglot.PolyglotListFactory.CacheFactory.RemoveNodeGen;
 import com.oracle.truffle.polyglot.PolyglotListFactory.CacheFactory.SetNodeGen;
 import com.oracle.truffle.polyglot.PolyglotListFactory.CacheFactory.SizeNodeGen;
-import com.oracle.truffle.polyglot.host.HostContext.ToGuestValueNode;
 
-class PolyglotList<T> extends AbstractList<T> implements PolyglotWrapper {
+class PolyglotList<T> extends AbstractList<T> implements HostWrapper {
 
     final Object guestObject;
     final PolyglotLanguageContext languageContext;
@@ -125,18 +126,18 @@ class PolyglotList<T> extends AbstractList<T> implements PolyglotWrapper {
 
     @Override
     public String toString() {
-        return PolyglotWrapper.toString(this);
+        return HostWrapper.toString(this);
     }
 
     @Override
     public int hashCode() {
-        return PolyglotWrapper.hashCode(languageContext, guestObject);
+        return HostWrapper.hashCode(languageContext, guestObject);
     }
 
     @Override
     public boolean equals(Object o) {
         if (o instanceof PolyglotList) {
-            return PolyglotWrapper.equals(languageContext, guestObject, ((PolyglotList<?>) o).guestObject);
+            return HostWrapper.equals(languageContext, guestObject, ((PolyglotList<?>) o).guestObject);
         } else {
             return false;
         }
@@ -158,7 +159,7 @@ class PolyglotList<T> extends AbstractList<T> implements PolyglotWrapper {
             this.receiverClass = receiverClass;
             this.valueClass = valueClass;
             this.valueType = valueType;
-            this.get = initializeCall(PolyglotListFactory.CacheFactory.GetNodeGen.create(this));
+            this.get = initializeCall(GetNodeGen.create(this));
             this.size = initializeCall(SizeNodeGen.create(this));
             this.set = initializeCall(SetNodeGen.create(this));
             this.remove = initializeCall(RemoveNodeGen.create(this));
@@ -272,20 +273,20 @@ class PolyglotList<T> extends AbstractList<T> implements PolyglotWrapper {
             @SuppressWarnings("unused")
             Object doCached(PolyglotLanguageContext languageContext, Object receiver, Object[] args,
                             @CachedLibrary("receiver") InteropLibrary interop,
-                            @Cached PolyglotToHostNode toHost,
+                            @Cached ToHostNode toHost,
                             @Cached BranchProfile error) {
                 Object key = args[ARGUMENT_OFFSET];
                 Object result = null;
                 assert key instanceof Integer;
                 int index = (int) key;
                 try {
-                    return toHost.execute(languageContext, interop.readArrayElement(receiver, index), cache.valueClass, cache.valueType);
+                    return toHost.execute(interop.readArrayElement(receiver, index), cache.valueClass, cache.valueType, languageContext, true);
                 } catch (InvalidArrayIndexException e) {
                     error.enter();
-                    throw PolyglotInteropErrors.invalidListIndex(languageContext, receiver, cache.valueType, index);
+                    throw HostInteropErrors.invalidListIndex(languageContext, receiver, cache.valueType, index);
                 } catch (UnsupportedMessageException e) {
                     error.enter();
-                    throw PolyglotInteropErrors.listUnsupported(languageContext, receiver, cache.valueType, "get()");
+                    throw HostInteropErrors.listUnsupported(languageContext, receiver, cache.valueType, "get()");
                 }
             }
 
@@ -316,18 +317,18 @@ class PolyglotList<T> extends AbstractList<T> implements PolyglotWrapper {
                 Object key = args[ARGUMENT_OFFSET];
                 assert key instanceof Integer;
                 int index = (int) key;
-                Object value = toGuest.execute(languageContext.context.getHostContextImpl(), args[ARGUMENT_OFFSET + 1]);
+                Object value = toGuest.execute(languageContext, args[ARGUMENT_OFFSET + 1]);
                 try {
                     interop.writeArrayElement(receiver, index, value);
                 } catch (InvalidArrayIndexException e) {
                     error.enter();
-                    throw PolyglotInteropErrors.invalidListIndex(languageContext, receiver, cache.valueType, index);
+                    throw HostInteropErrors.invalidListIndex(languageContext, receiver, cache.valueType, index);
                 } catch (UnsupportedMessageException e) {
                     error.enter();
-                    throw PolyglotInteropErrors.listUnsupported(languageContext, receiver, cache.valueType, "set");
+                    throw HostInteropErrors.listUnsupported(languageContext, receiver, cache.valueType, "set");
                 } catch (UnsupportedTypeException e) {
                     error.enter();
-                    throw PolyglotInteropErrors.invalidListValue(languageContext, receiver, cache.valueType, (int) key, value);
+                    throw HostInteropErrors.invalidListValue(languageContext, receiver, cache.valueType, (int) key, value);
                 }
                 return null;
             }
@@ -357,10 +358,10 @@ class PolyglotList<T> extends AbstractList<T> implements PolyglotWrapper {
                     interop.removeArrayElement(receiver, index);
                 } catch (InvalidArrayIndexException e) {
                     error.enter();
-                    throw PolyglotInteropErrors.invalidListIndex(languageContext, receiver, cache.valueType, index);
+                    throw HostInteropErrors.invalidListIndex(languageContext, receiver, cache.valueType, index);
                 } catch (UnsupportedMessageException e) {
                     error.enter();
-                    throw PolyglotInteropErrors.listUnsupported(languageContext, receiver, cache.valueType, "remove");
+                    throw HostInteropErrors.listUnsupported(languageContext, receiver, cache.valueType, "remove");
                 }
                 return null;
             }

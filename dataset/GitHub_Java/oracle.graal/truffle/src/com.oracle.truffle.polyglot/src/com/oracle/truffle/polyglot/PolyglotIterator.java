@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -50,22 +50,46 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.api.utilities.TriState;
 import com.oracle.truffle.polyglot.PolyglotIteratorFactory.CacheFactory.HasNextNodeGen;
 import com.oracle.truffle.polyglot.PolyglotIteratorFactory.CacheFactory.NextNodeGen;
 
 import java.lang.reflect.Type;
+import java.util.ConcurrentModificationException;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 
 class PolyglotIterator<T> implements Iterator<T>, HostWrapper {
 
     final Object guestObject;
     final PolyglotLanguageContext languageContext;
     final Cache cache;
+    /**
+     * Caches value returned from the {@link #hasNext()}. The {@link PolyglotIterator} needs to
+     * preserve the Java {@link Iterator} contract requiring that when the
+     * {@link Iterator#hasNext()} returns {@code true} the {@link Iterator#next()} does not throw
+     * {@link NoSuchElementException}. The interop contract is weaker when the underlying data
+     * structure is modified. We emulate the Java iterator behaviour by throwing a
+     * {@link ConcurrentModificationException} when we detect an inconsistency among
+     * {@link InteropLibrary#hasIteratorNextElement(Object)} and
+     * {@link InteropLibrary#getIteratorNextElement(Object)} calls. The {@link #lastHasNext} field
+     * is used to detect such an inconsistency.
+     */
+    private TriState lastHasNext;
+
+    /**
+     * A flag marking the iterator as concurrently modified. When the {@link #next()} throws a
+     * {@link ConcurrentModificationException} any other call to the {@link #next()} has to throw
+     * {@link ConcurrentModificationException}.
+     */
+    private boolean concurrentlyModified;
 
     PolyglotIterator(Class<T> elementClass, Type elementType, Object array, PolyglotLanguageContext languageContext) {
         this.guestObject = array;
         this.languageContext = languageContext;
         this.cache = Cache.lookup(languageContext, array.getClass(), elementClass, elementType);
+        lastHasNext = TriState.UNDEFINED;
     }
 
     @Override
@@ -85,13 +109,50 @@ class PolyglotIterator<T> implements Iterator<T>, HostWrapper {
 
     @Override
     public boolean hasNext() {
-        return (boolean) cache.hasNext.call(languageContext, guestObject);
+        if (lastHasNext == TriState.UNDEFINED) {
+            lastHasNext = TriState.valueOf((Boolean) cache.hasNext.call(languageContext, guestObject));
+        }
+        return lastHasNext == TriState.TRUE ? true : false;
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public T next() {
-        return (T) cache.next.call(languageContext, guestObject);
+        if (concurrentlyModified) {
+            throw new ConcurrentModificationException();
+        }
+        try {
+            TriState prevHasNext = lastHasNext;
+            if (lastHasNext == TriState.TRUE) {
+                lastHasNext = TriState.UNDEFINED;
+            }
+            return (T) cache.next.call(languageContext, guestObject, prevHasNext);
+        } catch (NoSuchElementException noSuchElementException) {
+            lastHasNext = TriState.FALSE;
+            throw noSuchElementException;
+        } catch (ConcurrentModificationException concurrentModificationException) {
+            concurrentlyModified = true;
+            throw concurrentModificationException;
+        }
+    }
+
+    @Override
+    public String toString() {
+        return HostWrapper.toString(this);
+    }
+
+    @Override
+    public int hashCode() {
+        return HostWrapper.hashCode(languageContext, guestObject);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o instanceof PolyglotIterator) {
+            return HostWrapper.equals(languageContext, guestObject, ((PolyglotIterator<?>) o).guestObject);
+        } else {
+            return false;
+        }
     }
 
     static final class Cache {
@@ -131,10 +192,8 @@ class PolyglotIterator<T> implements Iterator<T>, HostWrapper {
             private final Type valueType;
 
             Key(Class<?> receiverClass, Class<?> valueClass, Type valueType) {
-                assert receiverClass != null;
-                assert valueClass != null;
-                this.receiverClass = receiverClass;
-                this.valueClass = valueClass;
+                this.receiverClass = Objects.requireNonNull(receiverClass);
+                this.valueClass = Objects.requireNonNull(valueClass);
                 this.valueType = valueType;
             }
 
@@ -154,7 +213,7 @@ class PolyglotIterator<T> implements Iterator<T>, HostWrapper {
                     return false;
                 }
                 Key other = (Key) obj;
-                return valueType == other.valueType && valueClass == other.valueClass && receiverClass == other.receiverClass;
+                return receiverClass == other.receiverClass && valueClass == other.valueClass && Objects.equals(valueType, other.valueType);
             }
         }
 
@@ -224,15 +283,26 @@ class PolyglotIterator<T> implements Iterator<T>, HostWrapper {
             Object doCached(PolyglotLanguageContext languageContext, Object receiver, Object[] args,
                             @CachedLibrary("receiver") InteropLibrary iterators,
                             @Cached ToHostNode toHost,
-                            @Cached BranchProfile error) {
+                            @Cached BranchProfile error,
+                            @Cached BranchProfile stop) {
+                TriState lastHasNext = (TriState) args[ARGUMENT_OFFSET];
                 try {
-                    return toHost.execute(iterators.getIteratorNextElement(receiver), cache.valueClass, cache.valueType, languageContext, true);
+                    Object next = iterators.getIteratorNextElement(receiver);
+                    if (lastHasNext == TriState.FALSE) {
+                        error.enter();
+                        throw HostInteropErrors.iteratorConcurrentlyModified(languageContext, receiver, cache.valueType);
+                    }
+                    return toHost.execute(next, cache.valueClass, cache.valueType, languageContext, true);
                 } catch (StopIterationException e) {
-                    error.enter();
-                    throw HostInteropErrors.stopIteration(languageContext, receiver, cache.valueType);
+                    stop.enter();
+                    if (lastHasNext == TriState.TRUE) {
+                        throw HostInteropErrors.iteratorConcurrentlyModified(languageContext, receiver, cache.valueType);
+                    } else {
+                        throw HostInteropErrors.stopIteration(languageContext, receiver, cache.valueType);
+                    }
                 } catch (UnsupportedMessageException e) {
                     error.enter();
-                    throw HostInteropErrors.iteratorUnsupported(languageContext, receiver, cache.valueType, "next");
+                    throw HostInteropErrors.iteratorElementUnreadable(languageContext, receiver, cache.valueType);
                 }
             }
         }
@@ -252,7 +322,7 @@ class PolyglotIterator<T> implements Iterator<T>, HostWrapper {
 
             @Override
             protected Object executeImpl(PolyglotLanguageContext languageContext, Object receiver, Object[] args) {
-                return apply.execute(languageContext, receiver, args[ARGUMENT_OFFSET], Object.class, Object.class);
+                return apply.execute(languageContext, receiver, args[ARGUMENT_OFFSET]);
             }
         }
     }

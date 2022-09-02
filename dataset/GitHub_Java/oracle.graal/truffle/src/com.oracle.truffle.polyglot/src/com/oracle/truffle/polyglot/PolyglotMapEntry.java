@@ -44,15 +44,15 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
-import com.oracle.truffle.polyglot.PolyglotLanguageContext.ToGuestValueNode;
 
 import java.lang.reflect.Type;
 import java.util.Map;
+import java.util.Objects;
 
 class PolyglotMapEntry<K, V> implements Map.Entry<K, V>, HostWrapper {
 
@@ -89,9 +89,7 @@ class PolyglotMapEntry<K, V> implements Map.Entry<K, V>, HostWrapper {
 
     @Override
     public final V setValue(V value) {
-        V prev = getValue();
-        cache.setValue.call(languageContext, guestObject, value);
-        return prev;
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -138,7 +136,6 @@ class PolyglotMapEntry<K, V> implements Map.Entry<K, V>, HostWrapper {
 
         final CallTarget getKey;
         final CallTarget getValue;
-        final CallTarget setValue;
         final CallTarget apply;
 
         Cache(Class<?> receiverClass, Class<?> keyClass, Type keyType, Class<?> valueClass, Type valueType) {
@@ -147,9 +144,8 @@ class PolyglotMapEntry<K, V> implements Map.Entry<K, V>, HostWrapper {
             this.keyType = keyType;
             this.valueClass = valueClass;
             this.valueType = valueType;
-            this.getKey = initializeCall(PolyglotMapEntryFactory.CacheFactory.GetKeyNodeGen.create(this));
-            this.getValue = initializeCall(PolyglotMapEntryFactory.CacheFactory.GetValueNodeGen.create(this));
-            this.setValue = initializeCall(PolyglotMapEntryFactory.CacheFactory.SetValueNodeGen.create(this));
+            this.getKey = initializeCall(PolyglotMapEntryFactory.CacheFactory.GetNodeGen.create(this, "getKey", 0, keyClass, keyType));
+            this.getValue = initializeCall(PolyglotMapEntryFactory.CacheFactory.GetNodeGen.create(this, "getValue", 1, valueClass, valueType));
             this.apply = initializeCall(new Apply(this));
         }
 
@@ -183,13 +179,10 @@ class PolyglotMapEntry<K, V> implements Map.Entry<K, V>, HostWrapper {
 
             Key(Class<?> receiverClass, Class<?> keyClass, Type keyType,
                             Class<?> valueClass, Type valueType) {
-                assert receiverClass != null;
-                assert keyClass != null;
-                assert valueClass != null;
-                this.receiverClass = receiverClass;
-                this.keyClass = keyClass;
+                this.receiverClass = Objects.requireNonNull(receiverClass);
+                this.keyClass = Objects.requireNonNull(keyClass);
                 this.keyType = keyType;
-                this.valueClass = valueClass;
+                this.valueClass = Objects.requireNonNull(valueClass);
                 this.valueType = valueType;
             }
 
@@ -213,8 +206,8 @@ class PolyglotMapEntry<K, V> implements Map.Entry<K, V>, HostWrapper {
                 }
                 PolyglotMapEntry.Cache.Key other = (PolyglotMapEntry.Cache.Key) obj;
                 return receiverClass == other.receiverClass &&
-                                keyClass == other.keyClass && keyType == other.keyType &&
-                                valueClass == other.valueClass && valueType == other.valueType;
+                                keyClass == other.keyClass && Objects.equals(keyType, other.keyType) &&
+                                valueClass == other.valueClass && Objects.equals(valueType, other.valueType);
             }
         }
 
@@ -245,24 +238,37 @@ class PolyglotMapEntry<K, V> implements Map.Entry<K, V>, HostWrapper {
                 throw HostInteropErrors.mapEntryUnsupported(languageContext, receiver, getKeyType(), getValueType(), getOperationName());
             }
 
-            Type getKeyType() {
+            protected final RuntimeException invalidArrayIndex(PolyglotLanguageContext languageContext, Object receiver, long index) {
+                throw HostInteropErrors.invalidMapEntryArrayIndex(languageContext, receiver, getKeyType(), getValueType(), index);
+            }
+
+            protected final Type getKeyType() {
                 return cache.keyType != null ? cache.keyType : cache.keyClass;
             }
 
-            Type getValueType() {
+            protected final Type getValueType() {
                 return cache.valueType != null ? cache.valueType : cache.valueClass;
             }
         }
 
-        abstract static class GetKeyNode extends PolyglotMapEntry.Cache.PolyglotMapEntryNode {
+        abstract static class GetNode extends PolyglotMapEntry.Cache.PolyglotMapEntryNode {
 
-            GetKeyNode(PolyglotMapEntry.Cache cache) {
+            private final String name;
+            private final long index;
+            private final Class<?> elementClass;
+            private final Type elementType;
+
+            GetNode(PolyglotMapEntry.Cache cache, String name, long index, Class<?> elementClass, Type elementType) {
                 super(cache);
+                this.name = name;
+                this.index = index;
+                this.elementClass = elementClass;
+                this.elementType = elementType;
             }
 
             @Override
             protected String getOperationName() {
-                return "getKey";
+                return name;
             }
 
             @Specialization(limit = "LIMIT")
@@ -271,84 +277,18 @@ class PolyglotMapEntry<K, V> implements Map.Entry<K, V>, HostWrapper {
                             @CachedLibrary("receiver") InteropLibrary interop,
                             @Cached ToHostNode toHost,
                             @Cached BranchProfile error) {
-                if (interop.isHashEntry(receiver)) {
+                if (interop.hasArrayElements(receiver)) {
                     Object result;
                     try {
-                        result = interop.getHashEntryKey(receiver);
+                        result = interop.readArrayElement(receiver, index);
                     } catch (UnsupportedMessageException e) {
                         error.enter();
                         throw unsupported(languageContext, receiver);
-                    }
-                    return toHost.execute(result, cache.valueClass, cache.valueType, languageContext, true);
-                } else {
-                    error.enter();
-                    throw unsupported(languageContext, receiver);
-                }
-            }
-        }
-
-        abstract static class GetValueNode extends PolyglotMapEntry.Cache.PolyglotMapEntryNode {
-
-            GetValueNode(PolyglotMapEntry.Cache cache) {
-                super(cache);
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "getValue";
-            }
-
-            @Specialization(limit = "LIMIT")
-            @SuppressWarnings("unused")
-            protected Object doCached(PolyglotLanguageContext languageContext, Object receiver, Object[] args,
-                            @CachedLibrary("receiver") InteropLibrary interop,
-                            @Cached ToHostNode toHost,
-                            @Cached BranchProfile error) {
-                if (interop.isHashEntry(receiver)) {
-                    Object result;
-                    try {
-                        result = interop.getHashEntryValue(receiver);
-                    } catch (UnsupportedMessageException e) {
+                    } catch (InvalidArrayIndexException e) {
                         error.enter();
-                        throw unsupported(languageContext, receiver);
+                        throw invalidArrayIndex(languageContext, receiver, e.getInvalidIndex());
                     }
-                    return toHost.execute(result, cache.valueClass, cache.valueType, languageContext, true);
-                } else {
-                    error.enter();
-                    throw unsupported(languageContext, receiver);
-                }
-            }
-        }
-
-        abstract static class SetValueNode extends PolyglotMapEntry.Cache.PolyglotMapEntryNode {
-
-            SetValueNode(PolyglotMapEntry.Cache cache) {
-                super(cache);
-            }
-
-            @Override
-            protected String getOperationName() {
-                return "setValue";
-            }
-
-            @Specialization(limit = "LIMIT")
-            @SuppressWarnings("unused")
-            protected Object doCached(PolyglotLanguageContext languageContext, Object receiver, Object[] args,
-                            @CachedLibrary("receiver") InteropLibrary interop,
-                            @Cached ToGuestValueNode toGuest,
-                            @Cached BranchProfile error) {
-                if (interop.isHashEntry(receiver)) {
-                    Object guestValue = toGuest.execute(languageContext, args[ARGUMENT_OFFSET]);
-                    try {
-                        interop.setHashEntryValue(receiver, guestValue);
-                        return null;
-                    } catch (UnsupportedMessageException e) {
-                        error.enter();
-                        throw unsupported(languageContext, receiver);
-                    } catch (UnsupportedTypeException e) {
-                        error.enter();
-                        throw HostInteropErrors.invalidMapEntryValue(languageContext, receiver, getKeyType(), getValueType(), guestValue);
-                    }
+                    return toHost.execute(result, elementClass, elementType, languageContext, true);
                 } else {
                     error.enter();
                     throw unsupported(languageContext, receiver);
@@ -371,7 +311,7 @@ class PolyglotMapEntry<K, V> implements Map.Entry<K, V>, HostWrapper {
 
             @Override
             protected Object executeImpl(PolyglotLanguageContext languageContext, Object receiver, Object[] args) {
-                return apply.execute(languageContext, receiver, args[ARGUMENT_OFFSET], Object.class, Object.class);
+                return apply.execute(languageContext, receiver, args[ARGUMENT_OFFSET]);
             }
         }
     }

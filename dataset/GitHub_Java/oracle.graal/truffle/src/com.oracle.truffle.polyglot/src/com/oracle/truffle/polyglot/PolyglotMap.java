@@ -62,20 +62,22 @@ import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnknownKeyException;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.polyglot.PolyglotLanguageContext.ToGuestValueNode;
+import com.oracle.truffle.polyglot.PolyglotMapFactory.CacheFactory.ContainsKeyNodeGen;
 import com.oracle.truffle.polyglot.PolyglotMapFactory.CacheFactory.EntrySetNodeGen;
 import com.oracle.truffle.polyglot.PolyglotMapFactory.CacheFactory.HashEntriesIteratorNodeGen;
 import com.oracle.truffle.polyglot.PolyglotMapFactory.CacheFactory.HashSizeNodeGen;
 import com.oracle.truffle.polyglot.PolyglotMapFactory.CacheFactory.PutNodeGen;
 import com.oracle.truffle.polyglot.PolyglotMapFactory.CacheFactory.RemoveBooleanNodeGen;
-import com.oracle.truffle.polyglot.host.HostContext.ToGuestValueNode;
+import com.oracle.truffle.polyglot.PolyglotMapFactory.CacheFactory.RemoveNodeGen;
 
-class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
+class PolyglotMap<K, V> extends AbstractMap<K, V> implements HostWrapper {
 
     final PolyglotLanguageContext languageContext;
     final Object guestObject;
@@ -145,18 +147,18 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
 
     @Override
     public String toString() {
-        return PolyglotWrapper.toString(this);
+        return HostWrapper.toString(this);
     }
 
     @Override
     public int hashCode() {
-        return PolyglotWrapper.hashCode(languageContext, guestObject);
+        return HostWrapper.hashCode(languageContext, guestObject);
     }
 
     @Override
     public boolean equals(Object o) {
         if (o instanceof PolyglotMap) {
-            return PolyglotWrapper.equals(languageContext, guestObject, ((PolyglotMap<?, ?>) o).guestObject);
+            return HostWrapper.equals(languageContext, guestObject, ((PolyglotMap<?, ?>) o).guestObject);
         } else {
             return false;
         }
@@ -403,10 +405,10 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
             this.memberKey = keyClass == Object.class || keyClass == String.class || keyClass == CharSequence.class;
             this.numberKey = keyClass == Object.class || keyClass == Number.class || keyClass == Integer.class || keyClass == Long.class || keyClass == Short.class || keyClass == Byte.class;
             this.get = initializeCall(PolyglotMapFactory.CacheFactory.GetNodeGen.create(this));
-            this.containsKey = initializeCall(PolyglotMapFactory.CacheFactory.ContainsKeyNodeGen.create(this));
+            this.containsKey = initializeCall(ContainsKeyNodeGen.create(this));
             this.entrySet = initializeCall(EntrySetNodeGen.create(this));
             this.put = initializeCall(PutNodeGen.create(this));
-            this.remove = initializeCall(PolyglotMapFactory.CacheFactory.RemoveNodeGen.create(this));
+            this.remove = initializeCall(RemoveNodeGen.create(this));
             this.removeBoolean = initializeCall(RemoveBooleanNodeGen.create(this));
             this.hashEntriesIterator = initializeCall(HashEntriesIteratorNodeGen.create(this));
             this.hashSize = initializeCall(HashSizeNodeGen.create(this));
@@ -527,7 +529,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                             @Cached ToGuestValueNode toGuest) {
                 Object key = args[ARGUMENT_OFFSET];
                 if (interop.hasHashEntries(receiver)) {
-                    return interop.isHashEntryReadable(receiver, toGuest.execute(languageContext.context.getHostContextImpl(), key));
+                    return interop.isHashEntryReadable(receiver, toGuest.execute(languageContext, key));
                 }
                 if (cache.memberKey && interop.hasMembers(receiver)) {
                     if (isObjectKey(key)) {
@@ -559,7 +561,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
             @SuppressWarnings("unchecked")
             protected Object doCached(PolyglotLanguageContext languageContext, Object receiver, Object[] args,
                             @CachedLibrary("receiver") InteropLibrary interop,
-                            @Cached PolyglotToHostNode toHost,
+                            @Cached ToHostNode toHost,
                             @Cached BranchProfile error) {
                 PolyglotMap<Object, Object> originalMap = (PolyglotMap<Object, Object>) args[ARGUMENT_OFFSET];
 
@@ -615,13 +617,13 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
             protected Object doCached(PolyglotLanguageContext languageContext, Object receiver, Object[] args,
                             @CachedLibrary("receiver") InteropLibrary interop,
                             @Cached ToGuestValueNode toGuest,
-                            @Cached PolyglotToHostNode toHost,
+                            @Cached ToHostNode toHost,
                             @Cached BranchProfile error) {
                 Object key = args[ARGUMENT_OFFSET];
                 Object result;
                 try {
                     if (interop.hasHashEntries(receiver)) {
-                        result = interop.readHashValue(receiver, toGuest.execute(languageContext.context.getHostContextImpl(), key));
+                        result = interop.readHashValue(receiver, toGuest.execute(languageContext, key));
                     } else if (cache.memberKey && interop.hasMembers(receiver)) {
                         if (isObjectKey(key)) {
                             result = interop.readMember(receiver, ((String) key));
@@ -641,7 +643,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                     error.enter();
                     return null;
                 }
-                return toHost.execute(languageContext, result, cache.valueClass, cache.valueType);
+                return toHost.execute(result, cache.valueClass, cache.valueType, languageContext, true);
             }
         }
 
@@ -663,11 +665,11 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                             @Cached ToGuestValueNode toGuest,
                             @Cached BranchProfile error) {
                 Object key = args[ARGUMENT_OFFSET];
-                Object guestValue = toGuest.execute(languageContext.context.getHostContextImpl(), args[ARGUMENT_OFFSET + 1]);
+                Object guestValue = toGuest.execute(languageContext, args[ARGUMENT_OFFSET + 1]);
                 try {
                     boolean supported = false;
                     if (interop.hasHashEntries(receiver)) {
-                        interop.writeHashEntry(receiver, toGuest.execute(languageContext.context.getHostContextImpl(), key), guestValue);
+                        interop.writeHashEntry(receiver, toGuest.execute(languageContext, key), guestValue);
                         return null;
                     } else if (cache.memberKey && interop.hasMembers(receiver)) {
                         supported = true;
@@ -684,9 +686,9 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                     }
                     error.enter();
                     if (!supported) {
-                        throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "put");
+                        throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "put");
                     } else {
-                        throw PolyglotInteropErrors.invalidMapIdentifier(languageContext, receiver, getKeyType(), getValueType(), key);
+                        throw HostInteropErrors.invalidMapIdentifier(languageContext, receiver, getKeyType(), getValueType(), key);
                     }
                 } catch (UnknownIdentifierException | InvalidArrayIndexException | UnknownKeyException | UnsupportedMessageException | UnsupportedTypeException e) {
                     error.enter();
@@ -697,11 +699,11 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
             @TruffleBoundary
             RuntimeException error(PolyglotLanguageContext languageContext, Object receiver, InteropException e, Object key, Object guestValue) {
                 if (e instanceof UnknownIdentifierException || e instanceof InvalidArrayIndexException) {
-                    throw PolyglotInteropErrors.invalidMapIdentifier(languageContext, receiver, getKeyType(), getValueType(), key);
+                    throw HostInteropErrors.invalidMapIdentifier(languageContext, receiver, getKeyType(), getValueType(), key);
                 } else if (e instanceof UnsupportedMessageException) {
-                    throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "put");
+                    throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "put");
                 } else if (e instanceof UnsupportedTypeException) {
-                    throw PolyglotInteropErrors.invalidMapValue(languageContext, receiver, getKeyType(), getValueType(), key, guestValue);
+                    throw HostInteropErrors.invalidMapValue(languageContext, receiver, getKeyType(), getValueType(), key, guestValue);
                 } else {
                     throw shouldNotReachHere("unhandled error");
                 }
@@ -729,7 +731,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                 try {
                     boolean supported = false;
                     if (interop.hasHashEntries(receiver)) {
-                        interop.removeHashEntry(receiver, toGuest.execute(languageContext.context.getHostContextImpl(), key));
+                        interop.removeHashEntry(receiver, toGuest.execute(languageContext, key));
                         return null;
                     } else if (cache.memberKey && interop.hasMembers(receiver)) {
                         supported = true;
@@ -747,7 +749,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
 
                     error.enter();
                     if (!supported) {
-                        throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "remove");
+                        throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "remove");
                     } else {
                         return null;
                     }
@@ -756,7 +758,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                     return null;
                 } catch (UnsupportedMessageException e) {
                     error.enter();
-                    throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "remove");
+                    throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "remove");
                 }
             }
 
@@ -784,8 +786,8 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                 try {
                     boolean supported = false;
                     if (interop.hasHashEntries(receiver)) {
-                        Object guestKey = toGuest.execute(languageContext.context.getHostContextImpl(), key);
-                        Object guestExcpectedValue = toGuest.execute(languageContext.context.getHostContextImpl(), expectedValue);
+                        Object guestKey = toGuest.execute(languageContext, key);
+                        Object guestExcpectedValue = toGuest.execute(languageContext, expectedValue);
                         Object readValue = interop.readHashValue(receiver, guestKey);
                         if (!equalsBoundary(guestExcpectedValue, readValue)) {
                             return false;
@@ -797,7 +799,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                         if (isObjectKey(key)) {
                             String member = (String) key;
                             Object readValue = interop.readMember(receiver, member);
-                            Object guestExpectedValue = toGuest.execute(languageContext.context.getHostContextImpl(), expectedValue);
+                            Object guestExpectedValue = toGuest.execute(languageContext, expectedValue);
                             if (!equalsBoundary(guestExpectedValue, readValue)) {
                                 return false;
                             }
@@ -809,7 +811,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                         if (isArrayKey(key)) {
                             int index = intValue(key);
                             Object readValue = interop.readArrayElement(receiver, index);
-                            Object guestExpectedValue = toGuest.execute(languageContext.context.getHostContextImpl(), expectedValue);
+                            Object guestExpectedValue = toGuest.execute(languageContext, expectedValue);
                             if (!equalsBoundary(guestExpectedValue, readValue)) {
                                 return false;
                             }
@@ -819,7 +821,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                     }
                     error.enter();
                     if (!supported) {
-                        throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "remove");
+                        throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "remove");
                     } else {
                         return false;
                     }
@@ -828,7 +830,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                     return false;
                 } catch (UnsupportedMessageException e) {
                     error.enter();
-                    throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "remove");
+                    throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "remove");
                 }
             }
 
@@ -853,7 +855,7 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
             @Specialization(limit = "LIMIT")
             protected Object doCached(PolyglotLanguageContext languageContext, Object receiver, @SuppressWarnings("unused") Object[] args,
                             @CachedLibrary("receiver") InteropLibrary interop,
-                            @Cached PolyglotToHostNode toHost,
+                            @Cached ToHostNode toHost,
                             @Cached BranchProfile error) {
                 if (interop.hasHashEntries(receiver)) {
                     try {
@@ -862,14 +864,14 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                         Type useKeyType = cache.keyType != null ? cache.keyType : Object.class;
                         Type useValueType = cache.valueType != null ? cache.valueType : Object.class;
                         genericType = new ParameterizedTypeImpl(Iterator.class, new ParameterizedTypeImpl(Map.Entry.class, useKeyType, useValueType));
-                        return toHost.execute(languageContext, iterator, Iterator.class, genericType);
+                        return toHost.execute(iterator, Iterator.class, genericType, languageContext, true);
                     } catch (UnsupportedMessageException e) {
                         error.enter();
-                        throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "iterator");
+                        throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "iterator");
                     }
                 } else {
                     error.enter();
-                    throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "iterator");
+                    throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "iterator");
                 }
             }
         }
@@ -894,11 +896,11 @@ class PolyglotMap<K, V> extends AbstractMap<K, V> implements PolyglotWrapper {
                         return interop.getHashSize(receiver);
                     } catch (UnsupportedMessageException e) {
                         error.enter();
-                        throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "size");
+                        throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "size");
                     }
                 } else {
                     error.enter();
-                    throw PolyglotInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "size");
+                    throw HostInteropErrors.mapUnsupported(languageContext, receiver, getKeyType(), getValueType(), "size");
                 }
             }
         }
