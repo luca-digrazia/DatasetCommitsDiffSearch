@@ -34,9 +34,6 @@ public class SwitchFoldingTest extends GraalCompilerTest {
 
     private static final String REFERENCE_SNIPPET = "referenceSnippet";
     private static final String REFERENCE_SNIPPET_2 = "reference2Snippet";
-    private static final String REFERENCE_SNIPPET_3 = "reference3Snippet";
-    private static final String REFERENCE_SNIPPET_4 = "reference4Snippet";
-    private static final String REFERENCE_SNIPPET_5 = "reference5Snippet";
 
     public static int referenceSnippet(int a) {
         switch (a) {
@@ -72,21 +69,6 @@ public class SwitchFoldingTest extends GraalCompilerTest {
                 return 1;
             case 3:
                 return 6;
-            default:
-                return 7;
-        }
-    }
-
-    public static int reference3Snippet(int a) {
-        switch (a) {
-            case 0:
-                return 4;
-            case 1:
-            case 2:
-            case 4:
-                return 6;
-            case 6:
-            case 7:
             default:
                 return 7;
         }
@@ -351,133 +333,12 @@ public class SwitchFoldingTest extends GraalCompilerTest {
         test2("test7Snippet");
     }
 
-    public static int test8Snippet(int a) {
-        switch (a) {
-            case 0:
-                return 4;
-            case 1:
-            case 2:
-            case 7:
-            default:
-                switch (a) {
-                    case 2:
-                    case 6:
-                    default:
-                        switch (a) {
-                            case 1:
-                            case 2:
-                            case 4:
-                                return 6;
-                            default:
-                                return 7;
-                        }
-                }
-        }
-    }
-
-    @Test
-    public void test8() {
-        test3("test8Snippet");
-    }
-
-    public static int reference4Snippet(int a) {
-        switch (a) {
-            case 0:
-                return 4;
-            case 1:
-            case 2:
-            case 4:
-                return 6;
-            case 6:
-                return 7;
-            case 7:
-                return 7;
-            default:
-                return 7;
-        }
-    }
-
-    public static int test9Snippet(int a) {
-        switch (a) {
-            case 0:
-                return 4;
-            case 1:
-            case 2:
-            case 4:
-                return 6;
-            case 6:
-            case 7:
-            default:
-                if (a == 6) {
-                    return 7;
-                } else if (a == 7) {
-                    return 7;
-                } else {
-                    return 7;
-                }
-        }
-    }
-
-    @Test
-    public void test9() {
-        test4("test9Snippet");
-    }
-
-    public static int reference5Snippet(int a) {
-        switch (a) {
-            case 0:
-                return 4;
-            case 1:
-                return 1;
-            case 2:
-                return 1;
-            case 3:
-                return 6;
-            default:
-                return 7;
-        }
-    }
-
-    public static int test10Snippet(int a) {
-        if (a == 0) {
-            return 4;
-        } else {
-            if (a == 1 || a == 2) {
-                return 1;
-            } else {
-                switch (a) {
-                    case 3:
-                        return 6;
-                    default:
-                        return 7;
-                }
-            }
-        }
-    }
-
-    @Test
-    public void test10() {
-        test5("test10Snippet");
-    }
-
     private void test1(String snippet) {
         test(snippet, REFERENCE_SNIPPET);
     }
 
     private void test2(String snippet) {
         test(snippet, REFERENCE_SNIPPET_2);
-    }
-
-    private void test3(String snippet) {
-        test(snippet, REFERENCE_SNIPPET_3);
-    }
-
-    private void test4(String snippet) {
-        test(snippet, REFERENCE_SNIPPET_4);
-    }
-
-    private void test5(String snippet) {
-        test(snippet, REFERENCE_SNIPPET_5);
     }
 
     private void test(String snippet, String ref) {
