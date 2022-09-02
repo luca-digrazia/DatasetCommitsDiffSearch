@@ -47,7 +47,6 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.tests.options.TestOptions;
 
 @RunWith(Parameterized.class)
-@Parameterized.UseParametersRunnerFactory(BaseSuiteHarness.ExcludingParametersFactory.class)
 public final class ParserTortureSuite extends GccSuiteBase {
 
     public static final String TEST_DISTRIBUTION = "SULONG_PARSER_TORTURE";
