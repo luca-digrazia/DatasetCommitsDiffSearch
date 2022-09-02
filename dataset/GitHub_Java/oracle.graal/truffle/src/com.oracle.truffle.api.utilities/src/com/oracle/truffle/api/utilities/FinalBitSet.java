@@ -46,7 +46,6 @@ import java.util.BitSet;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
 
 /**
  * Read-only bitset designed for partial evaluation. The implementation is partially re-used from
@@ -57,6 +56,11 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
  */
 public final class FinalBitSet {
 
+    /**
+     * An empty bit set of size 0.
+     *
+     * @since 20.0
+     */
     public static final FinalBitSet EMPTY = new FinalBitSet(new long[0]);
 
     /*
