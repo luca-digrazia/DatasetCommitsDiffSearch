@@ -55,14 +55,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
  * @since 0.8 or earlier
  */
 public interface RepeatingNode extends NodeInterface {
-    /**
-     * A value indicating that the loop should be repeated.
-     */
     int CONTINUE_LOOP_STATUS = 0;
-
-    /**
-     * A value indicating that the loop should not be repeated.
-     */
     int BREAK_LOOP_STATUS = -1;
 
     /**
@@ -79,7 +72,6 @@ public interface RepeatingNode extends NodeInterface {
     /**
      * Repeatedly invoked by a {@link LoopNode loop node} implementation,
      * but allows returning a language-specific loop exit status.
-     * Only languages that need to return custom loop statuses should override this method.
      *
      * @param frame
      * @param frame the current execution frame passed through the interpreter
@@ -93,5 +85,4 @@ public interface RepeatingNode extends NodeInterface {
             return BREAK_LOOP_STATUS;
         }
     }
-
 }

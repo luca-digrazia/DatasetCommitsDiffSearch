@@ -139,19 +139,11 @@ public abstract class LoopNode extends Node {
      *
      * @param frame the current execution frame or null if the repeating node does not require a
      *            frame
-     * @return the loop exit status - this is useful for languages that need to return some information
-     *            when exiting out of a loop (e.g. WebAssembly).
      * @since 0.8 or earlier
      */
     public abstract int executeLoopWithStatus(VirtualFrame frame);
 
-    /**
-     * Same as {@link #executeLoopWithStatus(VirtualFrame)}, but ignores the loop exit status.
-     * Provides backwards compatibility with language implementations that already depend on this method.
-     *
-     * @param frame the current execution frame or null if the repeating node does not require a
-     *            frame
-     */
+    // TODO: Document this and the *WithStatus variant.
     public void executeLoop(VirtualFrame frame) {
         executeLoopWithStatus(frame);
     }

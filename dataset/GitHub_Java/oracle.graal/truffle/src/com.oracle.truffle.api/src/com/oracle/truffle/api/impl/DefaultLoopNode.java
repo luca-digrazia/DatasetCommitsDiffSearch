@@ -44,12 +44,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 
-import static com.oracle.truffle.api.nodes.RepeatingNode.CONTINUE_LOOP_STATUS;
+import static com.oracle.truffle.api.nodes.RepeatingNode.*;
 
 public final class DefaultLoopNode extends LoopNode {
 
-    @Child
-    private RepeatingNode repeatNode;
+    @Child private RepeatingNode repeatNode;
 
     public DefaultLoopNode(RepeatingNode repeatNode) {
         this.repeatNode = repeatNode;
