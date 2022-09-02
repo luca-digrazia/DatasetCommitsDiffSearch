@@ -37,7 +37,6 @@ import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.tools.agentscript.impl.AccessorFrameLibrary;
 import com.oracle.truffle.tools.agentscript.impl.DefaultFrameLibrary;
-import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -133,7 +132,7 @@ public abstract class FrameLibrary extends Library {
          * @since 20.1
          */
         public Iterable<Scope> findLocalScopes() {
-            return env != null ? env.findLocalScopes(where, frame) : Collections.emptySet();
+            return env.findLocalScopes(where, frame);
         }
 
         /**
