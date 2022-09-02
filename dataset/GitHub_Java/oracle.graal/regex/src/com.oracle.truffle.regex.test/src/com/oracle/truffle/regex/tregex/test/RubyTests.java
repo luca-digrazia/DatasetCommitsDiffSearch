@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.regex.tregex.test;
 
-import com.oracle.truffle.regex.tregex.string.Encodings;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -49,14 +48,6 @@ public class RubyTests extends RegexTestBase {
     @Override
     String getEngineOptions() {
         return "Flavor=Ruby";
-    }
-
-    void testUTF8(String pattern, String flags, String input, int fromIndex, boolean isMatch, int... captureGroupBounds) {
-        testBytes(pattern, flags, Encodings.UTF_8, input, fromIndex, isMatch, captureGroupBounds);
-    }
-
-    void testLatin1(String pattern, String flags, String input, int fromIndex, boolean isMatch, int... captureGroupBounds) {
-        testBytes(pattern, flags, Encodings.LATIN_1, input, fromIndex, isMatch, captureGroupBounds);
     }
 
     @Test
@@ -214,85 +205,5 @@ public class RubyTests extends RegexTestBase {
 
         // Test that we bail out on strings with complex unfoldings.
         Assert.assertTrue(compileRegex(new String(new char[100]).replace('\0', 'f'), "i").isNull());
-    }
-
-    @Test
-    public void ruby18009() {
-        // https://bugs.ruby-lang.org/issues/18009
-        for (int i = 0; i < 26; i++) {
-            String input = String.valueOf((char) ('a' + i));
-            testUTF8("\\W", "i", input, 0, false);
-            testUTF8("[^\\w]", "i", input, 0, false);
-            testUTF8("[[^\\w]]", "i", input, 0, false);
-            testUTF8("[^[^\\w]]", "i", input, 0, true, 0, 1);
-        }
-
-        testUTF8("[\\w]", "i", "\u212a", 0, false);
-        testUTF8("[kx]", "i", "\u212a", 0, true, 0, 3);
-        testUTF8("[\\w&&kx]", "i", "\u212a", 0, true, 0, 3);
-    }
-
-    @Test
-    public void ruby18010() {
-        // https://bugs.ruby-lang.org/issues/18010
-        test("ff", "i", "\ufb00", 0, true, 0, 1);
-        test("[f]f", "i", "\ufb00", 0, false);
-        test("f[f]", "i", "\ufb00", 0, false);
-        test("[f][f]", "i", "\ufb00", 0, false);
-        test("(?:f)f", "i", "\ufb00", 0, false);
-        test("f(?:f)", "i", "\ufb00", 0, false);
-        test("(?:f)(?:f)", "i", "\ufb00", 0, false);
-    }
-
-    @Test
-    public void ruby18012() {
-        // https://bugs.ruby-lang.org/issues/18012
-        test("\\A[\ufb00]\\z", "i", "\ufb00", 0, true, 0, 1);
-        test("\\A[\ufb00]\\z", "i", "ff", 0, true, 0, 2);
-
-        test("\\A[^\ufb00]\\z", "i", "\ufb00", 0, false);
-        test("\\A[^\ufb00]\\z", "i", "ff", 0, false);
-
-        test("\\A[^[^\ufb00]]\\z", "i", "\ufb00", 0, true, 0, 1);
-        test("\\A[^[^\ufb00]]\\z", "i", "ff", 0, true, 0, 2);
-
-        test("\\A[[^[^\ufb00]]]\\z", "i", "\ufb00", 0, true, 0, 1);
-        test("\\A[[^[^\ufb00]]]\\z", "i", "ff", 0, true, 0, 2);
-    }
-
-    @Test
-    public void ruby18013() {
-        // https://bugs.ruby-lang.org/issues/18013
-        test("[^a-c]", "i", "A", 0, false);
-        test("[[^a-c]]", "i", "A", 0, false);
-
-        test("[^a]", "i", "a", 0, false);
-        test("[[^a]]", "i", "a", 0, false);
-    }
-
-    @Test
-    public void multiCodePointCaseFoldAcrossAsciiBoundary() {
-        test("\\A[\\W]\\z", "i", "\ufb00", 0, true, 0, 1);
-        // When \ufb00 is not fully case-foldable (because it is contributed by \W), it shouldn't
-        // be able to match 'ff', because its first character crosses the ASCII boundary from
-        // \ufb00.
-        test("\\A[\\W]\\z", "i", "ff", 0, false);
-
-        test("\\A[\\p{L}]\\z", "i", "\ufb00", 0, true, 0, 1);
-        // When \ufb00 is contributed by some other means, e.g. \p{L}, then it is fully
-        // case-foldable and can cross the ASCII boundary.
-        test("\\A[\\p{L}]\\z", "i", "ff", 0, true, 0, 2);
-
-        test("\\A[\\W]\\z", "i", "\ufb03", 0, true, 0, 1);
-        // This violates the ASCII boundary restriction...
-        test("\\A[\\W]\\z", "i", "ffi", 0, false);
-        // but it doesn't mean that we drop all multi-code-point expansions. The following
-        // expansion, where the first character is not ASCII, is fine.
-        test("\\A[\\W]\\z", "i", "\ufb00i", 0, true, 0, 2);
-
-        // And when \ufb00 is fully case-foldable, all expansions are valid.
-        test("\\A[\\p{L}]\\z", "i", "\ufb03", 0, true, 0, 1);
-        test("\\A[\\p{L}]\\z", "i", "ffi", 0, true, 0, 3);
-        test("\\A[\\p{L}]\\z", "i", "\ufb00i", 0, true, 0, 2);
     }
 }
