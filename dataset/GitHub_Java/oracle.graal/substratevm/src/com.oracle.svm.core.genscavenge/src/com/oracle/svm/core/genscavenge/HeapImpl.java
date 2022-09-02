@@ -148,6 +148,13 @@ public class HeapImpl extends Heap {
         return getHeapImpl().imageHeapInfo;
     }
 
+    @Uninterruptible(reason = "Thread state not yet set up.")
+    @Override
+    public boolean initialize() {
+        // nothing to do - all relevant data was already initialized at image build time
+        return true;
+    }
+
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     @Override
     public boolean isInImageHeap(Object object) {
@@ -185,12 +192,11 @@ public class HeapImpl extends Heap {
 
     /** Tear down the heap, return all allocated virtual memory chunks to VirtualMemoryProvider. */
     @Override
-    @Uninterruptible(reason = "Tear-down in progress.")
-    public final boolean tearDown() {
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public final void tearDown() {
         youngGeneration.tearDown();
         oldGeneration.tearDown();
         HeapChunkProvider.get().tearDown();
-        return true;
     }
 
     /** State: Who handles object headers? */
@@ -497,22 +503,22 @@ public class HeapImpl extends Heap {
 
     @Fold
     static boolean getVerifyHeapBeforeGC() {
-        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyHeapBeforeCollection.getValue());
+        return (HeapOptions.VerifyHeap.getValue() || HeapOptions.VerifyHeapBeforeCollection.getValue());
     }
 
     @Fold
     static boolean getVerifyHeapAfterGC() {
-        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyHeapAfterCollection.getValue());
+        return (HeapOptions.VerifyHeap.getValue() || HeapOptions.VerifyHeapAfterCollection.getValue());
     }
 
     @Fold
     static boolean getVerifyStackBeforeGC() {
-        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyStackBeforeCollection.getValue());
+        return (HeapOptions.VerifyHeap.getValue() || HeapOptions.VerifyStackBeforeCollection.getValue());
     }
 
     @Fold
     static boolean getVerifyStackAfterGC() {
-        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyStackAfterCollection.getValue());
+        return (HeapOptions.VerifyHeap.getValue() || HeapOptions.VerifyStackAfterCollection.getValue());
     }
 
     @NeverInline("Starting a stack walk in the caller frame")
@@ -627,7 +633,6 @@ public class HeapImpl extends Heap {
         // nothing to do
     }
 
-    @Uninterruptible(reason = "Called during startup.")
     @Override
     public void attachThread(IsolateThread isolateThread) {
         // nothing to do
@@ -856,7 +861,7 @@ final class MemoryMXBeanMemoryVisitor implements MemoryWalker.Visitor {
     }
 }
 
-@TargetClass(value = java.lang.Runtime.class, onlyWith = UseCardRememberedSetHeap.class)
+@TargetClass(java.lang.Runtime.class)
 @SuppressWarnings({"static-method"})
 final class Target_java_lang_Runtime {
 
