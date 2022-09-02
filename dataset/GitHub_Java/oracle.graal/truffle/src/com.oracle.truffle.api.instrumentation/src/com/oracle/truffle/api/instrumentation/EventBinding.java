@@ -74,7 +74,7 @@ public class EventBinding<T> {
     private final T element;
 
     /* language bindings needs special treatment. */
-    volatile boolean disposed;
+    private volatile boolean disposed;
 
     EventBinding(AbstractInstrumenter instrumenter, T element) {
         this.instrumenter = instrumenter;
