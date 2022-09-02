@@ -330,13 +330,13 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
                     throw new ArrayIndexOutOfBoundsException(i);
                 }
 
-                Object arg = realArguments[numberOfExplicitArguments + i];
-
                 if (!(arguments[1] instanceof LLVMInteropType.Structured)) {
-                    return arg;
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    throw UnsupportedTypeException.create(new Object[]{arguments[1]}, "Type argument must be an instance of LLVMInteropType.Structured");
                 }
                 LLVMInteropType.Structured type = (LLVMInteropType.Structured) arguments[1];
 
+                Object arg = realArguments[numberOfExplicitArguments + i];
                 if (!LLVMPointer.isInstance(arg)) {
                     // TODO: Do some conversion if the type in the 2nd argument does not match the
                     // arg's types
@@ -1284,6 +1284,7 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
      * index for the input offset and uses the <code>gpIdx</code> and <code>fpIdx</code> arrays to
      * translate <code>reg_save_area</code> index to the real arguments index.
      */
+    @ExportLibrary(LLVMManagedReadLibrary.class)
     @ExportLibrary(NativeTypeLibrary.class)
     public static final class RegSaveArea extends ArgsArea {
 
@@ -1348,6 +1349,7 @@ public final class LLVMX86_64VaListStorage implements TruffleObject {
      * stored in the <code>overflow_area</code>. The <code>offsets</code> array serves to map
      * offsets to the indices of that array.
      */
+    @ExportLibrary(LLVMManagedReadLibrary.class)
     @ExportLibrary(NativeTypeLibrary.class)
     public static final class OverflowArgArea extends ArgsArea implements Cloneable {
         private final long[] offsets;

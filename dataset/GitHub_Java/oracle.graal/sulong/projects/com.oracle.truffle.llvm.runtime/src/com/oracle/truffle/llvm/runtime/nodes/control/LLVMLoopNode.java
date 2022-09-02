@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -41,6 +41,10 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.nodes.control.LLVMLoopNodeFactory.LLVMLoopNodeImplNodeGen;
 
+/**
+ * Implements a loop node, the block id of the successor block (where to continue after the loop) is
+ * stored in a frame slot.
+ */
 @GenerateWrapper
 public abstract class LLVMLoopNode extends LLVMControlFlowNode {
 
@@ -49,8 +53,6 @@ public abstract class LLVMLoopNode extends LLVMControlFlowNode {
     }
 
     public abstract void executeLoop(VirtualFrame frame);
-
-    public abstract int[] getSuccessors();
 
     @Override
     public WrapperNode createWrapper(ProbeNode probe) {
@@ -88,16 +90,4 @@ public abstract class LLVMLoopNode extends LLVMControlFlowNode {
             return null;
         }
     }
-
-    /**
-     * Override to allow access from generated wrapper.
-     */
-    @Override
-    protected abstract boolean isStatement();
-
-    /**
-     * Override to allow access from generated wrapper.
-     */
-    @Override
-    protected abstract void setStatement(boolean statementTag);
 }

@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -41,6 +43,7 @@ import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.virtual.nodes.MaterializedObjectState;
 import org.graalvm.compiler.virtual.nodes.VirtualObjectState;
+import org.graalvm.polyglot.Context;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -67,6 +70,9 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
         void check(ValueNode tag, ValueNode object, ValueNode primitive);
     }
 
+    /**
+     * Checks that a frame slot is consistent.
+     */
     private static final FSChecker regularFSChecker = new FSChecker() {
         @Override
         public void check(ValueNode tag, ValueNode object, ValueNode primitive) {
@@ -74,10 +80,10 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
                 return;
             }
             if (tag.isJavaConstant()) {
-                if (tag.asJavaConstant().asInt() == (int) FrameSlotKind.Illegal.tag) {
+                if (tag.asJavaConstant().asInt() == FrameSlotKind.Illegal.tag) {
                     assertTrue(object.isNullConstant());
                     assertTrue(primitive.isJavaConstant());
-                } else if (tag.asJavaConstant().asInt() == (int) FrameSlotKind.Object.tag) {
+                } else if (tag.asJavaConstant().asInt() == FrameSlotKind.Object.tag) {
                     assertTrue(primitive.isJavaConstant());
                 } else {
                     assertTrue(object.isNullConstant());
@@ -86,6 +92,9 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
         }
     };
 
+    /**
+     * Checks that if a frame slot can be primitive or object kinds, it is not cleared.
+     */
     private static final FSChecker noClearPhiChecker = new FSChecker() {
         @Override
         public void check(ValueNode tag, ValueNode object, ValueNode primitive) {
@@ -96,9 +105,9 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
                 return;
             }
             PrimitiveStamp stamp = (PrimitiveStamp) tag.stamp(NodeView.DEFAULT);
-            if (!stamp.join(StampFactory.forInteger(stamp.getBits(), (int) FrameSlotKind.Object.tag, (int) FrameSlotKind.Object.tag)).isEmpty()) {
+            if (!stamp.join(StampFactory.forInteger(stamp.getBits(), FrameSlotKind.Object.tag, FrameSlotKind.Object.tag)).isEmpty()) {
                 assertFalse(object.isNullConstant());
-                assertFalse(primitive.asJavaConstant() == null || primitive.asJavaConstant().asInt() != 0);
+                assertFalse(primitive.asJavaConstant() != null && primitive.asJavaConstant().asInt() == 0);
             }
         }
     };
@@ -107,6 +116,10 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
     static void boundary() {
     }
 
+    /**
+     * Iterates all frames in the graph, and check that each slot is consistent according to the
+     * {@code fsChecker}.
+     */
     private static Consumer<StructuredGraph> graphFSChecker(FSChecker fsChecker) {
         return new Consumer<StructuredGraph>() {
             int tagArrayIndex = -1;
@@ -145,6 +158,9 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
                 }
             }
 
+            /**
+             * Obtains indexes for the relevant fields in the FrameWithoutBoxing class
+             */
             private void initIndexes(ResolvedJavaType type) {
                 if (tagArrayIndex == -1) {
                     ResolvedJavaField[] instanceFields = type.getInstanceFields(true);
@@ -168,6 +184,9 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
         };
     }
 
+    /**
+     * clears a slot, then reads it. Fails with IllegalStateException.
+     */
     private static RootNode clearedAccessRoot() {
         FrameDescriptor fd = new FrameDescriptor();
         FrameSlot slot = fd.addFrameSlot("test");
@@ -183,32 +202,12 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
     @Test
     public void clearAccess() {
         doTest(ClearFrameSlotTest::clearedAccessRoot,
-                        voidChecker, emptyArgs, false, true);
+                        voidChecker, emptyArgs, false, true, false);
     }
 
-    private static RootNode unbalancedClearRoot() {
-        FrameDescriptor fd = new FrameDescriptor();
-        FrameSlot slot = fd.addFrameSlot("test");
-        return new RootNode(null, fd) {
-            @Override
-            public Object execute(VirtualFrame frame) {
-                Object[] args = frame.getArguments();
-                if ((boolean) args[0]) {
-                    frame.clear(slot);
-                }
-                // Expected CompilationError
-                boundary();
-                return null;
-            }
-        };
-    }
-
-    @Test
-    public void unbalancedClear() {
-        doTest(ClearFrameSlotTest::unbalancedClearRoot,
-                        voidChecker, trueArg, true, false);
-    }
-
+    /**
+     * Writes an object over a previous primitive slot. Ensures that the primitive slot is zero-ed.
+     */
     private static RootNode setClearsPrimitive() {
         FrameDescriptor fd = new FrameDescriptor();
         FrameSlot slot = fd.addFrameSlot("test");
@@ -226,9 +225,12 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
     @Test
     public void setClearsPrim() {
         doTest(ClearFrameSlotTest::setClearsPrimitive,
-                        graphFSChecker(regularFSChecker), emptyArgs, false, false);
+                        graphFSChecker(regularFSChecker), emptyArgs, false, false, true);
     }
 
+    /**
+     * Writes a primitive over a previous object slot. Ensures that the object slot is null-ed.
+     */
     private static RootNode setClearsObject() {
         FrameDescriptor fd = new FrameDescriptor();
         FrameSlot slot = fd.addFrameSlot("test");
@@ -246,9 +248,12 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
     @Test
     public void setClearsObj() {
         doTest(ClearFrameSlotTest::setClearsObject,
-                        graphFSChecker(regularFSChecker), emptyArgs, false, false);
+                        graphFSChecker(regularFSChecker), emptyArgs, false, false, true);
     }
 
+    /**
+     * A slot can be either object or primitive. Verifies that nothing is cleared.
+     */
     private static RootNode setNotClearPhi() {
         FrameDescriptor fd = new FrameDescriptor();
         FrameSlot slot = fd.addFrameSlot("test");
@@ -269,11 +274,14 @@ public class ClearFrameSlotTest extends PartialEvaluationTest {
 
     @Test
     public void setNotClear() {
-        doTest(ClearFrameSlotTest::setClearsObject,
-                        graphFSChecker(noClearPhiChecker), trueArg, false, false);
+        doTest(ClearFrameSlotTest::setNotClearPhi,
+                        graphFSChecker(noClearPhiChecker), trueArg, false, false, true);
     }
 
-    private void doTest(Supplier<RootNode> rootProvider, Consumer<StructuredGraph> graphChecker, Object[] args, boolean peFails, boolean executionFails) {
+    private void doTest(Supplier<RootNode> rootProvider, Consumer<StructuredGraph> graphChecker, Object[] args, boolean peFails, boolean executionFails, boolean forceClearPhase) {
+        if (forceClearPhase) {
+            setupContext(Context.newBuilder().option("engine.ForceFrameLivenessAnalysis", "true"));
+        }
         RootNode rootNode = rootProvider.get();
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         StructuredGraph graph = null;

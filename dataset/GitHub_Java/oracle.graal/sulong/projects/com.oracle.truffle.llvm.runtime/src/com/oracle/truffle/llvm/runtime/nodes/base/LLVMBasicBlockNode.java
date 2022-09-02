@@ -34,6 +34,7 @@ import org.graalvm.options.OptionValues;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.GenerateWrapper;
@@ -43,6 +44,8 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMControlFlowNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
+import com.oracle.truffle.llvm.runtime.nodes.base.LLVMBasicBlockNodeFactory.InitializedBlockNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.base.LLVMBasicBlockNodeFactory.LazyBlockNodeGen;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 /**
@@ -59,9 +62,9 @@ public abstract class LLVMBasicBlockNode extends LLVMStatementNode {
 
     public static LLVMBasicBlockNode createBasicBlockNode(OptionValues options, LLVMStatementNode[] statements, LLVMControlFlowNode termInstruction, int blockId, String blockName) {
         if (options.get(SulongEngineOption.LAZY_PARSING)) {
-            return new LazyBlockNode(statements, termInstruction, blockId, blockName);
+            return LazyBlockNodeGen.create(statements, termInstruction, blockId, blockName);
         } else {
-            return new InitializedBlockNode(statements, termInstruction, blockId, blockName);
+            return InitializedBlockNodeGen.create(statements, termInstruction, blockId, blockName);
         }
     }
 
@@ -91,10 +94,7 @@ public abstract class LLVMBasicBlockNode extends LLVMStatementNode {
         this.nullableAfter = nullableAfter;
     }
 
-    /**
-     * Don't return the new block here, since that will not include instrumentation wrappers.
-     */
-    public abstract void initialize();
+    public abstract LLVMBasicBlockNode initialize();
 
     public abstract LLVMStatementNode[] getStatements();
 
@@ -119,42 +119,45 @@ public abstract class LLVMBasicBlockNode extends LLVMStatementNode {
      */
     public abstract double getBranchProbability(int successorIndex);
 
-    public abstract void enterSuccessor(int trueSuccessor);
+    public abstract void increaseBranchProbability(int successorIndex);
 
     @Override
     public String toString() {
         return getShortString("blockId", "nullableBefore", "nullableAfter");
     }
 
-    private static final class InitializedBlockNode extends LLVMBasicBlockNode {
+    abstract static class InitializedBlock extends LLVMBasicBlockNode {
 
         private final BranchProfile controlFlowExceptionProfile = BranchProfile.create();
+        private final BranchProfile blockEntered = BranchProfile.create();
 
         @CompilationFinal(dimensions = 1) private final long[] successorExecutionCount;
 
         @Children private final LLVMStatementNode[] statements;
         @Child public LLVMControlFlowNode termInstruction;
 
-        InitializedBlockNode(LLVMStatementNode[] statements, LLVMControlFlowNode termInstruction, int blockId, String blockName) {
+        InitializedBlock(LLVMStatementNode[] statements, LLVMControlFlowNode termInstruction, int blockId, String blockName) {
             super(blockId, blockName);
-            this.successorExecutionCount = termInstruction.getSuccessorCount() > 1 ? new long[termInstruction.getSuccessorCount()] : null;
+            this.successorExecutionCount = termInstruction.needsBranchProfiling() ? new long[termInstruction.getSuccessorCount()] : null;
             this.statements = statements;
             this.termInstruction = termInstruction;
         }
 
         @Override
-        public void initialize() {
+        public LLVMBasicBlockNode initialize() {
             // this block is already initialized
+            return this;
         }
 
         @Override
-        public LLVMStatementNode[] getStatements() {
+        public final LLVMStatementNode[] getStatements() {
             return statements;
         }
 
-        @Override
+        @Specialization
         @ExplodeLoop
-        public void execute(VirtualFrame frame) {
+        public void doBlock(VirtualFrame frame) {
+            blockEntered.enter();
             for (int i = 0; i < statements.length; i++) {
                 LLVMStatementNode statement = statements[i];
                 try {
@@ -174,10 +177,7 @@ public abstract class LLVMBasicBlockNode extends LLVMStatementNode {
         @Override
         @ExplodeLoop
         public double getBranchProbability(int successorIndex) {
-            if (successorExecutionCount == null) {
-                // only one successor
-                return 1;
-            }
+            assert termInstruction.needsBranchProfiling();
             double successorBranchProbability;
 
             /*
@@ -207,26 +207,27 @@ public abstract class LLVMBasicBlockNode extends LLVMStatementNode {
         }
 
         @Override
-        public void enterSuccessor(int successorIndex) {
-            if (CompilerDirectives.inCompiledCode() && successorExecutionCount != null) {
-                if (successorExecutionCount[successorIndex] == 0) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                }
+        public void increaseBranchProbability(int successorIndex) {
+            CompilerAsserts.neverPartOfCompilation();
+            if (termInstruction.needsBranchProfiling()) {
+                incrementCountAtIndex(successorIndex);
             }
-            if (CompilerDirectives.inInterpreter() && successorExecutionCount != null) {
-                successorExecutionCount[successorIndex]++;
-            }
+        }
+
+        private void incrementCountAtIndex(int successorIndex) {
+            assert termInstruction.needsBranchProfiling();
+            successorExecutionCount[successorIndex]++;
         }
     }
 
-    private static final class LazyBlockNode extends LLVMBasicBlockNode {
+    abstract static class LazyBlock extends LLVMBasicBlockNode {
 
         // explicitly not an @Child to prevent Truffle from inlining the node and thereby causing an
         // unnecessarily large AST
         @CompilationFinal(dimensions = 1) private final LLVMStatementNode[] statements;
         private final LLVMControlFlowNode termInstruction;
 
-        LazyBlockNode(LLVMStatementNode[] statements, LLVMControlFlowNode termInstruction, int blockId, String blockName) {
+        LazyBlock(LLVMStatementNode[] statements, LLVMControlFlowNode termInstruction, int blockId, String blockName) {
             super(blockId, blockName);
             this.statements = statements;
             this.termInstruction = termInstruction;
@@ -239,23 +240,24 @@ public abstract class LLVMBasicBlockNode extends LLVMStatementNode {
         }
 
         @Override
-        public void initialize() {
+        public LLVMBasicBlockNode initialize() {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            LLVMBasicBlockNode materializedBlock = new InitializedBlockNode(statements, termInstruction, getBlockId(), getBlockName());
+            final LLVMBasicBlockNode materializedBlock = InitializedBlockNodeGen.create(statements, termInstruction, getBlockId(), getBlockName());
             materializedBlock.setNullableFrameSlots(nullableBefore, nullableAfter);
             materializedBlock.setSourceLocation(this.getSourceLocation());
             materializedBlock.setHasStatementTag(this.hasStatementTag());
             replace(materializedBlock, "Lazily Inserting LLVM Basic Block");
             notifyInserted(materializedBlock);
+            return materializedBlock;
         }
 
         @Override
-        public LLVMStatementNode[] getStatements() {
+        public final LLVMStatementNode[] getStatements() {
             return statements;
         }
 
-        @Override
-        public void execute(VirtualFrame frame) {
+        @Specialization
+        public void doFail() {
             CompilerDirectives.transferToInterpreter();
             throw new IllegalStateException("Lazy block should have been materialized");
         }
@@ -267,14 +269,11 @@ public abstract class LLVMBasicBlockNode extends LLVMStatementNode {
 
         @Override
         public double getBranchProbability(int successorIndex) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException("Lazy block should have been materialized");
+            return 0;
         }
 
         @Override
-        public void enterSuccessor(int successorIndex) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException("Lazy block should have been materialized");
+        public void increaseBranchProbability(int successorIndex) {
         }
 
         @Override
