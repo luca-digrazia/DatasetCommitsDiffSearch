@@ -42,7 +42,6 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
@@ -738,16 +737,12 @@ public class NativeImage {
                 Path nativeImageMetaInfBase = classpathEntry.resolve(Paths.get(nativeImagePropertiesMetaInf));
                 processNativeImageProperties(nativeImageMetaInfBase);
             } else {
-                List<Path> jarFileMatches = Collections.emptyList();
+                List<Path> jarFileMatches;
                 if (classpathEntry.endsWith(ImageClassLoader.cpWildcardSubstitute)) {
-                    try {
-                        jarFileMatches = Files.list(classpathEntry.getParent())
-                                        .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".jar"))
-                                        .collect(Collectors.toList());
-                    } catch (NoSuchFileException e) {
-                        /* Fallthrough */
-                    }
-                } else if (Files.isReadable(classpathEntry)) {
+                    jarFileMatches = Files.list(classpathEntry.getParent())
+                                    .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".jar"))
+                                    .collect(Collectors.toList());
+                } else {
                     jarFileMatches = Collections.singletonList(classpathEntry);
                 }
 

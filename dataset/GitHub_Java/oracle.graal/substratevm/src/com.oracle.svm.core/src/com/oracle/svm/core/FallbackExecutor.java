@@ -37,7 +37,6 @@ import org.graalvm.compiler.options.Option;
 import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.util.VMError;
 
 /**
  * This class is used to generate fallback images in case we are unable to build standalone images.
@@ -71,11 +70,7 @@ public class FallbackExecutor {
                 command.add(p);
             }
         }
-        Path fallbackImageDir = Paths.get(ProcessProperties.getExecutableName()).getParent();
-        if (fallbackImageDir == null) {
-            VMError.shouldNotReachHere();
-        }
-        String pathPrefix = fallbackImageDir.toAbsolutePath().normalize().toString();
+        String pathPrefix = Paths.get(ProcessProperties.getExecutableName()).getParent().toAbsolutePath().normalize().toString();
         String relativeClasspath = Options.FallbackExecutorClasspath.getValue();
         String[] split = SubstrateUtil.split(relativeClasspath, File.pathSeparator);
         for (int i = 0; i < split.length; i++) {
