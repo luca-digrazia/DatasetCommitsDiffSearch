@@ -994,11 +994,11 @@ public class ContextPreInitializationTest {
             ContextPreInitializationTestFirstLanguage.onPreInitAction = new Consumer<TruffleLanguage.Env>() {
                 @Override
                 public void accept(TruffleLanguage.Env env) {
-                    TruffleFile f = env.getPublicTruffleFile(buildFile.toString());
+                    TruffleFile f = env.getTruffleFile(buildFile.toString());
                     files.add(f);
-                    f = env.getPublicTruffleFile(noLangHomeFile.toString());
+                    f = env.getTruffleFile(noLangHomeFile.toString());
                     files.add(f);
-                    f = env.getPublicTruffleFile("relative_file");
+                    f = env.getTruffleFile("relative_file");
                     files.add(f);
                 }
             };
