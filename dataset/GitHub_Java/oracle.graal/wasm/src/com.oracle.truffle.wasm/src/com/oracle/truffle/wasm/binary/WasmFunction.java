@@ -84,7 +84,7 @@ public class WasmFunction implements TruffleObject {
 
     @ExportMessage
     Object execute(Object[] arguments) {
-        return getCallTarget().call(arguments);
+        return callTarget.call(arguments);
     }
 
     public WasmCodeEntry codeEntry() {

@@ -194,8 +194,6 @@ import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.wasm.binary.constants.ExportIdentifier;
 import com.oracle.truffle.wasm.collection.ByteArrayList;
 
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
-
 /** Simple recursive-descend parser for the binary WebAssembly format.
  */
 public class BinaryReader extends BinaryStreamReader {
@@ -340,7 +338,7 @@ public class BinaryReader extends BinaryStreamReader {
 
     private void readCodeEntry(int funcIndex) {
         /* Read code entry (function) locals. */
-        WasmCodeEntry codeEntry = new WasmCodeEntry(funcIndex, data);
+        WasmCodeEntry codeEntry = new WasmCodeEntry(data);
         wasmModule.symbolTable().function(funcIndex).setCodeEntry(codeEntry);
 
         /*
@@ -517,7 +515,8 @@ public class BinaryReader extends BinaryStreamReader {
                 case GLOBAL_GET: {
                     int globalIndex = readLocalIndex(bytesConsumed);
                     state.useByteConstant(bytesConsumed[0]);
-                    Assert.assertLess(globalIndex, wasmModule.globals().size(), "Invalid global index for global.get");
+                    // Assert globalIndex exists.
+                    Assert.assertLess(globalIndex, wasmModule.symbolTable().numGlobals(), "Invalid global index for global.get");
                     state.push();
                     break;
                 }
@@ -525,7 +524,7 @@ public class BinaryReader extends BinaryStreamReader {
                     int globalIndex = readLocalIndex(bytesConsumed);
                     state.useByteConstant(bytesConsumed[0]);
                     // Assert localIndex exists.
-                    Assert.assertLess(globalIndex, wasmModule.globals().size(), "Invalid global index for global.set");
+                    Assert.assertLess(globalIndex, wasmModule.symbolTable().numGlobals(), "Invalid global index for global.set");
                     // Assert there is a value on the top of the stack.
                     Assert.assertLarger(state.stackSize(), 0, "global.set requires at least one element in the stack");
                     state.pop();
@@ -837,37 +836,14 @@ public class BinaryReader extends BinaryStreamReader {
 
     private void readGlobalSection() {
         int numGlobals = readVectorLength();
-        wasmModule.globals().initialize(numGlobals);
         for (int i = 0; i != numGlobals; i++) {
             byte type = readValueType();
-            byte mut = read1();  // 0x00 means const, 0x01 means var
-            long value = 0;
-            byte instruction;
+            byte mut = read1();
+            // TODO: Store the global to the symbol table (or elsewhere).
+            byte b;
             do {
-                instruction = read1();
-                switch (instruction) {
-                    case I32_CONST:
-                        value = readSignedInt32();
-                        break;
-                    case I64_CONST:
-                        value = readSignedInt64();
-                        break;
-                    case F32_CONST:
-                        value = readFloatAsInt32();
-                        break;
-                    case F64_CONST:
-                        value = readFloatAsInt64();
-                        break;
-                    case GLOBAL_GET:
-                        throw new NotImplementedException();
-                    case END:
-                        break;
-                    default:
-                        Assert.fail(String.format("Invalid instruction for global initialization: 0x%02X", instruction));
-                        break;
-                }
-            } while (instruction != END);
-            wasmModule.globals().register(i, value, type, mut != 0x00);
+                b = read1();
+            } while (b != END);
         }
     }
 

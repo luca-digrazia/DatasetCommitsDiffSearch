@@ -58,11 +58,6 @@ public class UnsafeWasmMemory implements WasmMemory {
     }
 
     @Override
-    public long startAddress() {
-        return start;
-    }
-
-    @Override
     public int load_i32(long address) {
         return unsafe.getInt(start + address);
     }
