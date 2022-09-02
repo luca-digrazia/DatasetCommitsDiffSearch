@@ -673,7 +673,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    @TruffleBoundary
     public void monitorWait(Object monitor, long timeout) {
         Object guestThread = context.asGuestThread(Thread.currentThread());
         // a call to wait marks the monitor as contended
@@ -744,7 +743,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    @TruffleBoundary
     public void monitorWaited(Object monitor, boolean timedOut) {
         Object currentThread = context.asGuestThread(Thread.currentThread());
         // remove contended monitor from the thread
@@ -772,7 +770,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    @TruffleBoundary
     public void onContendedMonitorEnter(Object monitor) {
         Object guestThread = context.asGuestThread(Thread.currentThread());
         currentContendedMonitor.put(guestThread, monitor);
@@ -802,7 +799,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     @Override
-    @TruffleBoundary
     public void onContendedMonitorEntered(Object monitor) {
         Object guestThread = context.asGuestThread(Thread.currentThread());
         currentContendedMonitor.remove(guestThread);

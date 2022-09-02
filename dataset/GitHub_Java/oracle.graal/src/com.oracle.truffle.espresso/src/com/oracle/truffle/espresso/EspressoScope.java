@@ -52,51 +52,34 @@ public class EspressoScope {
         int size = slots.size();
 
         Map<String, FrameSlotInfo> slotsMap;
-        Map<String, FrameSlotInfo> identifiersMap;
         if (slots.isEmpty()) {
             slotsMap = Collections.emptyMap();
-            identifiersMap = Collections.emptyMap();
         } else if (size == 1) {
             FrameSlot slot = slots.get(0);
             String identifier = slot.getIdentifier().toString();
-            FrameSlotInfo frameSlotInfo = new FrameSlotInfo(slot);
-            slotsMap = Collections.singletonMap(Objects.toString(identifier), frameSlotInfo);
-            Local local = getLocal(liveLocals, slot);
-            identifiersMap = Collections.singletonMap(local.getNameAsString(), frameSlotInfo);
+            slotsMap = Collections.singletonMap(Objects.toString(identifier), new FrameSlotInfo(slot));
         } else {
             slotsMap = new LinkedHashMap<>(size);
-            identifiersMap = new LinkedHashMap<>(size);
             for (FrameSlot slot : slots) {
-                String slotNumber = slot.getIdentifier().toString();
+                String identifier = slot.getIdentifier().toString();
                 Local local = getLocal(liveLocals, slot);
                 if (local != null) {
-                    String localName = local.getNameAsString();
                     String type = local.getTypeAsString();
                     if ("D".equals(type)) {
-                        FrameSlotInfo frameSlotInfo = new FrameSlotInfo(slot, FrameSlotInfo.Kind.DOUBLE);
-                        slotsMap.put(slotNumber, frameSlotInfo);
-                        identifiersMap.put(localName, frameSlotInfo);
+                        slotsMap.put(identifier, new FrameSlotInfo(slot, FrameSlotInfo.Kind.DOUBLE));
                     } else if ("F".equals(type)) {
-                        FrameSlotInfo frameSlotInfo = new FrameSlotInfo(slot, FrameSlotInfo.Kind.FLOAT);
-                        slotsMap.put(slotNumber, frameSlotInfo);
-                        identifiersMap.put(localName, frameSlotInfo);
+                        slotsMap.put(identifier, new FrameSlotInfo(slot, FrameSlotInfo.Kind.FLOAT));
                     } else if ("J".equals(type)) {
-                        FrameSlotInfo frameSlotInfo = new FrameSlotInfo(slot, FrameSlotInfo.Kind.LONG);
-                        slotsMap.put(slotNumber, frameSlotInfo);
-                        identifiersMap.put(localName, frameSlotInfo);
+                        slotsMap.put(identifier, new FrameSlotInfo(slot, FrameSlotInfo.Kind.LONG));
                     } else if ("I".equals(type)) {
-                        FrameSlotInfo frameSlotInfo = new FrameSlotInfo(slot, FrameSlotInfo.Kind.INT);
-                        slotsMap.put(slotNumber, frameSlotInfo);
-                        identifiersMap.put(localName, frameSlotInfo);
+                        slotsMap.put(identifier, new FrameSlotInfo(slot, FrameSlotInfo.Kind.INT));
                     } else {
-                        FrameSlotInfo frameSlotInfo = new FrameSlotInfo(slot);
-                        slotsMap.put(slotNumber, frameSlotInfo);
-                        identifiersMap.put(localName, frameSlotInfo);
+                        slotsMap.put(identifier, new FrameSlotInfo(slot));
                     }
                 }
             }
         }
-        return new VariablesMapObject(slotsMap, identifiersMap, frame);
+        return new VariablesMapObject(slotsMap, frame);
     }
 
     private static Local getLocal(Local[] liveLocals, FrameSlot slot) {
@@ -113,26 +96,21 @@ public class EspressoScope {
         return null;
     }
 
-    // We map both variable names and their slot number to members. However we only expose the
-    // variable names through the Interop API. Clients which are bytecode based, e.g. JDWP that use
-    // slot numbers as identifiers must operate directly by using read/write member methods.
     @ExportLibrary(InteropLibrary.class)
     static final class VariablesMapObject implements TruffleObject {
 
         final Map<String, FrameSlotInfo> slots;
-        final Map<String, FrameSlotInfo> identifiers;
         final Frame frame;
 
-        private VariablesMapObject(Map<String, FrameSlotInfo> slots, Map<String, FrameSlotInfo> identifiers, Frame frame) {
+        private VariablesMapObject(Map<String, FrameSlotInfo> slots, Frame frame) {
             this.slots = slots;
-            this.identifiers = identifiers;
             this.frame = frame;
         }
 
         @SuppressWarnings("static-method")
         @ExportMessage
         boolean hasMembers() {
-            return identifiers != null && !identifiers.isEmpty();
+            return true;
         }
 
         @ExportMessage
@@ -142,10 +120,6 @@ public class EspressoScope {
                 return EspressoScope.NullValue.INSTANCE;
             }
             FrameSlotInfo slotInfo = slots.get(member);
-            if (slotInfo == null) {
-                // also try identifiers map
-                slotInfo = identifiers.get(member);
-            }
             if (slotInfo == null || slotInfo.getSlot() == null) {
                 throw UnknownIdentifierException.create(member);
             } else if (slotInfo.getKind() == FrameSlotInfo.Kind.DOUBLE) {
@@ -162,19 +136,19 @@ public class EspressoScope {
         @ExportMessage
         @CompilerDirectives.TruffleBoundary
         Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
-            return new EspressoScope.VariableNamesObject(identifiers.keySet());
+            return new EspressoScope.VariableNamesObject(slots.keySet());
         }
 
         @ExportMessage
         @CompilerDirectives.TruffleBoundary
         boolean isMemberReadable(String member) {
-            return identifiers.containsKey(member);
+            return slots.containsKey(member);
         }
 
         @ExportMessage
         @CompilerDirectives.TruffleBoundary
         boolean isMemberModifiable(String member) {
-            return identifiers.containsKey(member) && frame != null;
+            return slots.containsKey(member) && frame != null;
         }
 
         @ExportMessage
@@ -184,10 +158,6 @@ public class EspressoScope {
                 throw UnsupportedMessageException.create();
             }
             FrameSlotInfo slotInfo = slots.get(member);
-            if (slotInfo == null) {
-                // try identifiers map also
-                slotInfo = identifiers.get(member);
-            }
             if (slotInfo == null || slotInfo.getSlot() == null) {
                 throw UnknownIdentifierException.create(member);
             } else if (slotInfo.getKind() == FrameSlotInfo.Kind.DOUBLE) {

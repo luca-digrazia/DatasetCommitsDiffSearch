@@ -30,8 +30,7 @@ import java.util.List;
 
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.Debugger;
-import com.oracle.truffle.api.frame.Frame;
-import com.oracle.truffle.api.frame.FrameInstance;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
@@ -56,6 +55,7 @@ import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
 import com.oracle.truffle.espresso.jdwp.api.MonitorStackInfo;
 import com.oracle.truffle.espresso.jdwp.impl.TypeTag;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
@@ -542,10 +542,10 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public boolean moreMethodCallsOnLine(RootNode callerRoot, Frame frame) {
+    public boolean moreMethodCallsOnLine(RootNode callerRoot, MaterializedFrame materializedFrame) {
         if (callerRoot instanceof EspressoRootNode) {
             EspressoRootNode espressoRootNode = (EspressoRootNode) callerRoot;
-            int bci = (int) readBCIFromFrame(callerRoot, frame);
+            int bci = (int) readBCIFromFrame(callerRoot, materializedFrame);
             if (bci != -1) {
                 Method method = espressoRootNode.getMethod();
                 BytecodeStream bs = new BytecodeStream(method.getOriginalCode());
@@ -577,11 +577,11 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public long readBCIFromFrame(RootNode root, Frame frame) {
-        if (root instanceof EspressoRootNode && frame != null) {
+    public long readBCIFromFrame(RootNode root, MaterializedFrame materializedFrame) {
+        if (root instanceof EspressoRootNode && materializedFrame != null) {
             EspressoRootNode rootNode = (EspressoRootNode) root;
             if (rootNode.isBytecodeNode()) {
-                return rootNode.readBCI(frame);
+                return rootNode.readBCI(materializedFrame);
             }
         }
         return -1;
@@ -592,7 +592,7 @@ public final class JDWPContextImpl implements JDWPContext {
         Object currentThread = asGuestThread(Thread.currentThread());
         KlassRef klass = context.getMeta().java_lang_Object;
         MethodRef method = context.getMeta().java_lang_Object_wait;
-        return new CallFrame(ids.getIdAsLong(currentThread), TypeTag.CLASS, ids.getIdAsLong(klass), ids.getIdAsLong(method), 0, null, null, null, null);
+        return new CallFrame(ids.getIdAsLong(currentThread), TypeTag.CLASS, ids.getIdAsLong(klass), ids.getIdAsLong(method), 0, null, null, null);
     }
 
     @Override
@@ -609,15 +609,15 @@ public final class JDWPContextImpl implements JDWPContext {
         List<MonitorStackInfo> result = new ArrayList<>();
         int stackDepth = 0;
         for (CallFrame callFrame : callFrames) {
-            RootNode rootNode = callFrame.getRootNode();
-            if (rootNode instanceof EspressoRootNode) {
-                EspressoRootNode espressoRootNode = (EspressoRootNode) rootNode;
-                if (espressoRootNode.usesMonitors()) {
-                    StaticObject[] monitors = espressoRootNode.getMonitorsOnFrame(callFrame.getFrame(FrameInstance.FrameAccess.READ_ONLY));
-                    for (StaticObject monitor : monitors) {
-                        if (monitor != null) {
-                            result.add(new MonitorStackInfo(monitor, stackDepth));
-                        }
+            BytecodeNode bytecodeNode = getBytecodeNode(callFrame.getRootNode());
+            if (bytecodeNode != null) {
+                if (!bytecodeNode.usesMonitors()) {
+                    continue;
+                }
+                BytecodeNode.MonitorStack monitorStack = bytecodeNode.getMonitorStack(callFrame.getMaterializedFrame());
+                for (StaticObject monitor : monitorStack.getMonitors()) {
+                    if (monitor != null) {
+                        result.add(new MonitorStackInfo(monitor, callFrame.getMaterializedFrame(), stackDepth));
                     }
                 }
             }
@@ -640,6 +640,16 @@ public final class JDWPContextImpl implements JDWPContext {
         }
         eventListener.forceEarlyReturn(returnValue);
         return true;
+    }
+
+    public static BytecodeNode getBytecodeNode(RootNode rootNode) {
+        if (rootNode instanceof EspressoRootNode) {
+            EspressoRootNode espressoRootNode = (EspressoRootNode) rootNode;
+            if (espressoRootNode.isBytecodeNode()) {
+                return espressoRootNode.getBytecodeNode();
+            }
+        }
+        return null;
     }
 
     @Override
