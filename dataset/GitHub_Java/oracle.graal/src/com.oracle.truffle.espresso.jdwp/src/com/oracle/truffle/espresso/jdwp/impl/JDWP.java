@@ -32,7 +32,6 @@ import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Callable;
 
 import static com.oracle.truffle.espresso.jdwp.impl.TagConstants.BOOLEAN;
 
@@ -91,22 +90,6 @@ class JDWP {
                     reply.writeLong(context.getIds().getIdAsLong(t));
                 }
                 return new JDWPResult(reply);
-            }
-        }
-
-        static class DISPOSE {
-            public static final int ID = 6;
-
-            static JDWPResult createReply(Packet packet, JDWPDebuggerController controller) {
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                return new JDWPResult(reply, new Callable() {
-                    @Override
-                    public Object call() throws Exception {
-                        controller.disposeDebugger();
-                        return null;
-                    }
-                });
             }
         }
 
@@ -1125,12 +1108,7 @@ class JDWP {
                     return new JDWPResult(reply);
                 }
 
-                if (controller.getSuspendedInfo() != null) {
-                    reply.writeInt(controller.getSuspendedInfo().getStackFrames().length);
-                } else {
-                    reply.errorCode(JDWPErrorCodes.THREAD_NOT_SUSPENDED);
-                    return new JDWPResult(reply);
-                }
+                reply.writeInt(controller.getSuspendedInfo().getStackFrames().length);
                 return new JDWPResult(reply);
             }
         }

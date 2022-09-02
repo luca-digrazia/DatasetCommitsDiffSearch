@@ -17,7 +17,6 @@ import com.oracle.truffle.espresso.impl.NullKlass;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
@@ -110,23 +109,15 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
-    public Thread getGuest2HostThread(Object thread) {
-        return Target_java_lang_Thread.getHostFromGuestThread((StaticObject) thread);
-    }
-
-    @Override
     public Object[] getAllGuestThreads() {
-        StaticObject[] activeThreads = context.getActiveThreads();
-        ArrayList<StaticObject> result = new ArrayList<>(activeThreads.length);
-        for (StaticObject activeThread : activeThreads) {
-            // don't expose the finalizer and reference handler thread
-            if ("Ljava/lang/ref/Reference$ReferenceHandler;".equals(activeThread.getKlass().getType().toString()) ||
-                "Ljava/lang/ref/Finalizer$FinalizerThread;".equals(activeThread.getKlass().getType().toString())) {
-                continue;
-            }
-            result.add(activeThread);
+        Iterable<StaticObject> activeThreads = context.getActiveThreads();
+        ArrayList<Object> threads = new ArrayList<>();
+
+        Iterator<StaticObject> it = activeThreads.iterator();
+        while (it.hasNext()) {
+            threads.add(it.next());
         }
-        return result.toArray(new StaticObject[result.size()]);
+        return threads.toArray(new Object[threads.size()]);
     }
 
     @Override

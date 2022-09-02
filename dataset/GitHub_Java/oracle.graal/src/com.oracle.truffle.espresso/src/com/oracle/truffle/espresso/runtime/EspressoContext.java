@@ -25,21 +25,26 @@ package com.oracle.truffle.espresso.runtime;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.ref.ReferenceQueue;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
+import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import org.graalvm.polyglot.Engine;
 
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.TruffleFile;
+
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.source.Source;
@@ -58,9 +63,7 @@ import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.substitutions.EspressoReference;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
 
@@ -78,6 +81,7 @@ public final class EspressoContext {
     private final EspressoThreadManager threadManager;
 
     private final AtomicInteger klassIdProvider = new AtomicInteger();
+    private boolean mainThreadCreated;
 
     public int getNewId() {
         return klassIdProvider.getAndIncrement();
@@ -187,18 +191,27 @@ public final class EspressoContext {
 
     public void initializeContext() {
         assert !this.initialized;
+        new JDWPContextImpl(this).jdwpInit();
         spawnVM();
         this.initialized = true;
-        hostToGuestReferenceDrainThread.start();
+        VMInitializedListeners.getDefault().fire();
     }
 
-    private Thread hostToGuestReferenceDrainThread;
+    public Source findOrCreateSource(Method method) {
+        String sourceFile = method.getSourceFile();
+        if (sourceFile == null) {
+            return null;
+        } else {
+            TruffleFile file = env.getInternalTruffleFile(sourceFile);
+            Source source = Source.newBuilder("java", file).content(Source.CONTENT_NONE).build();
+            // sources are interned so no cache needed (hopefully)
+            return source;
+        }
+    }
 
     public Meta getMeta() {
         return meta;
     }
-
-    public final ReferenceQueue<StaticObject> REFERENCE_QUEUE = new ReferenceQueue<>();
 
     private void spawnVM() {
 
@@ -227,48 +240,8 @@ public final class EspressoContext {
 
         createMainThread();
 
+        // Finalizer is not public.
         initializeKnownClass(Type.java_lang_ref_Finalizer);
-
-        // Initialize ReferenceQueues
-        this.hostToGuestReferenceDrainThread = getEnv().createThread(new Runnable() {
-            @Override
-            public void run() {
-                final StaticObject lock = (StaticObject) meta.Reference_lock.get(meta.Reference.tryInitializeAndGetStatics());
-                while (!Thread.currentThread().isInterrupted()) {
-                    try {
-                        EspressoReference head;
-                        do {
-                            head = (EspressoReference) REFERENCE_QUEUE.remove();
-                            assert head != null;
-                        } while (StaticObject.notNull((StaticObject) meta.Reference_next.get(head.getGuestReference())));
-
-                        synchronized (lock) {
-                            assert Target_java_lang_Thread.holdsLock(lock) : "must hold Reference.lock at the guest level";
-                            casNextIfNullAndMaybeClear(head);
-
-                            EspressoReference prev = head, ref;
-                            while ((ref = (EspressoReference) REFERENCE_QUEUE.poll()) != null) {
-                                if (StaticObject.notNull((StaticObject) meta.Reference_next.get(ref.getGuestReference()))) {
-                                    continue;
-                                }
-                                meta.Reference_discovered.set(prev.getGuestReference(), ref.getGuestReference());
-                                casNextIfNullAndMaybeClear(ref);
-                                prev = ref;
-                            }
-
-                            meta.Reference_discovered.set(prev.getGuestReference(), prev.getGuestReference());
-                            StaticObject obj = meta.Reference_pending.getAndSetObject(meta.Reference.getStatics(), head.getGuestReference());
-                            meta.Reference_discovered.set(prev.getGuestReference(), obj);
-
-                            getVM().JVM_MonitorNotify(lock);
-                        }
-                    } catch (InterruptedException e) {
-                        // ignore
-                        return;
-                    }
-                }
-            }
-        });
 
         meta.System_initializeSystemClass.invokeDirect(null);
 
@@ -290,26 +263,10 @@ public final class EspressoContext {
         StaticObject outOfMemoryErrorInstance = meta.OutOfMemoryError.allocateInstance();
         meta.StackOverflowError.lookupDeclaredMethod(Name.INIT, Signature._void_String).invokeDirect(stackOverflowErrorInstance, meta.toGuestString("VM StackOverFlow"));
         meta.OutOfMemoryError.lookupDeclaredMethod(Name.INIT, Signature._void_String).invokeDirect(outOfMemoryErrorInstance, meta.toGuestString("VM OutOfMemory"));
-
-        stackOverflowErrorInstance.setHiddenField(meta.HIDDEN_FRAMES, new VM.StackTrace());
-        stackOverflowErrorInstance.setField(meta.Throwable_backtrace, stackOverflowErrorInstance);
-        outOfMemoryErrorInstance.setHiddenField(meta.HIDDEN_FRAMES, new VM.StackTrace());
-        outOfMemoryErrorInstance.setField(meta.Throwable_backtrace, outOfMemoryErrorInstance);
-
         this.stackOverflow = new EspressoException(stackOverflowErrorInstance);
         this.outOfMemory = new EspressoException(outOfMemoryErrorInstance);
 
         System.err.println("spawnVM: " + (System.currentTimeMillis() - ticks) + " ms");
-    }
-
-    private void casNextIfNullAndMaybeClear(EspressoReference wrapper) {
-        StaticObject ref = wrapper.getGuestReference();
-        // Cleaner references extends PhantomReference but are cleared.
-        // See HotSpot's ReferenceProcessor::process_discovered_references in referenceProcessor.cpp
-        if (InterpreterToVM.instanceOf(ref, ref.getKlass().getMeta().Cleaner)) {
-            wrapper.clear();
-        }
-        ref.compareAndSwapField(meta.Reference_next, StaticObject.NULL, ref);
     }
 
     /**
@@ -319,7 +276,7 @@ public final class EspressoContext {
     private void createMainThread() {
         StaticObject systemThreadGroup = meta.ThreadGroup.allocateInstance();
         meta.ThreadGroup.lookupDeclaredMethod(Name.INIT, Signature._void) // private ThreadGroup()
-                        .invokeDirect(systemThreadGroup);
+                .invokeDirect(systemThreadGroup);
         StaticObject mainThread = meta.Thread.allocateInstance();
         // Allow guest Thread.currentThread() to work.
         mainThread.setIntField(meta.Thread_priority, Thread.NORM_PRIORITY);
@@ -330,17 +287,20 @@ public final class EspressoContext {
 
         // Guest Thread.currentThread() must work as this point.
         meta.ThreadGroup // public ThreadGroup(ThreadGroup parent, String name)
-                        .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_String) //
-                        .invokeDirect(mainThreadGroup,
-                                        /* parent */ systemThreadGroup,
-                                        /* name */ meta.toGuestString("main"));
+                .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_String) //
+                .invokeDirect(mainThreadGroup,
+                        /* parent */ systemThreadGroup,
+                        /* name */ meta.toGuestString("main"));
 
         meta.Thread // public Thread(ThreadGroup group, String name)
-                        .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_String) //
-                        .invokeDirect(mainThread,
-                                        /* group */ mainThreadGroup,
-                                        /* name */ meta.toGuestString("main"));
+                .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_String) //
+                .invokeDirect(mainThread,
+                        /* group */ mainThreadGroup,
+                        /* name */ meta.toGuestString("main"));
         mainThread.setIntField(meta.Thread_threadStatus, Target_java_lang_Thread.State.RUNNABLE.value);
+
+        VMEventListeners.getDefault().threadStarted(mainThread);
+        mainThreadCreated = true;
     }
 
     public void interruptActiveThreads() {
@@ -367,13 +327,6 @@ public final class EspressoContext {
                     System.err.println("Interrupted while stopping thread in closing context.");
                 }
             }
-        }
-
-        hostToGuestReferenceDrainThread.interrupt();
-        try {
-            hostToGuestReferenceDrainThread.join();
-        } catch (InterruptedException e) {
-            // ignore
         }
         initiatingThread.interrupt();
     }
@@ -459,7 +412,6 @@ public final class EspressoContext {
     public EspressoException getOutOfMemory() {
         return outOfMemory;
     }
-
     // Thread management
 
     public StaticObject getGuestThreadFromHost(Thread host) {
@@ -470,16 +422,16 @@ public final class EspressoContext {
         return threadManager.getGuestThreadFromHost(Thread.currentThread());
     }
 
+    public Iterable<StaticObject> getActiveThreads() {
+        return threadManager.activeThreads();
+    }
+
     public void registerThread(Thread host, StaticObject self) {
         threadManager.registerThread(host, self);
     }
 
     public void unregisterThread(StaticObject self) {
         threadManager.unregisterThread(self);
-    }
-
-    public StaticObject[] getActiveThreads() {
-        return threadManager.activeThreads();
     }
 
     public void invalidateNoThreadStop(String message) {
@@ -512,7 +464,32 @@ public final class EspressoContext {
     public final boolean InlineFieldAccessors;
 
     public final EspressoOptions.VerifyMode Verify;
-    public final EspressoOptions.JDWPOptions JDWPOptions;
+    public final JDWPOptions JDWPOptions;
+
+    public boolean isMainThreadCreated() {
+        return mainThreadCreated;
+    }
+
+    public Object getMainThread() {
+        return threadManager.getMainThread();
+    }
+
+    public boolean isValidThread(Object thread) {
+        Iterator<StaticObject> it = threadManager.activeThreads().iterator();
+
+        while (it.hasNext()) {
+            StaticObject staticObject = it.next();
+            if (staticObject == thread) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean isValidThreadGroup(Object threadGroup) {
+        // TODO(Gregersen) - validate if this is a valid threadgroup
+        return true;
+    }
 
     // endregion Options
 }
