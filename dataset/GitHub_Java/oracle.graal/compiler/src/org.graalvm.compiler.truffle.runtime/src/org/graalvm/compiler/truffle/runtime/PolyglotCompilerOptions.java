@@ -70,16 +70,9 @@ public final class PolyglotCompilerOptions {
 
     // @formatter:off
 
-    // Compilation
+    // USER OPTIONS
 
-    @Option(help = "Enable or disable Truffle compilation.", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Boolean> Compilation = new OptionKey<>(true);
-
-    @Option(help = "Restrict compilation to ','-separated list of includes (or excludes prefixed with '~').", category = OptionCategory.INTERNAL)
-    public static final OptionKey<String> CompileOnly = new OptionKey<>(null, OptionType.defaultType(String.class));
-
-    @Option(help = "Compile immediately to test Truffle compilation", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Boolean> CompileImmediately = new OptionKey<>(false);
+    // EXPERT OPTIONS
 
     @Option(help = "Minimum number of invocations or loop iterations needed to compile a guest language root.",
                     category = OptionCategory.EXPERT)
@@ -108,8 +101,6 @@ public final class PolyglotCompilerOptions {
                     category = OptionCategory.EXPERT)
     public static final OptionKey<EngineModeEnum> Mode = new OptionKey<>(EngineModeEnum.DEFAULT, ENGINE_MODE_TYPE);
 
-    // Tracing
-
     @Option(help = "Print information for compilation results.", category = OptionCategory.EXPERT, stability = OptionStability.STABLE)
     public static final OptionKey<Boolean> TraceCompilation = new OptionKey<>(false);
 
@@ -122,8 +113,6 @@ public final class PolyglotCompilerOptions {
     @Option(help = "Print information for splitting decisions.", category = OptionCategory.EXPERT)
     public static final OptionKey<Boolean> TraceSplitting = new OptionKey<>(false);
 
-    // Inlining
-
     @Option(help = "Enable automatic inlining of guest language call targets.", category = OptionCategory.EXPERT)
     public static final OptionKey<Boolean> Inlining = new OptionKey<>(true);
 
@@ -132,8 +121,6 @@ public final class PolyglotCompilerOptions {
 
     @Option(help = "Maximum depth for recursive inlining.", category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> InliningRecursionDepth = new OptionKey<>(SharedTruffleRuntimeOptions.TruffleMaximumRecursiveInlining.getDefaultValue());
-
-    // Splitting
 
     @Option(help = "Enable automatic duplication of compilation profiles (splitting).",
                     category = OptionCategory.EXPERT)
@@ -166,14 +153,23 @@ public final class PolyglotCompilerOptions {
     @Option(help = "Should forced splits be allowed.", category = OptionCategory.EXPERT)
     public static final OptionKey<Boolean> SplittingAllowForcedSplits = new OptionKey<>(true);
 
-    // OSR
+    // INTERNAL OPTIONS
 
-    @Option(help = "Enable automatic on-stack-replacement of loops.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Boolean> OSR = new OptionKey<>(true);
+    @Option(help = "Enable or disable Truffle compilation.", category = OptionCategory.INTERNAL)
+    public static final OptionKey<Boolean> Compilation = new OptionKey<>(true);
+
+    @Option(help = "Restrict compilation to ','-separated list of includes (or excludes prefixed with '~').", category = OptionCategory.INTERNAL)
+    public static final OptionKey<String> CompileOnly = new OptionKey<>(null, OptionType.defaultType(String.class));
+
+    @Option(help = "Compile immediately to test Truffle compilation", category = OptionCategory.INTERNAL)
+    public static final OptionKey<Boolean> CompileImmediately = new OptionKey<>(false);
 
     /*
      * TODO planned options (GR-13444):
      *
+    @Option(help = "Enable automatic on-stack-replacement of loops.",
+                    category = OptionCategory.EXPERT)
+    public static final OptionKey<Boolean> OSR = new OptionKey<>(true);
 
     @Option(help = "Trace deoptimization of compilation units.",
                     category = OptionCategory.EXPERT)
@@ -188,9 +184,6 @@ public final class PolyglotCompilerOptions {
     }
 
     private static void initializePolyglotToGraalMapping() {
-        POLYGLOT_TO_TRUFFLE.put(Compilation, SharedTruffleRuntimeOptions.TruffleCompilation);
-        POLYGLOT_TO_TRUFFLE.put(CompileOnly, SharedTruffleRuntimeOptions.TruffleCompileOnly);
-        POLYGLOT_TO_TRUFFLE.put(CompileImmediately, SharedTruffleRuntimeOptions.TruffleCompileImmediately);
         POLYGLOT_TO_TRUFFLE.put(CompilationThreshold, SharedTruffleRuntimeOptions.TruffleCompilationThreshold);
         POLYGLOT_TO_TRUFFLE.put(MinInvokeThreshold, SharedTruffleRuntimeOptions.TruffleMinInvokeThreshold);
         POLYGLOT_TO_TRUFFLE.put(InvalidationReprofileCount, SharedTruffleRuntimeOptions.TruffleInvalidationReprofileCount);
@@ -220,7 +213,9 @@ public final class PolyglotCompilerOptions {
         POLYGLOT_TO_TRUFFLE.put(SplittingDumpDecisions, SharedTruffleRuntimeOptions.TruffleSplittingDumpDecisions);
         POLYGLOT_TO_TRUFFLE.put(SplittingAllowForcedSplits, SharedTruffleRuntimeOptions.TruffleSplittingAllowForcedSplits);
 
-        POLYGLOT_TO_TRUFFLE.put(OSR, SharedTruffleRuntimeOptions.TruffleOSR);
+        POLYGLOT_TO_TRUFFLE.put(Compilation, SharedTruffleRuntimeOptions.TruffleCompilation);
+        POLYGLOT_TO_TRUFFLE.put(CompileOnly, SharedTruffleRuntimeOptions.TruffleCompileOnly);
+        POLYGLOT_TO_TRUFFLE.put(CompileImmediately, SharedTruffleRuntimeOptions.TruffleCompileImmediately);
     }
 
     /**
