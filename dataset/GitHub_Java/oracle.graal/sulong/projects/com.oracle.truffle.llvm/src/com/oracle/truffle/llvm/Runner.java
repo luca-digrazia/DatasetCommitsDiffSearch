@@ -490,7 +490,7 @@ final class Runner {
         List<String> externals = SulongEngineOption.getPolyglotOptionExternalLibraries(context.getEnv());
         for (String external : externals) {
             // assume that the library is a native one until we parsed it and can say for sure
-            ExternalLibrary lib = context.addExternalLibrary(external, true, "<command line>");
+            ExternalLibrary lib = context.addExternalLibrary(external, true);
             if (lib != null) {
                 parse(parserResults, dependencyQueue, lib);
             }
@@ -652,7 +652,7 @@ final class Runner {
         }
 
         Path path = lib.getPath();
-        TruffleFile file = context.getEnv().getInternalTruffleFile(path.toUri());
+        TruffleFile file = context.getEnv().getTruffleFile(path.toUri());
         Source source;
         try {
             source = Source.newBuilder("llvm", file).internal(lib.isInternal()).build();
@@ -664,7 +664,7 @@ final class Runner {
 
     private LLVMParserResult parse(List<LLVMParserResult> parserResults, ArrayDeque<ExternalLibrary> dependencyQueue, Source source,
                     ExternalLibrary library, ByteSequence bytes) {
-        BinaryParserResult binaryParserResult = BinaryParser.parse(bytes, source, context);
+        BinaryParserResult binaryParserResult = BinaryParser.parse(bytes);
         if (binaryParserResult != null) {
             ModelModule module = new ModelModule();
             LLVMScanner.parseBitcode(binaryParserResult.getBitcode(), module, source, context);
@@ -672,7 +672,7 @@ final class Runner {
             context.addLibraryPaths(binaryParserResult.getLibraryPaths());
             List<String> libraries = binaryParserResult.getLibraries();
             for (String lib : libraries) {
-                ExternalLibrary dependency = context.addExternalLibrary(lib, true, library, binaryParserResult.getLocator());
+                ExternalLibrary dependency = context.addExternalLibrary(lib, true);
                 if (dependency != null) {
                     dependencyQueue.addLast(dependency);
                 }

@@ -29,22 +29,14 @@
  */
 package com.oracle.truffle.llvm.parser.binary;
 
-import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.parser.elf.ElfDynamicSection;
 import com.oracle.truffle.llvm.parser.elf.ElfFile;
-import com.oracle.truffle.llvm.parser.elf.ElfLibraryLocator;
 import com.oracle.truffle.llvm.parser.elf.ElfSectionHeaderTable;
 import com.oracle.truffle.llvm.parser.macho.MachOFile;
-import com.oracle.truffle.llvm.parser.macho.MachOLibraryLocator;
 import com.oracle.truffle.llvm.parser.macho.Xar;
 import com.oracle.truffle.llvm.parser.scanner.BitStream;
-import com.oracle.truffle.llvm.runtime.DefaultLibraryLocator;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LibraryLocator;
 import org.graalvm.polyglot.io.ByteSequence;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -95,39 +87,20 @@ public final class BinaryParser {
         }
     }
 
-    private List<String> libraries = new ArrayList<>();
-    private List<String> paths = new ArrayList<>();
-    private LibraryLocator locator = DefaultLibraryLocator.INSTANCE;
-
-    public static BinaryParserResult parse(ByteSequence bytes, Source bcSource, LLVMContext context) {
-        return new BinaryParser().parseInternal(bytes, bcSource, context);
-    }
-
-    private BinaryParserResult parseInternal(ByteSequence bytes, Source bcSource, LLVMContext context) {
+    public static BinaryParserResult parse(ByteSequence bytes) {
         assert bytes != null;
 
-        ByteSequence bitcode = parseBitcode(bytes, bcSource);
+        List<String> libraries = new ArrayList<>();
+        List<String> paths = new ArrayList<>();
+        ByteSequence bitcode = parseBitcode(bytes, libraries, paths);
         if (bitcode == null) {
             // unsupported file
             return null;
         }
-        LibraryLocator.traceParseBitcode(context, bcSource.getPath());
-        return new BinaryParserResult(libraries, paths, bitcode, locator);
+        return new BinaryParserResult(libraries, paths, bitcode);
     }
 
-    public static String getOrigin(Source source) {
-        String sourcePath = source.getPath();
-        if (sourcePath == null) {
-            return null;
-        }
-        Path parent = Paths.get(sourcePath).getParent();
-        if (parent == null) {
-            return null;
-        }
-        return parent.toString();
-    }
-
-    private ByteSequence parseBitcode(ByteSequence bytes, Source source) {
+    private static ByteSequence parseBitcode(ByteSequence bytes, List<String> libraries, List<String> paths) {
         BitStream b = BitStream.create(bytes);
         Magic magicWord = Magic.get(b);
         switch (magicWord) {
@@ -150,9 +123,8 @@ public final class BinaryParser {
                 }
                 ElfDynamicSection dynamicSection = elfFile.getDynamicSection();
                 if (dynamicSection != null) {
-                    List<String> elfLibraries = dynamicSection.getDTNeeded();
-                    libraries.addAll(elfLibraries);
-                    locator = new ElfLibraryLocator(elfFile, source);
+                    libraries.addAll(dynamicSection.getDTNeeded());
+                    paths.addAll(dynamicSection.getDTRPath());
                 }
                 long elfOffset = llvmbc.getOffset();
                 long elfSize = llvmbc.getSize();
@@ -163,23 +135,20 @@ public final class BinaryParser {
             case MH_CIGAM_64:
                 MachOFile machOFile = MachOFile.create(bytes);
 
-                String origin = getOrigin(source);
-                List<String> machoLibraries = machOFile.getDyLibs(origin);
-                locator = new MachOLibraryLocator(machOFile, source);
-                libraries.addAll(machoLibraries);
+                libraries.addAll(machOFile.getDyLibs());
 
                 ByteSequence machoBitcode = machOFile.extractBitcode();
                 if (machoBitcode == null) {
                     return null;
                 }
-                return parseBitcode(machoBitcode, source);
+                return parseBitcode(machoBitcode, libraries, paths);
             case XAR_MAGIC:
                 Xar xarFile = Xar.create(bytes);
                 ByteSequence xarBitcode = xarFile.extractBitcode();
                 if (xarBitcode == null) {
                     return null;
                 }
-                return parseBitcode(xarBitcode, source);
+                return parseBitcode(xarBitcode, libraries, paths);
             default:
                 return null;
         }
