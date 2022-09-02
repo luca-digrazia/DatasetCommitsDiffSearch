@@ -78,12 +78,10 @@ import org.graalvm.polyglot.io.MessageTransport;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.impl.DispatchOutputStream;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
@@ -123,7 +121,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     InputStream in;                 // effectively final
 
     final Map<String, PolyglotLanguage> idToLanguage;
-    final Map<String, PolyglotLanguage> classToLanguage;
     final Map<String, Language> idToPublicLanguage;
     final Map<String, LanguageInfo> idToInternalLanguageInfo;
 
@@ -146,8 +143,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
     private PolyglotContextImpl preInitializedContext;
 
     PolyglotLanguage hostLanguage;
-    final Assumption singleContext = Truffle.getRuntime().createAssumption("Single context per engine.");
-    final Assumption noInnerContexts = Truffle.getRuntime().createAssumption("No inner contexts.");
+    final Assumption singleContext = Truffle.getRuntime().createAssumption();
 
     volatile OptionDescriptors allOptions;
     volatile boolean closed;
@@ -184,11 +180,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         Map<String, InstrumentInfo> instrumentInfos = new LinkedHashMap<>();
         this.idToInstrument = Collections.unmodifiableMap(initializeInstruments(instrumentInfos));
         this.idToInternalInstrumentInfo = Collections.unmodifiableMap(instrumentInfos);
-
-        this.classToLanguage = new HashMap<>();
-        for (PolyglotLanguage language : idToLanguage.values()) {
-            classToLanguage.put(language.cache.getClassName(), language);
-        }
 
         for (String id : idToLanguage.keySet()) {
             if (idToInstrument.containsKey(id)) {
@@ -731,26 +722,6 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
         ensureClosed(cancelIfExecuting, false);
     }
 
-    @TruffleBoundary
-    <T extends TruffleLanguage<?>> PolyglotLanguage getLanguage(Class<T> languageClass, boolean fail) {
-        PolyglotLanguage foundLanguage = classToLanguage.get(languageClass.getName());
-        if (foundLanguage == null && fail) {
-            Set<String> languageNames = classToLanguage.keySet();
-            throw new IllegalArgumentException("Cannot find language " + languageClass + " among " + languageNames);
-        }
-        return foundLanguage;
-    }
-
-    <T extends TruffleLanguage<?>> PolyglotLanguageInstance getCurrentLanguageInstance(Class<T> languageClass) {
-        PolyglotLanguage foundLanguage = getLanguage(languageClass, true);
-        PolyglotLanguageContext context = foundLanguage.getCurrentLanguageContext();
-        if (!context.isCreated()) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalStateException(String.format("A context for language %s was not yet created.", languageClass.getName()));
-        }
-        return context.getLanguageInstance();
-    }
-
     synchronized void ensureClosed(boolean cancelIfExecuting, boolean ignoreCloseFailure) {
         if (!closed) {
             workContextReferenceQueue();
@@ -1121,10 +1092,7 @@ class PolyglotEngineImpl extends org.graalvm.polyglot.impl.AbstractPolyglotImpl.
 
         Handler useHandler = PolyglotLogHandler.asHandler(logHandlerOrStream);
         useHandler = useHandler != null ? useHandler : logHandler;
-        useHandler = useHandler != null ? useHandler
-                        : PolyglotLogHandler.createStreamHandler(
-                                        configErr == null ? INSTRUMENT.getOut(this.err) : configErr,
-                                        false, true);
+        useHandler = useHandler != null ? useHandler : PolyglotLogHandler.createStreamHandler(useErr, false, true);
 
         final InputStream useIn = configIn == null ? this.in : configIn;
 

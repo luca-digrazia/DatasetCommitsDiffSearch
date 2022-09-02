@@ -27,10 +27,10 @@ package com.oracle.svm.core.posix;
 import java.io.IOException;
 
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.ClassInitialization;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.RuntimeClassInitialization;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Substitute;
@@ -50,7 +50,7 @@ class JavaLangSubstitutionsJDK9OrLaterFeature implements Feature {
     public void duringSetup(DuringSetupAccess access) {
         Class<?> processHandleImplClass = access.findClassByName("java.lang.ProcessHandleImpl");
         VMError.guarantee(processHandleImplClass != null);
-        ClassInitialization.rerun(processHandleImplClass);
+        RuntimeClassInitialization.rerunClassInitialization(processHandleImplClass);
     }
 }
 
