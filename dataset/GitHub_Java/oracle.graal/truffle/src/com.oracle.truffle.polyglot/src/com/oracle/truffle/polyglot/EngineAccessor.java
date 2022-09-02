@@ -536,7 +536,7 @@ final class EngineAccessor extends Accessor {
             if (context.isActive()) {
                 throw new IllegalStateException("The context is currently entered and cannot be closed.");
             }
-            context.closeImpl(false, false, true);
+            context.closeImpl(false, false);
         }
 
         @Override
@@ -652,8 +652,8 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public Class<? extends TruffleLanguage<?>> getLanguageClass(LanguageInfo language) {
-            return ((PolyglotLanguage) NODES.getEngineObject(language)).cache.getLanguageClass();
+        public Set<? extends Class<?>> getProvidedTags(LanguageInfo language) {
+            return ((PolyglotLanguage) NODES.getEngineObject(language)).cache.getProvidedTags();
         }
 
         @SuppressWarnings("unchecked")

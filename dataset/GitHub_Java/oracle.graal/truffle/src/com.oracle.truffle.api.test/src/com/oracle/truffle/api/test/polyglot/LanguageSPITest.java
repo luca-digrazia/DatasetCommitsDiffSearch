@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -841,7 +841,7 @@ public class LanguageSPITest {
         MultiContextLanguage innerLang = OneContextLanguage.getCurrentLanguage();
         assertNotSame(innerLang, lang);
 
-        Env innerEnv = OneContextLanguage.getCurrentContext().env;
+        Env innerEnv = innerLang.getContextReference().get().env;
         innerEnv.parsePublic(truffleSource1);
         assertEquals(1, innerLang.parseCalled.size());
         assertEquals(0, innerLang.initializeMultiContextCalled.size());
@@ -1227,19 +1227,6 @@ public class LanguageSPITest {
         Context c = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build();
         c.initialize(ProxyLanguage.ID);
         assertTrue(c.getPolyglotBindings().getMember("symbol").isHostObject());
-        c.close();
-    }
-
-    @Test
-    public void testRemoveSymbol() {
-        Context c = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build();
-        c.initialize(ProxyLanguage.ID);
-        c.enter();
-        Env env = ProxyLanguage.getCurrentContext().getEnv();
-        env.exportSymbol("symbol", env.asGuestValue(1));
-        assertTrue(c.getPolyglotBindings().hasMember("symbol"));
-        env.exportSymbol("symbol", null);
-        assertFalse(c.getPolyglotBindings().hasMember("symbol"));
         c.close();
     }
 
@@ -1943,7 +1930,7 @@ public class LanguageSPITest {
             @Override
             protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
                 try {
-                    getCurrentContext().env.registerService(new LanguageSPITestLanguageService3() {
+                    getContextReference().get().env.registerService(new LanguageSPITestLanguageService3() {
                     });
                     fail("Illegal state exception should be thrown when calling Env.registerService outside createContext");
                 } catch (IllegalStateException e) {
