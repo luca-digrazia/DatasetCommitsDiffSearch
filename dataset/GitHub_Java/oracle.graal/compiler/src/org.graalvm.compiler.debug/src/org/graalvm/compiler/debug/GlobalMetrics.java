@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -78,7 +78,7 @@ public class GlobalMetrics {
     /**
      * Prints the values in the object to the file specified by
      * {@link DebugOptions#AggregatedMetricsFile} if present otherwise to
-     * {@link DebugContext#getDefaultLogStream()}.
+     * {@link DebugContext#DEFAULT_LOG_STREAM}.
      */
     public void print(OptionValues options) {
         long[] vals = values;
@@ -88,7 +88,7 @@ public class GlobalMetrics {
             boolean csv = metricsFile != null && (metricsFile.endsWith(".csv") || metricsFile.endsWith(".CSV"));
             PrintStream p = null;
             try {
-                p = metricsFile == null ? DebugContext.getDefaultLogStream() : new PrintStream(Files.newOutputStream(Paths.get(metricsFile)));
+                p = metricsFile == null ? DebugContext.DEFAULT_LOG_STREAM : new PrintStream(Files.newOutputStream(Paths.get(metricsFile)));
                 if (!csv) {
                     if (!map.isEmpty()) {
                         p.println("++ Aggregated Metrics ++");
