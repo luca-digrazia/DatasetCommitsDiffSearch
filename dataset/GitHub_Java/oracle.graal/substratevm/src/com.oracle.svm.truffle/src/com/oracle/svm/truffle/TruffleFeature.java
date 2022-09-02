@@ -470,13 +470,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         String className = lib.getPackage().getName() + "." + lib.getSimpleName() + "Gen";
         Class<?> genClass = config.findClassByName(className);
         if (genClass == null) {
-            if (className.startsWith("com.oracle.truffle.api.library.test")) {
-                /*
-                 * The Truffle unit tests contain libraries that don't have generated code as they
-                 * were deliberately containing errors. Ignore them for this check.
-                 */
-                return null;
-            }
             throw UserError.abort(String.format("Could not find generated library class '%s'. Did the Java compilation succeed and did the Truffle annotation processor run?", className));
         }
         return genClass;
@@ -553,17 +546,11 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
          */
         for (AnalysisType type : ((DuringAnalysisAccessImpl) access).getBigBang().getUniverse().getTypes()) {
             for (ExportLibrary library : type.getDeclaredAnnotationsByType(ExportLibrary.class)) {
-                Class<?> genLib = findGeneratedLibraryClass(access, library.value());
-                if (genLib != null) {
-                    access.registerAsInHeap(genLib);
-                }
+                access.registerAsInHeap(findGeneratedLibraryClass(access, library.value()));
             }
             GenerateLibrary generateLibrary = type.getAnnotation(GenerateLibrary.class);
             if (generateLibrary != null) {
-                Class<?> lib = findGeneratedLibraryClass(access, type.getJavaClass());
-                if (lib != null) {
-                    access.registerAsInHeap(lib);
-                }
+                access.registerAsInHeap(findGeneratedLibraryClass(access, type.getJavaClass()));
             }
         }
     }
