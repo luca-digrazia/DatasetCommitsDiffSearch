@@ -25,6 +25,8 @@ package com.oracle.truffle.espresso.runtime;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.impl.ContextAccess;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 
 class EspressoShutdownHandler implements ContextAccess {
@@ -34,6 +36,7 @@ class EspressoShutdownHandler implements ContextAccess {
     private final EspressoContext context;
     private final EspressoThreadManager threadManager;
     private final EspressoReferenceDrainer referenceDrainer;
+    private final boolean softExit;
 
     @Override
     public EspressoContext getContext() {
@@ -44,10 +47,11 @@ class EspressoShutdownHandler implements ContextAccess {
 
     EspressoShutdownHandler(EspressoContext context,
                     EspressoThreadManager threadManager,
-                    EspressoReferenceDrainer referenceDrainer) {
+                    EspressoReferenceDrainer referenceDrainer, boolean softExit) {
         this.context = context;
         this.threadManager = threadManager;
         this.referenceDrainer = referenceDrainer;
+        this.softExit = softExit;
     }
 
     /**
@@ -90,6 +94,7 @@ class EspressoShutdownHandler implements ContextAccess {
         assert Thread.holdsLock(getShutdownSynchronizer());
         isClosing = true;
         exitStatus = code;
+        context.getLogger().finer(() -> "Starting close process with code=" + code);
     }
 
     Object getShutdownSynchronizer() {
@@ -99,11 +104,17 @@ class EspressoShutdownHandler implements ContextAccess {
     /**
      * Starts the teardown process of the VM if it was not already started.
      *
-     * Notify any thread waiting for teardown (through {@link #destroyVM()}) to immediately return
-     * and let us do the job.
+     * Notify any thread waiting for teardown (through {@link #destroyVM(boolean)}) to immediately
+     * return and let us do the job.
      */
     @TruffleBoundary
     void doExit(int code) {
+        getContext().getLogger().fine(() -> {
+            Meta meta = getMeta();
+            StaticObject currentThread = getContext().getCurrentThread();
+            String guestName = Target_java_lang_Thread.getThreadName(meta, currentThread);
+            return "doExit(" + code + ") from " + guestName;
+        });
         if (!isClosing()) {
             Object sync = getShutdownSynchronizer();
             synchronized (sync) {
@@ -114,25 +125,35 @@ class EspressoShutdownHandler implements ContextAccess {
                 // Wake up spinning main thread.
                 sync.notifyAll();
             }
-            teardown();
+            teardown(!context.ExitHost);
         }
-        // At this point, the exit code given should have been registered. If not, this means that
-        // another closing was started before us, and we should use the previous' exit code.
-        throw new EspressoExitException(getExitStatus());
+        if (context.ExitHost) {
+            System.exit(getExitStatus());
+            throw EspressoError.shouldNotReachHere();
+        } else {
+            // At this point, the exit code given should have been registered. If not, this means
+            // that
+            // another closing was started before us, and we should use the previous' exit code.
+            throw new EspressoExitException(getExitStatus());
+        }
     }
 
     /**
      * Implements the {@code <DestroyJavaVM>} command of Espresso.
+     * <ol>
      * <li>Waits for all other non-daemon thread to naturally terminate.
      * <li>If all threads have terminated, and no other thread called an exit method, then:
      * <li>This calls guest {@code java.lang.Shutdown#shutdown()}
      * <li>Proceeds to teardown leftover daemon threads.
+     * </ol>
+     * 
+     * @param killThreads
      */
     @TruffleBoundary
-    void destroyVM() {
+    void destroyVM(boolean killThreads) {
         waitForClose();
         try {
-            getMeta().java_lang_reflect_Shutdown_shutdown.invokeDirect(null);
+            getMeta().java_lang_Shutdown_shutdown.invokeDirect(null);
         } catch (EspressoException | EspressoExitException e) {
             /* Suppress guest exception so as not to bypass teardown */
         }
@@ -148,13 +169,14 @@ class EspressoShutdownHandler implements ContextAccess {
             }
             beginClose(0);
         }
-        teardown();
-
+        teardown(killThreads);
+        throw new EspressoExitException(getExitStatus());
     }
 
     private void waitForClose() throws EspressoExitException {
         Object synchronizer = getShutdownSynchronizer();
         Thread initiating = Thread.currentThread();
+        context.getLogger().fine("Waiting for non-daemon threads to finish or exit");
         synchronized (synchronizer) {
             while (true) {
                 if (isClosing()) {
@@ -185,43 +207,45 @@ class EspressoShutdownHandler implements ContextAccess {
         return false;
     }
 
-    private void teardown() {
+    private void teardown(boolean killThreads) {
         assert isClosing();
+        getContext().prepareDispose();
         getContext().invalidateNoThreadStop("Killing the VM");
         Thread initiatingThread = Thread.currentThread();
 
-        // Phase 0: wait.
+        getContext().getLogger().finer("Teardown: Phase 0: wait");
         boolean nextPhase = !waitSpin(initiatingThread);
 
-        if (getContext().shouldTrySoftExit()) {
+        if (softExit) {
             if (nextPhase) {
-                // Phase 1: Interrupt threads, and stops daemons.
+                getContext().getLogger().finer("Teardown: Phase 1: Interrupt threads, and stops daemons");
                 teardownPhase1(initiatingThread);
                 nextPhase = !waitSpin(initiatingThread);
             }
 
             if (nextPhase) {
-                // Phase 2: Stop all threads.
+                getContext().getLogger().finer("Teardown: Phase 2: Stop all threads");
                 teardownPhase2(initiatingThread);
                 nextPhase = !waitSpin(initiatingThread);
             }
         }
 
-        if (nextPhase) {
-            // Phase 3: Force kill with host EspressoExitException. Obtains the exit code from the
-            // context.
-            teardownPhase3(initiatingThread);
-            nextPhase = !waitSpin(initiatingThread);
-        }
+        if (killThreads) {
+            if (nextPhase) {
+                getContext().getLogger().finer("Teardown: Phase 3: Force kill with host EspressoExitExceptions");
+                teardownPhase3(initiatingThread);
+                nextPhase = !waitSpin(initiatingThread);
+            }
 
-        if (nextPhase) {
-            getContext().getLogger().severe("Could not gracefully stop executing threads in context closing.");
-            // Phase 4: Forcefully command the context to forget any leftover thread.
-            teardownPhase4(initiatingThread);
+            if (nextPhase) {
+                getContext().getLogger().severe("Could not gracefully stop executing threads in context closing.");
+                getContext().getLogger().finer("Teardown: Phase 4: Forcefully command the context to forget any leftover thread");
+                teardownPhase4(initiatingThread);
+            }
         }
 
         Thread hostToGuestReferenceDrainThread = referenceDrainer.referenceDrain();
-        if (getContext().multiThreaded()) {
+        if (getContext().MultiThreaded) {
             hostToGuestReferenceDrainThread.interrupt();
             try {
                 hostToGuestReferenceDrainThread.join();
@@ -229,10 +253,10 @@ class EspressoShutdownHandler implements ContextAccess {
                 // ignore
             }
         } else {
-            assert !hostToGuestReferenceDrainThread.isAlive();
+            assert hostToGuestReferenceDrainThread == null || !hostToGuestReferenceDrainThread.isAlive();
         }
 
-        throw new EspressoExitException(getExitStatus());
+        context.getTimers().report(context.getLogger());
     }
 
     /**
