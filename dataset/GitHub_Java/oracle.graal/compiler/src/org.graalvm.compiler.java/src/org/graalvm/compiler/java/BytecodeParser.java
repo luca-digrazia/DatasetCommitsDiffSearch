@@ -1164,7 +1164,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 beginNode.safeDelete();
             }
         }
-        if (graph.isOSR() && getParent() == null && graph.getNodes(EntryMarkerNode.TYPE).isEmpty()) {
+        if (graph.isOSR() && getParent() == null && graph.getNodes().filter(EntryMarkerNode.class).isEmpty()) {
             // This should generally be a transient condition because of inconsistent profile
             // information.
             throw new RetryableBailoutException("OSR entry point wasn't parsed");
@@ -2326,7 +2326,7 @@ public class BytecodeParser implements GraphBuilderContext {
             try (InliningScope inlineScope = new IntrinsicScope(this, targetMethod, args)) {
 
                 EconomicMap<Node, Node> replacementsMap = EconomicMap.create(Equivalence.IDENTITY);
-                for (ParameterNode param : substituteGraph.getNodes(ParameterNode.TYPE)) {
+                for (ParameterNode param : substituteGraph.getNodes().filter(ParameterNode.class)) {
                     replacementsMap.put(param, args[param.index()]);
                 }
                 replacementsMap.put(entryPointNode, AbstractBeginNode.prevBegin(replacee));
@@ -2376,7 +2376,7 @@ public class BytecodeParser implements GraphBuilderContext {
                 }
 
                 ArrayList<ReturnToCallerData> calleeReturnDataList = new ArrayList<>();
-                for (ReturnNode n : substituteGraph.getNodes(ReturnNode.TYPE)) {
+                for (ReturnNode n : substituteGraph.getNodes().filter(ReturnNode.class)) {
                     ReturnNode returnNode = (ReturnNode) duplicates.get(n);
                     FixedWithNextNode predecessor = (FixedWithNextNode) returnNode.predecessor();
                     calleeReturnDataList.add(new ReturnToCallerData(returnNode.result(), predecessor));
@@ -2418,7 +2418,6 @@ public class BytecodeParser implements GraphBuilderContext {
                     nodes.add(node);
                 }
             }
-            replaceeGraph.recordAssumptions(snippet);
             UnmodifiableEconomicMap<Node, Node> duplicates = replaceeGraph.addDuplicates(nodes, snippet, snippet.getNodeCount(), replacementsMap);
             if (scope != null) {
                 replaceeGraph.getInliningLog().addLog(duplicates, snippet.getInliningLog());

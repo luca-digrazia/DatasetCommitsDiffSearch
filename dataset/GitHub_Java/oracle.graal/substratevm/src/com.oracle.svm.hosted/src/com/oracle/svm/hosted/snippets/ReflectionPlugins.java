@@ -44,7 +44,6 @@ import org.graalvm.compiler.options.Option;
 import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
-import com.oracle.svm.core.TypeResult;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.hosted.ExceptionSynthesizer;
@@ -154,12 +153,10 @@ public class ReflectionPlugins {
                     ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, boolean analysis, boolean hosted) {
         if (name.isConstant() && initialize.isConstant()) {
             String className = snippetReflection.asObject(String.class, name.asJavaConstant());
-            TypeResult<Class<?>> typeResult = imageClassLoader.findClass(className);
-            if (!typeResult.isPresent()) {
-                Throwable e = typeResult.getException();
-                return throwException(b, targetMethod, analysis, hosted, className, e.getClass(), e.getMessage());
+            Class<?> clazz = imageClassLoader.findClass(className).get();
+            if (clazz == null) {
+                return throwException(b, targetMethod, analysis, hosted, className, ClassNotFoundException.class, className);
             } else {
-                Class<?> clazz = typeResult.get();
                 Class<?> intrinsic = getIntrinsic(analysis, hosted, b, clazz);
                 if (intrinsic == null) {
                     return false;
