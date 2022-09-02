@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va;
 
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.LibraryFactory;
@@ -47,7 +46,6 @@ import com.oracle.truffle.llvm.runtime.types.Type;
  * @see LLVMVAArg
  */
 @GenerateLibrary
-@GenerateAOT
 public abstract class LLVMVaListLibrary extends Library {
 
     static final LibraryFactory<LLVMVaListLibrary> FACTORY = LibraryFactory.resolve(LLVMVaListLibrary.class);
@@ -78,8 +76,9 @@ public abstract class LLVMVaListLibrary extends Library {
      *
      * @param srcVaList
      * @param destVaList
+     * @param numberOfExplicitArguments
      */
-    public abstract void copy(Object srcVaList, Object destVaList);
+    public abstract void copy(Object srcVaList, Object destVaList, int numberOfExplicitArguments);
 
     /**
      * Shift the va_list argument to the next argument. It corresponds to the <code>va_arg</code>
