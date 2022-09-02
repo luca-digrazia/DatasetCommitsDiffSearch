@@ -340,8 +340,4 @@ public abstract class TVMCI {
     protected void reloadEngineOptions(Object runtimeData, OptionValues optionValues) {
     }
 
-    protected void applyVMObject(RootNode from, RootNode to) {
-        TVMCIAccessor.nodesAccess().applyVMObject(from, to);
-    }
-
 }

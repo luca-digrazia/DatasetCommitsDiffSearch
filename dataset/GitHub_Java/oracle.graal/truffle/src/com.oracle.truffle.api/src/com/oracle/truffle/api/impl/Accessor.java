@@ -69,7 +69,6 @@ import org.graalvm.polyglot.io.MessageTransport;
 import org.graalvm.polyglot.io.ProcessHandler;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Scope;
@@ -81,7 +80,6 @@ import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.TruffleLogger;
-import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.MaterializedFrame;
@@ -96,7 +94,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
 import com.oracle.truffle.api.source.SourceSection;
-import org.graalvm.nativeimage.ImageInfo;
 
 /**
  * Communication between TruffleLanguage API/SPI, and other services.
@@ -115,15 +112,15 @@ public abstract class Accessor {
     }
 
     protected ThreadLocal<Object> createFastThreadLocal() {
-        return getTVMCI().createFastThreadLocal();
+        return SUPPORT.createFastThreadLocal();
     }
 
     protected IndirectCallNode createUncachedIndirectCall() {
-        return getTVMCI().createUncachedIndirectCall();
+        return SUPPORT.createUncachedIndirectCall();
     }
 
     protected <T extends Node> BlockNode<T> createBlockNode(T[] elements, ElementExecutor<T> executor) {
-        return getTVMCI().createBlockNode(elements, executor);
+        return SUPPORT.createBlockNode(elements, executor);
     }
 
     protected void reloadEngineOptions(Object runtimeData, OptionValues optionValues) {
@@ -159,7 +156,7 @@ public abstract class Accessor {
         public abstract Lock getLock(Node node);
 
         public void reportPolymorphicSpecialize(Node node) {
-            getTVMCI().reportPolymorphicSpecialize(node);
+            SUPPORT.reportPolymorphicSpecialize(node);
         }
 
         public abstract void makeSharableRoot(RootNode rootNode);
@@ -596,37 +593,6 @@ public abstract class Accessor {
         public abstract TruffleProcessBuilder createProcessBuilder(Object polylgotLanguageContext, FileSystem fileSystem, List<String> command);
     }
 
-    public static final class JDKSupport {
-
-        private JDKSupport() {
-        }
-
-        public void exportTo(ClassLoader loader, String moduleName) {
-            TruffleJDKServices.exportTo(loader, moduleName);
-        }
-
-        public void exportTo(Class<?> client) {
-            TruffleJDKServices.exportTo(client);
-        }
-
-        public <Service> List<Iterable<Service>> getTruffleRuntimeLoaders(Class<Service> serviceClass) {
-            return TruffleJDKServices.getTruffleRuntimeLoaders(serviceClass);
-        }
-
-        public <S> void addUses(Class<S> service) {
-            TruffleJDKServices.addUses(service);
-        }
-
-        public Object getUnnamedModule(ClassLoader classLoader) {
-            return TruffleJDKServices.getUnnamedModule(classLoader);
-        }
-
-        public boolean verifyModuleVisibility(Object lookupModule, Class<?> memberClass) {
-            return TruffleJDKServices.verifyModuleVisibility(lookupModule, memberClass);
-        }
-
-    }
-
     // A separate class to break the cycle such that Accessor can fully initialize
     // before ...Accessor classes static initializers run, which call methods from Accessor.
     private static class Constants {
@@ -639,7 +605,6 @@ public abstract class Accessor {
         private static final Accessor.IOSupport IO;
         private static final Accessor.FrameSupport FRAMES;
         private static final Accessor.EngineSupport ENGINE;
-        private static final Accessor.JDKSupport JDKSERVICES;
 
         static {
             // Eager load all accessors so the above fields are all set and all methods are usable
@@ -651,7 +616,6 @@ public abstract class Accessor {
             IO = loadSupport("com.oracle.truffle.api.io.IOAccessor$IOSupportImpl");
             FRAMES = loadSupport("com.oracle.truffle.api.frame.FrameAccessor$FramesImpl");
             ENGINE = loadSupport("com.oracle.truffle.polyglot.EngineAccessor$EngineImpl");
-            JDKSERVICES = new JDKSupport();
         }
 
         @SuppressWarnings("unchecked")
@@ -685,7 +649,6 @@ public abstract class Accessor {
             case "com.oracle.truffle.api.instrumentation.test.AbstractInstrumentationTest$TestAccessor":
             case "com.oracle.truffle.api.test.polyglot.FileSystemsTest$TestAPIAccessor":
             case "com.oracle.truffle.api.impl.TVMCIAccessor":
-            case "org.graalvm.compiler.truffle.runtime.CompilerRuntimeAccessor":
                 // OK, classes allowed to use accessors
                 break;
             default:
@@ -725,10 +688,6 @@ public abstract class Accessor {
         return Constants.IO;
     }
 
-    public final JDKSupport jdkSupport() {
-        return Constants.JDKSERVICES;
-    }
-
     /**
      * Don't call me. I am here only to let NetBeans debug any Truffle project.
      *
@@ -738,33 +697,13 @@ public abstract class Accessor {
         throw new IllegalStateException();
     }
 
-    @CompilerDirectives.CompilationFinal //
-    private static volatile TVMCI tvmci;
-
-    /**
-     * Returns a {@link TVMCI} obtained from {@link TruffleRuntime}.
-     *
-     * NOTE: this method is called reflectively by {@code TruffleFeature} to initialize
-     * {@code tvmci} instance.
-     */
-    private static TVMCI getTVMCI() {
-        if (ImageInfo.inImageRuntimeCode()) {
-            return tvmci;
-        }
-        TVMCI result = tvmci;
-        if (result == null) {
-            result = Truffle.getRuntime().getCapability(TVMCI.class);
-            tvmci = result;
-        }
-        return result;
-    }
+    private static final TVMCI SUPPORT = Truffle.getRuntime().getCapability(TVMCI.class);
 
     protected OptionDescriptors getCompilerOptions() {
-        TVMCI support = getTVMCI();
-        if (support == null) {
+        if (SUPPORT == null) {
             return OptionDescriptors.EMPTY;
         }
-        return support.getCompilerOptionDescriptors();
+        return SUPPORT.getCompilerOptionDescriptors();
     }
 
     public abstract static class CallInlined {
@@ -782,11 +721,11 @@ public abstract class Accessor {
     }
 
     protected CastUnsafe getCastUnsafe() {
-        return getTVMCI().getCastUnsafe();
+        return SUPPORT.getCastUnsafe();
     }
 
     protected CallInlined getCallInlined() {
-        return getTVMCI().getCallInlined();
+        return SUPPORT.getCallInlined();
     }
 
     public abstract static class CallProfiled {
@@ -796,25 +735,23 @@ public abstract class Accessor {
     }
 
     protected CallProfiled getCallProfiled() {
-        return getTVMCI().getCallProfiled();
+        return SUPPORT.getCallProfiled();
     }
 
     protected boolean isGuestCallStackElement(StackTraceElement element) {
-        TVMCI support = getTVMCI();
-        if (support == null) {
+        if (SUPPORT == null) {
             return false;
         }
-        return support.isGuestCallStackFrame(element);
+        return SUPPORT.isGuestCallStackFrame(element);
     }
 
     protected void initializeProfile(CallTarget target, Class<?>[] argumentTypes) {
-        getTVMCI().initializeProfile(target, argumentTypes);
+        SUPPORT.initializeProfile(target, argumentTypes);
     }
 
     protected void onLoopCount(Node source, int iterations) {
-        TVMCI support = getTVMCI();
-        if (support != null) {
-            support.onLoopCount(source, iterations);
+        if (SUPPORT != null) {
+            SUPPORT.onLoopCount(source, iterations);
         }
     }
 
