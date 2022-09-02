@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,10 +30,13 @@ import java.nio.channels.WritableByteChannel;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.graalvm.graphio.GraphOutput;
 import org.graalvm.graphio.GraphStructure;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import org.junit.Before;
 import org.junit.Test;
@@ -51,31 +56,109 @@ public final class NodeEncodingTest {
     }
 
     @Test
-    public void defaultVersionTheNodeIsntDumpedWithItsID() throws Exception {
-        runTheNodeIsntDumpedWithItsID(false);
+    public void defaultVersionTheNodeIsDumpedWithItsID() throws Exception {
+        runTheNodeIsTreatedPoolEntry(false);
     }
 
     private void runTheNodeIsntDumpedWithItsID(boolean explicitVersion) throws Exception {
         WritableByteChannel w = Channels.newChannel(out);
-        MockNode node;
+        MockGraph graph = new MockGraph();
+        MockNodeClass clazz = new MockNodeClass("clazz");
+        MockNode node = new MockNode(clazz, 33); // random value otherwise not found in the stream
         try (GraphOutput<MockGraph, ?> dump = explicitVersion ? GraphOutput.newBuilder(new MockStructure()).protocolVersion(4, 0).build(w) : GraphOutput.newBuilder(new MockStructure()).build(w)) {
-            MockGraph graph = new MockGraph();
-            MockNodeClass clazz = new MockNodeClass("clazz");
-            node = new MockNode(clazz, 33); // random value otherwise not found in the stream
             dump.beginGroup(graph, "test1", "t1", null, 0, Collections.singletonMap("node", node));
             dump.endGroup();
         }
 
+        assertEquals("Node is always requested", 1, node.nodeRequested);
         assertEquals("Nobody asks for id of a node in version 4.0", 0, node.idTested);
-        assertByte(false, 33, out.toByteArray());
+        assertByte(false, out.toByteArray(), 33);
+        assertEquals("Node class of the node has been requested", 1, node.nodeClassRequested);
+        assertEquals("Node class template name stored", 1, clazz.nameTemplateQueried);
+        assertFalse("No to string ops", node.toStringRequested);
     }
 
-    private static void assertByte(boolean shouldBeFound, int value, byte[] arr) {
+    @Test
+    public void dumpingNodeInVersion10() throws Exception {
+        runTheNodeIsTreatedAsString(true);
+    }
+
+    private void runTheNodeIsTreatedAsString(boolean explicitVersion) throws Exception {
+        WritableByteChannel w = Channels.newChannel(out);
+        MockGraph graph = new MockGraph();
+        MockNodeClass clazz = new MockNodeClass("clazz");
+        MockNode node = new MockNode(clazz, 33); // random value otherwise not found in the stream
+        try (GraphOutput<MockGraph, ?> dump = explicitVersion ? GraphOutput.newBuilder(new MockStructure()).protocolVersion(1, 0).build(w) : GraphOutput.newBuilder(new MockStructure()).build(w)) {
+            dump.beginGroup(graph, "test1", "t1", null, 0, Collections.singletonMap("node", node));
+            dump.endGroup();
+        }
+
+        assertEquals("Node is always requested", 1, node.nodeRequested);
+        assertEquals("Nobody asks for id of a node in version 1.0", 0, node.idTested);
+        assertByte(false, out.toByteArray(), 33);
+        assertEquals("Node class was needed to find out it is not a NodeClass instance", 1, node.nodeClassRequested);
+        assertEquals("Node class template name wasn't needed however", 0, clazz.nameTemplateQueried);
+        assertTrue("Node sent as a string version 1.0", node.toStringRequested);
+    }
+
+    @Test
+    public void dumpingNodeInVersion15() throws Exception {
+        runTheNodeIsTreatedPoolEntry(true);
+    }
+
+    private void runTheNodeIsTreatedPoolEntry(boolean explicitVersion) throws Exception {
+        WritableByteChannel w = Channels.newChannel(out);
+        MockGraph graph = new MockGraph();
+        MockNodeClass clazz = new MockNodeClass("clazz");
+        MockNode node = new MockNode(clazz, 33); // random value otherwise not found in the stream
+        try (GraphOutput<MockGraph, ?> dump = explicitVersion ? GraphOutput.newBuilder(new MockStructure()).protocolVersion(5, 0).build(w) : GraphOutput.newBuilder(new MockStructure()).build(w)) {
+            dump.beginGroup(graph, "test1", "t1", null, 0, Collections.singletonMap("node", node));
+            dump.endGroup();
+        }
+
+        assertEquals("Node is always requested", 1, node.nodeRequested);
+        assertEquals("Id of our node is requested in version 5.0", 1, node.idTested);
+        assertByte(true, out.toByteArray(), 33);
+        assertTrue("Node class was needed at least once", 1 <= node.nodeClassRequested);
+        assertEquals("Node class template name sent to server", 1, clazz.nameTemplateQueried);
+        assertFalse("Node.toString() isn't needed", node.toStringRequested);
+    }
+
+    @Test
+    public void dumpingNodeTwiceInVersion4() throws Exception {
+        WritableByteChannel w = Channels.newChannel(out);
+        MockGraph graph = new MockGraph();
+        MockNodeClass clazz = new MockNodeClass("clazz");
+        MockNode node = new MockNode(clazz, 33); // random value otherwise not found in the stream
+        try (GraphOutput<MockGraph, ?> dump = GraphOutput.newBuilder(new MockStructure()).protocolVersion(4, 0).build(w)) {
+            Map<String, Object> props = new LinkedHashMap<>();
+            props.put("node1", node);
+            props.put("node2", node);
+            props.put("node3", node);
+            dump.beginGroup(graph, "test1", "t1", null, 0, props);
+            dump.endGroup();
+        }
+
+        assertEquals("Node requested three times", 3, node.nodeRequested);
+        assertEquals("Nobody asks for id of a node in version 4.0", 0, node.idTested);
+        // check there is no encoded string for object #3
+        assertByte(false, out.toByteArray(), 1, 0, 3);
+        assertEquals("Node class of the node has been requested three times", 3, node.nodeClassRequested);
+        assertEquals("Node class template name stored", 1, clazz.nameTemplateQueried);
+        assertFalse("No to string ops", node.toStringRequested);
+    }
+
+    private static void assertByte(boolean shouldBeFound, byte[] arr, int... value) {
         boolean found = false;
+        int at = 0;
         for (int i = 0; i < arr.length; i++) {
-            if (arr[i] == value) {
-                found = true;
-                break;
+            if (arr[i] == value[at]) {
+                if (++at == value.length) {
+                    found = true;
+                    break;
+                }
+            } else {
+                at = 0;
             }
         }
         if (shouldBeFound == found) {
@@ -121,18 +204,31 @@ public final class NodeEncodingTest {
         }
 
         @Override
-        public MockNodeClass nodeClass(Object obj) {
-            if (obj instanceof MockNodeClass) {
-                return (MockNodeClass) obj;
-            }
+        public MockNode node(Object obj) {
             if (obj instanceof MockNode) {
-                return ((MockNode) obj).clazz;
+                ((MockNode) obj).nodeRequested++;
+                return (MockNode) obj;
             }
             return null;
         }
 
         @Override
+        public MockNodeClass nodeClass(Object obj) {
+            if (obj instanceof MockNode) {
+                ((MockNode) obj).nodeClassRequested++;
+            }
+            return obj instanceof MockNodeClass ? (MockNodeClass) obj : null;
+        }
+
+        @Override
+        public MockNodeClass classForNode(MockNode n) {
+            n.nodeClassRequested++;
+            return n.clazz;
+        }
+
+        @Override
         public String nameTemplate(MockNodeClass nodeClass) {
+            nodeClass.nameTemplateQueried++;
             return "";
         }
 
@@ -182,18 +278,28 @@ public final class NodeEncodingTest {
     }
 
     private static final class MockNode {
-        private final MockNodeClass clazz;
-        private final int id;
-        private int idTested;
+        final MockNodeClass clazz;
+        final int id;
+        int idTested;
+        int nodeClassRequested;
+        int nodeRequested;
+        boolean toStringRequested;
 
         MockNode(MockNodeClass clazz, int id) {
             this.clazz = clazz;
             this.id = id;
         }
+
+        @Override
+        public String toString() {
+            this.toStringRequested = true;
+            return "MockNode{" + "id=" + id + ", class=" + clazz + '}';
+        }
     }
 
     private static final class MockNodeClass {
-        private final String name;
+        final String name;
+        int nameTemplateQueried;
 
         MockNodeClass(String name) {
             this.name = name;
