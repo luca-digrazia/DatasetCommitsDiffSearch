@@ -54,8 +54,7 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.test.polyglot.LanguageSPITestLanguage.LanguageContext;
 
-@TruffleLanguage.Registration(id = LanguageSPITestLanguage.ID, name = LanguageSPITestLanguage.ID, version = "1.0", contextPolicy = ContextPolicy.SHARED, services = {
-                LanguageSPITestLanguageService2.class})
+@TruffleLanguage.Registration(id = LanguageSPITestLanguage.ID, name = LanguageSPITestLanguage.ID, version = "1.0", contextPolicy = ContextPolicy.SHARED)
 public class LanguageSPITestLanguage extends TruffleLanguage<LanguageContext> implements LanguageSPITestLanguageService {
 
     static final String ID = "LanguageSPITest";
@@ -112,8 +111,6 @@ public class LanguageSPITestLanguage extends TruffleLanguage<LanguageContext> im
         LanguageSPITest.langContext = new LanguageContext();
         LanguageSPITest.langContext.env = env;
         LanguageSPITest.langContext.config = env.getConfig();
-        env.registerService(new LanguageSPITestLanguageService2() {
-        });
         return LanguageSPITest.langContext;
     }
 
@@ -139,7 +136,4 @@ public class LanguageSPITestLanguage extends TruffleLanguage<LanguageContext> im
 }
 
 interface LanguageSPITestLanguageService {
-}
-
-interface LanguageSPITestLanguageService2 {
 }

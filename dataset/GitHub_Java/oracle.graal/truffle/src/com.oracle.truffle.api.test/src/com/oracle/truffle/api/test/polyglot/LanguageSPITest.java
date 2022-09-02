@@ -1803,13 +1803,13 @@ public class LanguageSPITest {
             }
         });
         // Not loaded language
-        try (Context context = Context.create(LanguageSPITestLanguage.ID, ProxyLanguage.ID)) {
+        try (Context context = Context.newBuilder(LanguageSPITestLanguage.ID, ProxyLanguage.ID).allowHostAccess(true).build()) {
             Value result = context.eval(ProxyLanguage.ID, "");
             assertTrue(result.isBoolean());
             assertFalse(result.asBoolean());
         }
         // Loaded language
-        try (Context context = Context.create(LanguageSPITestLanguage.ID, ProxyLanguage.ID)) {
+        try (Context context = Context.newBuilder(LanguageSPITestLanguage.ID, ProxyLanguage.ID).allowHostAccess(true).build()) {
             context.initialize(LanguageSPITestLanguage.ID);
             Value result = context.eval(ProxyLanguage.ID, "");
             assertTrue(result.isBoolean());
