@@ -24,17 +24,19 @@ package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrumentation.GenerateWrapper;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.ProbeNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
-import com.oracle.truffle.api.instrumentation.GenerateWrapper;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 @GenerateWrapper
 public abstract class EspressoBaseNode extends Node implements ContextAccess, InstrumentableNode {
@@ -58,7 +60,28 @@ public abstract class EspressoBaseNode extends Node implements ContextAccess, In
         return method.getContext();
     }
 
-    public abstract Object execute(VirtualFrame frame);
+    public abstract Object invokeNaked(VirtualFrame frame);
+
+    public Object execute(VirtualFrame frame) {
+        if (method.isSynchronized()) {
+            StaticObject monitor = method.isStatic()
+                            ? /* class */ method.getDeclaringKlass().mirror()
+                            : /* receiver */ (StaticObject) frame.getArguments()[0];
+            // No owner checks in SVM. Manual monitor accesses is a safeguard against unbalanced
+            // monitor accesses until Espresso has its own monitor handling.
+            InterpreterToVM.monitorEnter(monitor);
+            Object result;
+            try {
+                result = invokeNaked(frame);
+            } finally {
+                InterpreterToVM.monitorExit(monitor);
+            }
+            return result;
+            // }
+        } else {
+            return invokeNaked(frame);
+        }
+    }
 
     @TruffleBoundary
     @Override
