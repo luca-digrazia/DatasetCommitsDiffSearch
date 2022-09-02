@@ -22,6 +22,9 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
+import static com.oracle.truffle.espresso.vm.VM.StackElement.NATIVE_BCI;
+import static com.oracle.truffle.espresso.vm.VM.StackElement.UNKNOWN_BCI;
+
 import java.util.Arrays;
 
 import com.oracle.truffle.api.frame.Frame;
@@ -31,6 +34,8 @@ import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.instrumentation.InstrumentableNode.WrapperNode;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.source.SourceSection;
@@ -50,7 +55,7 @@ import com.oracle.truffle.espresso.vm.InterpreterToVM;
 public abstract class EspressoRootNode extends RootNode implements ContextAccess {
 
     // must not be of type EspressoMethodNode as it might be wrapped by instrumentation
-    @Child protected EspressoBaseMethodNode methodNode;
+    @Child protected EspressoInstrumentableNode methodNode;
 
     private final FrameSlot monitorSlot;
     /**
@@ -61,14 +66,14 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
 
     private final BranchProfile unbalancedMonitorProfile = BranchProfile.create();
 
-    EspressoRootNode(FrameDescriptor frameDescriptor, EspressoBaseMethodNode methodNode, boolean usesMonitors) {
+    EspressoRootNode(FrameDescriptor frameDescriptor, EspressoMethodNode methodNode, boolean usesMonitors) {
         super(methodNode.getMethod().getEspressoLanguage(), frameDescriptor);
         this.methodNode = methodNode;
         this.monitorSlot = usesMonitors ? frameDescriptor.addFrameSlot("monitor", FrameSlotKind.Object) : null;
         this.cookieSlot = frameDescriptor.addFrameSlot("cookie", FrameSlotKind.Object);
     }
 
-    private EspressoRootNode(EspressoRootNode split, FrameDescriptor frameDescriptor, EspressoBaseMethodNode methodNode) {
+    private EspressoRootNode(EspressoRootNode split, FrameDescriptor frameDescriptor, EspressoMethodNode methodNode) {
         super(methodNode.getMethod().getEspressoLanguage(), frameDescriptor);
         this.methodNode = methodNode;
         this.monitorSlot = split.monitorSlot;
@@ -125,8 +130,17 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
         return getMethodNode().getEncapsulatingSourceSection();
     }
 
-    public EspressoBaseMethodNode getMethodNode() {
-        return methodNode;
+    public final boolean isBytecodeNode() {
+        return getMethodNode() instanceof BytecodeNode;
+    }
+
+    public EspressoMethodNode getMethodNode() {
+        Node child = methodNode;
+        if (child instanceof WrapperNode) {
+            child = ((WrapperNode) child).getDelegateNode();
+        }
+        assert !(child instanceof WrapperNode);
+        return (EspressoMethodNode) child;
     }
 
     public static EspressoRootNode create(FrameDescriptor descriptor, EspressoMethodNode methodNode) {
@@ -139,7 +153,13 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
     }
 
     public final int readBCI(Frame frame) {
-        return getMethodNode().getBci(frame);
+        if (isBytecodeNode()) {
+            return getMethodNode().getCurrentBCI(frame);
+        } else if (getMethod().isNative()) {
+            return NATIVE_BCI; // native
+        } else {
+            return UNKNOWN_BCI; // unknown
+        }
     }
 
     public final void setFrameId(Frame frame, long frameId) {
