@@ -70,8 +70,8 @@ public class ShapeAndFactoryTest extends StaticObjectTest {
     }
 
     public static class CustomStaticObject implements Cloneable {
-        final int i;
-        final Object o;
+        private final int i;
+        private final Object o;
 
         public CustomStaticObject(int i, Object o) {
             this.i = i;
@@ -80,8 +80,8 @@ public class ShapeAndFactoryTest extends StaticObjectTest {
     }
 
     public static class WrongCloneCustomStaticObject implements Cloneable {
-        final int i;
-        final Object o;
+        private final int i;
+        private final Object o;
 
         public WrongCloneCustomStaticObject(int i, Object o) {
             this.i = i;
