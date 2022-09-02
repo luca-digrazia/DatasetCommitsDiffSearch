@@ -26,26 +26,14 @@ package org.graalvm.compiler.truffle.runtime.collection;
 
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 
 import org.graalvm.compiler.truffle.runtime.CompilationTask;
 
-public class TraversingBlockingQueue<E> implements BlockingQueue<E> {
-    BlockingQueue<E> firstTierEntries = new LinkedBlockingDeque<>();
-    BlockingQueue<E> lastTierEntries = new LinkedBlockingDeque<>();
-
-    private static boolean greater(double maxWeight, boolean maxCompiled, double weight, boolean compiled) {
-        if (compiled && !maxCompiled) {
-            return true;
-        }
-        if (maxCompiled && !compiled) {
-            return false;
-        }
-        return weight > maxWeight;
-    }
+public final class TraversingBlockingQueue<E> implements BlockingQueue<E> {
+    final BlockingQueue<E> entries = new LinkedBlockingDeque<>();
 
     @SuppressWarnings("unchecked")
     private CompilationTask task(E entry) {
@@ -54,166 +42,173 @@ public class TraversingBlockingQueue<E> implements BlockingQueue<E> {
 
     @Override
     public boolean add(E e) {
-        if (task(e).isFirstTier()) {
-            return firstTierEntries.add(e);
-        } else {
-            return lastTierEntries.add(e);
-        }
+        return entries.add(e);
     }
 
     @Override
     public boolean isEmpty() {
-        return firstTierEntries.isEmpty() && lastTierEntries.isEmpty();
+        return entries.isEmpty();
     }
 
     @Override
     public E poll(long timeout, TimeUnit unit) throws InterruptedException {
-        // We don't wait for elements.
-        return poll();
+        E max = takeMax();
+        if (max != null) {
+            return max;
+        }
+        return entries.poll(timeout, unit);
     }
 
     @Override
     public E poll() {
-        if (firstTierEntries.isEmpty()) {
-            return lastTierEntries.poll();
+        E max = takeMax();
+        if (max != null) {
+            return max;
         }
-        return poll(firstTierEntries);
+        return entries.poll();
     }
 
-    private E poll(Queue<E> entries) {
+    /*
+     * This method traverses the entries and picks the best task according to {@link
+     * CompilationTask#isHigherPriorityThan(CompilationTask)}. The method is synchronized to ensure
+     * that only 1 thread at a time traverses and picks the max entry. It is still possible that the
+     * {@link #entries} gets modified during the execution of this method (e.g. add, but that's
+     * fine, because the iterator is weakly consistent). This allows the queue to not block
+     * interpreter threads from adding entries to the queue while a compiler thread is looking for
+     * the best task.
+     */
+    private synchronized E takeMax() {
         if (entries.isEmpty()) {
             return null;
         }
         long time = System.nanoTime();
         Iterator<E> it = entries.iterator();
-        E max = it.next();
-        double maxWeight = task(max).weight(time);
-        boolean maxCompiled = task(max).targetPreviouslyCompiled();
+        E max = null;
         while (it.hasNext()) {
             E entry = it.next();
             CompilationTask task = task(entry);
-            double weight = task.weight(time);
-            if (task.isCancelled() || weight < 0) {
+            // updateWeight returns a negative number only if the task's target does not exist
+            if (task.isCancelled() || task.updateWeight(time) < 0) {
                 it.remove();
                 continue;
             }
-            boolean compiled = task.targetPreviouslyCompiled();
-            if (greater(maxWeight, maxCompiled, weight, compiled)) {
-                maxWeight = weight;
-                maxCompiled = compiled;
+            if (max == null || task.isHigherPriorityThan(task(max))) {
                 max = entry;
             }
         }
-        return remove(max, entries);
+        return removeAndReturn(max);
     }
 
-    private E remove(E max, Queue<E> entries) {
-        entries.remove(max);
-        return max;
+    private E removeAndReturn(E max) {
+        if (entries.remove(max)) {
+            return max;
+        } else {
+            return null;
+        }
     }
 
     @Override
     public boolean offer(E e) {
-        return add(e);
+        return entries.offer(e);
     }
 
     @Override
     public E remove() {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.remove();
     }
 
     @Override
     public E element() {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.element();
     }
 
     @Override
     public E peek() {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.peek();
     }
 
     @Override
     public void put(E e) throws InterruptedException {
-        add(e);
+        entries.put(e);
     }
 
     @Override
     public boolean offer(E e, long timeout, TimeUnit unit) throws InterruptedException {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.offer(e, timeout, unit);
     }
 
     @Override
     public E take() throws InterruptedException {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.take();
     }
 
     @Override
     public int remainingCapacity() {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.remainingCapacity();
     }
 
     @Override
     public boolean remove(Object o) {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.remove(o);
     }
 
     @Override
     public boolean containsAll(Collection<?> c) {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.containsAll(c);
     }
 
     @Override
     public boolean addAll(Collection<? extends E> c) {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.addAll(c);
     }
 
     @Override
     public boolean removeAll(Collection<?> c) {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.removeAll(c);
     }
 
     @Override
     public boolean retainAll(Collection<?> c) {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.retainAll(c);
     }
 
     @Override
     public void clear() {
-        throw new UnsupportedOperationException("Not supported!");
+        entries.clear();
     }
 
     @Override
     public int size() {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.size();
     }
 
     @Override
     public boolean contains(Object o) {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.contains(o);
     }
 
     @Override
     public Iterator<E> iterator() {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.iterator();
     }
 
     @Override
     public Object[] toArray() {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.toArray();
     }
 
     @Override
     public <T> T[] toArray(T[] a) {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.toArray(a);
     }
 
     @Override
     public int drainTo(Collection<? super E> c) {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.drainTo(c);
     }
 
     @Override
     public int drainTo(Collection<? super E> c, int maxElements) {
-        throw new UnsupportedOperationException("Not supported!");
+        return entries.drainTo(c, maxElements);
     }
 }
