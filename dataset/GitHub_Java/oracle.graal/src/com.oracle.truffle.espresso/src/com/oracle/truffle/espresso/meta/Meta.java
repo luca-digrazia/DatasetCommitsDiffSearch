@@ -208,7 +208,6 @@ public final class Meta implements ContextAccess {
         java_lang_ClassLoader_findNative = java_lang_ClassLoader.lookupDeclaredMethod(Name.findNative, Signature._long_ClassLoader_String);
         java_lang_ClassLoader_getSystemClassLoader = java_lang_ClassLoader.lookupDeclaredMethod(Name.getSystemClassLoader, Signature.ClassLoader);
         java_lang_ClassLoader_parent = java_lang_ClassLoader.lookupDeclaredField(Name.parent, Type.java_lang_ClassLoader);
-        HIDDEN_CLASS_LOADER_REGISTRY = java_lang_ClassLoader.lookupHiddenField(Name.HIDDEN_CLASS_LOADER_REGISTRY);
 
         // Guest reflection.
         java_lang_reflect_Executable = knownKlass(Type.java_lang_reflect_Executable);
@@ -315,7 +314,6 @@ public final class Meta implements ContextAccess {
         java_security_AccessControlContext_privilegedContext = java_security_AccessControlContext.lookupDeclaredField(Name.privilegedContext, Type.java_security_AccessControlContext);
         java_security_AccessControlContext_isPrivileged = java_security_AccessControlContext.lookupDeclaredField(Name.isPrivileged, Type._boolean);
         java_security_AccessControlContext_isAuthorized = java_security_AccessControlContext.lookupDeclaredField(Name.isAuthorized, Type._boolean);
-        java_security_AccessController = knownKlass(Type.java_security_AccessController);
 
         java_lang_invoke_MethodType = knownKlass(Type.java_lang_invoke_MethodType);
         java_lang_invoke_MethodType_toMethodDescriptorString = java_lang_invoke_MethodType.lookupDeclaredMethod(Name.toMethodDescriptorString, Signature.String);
@@ -487,7 +485,6 @@ public final class Meta implements ContextAccess {
     public final Method java_lang_ClassLoader$NativeLibrary_getFromClass;
     public final Method java_lang_ClassLoader_findNative;
     public final Method java_lang_ClassLoader_getSystemClassLoader;
-    public final Field HIDDEN_CLASS_LOADER_REGISTRY;
 
     public final ObjectKlass java_lang_AssertionStatusDirectives;
     public final Field java_lang_AssertionStatusDirectives_classes;
@@ -652,7 +649,6 @@ public final class Meta implements ContextAccess {
     public final Field java_security_AccessControlContext_privilegedContext;
     public final Field java_security_AccessControlContext_isPrivileged;
     public final Field java_security_AccessControlContext_isAuthorized;
-    public final ObjectKlass java_security_AccessController;
 
     public final ObjectKlass java_lang_invoke_MethodType;
     public final Method java_lang_invoke_MethodType_toMethodDescriptorString;
