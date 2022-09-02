@@ -45,8 +45,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.CompilerDirectives.TruffleInterpreter;
-import com.oracle.truffle.api.CompilerDirectives.TruffleInterpreterBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
@@ -248,9 +246,19 @@ import static org.graalvm.wasm.constants.Instructions.UNREACHABLE;
 public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     /**
+     * The number of bytes in the byte constant table used by this node.
+     */
+    @CompilationFinal private int byteConstantLength;
+
+    /**
      * The number of integers in the int constant table used by this node.
      */
     @CompilationFinal private int intConstantLength;
+
+    /**
+     * The number of literals in the numeric literals table used by this node.
+     */
+    @CompilationFinal private int longConstantLength;
 
     /**
      * The number of branch tables used by this node.
@@ -296,8 +304,18 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @Override
+    int byteConstantLength() {
+        return byteConstantLength;
+    }
+
+    @Override
     int intConstantLength() {
         return intConstantLength;
+    }
+
+    @Override
+    int longConstantLength() {
+        return longConstantLength;
     }
 
     @Override
@@ -326,12 +344,11 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     @Override
     public Integer executeRepeatingWithValue(VirtualFrame frame) {
-        final WasmCodeEntry codeEntry = codeEntry();
         final long[] stack;
         final long[] locals;
         try {
-            stack = (long[]) frame.getObject(codeEntry.stackSlot());
-            locals = (long[]) frame.getObject(codeEntry.localsSlot());
+            stack = (long[]) frame.getObject(codeEntry().stackSlot());
+            locals = (long[]) frame.getObject(codeEntry().localsSlot());
         } catch (FrameSlotTypeException e) {
             throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, this, "Invalid object type in the stack slot.");
         }
@@ -339,8 +356,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @Override
-    @TruffleInterpreter
-    @TruffleInterpreterBoundary
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN)
     public int execute(WasmContext context, VirtualFrame frame, long[] locals, long[] stack) {
         int childrenOffset = 0;
@@ -349,14 +364,14 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         int stackPointer = initialStackPointer;
         int profileOffset = initialProfileOffset;
         int offset = startOffset;
-        final WasmCodeEntry codeEntry = codeEntry();
+        WasmCodeEntry codeEntry = codeEntry();
         final WasmMemory memory = instance().memory();
         final byte[] data = codeEntry.data();
-        final int blockByteLength = byteLength();
-        final int offsetLimit = startOffset + blockByteLength;
+        final int blockByteLength = Math.min(data.length - startOffset, byteLength());
         try {
+            final int offsetLimit = startOffset + blockByteLength;
             while (offset < offsetLimit) {
-                byte byteOpcode = BinaryStreamParser.rawPeek1(data, offset);
+                byte byteOpcode = BinaryStreamParser.peek1(data, offset);
                 int opcode = byteOpcode & 0xFF;
                 offset++;
                 CompilerAsserts.partialEvaluationConstant(offset);
@@ -570,7 +585,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 break;
                             }
                             default: {
-                                throw formatException("Unknown return type: %d", returnType);
+                                throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Unknown return type: %d", returnType);
                             }
                         }
 
@@ -636,7 +651,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         // At the moment, WebAssembly functions may return up to one value.
                         // As per the WebAssembly specification, this restriction may be lifted in
                         // the future.
-                        byte returnType = instance().symbolTable().functionTypeReturnType(expectedFunctionTypeIndex);
+                        int returnType = instance().symbolTable().functionTypeReturnType(expectedFunctionTypeIndex);
                         switch (returnType) {
                             case WasmType.I32_TYPE: {
                                 pushInt(stack, stackPointer, (int) result);
@@ -663,7 +678,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 break;
                             }
                             default: {
-                                throw formatException("Unknown return type: %d", returnType);
+                                throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Unknown return type: %d", returnType);
                             }
                         }
 
@@ -810,11 +825,11 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     }
                     case I32_CONST: {
                         // region Load LEB128 Signed32 -> value
-                        long valueAndLength = signedIntConstantAndLength(data, offset);
-                        int offsetDelta = (int) ((valueAndLength >>> 32) & 0xffff_ffffL);
+                        int value = signedIntConstant(data, offset);
+                        int offsetDelta = offsetDelta(data, offset);
                         offset += offsetDelta;
                         // endregion
-                        push(stack, stackPointer, valueAndLength & 0xffff_ffffL);
+                        pushInt(stack, stackPointer, value);
                         stackPointer++;
                         break;
                     }
@@ -1304,18 +1319,13 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         // for these instructions.
                         break;
                     default:
-                        throw createUnknownOpcodeError(opcode, "Unknown opcode: 0x%02X", Failure.UNSPECIFIED_MALFORMED);
+                        Assert.fail(Assert.format("Unknown opcode: 0x%02X", opcode), Failure.UNSPECIFIED_MALFORMED);
                 }
             }
         } catch (ArithmeticException e) {
             throw WasmException.fromArithmeticException(this, e);
         }
         return -1;
-    }
-
-    @TruffleInterpreterBoundary
-    private RuntimeException createUnknownOpcodeError(int opcode, String s, Failure failure) {
-        return Assert.fail(Assert.format(s, opcode), failure);
     }
 
     private void load(WasmMemory memory, long[] stack, int stackPointer, int opcode, int memOffset) {
@@ -1395,7 +1405,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 default: {
-                    throw formatException("Unknown load opcode: %d", opcode);
+                    throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Unknown load opcode: %d", opcode);
                 }
             }
         } catch (WasmMemoryException e) {
@@ -1470,7 +1480,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 default: {
-                    throw formatException("Unknown store opcode: %d", opcode);
+                    throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Unknown store opcode: %d", opcode);
                 }
             }
         } catch (WasmMemoryException e) {
@@ -1702,7 +1712,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 f64_promote_f32(stack, stackPointer);
                 break;
             default:
-                createUnknownOpcodeError(opcode, "Unexpected opcode: 0x%02X", Failure.UNSPECIFIED_INTERNAL);
+                Assert.fail(Assert.format("Unexpected opcode: 0x%02X", opcode), Failure.UNSPECIFIED_INTERNAL);
         }
     }
 
@@ -1948,7 +1958,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 f64_copysign(stack, stackPointer);
                 break;
             default:
-                createUnknownOpcodeError(opcode, "Unexpected opcode: 0x%02X", Failure.UNSPECIFIED_INTERNAL);
+                Assert.fail(Assert.format("Unexpected opcode: 0x%02X", opcode), Failure.UNSPECIFIED_INTERNAL);
         }
     }
 
@@ -2726,16 +2736,11 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     args[i] = popAsDouble(stack, stackPointer);
                     break;
                 default: {
-                    throw formatException("Unknown type: %d", type);
+                    throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Unknown type: %d", type);
                 }
             }
         }
         return args;
-    }
-
-    @TruffleInterpreterBoundary
-    private WasmException formatException(String formatString, int type) {
-        return WasmException.format(Failure.UNSPECIFIED_TRAP, this, formatString, type);
     }
 
     @ExplodeLoop
@@ -2760,10 +2765,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         return BinaryStreamParser.peekUnsignedInt32(data, offset, false);
     }
 
-    private static long signedIntConstantAndLength(byte[] data, int offset) {
-        // This is an optimized version of the read which returns both the constant
-        // and its length within one 64-bit value.
-        return BinaryStreamParser.peekSignedInt32AndLength(data, offset);
+    private static int signedIntConstant(byte[] data, int offset) {
+        return BinaryStreamParser.peekSignedInt32(data, offset);
     }
 
     private static long signedLongConstant(byte[] data, int offset) {
@@ -2771,6 +2774,10 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     private static int offsetDelta(byte[] data, int offset) {
+        return peekLeb128Length(data, offset);
+    }
+
+    private static int peekLeb128Length(byte[] data, int offset) {
         return BinaryStreamParser.peekLeb128Length(data, offset);
     }
 }
