@@ -26,7 +26,6 @@ package com.oracle.svm.core.windows;
 
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.StackValue;
-import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -133,7 +132,7 @@ public class WindowsVirtualMemoryProvider implements VirtualMemoryProvider {
     @Override
     @Uninterruptible(reason = "May be called from uninterruptible code.", mayBeInlined = true)
     public Pointer reserve(UnsignedWord nbytes) {
-        return MemoryAPI.VirtualAlloc(WordFactory.nullPointer(), nbytes, MemoryAPI.MEM_RESERVE(), MemoryAPI.PAGE_NOACCESS());
+        return MemoryAPI.VirtualAlloc(WordFactory.nullPointer(), nbytes, MemoryAPI.MEM_RESERVE(), MemoryAPI.PAGE_READWRITE());
     }
 
     @Override
@@ -145,7 +144,8 @@ public class WindowsVirtualMemoryProvider implements VirtualMemoryProvider {
     @Override
     @Uninterruptible(reason = "May be called from uninterruptible code.", mayBeInlined = true)
     public Pointer commit(PointerBase start, UnsignedWord nbytes, int access) {
-        return MemoryAPI.VirtualAlloc(start, nbytes, MemoryAPI.MEM_COMMIT(), accessAsProt(access));
+        Pointer addr = MemoryAPI.VirtualAlloc(start, nbytes, MemoryAPI.MEM_COMMIT(), accessAsProt(access));
+        return addr.isNull() ? WordFactory.nullPointer() : addr;
     }
 
     @Override
@@ -166,15 +166,6 @@ public class WindowsVirtualMemoryProvider implements VirtualMemoryProvider {
     @Override
     @Uninterruptible(reason = "May be called from uninterruptible code.", mayBeInlined = true)
     public int free(PointerBase start, UnsignedWord nbytes) {
-        assert isValid(start) : "Invalid address range start";
-        int result = MemoryAPI.VirtualFree(start, WordFactory.zero(), MemoryAPI.MEM_RELEASE());
-        return result != 0 ? 0 : -1;
-    }
-
-    @Uninterruptible(reason = "May be called from uninterruptible code.", mayBeInlined = true)
-    private static boolean isValid(PointerBase start) {
-        MemoryAPI.MEMORY_BASIC_INFORMATION memoryInfo = StackValue.get(MemoryAPI.MEMORY_BASIC_INFORMATION.class);
-        MemoryAPI.VirtualQuery(start, memoryInfo, SizeOf.unsigned(MemoryAPI.MEMORY_BASIC_INFORMATION.class));
-        return start.equal(memoryInfo.AllocationBase());
+        return MemoryAPI.VirtualFree(start, nbytes, MemoryAPI.MEM_RELEASE());
     }
 }
