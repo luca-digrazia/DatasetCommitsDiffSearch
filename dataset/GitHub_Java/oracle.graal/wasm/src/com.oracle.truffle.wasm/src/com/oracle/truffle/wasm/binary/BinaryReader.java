@@ -82,7 +82,6 @@ import static com.oracle.truffle.wasm.binary.Instructions.I64_LT_S;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_LT_U;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_NE;
 import static com.oracle.truffle.wasm.binary.Instructions.NOP;
-import static com.oracle.truffle.wasm.binary.Instructions.UNREACHABLE;
 import static com.oracle.truffle.wasm.binary.Sections.CODE;
 import static com.oracle.truffle.wasm.binary.Sections.CUSTOM;
 import static com.oracle.truffle.wasm.binary.Sections.DATA;
@@ -291,7 +290,6 @@ public class BinaryReader extends BinaryStreamReader {
         do {
             opcode = read1() & 0xFF;
             switch (opcode) {
-                case UNREACHABLE:
                 case NOP:
                     break;
                 case BLOCK:
