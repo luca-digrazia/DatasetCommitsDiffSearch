@@ -236,7 +236,7 @@ final class LLDBMemoryValue implements LLVMDebugValue {
         }
 
         if (LLVMManagedPointer.isInstance(pointer)) {
-            return "<managed value>" + (bitOffset == 0 ? "" : " + " + LLDBSupport.toSizeString(bitOffset));
+            return "<managed pointer>" + (bitOffset == 0 ? "" : " + " + LLDBSupport.toSizeString(bitOffset));
         }
 
         if (LLVMNativePointer.isInstance(pointer)) {
@@ -406,7 +406,7 @@ final class LLDBMemoryValue implements LLVMDebugValue {
     @Override
     public boolean isInteropValue() {
         if (LLVMManagedPointer.isInstance(pointer)) {
-            return !LLDBSupport.pointsToObjectAccess(LLVMManagedPointer.cast(pointer)) && !LLDBSupport.isNestedManagedPointer(pointer);
+            return !LLDBSupport.pointsToObjectAccess(LLVMManagedPointer.cast(pointer));
         }
         return false;
     }
