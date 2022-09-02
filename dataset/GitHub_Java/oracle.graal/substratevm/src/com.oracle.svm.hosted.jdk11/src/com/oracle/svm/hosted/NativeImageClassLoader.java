@@ -25,13 +25,14 @@
 package com.oracle.svm.hosted;
 
 import java.io.File;
+import java.io.IOException;
 import java.lang.module.Configuration;
 import java.lang.module.ModuleFinder;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -49,23 +50,23 @@ public class NativeImageClassLoader extends AbstractNativeImageClassLoader {
     private final List<Path> buildmp;
 
     private final ClassLoader classLoader;
-    private final Optional<Function<String, Optional<Module>>> moduleFinder;
+    private final Function<String, Optional<Module>> moduleFinder;
     private final ModuleLayer.Controller moduleController;
 
     NativeImageClassLoader(String[] classpath, String[] modulePath) {
         super(classpath);
 
-        imagemp = Collections.unmodifiableList(Arrays.stream(modulePath).map(Paths::get).collect(Collectors.toList()));
-        buildmp = Collections.unmodifiableList(Arrays.stream(System.getProperty("jdk.module.path").split(File.pathSeparator)).map(Paths::get).collect(Collectors.toList()));
+        imagemp = Arrays.stream(modulePath).map(Paths::get).collect(Collectors.toUnmodifiableList());
+        buildmp = Arrays.stream(System.getProperty("jdk.module.path").split(File.pathSeparator)).map(Paths::get).collect(Collectors.toUnmodifiableList());
 
         moduleController = createModuleController(imagemp.toArray(Path[]::new), classPathClassLoader);
         ModuleLayer moduleLayer = moduleController.layer();
         if (moduleLayer.modules().isEmpty()) {
             classLoader = classPathClassLoader;
-            moduleFinder = Optional.empty();
+            moduleFinder = null;
         } else {
             classLoader = moduleLayer.modules().iterator().next().getClassLoader();
-            moduleFinder = Optional.of(moduleLayer::findModule);
+            moduleFinder = moduleLayer::findModule;
         }
     }
 
@@ -84,7 +85,7 @@ public class NativeImageClassLoader extends AbstractNativeImageClassLoader {
 
     @Override
     public Optional<Object> findModule(String moduleName) {
-        return moduleFinder.flatMap(f -> f.apply(moduleName));
+        return Optional.ofNullable(moduleFinder).flatMap(f -> f.apply(moduleName));
     }
 
     @Override
@@ -117,6 +118,11 @@ public class NativeImageClassLoader extends AbstractNativeImageClassLoader {
     }
 
     @Override
+    protected Enumeration<URL> findResources(String name) throws IOException {
+        return Util.findResources(classLoader, name);
+    }
+
+    @Override
     protected ClassLoader replacementClassLoader(ClassLoader replaceCandidate) {
         if (replaceCandidate == classLoader) {
             return getParent();
@@ -146,18 +152,20 @@ public class NativeImageClassLoader extends AbstractNativeImageClassLoader {
             }
 
             for (String moduleResource : ModuleSupport.getSystemModuleResources(modules)) {
-                if (moduleResource.endsWith(CLASS_EXTENSION)) {
-                    executor.execute(() -> handleClassFileName(classFileWithoutSuffix(moduleResource), '/'));
-                }
+                handleClassInModuleResource(moduleResource);
             }
 
             for (String moduleResource : ModuleSupport.getModuleResources(nativeImageClassLoader.modulepath())) {
-                if (moduleResource.endsWith(CLASS_EXTENSION)) {
-                    executor.execute(() -> handleClassFileName(classFileWithoutSuffix(moduleResource), '/'));
-                }
+                handleClassInModuleResource(moduleResource);
             }
 
             super.init();
+        }
+
+        private void handleClassInModuleResource(String moduleResource) {
+            if (moduleResource.endsWith(CLASS_EXTENSION)) {
+                executor.execute(() -> handleClassFileName(classFileWithoutSuffix(moduleResource), '/'));
+            }
         }
 
         private static void addOptionalModule(Set<String> modules, String name) {
