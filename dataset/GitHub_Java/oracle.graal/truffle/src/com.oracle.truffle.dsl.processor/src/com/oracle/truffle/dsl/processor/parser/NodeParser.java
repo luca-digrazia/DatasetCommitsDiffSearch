@@ -1387,7 +1387,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
 
         boolean genericFound = false;
         for (ExecutableTypeData type : node.getExecutableTypes()) {
-            if (mode == ParseMode.EXPORTED_MESSAGE || !type.hasUnexpectedValue()) {
+            if (!type.hasUnexpectedValue()) {
                 genericFound = true;
                 break;
             }
@@ -1428,13 +1428,14 @@ public final class NodeParser extends AbstractParser<NodeData> {
             }
         }
 
+        TypeMirror unexpectedResult = types.UnexpectedResultException;
         TypeMirror runtimeException = context.getType(RuntimeException.class);
         Set<String> allowedCheckedExceptions = null;
         for (ExecutableTypeData type : allExecutes) {
             List<? extends TypeMirror> thrownTypes = type.getMethod().getThrownTypes();
             List<String> checkedTypes = null;
             for (TypeMirror thrownType : thrownTypes) {
-                if (mode != ParseMode.EXPORTED_MESSAGE && typeEquals(thrownType, types.UnexpectedResultException)) {
+                if (typeEquals(thrownType, unexpectedResult)) {
                     continue;
                 } else if (isAssignable(thrownType, runtimeException)) {
                     // runtime exceptions don't need to be declared.

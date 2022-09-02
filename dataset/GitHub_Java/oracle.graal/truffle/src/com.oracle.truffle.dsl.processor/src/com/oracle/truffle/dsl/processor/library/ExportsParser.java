@@ -1017,7 +1017,6 @@ public class ExportsParser extends AbstractParser<ExportsData> {
         syntheticExecute.getParameters().set(0, new CodeVariableElement(exportedMessage.getReceiverType(), "receiver"));
         syntheticExecute.getModifiers().add(Modifier.ABSTRACT);
         syntheticExecute.setVarArgs(false);
-
         clonedType.add(syntheticExecute);
 
         // add enclosing type to static imports. merge with existing static imports
