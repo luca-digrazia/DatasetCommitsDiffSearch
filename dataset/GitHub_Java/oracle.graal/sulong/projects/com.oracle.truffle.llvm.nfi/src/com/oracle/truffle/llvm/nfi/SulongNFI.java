@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -143,13 +143,9 @@ public final class SulongNFI extends TruffleLanguage<Env> {
 
             @Override
             public Object execute(VirtualFrame frame) {
-                throw CompilerDirectives.shouldNotReachHere("illegal access to internal language");
+                throw new UnsupportedOperationException("illegal access to internal language");
             }
         });
     }
 
-    @Override
-    protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
-        return true;
-    }
 }
