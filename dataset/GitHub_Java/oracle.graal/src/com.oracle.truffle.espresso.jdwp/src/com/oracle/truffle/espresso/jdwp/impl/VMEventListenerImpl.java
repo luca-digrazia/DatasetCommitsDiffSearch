@@ -314,9 +314,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void breakpointHit(BreakpointInfo info, CallFrame frame, Object currentThread) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(info.getSuspendPolicy());
@@ -342,9 +339,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void methodBreakpointHit(MethodBreakpointEvent methodEvent, Object currentThread, CallFrame frame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
         MethodBreakpointInfo info = methodEvent.getInfo();
 
@@ -378,9 +372,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void fieldAccessBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = writeSharedFieldInformation(event, currentThread, callFrame, RequestedJDWPEvents.FIELD_ACCESS);
         if (holdEvents) {
             heldEvents.add(stream);
@@ -391,9 +382,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void fieldModificationBreakpointHit(FieldBreakpointEvent event, Object currentThread, CallFrame callFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = writeSharedFieldInformation(event, currentThread, callFrame, RequestedJDWPEvents.FIELD_MODIFICATION);
 
         // value about to be set
@@ -446,9 +434,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void exceptionThrown(BreakpointInfo info, Object currentThread, Object exception, CallFrame[] callFrames) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         CallFrame top = callFrames[0];
@@ -498,9 +483,6 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void stepCompleted(SteppingInfo info, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         if (info.isPopFrames()) {
             // send reply packet when "step" is completed
             PacketStream reply = new PacketStream().replyPacket().id(info.getRequestId());
@@ -538,9 +520,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     private void sendMonitorContendedEnterEvent(MonitorEvent monitorEvent, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(monitorEvent.getFilter().getSuspendPolicy());
@@ -580,9 +559,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     private void sendMonitorContendedEnteredEvent(MonitorEvent monitorEvent, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(monitorEvent.getFilter().getSuspendPolicy());
@@ -622,9 +598,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     public void sendMonitorWaitEvent(Object monitor, long timeout, RequestFilter filter, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(filter.getSuspendPolicy());
@@ -696,9 +669,6 @@ public final class VMEventListenerImpl implements VMEventListener {
     }
 
     private void sendMonitorWaitedEvent(Object monitor, boolean timedOut, RequestFilter filter, CallFrame currentFrame) {
-        if (connection == null) {
-            return;
-        }
         PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
 
         stream.writeByte(filter.getSuspendPolicy());

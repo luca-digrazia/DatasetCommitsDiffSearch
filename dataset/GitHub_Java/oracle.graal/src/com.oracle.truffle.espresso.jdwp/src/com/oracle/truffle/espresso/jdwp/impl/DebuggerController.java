@@ -586,8 +586,6 @@ public final class DebuggerController implements ContextsListener {
                 }
             } catch (InterruptedException e) {
                 // the thread was interrupted, so let it run dry
-                // make sure the interrupted flag is set though
-                Thread.currentThread().interrupt();
             }
         }
 
