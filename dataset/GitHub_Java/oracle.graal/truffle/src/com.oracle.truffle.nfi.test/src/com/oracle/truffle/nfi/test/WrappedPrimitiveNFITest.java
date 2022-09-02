@@ -63,8 +63,8 @@ public class WrappedPrimitiveNFITest extends NFITest {
     }
 
     private static final Object[] ARGUMENTS = {
-                    false, (byte) 42, (short) 42, (char) 42, 42, (long) 42, (float) 42, (double) 42, //
-                    8472, Integer.MAX_VALUE, Integer.MIN_VALUE, //
+                    false, (byte) 42, (short) 42, (char) 42, 42, (long) 42,
+                    // Disabled until we eliminate boxing: (float) 42, (double) 42,
                     "Hello, World!", new TestObject(), new NullObject()
     };
 
@@ -100,11 +100,6 @@ public class WrappedPrimitiveNFITest extends NFITest {
     @Test
     public void passObjectTest(@Inject(PassObjectNode.class) CallTarget target) {
         Object ret = target.call(argument, getObject, verifyObject);
-        if (argument instanceof TruffleObject) {
-            Assert.assertSame("return value", argument, ret);
-        } else {
-            // everything else is considered a value type by Truffle, so identity can be lost
-            Assert.assertEquals("return value", argument, ret);
-        }
+        Assert.assertSame("return value", argument, ret);
     }
 }
