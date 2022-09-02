@@ -1,26 +1,7 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
  */
 package org.graalvm.component.installer.commands;
 
@@ -35,7 +16,6 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -56,14 +36,24 @@ public class PreRemoveProcess {
     private final Feedback feedback;
     private final List<ComponentInfo> infos = new ArrayList<>();
     private boolean rebuildPolyglot;
-
+    
     private boolean dryRun;
     private boolean ignoreFailedDeletions;
-    private Set<String> knownPaths;
+    private boolean removeBaseDir;
 
     public PreRemoveProcess(Path instPath, Feedback fb) {
-        this.feedback = fb.withBundle(PreRemoveProcess.class);
+        this.feedback = fb;
+        
         installPath = instPath;
+    }
+
+    public boolean isRemoveBaseDir() {
+        return removeBaseDir;
+    }
+
+    public PreRemoveProcess setRemoveBaseDir(boolean removeBaseDir) {
+        this.removeBaseDir = removeBaseDir;
+        return this;
     }
 
     public boolean isDryRun() {
@@ -87,13 +77,12 @@ public class PreRemoveProcess {
     public void addComponentInfo(ComponentInfo info) {
         this.infos.add(info);
     }
-
+    
     /**
      * Process all the components, prints message.
-     * 
      * @throws IOException if deletion fails
      */
-    public void run() throws IOException {
+    void run() throws IOException {
         for (ComponentInfo ci : infos) {
             processComponent(ci);
         }
@@ -102,13 +91,13 @@ public class PreRemoveProcess {
             feedback.output("INSTALL_RebuildPolyglotNeeded", File.separator, installPath.resolve(p).normalize());
         }
     }
-
+    
     /**
-     * Called also from Uninstaller. Will delete one single file, possibly with altering permissions
-     * on the parent so the file can be deleted.
-     * 
+     * Called also from Uninstaller. Will delete one single file, possibly with altering
+     * permissions on the parent so the file can be deleted.
      * @param p file to delete
-     * @throws IOException
+     * @param rootPath root path to the graalVM
+     * @throws IOException 
      */
     void deleteOneFile(Path p) throws IOException {
         try {
@@ -123,7 +112,7 @@ public class PreRemoveProcess {
                 return;
             }
             throw ex;
-            // throw new UncheckedIOException(ex);
+//            throw new UncheckedIOException(ex);
         }
     }
 
@@ -141,7 +130,7 @@ public class PreRemoveProcess {
             Set<PosixFilePermission> restoreDirPermissions = null;
             if (attrs != null) {
                 Files.setPosixFilePermissions(p, ALL_WRITE_PERMS);
-                Path d = p.normalize().getParent();
+                Path d = p.getParent();
                 // set the parent directory's permissions, but do not
                 // alter permissions outside the to-be-deleted tree:
                 if (d == null) {
@@ -173,7 +162,6 @@ public class PreRemoveProcess {
 
     /**
      * Also called from Uninstaller.
-     * 
      * @param rootPath root path to delete (inclusive)
      * @throws IOException if the deletion fails.
      */
@@ -184,9 +172,7 @@ public class PreRemoveProcess {
         try (Stream<Path> paths = Files.walk(rootPath)) {
             paths.sorted(Comparator.reverseOrder()).forEach((p) -> {
                 try {
-                    if (shouldDeletePath(p)) {
-                        deleteOneFile(p);
-                    }
+                    deleteOneFile(p);
                 } catch (IOException ex) {
                     throw new UncheckedIOException(ex);
                 }
@@ -195,29 +181,20 @@ public class PreRemoveProcess {
             throw ex.getCause();
         }
     }
-
-    private boolean shouldDeletePath(Path toDelete) {
-        Path rel;
-        try {
-            rel = installPath.relativize(toDelete);
-        } catch (IllegalArgumentException ex) {
-            // cannot relativize; avoid to delete such thing.
-            return false;
-        }
-        String relString = SystemUtils.toCommonPath(rel);
-        if (Files.isDirectory(toDelete)) {
-            relString += "/"; // NOI18N
-        }
-        return !knownPaths.contains(relString);
-    }
-
+    
     void processComponent(ComponentInfo ci) throws IOException {
+        Path langParentPath = SystemUtils.fromCommonRelative(CommonConstants.LANGUAGE_PARENT);
         rebuildPolyglot |= ci.isPolyglotRebuild();
         for (String s : ci.getWorkingDirectories()) {
+            Path relPath = SystemUtils.fromCommonRelative(s);
+            if (langParentPath.equals(relPath.getParent()) && !removeBaseDir) {
+                return;
+            }
             Path p = installPath.resolve(SystemUtils.fromCommonRelative(s));
             feedback.verboseOutput("UNINSTALL_DeletingDirectoryRecursively", p);
-            this.knownPaths = new HashSet<>(ci.getPaths());
-            deleteContentsRecursively(p);
+            if (ci.getWorkingDirectories().contains(s)) {
+                deleteContentsRecursively(p);
+            }
         }
     }
 }

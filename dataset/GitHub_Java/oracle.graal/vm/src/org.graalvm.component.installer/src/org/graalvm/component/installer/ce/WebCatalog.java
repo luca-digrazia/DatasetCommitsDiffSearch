@@ -31,18 +31,25 @@ import java.net.ConnectException;
 import java.net.MalformedURLException;
 import java.net.NoRouteToHostException;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
+import java.util.jar.JarFile;
 import org.graalvm.component.installer.BundleConstants;
+import org.graalvm.component.installer.model.CatalogContents;
 import org.graalvm.component.installer.CommandInput;
 import org.graalvm.component.installer.CommonConstants;
+import org.graalvm.component.installer.ComponentCollection;
 import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.IncompatibleException;
+import org.graalvm.component.installer.jar.JarMetaLoader;
 import org.graalvm.component.installer.model.ComponentRegistry;
 import org.graalvm.component.installer.model.ComponentStorage;
 import org.graalvm.component.installer.remote.FileDownloader;
+import org.graalvm.component.installer.persist.MetadataLoader;
 import org.graalvm.component.installer.remote.RemotePropertiesStorage;
 import org.graalvm.component.installer.SoftwareChannel;
+import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.model.ComponentInfo;
 
 public class WebCatalog implements SoftwareChannel {
@@ -120,7 +127,7 @@ public class WebCatalog implements SoftwareChannel {
         oldGraalPref.append('.');
 
         String graalVersionString = graalCaps.get(CommonConstants.CAP_GRAALVM_VERSION).toLowerCase();
-        String normalizedVersion = input.getLocalRegistry().getGraalVersion().toString();
+        String normalizedVersion = SystemUtils.normalizeOldVersions(graalVersionString);
 
         StringBuilder graalPref = new StringBuilder(oldGraalPref);
 
@@ -152,7 +159,7 @@ public class WebCatalog implements SoftwareChannel {
                 throw feedback.failure("REMOTE_CorruptedCatalogFile", null, catalogURL);
             } else {
                 throw new IncompatibleException(
-                                feedback.l10n("REMOTE_UnsupportedGraalVersion",
+                                feedback.l10n("REMOTE_UnsupportedGraalVersion", null,
                                                 graalCaps.get(CommonConstants.CAP_GRAALVM_VERSION),
                                                 graalCaps.get(CommonConstants.CAP_OS_NAME),
                                                 graalCaps.get(CommonConstants.CAP_OS_ARCH)),
@@ -164,15 +171,21 @@ public class WebCatalog implements SoftwareChannel {
     }
 
     @Override
+    public MetadataLoader createLocalFileLoader(ComponentInfo cInfo, Path localFile, boolean verify) throws IOException {
+        return new JarMetaLoader(new JarFile(localFile.toFile(), verify), feedback);
+    }
+
+    @Override
     public FileDownloader configureDownloader(ComponentInfo cInfo, FileDownloader dn) {
         return dn;
     }
 
     public static class WebCatalogFactory implements SoftwareChannel.Factory {
         private CommandInput input;
+        private Feedback feedback;
 
         @Override
-        public SoftwareChannel createChannel(String urlSpec, CommandInput in, Feedback fb) {
+        public SoftwareChannel createChannel(String urlSpec, CommandInput input, Feedback fb) {
             int schColon = urlSpec.indexOf(':'); // NOI18N
             if (schColon == -1) {
                 return null;
@@ -180,7 +193,7 @@ public class WebCatalog implements SoftwareChannel {
             String scheme = urlSpec.toLowerCase().substring(0, schColon);
             if (acceptURLScheme(scheme)) {
                 WebCatalog c = new WebCatalog(urlSpec);
-                c.init(in, fb);
+                c.init(input, fb);
                 return c;
             }
             return null;
@@ -189,7 +202,9 @@ public class WebCatalog implements SoftwareChannel {
         @Override
         public void init(CommandInput in, Feedback out) {
             assert this.input == null;
+
             this.input = in;
+            this.feedback = out.withBundle(WebCatalog.class);
         }
     }
 }

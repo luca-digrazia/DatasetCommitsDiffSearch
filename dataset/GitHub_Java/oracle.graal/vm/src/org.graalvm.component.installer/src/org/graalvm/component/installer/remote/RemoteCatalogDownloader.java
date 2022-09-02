@@ -24,7 +24,9 @@
  */
 package org.graalvm.component.installer.remote;
 
+import java.io.IOException;
 import java.net.URL;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ServiceLoader;
@@ -32,6 +34,7 @@ import org.graalvm.component.installer.model.CatalogContents;
 import org.graalvm.component.installer.CommandInput;
 import org.graalvm.component.installer.ComponentCollection;
 import org.graalvm.component.installer.Feedback;
+import org.graalvm.component.installer.persist.MetadataLoader;
 import org.graalvm.component.installer.SoftwareChannel;
 import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.model.ComponentStorage;
@@ -96,6 +99,11 @@ public class RemoteCatalogDownloader implements SoftwareChannel {
             union.getComponentIDs();
         }
         return union;
+    }
+
+    @Override
+    public MetadataLoader createLocalFileLoader(ComponentInfo cInfo, Path localFile, boolean verify) throws IOException {
+        return delegate(cInfo).createLocalFileLoader(cInfo, localFile, verify);
     }
 
     @Override

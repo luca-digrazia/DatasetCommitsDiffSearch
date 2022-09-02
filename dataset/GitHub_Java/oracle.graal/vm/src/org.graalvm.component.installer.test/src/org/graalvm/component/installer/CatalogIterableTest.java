@@ -116,6 +116,7 @@ public class CatalogIterableTest extends CommandTestBase {
 
         assertEquals("ruby", meta.getId());
         assertNull(meta.getInfoPath());
+        assertNotNull(meta.getLicensePath());
         assertFalse(meta.getPaths().isEmpty());
         assertEquals("TruffleRuby 0.33-dev", meta.getName());
         assertEquals("0.33-dev", meta.getVersionString());
@@ -138,9 +139,8 @@ public class CatalogIterableTest extends CommandTestBase {
     }
 
     void addRemoteComponent(String relative, String u, boolean addParam) throws IOException {
-        storage.graalInfo.put(BundleConstants.GRAAL_VERSION, "0.33-dev");
         initRemoteComponent(relative, u, null, null);
-        catalogStorage.installed.add(info);
+        storage.installed.add(info);
         if (addParam) {
             components.add(param);
         }
@@ -150,7 +150,7 @@ public class CatalogIterableTest extends CommandTestBase {
     public void testReadComponentMetadataNoNetwork() throws Exception {
         addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
         textParams.add("ruby");
-        CatalogIterable cit = new CatalogIterable(this, this, getRegistry(), this);
+        CatalogIterable cit = new CatalogIterable(this, this, this);
         assertTrue(cit.iterator().hasNext());
         for (ComponentParam p : cit) {
             URL remoteU = p.createMetaLoader().getComponentInfo().getRemoteURL();
@@ -165,7 +165,7 @@ public class CatalogIterableTest extends CommandTestBase {
         exception.expectMessage("REMOTE_UnknownComponentId");
         addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
         textParams.add("r");
-        CatalogIterable cit = new CatalogIterable(this, this, getRegistry(), this);
+        CatalogIterable cit = new CatalogIterable(this, this, this);
         assertTrue(cit.iterator().hasNext());
         cit.iterator().next();
     }
@@ -181,7 +181,7 @@ public class CatalogIterableTest extends CommandTestBase {
         addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
         File mistyped = folder.newFile("mistyped-component.jar");
         textParams.add(mistyped.getPath());
-        CatalogIterable cit = new CatalogIterable(this, this, getRegistry(), this);
+        CatalogIterable cit = new CatalogIterable(this, this, this);
         assertTrue(cit.iterator().hasNext());
         cit.iterator().next();
     }
@@ -247,7 +247,6 @@ public class CatalogIterableTest extends CommandTestBase {
 
     @Test
     public void testURLDoesNotExist() throws Exception {
-        storage.graalInfo.put(BundleConstants.GRAAL_VERSION, "0.33-dev");
         addRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", false);
         textParams.add("ruby");
         Handler.bind(url.toString(), new URLConnection(url) {
@@ -283,7 +282,7 @@ public class CatalogIterableTest extends CommandTestBase {
             }
         });
 
-        CatalogIterable cit = new CatalogIterable(this, this, getRegistry(), this);
+        CatalogIterable cit = new CatalogIterable(this, this, this);
         ComponentParam rubyComp = cit.iterator().next();
 
         exception.expect(FailedOperationException.class);
