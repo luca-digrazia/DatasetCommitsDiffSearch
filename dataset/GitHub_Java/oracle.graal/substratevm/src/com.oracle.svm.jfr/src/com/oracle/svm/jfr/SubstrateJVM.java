@@ -310,7 +310,7 @@ class SubstrateJVM {
 
     /** See {@link JVM#setMethodSamplingInterval}. */
     public void setMethodSamplingInterval(@SuppressWarnings("unused") long type, @SuppressWarnings("unused") long intervalMillis) {
-        // Not supported but this method is called during JFR startup, so we can't throw an error.
+        throw new IllegalStateException("JFR Method sampling is currently not supported.");
     }
 
     /** See {@link JVM#setSampleThreads}. */
@@ -332,7 +332,7 @@ class SubstrateJVM {
 
     /** See {@link JVM#setStackTraceEnabled}. */
     public void setStackTraceEnabled(@SuppressWarnings("unused") long eventTypeId, @SuppressWarnings("unused") boolean enabled) {
-        // Not supported but this method is called during JFR startup, so we can't throw an error.
+        throw new IllegalStateException("JFR stack traces are not supported");
     }
 
     /** See {@link JVM#setThreadBufferSize}. */
@@ -440,7 +440,6 @@ class SubstrateJVM {
         eventSettings[NumUtil.safeToInt(eventTypeId)].setEnabled(enabled);
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean isEnabled(JfrEvents event) {
         return eventSettings[event.getId()].isEnabled();
     }
@@ -457,7 +456,6 @@ class SubstrateJVM {
         return true;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public boolean getEpoch() {
         return epoch == 1L;
     }

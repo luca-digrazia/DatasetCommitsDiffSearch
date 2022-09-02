@@ -39,17 +39,15 @@ import static jdk.jfr.internal.jfc.JFC.nameFromPath;
 public final class PredefinedJFCSubstitition {
 
     static Map<String, Configuration> knownKonfigurations;
-    static final String DEFAULT_JFC = "com/oracle/svm/jfr/jdk11/jfc/default.jfc";
-    static final String PROFILE_JFC = "com/oracle/svm/jfr/jdk11/jfc/profile.jfc";
+    static final String DEFAULT_JFC = "com/oracle/svm/jfr/jfc/default.jfc";
+    static final String PROFILE_JFC = "com/oracle/svm/jfr/jfc/profile.jfc";
 
     static {
         knownKonfigurations = new HashMap<>();
         try {
             registerConf(DEFAULT_JFC);
             registerConf(PROFILE_JFC);
-        } catch (IOException ex) {
-            throw VMError.shouldNotReachHere(ex);
-        } catch (ParseException ex) {
+        } catch (IOException | ParseException ex) {
             throw VMError.shouldNotReachHere(ex);
         }
     }
