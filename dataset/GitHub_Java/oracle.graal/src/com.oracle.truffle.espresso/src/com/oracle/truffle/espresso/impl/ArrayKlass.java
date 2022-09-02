@@ -61,13 +61,13 @@ public final class ArrayKlass extends Klass {
     }
 
     @Override
-    public int getModifiers() {
+    public final int getModifiers() {
         // Arrays (of static inner class) may have protected access.
         return (getElementalType().getModifiers() & (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED)) | ACC_FINAL | ACC_ABSTRACT;
     }
 
     @Override
-    public int getClassModifiers() {
+    public final int getClassModifiers() {
         // Arrays (of static inner class) may have protected access.
         return (getElementalType().getClassModifiers() & (ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED)) | ACC_FINAL | ACC_ABSTRACT;
     }
@@ -109,7 +109,7 @@ public final class ArrayKlass extends Klass {
     }
 
     @Override
-    public Method vtableLookup(int vtableIndex) {
+    public final Method vtableLookup(int vtableIndex) {
         return getSuperKlass().vtableLookup(vtableIndex);
     }
 
@@ -144,23 +144,23 @@ public final class ArrayKlass extends Klass {
     }
 
     @Override
-    public Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass) {
+    public final Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass) {
         methodLookupCount.inc();
         return getSuperKlass().lookupMethod(methodName, signature, accessingKlass);
     }
 
     @Override
-    public Field lookupFieldTable(int slot) {
+    public final Field lookupFieldTable(int slot) {
         return getSuperKlass().lookupFieldTable(slot);
     }
 
     @Override
-    public Field lookupStaticFieldTable(int slot) {
+    public final Field lookupStaticFieldTable(int slot) {
         return getSuperKlass().lookupStaticFieldTable(slot);
     }
 
     @Override
-    public @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
+    public final @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
         return elementalType.getDefiningClassLoader();
     }
 
