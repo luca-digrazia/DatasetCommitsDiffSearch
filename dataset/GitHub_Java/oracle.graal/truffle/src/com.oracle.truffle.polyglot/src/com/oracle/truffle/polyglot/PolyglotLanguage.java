@@ -62,7 +62,6 @@ import com.oracle.truffle.api.TruffleLanguage.Env;
 import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.utilities.NeverValidAssumption;
-import java.lang.ref.WeakReference;
 
 final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
@@ -269,6 +268,7 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
 
     void freeInstance(PolyglotLanguageInstance instance) {
         synchronized (engine) {
+            profile.notifyLanguageFreed();
             switch (cache.getPolicy()) {
                 case EXCLUSIVE:
                     // nothing to do
@@ -392,9 +392,11 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
 
     static final class ContextProfile {
 
+        private static final Object UNSET_CONTEXT = new Object();
+
         private final Assumption singleContext;
-        @CompilationFinal private volatile WeakReference<Object> cachedSingleContext;
-        @CompilationFinal private volatile WeakReference<PolyglotLanguageContext> cachedSingleLanguageContext;
+        @CompilationFinal private volatile Object cachedSingleContext = UNSET_CONTEXT;
+        @CompilationFinal private volatile Object cachedSingleLanguageContext = UNSET_CONTEXT;
 
         ContextProfile(PolyglotLanguage language) {
             this.singleContext = language.engine.boundEngine ? Truffle.getRuntime().createAssumption("Language single context.") : NeverValidAssumption.INSTANCE;
@@ -406,11 +408,10 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
 
         PolyglotLanguageContext profile(Object context) {
             if (singleContext.isValid()) {
-                WeakReference<PolyglotLanguageContext> ref = cachedSingleLanguageContext;
-                PolyglotLanguageContext cachedSingle = ref == null ? null : ref.get();
+                Object cachedSingle = cachedSingleLanguageContext;
                 if (singleContext.isValid()) {
                     assert cachedSingle == context : assertionError(cachedSingle, context);
-                    return cachedSingle;
+                    return (PolyglotLanguageContext) cachedSingle;
                 }
             }
             return (PolyglotLanguageContext) context;
@@ -422,19 +423,26 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
 
         void notifyContextCreate(PolyglotLanguageContext context, Env env) {
             if (singleContext.isValid()) {
-                WeakReference<Object> ref = this.cachedSingleContext;
-                Object cachedSingle = ref == null ? null : ref.get();
+                Object cachedSingle = this.cachedSingleContext;
                 assert cachedSingle != LANGUAGE.getContext(env) || cachedSingle == null : "Non-null context objects should be distinct";
-                if (ref == null) {
+                if (cachedSingle == UNSET_CONTEXT) {
                     if (singleContext.isValid()) {
-                        this.cachedSingleContext = new WeakReference<>(LANGUAGE.getContext(env));
-                        this.cachedSingleLanguageContext = new WeakReference<>(context);
+                        this.cachedSingleContext = LANGUAGE.getContext(env);
+                        this.cachedSingleLanguageContext = context;
                     }
                 } else {
                     singleContext.invalidate();
-                    cachedSingleContext = null;
-                    cachedSingleLanguageContext = null;
+                    cachedSingleContext = UNSET_CONTEXT;
+                    cachedSingleLanguageContext = UNSET_CONTEXT;
                 }
+            }
+        }
+
+        void notifyLanguageFreed() {
+            if (singleContext.isValid()) {
+                singleContext.invalidate();
+                cachedSingleContext = UNSET_CONTEXT;
+                cachedSingleLanguageContext = UNSET_CONTEXT;
             }
         }
     }
