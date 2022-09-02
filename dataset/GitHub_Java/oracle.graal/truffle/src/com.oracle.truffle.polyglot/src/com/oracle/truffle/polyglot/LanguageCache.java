@@ -75,7 +75,6 @@ import com.oracle.truffle.api.impl.TruffleJDKServices;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.Tag;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Ahead-of-time initialization. If the JVM is started with {@link TruffleOptions#AOT}, it populates
@@ -97,6 +96,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
     private final String version;
     private final boolean interactive;
     private final boolean internal;
+    private final TruffleLanguage<?> globalInstance;
     private final Set<String> services;
     private final LanguageReflection languageReflection;
     private String languageHome;
@@ -125,6 +125,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
         if (TruffleOptions.AOT) {
             languageReflection.aotInitializeAtBuildTime();
         }
+        this.globalInstance = null;
     }
 
     static LanguageCache createHostLanguageCache(String... services) {
@@ -283,6 +284,9 @@ final class LanguageCache implements Comparable<LanguageCache> {
     }
 
     TruffleLanguage<?> loadLanguage() {
+        if (globalInstance != null) {
+            return globalInstance;
+        }
         return languageReflection.newInstance();
     }
 
@@ -831,9 +835,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
                     TreeSet<String> byteMimeTypes = new TreeSet<>();
                     Collections.addAll(byteMimeTypes, reg.byteMimeTypes());
                     String defaultMime = reg.defaultMimeType();
-                    if (defaultMime.isEmpty()) {
-                        defaultMime = null;
-                    }
                     TreeSet<String> dependentLanguages = new TreeSet<>();
                     Collections.addAll(dependentLanguages, reg.dependentLanguages());
                     boolean interactive = reg.interactive();
@@ -858,9 +859,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
                 private final TruffleLanguage.Provider provider;
                 private final ContextPolicy contextPolicy;
-                private final AtomicBoolean exported = new AtomicBoolean();
                 private volatile Set<Class<? extends Tag>> providedTags;
-                private volatile List<FileTypeDetector> fileTypeDetectors;
 
                 ServiceLoaderLanguageReflection(TruffleLanguage.Provider provider, ContextPolicy contextPolicy) {
                     assert provider != null;
@@ -871,19 +870,12 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
                 @Override
                 TruffleLanguage<?> newInstance() {
-                    exportTruffleIfNeeded();
-                    return provider.create();
+                    return provider.get();
                 }
 
                 @Override
                 List<? extends FileTypeDetector> getFileTypeDetectors() {
-                    List<FileTypeDetector> result = fileTypeDetectors;
-                    if (result == null) {
-                        exportTruffleIfNeeded();
-                        result = provider.createFileTypeDetectors();
-                        fileTypeDetectors = result;
-                    }
-                    return result;
+                    return provider.getFileTypeDetectors();
                 }
 
                 @Override
@@ -924,14 +916,8 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
                 @Override
                 URL getCodeSource() {
-                    CodeSource source = provider.getClass().getProtectionDomain().getCodeSource();
+                    CodeSource source = providedTags.getClass().getProtectionDomain().getCodeSource();
                     return source != null ? source.getLocation() : null;
-                }
-
-                private void exportTruffleIfNeeded() {
-                    if (exported.compareAndSet(false, true)) {
-                        exportTruffle(provider.getClass().getClassLoader());
-                    }
                 }
             }
         }
