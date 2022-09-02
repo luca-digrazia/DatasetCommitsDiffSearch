@@ -374,18 +374,11 @@ public abstract class ClassRegistry implements ContextAccess {
         return (ObjectKlass) klass;
     }
 
-    public void onClassRenamed(ObjectKlass renamedKlass) {
-        // First remove class loader constraint if newType was previously loaded.
-        // That class instance will either be assigned a patched name, or marked
-        // as removed.
-        Klass loadedKlass = findLoadedKlass(renamedKlass.getType());
-        if (loadedKlass != null) {
-            context.getRegistries().removeUnloadedKlassConstraint(loadedKlass, renamedKlass.getType());
-        }
-
-        classes.put(renamedKlass.getType(), new ClassRegistries.RegistryEntry(renamedKlass));
+    public void onClassRenamed(ObjectKlass oldKlass, Symbol<Symbol.Name> newName, Symbol<Type> type) {
+        Symbol<Symbol.Type> newType = context.getTypes().fromName(newName);
+        classes.put(newType, new ClassRegistries.RegistryEntry(oldKlass));
         // record the new loading constraint
-        context.getRegistries().recordConstraint(renamedKlass.getType(), renamedKlass, renamedKlass.getDefiningClassLoader());
+        context.getRegistries().recordConstraint(type, oldKlass, oldKlass.getDefiningClassLoader());
     }
 
     public void onInnerClassRemoved(Symbol<Symbol.Type> type) {

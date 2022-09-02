@@ -241,7 +241,7 @@ public final class ClassRegistries {
         }
     }
 
-    void removeUnloadedKlassConstraint(Klass klass, Symbol<Type> type) {
+    public void removeUnloadedKlassConstraint(Klass klass, Symbol<Type> type) {
         assert klass.isInstanceClass();
         constraints.removeUnloadedKlassConstraint(klass, type);
     }
