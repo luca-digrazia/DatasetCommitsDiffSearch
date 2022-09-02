@@ -2021,16 +2021,12 @@ public final class VM extends NativeEnv implements ContextAccess {
     public static final int JMM_VERSION_1_2 = 0x20010200; // JDK 7
     public static final int JMM_VERSION_1_2_1 = 0x20010201; // JDK 7 GA
     public static final int JMM_VERSION_1_2_2 = 0x20010202;
-    public static final int JMM_VERSION_2 = 0x20020000; // JDK 10
 
     public static final int JMM_VERSION = 0x20010203;
 
     @VmImpl
     public synchronized @Pointer TruffleObject JVM_GetManagement(int version) {
-        if (version != JMM_VERSION_1_0 && getJavaVersion().java8OrEarlier()) {
-            return RawPointer.nullInstance();
-        }
-        if (version != JMM_VERSION_2 && getJavaVersion().java9OrLater()) {
+        if (version != JMM_VERSION_1_0) {
             return RawPointer.nullInstance();
         }
         EspressoContext context = getContext();
@@ -2053,12 +2049,8 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @JniImpl
     @VmImpl
-    public int GetVersion() {
-        if (getJavaVersion().java8OrEarlier()) {
-            return JMM_VERSION;
-        } else {
-            return JMM_VERSION_2;
-        }
+    public static int GetVersion() {
+        return JMM_VERSION;
     }
 
     @JniImpl
@@ -2204,12 +2196,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     public @Host(String[].class) StaticObject GetInputArgumentArray() {
         return getMeta().java_lang_String.allocateReferenceArray(0);
-    }
-
-    @JniImpl
-    @VmImpl
-    public @Host(String[].class) StaticObject GetInputArguments() {
-        return GetInputArgumentArray();
     }
 
     @JniImpl
@@ -2403,41 +2389,6 @@ public final class VM extends NativeEnv implements ContextAccess {
             return StaticObject.NULL;
         }
         return result;
-    }
-
-    @VmImpl
-    @JniImpl
-    public void GetThreadAllocatedMemory(
-                    @Host(long[].class) StaticObject ids,
-                    @Host(long[].class) StaticObject sizeArray,
-                    @InjectProfile SubstitutionProfiler profiler) {
-        if (StaticObject.isNull(ids) || StaticObject.isNull(sizeArray)) {
-            profiler.profile(0);
-            throw Meta.throwException(getMeta().java_lang_NullPointerException);
-        }
-        validateThreadIdArray(getMeta(), ids, profiler);
-        if (ids.length() != sizeArray.length()) {
-            profiler.profile(1);
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IllegalArgumentException, "The length of the given long array does not match the length of the given array of thread IDs");
-        }
-        StaticObject[] activeThreads = getContext().getActiveThreads();
-
-        for (int i = 0; i < ids.length(); i++) {
-            long id = getInterpreterToVM().getArrayLong(i, ids);
-            StaticObject thread = StaticObject.NULL;
-
-            for (int j = 0; j < activeThreads.length; ++j) {
-                if ((long) getMeta().java_lang_Thread_tid.get(activeThreads[j]) == id) {
-                    thread = activeThreads[j];
-                    break;
-                }
-            }
-            if (StaticObject.isNull(thread)) {
-                getInterpreterToVM().setArrayLong(-1L, i, sizeArray);
-            } else {
-                getInterpreterToVM().setArrayLong(0L, i, sizeArray);
-            }
-        }
     }
 
     // endregion Management

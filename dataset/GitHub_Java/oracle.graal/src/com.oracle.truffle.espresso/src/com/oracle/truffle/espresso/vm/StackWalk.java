@@ -35,6 +35,7 @@ import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameInstanceVisitor;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -47,43 +48,74 @@ public class StackWalk {
     // -1 and 0 are reserved values.
     private final AtomicLong walkerIds = new AtomicLong(1);
 
+    /**
+     * Contains frame walkers that are currently anchored (ie: the call to callStackWalk has not yet
+     * returned).
+     */
     private final Map<Long, FrameWalker> walkers = new ConcurrentHashMap<>();
 
-    private static final long JVM_STACKWALK_FILL_CLASS_REFS_ONLY = 0x2;
-    private static final long JVM_STACKWALK_GET_CALLER_CLASS = 0x04;
-    private static final long JVM_STACKWALK_SHOW_HIDDEN_FRAMES = 0x20;
-    private static final long JVM_STACKWALK_FILL_LIVE_STACK_FRAMES = 0x100;
+    private static final long DEFAULT_MODE = 0x0;
+    private static final long FILL_CLASS_REFS_ONLY = 0x2;
+    private static final long GET_CALLER_CLASS = 0x04;
+    private static final long SHOW_HIDDEN_FRAMES = 0x20;
+    private static final long FILL_LIVE_STACK_FRAMES = 0x100;
+
+    private static final String STRING_DEFAULT_MODE = "DEFAULT_MODE";
+    private static final String STRING_FILL_CLASS_REFS_ONLY = "FILL_CLASS_REFS_ONLY";
+    private static final String STRING_GET_CALLER_CLASS = "GET_CALLER_CLASS";
+    private static final String STRING_SHOW_HIDDEN_FRAMES = "SHOW_HIDDEN_FRAMES";
+    private static final String STRING_FILL_LIVE_STACK_FRAMES = "FILL_LIVE_STACK_FRAMES";
 
     static boolean getCallerClass(long mode) {
-        return (mode & JVM_STACKWALK_GET_CALLER_CLASS) != 0;
+        return (mode & GET_CALLER_CLASS) != 0;
     }
 
     static boolean skipHiddenFrames(long mode) {
-        return (mode & JVM_STACKWALK_SHOW_HIDDEN_FRAMES) == 0;
+        return (mode & SHOW_HIDDEN_FRAMES) == 0;
     }
 
     static boolean liveFrameInfo(long mode) {
-        return (mode & JVM_STACKWALK_FILL_LIVE_STACK_FRAMES) != 0;
+        return (mode & FILL_LIVE_STACK_FRAMES) != 0;
     }
 
     static boolean needMethodInfo(long mode) {
-        return (mode & JVM_STACKWALK_FILL_CLASS_REFS_ONLY) == 0;
+        return (mode & FILL_CLASS_REFS_ONLY) == 0;
+    }
+
+    private static boolean synchronizedConstants(Meta meta) {
+        Klass stackStreamFactory = meta.java_lang_StackStreamFactory;
+        StaticObject statics = stackStreamFactory.tryInitializeAndGetStatics();
+        assert DEFAULT_MODE == getConstantField(stackStreamFactory, statics, STRING_DEFAULT_MODE, meta);
+        assert FILL_CLASS_REFS_ONLY == getConstantField(stackStreamFactory, statics, STRING_FILL_CLASS_REFS_ONLY, meta);
+        assert GET_CALLER_CLASS == getConstantField(stackStreamFactory, statics, STRING_GET_CALLER_CLASS, meta);
+        assert SHOW_HIDDEN_FRAMES == getConstantField(stackStreamFactory, statics, STRING_SHOW_HIDDEN_FRAMES, meta);
+        assert FILL_LIVE_STACK_FRAMES == getConstantField(stackStreamFactory, statics, STRING_FILL_LIVE_STACK_FRAMES, meta);
+        return true;
+    }
+
+    private static int getConstantField(Klass stackStreamFactory, StaticObject statics, String name, Meta meta) {
+        return statics.getIntField(stackStreamFactory.lookupDeclaredField(meta.getNames().getOrCreate(name), Symbol.Type._int));
     }
 
     public StackWalk() {
     }
 
-    public StaticObject walk(@Host(typeName = "Ljava/lang/StackStreamFactory;") StaticObject stackStream, long mode, int skipframes,
+    /**
+     * initializes the stack walking, and anchors the Frame Walker instance to a particular frame
+     * and fetches the first batch of frames requested by guest.
+     * 
+     * Upon return, unanchors the Frame Walker, and it is then not possible to continue walking for
+     * this walker anymore.
+     * 
+     * @return The result of invoking guest
+     *         {@code java.lang.StackStreamFactory.AbstractStackWalker#doStackWalk(long, int, int, int,
+     *         int)} .
+     */
+    public StaticObject fetchFirstBatch(@Host(typeName = "Ljava/lang/StackStreamFactory;") StaticObject stackStream, long mode, int skipframes,
                     int batchSize, int startIndex,
                     @Host(Object[].class) StaticObject frames,
                     Meta meta) {
-        return fetchFirstBatch(stackStream, mode, skipframes, batchSize, startIndex, frames, meta);
-    }
-
-    private StaticObject fetchFirstBatch(@Host(typeName = "Ljava/lang/StackStreamFactory;") StaticObject stackStream, long mode, int skipframes,
-                    int batchSize, int startIndex,
-                    @Host(Object[].class) StaticObject frames,
-                    Meta meta) {
+        assert synchronizedConstants(meta);
         FrameWalker fw = new FrameWalker(meta, mode);
         fw.init(skipframes, batchSize, startIndex);
         Integer decodedOrNull = fw.doStackWalk(frames);
@@ -97,12 +129,19 @@ public class StackWalk {
         return (StaticObject) result;
     }
 
+    /**
+     * After {@link #fetchFirstBatch(StaticObject, long, int, int, int, StaticObject, Meta)}, this
+     * method allows to continue frame walking, starting from where the previous calls left off.
+     * 
+     * @return The position in the buffer at the end of fetching.
+     */
     public int fetchNextBatch(
                     @SuppressWarnings("unused") @Host(typeName = "Ljava/lang/StackStreamFactory;") StaticObject stackStream,
                     long mode, long anchor,
                     int batchSize, int startIndex,
                     @Host(Object[].class) StaticObject frames,
                     Meta meta) {
+        assert synchronizedConstants(meta);
         FrameWalker fw = getAnchored(anchor);
         if (fw == null) {
             throw Meta.throwExceptionWithMessage(meta.java_lang_InternalError, "doStackWalk: corrupted buffers");
@@ -129,7 +168,7 @@ public class StackWalk {
         walkers.remove(fw.anchor);
     }
 
-    private class FrameWalker implements FrameInstanceVisitor<Integer> {
+    class FrameWalker implements FrameInstanceVisitor<Integer> {
 
         protected final Meta meta;
         protected long mode;
@@ -157,6 +196,7 @@ public class StackWalk {
         }
 
         public void anchor() {
+            assert !isAnchored();
             anchor = walkerIds.getAndIncrement();
         }
 
@@ -296,7 +336,7 @@ public class StackWalk {
             decoded++;
         }
 
-        public void processFrame(FrameInstance frameInstance, Method m, int index) {
+        private void processFrame(FrameInstance frameInstance, Method m, int index) {
             if (liveFrameInfo(mode)) {
                 fillFrame(frameInstance, m, index);
                 // TODO: extract stack, locals and monitors from the frame.
@@ -304,11 +344,17 @@ public class StackWalk {
             } else if (needMethodInfo(mode)) {
                 fillFrame(frameInstance, m, index);
             } else {
+                // Only class info is needed.
                 frames.putObject(m.getDeclaringKlass().mirror(), index, meta);
             }
         }
 
-        public void fillFrame(FrameInstance frameInstance, Method m, int index) {
+        /**
+         * Initializes the {@code java.lang.StackFrameInfo} in the {@link #frames} array at index
+         * {@code index}. This means initializing the associated {@code java.lang.invoke.MemberName}
+         * , and injecting a BCI.
+         */
+        private void fillFrame(FrameInstance frameInstance, Method m, int index) {
             StaticObject frame = frames.get(index);
             StaticObject memberName = frame.getField(meta.java_lang_StackFrameInfo_memberName);
             Target_java_lang_invoke_MethodHandleNatives.plantResolvedMethod(memberName, m, m.getRefKind(), meta);
