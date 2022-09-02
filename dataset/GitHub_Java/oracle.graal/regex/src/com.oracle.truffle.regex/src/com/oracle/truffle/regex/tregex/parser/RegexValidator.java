@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.regex.RegexFlags;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
@@ -54,17 +55,19 @@ import com.oracle.truffle.regex.tregex.TRegexOptions;
 public class RegexValidator {
 
     private final RegexSource source;
+    private final RegexFlags flags;
     private final RegexLexer lexer;
     private RegexFeatures features;
 
-    public RegexValidator(RegexSource source, RegexOptions options) {
+    public RegexValidator(RegexSource source, RegexFlags flags, RegexOptions options) {
         this.source = source;
-        this.lexer = new RegexLexer(source, options);
+        this.flags = flags;
+        this.lexer = new RegexLexer(source, flags, options);
     }
 
     @TruffleBoundary
     public static void validate(RegexSource source) throws RegexSyntaxException {
-        new RegexValidator(source, RegexOptions.DEFAULT).validate();
+        new RegexValidator(source, RegexFlags.parseFlags(source.getFlags()), RegexOptions.DEFAULT).validate();
     }
 
     @TruffleBoundary
@@ -142,7 +145,7 @@ public class RegexValidator {
                     curTermState = CurTermState.Other;
                     break;
                 case dollar:
-                    if (lookBehindDepth > 0 && !source.getFlags().isMultiline()) {
+                    if (lookBehindDepth > 0 && !flags.isMultiline()) {
                         features.setEndOfStringAssertionsInLookBehind();
                     }
                     curTermState = CurTermState.Other;
@@ -169,7 +172,7 @@ public class RegexValidator {
                         case Null:
                             throw syntaxError(ErrorMessages.QUANTIFIER_WITHOUT_TARGET);
                         case LookAheadAssertion:
-                            if (source.getFlags().isUnicode()) {
+                            if (flags.isUnicode()) {
                                 throw syntaxError(ErrorMessages.QUANTIFIER_ON_LOOKAHEAD_ASSERTION);
                             }
                             break;

@@ -48,9 +48,8 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.charset.CodePointSet;
 import com.oracle.truffle.regex.tregex.TRegexOptions;
 import com.oracle.truffle.regex.tregex.automaton.StateSet;
-import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
+import com.oracle.truffle.regex.tregex.buffer.CharArrayBuffer;
 import com.oracle.truffle.regex.tregex.parser.RegexParser;
-import com.oracle.truffle.regex.tregex.string.AbstractStringBuffer;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonObject;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
@@ -73,7 +72,7 @@ public class CharacterClass extends QuantifiableTerm {
 
     private CodePointSet charSet;
     // look-behind groups which might match the same character as this CharacterClass node
-    private StateSet<LookAroundIndex, LookBehindAssertion> lookBehindEntries;
+    private StateSet<LookBehindAssertion> lookBehindEntries;
 
     /**
      * Creates a new {@link CharacterClass} node which matches the set of characters specified by
@@ -83,19 +82,14 @@ public class CharacterClass extends QuantifiableTerm {
         this.charSet = charSet;
     }
 
-    private CharacterClass(CharacterClass copy, CodePointSet charSet) {
+    private CharacterClass(CharacterClass copy) {
         super(copy);
-        this.charSet = charSet;
+        charSet = copy.charSet;
     }
 
     @Override
-    public CharacterClass copy(RegexAST ast) {
-        return ast.register(new CharacterClass(this, charSet));
-    }
-
-    @Override
-    public CharacterClass copyRecursive(RegexAST ast, CompilationBuffer compilationBuffer) {
-        return ast.register(new CharacterClass(this, ast.getEncoding().getFullSet().createIntersection(charSet, compilationBuffer)));
+    public CharacterClass copy(RegexAST ast, boolean recursive) {
+        return ast.register(new CharacterClass(this));
     }
 
     @Override
@@ -155,19 +149,31 @@ public class CharacterClass extends QuantifiableTerm {
         return lookBehindEntries;
     }
 
-    public void extractSingleChar(AbstractStringBuffer literal, AbstractStringBuffer mask) {
-        if (charSet.matchesSingleChar()) {
-            literal.append(charSet.getMin());
-            assert mask.getEncoding().getEncodedSize(0) == 1;
-            for (int i = 0; i < mask.getEncoding().getEncodedSize(charSet.getMin()); i++) {
-                mask.append(0);
-            }
+    public void extractSingleChar(CharArrayBuffer literal, CharArrayBuffer mask) {
+        CodePointSet c = charSet;
+        char c1 = (char) c.getLo(0);
+        if (c.matches2CharsWith1BitDifference()) {
+            int c2 = c.size() == 1 ? c.getHi(0) : c.getLo(1);
+            literal.add((char) (c1 | c2));
+            mask.add((char) (c1 ^ c2));
         } else {
-            assert charSet.matches2CharsWith1BitDifference();
-            int c1 = charSet.getMin();
-            int c2 = charSet.getMax();
-            literal.appendOR(c1, c2);
-            mask.appendXOR(c1, c2);
+            assert c.matchesSingleChar();
+            literal.add(c1);
+            mask.add((char) 0);
+        }
+    }
+
+    public void extractSingleChar(char[] literal, char[] mask, int i) {
+        CodePointSet c = charSet;
+        char c1 = (char) c.getLo(0);
+        if (c.matches2CharsWith1BitDifference()) {
+            int c2 = c.size() == 1 ? c.getHi(0) : c.getLo(1);
+            literal[i] = (char) (c1 | c2);
+            mask[i] = (char) (c1 ^ c2);
+        } else {
+            assert c.matchesSingleChar();
+            literal[i] = c1;
+            mask[i] = (char) 0;
         }
     }
 
