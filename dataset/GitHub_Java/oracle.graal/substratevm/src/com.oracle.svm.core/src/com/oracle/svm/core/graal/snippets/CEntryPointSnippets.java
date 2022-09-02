@@ -310,14 +310,7 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
         assert !isolateInitialized;
         isolateInitialized = true;
 
-        try {
-            RuntimeSupport.executeInitializationHooks();
-        } catch (Throwable t) {
-            System.err.println("Uncaught exception while running initialization hooks:");
-            t.printStackTrace();
-            return CEntryPointErrors.ISOLATE_INITIALIZATION_FAILED;
-        }
-
+        RuntimeSupport.executeInitializationHooks();
         return CEntryPointErrors.NO_ERROR;
     }
 
@@ -738,5 +731,12 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
             }
             template(node, args).instantiate(providers.getMetaAccess(), node, SnippetTemplate.DEFAULT_REPLACER, args);
         }
+    }
+
+    // IsolateCreationWatcher will be removed, see GR-30740. Use
+    // IsolateListener and IsolateListenerSupport instead.
+    public interface IsolateCreationWatcher {
+        @Uninterruptible(reason = "Thread state not yet set up.")
+        void registerIsolate(Isolate isolate);
     }
 }
