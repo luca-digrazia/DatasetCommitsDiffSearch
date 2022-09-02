@@ -210,6 +210,11 @@ public class Option {
             .category("INTERNAL")
             .def("true"),
 
+        option("TruffleUseFrameWithoutBoxing")
+            .type("Boolean")
+            .category("INTERNAL")
+            .def("true"), // COMPILER
+
         option("TraceTruffleCompilation")
             .type("Boolean")
             .category("INTERNAL")
