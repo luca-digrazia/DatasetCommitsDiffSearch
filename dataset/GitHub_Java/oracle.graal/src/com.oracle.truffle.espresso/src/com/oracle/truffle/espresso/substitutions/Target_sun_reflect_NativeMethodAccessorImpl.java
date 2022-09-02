@@ -38,8 +38,6 @@ import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectClass;
 import com.oracle.truffle.espresso.runtime.StaticObjectImpl;
 
-import static com.oracle.truffle.espresso.impl.HiddenFields.HIDDEN_METHOD_KEY;
-
 /**
  * This substitution is merely for performance reasons, to avoid the deep-dive to native. libjava
  * hardwires {@link #invoke0} to JVM_InvokeMethod in libjvm.
@@ -233,7 +231,7 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
 
         Method reflectedMethod = null;
         while (reflectedMethod == null) {
-            reflectedMethod = (Method) ((StaticObjectImpl) curMethod).getHiddenField(HIDDEN_METHOD_KEY);
+            reflectedMethod = (Method) ((StaticObjectImpl) curMethod).getHiddenField(Target_java_lang_Class.HIDDEN_METHOD_KEY);
             if (reflectedMethod == null) {
                 curMethod = (StaticObject) meta.Method_root.get(curMethod);
             }
@@ -291,6 +289,16 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
                             throw meta.throwExWithCause(meta.InvocationTargetException, Meta.initEx(meta.AbstractMethodError));
                         }
                     }
+                    // throw EspressoError.unimplemented("reflective interface calls");
+                    // This is what it should look like for interfaces.
+                    // try {
+                    // method = resolveInterfaceCall(klass, reflectedMethod, targetKlass, receiver);
+                    // } catch (EspressoException e) {
+                    // // Method resolution threw an exception; wrap it in an
+                    // InvocationTargetException
+                    // throw meta.throwExWithCause(meta.InvocationTargetException,
+                    // e.getException());
+                    // }
                 } else {
                     // if the method can be overridden, we resolve using the vtable index.
                     method = reflectedMethod;
