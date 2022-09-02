@@ -296,44 +296,40 @@ public final class NFIContextExtension implements ContextExtension {
 
     public NativeLookupResult getNativeFunctionOrNull(LLVMContext context, String name) {
         CompilerAsserts.neverPartOfCompilation();
-        synchronized (libraryHandles) {
-            addLibraries(context);
+        addLibraries(context);
 
-            MapCursor<ExternalLibrary, TruffleObject> cursor = libraryHandles.getEntries();
-            while (cursor.advance()) {
-                TruffleObject symbol = getNativeFunctionOrNull(cursor.getValue(), name);
-                if (symbol != null) {
-                    return new NativeLookupResult(cursor.getKey(), symbol);
-                }
-            }
-            TruffleObject symbol = getNativeFunctionOrNull(defaultLibraryHandle, name);
+        MapCursor<ExternalLibrary, TruffleObject> cursor = libraryHandles.getEntries();
+        while (cursor.advance()) {
+            TruffleObject symbol = getNativeFunctionOrNull(cursor.getValue(), name);
             if (symbol != null) {
-                assert isInitialized();
-                return new NativeLookupResult(defaultLibrary, symbol);
+                return new NativeLookupResult(cursor.getKey(), symbol);
             }
-            return null;
         }
+        TruffleObject symbol = getNativeFunctionOrNull(defaultLibraryHandle, name);
+        if (symbol != null) {
+            assert isInitialized();
+            return new NativeLookupResult(defaultLibrary, symbol);
+        }
+        return null;
     }
 
     private NativeLookupResult getNativeDataObjectOrNull(LLVMContext context, String name) {
         CompilerAsserts.neverPartOfCompilation();
-        synchronized (libraryHandles) {
-            addLibraries(context);
+        addLibraries(context);
 
-            MapCursor<ExternalLibrary, TruffleObject> cursor = libraryHandles.getEntries();
-            while (cursor.advance()) {
-                TruffleObject symbol = getNativeDataObjectOrNull(cursor.getValue(), name);
-                if (symbol != null) {
-                    return new NativeLookupResult(cursor.getKey(), symbol);
-                }
-            }
-            TruffleObject symbol = getNativeDataObjectOrNull(defaultLibraryHandle, name);
+        MapCursor<ExternalLibrary, TruffleObject> cursor = libraryHandles.getEntries();
+        while (cursor.advance()) {
+            TruffleObject symbol = getNativeDataObjectOrNull(cursor.getValue(), name);
             if (symbol != null) {
-                assert isInitialized();
-                return new NativeLookupResult(defaultLibrary, symbol);
+                return new NativeLookupResult(cursor.getKey(), symbol);
             }
-            return null;
         }
+        TruffleObject symbol = getNativeDataObjectOrNull(defaultLibraryHandle, name);
+        if (symbol != null) {
+            assert isInitialized();
+            return new NativeLookupResult(defaultLibrary, symbol);
+        }
+        return null;
     }
 
     private static TruffleObject getNativeDataObjectOrNull(TruffleObject libraryHandle, String name) {
