@@ -24,97 +24,85 @@
  */
 package org.graalvm.compiler.hotspot.test;
 
-import static org.graalvm.compiler.serviceprovider.JavaVersionUtil.JAVA_SPEC;
-
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
 
 public class BoxDeoptimizationTest extends GraalCompilerTest {
+    private static boolean isJDK13OrLater = JavaVersionUtil.JAVA_SPEC >= 13;
 
-    private static void checkJDK() {
-        Assume.assumeTrue(JAVA_SPEC == 8 || JAVA_SPEC >= 13);
-    }
-
-    public static void testIntegerSnippet() {
-        Object[] values = {42, -42, new Exception()};
+    public static void testInteger() {
+        Object[] values = {42, new Exception()};
         GraalDirectives.deoptimize();
         Assert.assertSame(values[0], Integer.valueOf(42));
-        Assert.assertSame(values[1], Integer.valueOf(-42));
     }
 
     @Test
-    public void testInteger() {
-        checkJDK();
-        test("testIntegerSnippet");
+    public void test1() {
+        Assume.assumeTrue(isJDK13OrLater);
+        test("testInteger");
     }
 
-    public static void testLongSnippet() {
-        long highBitsOnly = 2L << 40;
-        Object[] values = {42L, -42L, highBitsOnly, new Exception()};
+    public static void testLong() {
+        Object[] values = {42L, new Exception()};
         GraalDirectives.deoptimize();
         Assert.assertSame(values[0], Long.valueOf(42));
-        Assert.assertSame(values[1], Long.valueOf(-42));
-        Assert.assertNotSame(values[2], highBitsOnly);
     }
 
     @Test
-    public void testLong() {
-        checkJDK();
-        test("testLongSnippet");
+    public void test2() {
+        Assume.assumeTrue(isJDK13OrLater);
+        test("testLong");
     }
 
-    public static void testCharSnippet() {
-        Object[] values = {'a', 'Z', new Exception()};
+    public static void testChar() {
+        Object[] values = {'a', new Exception()};
         GraalDirectives.deoptimize();
         Assert.assertSame(values[0], Character.valueOf('a'));
-        Assert.assertSame(values[1], Character.valueOf('Z'));
     }
 
     @Test
-    public void testChar() {
-        checkJDK();
-        test("testCharSnippet");
+    public void test3() {
+        Assume.assumeTrue(isJDK13OrLater);
+        test("testChar");
     }
 
-    public static void testShortSnippet() {
-        Object[] values = {(short) 42, (short) -42, new Exception()};
+    public static void testShort() {
+        Object[] values = {(short) 42, new Exception()};
         GraalDirectives.deoptimize();
         Assert.assertSame(values[0], Short.valueOf((short) 42));
-        Assert.assertSame(values[1], Short.valueOf((short) -42));
     }
 
     @Test
-    public void testShort() {
-        checkJDK();
-        test("testShortSnippet");
+    public void test4() {
+        Assume.assumeTrue(isJDK13OrLater);
+        test("testShort");
     }
 
-    public static void testByteSnippet() {
-        Object[] values = {(byte) 42, (byte) -42, new Exception()};
+    public static void testByte() {
+        Object[] values = {(byte) 42, new Exception()};
         GraalDirectives.deoptimize();
         Assert.assertSame(values[0], Byte.valueOf((byte) 42));
-        Assert.assertSame(values[1], Byte.valueOf((byte) -42));
     }
 
     @Test
-    public void testByte() {
-        checkJDK();
-        test("testByteSnippet");
+    public void test5() {
+        Assume.assumeTrue(isJDK13OrLater);
+        test("testByte");
     }
 
-    public static void testBooleanSnippet() {
-        Object[] values = {true, false, new Exception()};
+    public static void testBoolean() {
+        Object[] values = {true, new Exception()};
         GraalDirectives.deoptimize();
         Assert.assertSame(values[0], Boolean.valueOf(true));
-        Assert.assertSame(values[1], Boolean.valueOf(false));
     }
 
     @Test
-    public void testBoolean() {
-        checkJDK();
-        test("testBooleanSnippet");
+    public void test6() {
+        Assume.assumeTrue(isJDK13OrLater);
+        test("testBoolean");
     }
 }

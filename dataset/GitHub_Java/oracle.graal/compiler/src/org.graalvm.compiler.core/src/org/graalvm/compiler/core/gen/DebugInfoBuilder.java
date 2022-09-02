@@ -156,6 +156,10 @@ public class DebugInfoBuilder {
                 }
                 assert checkValues(vobjValue.getType(), values, slotKinds);
                 vobjValue.setValues(values, slotKinds);
+
+                if (vobjNode instanceof VirtualBoxingNode) {
+                    GraalServices.markVirtualObjectAsAutoBox(vobjValue);
+                }
             }
 
             virtualObjectsArray = new VirtualObject[virtualObjects.size()];
@@ -319,8 +323,7 @@ public class DebugInfoBuilder {
                     assert obj.entryCount() == 0 || state instanceof VirtualObjectState;
                     VirtualObject vobject = virtualObjects.get(obj);
                     if (vobject == null) {
-                        boolean isAutoBox = obj instanceof VirtualBoxingNode;
-                        vobject = GraalServices.createVirtualObject(obj.type(), virtualObjects.size(), isAutoBox);
+                        vobject = VirtualObject.get(obj.type(), virtualObjects.size());
                         virtualObjects.put(obj, vobject);
                         pendingVirtualObjects.add(obj);
                     }
