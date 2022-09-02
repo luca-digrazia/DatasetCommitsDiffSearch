@@ -47,6 +47,8 @@ import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMPolyglotFrom
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMPolyglotFromStringNodeGen.ReadZeroTerminatedBytesNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMReadCharsetNode.LLVMCharset;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
+import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMGetElementPtrNode.LLVMIncrementPointerNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI16LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI32LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI64LoadNodeGen;
@@ -86,6 +88,7 @@ public abstract class LLVMPolyglotFromString extends LLVMIntrinsic {
     abstract static class ReadBytesWithLengthNode extends ReadBytesNode {
 
         @Child private LLVMLoadNode load = LLVMI8LoadNodeGen.create(null);
+        @Child private LLVMIncrementPointerNode inc = LLVMIncrementPointerNodeGen.create();
 
         @Specialization
         ByteBuffer doRead(@SuppressWarnings("unused") LLVMCharset charset, LLVMPointer string, long len) {
@@ -94,7 +97,7 @@ public abstract class LLVMPolyglotFromString extends LLVMIntrinsic {
             LLVMPointer ptr = string;
             for (int i = 0; i < len; i++) {
                 byte value = (byte) load.executeWithTarget(ptr);
-                ptr = ptr.increment(Byte.BYTES);
+                ptr = inc.executeWithTarget(ptr, Byte.BYTES);
                 buffer.put(value);
             }
 
@@ -109,6 +112,8 @@ public abstract class LLVMPolyglotFromString extends LLVMIntrinsic {
 
         @CompilationFinal int bufferSize = 8;
 
+        @Child private LLVMIncrementPointerNode inc = LLVMIncrementPointerNodeGen.create();
+
         @Specialization(limit = "4", guards = "charset.zeroTerminatorLen == increment")
         ByteBuffer doRead(@SuppressWarnings("unused") LLVMCharset charset, LLVMPointer string,
                         @Cached("charset.zeroTerminatorLen") int increment,
@@ -121,7 +126,7 @@ public abstract class LLVMPolyglotFromString extends LLVMIntrinsic {
             Object value;
             do {
                 value = load.executeWithTarget(ptr);
-                ptr = ptr.increment(increment);
+                ptr = inc.executeWithTarget(ptr, increment);
 
                 if (result.remaining() < increment) {
                     // buffer overflow, allocate a bigger buffer

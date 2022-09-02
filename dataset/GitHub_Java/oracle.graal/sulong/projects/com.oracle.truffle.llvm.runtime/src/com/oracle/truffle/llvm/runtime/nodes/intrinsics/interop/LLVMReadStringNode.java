@@ -39,6 +39,7 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
+import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMGetElementPtrNode.LLVMIncrementPointerNode;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.interop.LLVMAsForeignNode;
@@ -47,6 +48,7 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMReadStringNodeGen.ForeignReadStringNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMReadStringNodeGen.PointerReadStringNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMGetElementPtrNodeGen.LLVMIncrementPointerNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI8LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -121,6 +123,7 @@ public abstract class LLVMReadStringNode extends LLVMNode {
 
     abstract static class PointerReadStringNode extends LLVMNode {
 
+        @Child private LLVMIncrementPointerNode inc = LLVMIncrementPointerNodeGen.create();
         @Child private LLVMLoadNode read = LLVMI8LoadNodeGen.create(null);
 
         protected abstract String execute(Object address);
@@ -148,7 +151,7 @@ public abstract class LLVMReadStringNode extends LLVMNode {
             int length = 0;
             while ((byte) read.executeWithTarget(ptr) != 0) {
                 length++;
-                ptr = ptr.increment(Byte.BYTES);
+                ptr = inc.executeWithTarget(ptr, Byte.BYTES);
             }
 
             char[] string = new char[length];
@@ -156,7 +159,7 @@ public abstract class LLVMReadStringNode extends LLVMNode {
             ptr = address;
             for (int i = 0; i < length; i++) {
                 string[i] = (char) Byte.toUnsignedInt((byte) read.executeWithTarget(ptr));
-                ptr = ptr.increment(Byte.BYTES);
+                ptr = inc.executeWithTarget(ptr, Byte.BYTES);
             }
 
             return toString(string);
