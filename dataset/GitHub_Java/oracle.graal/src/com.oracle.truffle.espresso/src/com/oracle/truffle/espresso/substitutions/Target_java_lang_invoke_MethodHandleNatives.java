@@ -33,7 +33,6 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.runtime.Intrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.runtime.StaticObjectArray;
 import com.oracle.truffle.espresso.runtime.StaticObjectClass;
@@ -54,15 +53,15 @@ import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeStatic;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeVirtual;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_putField;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_putStatic;
-import static com.oracle.truffle.espresso.runtime.Intrinsics.firstStaticSigPoly;
-import static com.oracle.truffle.espresso.runtime.Intrinsics.lastSigPoly;
-import static com.oracle.truffle.espresso.runtime.Intrinsics.PolySigIntrinsics.None;
-import static com.oracle.truffle.espresso.runtime.Intrinsics.PolySigIntrinsics.InvokeBasic;
-import static com.oracle.truffle.espresso.runtime.Intrinsics.PolySigIntrinsics.InvokeGeneric;
-import static com.oracle.truffle.espresso.runtime.Intrinsics.PolySigIntrinsics.LinkToInterface;
-import static com.oracle.truffle.espresso.runtime.Intrinsics.PolySigIntrinsics.LinkToSpecial;
-import static com.oracle.truffle.espresso.runtime.Intrinsics.PolySigIntrinsics.LinkToStatic;
-import static com.oracle.truffle.espresso.runtime.Intrinsics.PolySigIntrinsics.LinkToVirtual;
+import static com.oracle.truffle.espresso.classfile.Constants._firstStaticSigPoly;
+import static com.oracle.truffle.espresso.classfile.Constants._invokeBasic;
+import static com.oracle.truffle.espresso.classfile.Constants._invokeGeneric;
+import static com.oracle.truffle.espresso.classfile.Constants._lastSigPoly;
+import static com.oracle.truffle.espresso.classfile.Constants._linkToInterface;
+import static com.oracle.truffle.espresso.classfile.Constants._linkToSpecial;
+import static com.oracle.truffle.espresso.classfile.Constants._linkToStatic;
+import static com.oracle.truffle.espresso.classfile.Constants._linkToVirtual;
+import static com.oracle.truffle.espresso.classfile.Constants._none;
 import static java.lang.Math.max;
 
 @EspressoSubstitutions
@@ -244,6 +243,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
         if (memberName.getHiddenField(VMTARGET) != null) {
             return self; // Already planted
         }
+
         StaticObjectClass clazz = (StaticObjectClass) memberName.getField(mnKlass.lookupDeclaredField(Name.clazz, Type.Class));
         Klass defKlass = clazz.getMirrorKlass();
 
@@ -258,14 +258,14 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
         if (defKlass == null) {
             return StaticObject.NULL;
         }
-        Intrinsics.PolySigIntrinsics mhMethodId = None;
+        int mhMethodId = _none;
         if (((flags & ALL_KINDS) == MN_IS_METHOD) && (defKlass.getType() == Type.MethodHandle)) {
             if (refKind == REF_invokeVirtual ||
                             refKind == REF_invokeSpecial ||
                             refKind == REF_invokeStatic) {
-                Intrinsics.PolySigIntrinsics iid = MHid(nSymbol);
-                if (iid != None &&
-                                ((refKind == REF_invokeStatic) == isStaticSigPoly(iid.value))) {
+                int iid = MHid(nSymbol);
+                if (iid != _none &&
+                                ((refKind == REF_invokeStatic) == isStaticSigPoly(iid))) {
                     mhMethodId = iid;
                 }
             }
@@ -284,9 +284,12 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
                 if (refKind == REF_invokeStatic || refKind == REF_invokeInterface) {
                     plantMethodMemberName(memberName, sig, defKlass, nSymbol, flagField, refKind);
 
-                } else if (mhMethodId != None) {
-                    assert (!isStaticSigPoly(mhMethodId.value));
+                } else if (mhMethodId != _none) {
+                    assert (!isStaticSigPoly(mhMethodId));
                     if (isIntrinsicPolySig(mhMethodId)) {
+                        // boolean keepLastArg = isStaticSigPoly(mhMethodId);
+                        // Symbol<Signature> basic = toBasic(signatures.parsed(sig), keepLastArg,
+                        // signatures);
                         Method target = meta.invokeBasic;
                         plantInvokeBasic(memberName, target, defKlass, nSymbol, flagField, refKind);
                     } else {
@@ -415,22 +418,22 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
     // End MemberName planting
     // Helping methods
 
-    public static Intrinsics.PolySigIntrinsics MHid(Symbol<Name> name) {
+    public static int MHid(Symbol<Name> name) {
         if (name == Name.invoke)
-            return InvokeGeneric;
+            return _invokeGeneric;
         if (name == Name.invokeExact)
-            return InvokeGeneric;
+            return _invokeGeneric;
         if (name == Name.invokeBasic)
-            return InvokeBasic;
+            return _invokeBasic;
         if (name == Name.linkToVirtual)
-            return LinkToVirtual;
+            return _linkToVirtual;
         if (name == Name.linkToStatic)
-            return LinkToStatic;
+            return _linkToStatic;
         if (name == Name.linkToInterface)
-            return LinkToInterface;
+            return _linkToInterface;
         if (name == Name.linkToSpecial)
-            return LinkToSpecial;
-        return None;
+            return _linkToSpecial;
+        return _none;
     }
 
     @SuppressWarnings("unused")
@@ -452,11 +455,11 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
     }
 
     private static boolean isStaticSigPoly(int id) {
-        return (id >= firstStaticSigPoly) && (id <= lastSigPoly);
+        return (id >= _firstStaticSigPoly) && (id <= _lastSigPoly);
     }
 
-    private static boolean isIntrinsicPolySig(Intrinsics.PolySigIntrinsics id) {
-        return (id != InvokeGeneric);
+    private static boolean isIntrinsicPolySig(int id) {
+        return (id != _invokeGeneric);
     }
 
     public static int getRefKind(int flags) {

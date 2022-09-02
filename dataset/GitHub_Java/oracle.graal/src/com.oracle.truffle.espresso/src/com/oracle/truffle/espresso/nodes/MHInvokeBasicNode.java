@@ -55,7 +55,7 @@ public class MHInvokeBasicNode extends EspressoBaseNode {
 abstract class BasicNode extends Node {
     final static String vmtarget = VMTARGET;
 
-    static final int INLINE_CACHE_SIZE_LIMIT = 5;
+    static final int INLINE_CACHE_SIZE_LIMIT = 3;
 
     public abstract Object executeBasic(StaticObjectImpl methodHandle, Object[] args, Meta meta);
 
@@ -67,9 +67,10 @@ abstract class BasicNode extends Node {
                     @Cached("getMethodHiddenField(getSOIField(lform, meta.vmentry), vmtarget)") Method target,
                     @Cached("create(target.getCallTarget())") DirectCallNode callNode) {
         return callNode.call(args);
+        // return target.invokeDirect(null, args);
     }
 
-    @Specialization()
+    @Specialization(replaces = "directBasic")
     Object normalBasic(StaticObjectImpl methodHandle, Object[] args, Meta meta,
                     @Cached("create()") IndirectCallNode callNode) {
         StaticObjectImpl lform = (StaticObjectImpl) methodHandle.getField(meta.form);
