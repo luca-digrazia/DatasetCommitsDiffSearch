@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,17 +25,13 @@
 package com.oracle.svm.hosted.meta;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
-import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
 
-import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.infrastructure.Universe;
 import com.oracle.graal.pointsto.infrastructure.WrappedConstantPool;
@@ -42,11 +40,11 @@ import com.oracle.graal.pointsto.infrastructure.WrappedSignature;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
-import com.oracle.graal.pointsto.util.ConcurrentLightHashSet;
 import com.oracle.svm.hosted.SVMHost;
+import com.oracle.svm.hosted.ameta.AnalysisConstantReflectionProvider;
+import com.oracle.svm.hosted.analysis.Inflation;
 
 import jdk.vm.ci.meta.ConstantPool;
-import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaField;
 import jdk.vm.ci.meta.JavaKind;
@@ -63,16 +61,13 @@ import jdk.vm.ci.meta.Signature;
  * Nothing is added later on during compilation of methods.
  */
 public class HostedUniverse implements Universe {
-
-    protected final BigBang bb;
-    protected final SVMHost svmHost;
+    protected final Inflation bb;
 
     protected final Map<AnalysisType, HostedType> types = new HashMap<>();
     protected final Map<AnalysisField, HostedField> fields = new HashMap<>();
     protected final Map<AnalysisMethod, HostedMethod> methods = new HashMap<>();
     protected final Map<Signature, WrappedSignature> signatures = new HashMap<>();
     protected final Map<ConstantPool, WrappedConstantPool> constantPools = new HashMap<>();
-    protected final ConcurrentLightHashSet<AnalysisMethod> methodsWithStackValues = new ConcurrentLightHashSet<>();
 
     protected EnumMap<JavaKind, HostedType> kindToType = new EnumMap<>(JavaKind.class);
 
@@ -80,14 +75,8 @@ public class HostedUniverse implements Universe {
     protected List<HostedMethod> orderedMethods;
     protected List<HostedField> orderedFields;
 
-    /**
-     * Number of allocated bits for instanceof checks.
-     */
-    protected int numInterfaceBits;
-
-    public HostedUniverse(BigBang bb, SVMHost svmHost) {
+    public HostedUniverse(Inflation bb) {
         this.bb = bb;
-        this.svmHost = svmHost;
     }
 
     public HostedType getType(JavaKind kind) {
@@ -103,10 +92,9 @@ public class HostedUniverse implements Universe {
 
     public synchronized HostedMethod createDeoptTarget(HostedMethod method) {
         if (method.compilationInfo.getDeoptTargetMethod() == null) {
-            HostedMethod deoptTarget = new HostedMethod(this, method.getWrapped(), method.getDeclaringClass(), method.getSignature(), method.getConstantPool(), method.getExceptionHandlers());
+            HostedMethod deoptTarget = new HostedMethod(this, method.getWrapped(), method.getDeclaringClass(), method.getSignature(), method.getConstantPool(), method.getExceptionHandlers(), method);
             assert method.staticAnalysisResults != null;
             deoptTarget.staticAnalysisResults = method.staticAnalysisResults;
-            method.compilationInfo.setDeoptTarget(deoptTarget);
         }
         return method.compilationInfo.getDeoptTargetMethod();
     }
@@ -117,7 +105,7 @@ public class HostedUniverse implements Universe {
 
     @Override
     public SVMHost hostVM() {
-        return svmHost;
+        return bb.getHostVM();
     }
 
     @Override
@@ -229,23 +217,21 @@ public class HostedUniverse implements Universe {
         return orderedMethods;
     }
 
-    public BigBang getBigBang() {
+    public Inflation getBigBang() {
         return bb;
     }
 
-    public ConstantReflectionProvider getConstantReflectionProvider() {
-        return bb.getConstantReflectionProvider();
+    public AnalysisConstantReflectionProvider getConstantReflectionProvider() {
+        return (AnalysisConstantReflectionProvider) bb.getConstantReflectionProvider();
     }
 
-    public ConstantFieldProvider getConstantFieldProvider() {
-        return bb.getConstantFieldProvider();
+    @Override
+    public ResolvedJavaMethod resolveSubstitution(ResolvedJavaMethod method) {
+        return method;
     }
 
-    public void recordMethodWithStackValues(AnalysisMethod analysisMethod) {
-        methodsWithStackValues.addElement(analysisMethod);
-    }
-
-    public Set<AnalysisMethod> getMethodsWithStackValues() {
-        return Collections.unmodifiableSet(methodsWithStackValues.getElements());
+    @Override
+    public HostedType objectType() {
+        return types.get(bb.getUniverse().objectType());
     }
 }

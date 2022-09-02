@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,6 +28,7 @@ import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 import static com.oracle.svm.core.util.VMError.unimplemented;
 
 import java.lang.annotation.Annotation;
+import java.lang.reflect.Executable;
 import java.lang.reflect.Type;
 
 import org.graalvm.compiler.debug.DebugContext;
@@ -34,14 +37,17 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.infrastructure.GraphProvider;
+import com.oracle.graal.pointsto.infrastructure.OriginalMethodProvider;
 import com.oracle.graal.pointsto.infrastructure.WrappedJavaMethod;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.HostedProviders;
 import com.oracle.graal.pointsto.results.StaticAnalysisResults;
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AlwaysInline;
-import com.oracle.svm.core.annotate.NeverInline;
+import com.oracle.svm.core.annotate.StubCallingConvention;
 import com.oracle.svm.core.deopt.Deoptimizer;
 import com.oracle.svm.core.meta.SharedMethod;
+import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.code.CompilationInfo;
 
 import jdk.vm.ci.meta.Constant;
@@ -57,7 +63,9 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Signature;
 import jdk.vm.ci.meta.SpeculationLog;
 
-public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvider, JavaMethodContext {
+public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvider, JavaMethodContext, Comparable<HostedMethod>, OriginalMethodProvider {
+
+    public static final String METHOD_NAME_DEOPT_SUFFIX = "**";
 
     public final AnalysisMethod wrapped;
 
@@ -66,7 +74,6 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
     private final ConstantPool constantPool;
     private final ExceptionHandler[] handlers;
     protected StaticAnalysisResults staticAnalysisResults;
-
     protected int vtableIndex = -1;
 
     /**
@@ -75,6 +82,7 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
      */
     private int codeAddressOffset;
     private boolean codeAddressOffsetValid;
+    private boolean compiled;
 
     /**
      * All concrete methods that can actually be called when calling this method. This includes all
@@ -85,13 +93,16 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
     public final CompilationInfo compilationInfo;
     private final LocalVariableTable localVariableTable;
 
-    public HostedMethod(HostedUniverse universe, AnalysisMethod wrapped, HostedType holder, Signature signature, ConstantPool constantPool, ExceptionHandler[] handlers) {
+    private final String uniqueShortName;
+
+    public HostedMethod(HostedUniverse universe, AnalysisMethod wrapped, HostedType holder, Signature signature, ConstantPool constantPool, ExceptionHandler[] handlers, HostedMethod deoptOrigin) {
         this.wrapped = wrapped;
         this.holder = holder;
         this.signature = signature;
         this.constantPool = constantPool;
         this.handlers = handlers;
-        this.compilationInfo = new CompilationInfo(this);
+        this.compilationInfo = new CompilationInfo(this, deoptOrigin);
+        this.uniqueShortName = SubstrateUtil.uniqueShortName(this);
 
         LocalVariableTable newLocalVariableTable = null;
         if (wrapped.getLocalVariableTable() != null) {
@@ -120,7 +131,12 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
         return implementations;
     }
 
+    public String getQualifiedName() {
+        return wrapped.getQualifiedName();
+    }
+
     public void setCodeAddressOffset(int address) {
+        assert isCompiled();
         codeAddressOffset = address;
         codeAddressOffsetValid = true;
     }
@@ -130,12 +146,26 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
      * the buffer.
      */
     public int getCodeAddressOffset() {
-        assert codeAddressOffsetValid : "method " + getName() + " has no code address offset set";
+        if (!codeAddressOffsetValid) {
+            throw VMError.shouldNotReachHere(format("%H.%n(%p)") + ": has no code address offset set.");
+        }
         return codeAddressOffset;
     }
 
     public boolean isCodeAddressOffsetValid() {
         return codeAddressOffsetValid;
+    }
+
+    public void setCompiled() {
+        this.compiled = true;
+    }
+
+    public boolean isCompiled() {
+        return compiled;
+    }
+
+    public String getUniqueShortName() {
+        return uniqueShortName;
     }
 
     /*
@@ -214,9 +244,14 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
     }
 
     @Override
+    public boolean hasCalleeSavedRegisters() {
+        return StubCallingConvention.Utils.hasStubCallingConvention(this);
+    }
+
+    @Override
     public String getName() {
         if (compilationInfo.isDeoptTarget()) {
-            return wrapped.getName() + "**";
+            return wrapped.getName() + METHOD_NAME_DEOPT_SUFFIX;
         }
         return wrapped.getName();
     }
@@ -229,6 +264,11 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
     @Override
     public StructuredGraph buildGraph(DebugContext debug, ResolvedJavaMethod method, HostedProviders providers, Purpose purpose) {
         return wrapped.buildGraph(debug, method, providers, purpose);
+    }
+
+    @Override
+    public boolean allowRuntimeCompilation() {
+        return wrapped.allowRuntimeCompilation();
     }
 
     @Override
@@ -348,7 +388,7 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
 
     @Override
     public boolean hasNeverInlineDirective() {
-        return getAnnotation(NeverInline.class) != null;
+        return wrapped.hasNeverInlineDirective();
     }
 
     @Override
@@ -408,5 +448,47 @@ public class HostedMethod implements SharedMethod, WrappedJavaMethod, GraphProvi
     @Override
     public int hashCode() {
         return wrapped.hashCode();
+    }
+
+    @Override
+    public int compareTo(HostedMethod other) {
+        if (this.equals(other)) {
+            return 0;
+        }
+
+        /*
+         * Sort deoptimization targets towards the end of the code cache. They are rarely executed,
+         * and we do not want a deoptimization target as the first method (because offset 0 means no
+         * deoptimization target available).
+         */
+        int result = Boolean.compare(this.compilationInfo.isDeoptTarget(), other.compilationInfo.isDeoptTarget());
+
+        if (result == 0) {
+            result = this.getDeclaringClass().compareTo(other.getDeclaringClass());
+        }
+        if (result == 0) {
+            result = this.getName().compareTo(other.getName());
+        }
+        if (result == 0) {
+            result = this.getSignature().getParameterCount(false) - other.getSignature().getParameterCount(false);
+        }
+        if (result == 0) {
+            for (int i = 0; i < this.getSignature().getParameterCount(false); i++) {
+                result = ((HostedType) this.getSignature().getParameterType(i, null)).compareTo((HostedType) other.getSignature().getParameterType(i, null));
+                if (result != 0) {
+                    break;
+                }
+            }
+        }
+        if (result == 0) {
+            result = ((HostedType) this.getSignature().getReturnType(null)).compareTo((HostedType) other.getSignature().getReturnType(null));
+        }
+        assert result != 0;
+        return result;
+    }
+
+    @Override
+    public Executable getJavaMethod() {
+        return OriginalMethodProvider.getJavaMethod(getDeclaringClass().universe.getSnippetReflection(), wrapped);
     }
 }
