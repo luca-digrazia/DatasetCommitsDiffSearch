@@ -54,7 +54,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
@@ -95,8 +94,9 @@ abstract class HostExecuteNode extends Node {
             return executeImpl(method, obj, args, languageContext);
         } catch (ClassCastException | NullPointerException e) {
             // conversion failed by ToJavaNode
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedTypeException.create(args, e.getMessage());
+            throw UnsupportedTypeException.create(args);
+        } catch (UnsupportedTypeException | ArityException e) {
+            throw e;
         }
     }
 
