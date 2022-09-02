@@ -56,8 +56,6 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 final class HostClassCache {
 
-    static final PolyglotTargetMapping[] EMPTY_MAPPINGS = new PolyglotTargetMapping[0];
-
     private final APIAccess apiAccess;
     private final HostAccess hostAccess;
     private final boolean arrayAccess;
@@ -75,6 +73,8 @@ final class HostClassCache {
     boolean hasTargetMappings() {
         return targetMappings != null;
     }
+
+    static final PolyglotTargetMapping[] EMPTY_BINDINGS = new PolyglotTargetMapping[0];
 
     @TruffleBoundary
     PolyglotTargetMapping[] getMappings(Class<?> targetType) {
@@ -107,12 +107,12 @@ final class HostClassCache {
             }
             PolyglotTargetMapping[] mappings = (PolyglotTargetMapping[]) targetMappings.get(lookupType);
             if (mappings == null) {
-                return EMPTY_MAPPINGS;
+                return EMPTY_BINDINGS;
             } else {
                 return mappings;
             }
         }
-        return EMPTY_MAPPINGS;
+        return EMPTY_BINDINGS;
     }
 
     @SuppressWarnings("unchecked")
@@ -132,7 +132,7 @@ final class HostClassCache {
             list.add(map);
         }
         for (Entry<Class<?>, Object> object : localMappings.entrySet()) {
-            object.setValue(((List<?>) object.getValue()).toArray(EMPTY_MAPPINGS));
+            object.setValue(((List<?>) object.getValue()).toArray(EMPTY_BINDINGS));
         }
         return localMappings;
     }
