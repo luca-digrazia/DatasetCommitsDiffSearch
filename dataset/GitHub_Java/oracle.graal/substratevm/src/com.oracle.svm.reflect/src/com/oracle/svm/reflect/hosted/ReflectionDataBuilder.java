@@ -52,7 +52,6 @@ import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
-import com.oracle.svm.hosted.substitute.DeletedElementException;
 
 public class ReflectionDataBuilder implements RuntimeReflectionSupport {
 
@@ -89,8 +88,6 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
                         null,
                         new Field[0],
                         new Method[0],
-                        new Class<?>[0],
-                        new Class<?>[0],
                         null);
     }
 
@@ -205,8 +202,6 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
                 clazz.getMethods();
                 clazz.getDeclaredConstructors();
                 clazz.getConstructors();
-                clazz.getDeclaredClasses();
-                clazz.getClasses();
             } catch (NoClassDefFoundError e) {
                 /*
                  * If any of the methods or fields reference missing types in their signatures a
@@ -238,8 +233,6 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
                                     nullaryConstructor(declaredConstructorsField.get(originalReflectionData), reflectionMethods),
                                     filterFields(declaredPublicFieldsField.get(originalReflectionData), reflectionFields.keySet(), access.getMetaAccess()),
                                     filterMethods(declaredPublicMethodsField.get(originalReflectionData), reflectionMethods, access.getMetaAccess()),
-                                    filterClasses(clazz.getDeclaredClasses(), reflectionClasses, access.getMetaAccess()),
-                                    filterClasses(clazz.getClasses(), reflectionClasses, access.getMetaAccess()),
                                     enclosingMethodOrConstructor(clazz));
                 }
 
@@ -304,13 +297,8 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
     private static Field[] filterFields(Object fields, Set<Field> filter, AnalysisMetaAccess metaAccess) {
         List<Field> result = new ArrayList<>();
         for (Field field : (Field[]) fields) {
-            if (filter.contains(field)) {
-                try {
-                    if (!metaAccess.lookupJavaField(field).isAnnotationPresent(Delete.class)) {
-                        result.add(field);
-                    }
-                } catch (DeletedElementException ignored) { // filter
-                }
+            if (filter.contains(field) && !metaAccess.lookupJavaField(field).isAnnotationPresent(Delete.class)) {
+                result.add(field);
             }
         }
         return result.toArray(new Field[0]);
@@ -328,31 +316,11 @@ public class ReflectionDataBuilder implements RuntimeReflectionSupport {
     private static <T extends Executable> T[] filterMethods(Object methods, Set<Executable> filter, AnalysisMetaAccess metaAccess, T[] prototypeArray) {
         List<T> result = new ArrayList<>();
         for (T method : (T[]) methods) {
-            if (filter.contains(method)) {
-                try {
-                    if (!metaAccess.lookupJavaMethod(method).isAnnotationPresent(Delete.class)) {
-                        result.add(method);
-                    }
-                } catch (DeletedElementException ignored) { // filter
-                }
+            if (filter.contains(method) && !metaAccess.lookupJavaMethod(method).isAnnotationPresent(Delete.class)) {
+                result.add(method);
             }
         }
         return result.toArray(prototypeArray);
-    }
-
-    private static Class<?>[] filterClasses(Object classes, Set<Class<?>> filter, AnalysisMetaAccess metaAccess) {
-        List<Class<?>> result = new ArrayList<>();
-        for (Class<?> clazz : (Class<?>[]) classes) {
-            if (filter.contains(clazz)) {
-                try {
-                    if (!metaAccess.lookupJavaType(clazz).isAnnotationPresent(Delete.class)) {
-                        result.add(clazz);
-                    }
-                } catch (DeletedElementException ignored) { // filter
-                }
-            }
-        }
-        return result.toArray(new Class<?>[0]);
     }
 
     private static Method findMethod(Class<?> declaringClass, String methodName, Class<?>... parameterTypes) {
