@@ -324,12 +324,6 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
     interface ExportsType {
     }
 
-    interface ExportsGenericInterface<T> {
-    }
-
-    class ExportsGenericClass<T> {
-    }
-
     @ExpectError("Invalid type. Valid declared type expected.")
     @GenerateLibrary(receiverType = int.class)
     public abstract static class ExportsTypeLibraryError1 extends Library {
@@ -374,36 +368,6 @@ public class GenerateLibraryTest extends AbstractLibraryTest {
     public static class InvalidDefaultTypeImpl {
         @ExportMessage
         static void foo(Double receiver) {
-        }
-    }
-
-    @GenerateLibrary()
-    @DefaultExport(ExportsGenericInterfaceDefaultLibrary.class)
-    public abstract static class ExportsGenericInterfaceLibrary extends Library {
-
-        public abstract void foo(ExportsGenericInterface<?> receiver);
-
-    }
-
-    @ExportLibrary(value = ExportsGenericInterfaceLibrary.class, receiverType = ExportsGenericInterface.class)
-    public static class ExportsGenericInterfaceDefaultLibrary {
-        @ExportMessage
-        static void foo(ExportsGenericInterface<?> receiver) {
-        }
-    }
-
-    @GenerateLibrary()
-    @DefaultExport(ExportsGenericClassDefaultLibrary.class)
-    public abstract static class ExportsGenericClassLibrary extends Library {
-
-        public abstract void foo(ExportsGenericClass<?> receiver);
-
-    }
-
-    @ExportLibrary(value = ExportsGenericClassLibrary.class, receiverType = ExportsGenericClass.class)
-    public static class ExportsGenericClassDefaultLibrary {
-        @ExportMessage
-        static void foo(ExportsGenericClass<?> receiver) {
         }
     }
 

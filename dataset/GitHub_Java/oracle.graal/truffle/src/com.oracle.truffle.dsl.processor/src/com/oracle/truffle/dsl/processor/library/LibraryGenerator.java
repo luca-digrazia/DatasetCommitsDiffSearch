@@ -262,7 +262,7 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
             CodeExecutableElement executeImpl = proxyClass.add(CodeExecutableElement.cloneNoAnnotations(message.model.getExecutable()));
             removeAbstractModifiers(executeImpl);
             if (executeImpl.getReturnType().getKind() == TypeKind.TYPEVAR) {
-                executeImpl.getAnnotationMirrors().add(createSuppressWarningsUnchecked(context));
+                executeImpl.getAnnotationMirrors().add(createSuppressWarningsUnchecked());
             }
             executeImpl.renameArguments("receiver_");
             builder = executeImpl.createBuilder();
@@ -381,7 +381,7 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
             CodeExecutableElement executeImpl = delegateClass.add(CodeExecutableElement.cloneNoAnnotations(message.model.getExecutable()));
             removeAbstractModifiers(executeImpl);
             if (executeImpl.getReturnType().getKind() == TypeKind.TYPEVAR) {
-                executeImpl.getAnnotationMirrors().add(createSuppressWarningsUnchecked(context));
+                executeImpl.getAnnotationMirrors().add(createSuppressWarningsUnchecked());
             }
             executeImpl.renameArguments("receiver_");
             builder = executeImpl.createBuilder();
@@ -680,7 +680,7 @@ public class LibraryGenerator extends CodeTypeElementFactory<LibraryData> {
         return new TypeMirror[]{defaultExportsLibrary.getTemplateType().asType(), resolvedExports.asType()};
     }
 
-    static CodeAnnotationMirror createSuppressWarningsUnchecked(ProcessorContext context) {
+    private CodeAnnotationMirror createSuppressWarningsUnchecked() {
         CodeAnnotationMirror suppressWarnings = new CodeAnnotationMirror(context.getDeclaredType(SuppressWarnings.class));
         suppressWarnings.setElementValue(suppressWarnings.findExecutableElement("value"), new CodeAnnotationValue(Arrays.asList(new CodeAnnotationValue("unchecked"))));
         return suppressWarnings;
