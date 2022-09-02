@@ -1053,9 +1053,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     } else if (UnicodeProperties.isSupportedProperty(propertySpec, true)) {
                         property = UnicodeProperties.getProperty(propertySpec, true);
                     } else {
-                        bailOut("unsupported Unicode property " + propertySpec);
-                        // So that the property variable is always written to.
-                        property = CodePointSet.getEmpty();
+                        throw syntaxError(String.format("invalid character property name {%s}", propertySpec));
                     }
                     if (negative) {
                         property = property.createInverse(Encodings.UTF_32);
