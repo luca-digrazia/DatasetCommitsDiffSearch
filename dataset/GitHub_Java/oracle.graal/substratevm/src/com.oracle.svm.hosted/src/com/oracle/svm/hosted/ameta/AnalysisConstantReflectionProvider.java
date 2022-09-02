@@ -138,7 +138,7 @@ public class AnalysisConstantReflectionProvider extends SharedConstantReflection
 
         /* On HotSpot the base of a static field is the Class object. */
         Object base = field.getDeclaringClass().getJavaClass();
-        long offset = field.wrapped.getOffset();
+        long offset = field.getOffset();
 
         /*
          * We cannot rely on the reflectionField because it can be null if there is some incomplete
@@ -225,14 +225,22 @@ public class AnalysisConstantReflectionProvider extends SharedConstantReflection
     /**
      * Intercept assertion status: the value of the field during image generation does not matter at
      * all (because it is the hosted assertion status), we instead return the appropriate runtime
-     * assertion status. Field loads are also intrinsified early in
-     * {@link com.oracle.svm.hosted.phases.EarlyConstantFoldLoadFieldPlugin}, but we could still see
-     * such a field here if user code, e.g., accesses it via reflection.
+     * assertion status.
      */
     private static JavaConstant interceptAssertionStatus(AnalysisField field, JavaConstant value) {
-        if (field.isStatic() && field.isSynthetic() && field.getName().startsWith("$assertionsDisabled")) {
-            boolean assertionsEnabled = SubstrateOptions.getRuntimeAssertionsForClass(field.getDeclaringClass().toJavaName());
-            return JavaConstant.forBoolean(!assertionsEnabled);
+        if (Modifier.isStatic(field.getModifiers()) && field.isSynthetic() && field.getName().startsWith("$assertionsDisabled")) {
+            String unsubstitutedName = field.wrapped.getDeclaringClass().toJavaName();
+            if (unsubstitutedName.startsWith("java.") || unsubstitutedName.startsWith("javax.") || unsubstitutedName.startsWith("sun.")) {
+                /*
+                 * This is a JDK class, so not likely an assertion that we care about, and some JDK
+                 * assertions do not hold in Substrate VM. Note that we match the original class
+                 * (before substitution) here to keep assertions in substitution code.
+                 */
+                return JavaConstant.TRUE;
+            }
+            /* For the user-provided filter, match substitution target names to avoid confusion. */
+            String className = field.getDeclaringClass().toJavaName();
+            return JavaConstant.forBoolean(!SubstrateOptions.getRuntimeAssertionsForClass(className));
         }
         return value;
     }
