@@ -231,7 +231,6 @@ public final class CallNode extends Node implements Comparable<CallNode> {
         verifyTrivial(entry);
         ir = copyGraphAndAddChildren(entry);
         addIndirectChildren(entry);
-
         getPolicy().afterExpand(this);
     }
 
@@ -252,11 +251,7 @@ public final class CallNode extends Node implements Comparable<CallNode> {
                 for (Invoke original : entry.invokeToTruffleCallNode.getKeys()) {
                     final TruffleCallNode truffleCallNode = entry.invokeToTruffleCallNode.get(original);
                     Invoke replacement = (Invoke) duplicates.get((Node) original);
-                    // TODO after performing truffle tier before inlining the replacement
-                    // can become null. Is this intentional?
-                    if (replacement != null) {
-                        replacements.put(replacement, truffleCallNode);
-                    }
+                    replacements.put(replacement, truffleCallNode);
                 }
                 addChildren(CallNode.this, replacements);
             }

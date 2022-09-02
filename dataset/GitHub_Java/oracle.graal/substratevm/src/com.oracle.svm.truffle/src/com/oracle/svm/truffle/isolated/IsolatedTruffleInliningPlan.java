@@ -100,13 +100,12 @@ final class IsolatedTruffleInlining<T extends TruffleMetaAccessProvider> extends
 
     @Override
     public CompilableTruffleAST[] inlinedTargets() {
-        return inlinedTargets0(IsolatedCompileContext.get().getClient(), handle);
+        return null; //TODO
     }
 
     @Override
     public void addInlinedTarget(CompilableTruffleAST target) {
-        ClientHandle<SubstrateCompilableTruffleAST> targetHandle = ((IsolatedCompilableTruffleAST) target).getHandle();
-        addInlinedTarget0(IsolatedCompileContext.get().getClient(), handle, targetHandle);
+        // TODO
     }
 
     @CEntryPoint
@@ -147,16 +146,6 @@ final class IsolatedTruffleInlining<T extends TruffleMetaAccessProvider> extends
 
     @CEntryPoint
     @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private void addInlinedTarget0(@SuppressWarnings("unused") ClientIsolateThread client,
-                    ClientHandle<? extends TruffleMetaAccessProvider> providerHandle,
-                    ClientHandle<SubstrateCompilableTruffleAST> targetHandle) {
-        final IsolatedCompileClient isolatedCompileClient = IsolatedCompileClient.get();
-        TruffleMetaAccessProvider truffleMetaAccessProvider = isolatedCompileClient.unhand(providerHandle);
-        truffleMetaAccessProvider.addInlinedTarget(isolatedCompileClient.unhand(targetHandle));
-    }
-
-    @CEntryPoint
-    @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
     private static void dequeueTargets0(@SuppressWarnings("unused") ClientIsolateThread client,
                     ClientHandle<? extends TruffleMetaAccessProvider> providerHandle) {
         TruffleMetaAccessProvider truffleMetaAccessProvider = IsolatedCompileClient.get().unhand(providerHandle);
@@ -193,15 +182,6 @@ final class IsolatedTruffleInlining<T extends TruffleMetaAccessProvider> extends
                     ClientHandle<? extends TruffleMetaAccessProvider> handle) {
         TruffleMetaAccessProvider truffleMetaAccessProvider = IsolatedCompileClient.get().unhand(handle);
         return truffleMetaAccessProvider.countInlinedCalls();
-    }
-
-    @CEntryPoint
-    @CEntryPointOptions(include = CEntryPointOptions.NotIncludedAutomatically.class, publishAs = CEntryPointOptions.Publish.NotPublished)
-    private static CompilableTruffleAST[] inlinedTargets0(@SuppressWarnings("unused") ClientIsolateThread client,
-                                                          ClientHandle<? extends TruffleMetaAccessProvider> handle) {
-        // TODO: I'm quite sure this is incorrect.
-        TruffleMetaAccessProvider truffleMetaAccessProvider = IsolatedCompileClient.get().unhand(handle);
-        return truffleMetaAccessProvider.inlinedTargets();
     }
 
     @CEntryPoint
