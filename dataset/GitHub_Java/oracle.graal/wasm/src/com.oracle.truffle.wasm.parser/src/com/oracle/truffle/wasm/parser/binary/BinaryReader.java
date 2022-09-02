@@ -169,21 +169,8 @@ public class BinaryReader {
             instruction = read1();
             switch (instruction) {
                 case 0x41:  // i32.const
-                case 0x42:  // i64.const
-                {
                     int val = readSignedLEB128();
                     break;
-                }
-                case 0x43:  // f32.const
-                {
-                    float val = readF32();
-                    break;
-                }
-                case 0x44:  // f64.const
-                {
-                    double val = readF64();
-                    break;
-                }
                 default:
                     break;
             }
@@ -268,21 +255,11 @@ public class BinaryReader {
     }
 
     public int read4() {
-        int result = 0;
-        for (int i = 0; i != 4; ++i) {
-            int x = Byte.toUnsignedInt(read1());
-            result |= x << 8 * i;
-        }
-        return result;
-    }
-
-    public long read8() {
-        long result = 0;
-        for (int i = 0; i != 8; ++i) {
-            long x = Byte.toUnsignedLong(read1());
-            result |= x << 8 * i;
-        }
-        return result;
+        int x3 = read1();
+        int x2 = read1();
+        int x1 = read1();
+        int x0 = read1();
+        return (x0 << 24) | (x1 << 16) | (x2 << 8) | x3;
     }
 
     public int readSignedLEB128() {
@@ -336,16 +313,6 @@ public class BinaryReader {
             Assert.fail("Unsigned LEB128 overflow");
         }
         return result;
-    }
-
-    public float readF32() {
-        int rawBits = read4();
-        return Float.intBitsToFloat(rawBits);
-    }
-
-    public double readF64() {
-        long rawBits = read8();
-        return Double.longBitsToDouble(rawBits);
     }
 
     public int readVectorLength() {
