@@ -1415,9 +1415,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                         case 'm':
                         case 'i':
                         case 'x':
-                        case 'a':
-                        case 'd':
-                        case 'u':
                             flags(ch1);
                             break;
 
@@ -1630,35 +1627,36 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         int ch = ch0;
         RubyFlags newFlags = getLocalFlags();
         boolean negative = false;
-        while (ch != ')' && ch != ':') {
-            if (ch == '-') {
+        switch (ch) {
+            case ')':
+                openEndedLocalFlags(newFlags);
+                break;
+            case ':':
+                localFlags(newFlags, start);
+                break;
+            case '-':
                 negative = true;
-            } else if (RubyFlags.isValidFlagChar(ch)) {
-                if (negative) {
-                    if (RubyFlags.isTypeFlag(ch)) {
-                        throw syntaxErrorAtRel("undefined group option", 1);
-                    }
-                    newFlags = newFlags.delFlag(ch);
-                } else {
-                    newFlags = newFlags.addFlag(ch);
+                if (atEnd()) {
+                    throw syntaxErrorHere("missing flag");
                 }
-            } else if (Character.isAlphabetic(ch)) {
-                throw syntaxErrorAtRel("undefined group option", 1);
-            } else {
-                throw syntaxErrorAtRel("missing -, : or )", 1);
-            }
-
-            if (atEnd()) {
-               throw syntaxErrorHere("missing flag, -, : or )");
-            }
-            ch = consumeChar();
-        }
-
-        if (ch == ')') {
-            openEndedLocalFlags(newFlags);
-        } else {
-            assert ch == ':';
-            localFlags(newFlags, start);
+                ch = consumeChar();
+                break;
+            default:
+                if (RubyFlags.isValidFlagChar(ch)) {
+                    if (negative) {
+                        newFlags = newFlags.delFlag(ch);
+                    } else {
+                        newFlags = newFlags.addFlag(ch);
+                    }
+                    if (atEnd()) {
+                        throw syntaxErrorHere("missing -, : or )");
+                    }
+                    ch = consumeChar();
+                } else if (Character.isAlphabetic(ch)) {
+                    throw syntaxErrorAtRel("unknown flag", 1);
+                } else {
+                    throw syntaxErrorAtRel("missing -, : or )", 1);
+                }
         }
     }
 
