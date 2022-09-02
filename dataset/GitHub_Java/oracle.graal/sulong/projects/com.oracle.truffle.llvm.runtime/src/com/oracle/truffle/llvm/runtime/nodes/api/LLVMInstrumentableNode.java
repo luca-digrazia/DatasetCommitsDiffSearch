@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,36 +30,57 @@
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.dsl.NodeField;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.instrumentation.InstrumentableNode;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 
-@NodeField(name = "sourceLocation", type = LLVMSourceLocation.class)
-@NodeField(name = "statement", type = boolean.class)
 public abstract class LLVMInstrumentableNode extends LLVMNode implements InstrumentableNode {
 
+    @CompilationFinal private LLVMNodeSourceDescriptor sourceDescriptor = null;
+
     /**
-     * Get a {@link LLVMSourceLocation descriptor} for the source-level code location and scope
-     * information of this node.
+     * Get a {@link LLVMNodeSourceDescriptor descriptor} for the debug and instrumentation
+     * properties of this node.
      *
-     * @return the {@link LLVMSourceLocation} attached to this node
+     * @return a source descriptor attached to this node
      */
-    public abstract LLVMSourceLocation getSourceLocation();
-
-    public abstract void setSourceLocation(LLVMSourceLocation sourceLocation);
-
-    @Override
-    public final SourceSection getSourceSection() {
-        LLVMSourceLocation sourceLocation = getSourceLocation();
-        return sourceLocation == null ? null : sourceLocation.getSourceSection();
+    public final LLVMNodeSourceDescriptor getSourceDescriptor() {
+        return sourceDescriptor;
     }
 
-    protected abstract boolean isStatement();
+    /**
+     * Get a {@link LLVMNodeSourceDescriptor descriptor} for the debug and instrumentation
+     * properties of this node. If no such descriptor is currently attached to this node, one will
+     * be created.
+     *
+     * @return a source descriptor attached to this node
+     */
+    public final LLVMNodeSourceDescriptor getOrCreateSourceDescriptor() {
+        if (sourceDescriptor == null) {
+            setSourceDescriptor(new LLVMNodeSourceDescriptor());
+        }
+        return sourceDescriptor;
+    }
 
-    protected abstract void setStatement(boolean statementTag);
+    public final void setSourceDescriptor(LLVMNodeSourceDescriptor sourceDescriptor) {
+        // the source descriptor should only be set in the parser, and should only be modified
+        // before this node is first executed
+        CompilerAsserts.neverPartOfCompilation();
+        this.sourceDescriptor = sourceDescriptor;
+    }
+
+    @Override
+    public SourceSection getSourceSection() {
+        return sourceDescriptor != null ? sourceDescriptor.getSourceSection() : null;
+    }
+
+    @Override
+    public boolean isInstrumentable() {
+        return getSourceSection() != null;
+    }
 
     /**
      * Describes whether this node has source-level debug information attached and should be
@@ -68,18 +89,18 @@ public abstract class LLVMInstrumentableNode extends LLVMNode implements Instrum
      * @return whether this node may provide the
      *         {@link com.oracle.truffle.api.instrumentation.StandardTags.StatementTag}
      */
-    public boolean hasStatementTag() {
-        return isStatement() && getSourceLocation() != null;
+    private boolean hasStatementTag() {
+        return sourceDescriptor != null && sourceDescriptor.hasStatementTag();
     }
 
-    public void setHasStatementTag(boolean b) {
-        CompilerAsserts.neverPartOfCompilation();
-        setStatement(b);
-    }
-
-    @Override
-    public final boolean isInstrumentable() {
-        return getSourceSection() != null;
+    /**
+     * Get a {@link LLVMSourceLocation descriptor} for the source-level code location and scope
+     * information of this node.
+     *
+     * @return the {@link LLVMSourceLocation} attached to this node
+     */
+    public LLVMSourceLocation getSourceLocation() {
+        return sourceDescriptor != null ? sourceDescriptor.getSourceLocation() : null;
     }
 
     /**
