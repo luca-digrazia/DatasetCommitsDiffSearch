@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -99,8 +99,7 @@ import com.oracle.truffle.api.nodes.UnexpectedResultException;
 @GenerateLibrary(defaultExportLookupEnabled = true, dynamicDispatchEnabled = false)
 public abstract class DynamicObjectLibrary extends Library {
 
-    private static final LibraryFactory<DynamicObjectLibrary> FACTORY = LibraryFactory.resolve(DynamicObjectLibrary.class);
-    private static final DynamicObjectLibrary UNCACHED = FACTORY.getUncached();
+    static final LibraryFactory<DynamicObjectLibrary> FACTORY = LibraryFactory.resolve(DynamicObjectLibrary.class);
 
     /**
      * @since 20.2.0
@@ -125,7 +124,7 @@ public abstract class DynamicObjectLibrary extends Library {
      * @since 20.2.0
      */
     public static DynamicObjectLibrary getUncached() {
-        return UNCACHED;
+        return getFactory().getUncached();
     }
 
     /**
