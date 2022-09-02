@@ -32,18 +32,17 @@ import static org.graalvm.compiler.core.common.GraalOptions.OptReadElimination;
 import static org.graalvm.compiler.core.common.GraalOptions.PartialEscapeAnalysis;
 import static org.graalvm.compiler.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
+import org.graalvm.compiler.loop.DefaultLoopPolicies;
+import org.graalvm.compiler.loop.LoopPolicies;
 import org.graalvm.compiler.loop.phases.ConvertDeoptimizeToGuardPhase;
 import org.graalvm.compiler.loop.phases.LoopFullUnrollPhase;
 import org.graalvm.compiler.loop.phases.LoopPeelingPhase;
 import org.graalvm.compiler.loop.phases.LoopUnswitchingPhase;
-import org.graalvm.compiler.nodes.loop.DefaultLoopPolicies;
-import org.graalvm.compiler.nodes.loop.LoopPolicies;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.phases.common.BoxNodeOptimizationPhase;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
 import org.graalvm.compiler.phases.common.DisableOverflownCountedLoopsPhase;
@@ -106,9 +105,7 @@ public class HighTier extends BaseTier<HighTierContext> {
         }
 
         if (PartialEscapeAnalysis.getValue(options)) {
-            PartialEscapePhase pea = new PartialEscapePhase(true, canonicalizer, options);
-            pea.setFinalPEA();
-            appendPhase(pea);
+            appendPhase(new PartialEscapePhase(true, canonicalizer, options));
         }
 
         if (OptReadElimination.getValue(options)) {
@@ -119,7 +116,6 @@ public class HighTier extends BaseTier<HighTierContext> {
             appendPhase(new NodeCounterPhase(NodeCounterPhase.Stage.LATE));
         }
 
-        appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new BoxNodeOptimizationPhase()));
         appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER, true));
     }
 
