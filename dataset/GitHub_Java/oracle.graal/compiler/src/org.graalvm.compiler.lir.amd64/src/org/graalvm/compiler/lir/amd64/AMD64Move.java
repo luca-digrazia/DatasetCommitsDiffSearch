@@ -709,8 +709,12 @@ public class AMD64Move {
                             masm.movq(result, crb.nullRegister);
                         }
                     } else {
-                        // Upper bits will be zeroed so this also works for narrow oops
-                        masm.movslq(result, 0);
+                        if (Objects.equals(moveKind, AMD64Kind.DWORD)) {
+                            // Support for narrow oops
+                            masm.movl(result, 0);
+                        } else {
+                            masm.movslq(result, 0);
+                        }
                     }
                 } else {
                     if (crb.target.inlineObjects) {
