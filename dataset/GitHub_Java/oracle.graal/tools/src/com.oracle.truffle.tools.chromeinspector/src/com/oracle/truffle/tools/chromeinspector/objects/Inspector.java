@@ -25,19 +25,15 @@
 package com.oracle.truffle.tools.chromeinspector.objects;
 
 import java.io.IOException;
-import java.util.function.Supplier;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
-
 import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext;
+
 import com.oracle.truffle.tools.chromeinspector.server.InspectorServerConnection;
+import java.util.function.Supplier;
 
 /**
  * Implementation of Inspector module described at
@@ -59,8 +55,6 @@ public final class Inspector extends AbstractInspectorObject {
     private final InspectorServerConnection.Open open;
     private final Console console;
     private final SessionClass sessionType;
-    private final Node nodeIsBoxed = Message.IS_BOXED.createNode();
-    private final Node nodeUnbox = Message.UNBOX.createNode();
 
     public Inspector(InspectorServerConnection connection, InspectorServerConnection.Open open, Supplier<InspectorExecutionContext> contextSupplier) {
         this.connection = connection;
@@ -147,19 +141,11 @@ public final class Inspector extends AbstractInspectorObject {
         String host = null;
         boolean wait = false;
         if (arguments.length > 0) {
-            Object arg = unbox(arguments[0]);
-            if (arg instanceof Number) {
-                port = ((Number) arg).intValue();
-            }
+            port = ((Number) arguments[0]).intValue();
             if (arguments.length > 1) {
-                if (arguments[1] instanceof String) {
-                    host = (String) arguments[1];
-                }
+                host = (String) arguments[1];
                 if (arguments.length > 2) {
-                    arg = unbox(arguments[2]);
-                    if (arg instanceof Boolean) {
-                        wait = (boolean) arg;
-                    }
+                    wait = (boolean) arguments[2];
                 }
             }
         }
@@ -169,19 +155,6 @@ public final class Inspector extends AbstractInspectorObject {
             console.setConnection(newConnection);
         }
         return NullObject.INSTANCE;
-    }
-
-    Object unbox(Object obj) {
-        if (obj instanceof TruffleObject) {
-            TruffleObject tobj = (TruffleObject) obj;
-            if (ForeignAccess.sendIsBoxed(nodeIsBoxed, tobj)) {
-                try {
-                    return ForeignAccess.sendUnbox(nodeUnbox, tobj);
-                } catch (UnsupportedMessageException ex) {
-                }
-            }
-        }
-        return obj;
     }
 
     private Object methodUrl() {

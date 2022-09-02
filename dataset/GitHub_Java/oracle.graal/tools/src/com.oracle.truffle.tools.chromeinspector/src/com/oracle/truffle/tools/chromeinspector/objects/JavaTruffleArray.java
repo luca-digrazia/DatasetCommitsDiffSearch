@@ -25,7 +25,7 @@
 package com.oracle.truffle.tools.chromeinspector.objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 
 public final class JavaTruffleArray extends AbstractInspectorArray {
 
@@ -36,16 +36,16 @@ public final class JavaTruffleArray extends AbstractInspectorArray {
     }
 
     @Override
-    int getArraySize() {
+    int getLength() {
         return array.length;
     }
 
     @Override
-    Object readArrayElement(long index) throws InvalidArrayIndexException {
+    Object getElementAt(int index) {
         if (index < 0 || index >= array.length) {
             CompilerDirectives.transferToInterpreter();
-            throw InvalidArrayIndexException.create(index);
+            throw UnknownIdentifierException.raise(Integer.toString(index));
         }
-        return array[(int) index];
+        return array[index];
     }
 }

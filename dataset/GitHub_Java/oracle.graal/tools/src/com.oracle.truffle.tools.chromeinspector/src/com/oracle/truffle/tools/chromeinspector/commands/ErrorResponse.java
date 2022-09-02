@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,18 +22,37 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.tools.chromeinspector.instrument;
+package com.oracle.truffle.tools.chromeinspector.commands;
 
-import java.io.IOException;
+import com.oracle.truffle.tools.utils.json.JSONObject;
 
-/**
- * Web socket connection for the inspector protocol.
- */
-public interface InspectorWSConnection {
+public final class ErrorResponse {
 
-    int getPort();
+    private static final String ERROR = "error";
+    private static final String CODE = "code";
+    private static final String MESSAGE = "message";
 
-    void consoleAPICall(String wsspath, String type, Object text);
+    private final long id;
+    private final long code;
+    private final String message;
 
-    void close(String wsspath) throws IOException;
+    public ErrorResponse(long id, long code, String message) {
+        this.id = id;
+        this.code = code;
+        this.message = message;
+    }
+
+    public JSONObject toJSON() {
+        JSONObject json = new JSONObject();
+        json.put(Command.ID, id);
+        JSONObject error = new JSONObject();
+        error.put(CODE, code);
+        error.put(MESSAGE, message);
+        json.put(ERROR, error);
+        return json;
+    }
+
+    public String toJSONString() {
+        return toJSON().toString();
+    }
 }

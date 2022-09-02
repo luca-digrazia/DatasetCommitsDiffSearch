@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,10 @@
  */
 package com.oracle.truffle.tools.chromeinspector;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.util.ArrayList;
@@ -33,16 +37,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.logging.Level;
 
-import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugValue;
 import com.oracle.truffle.api.instrumentation.EventBinding;
 import com.oracle.truffle.api.instrumentation.SourceFilter;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 
-import com.oracle.truffle.tools.chromeinspector.instrument.InspectorInstrument;
 import com.oracle.truffle.tools.chromeinspector.server.CommandProcessException;
 import com.oracle.truffle.tools.chromeinspector.types.CallArgument;
 import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
@@ -52,12 +53,12 @@ import com.oracle.truffle.tools.chromeinspector.types.RemoteObject;
  */
 public final class InspectorExecutionContext {
 
-    public static final TruffleLogger LOG = TruffleLogger.getLogger(InspectorInstrument.INSTRUMENT_ID);
     private static final AtomicLong LAST_ID = new AtomicLong(0);
 
     private final String name;
     private final TruffleInstrument.Env env;
     private final PrintWriter err;
+    private final PrintStream traceLogger;
     private final List<Listener> listeners = Collections.synchronizedList(new ArrayList<>(3));
     private final long id = LAST_ID.incrementAndGet();
     private final boolean[] runPermission = new boolean[]{false};
@@ -75,13 +76,31 @@ public final class InspectorExecutionContext {
     private volatile String lastLanguage = "js";
     private boolean synchronous = false;
 
-    public InspectorExecutionContext(String name, boolean inspectInternal, boolean inspectInitialization, TruffleInstrument.Env env, List<URI> sourceRoots, PrintWriter err) {
+    public InspectorExecutionContext(String name, boolean inspectInternal, boolean inspectInitialization, TruffleInstrument.Env env, List<URI> sourceRoots, PrintWriter err) throws IOException {
         this.name = name;
         this.inspectInternal = inspectInternal;
         this.inspectInitialization = inspectInitialization;
         this.env = env;
         this.sourceRoots = sourceRoots;
         this.err = err;
+        this.traceLogger = createTraceLogger();
+    }
+
+    private static PrintStream createTraceLogger() throws IOException {
+        PrintStream traceLog = null;
+        String traceLogFile = System.getProperty("chromeinspector.traceMessages");
+        if (traceLogFile != null) {
+            if (Boolean.parseBoolean(traceLogFile)) {
+                traceLog = System.err;
+            } else if (!"false".equalsIgnoreCase(traceLogFile)) {
+                if ("tmp".equalsIgnoreCase(traceLogFile)) {
+                    traceLog = new PrintStream(new FileOutputStream(File.createTempFile("ChromeInspectorProtocol", ".txt")));
+                } else {
+                    traceLog = new PrintStream(new FileOutputStream(traceLogFile));
+                }
+            }
+        }
+        return traceLog;
     }
 
     public boolean isInspectInternal() {
@@ -104,22 +123,8 @@ public final class InspectorExecutionContext {
         return err;
     }
 
-    public void logMessage(String prefix, String message) {
-        if (LOG.isLoggable(Level.FINE)) {
-            LOG.fine("CONTEXT " + id + " " + prefix + message);
-        }
-    }
-
-    public void logException(Throwable ex) {
-        if (LOG.isLoggable(Level.FINE)) {
-            LOG.log(Level.FINE, "CONTEXT " + id, ex);
-        }
-    }
-
-    public void logException(String prefix, Throwable ex) {
-        if (LOG.isLoggable(Level.FINE)) {
-            LOG.log(Level.FINE, "CONTEXT " + id + " " + prefix, ex);
-        }
+    public PrintStream getLogger() {
+        return traceLogger;
     }
 
     Iterable<URI> getSourcePath() {
@@ -346,9 +351,8 @@ public final class InspectorExecutionContext {
             throw new NoSuspendedThreadException("<Resuming...>");
         }
 
-        @SuppressWarnings("sync-override")
         @Override
-        public Throwable fillInStackTrace() {
+        public synchronized Throwable fillInStackTrace() {
             return this;
         }
     }

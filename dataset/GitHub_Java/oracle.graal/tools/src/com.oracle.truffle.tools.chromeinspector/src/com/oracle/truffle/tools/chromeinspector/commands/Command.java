@@ -22,39 +22,49 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.tools.chromeinspector.events;
+package com.oracle.truffle.tools.chromeinspector.commands;
 
+import com.oracle.truffle.tools.utils.json.JSONException;
 import com.oracle.truffle.tools.utils.json.JSONObject;
 
-import com.oracle.truffle.tools.chromeinspector.commands.Command;
-import com.oracle.truffle.tools.chromeinspector.commands.Params;
-import com.oracle.truffle.tools.chromeinspector.commands.Result;
+public final class Command {
 
-public final class Event {
+    public static final String ID = "id";
+    public static final String METHOD = "method";
+    public static final String PARAMS = "params";
 
-    private final JSONObject json;
+    private final long id;
+    private final String method;
+    private final Params params;
 
-    public Event(String method, Params params) {
-        JSONObject event = new JSONObject();
-        event.put(Command.METHOD, method);
-        if (params != null) {
-            event.put(Command.PARAMS, params.getJSONObject());
+    public Command(String jsonStr) throws JSONException {
+        JSONObject json = new JSONObject(jsonStr);
+        this.id = json.getLong(ID);
+        this.method = json.getString(METHOD);
+        if (json.has(PARAMS)) {
+            JSONObject paramsJson = json.getJSONObject(PARAMS);
+            this.params = new Params(paramsJson);
+        } else {
+            this.params = null;
         }
-        json = event;
     }
 
-    /**
-     * Command result event.
-     */
-    public Event(long id, Result result) {
-        json = result.toJSON(id);
+    public Command(long id, String method, Params params) {
+        this.id = id;
+        this.method = method;
+        this.params = params;
     }
 
-    public JSONObject toJSON() {
-        return json;
+    public long getId() {
+        return id;
     }
 
-    public String toJSONString() {
-        return json.toString();
+    public String getMethod() {
+        return method;
     }
+
+    public Params getParams() {
+        return params;
+    }
+
 }

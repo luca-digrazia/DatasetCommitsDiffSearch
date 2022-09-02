@@ -28,7 +28,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.tools.utils.json.JSONArray;
@@ -49,7 +48,7 @@ public final class JSONTruffleObject extends AbstractInspectorObject {
     }
 
     @Override
-    protected TruffleObject getMembers(boolean includeInternal) {
+    protected TruffleObject getKeys() {
         return keys;
     }
 
@@ -83,9 +82,9 @@ public final class JSONTruffleObject extends AbstractInspectorObject {
     }
 
     @Override
-    protected Object invokeMember(String name, Object[] arguments) throws UnknownIdentifierException {
+    protected Object invokeMethod(String name, Object[] arguments) {
         CompilerDirectives.transferToInterpreter();
-        throw UnknownIdentifierException.create(name);
+        throw UnknownIdentifierException.raise(name);
     }
 
     static Object getTruffleValueFromJSONValue(Object value) {
@@ -108,18 +107,18 @@ public final class JSONTruffleObject extends AbstractInspectorObject {
         }
 
         @Override
-        int getArraySize() {
+        int getLength() {
             return obj.getNames().length;
         }
 
         @Override
-        Object readArrayElement(long index) throws InvalidArrayIndexException {
+        Object getElementAt(int index) {
             String[] allNames = obj.getNames();
             if (index < 0 || index >= allNames.length) {
                 CompilerDirectives.transferToInterpreter();
-                throw InvalidArrayIndexException.create(index);
+                throw UnknownIdentifierException.raise(Integer.toString(index));
             }
-            return allNames[(int) index];
+            return allNames[index];
         }
     }
 

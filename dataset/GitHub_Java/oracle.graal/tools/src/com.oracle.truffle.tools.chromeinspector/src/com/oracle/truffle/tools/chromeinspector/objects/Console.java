@@ -28,7 +28,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
@@ -69,12 +68,6 @@ class Console extends AbstractInspectorObject {
                     METHOD_CLEAR, METHOD_COUNT, METHOD_COUNT_RESET, METHOD_ASSERT, METHOD_MARK_TIMELINE, METHOD_PROFILE, METHOD_PROFILE_END,
                     METHOD_TIMELINE, METHOD_TIMELINE_END, METHOD_TIME, METHOD_TIME_END, METHOD_TIME_STAMP};
     private static final TruffleObject KEYS = new Keys();
-    private static final Object UNKNOWN = new Object() {
-        @Override
-        public String toString() {
-            return "unknown";
-        }
-    };
 
     private InspectorServerConnection connection;
     private final Map<Object, Long> time = new ConcurrentHashMap<>();
@@ -92,7 +85,7 @@ class Console extends AbstractInspectorObject {
     }
 
     @Override
-    protected TruffleObject getMembers(boolean includeInternal) {
+    protected TruffleObject getKeys() {
         return KEYS;
     }
 
@@ -141,13 +134,13 @@ class Console extends AbstractInspectorObject {
 
     @Override
     @CompilerDirectives.TruffleBoundary
-    protected Object invokeMember(String name, Object[] arguments) throws UnsupportedTypeException, UnknownIdentifierException {
+    protected Object invokeMethod(String name, Object[] arguments) {
         Object arg;
         if (arguments.length < 1) {
-            arg = UNKNOWN;
+            arg = null;
         } else {
             if (!(arguments[0] instanceof String || arguments[0] instanceof Number)) {
-                throw UnsupportedTypeException.create(arguments);
+                throw UnsupportedTypeException.raise(arguments);
             }
             arg = arguments[0];
         }
@@ -205,7 +198,7 @@ class Console extends AbstractInspectorObject {
             case METHOD_TIME_END:
                 long t2 = System.nanoTime();
                 Long t1 = time.remove(arg);
-                String timer = arg.toString();
+                String timer = (arg == null) ? "default" : arg.toString();
                 if (t1 == null) {
                     arg = "Timer '" + timer + "' does not exist";
                     type = "warning";
@@ -224,7 +217,7 @@ class Console extends AbstractInspectorObject {
             case METHOD_TIME_STAMP:
                 break;
             default:
-                throw UnknownIdentifierException.create(name);
+                throw UnknownIdentifierException.raise(name);
         }
         connection.consoleAPICall(type, arg);
         return NullObject.INSTANCE;
@@ -233,17 +226,17 @@ class Console extends AbstractInspectorObject {
     static final class Keys extends AbstractInspectorArray {
 
         @Override
-        int getArraySize() {
+        int getLength() {
             return METHOD_NAMES.length;
         }
 
         @Override
-        Object readArrayElement(long index) throws InvalidArrayIndexException {
+        Object getElementAt(int index) {
             if (index < 0 || index >= METHOD_NAMES.length) {
                 CompilerDirectives.transferToInterpreter();
-                throw InvalidArrayIndexException.create(index);
+                throw UnknownIdentifierException.raise(Integer.toString(index));
             }
-            return METHOD_NAMES[(int) index];
+            return METHOD_NAMES[index];
         }
     }
 

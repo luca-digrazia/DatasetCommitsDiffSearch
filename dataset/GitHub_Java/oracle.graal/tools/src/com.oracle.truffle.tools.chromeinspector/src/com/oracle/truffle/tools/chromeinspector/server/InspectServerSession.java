@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@
 package com.oracle.truffle.tools.chromeinspector.server;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
@@ -57,7 +58,7 @@ public final class InspectServerSession implements MessageEndpoint {
     private final RuntimeDomain runtime;
     private final DebuggerDomain debugger;
     private final ProfilerDomain profiler;
-    final InspectorExecutionContext context;
+    private final InspectorExecutionContext context;
     private volatile MessageEndpoint messageEndpoint;
     private volatile JSONMessageListener jsonMessageListener;
     private CommandProcessThread processThread;
@@ -253,8 +254,8 @@ public final class InspectServerSession implements MessageEndpoint {
             case "Debugger.getPossibleBreakpoints":
                 json = cmd.getParams().getJSONObject();
                 resultParams = debugger.getPossibleBreakpoints(
-                                Location.create(json.optJSONObject("start")),
-                                Location.create(json.optJSONObject("end")),
+                                Location.create(json.getJSONObject("start")),
+                                Location.create(json.getJSONObject("end")),
                                 json.optBoolean("restrictToFunction"));
                 break;
             case "Debugger.getScriptSource":
@@ -406,7 +407,11 @@ public final class InspectServerSession implements MessageEndpoint {
                 try {
                     listener.sendText(event.toJSONString());
                 } catch (IOException ex) {
-                    context.logException(ex);
+                    PrintStream log = context.getLogger();
+                    if (log != null) {
+                        ex.printStackTrace(log);
+                        log.flush();
+                    }
                 }
             }
             JSONMessageListener jsonListener = jsonMessageListener;
@@ -503,7 +508,11 @@ public final class InspectServerSession implements MessageEndpoint {
                         try {
                             listener.sendText(result.toString());
                         } catch (IOException ex) {
-                            context.logException(ex);
+                            PrintStream log = context.getLogger();
+                            if (log != null) {
+                                ex.printStackTrace(log);
+                                log.flush();
+                            }
                         }
                     }
                     JSONMessageListener jsonListener = jsonMessageListener;

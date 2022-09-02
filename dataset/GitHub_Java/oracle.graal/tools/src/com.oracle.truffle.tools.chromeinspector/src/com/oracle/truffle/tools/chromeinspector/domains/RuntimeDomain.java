@@ -42,13 +42,12 @@ public abstract class RuntimeDomain extends Domain {
 
     public abstract Params compileScript(String expression, String sourceURL, boolean persistScript, long executionContextId) throws CommandProcessException;
 
-    public abstract Params evaluate(String expression, String objectGroup, boolean includeCommandLineAPI, boolean silent, int contextId, boolean returnByValue, boolean generatePreview,
-                    boolean awaitPromise)
+    public abstract Params evaluate(String expression, String objectGroup, boolean includeCommandLineAPI, boolean silent, int contextId, boolean returnByValue, boolean awaitPromise)
                     throws CommandProcessException;
 
-    public abstract Params getProperties(String objectId, boolean ownProperties, boolean accessorPropertiesOnly, boolean generatePreview) throws CommandProcessException;
+    public abstract Params getProperties(String objectId, boolean ownProperties) throws CommandProcessException;
 
-    public abstract Params callFunctionOn(String objectId, String functionDeclaration, JSONArray arguments, boolean silent, boolean returnByValue, boolean generatePreview, boolean awaitPromise)
+    public abstract Params callFunctionOn(String objectId, String functionDeclaration, JSONArray arguments, boolean silent, boolean returnByValue, boolean awaitPromise)
                     throws CommandProcessException;
 
     public abstract void runIfWaitingForDebugger(CommandPostProcessor postProcessor);
@@ -62,7 +61,5 @@ public abstract class RuntimeDomain extends Domain {
     protected void executionContextDestroyed(long id) {
         eventHandler.event(new Event("Runtime.executionContextDestroyed", Params.createContextId(id)));
     }
-
-    public abstract void setCustomObjectFormatterEnabled(boolean enabled);
 
 }

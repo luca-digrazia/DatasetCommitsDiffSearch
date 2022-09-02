@@ -525,7 +525,6 @@ class Session extends AbstractInspectorObject {
             }
         }
 
-        @MessageResolution(receiverType = AutoremoveListener.class)
         static class AutoremoveListener implements TruffleObject {
 
             private final Listeners listeners;
@@ -540,44 +539,48 @@ class Session extends AbstractInspectorObject {
 
             @Override
             public ForeignAccess getForeignAccess() {
-                return AutoremoveListenerForeign.ACCESS;
+                return AutoremoveMessageResolutionForeign.ACCESS;
             }
 
             public static boolean isInstance(TruffleObject obj) {
                 return obj instanceof AutoremoveListener;
             }
 
-            @Resolve(message = "IS_EXECUTABLE")
-            abstract static class IsExecutableNode extends Node {
+            @MessageResolution(receiverType = AutoremoveListener.class)
+            static final class AutoremoveMessageResolution {
 
-                @SuppressWarnings("unused")
-                public Object access(AutoremoveListener exec) {
-                    return true;
-                }
-            }
+                @Resolve(message = "IS_EXECUTABLE")
+                abstract static class IsExecutableNode extends Node {
 
-            @Resolve(message = "EXECUTE")
-            abstract static class ExecuteNode extends Node {
-
-                @Child private Node nodeExecute;
-
-                public Object access(AutoremoveListener exec, Object[] arguments) {
-                    if (nodeExecute == null) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        nodeExecute = insert(Message.EXECUTE.createNode());
+                    @SuppressWarnings("unused")
+                    public Object access(AutoremoveListener exec) {
+                        return true;
                     }
-                    exec.listeners.removeListener(exec.eventName, exec);
-                    try {
-                        return ForeignAccess.sendExecute(nodeExecute, exec.listener, arguments);
-                    } catch (ArityException ex) {
-                        CompilerDirectives.transferToInterpreter();
-                        throw ArityException.raise(ex.getExpectedArity(), ex.getActualArity());
-                    } catch (UnsupportedMessageException ex) {
-                        CompilerDirectives.transferToInterpreter();
-                        throw UnsupportedMessageException.raise(ex.getUnsupportedMessage());
-                    } catch (UnsupportedTypeException ex) {
-                        CompilerDirectives.transferToInterpreter();
-                        throw UnsupportedTypeException.raise(ex.getSuppliedValues());
+                }
+
+                @Resolve(message = "EXECUTE")
+                abstract static class ExecuteNode extends Node {
+
+                    @Child private Node nodeExecute;
+
+                    public Object access(AutoremoveListener exec, Object[] arguments) {
+                        if (nodeExecute == null) {
+                            CompilerDirectives.transferToInterpreterAndInvalidate();
+                            nodeExecute = insert(Message.EXECUTE.createNode());
+                        }
+                        exec.listeners.removeListener(exec.eventName, exec);
+                        try {
+                            return ForeignAccess.sendExecute(Message.EXECUTE.createNode(), exec.listener, arguments);
+                        } catch (ArityException ex) {
+                            CompilerDirectives.transferToInterpreter();
+                            throw ArityException.raise(ex.getExpectedArity(), ex.getActualArity());
+                        } catch (UnsupportedMessageException ex) {
+                            CompilerDirectives.transferToInterpreter();
+                            throw UnsupportedMessageException.raise(ex.getUnsupportedMessage());
+                        } catch (UnsupportedTypeException ex) {
+                            CompilerDirectives.transferToInterpreter();
+                            throw UnsupportedTypeException.raise(ex.getSuppliedValues());
+                        }
                     }
                 }
             }
