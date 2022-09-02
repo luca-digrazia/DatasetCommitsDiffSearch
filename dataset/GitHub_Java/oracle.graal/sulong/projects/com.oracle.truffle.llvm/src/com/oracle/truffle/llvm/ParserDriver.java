@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -148,7 +147,7 @@ final class ParserDriver {
             TruffleFile file = createNativeTruffleFile(source.getName(), source.getPath());
             // An empty call target is returned for native libraries.
             if (file == null) {
-                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
+                return LLVMLanguage.createCallTarget(RootNode.createConstantNode(0));
             }
             return createNativeLibraryCallTarget(file);
         }
@@ -368,17 +367,9 @@ final class ParserDriver {
         final LLVMSourceContext sourceContext = context.getSourceContext();
 
         model.getSourceGlobals().forEach((symbol, irValue) -> {
-            try {
-                final LLVMExpressionNode node = symbolResolver.resolve(irValue);
-                final LLVMDebugObjectBuilder value = CommonNodeFactory.createDebugStaticValue(node, irValue instanceof GlobalVariable);
-                sourceContext.registerStatic(symbol, value);
-            } catch (IllegalStateException e) {
-                /*
-                 * Cannot resolve symbol for global. Some optimization replace an unused global with
-                 * an (unresolved) external to avoid initialization. The external still has debug
-                 * info but cannot be resolved. We can safely ignore this here.
-                 */
-            }
+            final LLVMExpressionNode node = symbolResolver.resolve(irValue);
+            final LLVMDebugObjectBuilder value = CommonNodeFactory.createDebugStaticValue(node, irValue instanceof GlobalVariable);
+            sourceContext.registerStatic(symbol, value);
         });
 
         model.getSourceStaticMembers().forEach(((type, symbol) -> {
@@ -508,12 +499,12 @@ final class ParserDriver {
      */
     private CallTarget createLibraryCallTarget(String name, LLVMParserResult parserResult, Source source) {
         if (context.getEnv().getOptions().get(SulongEngineOption.PARSE_ONLY)) {
-            return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
+            return LLVMLanguage.createCallTarget(RootNode.createConstantNode(0));
         } else {
             // check if the functions should be resolved eagerly or lazily.
             boolean lazyParsing = context.getEnv().getOptions().get(SulongEngineOption.LAZY_PARSING);
             LoadModulesNode loadModules = LoadModulesNode.create(name, parserResult, lazyParsing, context.isInternalLibraryFile(parserResult.getRuntime().getFile()), dependencies, source, language);
-            return Truffle.getRuntime().createCallTarget(loadModules);
+            return LLVMLanguage.createCallTarget(loadModules);
         }
     }
 
@@ -524,11 +515,11 @@ final class ParserDriver {
      */
     private CallTarget createNativeLibraryCallTarget(TruffleFile file) {
         if (context.getEnv().getOptions().get(SulongEngineOption.PARSE_ONLY)) {
-            return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
+            return LLVMLanguage.createCallTarget(RootNode.createConstantNode(0));
         } else {
             // check if the functions should be resolved eagerly or lazyly.
             LoadNativeNode loadNative = LoadNativeNode.create(new FrameDescriptor(), language, file);
-            return Truffle.getRuntime().createCallTarget(loadNative);
+            return LLVMLanguage.createCallTarget(loadNative);
         }
     }
 }

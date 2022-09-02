@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,31 +29,25 @@
  */
 package com.oracle.truffle.llvm.runtime.debug;
 
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.Equivalence;
+
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node.Child;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.NodeFactory;
-import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.Type;
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
 
 public final class LLDBSupport {
 
     private final LLVMLanguage language;
     private final EconomicMap<Type, CallTarget> loadFunctionCache;
-
-    private LLVMDebugValue.Builder cachedDebugValueBuilder;
-    private LLVMDebugValue.Builder cachedDebugDeclarationBuilder;
 
     public LLDBSupport(LLVMLanguage language) {
         this.language = language;
@@ -66,27 +60,24 @@ public final class LLDBSupport {
 
         LoadRootNode(LLDBSupport dbSupport, Type loadType) {
             super(dbSupport.language);
-            loadNode = dbSupport.getNodeFactory().createLoad(loadType, null);
+            loadNode = CommonNodeFactory.createLoad(loadType, null);
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
             LLVMPointer offsetPointer = LLVMPointer.cast(frame.getArguments()[0]);
-            return loadNode.executeWithTarget(offsetPointer);
+            return loadNode.executeWithTargetGeneric(offsetPointer);
         }
     }
 
+    @TruffleBoundary
     public CallTarget getLoadFunction(Type loadType) {
         CallTarget ret = loadFunctionCache.get(loadType);
         if (ret == null) {
-            ret = Truffle.getRuntime().createCallTarget(new LoadRootNode(this, loadType));
+            ret = LLVMLanguage.createCallTarget(new LoadRootNode(this, loadType));
             loadFunctionCache.put(loadType, ret);
         }
         return ret;
-    }
-
-    private NodeFactory getNodeFactory() {
-        return language.getContextReference().get().getNodeFactory();
     }
 
     public static boolean pointsToObjectAccess(LLVMPointer pointer) {
@@ -95,52 +86,8 @@ public final class LLDBSupport {
         }
 
         final LLVMManagedPointer managedPointer = LLVMManagedPointer.cast(pointer);
-        final TruffleObject target = managedPointer.getObject();
-        return target instanceof DynamicObject && ((DynamicObject) target).getShape().getObjectType() instanceof LLVMObjectAccess;
-    }
-
-    private static final class BuilderRootNode extends RootNode {
-
-        @Child LLVMDebugValue.Builder builder;
-
-        BuilderRootNode(LLVMDebugValue.Builder builder, LLVMLanguage language) {
-            super(language);
-            this.builder = builder;
-        }
-
-        @Override
-        public Object execute(VirtualFrame frame) {
-            return builder.build(frame.getArguments()[0]);
-        }
-    }
-
-    private static final class WrappedBuilder implements LLVMDebugValue.Builder {
-
-        private final CallTarget callTarget;
-
-        WrappedBuilder(LLVMDebugValue.Builder inner, LLVMLanguage language) {
-            RootNode root = new BuilderRootNode(inner, language);
-            this.callTarget = Truffle.getRuntime().createCallTarget(root);
-        }
-
-        @Override
-        public LLVMDebugValue build(Object irValue) {
-            return (LLVMDebugValue) callTarget.call(irValue);
-        }
-    }
-
-    public LLVMDebugValue.Builder createDebugValueBuilder() {
-        if (cachedDebugValueBuilder == null) {
-            cachedDebugValueBuilder = new WrappedBuilder(getNodeFactory().createDebugValueBuilder(), language);
-        }
-        return cachedDebugValueBuilder;
-    }
-
-    public LLVMDebugValue.Builder createDebugDeclarationBuilder() {
-        if (cachedDebugDeclarationBuilder == null) {
-            cachedDebugDeclarationBuilder = new WrappedBuilder(getNodeFactory().createDebugDeclarationBuilder(), language);
-        }
-        return cachedDebugDeclarationBuilder;
+        final Object target = managedPointer.getObject();
+        return !LLVMAsForeignLibrary.getFactory().getUncached().isForeign(target);
     }
 
     private static boolean isByteAligned(long bits) {
@@ -166,5 +113,14 @@ public final class LLDBSupport {
         } else {
             return String.format("%d bytes", byteSize);
         }
+    }
+
+    public static boolean isNestedManagedPointer(LLVMPointer base) {
+        if (!LLVMManagedPointer.isInstance(base)) {
+            return false;
+        }
+
+        final LLVMManagedPointer pointer = LLVMManagedPointer.cast(base);
+        return LLVMPointer.isInstance(pointer.getObject()) && pointer.getOffset() == 0L;
     }
 }
