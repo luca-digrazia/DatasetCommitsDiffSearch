@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -28,12 +30,10 @@ import java.util.Arrays;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
-import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.calc.FloatConvert;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.java.BytecodeParser;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -54,22 +54,30 @@ import org.graalvm.compiler.nodes.calc.OrNode;
 import org.graalvm.compiler.nodes.calc.RightShiftNode;
 import org.graalvm.compiler.nodes.calc.SignExtendNode;
 import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
+import org.graalvm.compiler.nodes.extended.JavaReadNode;
+import org.graalvm.compiler.nodes.extended.JavaWriteNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
 import org.graalvm.compiler.word.WordTypes;
+import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.function.CFunction.Transition;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.word.LocationIdentity;
 
-import com.oracle.svm.core.amd64.FrameAccess;
+import com.oracle.graal.pointsto.meta.AnalysisMethod;
+import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.annotate.InvokeJavaFunctionPointer;
 import com.oracle.svm.core.c.struct.CInterfaceLocationIdentity;
-import com.oracle.svm.core.graal.code.amd64.SubstrateCallingConventionType;
+import com.oracle.svm.core.graal.code.SubstrateCallingConventionType;
 import com.oracle.svm.core.graal.nodes.CInterfaceReadNode;
 import com.oracle.svm.core.graal.nodes.CInterfaceWriteNode;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
+import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
+import com.oracle.svm.core.nodes.CFunctionPrologueNode;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.c.CInterfaceError;
 import com.oracle.svm.hosted.c.NativeLibraries;
@@ -77,13 +85,15 @@ import com.oracle.svm.hosted.c.info.AccessorInfo;
 import com.oracle.svm.hosted.c.info.AccessorInfo.AccessorKind;
 import com.oracle.svm.hosted.c.info.ConstantInfo;
 import com.oracle.svm.hosted.c.info.ElementInfo;
-import com.oracle.svm.hosted.c.info.EnumInfo;
-import com.oracle.svm.hosted.c.info.EnumValueInfo;
 import com.oracle.svm.hosted.c.info.PointerToInfo;
 import com.oracle.svm.hosted.c.info.SizableInfo;
 import com.oracle.svm.hosted.c.info.StructBitfieldInfo;
 import com.oracle.svm.hosted.c.info.StructFieldInfo;
 import com.oracle.svm.hosted.c.info.StructInfo;
+import com.oracle.svm.hosted.code.CEntryPointCallStubSupport;
+import com.oracle.svm.hosted.code.CEntryPointJavaCallStubMethod;
+import com.oracle.svm.hosted.meta.HostedMetaAccess;
+import com.oracle.svm.hosted.meta.HostedMethod;
 
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.meta.JavaKind;
@@ -97,14 +107,11 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
 
     private final NativeLibraries nativeLibs;
 
-    private final CInterfaceEnumTool enumTool;
-
     private final ResolvedJavaType functionPointerType;
 
-    public CInterfaceInvocationPlugin(MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, WordTypes wordTypes, NativeLibraries nativeLibs) {
+    public CInterfaceInvocationPlugin(MetaAccessProvider metaAccess, WordTypes wordTypes, NativeLibraries nativeLibs) {
         this.wordTypes = wordTypes;
         this.nativeLibs = nativeLibs;
-        this.enumTool = new CInterfaceEnumTool(metaAccess, snippetReflection);
         this.functionPointerType = metaAccess.lookupJavaType(CFunctionPointer.class);
     }
 
@@ -129,12 +136,22 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
             }
         } else if (methodInfo instanceof ConstantInfo) {
             return replaceConstant(b, method, (ConstantInfo) methodInfo);
-        } else if (methodInfo instanceof EnumValueInfo) {
-            return enumTool.replaceEnumValueInvoke((BytecodeParser) b, (EnumInfo) methodInfo.getParent(), method, args);
         } else if (method.getAnnotation(InvokeCFunctionPointer.class) != null) {
-            return replaceFunctionPointerInvoke(b, method, args, SubstrateCallingConventionType.NativeCall);
+            boolean needsTransition = (method.getAnnotation(InvokeCFunctionPointer.class).transition() != Transition.NO_TRANSITION);
+            return replaceFunctionPointerInvoke(b, method, args, SubstrateCallingConventionType.NativeCall, needsTransition);
         } else if (method.getAnnotation(InvokeJavaFunctionPointer.class) != null) {
-            return replaceFunctionPointerInvoke(b, method, args, SubstrateCallingConventionType.JavaCall);
+            return replaceFunctionPointerInvoke(b, method, args, SubstrateCallingConventionType.JavaCall, false);
+        } else if (method.getAnnotation(CEntryPoint.class) != null) {
+            AnalysisMethod aMethod = (AnalysisMethod) (method instanceof HostedMethod ? ((HostedMethod) method).getWrapped() : method);
+            assert !(aMethod.getWrapped() instanceof CEntryPointJavaCallStubMethod) : "Call stub should never have a @CEntryPoint annotation";
+            ResolvedJavaMethod stub = CEntryPointCallStubSupport.singleton().registerJavaStubForMethod(aMethod);
+            if (method instanceof HostedMethod) {
+                HostedMetaAccess hMetaAccess = (HostedMetaAccess) b.getMetaAccess();
+                stub = hMetaAccess.getUniverse().lookup(stub);
+            }
+            assert !b.getMethod().equals(stub) : "Plugin should not be called for the invoke in the stub itself";
+            b.handleReplacedInvoke(InvokeKind.Static, stub, args, false);
+            return true;
         } else {
             return false;
         }
@@ -157,12 +174,16 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         SizableInfo sizableInfo = (SizableInfo) accessorInfo.getParent();
         int elementSize = sizableInfo.getSizeInfo().getProperty();
         boolean isUnsigned = sizableInfo.isUnsigned();
+        boolean isPinnedObject = sizableInfo.isObject();
 
         assert args.length == accessorInfo.parameterCount(true);
-        ValueNode base = args[accessorInfo.baseParameterNumber(true)];
+
+        ValueNode base = args[AccessorInfo.baseParameterNumber(true)];
+        assert base.getStackKind() == FrameAccess.getWordKind();
+
         switch (accessorInfo.getAccessorKind()) {
             case ADDRESS: {
-                ValueNode address = makeAddress(graph, args, accessorInfo, base, displacement, elementSize);
+                ValueNode address = graph.addOrUniqueWithInputs(new AddNode(base, makeOffset(graph, args, accessorInfo, displacement, elementSize)));
                 b.addPush(pushKind(method), address);
                 return true;
             }
@@ -174,9 +195,9 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
                 } else if (readKind.getBitCount() > resultKind.getBitCount() && !readKind.isNumericFloat() && resultKind != JavaKind.Boolean) {
                     readKind = resultKind;
                 }
-                ValueNode address = makeAddress(graph, args, accessorInfo, base, displacement, elementSize);
+                AddressNode offsetAddress = makeOffsetAddress(graph, args, accessorInfo, base, displacement, elementSize);
                 LocationIdentity locationIdentity = makeLocationIdentity(b, method, args, accessorInfo);
-                Stamp stamp;
+                final Stamp stamp;
                 if (readKind == JavaKind.Object) {
                     stamp = b.getInvokeReturnStamp(null).getTrustedStamp();
                 } else if (readKind == JavaKind.Float || readKind == JavaKind.Double) {
@@ -184,19 +205,28 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
                 } else {
                     stamp = StampFactory.forInteger(readKind.getBitCount());
                 }
-                ValueNode read = readOp(b, address, locationIdentity, stamp, accessorInfo);
-                ValueNode adapted = adaptPrimitiveType(graph, read, readKind, resultKind == JavaKind.Boolean ? resultKind : resultKind.getStackKind(), isUnsigned);
-                b.push(pushKind(method), adapted);
+                final ValueNode node;
+                if (isPinnedObject) {
+                    node = b.add(new JavaReadNode(stamp, readKind, offsetAddress, locationIdentity, BarrierType.NONE, true));
+                } else {
+                    ValueNode read = readPrimitive(b, offsetAddress, locationIdentity, stamp, accessorInfo);
+                    node = adaptPrimitiveType(graph, read, readKind, resultKind == JavaKind.Boolean ? resultKind : resultKind.getStackKind(), isUnsigned);
+                }
+                b.push(pushKind(method), node);
                 return true;
             }
             case SETTER: {
                 ValueNode value = args[accessorInfo.valueParameterNumber(true)];
                 JavaKind valueKind = value.getStackKind();
                 JavaKind writeKind = kindFromSize(elementSize, valueKind);
-                ValueNode address = makeAddress(graph, args, accessorInfo, base, displacement, elementSize);
+                AddressNode offsetAddress = makeOffsetAddress(graph, args, accessorInfo, base, displacement, elementSize);
                 LocationIdentity locationIdentity = makeLocationIdentity(b, method, args, accessorInfo);
-                ValueNode adaptedValue = adaptPrimitiveType(graph, value, valueKind, writeKind, isUnsigned);
-                writeOp(b, address, locationIdentity, adaptedValue, accessorInfo);
+                if (isPinnedObject) {
+                    b.add(new JavaWriteNode(writeKind, offsetAddress, locationIdentity, value, BarrierType.NONE, true));
+                } else {
+                    ValueNode adaptedValue = adaptPrimitiveType(graph, value, valueKind, writeKind, isUnsigned);
+                    writePrimitive(b, offsetAddress, locationIdentity, adaptedValue, accessorInfo);
+                }
                 return true;
             }
             default:
@@ -258,16 +288,16 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         assert computeBits >= numBits;
 
         assert args.length == accessorInfo.parameterCount(true);
-        ValueNode base = args[accessorInfo.baseParameterNumber(true)];
+        ValueNode base = args[AccessorInfo.baseParameterNumber(true)];
         StructuredGraph graph = b.getGraph();
         /*
          * Read the memory location. This is also necessary for writes, since we need to keep the
          * bits around the written bitfield unchanged.
          */
-        ValueNode address = makeAddress(graph, args, accessorInfo, base, byteOffset, -1);
+        AddressNode address = makeOffsetAddress(graph, args, accessorInfo, base, byteOffset, -1);
         LocationIdentity locationIdentity = makeLocationIdentity(b, method, args, accessorInfo);
         Stamp stamp = StampFactory.forInteger(memoryKind.getBitCount());
-        ValueNode cur = readOp(b, address, locationIdentity, stamp, accessorInfo);
+        ValueNode cur = readPrimitive(b, address, locationIdentity, stamp, accessorInfo);
         cur = adaptPrimitiveType(graph, cur, memoryKind, computeKind, true);
 
         switch (accessorInfo.getAccessorKind()) {
@@ -312,7 +342,7 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
                 /* Narrow value to the number of bits we need to write. */
                 cur = adaptPrimitiveType(graph, cur, computeKind, memoryKind, true);
                 /* Perform the write (bitcount is taken from the stamp of the written value). */
-                writeOp(b, address, locationIdentity, cur, accessorInfo);
+                writePrimitive(b, address, locationIdentity, cur, accessorInfo);
                 return true;
             }
             default:
@@ -320,9 +350,8 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         }
     }
 
-    private static ValueNode readOp(GraphBuilderContext b, ValueNode address, LocationIdentity locationIdentity, Stamp stamp, AccessorInfo accessorInfo) {
-        assert address.getStackKind() == FrameAccess.getWordKind();
-        CInterfaceReadNode read = b.add(new CInterfaceReadNode(b.add(OffsetAddressNode.create(address)), locationIdentity, stamp, BarrierType.NONE, accessName(accessorInfo)));
+    private static ValueNode readPrimitive(GraphBuilderContext b, AddressNode address, LocationIdentity locationIdentity, Stamp stamp, AccessorInfo accessorInfo) {
+        CInterfaceReadNode read = b.add(new CInterfaceReadNode(address, locationIdentity, stamp, BarrierType.NONE, accessName(accessorInfo)));
         /*
          * The read must not float outside its block otherwise it may float above an explicit zero
          * check on its base address.
@@ -331,8 +360,8 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         return read;
     }
 
-    private static void writeOp(GraphBuilderContext b, ValueNode address, LocationIdentity locationIdentity, ValueNode value, AccessorInfo accessorInfo) {
-        b.add(new CInterfaceWriteNode(b.add(OffsetAddressNode.create(address)), locationIdentity, value, BarrierType.NONE, accessName(accessorInfo)));
+    private static void writePrimitive(GraphBuilderContext b, AddressNode address, LocationIdentity locationIdentity, ValueNode value, AccessorInfo accessorInfo) {
+        b.add(new CInterfaceWriteNode(address, locationIdentity, value, BarrierType.NONE, accessName(accessorInfo)));
     }
 
     private static String accessName(AccessorInfo accessorInfo) {
@@ -343,7 +372,7 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         }
     }
 
-    private static ValueNode makeAddress(StructuredGraph graph, ValueNode[] args, AccessorInfo accessorInfo, ValueNode base, int displacement, int indexScaling) {
+    private static ValueNode makeOffset(StructuredGraph graph, ValueNode[] args, AccessorInfo accessorInfo, int displacement, int indexScaling) {
         ValueNode offset = ConstantNode.forIntegerKind(FrameAccess.getWordKind(), displacement, graph);
 
         if (accessorInfo.isIndexed()) {
@@ -355,8 +384,11 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
             offset = graph.unique(new AddNode(scaledIndex, offset));
         }
 
-        assert base.getStackKind() == FrameAccess.getWordKind();
-        return graph.unique(new AddNode(base, offset));
+        return offset;
+    }
+
+    private static AddressNode makeOffsetAddress(StructuredGraph graph, ValueNode[] args, AccessorInfo accessorInfo, ValueNode base, int displacement, int indexScaling) {
+        return graph.addOrUniqueWithInputs(new OffsetAddressNode(base, makeOffset(graph, args, accessorInfo, displacement, indexScaling)));
     }
 
     private static LocationIdentity makeLocationIdentity(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, AccessorInfo accessorInfo) {
@@ -379,7 +411,7 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         return locationIdentity;
     }
 
-    static ValueNode adaptPrimitiveType(StructuredGraph graph, ValueNode value, JavaKind fromKind, JavaKind toKind, boolean isUnsigned) {
+    public static ValueNode adaptPrimitiveType(StructuredGraph graph, ValueNode value, JavaKind fromKind, JavaKind toKind, boolean isUnsigned) {
         if (fromKind == toKind) {
             return value;
         }
@@ -469,7 +501,7 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         return true;
     }
 
-    private boolean replaceFunctionPointerInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, CallingConvention.Type callType) {
+    private boolean replaceFunctionPointerInvoke(GraphBuilderContext b, ResolvedJavaMethod method, ValueNode[] args, CallingConvention.Type callType, boolean needsTransition) {
         if (!functionPointerType.isAssignableFrom(method.getDeclaringClass())) {
             throw UserError.abort(new CInterfaceError("function pointer invocation method " + method.format("%H.%n(%p)") +
                             " must be in a type that extends " + CFunctionPointer.class.getSimpleName(), method).getMessage());
@@ -486,6 +518,10 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
              * introducing additional invokes without real BCIs in a BytecodeParser context, which
              * does not work too well.
              */
+
+            if (needsTransition) {
+                b.append(new CFunctionPrologueNode());
+            }
         }
 
         // We "discard" the receiver from the signature by pretending we are a static method
@@ -502,7 +538,7 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
         }
 
         CallTargetNode indirectCallTargetNode = b.add(new IndirectCallTargetNode(methodAddress, argsWithoutReceiver,
-                        StampPair.createSingle(returnStamp), parameterTypes, method, callType, InvokeKind.Static));
+                        StampPair.createSingle(returnStamp), parameterTypes, null, callType, InvokeKind.Static));
 
         if (callType == SubstrateCallingConventionType.JavaCall) {
             b.handleReplacedInvoke(indirectCallTargetNode, b.getInvokeReturnType().getJavaKind());
@@ -513,6 +549,9 @@ public class CInterfaceInvocationPlugin implements NodePlugin {
                 b.addPush(pushKind(method), invokeNode);
             } else {
                 b.add(invokeNode);
+            }
+            if (needsTransition) {
+                b.append(new CFunctionEpilogueNode());
             }
         } else {
             throw shouldNotReachHere("Unsupported type of call: " + callType);

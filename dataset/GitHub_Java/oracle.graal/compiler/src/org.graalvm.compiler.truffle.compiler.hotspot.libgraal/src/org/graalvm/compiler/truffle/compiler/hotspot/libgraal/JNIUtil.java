@@ -39,7 +39,6 @@ import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.c.type.CShortPointer;
-import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.WordFactory;
 
 /**
@@ -172,11 +171,6 @@ final class JNIUtil {
             HotSpotToSVMEntryPoints.trace(3, "Delete global reference 0x%x", ref.rawValue());
         }
         env.getFunctions().getDeleteGlobalRef().call(env, ref);
-    }
-
-    static VoidPointer GetDirectBufferAddress(JNIEnv env, JObject buf) {
-        traceJNI("GetDirectBufferAddress");
-        return env.getFunctions().getGetDirectBufferAddress().call(env, buf);
     }
 
     // Checkstyle: resume
