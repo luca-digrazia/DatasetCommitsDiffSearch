@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,17 +22,17 @@
  */
 package com.oracle.truffle.espresso;
 
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
+
 import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.StringJoiner;
-
-import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.JavaKind;
-import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
+import java.util.stream.Collectors;
 
 public final class Utils {
 
@@ -59,7 +59,11 @@ public final class Utils {
             case Object:
                 // TODO(peterssen): We don't want Interop null passed verbatim to native, but native
                 // NULL instead.
-                return Method.word();
+
+                return javaToNative
+                                ? NativeSimpleType.NULLABLE
+                                : NativeSimpleType.OBJECT;
+
             default:
                 throw EspressoError.shouldNotReachHere();
         }
