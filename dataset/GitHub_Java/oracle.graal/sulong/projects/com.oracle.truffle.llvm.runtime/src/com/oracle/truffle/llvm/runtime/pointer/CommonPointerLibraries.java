@@ -58,11 +58,11 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionCode;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropInvokeNode;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMResolveForeignClassChainNode;
+import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropReadMemberNode;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Clazz;
+import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropWriteMemberNode;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignGetIndexPointerNode;
-import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignGetMemberPointerNode;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignReadNode;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignWriteNode;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
@@ -216,12 +216,8 @@ abstract class CommonPointerLibraries {
 
     @ExportMessage
     static Object readMember(LLVMPointerImpl receiver, String ident,
-                    @Shared("getDirectClass") @Cached LLVMResolveForeignClassChainNode resolveClassChain,
-                    @Shared("getMember") @Cached LLVMForeignGetMemberPointerNode getElementPointer,
-                    @Exclusive @Cached LLVMForeignReadNode read) throws UnsupportedMessageException, UnknownIdentifierException {
-        LLVMPointer correctClassPtr = resolveClassChain.execute(receiver, ident, receiver.getExportType());
-        LLVMPointer ptr = getElementPointer.execute(correctClassPtr.getExportType(), correctClassPtr, ident);
-        return read.execute(ptr, ptr.getExportType());
+                    @Cached LLVMInteropReadMemberNode read) throws UnsupportedMessageException, UnknownIdentifierException {
+        return read.execute(receiver, ident, receiver.getExportType());
     }
 
     @ExportMessage
@@ -293,14 +289,9 @@ abstract class CommonPointerLibraries {
     }
 
     @ExportMessage
-    static void writeMember(LLVMPointerImpl receiver, String ident, Object value,
-                    @Shared("getDirectClass") @Cached LLVMResolveForeignClassChainNode resolveClassChain,
-                    @Shared("getMember") @Cached LLVMForeignGetMemberPointerNode getElementPointer,
-                    @Exclusive @Cached LLVMForeignWriteNode write)
+    static void writeMember(LLVMPointerImpl receiver, String ident, Object value, @Cached LLVMInteropWriteMemberNode write)
                     throws UnsupportedMessageException, UnknownIdentifierException {
-        LLVMPointer correctClassPtr = resolveClassChain.execute(receiver, ident, receiver.getExportType());
-        LLVMPointer ptr = getElementPointer.execute(correctClassPtr.getExportType(), correctClassPtr, ident);
-        write.execute(ptr, ptr.getExportType(), value);
+        write.execute(receiver, ident, value, receiver.getExportType());
     }
 
     @ExportMessage

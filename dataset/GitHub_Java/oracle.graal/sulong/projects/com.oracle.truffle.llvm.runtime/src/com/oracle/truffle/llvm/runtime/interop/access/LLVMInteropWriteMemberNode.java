@@ -37,11 +37,8 @@ import org.graalvm.collections.Pair;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignGetMemberPointerNode;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignWriteNode;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignGetVirtualMemberPtrNode;
@@ -50,25 +47,16 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 @GenerateUncached
 public abstract class LLVMInteropWriteMemberNode extends LLVMNode {
-    public abstract void execute(LLVMPointer receiver, String ident, Object value, LLVMInteropType exportType) throws UnsupportedMessageException, UnknownIdentifierException, UnsupportedTypeException;
+    public abstract void execute(LLVMPointer receiver, String ident, Object value, LLVMInteropType exportType) throws UnsupportedMessageException, UnknownIdentifierException;
 
     @Specialization
-    public void doClazzFieldRead(LLVMPointer receiver, String ident, Object value, LLVMInteropType.Clazz clazz, @CachedLibrary(limit = "5") InteropLibrary interop,
-                    @Cached LLVMForeignGetVirtualMemberPtrNode virtualMemberPtrNode, @Cached LLVMForeignGetMemberPointerNode getMemberPtr, @Cached LLVMForeignWriteNode write)
-                    throws UnsupportedMessageException, UnknownIdentifierException, UnsupportedTypeException {
+    public void doClazzFieldRead(LLVMPointer receiver, String ident, Object value, LLVMInteropType.Clazz clazz, @Cached LLVMForeignGetVirtualMemberPtrNode virtualMemberPtrNode,
+                    @Cached LLVMForeignGetMemberPointerNode getMemberPtr, @Cached LLVMForeignWriteNode write)
+                    throws UnsupportedMessageException, UnknownIdentifierException {
         List<Pair<LLVMInteropType.StructMember, LLVMInteropType.ClazzInheritance>> list = clazz.getMemberAccessList(ident);
         if (list != null && list.size() > 0) {
-            Object ret = receiver;
-            for (Pair<LLVMInteropType.StructMember, LLVMInteropType.ClazzInheritance> p : list) {
-                if (p.getRight().virtual) {
-                    LLVMPointer elemPtr = virtualMemberPtrNode.execute(LLVMPointer.cast(ret), clazz.findMember(ident), LLVMPointer.cast(ret).getExportType());
-                    write.execute(elemPtr, elemPtr.getExportType(), value);
-                    return;
-                } else {
-                    ret = interop.readMember(ret, p.getLeft().name);
-                }
-            }
-            interop.writeMember(ret, ident, value);
+            LLVMPointer elemPtr = virtualMemberPtrNode.execute(receiver, clazz.findMember(ident), list);
+            write.execute(elemPtr, elemPtr.getExportType(), value);
         } else {
             doNormal(receiver, ident, value, clazz, getMemberPtr, write);
         }

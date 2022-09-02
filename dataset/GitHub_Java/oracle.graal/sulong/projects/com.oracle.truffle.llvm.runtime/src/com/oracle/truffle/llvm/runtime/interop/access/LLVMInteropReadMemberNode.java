@@ -37,12 +37,11 @@ import org.graalvm.collections.Pair;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignGetMemberPointerNode;
 import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignReadNode;
+import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignGetVirtualMemberPtrNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
@@ -51,24 +50,13 @@ public abstract class LLVMInteropReadMemberNode extends LLVMNode {
     public abstract Object execute(LLVMPointer receiver, String ident, LLVMInteropType exportType) throws UnsupportedMessageException, UnknownIdentifierException;
 
     @Specialization
-    public Object doClazzFieldRead(LLVMPointer receiver, String ident, LLVMInteropType.Clazz clazz, @CachedLibrary(limit = "5") InteropLibrary interop,
-                    @Cached LLVMInteropReadVirtualMemberNode readVirtual, @Cached LLVMForeignGetMemberPointerNode getMemberPtr, @Cached LLVMForeignReadNode read)
+    public Object doClazzFieldRead(LLVMPointer receiver, String ident, LLVMInteropType.Clazz clazz, @Cached LLVMForeignReadNode read, @Cached LLVMForeignGetMemberPointerNode getMemberPtr,
+                    @Cached LLVMForeignGetVirtualMemberPtrNode virtualMemberPtr)
                     throws UnsupportedMessageException, UnknownIdentifierException {
-        List<Pair<LLVMInteropType.StructMember, Boolean>> list = clazz.getMemberAccessList(ident);
-        // boolean value of list pair indicates if inheritance is virtual
+        List<Pair<LLVMInteropType.StructMember, LLVMInteropType.ClazzInheritance>> list = clazz.getMemberAccessList(ident);
         if (list != null && list.size() > 0) {
-            Object ret = receiver;
-            for (Pair<LLVMInteropType.StructMember, Boolean> p : list) {
-                if (p.getRight()) {
-                    ret = readVirtual.execute(LLVMPointer.cast(ret), clazz.findMember(ident), LLVMPointer.cast(ret).getExportType());
-                    if (ret != null) {
-                        return ret;
-                    }
-                } else {
-                    ret = interop.readMember(ret, p.getLeft().name);
-                }
-            }
-            return interop.readMember(ret, ident);
+            LLVMPointer elemPtr = virtualMemberPtr.execute(receiver, clazz.findMember(ident), list);
+            return read.execute(elemPtr, elemPtr.getExportType());
         }
         return doNormal(receiver, ident, clazz, getMemberPtr, read);
     }

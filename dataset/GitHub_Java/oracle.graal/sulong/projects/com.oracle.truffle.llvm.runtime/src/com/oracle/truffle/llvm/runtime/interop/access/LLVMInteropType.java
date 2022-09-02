@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.interop.access;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -72,7 +71,6 @@ import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStructLikeType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
-import com.oracle.truffle.llvm.runtime.interop.export.LLVMForeignGetSuperElemPtrNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 /**
@@ -357,36 +355,7 @@ public abstract class LLVMInteropType implements TruffleObject {
             return null;
         }
 
-        /**
-         * @param ident name (String) of the StructMember
-         * @return an array of LLVMForeignGetSuperElemPtrNode containing the class access nodes, and
-         *         the type of the struct/class that contains the member named as 'ident'
-         * @throws UnknownIdentifierException if neither self class nor parent classes contain a
-         *             StructMember with name 'ident'
-         */
-        public Pair<LLVMForeignGetSuperElemPtrNode[], Struct> getSuperElementPtrChain(String ident) throws UnknownIdentifierException {
-            for (StructMember member : members) {
-                if (member.name.equals(ident)) {
-                    return Pair.create(new LLVMForeignGetSuperElemPtrNode[0], member.struct);
-                }
-            }
-            List<Pair<StructMember, ClazzInheritance>> list = getMemberAccessList(ident);
-            if (list == null) {
-                throw UnknownIdentifierException.create(ident);
-            }
-            LLVMForeignGetSuperElemPtrNode[] arr = new LLVMForeignGetSuperElemPtrNode[list.size()];
-            Struct struct = null;
-            for (int i = 0; i < arr.length; i++) {
-                arr[i] = LLVMForeignGetSuperElemPtrNode.createFromPair(list.get(i));
-            }
-            if (list.size() > 0) {
-                struct = list.get(list.size() - 1).getLeft().struct;
-            }
-            return Pair.create(arr, struct);
-        }
-
-        @TruffleBoundary
-        private LinkedList<Pair<StructMember, ClazzInheritance>> getMemberAccessList(String ident) throws UnknownIdentifierException {
+        public LinkedList<Pair<StructMember, ClazzInheritance>> getMemberAccessList(String ident) {
             for (StructMember member : members) {
                 if (member.name.equals(ident)) {
                     return new LinkedList<>();
@@ -407,7 +376,6 @@ public abstract class LLVMInteropType implements TruffleObject {
         }
 
         @Override
-        @TruffleBoundary
         public StructMember findMember(String memberName) {
             for (StructMember member : members) {
                 if (member.name.equals(memberName)) {
@@ -421,22 +389,6 @@ public abstract class LLVMInteropType implements TruffleObject {
                 }
             }
             return null;
-        }
-
-        @TruffleBoundary
-        public String[] getVtableAccessNames() {
-            if (!hasVirtualMethods()) {
-                throw new IllegalStateException("vtable of given LLVMInteropType.Clazz type does not exist");
-            }
-            ArrayList<String> list = new ArrayList<>();
-            StructMember structMember = findMember(0);
-            list.add(structMember.name);
-
-            while (structMember.type instanceof LLVMInteropType.Clazz) {
-                structMember = ((Clazz) structMember.type).findMember(0);
-                list.add(structMember.name);
-            }
-            return list.toArray(new String[0]);
         }
 
         public Set<Clazz> getSuperClasses() {
