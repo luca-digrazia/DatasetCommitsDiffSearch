@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -165,7 +165,8 @@ public class CompilationResultBuilder {
 
     /**
      * These position maps are used for estimating offsets of forward branches. Used for
-     * architectures where certain branch instructions have limited displacement such as ARM tbz.
+     * architectures where certain branch instructions have limited displacement such as ARM tbz or
+     * SPARC cbcond.
      */
     private EconomicMap<Label, Integer> labelBindLirPositions;
     private EconomicMap<LIRInstruction, Integer> lirPositions;
@@ -582,7 +583,7 @@ public class CompilationResultBuilder {
                     afterOp.accept(op);
                 }
             } catch (GraalError e) {
-                throw e.addContext("lir instruction", block + "@" + op.id() + " " + op.getClass().getName() + " " + op);
+                throw e.addContext("lir instruction", block + "@" + op.id() + " " + op.getClass().getName() + " " + op + "\n" + Arrays.toString(lir.codeEmittingOrder()));
             }
         }
     }

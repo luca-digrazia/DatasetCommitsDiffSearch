@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -81,6 +83,10 @@ public class SPARCMacroAssembler extends SPARCAssembler {
         nop();  // delay slot
     }
 
+    public void bz(Label l) {
+        BPCC.emit(this, Xcc, ConditionFlag.Zero, NOT_ANNUL, PREDICT_NOT_TAKEN, l);
+    }
+
     @Override
     protected final void patchJumpTarget(int branch, int branchTarget) {
         final int disp = (branchTarget - branch) / 4;
@@ -91,7 +97,7 @@ public class SPARCMacroAssembler extends SPARCAssembler {
     }
 
     @Override
-    public AbstractAddress makeAddress(Register base, int displacement) {
+    public AbstractAddress makeAddress(int transferSize, Register base, int displacement) {
         return new SPARCAddress(base, displacement);
     }
 

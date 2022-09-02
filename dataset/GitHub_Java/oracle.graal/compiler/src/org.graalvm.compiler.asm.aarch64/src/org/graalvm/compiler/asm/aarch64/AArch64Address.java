@@ -35,17 +35,12 @@ import jdk.vm.ci.code.Register;
 
 /**
  * Represents an address in target machine memory, specified using one of the different addressing
- * modes of the AArch64 ISA.
- *
- * <pre>
- *
- *  - Base register only
- *  - Base register + immediate or register with shifted offset
- *  - Pre-indexed: base + immediate offset are written back to base register, value used in instruction is base + offset
- *  - Post-indexed: base + offset (immediate or register) are written back to base register, value used in instruction is base only
- *  - Literal: PC + 19-bit signed word aligned offset
- * </pre>
- *
+ * modes of the AArch64 ISA. - Base register only - Base register + immediate or register with
+ * shifted offset - Pre-indexed: base + immediate offset are written back to base register, value
+ * used in instruction is base + offset - Post-indexed: base + offset (immediate or register) are
+ * written back to base register, value used in instruction is base only - Literal: PC + 19-bit
+ * signed word aligned offset
+ * <p>
  * Not all addressing modes are supported for all instructions.
  */
 public final class AArch64Address extends AbstractAddress {
@@ -210,7 +205,7 @@ public final class AArch64Address extends AbstractAddress {
             absoluteImm = getScaledImmediate(size, immediate);
         }
 
-        /* Note register offset scaled field does not matter for immediate addresses. */
+        /** note register offset scaled field does not matter for immediate addresses */
         return new AArch64Address(base, zr, absoluteImm, false, null, addressingMode);
     }
 
@@ -418,57 +413,44 @@ public final class AArch64Address extends AbstractAddress {
         return addressingMode;
     }
 
-    @Override
-    public String toString() {
-        String transferSize = "(unknown)";
-        String addressEncoding;
+    public String toString(int log2TransferSize) {
+        int regShiftVal = registerOffsetScaled ? log2TransferSize : 0;
         switch (addressingMode) {
             case IMMEDIATE_UNSIGNED_SCALED:
             case IMMEDIATE_PAIR_SIGNED_SCALED:
-                addressEncoding = String.format("[X%d, %d << %s]", base.encoding, immediate, transferSize);
-                break;
+                return String.format("[X%d, %d]", base.encoding, immediate << log2TransferSize);
             case IMMEDIATE_SIGNED_UNSCALED:
-                addressEncoding = String.format("[X%d, %d]", base.encoding, immediate);
-                break;
+                return String.format("[X%d, %d]", base.encoding, immediate);
             case BASE_REGISTER_ONLY:
-                addressEncoding = String.format("[X%d]", base.encoding);
-                break;
+                return String.format("[X%d]", base.encoding);
             case EXTENDED_REGISTER_OFFSET:
-                if (registerOffsetScaled) {
-                    addressEncoding = String.format("[X%d, W%d, %s << %s]", base.encoding, offset.encoding, extendType.name(), transferSize);
+                if (regShiftVal != 0) {
+                    return String.format("[X%d, W%d, %s %d]", base.encoding, offset.encoding, extendType.name(), regShiftVal);
                 } else {
-                    addressEncoding = String.format("[X%d, W%d, %s]", base.encoding, offset.encoding, extendType.name());
+                    return String.format("[X%d, W%d, %s]", base.encoding, offset.encoding, extendType.name());
                 }
-                break;
             case REGISTER_OFFSET:
-                if (registerOffsetScaled) {
-                    addressEncoding = String.format("[X%d, X%d, LSL %s]", base.encoding, offset.encoding, transferSize);
+                if (regShiftVal != 0) {
+                    return String.format("[X%d, X%d, LSL %d]", base.encoding, offset.encoding, regShiftVal);
                 } else {
                     /*
                      * LSL 0 may be optional, but still encoded differently so we always leave it
                      * off
                      */
-                    addressEncoding = String.format("[X%d, X%d]", base.encoding, offset.encoding);
+                    return String.format("[X%d, X%d]", base.encoding, offset.encoding);
                 }
-                break;
             case PC_LITERAL:
-                addressEncoding = String.format(".%s%d", immediate >= 0 ? "+" : "", immediate);
-                break;
+                return String.format(".%s%d", immediate >= 0 ? "+" : "", immediate);
             case IMMEDIATE_POST_INDEXED:
-                addressEncoding = String.format("[X%d], %d", base.encoding, immediate);
-                break;
+                return String.format("[X%d],%d", base.encoding, immediate);
             case IMMEDIATE_PRE_INDEXED:
-                addressEncoding = String.format("[X%d, %d]!", base.encoding, immediate);
-                break;
+                return String.format("[X%d,%d]!", base.encoding, immediate);
             case IMMEDIATE_PAIR_POST_INDEXED:
-                addressEncoding = String.format("[X%d], %d << %s", base.encoding, immediate, transferSize);
-                break;
+                return String.format("[X%d],%d", base.encoding, immediate << log2TransferSize);
             case IMMEDIATE_PAIR_PRE_INDEXED:
-                addressEncoding = String.format("[X%d, %d << %s]!", base.encoding, immediate, transferSize);
-                break;
+                return String.format("[X%d,%d]!", base.encoding, immediate << log2TransferSize);
             default:
                 throw GraalError.shouldNotReachHere();
         }
-        return String.format("%s: %s", addressingMode.toString(), addressEncoding);
     }
 }

@@ -152,8 +152,8 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitLogicCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
-        emitCompareAndSwap(accessKind, address, expectedValue, newValue);
+    public Variable emitLogicCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue, boolean useBarriers) {
+        emitCompareAndSwap(address, expectedValue, newValue, useBarriers);
         assert trueValue.getValueKind().equals(falseValue.getValueKind());
         assert isIntConstant(trueValue, 1) && isIntConstant(falseValue, 0);
         Variable result = newVariable(trueValue.getValueKind());
@@ -162,14 +162,14 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitValueCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue) {
-        return emitCompareAndSwap(accessKind, address, expectedValue, newValue);
+    public Variable emitValueCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, boolean useBarriers) {
+        return emitCompareAndSwap(address, expectedValue, newValue, useBarriers);
     }
 
-    private Variable emitCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue) {
+    private Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, boolean useBarriers) {
         Variable result = newVariable(expectedValue.getValueKind());
         Variable scratch = newVariable(LIRKind.value(AArch64Kind.DWORD));
-        append(new CompareAndSwapOp((AArch64Kind) accessKind.getPlatformKind(), result, loadReg(expectedValue), loadReg(newValue), asAllocatable(address), scratch));
+        append(new CompareAndSwapOp(result, loadReg(expectedValue), loadReg(newValue), asAllocatable(address), scratch, useBarriers));
         return result;
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import org.graalvm.compiler.debug.GraalError;
+
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
@@ -40,18 +42,15 @@ import jdk.vm.ci.code.TargetDescription;
 public abstract class Assembler {
 
     public abstract static class CodeAnnotation {
-        /**
-         * The position (bytes from the beginning of the method) of the annotated instruction.
-         */
-        public final int instructionPosition;
-
-        protected CodeAnnotation(int instructionStartPosition) {
-            this.instructionPosition = instructionStartPosition;
-        }
     }
 
     public final TargetDescription target;
     private List<LabelHint> jumpDisplacementHints;
+
+    /**
+     * Labels with instructions to be patched when it is {@linkplain Label#bind bound}.
+     */
+    Label labelsWithPatches;
 
     /**
      * Backing code buffer.
@@ -123,7 +122,7 @@ public abstract class Assembler {
         return codeBuffer.getInt(pos);
     }
 
-    private static final String NEWLINE = System.getProperty("line.separator");
+    private static final String NEWLINE = System.lineSeparator();
 
     /**
      * Some GPU architectures have a text based encoding.
@@ -151,13 +150,30 @@ public abstract class Assembler {
      * @return the data in this buffer or a trimmed copy if {@code trimmedCopy} is {@code true}
      */
     public byte[] close(boolean trimmedCopy) {
+        checkAndClearLabelsWithPatches();
         return codeBuffer.close(trimmedCopy);
+    }
+
+    public byte[] copy(int start, int end) {
+        return codeBuffer.copyData(start, end);
+    }
+
+    private void checkAndClearLabelsWithPatches() throws InternalError {
+        Label label = labelsWithPatches;
+        while (label != null) {
+            if (label.patchPositions != null) {
+                throw new GraalError("Label used by instructions at following offsets has not been bound: %s", label.patchPositions);
+            }
+            Label next = label.nextWithPatches;
+            label.nextWithPatches = null;
+            label = next;
+        }
+        labelsWithPatches = null;
     }
 
     public void bind(Label l) {
         assert !l.isBound() : "can bind label only once";
-        l.bind(position());
-        l.patchInstructions(this);
+        l.bind(position(), this);
     }
 
     public abstract void align(int modulus);
@@ -198,8 +214,10 @@ public abstract class Assembler {
     /**
      * This is used by the CompilationResultBuilder to convert a {@link StackSlot} to an
      * {@link AbstractAddress}.
+     *
+     * @param transferSize bit size of memory operation this address will be used in.
      */
-    public abstract AbstractAddress makeAddress(Register base, int displacement);
+    public abstract AbstractAddress makeAddress(int transferSize, Register base, int displacement);
 
     /**
      * Returns a target specific placeholder address that can be used for code patching.
