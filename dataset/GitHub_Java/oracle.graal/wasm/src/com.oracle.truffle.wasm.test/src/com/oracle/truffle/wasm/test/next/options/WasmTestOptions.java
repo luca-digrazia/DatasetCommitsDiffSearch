@@ -27,24 +27,11 @@
  *  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  *  OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.wasm.test.next;
+package com.oracle.truffle.wasm.test.next.options;
 
-import java.util.function.Consumer;
-
-import org.graalvm.polyglot.PolyglotException;
-import org.graalvm.polyglot.Value;
-
-class WasmTestCaseData {
-    Consumer<Value> resultValidator;
-    Class<? extends PolyglotException> expectedException;
-
-    WasmTestCaseData(Consumer<Value> resultValidator) {
-        this.resultValidator = resultValidator;
-        this.expectedException = null;
-    }
-
-    public WasmTestCaseData(Class<? extends PolyglotException> expectedException) {
-        this.resultValidator = null;
-        this.expectedException = expectedException;
-    }
+public final class WasmTestOptions {
+    public static final String WAT_TO_WASM_EXECUTABLE = System.getProperty("wasmtest.watToWasmExecutable");
+    public static final String TEST_SOURCE_PATH = System.getProperty("wasmtest.testSourcePath");
+    public static final String TEST_FILTER = System.getProperty("wasmtest.testFilter");
+    public static final boolean TRIGGER_GRAAL = Boolean.parseBoolean(System.getProperty("wasmtest.triggerGraal"));
 }
