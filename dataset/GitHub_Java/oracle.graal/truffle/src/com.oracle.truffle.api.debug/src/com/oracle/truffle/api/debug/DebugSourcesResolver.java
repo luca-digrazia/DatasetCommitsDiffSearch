@@ -153,14 +153,13 @@ final class DebugSourcesResolver {
                     // fallback to a general Source
                 }
             }
-            if (builder == null) {
-                String name = uri.getPath() != null ? uri.getPath() : uri.getSchemeSpecificPart();
-                builder = Source.newBuilder(source.getLanguage(), new InputStreamReader(stream), name).uri(uri);
-            }
             try {
+                if (builder == null) {
+                    String name = uri.getPath() != null ? uri.getPath() : uri.getSchemeSpecificPart();
+                    builder = Source.newBuilder(source.getLanguage(), new InputStreamReader(stream), name).uri(uri);
+                }
                 return builder.cached(false).interactive(source.isInteractive()).internal(source.isInternal()).mimeType(source.getMimeType()).build();
-            } catch (IOException | SecurityException e) {
-                env.getLogger("").warning(String.format("Failed to resolve %s: %s%s", source.getURI(), e.getLocalizedMessage(), System.lineSeparator()));
+            } catch (IOException ex) {
                 return null;
             }
         } finally {

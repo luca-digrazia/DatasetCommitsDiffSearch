@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -77,8 +77,8 @@ public final class TestDebugNoContentLanguage extends ProxyLanguage {
 
     @Override
     protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {
-        sourceInfo.createSource(languageInstance.getContextReference().get().getEnv());
         Source source = request.getSource();
+        sourceInfo.createSource(getCurrentContext().getEnv(), source);
         CharSequence characters = source.getCharacters();
         int varStartPos = source.getLength() - 1;
         while (varStartPos > 0) {
@@ -114,8 +114,9 @@ public final class TestDebugNoContentLanguage extends ProxyLanguage {
             this.columnInfo = columnInfo;
         }
 
-        void createSource(Env env) {
-            this.source = Source.newBuilder(ProxyLanguage.ID, env.getTruffleFile(path)).content(Source.CONTENT_NONE).cached(false).build();
+        void createSource(Env env, Source parsedSource) {
+            this.source = Source.newBuilder(ProxyLanguage.ID, env.getPublicTruffleFile(path)).content(Source.CONTENT_NONE).cached(false).interactive(parsedSource.isInteractive()).internal(
+                            parsedSource.isInternal()).mimeType(parsedSource.getMimeType()).build();
         }
 
         private SourceSection copySection(SourceSection section) {
@@ -136,6 +137,7 @@ public final class TestDebugNoContentLanguage extends ProxyLanguage {
         @Node.Child private TestStatementNoContentNode statement;
         private final String name;
         private final SourceSection rootSection;
+        private final FrameSlot slotA;
 
         TestRootNode(TruffleLanguage<?> language, Source parsedSource, SourceInfo sourceInfo) {
             super(language);
@@ -151,6 +153,7 @@ public final class TestDebugNoContentLanguage extends ProxyLanguage {
             statement = new TestStatementNoContentNode(statementSection);
             name = word(parseRootSection.getCharacters().toString());
             insert(statement);
+            slotA = getFrameDescriptor().findOrAddFrameSlot("a", FrameSlotKind.Object);
         }
 
         private static String word(String str) {
@@ -173,8 +176,7 @@ public final class TestDebugNoContentLanguage extends ProxyLanguage {
 
         @Override
         public Object execute(VirtualFrame frame) {
-            FrameSlot slot = frame.getFrameDescriptor().findOrAddFrameSlot("a", FrameSlotKind.Object);
-            frame.setObject(slot, "A");
+            frame.setObject(slotA, "A");
             return statement.execute(frame);
         }
 
