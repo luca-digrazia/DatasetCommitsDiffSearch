@@ -202,7 +202,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> packageEnabled = StaticSymbols.putName("packageEnabled");
 
         // j.l.Class
-        public static final Symbol<Name> getName = StaticSymbols.putName("getName");
         public static final Symbol<Name> forName = StaticSymbols.putName("forName");
         public static final Symbol<Name> module = StaticSymbols.putName("module");
         public static final Symbol<Name> classLoader = StaticSymbols.putName("classLoader");
@@ -230,7 +229,6 @@ public final class Symbol<T> extends ByteSequence {
         // j.l.Throwable
         public static final Symbol<Name> backtrace = StaticSymbols.putName("backtrace");
         public static final Symbol<Name> cause = StaticSymbols.putName("cause");
-        public static final Symbol<Name> depth = StaticSymbols.putName("depth");
         public static final Symbol<Name> fillInStackTrace = StaticSymbols.putName("fillInStackTrace");
         public static final Symbol<Name> fillInStackTrace0 = StaticSymbols.putName("fillInStackTrace0");
         public static final Symbol<Name> getMessage = StaticSymbols.putName("getMessage");
@@ -253,16 +251,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> stop = StaticSymbols.putName("stop");
         public static final Symbol<Name> threadStatus = StaticSymbols.putName("threadStatus");
         public static final Symbol<Name> toThreadState = StaticSymbols.putName("toThreadState");
-
-        // j.l.StackTraceElement
-        public static final Symbol<Name> declaringClassObject = StaticSymbols.putName("declaringClassObject");
-        public static final Symbol<Name> classLoaderName = StaticSymbols.putName("classLoaderName");
-        public static final Symbol<Name> moduleName = StaticSymbols.putName("moduleName");
-        public static final Symbol<Name> moduleVersion = StaticSymbols.putName("moduleVersion");
-        public static final Symbol<Name> declaringClass = StaticSymbols.putName("declaringClass");
-        public static final Symbol<Name> methodName = StaticSymbols.putName("methodName");
-        public static final Symbol<Name> fileName = StaticSymbols.putName("fileName");
-        public static final Symbol<Name> lineNumber = StaticSymbols.putName("lineNumber");
 
         // j.l.System
         public static final Symbol<Name> getProperty = StaticSymbols.putName("getProperty");
@@ -641,7 +629,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Type> java_lang_management_MemoryPoolMXBean = StaticSymbols.putType(java.lang.management.MemoryPoolMXBean.class);
         public static final Symbol<Type> java_lang_management_GarbageCollectorMXBean = StaticSymbols.putType(java.lang.management.GarbageCollectorMXBean.class);
         public static final Symbol<Type> sun_management_ManagementFactory = StaticSymbols.putType("Lsun/management/ManagementFactory;");
-        public static final Symbol<Type> sun_management_ManagementFactoryHelper = StaticSymbols.putType("Lsun/management/ManagementFactoryHelper;");
         public static final Symbol<Type> java_lang_management_MemoryUsage = StaticSymbols.putType(java.lang.management.MemoryUsage.class);
         public static final Symbol<Type> java_lang_management_ThreadInfo = StaticSymbols.putType(java.lang.management.ThreadInfo.class);
     }

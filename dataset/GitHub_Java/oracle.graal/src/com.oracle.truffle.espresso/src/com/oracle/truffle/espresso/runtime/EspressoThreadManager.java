@@ -51,8 +51,7 @@ class EspressoThreadManager implements ContextAccess {
 
     private final Set<StaticObject> activeThreads = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
-    private final Object threadLock = new Object() {
-    };
+    private final Object threadLock = new Object();
 
     /**
      * Contains a mapping from host thread ID to guest thread object. The object at index 0 is an
@@ -142,13 +141,6 @@ class EspressoThreadManager implements ContextAccess {
 
     public void unregisterThread(StaticObject thread) {
         activeThreads.remove(thread);
-        synchronized (context.getSynchronizer()) {
-            context.getSynchronizer().notifyAll();
-        }
-    }
-
-    public void unregisterMainThread() {
-        Target_java_lang_Thread.terminate(guestMainThread, getMeta());
     }
 
     /**
