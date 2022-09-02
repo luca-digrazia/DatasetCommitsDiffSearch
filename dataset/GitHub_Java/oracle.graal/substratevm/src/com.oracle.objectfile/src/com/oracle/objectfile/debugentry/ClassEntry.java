@@ -29,6 +29,7 @@ package com.oracle.objectfile.debugentry;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
@@ -97,7 +98,11 @@ public class ClassEntry extends StructureTypeEntry {
         super(className, size);
         this.interfaces = new ArrayList<>();
         this.fileEntry = fileEntry;
-        this.methods = new ArrayList<>();
+        // methods is a sorted list and we want to be able to add more elements to it while keeping
+        // it sorted,
+        // so a LinkedList seems more appropriate than an ArrayList.
+        // (see ensureMethodEntryForDebugRangeInfo)
+        this.methods = new LinkedList<>();
         this.primaryEntries = new ArrayList<>();
         this.primaryIndex = new HashMap<>();
         this.localFiles = new ArrayList<>();

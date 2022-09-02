@@ -31,7 +31,7 @@ import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugRangeInfo;
 public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> {
     final TypeEntry[] paramTypes;
     final String[] paramNames;
-    public final boolean isDeoptTarget;
+    final boolean isDeoptTarget;
     boolean isInRange;
 
     final String symbolName;
@@ -147,6 +147,10 @@ public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> 
             }
         }
         return 0;
+    }
+
+    public boolean isDeoptTarget() {
+        return isDeoptTarget;
     }
 
     @Override
