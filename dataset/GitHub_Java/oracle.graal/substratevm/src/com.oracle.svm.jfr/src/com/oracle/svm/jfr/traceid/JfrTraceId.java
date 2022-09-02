@@ -30,11 +30,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.oracle.svm.jfr.JfrRuntimeAccess;
-import jdk.jfr.Event;
 import jdk.jfr.internal.JVM;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
 
 public class JfrTraceId {
 
@@ -83,6 +80,13 @@ public class JfrTraceId {
         return (id & bits) != 0;
     }
 
+    public static boolean predicate(Package p, long bits) {
+        Map<String, Long> map = getTraceIdMap().getPackageMap();
+        long id = map.get(p.getName());
+        assert id != -1;
+        return (id & bits) != 0;
+    }
+
     public static void setUsedThisEpoch(Object obj) {
         tag(obj, JfrTraceIdEpoch.thisEpochBit());
     }
@@ -91,97 +95,115 @@ public class JfrTraceId {
         return predicate(obj, TRANSIENT_BIT | JfrTraceIdEpoch.thisEpochBit());
     }
 
-    public static long getTraceIdRaw(Object key) {
-        JfrTraceIdMap map = getTraceIdMap();
-        if (map == null) {
-            throw new AssertionError();
-        };
-        return getTraceIdMap().getId(key);
+    public static long getTraceIdRaw(Object obj) {
+        return getTraceIdMap().getId(obj);
     }
 
-    public static long getTraceId(Object key) {
-        long traceid = getTraceIdRaw(key);
-        return traceid >> TRACE_ID_SHIFT;
+    public static long getTraceId(Package p) {
+        Long traceid = getTraceIdMap().getPackageMap().get(p.getName());
+        if (traceid != null) {
+            return traceid >> TRACE_ID_SHIFT;
+        } else {
+            return -1;
+        }
+    }
+
+    public static long getTraceId(Object obj) {
+        return getTraceIdMap().getId(obj) >> TRACE_ID_SHIFT;
     }
 
     public static long load(Class<?> clazz) {
         return JfrTraceIdLoadBarrier.load(clazz);
     }
 
-    private static void tagAsJdkJfrEvent(int index) {
+    private static void tagAsJdkJfrEvent(Class<?> clazz) {
         JfrTraceIdMap map = getTraceIdMap();
-        long id = map.getId(index);
+        long id = map.getId(clazz);
         assert id != -1;
-        map.setId(index, id | JDK_JFR_EVENT_KLASS);
+        map.setId(clazz, id | JDK_JFR_EVENT_KLASS);
     }
 
-    private static void tagAsJdkJfrEventSub(int index) {
+    private static void tagAsJdkJfrEventSub(Class<?> clazz) {
         JfrTraceIdMap map = getTraceIdMap();
-        long id = map.getId(index);
+        long id = map.getId(clazz);
         assert id != -1;
-        map.setId(index, id | JDK_JFR_EVENT_SUBKLASS);
+        map.setId(clazz, id | JDK_JFR_EVENT_SUBKLASS);
     }
 
-    private static boolean isEventClass(int index) {
+    private static boolean isEventClass(Class<?> clazz) {
         JfrTraceIdMap map = getTraceIdMap();
-        long id = map.getId(index);
+        long id = map.getId(clazz);
         assert id != -1;
         return (id & (JDK_JFR_EVENT_KLASS | JDK_JFR_EVENT_SUBKLASS)) != 0;
     }
 
-    private static boolean setSystemEventClass(Class<?> clazz, int index) {
+    private static boolean setSystemEventClass(Class<?> clazz) {
         String className = clazz.getCanonicalName();
         if (className != null && className.equals("jdk.internal.event.Event")
                 && clazz.getClassLoader() == null || clazz.getClassLoader() == ClassLoader.getSystemClassLoader()) {
-            tagAsJdkJfrEvent(index);
+            tagAsJdkJfrEvent(clazz);
             return true;
         }
 
         if (className != null && className.equals("jdk.jfr.Event")
                 && clazz.getClassLoader() == null || clazz.getClassLoader() == ClassLoader.getSystemClassLoader()) {
-            tagAsJdkJfrEvent(index);
+            tagAsJdkJfrEvent(clazz);
             return true;
         }
         return false;
     }
 
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public static void assign(Class<?> clazz, Map<Class<?>, Integer> classToIndex) {
+    public static long assign(Class<?> clazz) {
         assert clazz != null;
-        int index = classToIndex.get(clazz);
-        if (getTraceIdMap().getId(index) != -1) return;
+        assert getTraceIdMap().getId(clazz) == -1;
         long typeId = JVM.getJVM().getTypeId(clazz);
-        getTraceIdMap().setId(index, typeId << TRACE_ID_SHIFT);
-        if (!setSystemEventClass(clazz, index)) {
+        getTraceIdMap().setId(clazz, typeId << TRACE_ID_SHIFT);
+        if (!setSystemEventClass(clazz)) {
             Class<?> superClazz = clazz.getSuperclass();
             if (superClazz != null) {
-                int superIndex = classToIndex.get(superClazz);
-                if (getTraceIdMap().getId(superIndex) != -1) {
-                    assign(superClazz, classToIndex);
+                if (getTraceIdMap().getId(superClazz) == -1) {
+                    assign(superClazz);
                 }
-                if (isEventClass(superIndex)) {
-                    tagAsJdkJfrEventSub(index);
+                if (isEventClass(superClazz)) {
+                    tagAsJdkJfrEventSub(clazz);
                 }
             }
         }
+
+        return typeId;
     }
 
-    public static void assign(ClassLoader classLoader, int index) {
+    public static long assign(ClassLoader classLoader) {
         assert classLoader != null;
         long nextId = classLoaderCounter.getAndIncrement();
-        getTraceIdMap().setId(index, nextId << TRACE_ID_SHIFT);
+        getTraceIdMap().setId(classLoader, nextId << TRACE_ID_SHIFT);
+        return nextId;
     }
 
-    public static void assign(Package pkg, int index) {
+    public static long assign(Package pkg) {
         assert pkg != null;
         long nextId = packageCounter.getAndIncrement();
-        getTraceIdMap().setId(index, nextId << TRACE_ID_SHIFT);
+        getTraceIdMap().getPackageMap().put(pkg.getName(), nextId << TRACE_ID_SHIFT);
+        assert (getTraceId(pkg) == nextId);
+        return nextId;
     }
 
-    public static void assign(Module module, int index) {
+    public static long assign(Module module) {
         assert module != null;
         long nextId = moduleCounter.getAndIncrement();
-        getTraceIdMap().setId(index, nextId << TRACE_ID_SHIFT);
+        getTraceIdMap().setId(module, nextId << TRACE_ID_SHIFT);
+        return nextId;
+    }
+
+    public static void assign(Thread thread) {
+        assert thread != null;
+        long nextId = threadCounter.incrementAndGet();
+        getTraceIdMap().setId(thread, nextId << TRACE_ID_SHIFT);
+    }
+
+    public static void unassign(Thread thread) {
+        assert thread != null;
+        getTraceIdMap().clearId(thread);
     }
 
     public static long load(ClassLoader classLoader) {
@@ -216,6 +238,16 @@ public class JfrTraceId {
         getTraceIdMap().setId(obj, id | SERIALIZED_BIT);
     }
 
+    public static boolean isSerialized(Package p) {
+        return predicate(p, SERIALIZED_BIT);
+    }
+
+    public static void setSerialized(Package p) {
+        long id = getTraceIdMap().getPackageMap().get(p.getName());
+        assert (id != -1);
+        getTraceIdMap().getPackageMap().put(p.getName(), id | SERIALIZED_BIT);
+    }
+
     public static void clearSerialized(Object obj) {
         long id = getTraceIdMap().getId(obj);
         assert (id != -1);
@@ -224,4 +256,14 @@ public class JfrTraceId {
         }
         assert (!isSerialized(obj));
     }
+
+    public static void clearSerialized(Package p) {
+        long id = getTraceIdMap().getPackageMap().get(p.getName());
+        assert (id != -1);
+        if (isSerialized(p)) {
+            getTraceIdMap().getPackageMap().put(p.getName(), id ^ SERIALIZED_BIT);
+        }
+        assert (!isSerialized(p));
+    }
+
 }

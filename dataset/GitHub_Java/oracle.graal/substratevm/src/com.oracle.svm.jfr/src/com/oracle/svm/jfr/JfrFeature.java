@@ -44,6 +44,7 @@ import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.thread.ThreadListenerFeature;
 import com.oracle.svm.core.thread.ThreadListenerSupport;
 import com.oracle.svm.hosted.FeatureImpl;
+import com.oracle.svm.hosted.FeatureImpl.BeforeCompilationAccessImpl;
 import com.oracle.svm.util.ModuleSupport;
 
 import jdk.jfr.Event;
@@ -154,8 +155,11 @@ public class JfrFeature implements Feature {
 
     @Override
     public void beforeCompilation(BeforeCompilationAccess a) {
+        BeforeCompilationAccessImpl access = (BeforeCompilationAccessImpl) a;
+        int typeCount = access.getTypes().size();
         // TODO: get the method count
         int methodCount = 0;
+        SubstrateJVM.getTypeRepository().initialize(typeCount);
         SubstrateJVM.getMethodRepository().initialize(methodCount);
     }
 }
