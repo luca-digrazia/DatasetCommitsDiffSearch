@@ -141,9 +141,7 @@ public abstract class LoopNode extends Node {
      * @param frame the current execution frame or null if the repeating node does not require a
      *            frame
      * @since 0.8 or earlier
-     * @deprecated use {@link #executeLoopWithValue(VirtualFrame)} instead
      */
-    @Deprecated
     public abstract void executeLoop(VirtualFrame frame);
 
     /**
@@ -157,7 +155,7 @@ public abstract class LoopNode extends Node {
      * @return a value different than {@link RepeatingNode#CONTINUE_LOOP_STATUS}, which can be
      *             used in a language-specific way (for example, to encode structured jumps)
      */
-    public Object executeLoopWithValue(VirtualFrame frame) {
+    public int executeLoopWithStatus(VirtualFrame frame) {
         throw new RuntimeException("Must be overridden in concrete subclasses.");
     }
 
