@@ -84,23 +84,23 @@ public final class ImageClassLoader {
     }
 
     private final Platform platform;
-    private final NativeImageClassLoader classLoader;
+    private final ClassLoader classLoader;
     private final String[] classpath;
     private final EconomicSet<Class<?>> systemClasses = EconomicSet.create();
     private final EconomicSet<Method> systemMethods = EconomicSet.create();
     private final EconomicSet<Field> systemFields = EconomicSet.create();
 
-    private ImageClassLoader(Platform platform, String[] classpath, NativeImageClassLoader classLoader) {
+    private ImageClassLoader(Platform platform, String[] classpath, ClassLoader classLoader) {
         this.platform = platform;
         this.classpath = classpath;
         this.classLoader = classLoader;
     }
 
-    public static ImageClassLoader create(Platform platform, String[] classpathAll, NativeImageClassLoader classLoader) {
+    public static ImageClassLoader create(Platform platform, String[] classpathAll, ClassLoader classLoader) {
         ArrayList<String> classpathFiltered = new ArrayList<>(classpathAll.length);
         classpathFiltered.addAll(Arrays.asList(classpathAll));
 
-        /* If the GraalVM SDK is on the boot class path, and it contains annotated types. */
+        /* If the Graal SDK is on the boot class path, and it contains annotated types. */
         final String sunBootClassPath = System.getProperty("sun.boot.class.path");
         if (sunBootClassPath != null) {
             for (String s : sunBootClassPath.split(File.pathSeparator)) {
@@ -464,9 +464,5 @@ public final class ImageClassLoader {
 
     public ClassLoader getClassLoader() {
         return classLoader;
-    }
-
-    public Package[] getPackages() {
-        return classLoader.getPackages();
     }
 }
