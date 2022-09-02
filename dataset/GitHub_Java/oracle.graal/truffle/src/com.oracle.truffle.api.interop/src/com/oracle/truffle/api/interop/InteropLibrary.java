@@ -43,7 +43,6 @@ package com.oracle.truffle.api.interop;
 import static com.oracle.truffle.api.interop.AssertUtils.preCondition;
 import static com.oracle.truffle.api.interop.AssertUtils.validArgument;
 import static com.oracle.truffle.api.interop.AssertUtils.validArguments;
-import static com.oracle.truffle.api.interop.AssertUtils.validNonInteropArgument;
 import static com.oracle.truffle.api.interop.AssertUtils.validReturn;
 import static com.oracle.truffle.api.interop.AssertUtils.violationInvariant;
 import static com.oracle.truffle.api.interop.AssertUtils.violationPost;
@@ -54,14 +53,9 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.time.zone.ZoneRules;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.TruffleLanguage.Registration;
 import com.oracle.truffle.api.impl.Accessor.EngineSupport;
 import com.oracle.truffle.api.interop.InteropLibrary.Asserts;
 import com.oracle.truffle.api.library.ExportLibrary;
@@ -70,10 +64,8 @@ import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.LibraryFactory;
-import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.source.SourceSection;
 
 /**
  * Represents the library that specifies the interoperability message protocol between Truffle
@@ -114,19 +106,11 @@ import com.oracle.truffle.api.source.SourceSection;
  * TimeZone}
  * <li>{@link #isDuration(Object) Duration}
  * <li>{@link #isException(Object) Exception}
- * <li>{@link #isMetaObject(Object) Meta-Object}
  * </ul>
- * All receiver values may have none, one or multiple of the following traits:
- * <ul>
- * <li>{@link #isExecutable(Object) executable}
- * <li>{@link #isInstantiable(Object) instantiable}
- * <li>{@link #isPointer(Object) pointer}
- * <li>{@link #hasMembers(Object) members}
- * <li>{@link #hasArrayElements(Object) array elements}
- * <li>{@link #hasLanguage(Object) language}
- * <li>{@link #hasMetaObject(Object) associated metaobject}
- * <li>{@link #hasSourceLocation(Object) source location}
- * <ul>
+ * All receiver values may be {@link #isExecutable(Object) executable},
+ * {@link #isInstantiable(Object) instantiable}, {@link #isPointer(Object) pointers}, have
+ * {@link #hasMembers(Object) members} or {@link #hasArrayElements(Object) array elements} at the
+ * same time.
  * <p>
  * <h3>Naive and aware dates and times</h3>
  * <p>
@@ -162,6 +146,7 @@ import com.oracle.truffle.api.source.SourceSection;
 @DefaultExport(DefaultDoubleExports.class)
 @DefaultExport(DefaultCharacterExports.class)
 @DefaultExport(DefaultStringExports.class)
+@DefaultExport(DefaultTruffleObjectExports.class)
 @SuppressWarnings("unused")
 public abstract class InteropLibrary extends Library {
 
@@ -244,7 +229,7 @@ public abstract class InteropLibrary extends Library {
     // Instantiable Messages
     /**
      * Returns <code>true</code> if the receiver represents an <code>instantiable</code> value, else
-     * <code>false</code>. Contructors or metaobjects are typical examples of instantiable values.
+     * <code>false</code>. Contructors or meta-objects are typical examples of instantiable values.
      * Invoking this message does not cause any observable side-effects. Note that receiver values
      * which are {@link #isExecutable(Object) executable} might also be
      * {@link #isInstantiable(Object) instantiable}.
@@ -1038,10 +1023,9 @@ public abstract class InteropLibrary extends Library {
      * <li>If {@link #isDate(Object)} and {@link #isTime(Object)} returns <code>false</code>, then
      * it represents just timezone information.
      * </ul>
-     * Objects with only date information must not have timezone information attached and objects
-     * with only time information must have either none, or {@link ZoneRules#isFixedOffset() fixed
-     * zone} only. If this rule is violated then an {@link AssertionError} is thrown if assertions
-     * are enabled.
+     * Objects with only time or only date information must not have timezone information attached,
+     * as aware date or time information always consist of both date and time. If this rule is
+     * violated then an {@link AssertionError} is thrown if assertions are enabled.
      * <p>
      * If this method is implemented then also {@link #asTimeZone(Object)} must be implemented.
      *
@@ -1182,312 +1166,6 @@ public abstract class InteropLibrary extends Library {
     }
 
     /**
-     * Returns <code>true</code> if the receiver value has a declared source location attached, else
-     * <code>false</code>. Returning a source location for a value is optional and typically impacts
-     * the capabilities of tools like debuggers to jump to the declaration of a value.
-     * <p>
-     * Examples for values that may provide a source location:
-     * <ul>
-     * <li>{@link #isMetaObject(Object) Metaobjects} like classes or types.
-     * <li>First class {@link #isExecutable(Object) executables}, like functions, closures or
-     * promises.
-     * <li>Allocation sites for instances. Note that in most languages it is very expensive to track
-     * the allocation site of an instance and it is therefore not recommended to support this
-     * feature by default, but ideally behind an optional language option.
-     * <ul>
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #getSourceLocation(Object)} must be implemented.
-     *
-     * @see #getSourceLocation(Object)
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"getSourceLocation"})
-    @TruffleBoundary
-    public boolean hasSourceLocation(Object receiver) {
-        Env env = getLegacyEnv(receiver, false);
-        if (env != null) {
-            SourceSection location = InteropAccessor.ACCESSOR.languageSupport().legacyFindSourceLocation(env, receiver);
-            if (location != null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Returns the declared source location of the receiver value. Throws an
-     * {@link UnsupportedMessageException} if the value does not have a declared source location.
-     * See {@link #hasSourceLocation(Object)} for further details on potential interpretations.
-     * Throws {@link UnsupportedMessageException} by default.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #hasSourceLocation(Object)} must be implemented.
-     *
-     * @throws UnsupportedMessageException if and only if {@link #hasSourceLocation(Object)} returns
-     *             <code>false</code> for the same receiver.
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"hasSourceLocation"})
-    @TruffleBoundary
-    public SourceSection getSourceLocation(Object receiver) throws UnsupportedMessageException {
-        Env env = getLegacyEnv(receiver, false);
-        if (env != null) {
-            SourceSection location = InteropAccessor.ACCESSOR.languageSupport().legacyFindSourceLocation(env, receiver);
-            if (location != null) {
-                return location;
-            }
-        }
-        throw UnsupportedMessageException.create();
-    }
-
-    /**
-     * Returns <code>true</code> if the receiver originates from a language, else
-     * <code>false</code>. Primitive values or other shared interop value representations that are
-     * not associated with a language may return <code>false</code>. Values that originate from a
-     * language should return <code>true</code>. Returns <code>false</code> by default.
-     * <p>
-     * The associated language allows tools to identify the original language of a value. If an
-     * instrument requests a
-     * {@link com.oracle.truffle.api.instrumentation.TruffleInstrument.Env#getLanguageView(LanguageInfo, Object)
-     * language view} then values that are already associated with a language will just return the
-     * same value. Otherwise {@link TruffleLanguage#getLanguageView(Object, Object)} will be invoked
-     * on the language. The returned language may be also exposed to embedders in the future.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #getLanguage(Object)} and {@link #toDisplayString(Object, boolean)} must be
-     * implemented.
-     *
-     * @see #getLanguage(Object)
-     * @see #toDisplayString(Object)
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"getLanguage"})
-    @TruffleBoundary
-    public boolean hasLanguage(Object receiver) {
-        return getLegacyEnv(receiver, false) != null;
-    }
-
-    /**
-     * Returns the the original language of the receiver value. The returned language class must be
-     * non-null and represent a valid {@link Registration registered} language class. For more
-     * details see {@link #hasLanguage(Object)}.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #hasLanguage(Object)} must be implemented.
-     *
-     * @throws UnsupportedMessageException if and only if {@link #hasLanguage(Object)} returns
-     *             <code>false</code> for the same receiver.
-     * @since 20.1
-     */
-    @SuppressWarnings("unchecked")
-    @Abstract(ifExported = {"hasLanguage"})
-    @TruffleBoundary
-    public Class<? extends TruffleLanguage<?>> getLanguage(Object receiver) throws UnsupportedMessageException {
-        Env env = getLegacyEnv(receiver, false);
-        if (env != null) {
-            return (Class<? extends TruffleLanguage<?>>) InteropAccessor.ACCESSOR.languageSupport().getSPI(env).getClass();
-        }
-        throw UnsupportedMessageException.create();
-    }
-
-    /**
-     * Returns <code>true</code> if the receiver value has a metaobject associated. The metaobject
-     * represents a description of the object, reveals it's kind and it's features. Some information
-     * that a metaobject might define includes the base object's type, interface, class, methods,
-     * attributes, etc. Should return <code>false</code> when no metaobject is known for this type.
-     * Returns <code>false</code> by default.
-     * <p>
-     * An example, for Java objects the returned metaobject is the {@link Object#getClass() class}
-     * instance. In JavaScript this could be the function or class that is associated with the
-     * object.
-     * <p>
-     * Metaobjects for primitive values or values of other languages may be provided using
-     * {@link TruffleLanguage#getLanguageView(Object, Object) language views}. While an object is
-     * associated with a metaobject in one language, the metaobject might be a different when viewed
-     * from another language.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #getMetaObject(Object)} must be implemented.
-     *
-     * @see #getMetaObject(Object)
-     * @see #isMetaObject(Object)
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"getMetaObject"})
-    @TruffleBoundary
-    public boolean hasMetaObject(Object receiver) {
-        Env env = getLegacyEnv(receiver, false);
-        if (env != null) {
-            Object metaObject = InteropAccessor.ACCESSOR.languageSupport().legacyFindMetaObject(env, receiver);
-            if (metaObject != null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Returns the metaobject that is associated with this value. The metaobject represents a
-     * description of the object, reveals it's kind and it's features. Some information that a
-     * metaobject might define includes the base object's type, interface, class, methods,
-     * attributes, etc. When no metaobject is known for this type. Throws
-     * {@link UnsupportedMessageException} by default.
-     * <p>
-     * The returned object must return <code>true</code> for {@link #isMetaObject(Object)} and
-     * provide implementations for {@link #getMetaSimpleName(Object)},
-     * {@link #getMetaQualifiedName(Object)}, and {@link #isMetaInstance(Object, Object)}. For all
-     * values with metaobjects it must at hold that
-     * <code>isMetaInstance(getMetaObject(value), value) ==
-     * true</code>.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #hasMetaObject(Object)} must be implemented.
-     *
-     * @throws UnsupportedMessageException if and only if {@link #hasMetaObject(Object)} returns
-     *             <code>false</code> for the same receiver.
-     *
-     * @see #hasMetaObject(Object)
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"hasMetaObject"})
-    @TruffleBoundary
-    public Object getMetaObject(Object receiver) throws UnsupportedMessageException {
-        Env env = getLegacyEnv(receiver, false);
-        if (env != null) {
-            Object metaObject = InteropAccessor.ACCESSOR.languageSupport().legacyFindMetaObject(env, receiver);
-            if (metaObject != null) {
-                return new LegacyMetaObjectWrapper(receiver, metaObject);
-            }
-        }
-        throw UnsupportedMessageException.create();
-    }
-
-    /**
-     * Converts the receiver to a human readable {@link #isString(Object) string}. Each language may
-     * have special formating conventions - even primitive values may not follow the traditional
-     * Java formating rules. The format of the returned string is intended to be interpreted by
-     * humans not machines and should therefore not be relied upon by machines. By default the
-     * receiver class name and its {@link System#identityHashCode(Object) identity hash code} is
-     * used as string representation.
-     * <p>
-     * String representations for primitive values or values of other languages may be provided
-     * using {@link TruffleLanguage#getLanguageView(Object, Object) language views}. It is common
-     * that languages provide different string representations for primitive and foreign values. To
-     * convert the result value to a Java string use {@link InteropLibrary#asString(Object)}.
-     *
-     * @param allowSideEffects whether side-effects are allowed in the production of the string.
-     * @see TruffleLanguage#getLanguageView(Object, Object)
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"hasLanguage", "getLanguage"})
-    @TruffleBoundary
-    public Object toDisplayString(Object receiver, boolean allowSideEffects) {
-        Env env = getLegacyEnv(receiver, false);
-        if (env != null && allowSideEffects) {
-            return InteropAccessor.ACCESSOR.languageSupport().toStringIfVisible(env, receiver, false);
-        } else {
-            return receiver.getClass().getTypeName() + "@" + Integer.toHexString(System.identityHashCode(receiver));
-        }
-    }
-
-    private static Env getLegacyEnv(Object receiver, boolean nullForhost) {
-        return InteropAccessor.ACCESSOR.engineSupport().getLegacyLanguageEnv(receiver, nullForhost);
-    }
-
-    /**
-     * Converts the receiver to a human readable {@link #isString(Object) string} of the language.
-     * Short-cut for <code>{@link #toDisplayString(Object) toDisplayString}(true)</code>.
-     *
-     * @see #toDisplayString(Object, boolean)
-     * @since 20.1
-     */
-    public final Object toDisplayString(Object receiver) {
-        return toDisplayString(receiver, true);
-    }
-
-    /**
-     * Returns <code>true</code> if the receiver value represents a metaobject. Metaobjects may be
-     * values that naturally occur in a language or they may be returned by
-     * {@link #getMetaObject(Object)}. A metaobject represents a description of the object, reveals
-     * it's kind and it's features. Some information thametaobjectject might define includes the
-     * base object's type, interface, class, methods, attributes, etc. Returns <code>false</code> by
-     * default.
-     * <p>
-     * <b>Sample interpretations:</b> In Java an instance of the type {@link Class} is a metaobject.
-     * In JavaScript any function instance is a metaobject. For example, the metaobject of a
-     * JavaScript class is the associated constructor function.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #getMetaQualifiedName(Object)}, {@link #getMetaSimpleName(Object)} and
-     * {@link #isMetaInstance(Object, Object)} must be implemented as well.
-     *
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"getMetaQualifiedName", "getMetaSimpleName", "isMetaInstance"})
-    public boolean isMetaObject(Object receiver) {
-        return false;
-    }
-
-    /**
-     * Returns the qualified name of a metaobject as {@link #isString(Object) string}.
-     * <p>
-     * <b>Sample interpretations:</b> The qualified name of a Java class includes the package name
-     * and its class name. JavaScript does not have the notion of qualified name and therefore
-     * returns the {@link #getMetaSimpleName(Object) simple name} instead.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #isMetaObject(Object)} must be implemented as well.
-     *
-     * @throws UnsupportedMessageException if and only if {@link #isMetaObject(Object)} returns
-     *             <code>false</code> for the same receiver.
-     *
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"isMetaObject"})
-    public Object getMetaQualifiedName(Object metaObject) throws UnsupportedMessageException {
-        throw UnsupportedMessageException.create();
-    }
-
-    /**
-     * Returns the simple name of a metaobject as {@link #isString(Object) string}.
-     * <p>
-     * <b>Sample interpretations:</b> The simple name of a Java class is the class name.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #isMetaObject(Object)} must be implemented as well.
-     *
-     * @throws UnsupportedMessageException if and only if {@link #isMetaObject(Object)} returns
-     *             <code>false</code> for the same receiver.
-     *
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"isMetaObject"})
-    public Object getMetaSimpleName(Object metaObject) throws UnsupportedMessageException {
-        throw UnsupportedMessageException.create();
-    }
-
-    /**
-     * Returns <code>true</code> if the given instance is of the provided receiver metaobject, else
-     * <code>false</code>.
-     * <p>
-     * <b>Sample interpretations:</b> A Java object is an instance of its returned
-     * {@link Object#getClass() class}.
-     * <p>
-     * This method must not cause any observable side-effects. If this method is implemented then
-     * also {@link #isMetaObject(Object)} must be implemented as well.
-     *
-     * @param instance the instance object to check.
-     * @throws UnsupportedMessageException if and only if {@link #isMetaObject(Object)} returns
-     *             <code>false</code> for the same receiver.
-     * @since 20.1
-     */
-    @Abstract(ifExported = {"isMetaObject"})
-    public boolean isMetaInstance(Object receiver, Object instance) throws UnsupportedMessageException {
-        throw UnsupportedMessageException.create();
-    }
-
-    /**
      * Returns the library factory for the interop library. Short-cut for
      * {@link LibraryFactory#resolve(Class) ResolvedLibrary.resolve(InteropLibrary.class)}.
      *
@@ -1500,7 +1178,7 @@ public abstract class InteropLibrary extends Library {
 
     /**
      * Utility for libraries to require adoption before cached versions of nodes can be executed.
-     * Only fails if assertions (-ea) are enabled.
+     * Only failes if assertions (-ea) are enabled.
      *
      * @since 19.0
      */
@@ -1512,7 +1190,9 @@ public abstract class InteropLibrary extends Library {
     private boolean assertAdoptedImpl() {
         Node node = this;
         do {
-            if (node instanceof RootNode) {
+            if (node instanceof RootNode || node instanceof LegacyToLibraryNode || node instanceof InteropAccessNode) {
+                // we all nodes with root nodes or
+                // unadopted that use the compatibility bridge
                 return true;
             }
             node = node.getParent();
@@ -1535,8 +1215,7 @@ public abstract class InteropLibrary extends Library {
             DURATION,
             STRING,
             NUMBER,
-            POINTER,
-            META_OBJECT;
+            POINTER;
         }
 
         Asserts(InteropLibrary delegate) {
@@ -1566,25 +1245,17 @@ public abstract class InteropLibrary extends Library {
         }
 
         private boolean notOtherType(Object receiver, Type type) {
-            if (receiver instanceof LegacyMetaObjectWrapper) {
-                // ignore other type assertions for legacy meta object wrapper
-                return true;
-            }
             assert type == Type.NULL || !delegate.isNull(receiver) : violationInvariant(receiver);
             assert type == Type.BOOLEAN || !delegate.isBoolean(receiver) : violationInvariant(receiver);
             assert type == Type.STRING || !delegate.isString(receiver) : violationInvariant(receiver);
             assert type == Type.NUMBER || !delegate.isNumber(receiver) : violationInvariant(receiver);
             assert type == Type.DATE_TIME_ZONE || (!delegate.isDate(receiver) && !delegate.isTime(receiver) && !delegate.isTimeZone(receiver)) : violationInvariant(receiver);
             assert type == Type.DURATION || !delegate.isDuration(receiver) : violationInvariant(receiver);
-            assert type == Type.META_OBJECT || !delegate.isMetaObject(receiver) : violationInvariant(receiver);
             return true;
         }
 
         @Override
         public boolean isBoolean(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.isBoolean(receiver);
-            }
             assert preCondition(receiver);
             boolean result = delegate.isBoolean(receiver);
             if (result) {
@@ -1601,9 +1272,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public boolean asBoolean(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.asBoolean(receiver);
-            }
             assert preCondition(receiver);
             boolean wasBoolean = delegate.isBoolean(receiver);
             try {
@@ -1627,9 +1295,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Object execute(Object receiver, Object... arguments) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.execute(receiver, arguments);
-            }
             assert preCondition(receiver);
             assert validArguments(receiver, arguments);
             boolean wasExecutable = delegate.isExecutable(receiver);
@@ -1654,9 +1319,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Object instantiate(Object receiver, Object... arguments) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.instantiate(receiver, arguments);
-            }
             assert preCondition(receiver);
             assert validArguments(receiver, arguments);
             boolean wasInstantiable = delegate.isInstantiable(receiver);
@@ -1674,9 +1336,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public boolean isString(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.isString(receiver);
-            }
             assert preCondition(receiver);
             boolean result = delegate.isString(receiver);
             if (result) {
@@ -1693,9 +1352,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public String asString(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.asString(receiver);
-            }
             assert preCondition(receiver);
             boolean wasString = delegate.isString(receiver);
             try {
@@ -1719,9 +1375,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public boolean fitsInByte(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.fitsInByte(receiver);
-            }
             assert preCondition(receiver);
             boolean fits = delegate.fitsInByte(receiver);
             assert !fits || delegate.isNumber(receiver) : violationInvariant(receiver);
@@ -1744,9 +1397,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public boolean fitsInShort(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.fitsInShort(receiver);
-            }
             assert preCondition(receiver);
 
             boolean fits = delegate.fitsInShort(receiver);
@@ -1769,9 +1419,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public boolean fitsInInt(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.fitsInInt(receiver);
-            }
             assert preCondition(receiver);
 
             boolean fits = delegate.fitsInInt(receiver);
@@ -1792,9 +1439,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public boolean fitsInLong(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.fitsInLong(receiver);
-            }
             assert preCondition(receiver);
 
             boolean fits = delegate.fitsInLong(receiver);
@@ -1813,9 +1457,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public boolean fitsInFloat(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.fitsInFloat(receiver);
-            }
             assert preCondition(receiver);
             boolean fits = delegate.fitsInFloat(receiver);
             assert !fits || delegate.isNumber(receiver) : violationInvariant(receiver);
@@ -1833,9 +1474,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public boolean fitsInDouble(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.fitsInDouble(receiver);
-            }
             assert preCondition(receiver);
             boolean fits = delegate.fitsInDouble(receiver);
             assert !fits || delegate.isNumber(receiver) : violationInvariant(receiver);
@@ -1854,6 +1492,7 @@ public abstract class InteropLibrary extends Library {
         @Override
         public byte asByte(Object receiver) throws UnsupportedMessageException {
             assert preCondition(receiver);
+
             try {
                 byte result = delegate.asByte(receiver);
                 assert delegate.isNumber(receiver) : violationInvariant(receiver);
@@ -1954,9 +1593,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Object readMember(Object receiver, String identifier) throws UnsupportedMessageException, UnknownIdentifierException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.readMember(receiver, identifier);
-            }
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean wasReadable = delegate.isMemberReadable(receiver, identifier);
@@ -1974,10 +1610,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public void writeMember(Object receiver, String identifier, Object value) throws UnsupportedMessageException, UnknownIdentifierException, UnsupportedTypeException {
-            if (CompilerDirectives.inCompiledCode()) {
-                delegate.writeMember(receiver, identifier, value);
-                return;
-            }
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             assert validArgument(receiver, value);
@@ -1994,10 +1626,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public void removeMember(Object receiver, String identifier) throws UnsupportedMessageException, UnknownIdentifierException {
-            if (CompilerDirectives.inCompiledCode()) {
-                delegate.removeMember(receiver, identifier);
-                return;
-            }
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             boolean wasRemovable = delegate.isMemberRemovable(receiver, identifier);
@@ -2012,11 +1640,7 @@ public abstract class InteropLibrary extends Library {
         }
 
         @Override
-        public Object invokeMember(Object receiver, String identifier, Object... arguments)
-                        throws UnsupportedMessageException, ArityException, UnknownIdentifierException, UnsupportedTypeException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.invokeMember(receiver, identifier, arguments);
-            }
+        public Object invokeMember(Object receiver, String identifier, Object... arguments) throws UnsupportedMessageException, ArityException, UnknownIdentifierException, UnsupportedTypeException {
             assert preCondition(receiver);
             assert validArgument(receiver, identifier);
             assert validArguments(receiver, arguments);
@@ -2160,9 +1784,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Object readArrayElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.readArrayElement(receiver, index);
-            }
             assert preCondition(receiver);
             boolean wasReadable = delegate.isArrayElementReadable(receiver, index);
             try {
@@ -2179,10 +1800,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public void writeArrayElement(Object receiver, long index, Object value) throws UnsupportedMessageException, UnsupportedTypeException, InvalidArrayIndexException {
-            if (CompilerDirectives.inCompiledCode()) {
-                delegate.writeArrayElement(receiver, index, value);
-                return;
-            }
             assert preCondition(receiver);
             assert validArgument(receiver, value);
             boolean wasWritable = delegate.isArrayElementModifiable(receiver, index) || delegate.isArrayElementInsertable(receiver, index);
@@ -2198,10 +1815,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public void removeArrayElement(Object receiver, long index) throws UnsupportedMessageException, InvalidArrayIndexException {
-            if (CompilerDirectives.inCompiledCode()) {
-                delegate.removeArrayElement(receiver, index);
-                return;
-            }
             assert preCondition(receiver);
             boolean wasRemovable = delegate.isArrayElementRemovable(receiver, index);
             try {
@@ -2276,10 +1889,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public long asPointer(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.asPointer(receiver);
-            }
-
             assert preCondition(receiver);
             boolean wasPointer = delegate.isPointer(receiver);
             try {
@@ -2295,9 +1904,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public LocalDate asDate(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.asDate(receiver);
-            }
             assert preCondition(receiver);
             boolean hasDate = delegate.isDate(receiver);
             try {
@@ -2309,22 +1915,19 @@ public abstract class InteropLibrary extends Library {
             } catch (InteropException e) {
                 assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
                 assert !hasDate : violationInvariant(receiver);
-                assert !delegate.isTimeZone(receiver) || !delegate.isTime(receiver) || hasFixedTimeZone(receiver) : violationInvariant(receiver);
+                assert !delegate.isTimeZone(receiver) || !delegate.isTime(receiver) : violationInvariant(receiver);
                 throw e;
             }
         }
 
         @Override
         public LocalTime asTime(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.asTime(receiver);
-            }
             assert preCondition(receiver);
             boolean hasTime = delegate.isTime(receiver);
             try {
                 LocalTime result = delegate.asTime(receiver);
                 assert hasTime : violationInvariant(receiver);
-                assert !delegate.isTimeZone(receiver) || delegate.isDate(receiver) || hasFixedTimeZone(receiver) : violationInvariant(receiver);
+                assert !delegate.isTimeZone(receiver) || delegate.isDate(receiver) : violationInvariant(receiver);
                 assert notOtherType(receiver, Type.DATE_TIME_ZONE);
                 return result;
             } catch (InteropException e) {
@@ -2337,16 +1940,12 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public ZoneId asTimeZone(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.asTimeZone(receiver);
-            }
             assert preCondition(receiver);
             boolean hasTimeZone = delegate.isTimeZone(receiver);
             try {
                 ZoneId result = delegate.asTimeZone(receiver);
                 assert hasTimeZone : violationInvariant(receiver);
-                assert ((delegate.isDate(receiver) || result.getRules().isFixedOffset()) && delegate.isTime(receiver)) ||
-                                (!delegate.isDate(receiver) && !delegate.isTime(receiver)) : violationInvariant(receiver);
+                assert (delegate.isDate(receiver) && delegate.isTime(receiver)) || (!delegate.isDate(receiver) && !delegate.isTime(receiver)) : violationInvariant(receiver);
                 assert notOtherType(receiver, Type.DATE_TIME_ZONE);
                 return result;
             } catch (InteropException e) {
@@ -2356,19 +1955,8 @@ public abstract class InteropLibrary extends Library {
             }
         }
 
-        private boolean hasFixedTimeZone(Object receiver) {
-            try {
-                return delegate.asTimeZone(receiver).getRules().isFixedOffset();
-            } catch (InteropException e) {
-                throw new AssertionError(violationInvariant(receiver));
-            }
-        }
-
         @Override
         public Duration asDuration(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.asDuration(receiver);
-            }
             assert preCondition(receiver);
             boolean wasDuration = delegate.isDuration(receiver);
             try {
@@ -2385,9 +1973,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public Instant asInstant(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.asInstant(receiver);
-            }
             assert preCondition(receiver);
             boolean hasDateAndTime = delegate.isDate(receiver) && delegate.isTime(receiver) && delegate.isTimeZone(receiver);
             try {
@@ -2409,7 +1994,7 @@ public abstract class InteropLibrary extends Library {
         public boolean isDate(Object receiver) {
             assert preCondition(receiver);
             boolean result = delegate.isDate(receiver);
-            assert !delegate.isTimeZone(receiver) || (delegate.isTime(receiver) && result) || ((!delegate.isTime(receiver) || hasFixedTimeZone(receiver)) && !result) : violationInvariant(receiver);
+            assert !delegate.isTimeZone(receiver) || (delegate.isTime(receiver) && result) || (!delegate.isTime(receiver) && !result) : violationInvariant(receiver);
             assert !result || notOtherType(receiver, Type.DATE_TIME_ZONE);
             return result;
         }
@@ -2418,7 +2003,7 @@ public abstract class InteropLibrary extends Library {
         public boolean isTime(Object receiver) {
             assert preCondition(receiver);
             boolean result = delegate.isTime(receiver);
-            assert !delegate.isTimeZone(receiver) || ((delegate.isDate(receiver) || hasFixedTimeZone(receiver)) && result) || (!delegate.isDate(receiver) && !result) : violationInvariant(receiver);
+            assert !delegate.isTimeZone(receiver) || (delegate.isDate(receiver) && result) || (!delegate.isDate(receiver) && !result) : violationInvariant(receiver);
             assert !result || notOtherType(receiver, Type.DATE_TIME_ZONE);
             return result;
         }
@@ -2427,8 +2012,7 @@ public abstract class InteropLibrary extends Library {
         public boolean isTimeZone(Object receiver) {
             assert preCondition(receiver);
             boolean result = delegate.isTimeZone(receiver);
-            assert !result || ((delegate.isDate(receiver) || hasFixedTimeZone(receiver)) && delegate.isTime(receiver)) ||
-                            (!delegate.isDate(receiver) && !delegate.isTime(receiver)) : violationInvariant(receiver);
+            assert !result || (delegate.isDate(receiver) && delegate.isTime(receiver)) || (!delegate.isDate(receiver) && !delegate.isTime(receiver)) : violationInvariant(receiver);
             assert !result || notOtherType(receiver, Type.DATE_TIME_ZONE);
             return result;
         }
@@ -2450,9 +2034,6 @@ public abstract class InteropLibrary extends Library {
 
         @Override
         public RuntimeException throwException(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.throwException(receiver);
-            }
             assert preCondition(receiver);
             boolean wasException = delegate.isException(receiver);
             boolean unsupported = false;
@@ -2467,289 +2048,6 @@ public abstract class InteropLibrary extends Library {
                 if (!unsupported) {
                     assert wasException : violationInvariant(receiver);
                 }
-            }
-        }
-
-        @Override
-        public Object toDisplayString(Object receiver, boolean allowSideEffects) {
-            assert preCondition(receiver);
-            assert validNonInteropArgument(receiver, allowSideEffects);
-            Object result = delegate.toDisplayString(receiver, allowSideEffects);
-            assert assertString(receiver, result);
-            return result;
-        }
-
-        private static boolean assertString(Object receiver, Object string) {
-            InteropLibrary uncached = InteropLibrary.getFactory().getUncached(string);
-            assert uncached.isString(string) : violationPost(receiver, string);
-            try {
-                assert uncached.asString(string) != null : violationPost(receiver, string);
-            } catch (UnsupportedMessageException e) {
-                assert false; // should be handled by uncached assertions
-            }
-            return true;
-        }
-
-        @Override
-        public boolean hasSourceLocation(Object receiver) {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.hasSourceLocation(receiver);
-            }
-            assert preCondition(receiver);
-            boolean result = delegate.hasSourceLocation(receiver);
-            if (result) {
-                try {
-                    assert delegate.getSourceLocation(receiver) != null : violationPost(receiver, result);
-                } catch (InteropException e) {
-                    assert false : violationInvariant(receiver);
-                } catch (Exception e) {
-                }
-            } else {
-                assert assertHasNoSourceSection(receiver);
-            }
-            return result;
-        }
-
-        private boolean assertHasNoSourceSection(Object receiver) {
-            try {
-                delegate.getSourceLocation(receiver);
-                assert false : violationInvariant(receiver);
-            } catch (UnsupportedMessageException e) {
-            }
-            return true;
-        }
-
-        @Override
-        public SourceSection getSourceLocation(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getSourceLocation(receiver);
-            }
-            assert preCondition(receiver);
-            boolean wasHasSourceLocation = delegate.hasSourceLocation(receiver);
-            try {
-                SourceSection result = delegate.getSourceLocation(receiver);
-                assert wasHasSourceLocation : violationInvariant(receiver);
-                assert result != null : violationPost(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasHasSourceLocation : violationInvariant(receiver);
-                throw e;
-            }
-        }
-
-        @Override
-        public boolean hasLanguage(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.hasLanguage(receiver);
-            if (result) {
-                try {
-                    assert delegate.getLanguage(receiver) != null : violationPost(receiver, result);
-                } catch (InteropException e) {
-                    assert false : violationInvariant(receiver);
-                } catch (Exception e) {
-                }
-            } else {
-                assert assertHasNoLanguage(receiver);
-            }
-            return result;
-        }
-
-        private boolean assertHasNoLanguage(Object receiver) {
-            try {
-                delegate.getLanguage(receiver);
-                assert false : violationInvariant(receiver);
-            } catch (UnsupportedMessageException e) {
-            }
-            return true;
-        }
-
-        @Override
-        public Class<? extends TruffleLanguage<?>> getLanguage(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getLanguage(receiver);
-            }
-            assert preCondition(receiver);
-            boolean wasHasLanguage = delegate.hasLanguage(receiver);
-            try {
-                Class<? extends TruffleLanguage<?>> result = delegate.getLanguage(receiver);
-                assert wasHasLanguage : violationInvariant(receiver);
-                assert result != null : violationPost(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasHasLanguage : violationInvariant(receiver);
-                throw e;
-            }
-        }
-
-        @Override
-        public boolean hasMetaObject(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.hasMetaObject(receiver);
-            if (result) {
-                assert assertHasMetaObject(receiver, result);
-            } else {
-                assert assertHasNoMetaObject(receiver);
-            }
-            return result;
-        }
-
-        private boolean assertHasMetaObject(Object receiver, boolean result) {
-            try {
-                Object meta = delegate.getMetaObject(receiver);
-                assert verifyMetaObject(receiver, meta);
-            } catch (InteropException e) {
-                assert false : violationInvariant(receiver);
-            } catch (Exception e) {
-            }
-            return true;
-        }
-
-        private static boolean verifyMetaObject(Object receiver, Object meta) throws UnsupportedMessageException {
-            assert meta != null : violationPost(receiver, meta);
-            InteropLibrary metaLib = InteropLibrary.getFactory().getUncached(meta);
-            assert metaLib.isMetaObject(meta) : violationPost(receiver, meta);
-            assert metaLib.isMetaInstance(meta, receiver) : violationPost(receiver, meta);
-            assert metaLib.getMetaSimpleName(meta) != null : violationPost(receiver, meta);
-            assert metaLib.getMetaQualifiedName(meta) != null : violationPost(receiver, meta);
-            return true;
-        }
-
-        private boolean assertHasNoMetaObject(Object receiver) {
-            try {
-                delegate.getMetaObject(receiver);
-                assert false : violationInvariant(receiver);
-            } catch (UnsupportedMessageException e) {
-            }
-            return true;
-        }
-
-        @Override
-        public Object getMetaObject(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getMetaObject(receiver);
-            }
-            assert preCondition(receiver);
-            boolean wasHasMetaObject = delegate.hasMetaObject(receiver);
-            try {
-                Object result = delegate.getMetaObject(receiver);
-                assert wasHasMetaObject : violationInvariant(receiver);
-                assert verifyMetaObject(receiver, result);
-                assert result != null : violationPost(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasHasMetaObject : violationInvariant(receiver);
-                throw e;
-            }
-        }
-
-        @Override
-        public boolean isMetaObject(Object receiver) {
-            assert preCondition(receiver);
-            boolean result = delegate.isMetaObject(receiver);
-            if (result) {
-                assert assertMetaObject(receiver);
-            } else {
-                assert assertNoMetaObject(receiver);
-                assert !result || notOtherType(receiver, Type.META_OBJECT);
-            }
-            return result;
-        }
-
-        private boolean assertNoMetaObject(Object receiver) {
-            try {
-                delegate.isMetaInstance(receiver, receiver);
-                assert false : violationInvariant(receiver);
-            } catch (UnsupportedMessageException e) {
-            }
-            try {
-                delegate.getMetaSimpleName(receiver);
-                assert false : violationInvariant(receiver);
-            } catch (UnsupportedMessageException e) {
-            }
-            try {
-                delegate.getMetaQualifiedName(receiver);
-                assert false : violationInvariant(receiver);
-            } catch (UnsupportedMessageException e) {
-            }
-            return true;
-        }
-
-        private boolean assertMetaObject(Object receiver) {
-            try {
-                delegate.isMetaInstance(receiver, receiver);
-            } catch (UnsupportedMessageException e) {
-                assert false : violationInvariant(receiver);
-            }
-            try {
-                assert assertString(receiver, delegate.getMetaSimpleName(receiver)) : violationInvariant(receiver);
-            } catch (UnsupportedMessageException e) {
-                assert false : violationInvariant(receiver);
-            }
-            try {
-                assert assertString(receiver, delegate.getMetaQualifiedName(receiver)) : violationInvariant(receiver);
-            } catch (UnsupportedMessageException e) {
-                assert false : violationInvariant(receiver);
-            }
-            return true;
-        }
-
-        @Override
-        public Object getMetaQualifiedName(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getMetaQualifiedName(receiver);
-            }
-            assert preCondition(receiver);
-            boolean wasMetaObject = delegate.isMetaObject(receiver);
-            try {
-                Object result = delegate.getMetaQualifiedName(receiver);
-                assert wasMetaObject : violationInvariant(receiver);
-                assert assertString(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasMetaObject : violationInvariant(receiver);
-                throw e;
-            }
-        }
-
-        @Override
-        public Object getMetaSimpleName(Object receiver) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.getMetaSimpleName(receiver);
-            }
-            assert preCondition(receiver);
-            boolean wasMetaObject = delegate.isMetaObject(receiver);
-            try {
-                Object result = delegate.getMetaSimpleName(receiver);
-                assert wasMetaObject : violationInvariant(receiver);
-                assert assertString(receiver, result);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasMetaObject : violationInvariant(receiver);
-                throw e;
-            }
-        }
-
-        @Override
-        public boolean isMetaInstance(Object receiver, Object instance) throws UnsupportedMessageException {
-            if (CompilerDirectives.inCompiledCode()) {
-                return delegate.isMetaInstance(receiver, instance);
-            }
-            assert preCondition(receiver);
-            assert validArgument(receiver, instance);
-            boolean wasMetaObject = delegate.isMetaObject(receiver);
-            try {
-                boolean result = delegate.isMetaInstance(receiver, instance);
-                assert wasMetaObject : violationInvariant(receiver);
-                return result;
-            } catch (InteropException e) {
-                assert e instanceof UnsupportedMessageException : violationInvariant(receiver);
-                assert !wasMetaObject : violationInvariant(receiver);
-                throw e;
             }
         }
 
