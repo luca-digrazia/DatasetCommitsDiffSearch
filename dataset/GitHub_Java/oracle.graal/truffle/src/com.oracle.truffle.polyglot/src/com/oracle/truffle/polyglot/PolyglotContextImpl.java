@@ -65,7 +65,6 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 
 import org.graalvm.collections.EconomicSet;
-import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.EnvironmentAccess;
@@ -291,10 +290,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         // notifyContextCreated() is called after spiContext.impl is set to this.
         this.engine.noInnerContexts.invalidate();
         initializeStaticContext(this);
-    }
-
-    OptionValues getInstrumentContextOptions(PolyglotInstrument instrument) {
-        return config.getInstrumentOptionValues(instrument);
     }
 
     @Override
@@ -526,7 +521,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
             // enter the thread info already
             prev = (PolyglotContextImpl) singleContextState.contextThreadLocal.setReturnParent(this);
-            threadInfo.enter(engine, this);
+            threadInfo.enter(engine);
 
             if (transitionToMultiThreading) {
                 // we need to verify that all languages give access
@@ -608,7 +603,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             if (cancelling && info.isLastActive()) {
                 notifyThreadClosed();
             }
-            info.leave(engine, this);
+            info.leave(engine);
             if (!closed && !cancelling && !invalid) {
                 setCachedThreadInfo(threadInfo);
             }
@@ -1227,6 +1222,15 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                     if (impls != null) {
                         Arrays.fill(impls, null);
                     }
+                    if (contextLocals != null) {
+                        Arrays.fill(contextLocals, null);
+                    }
+                    for (PolyglotThreadInfo thread : threads.values()) {
+                        Object[] threadLocals = thread.getContextThreadLocals();
+                        if (threadLocals != null) {
+                            Arrays.fill(threadLocals, null);
+                        }
+                    }
                 }
             }
             if (parent == null) {
@@ -1402,7 +1406,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
         Thread thread = threadInfo.getThread();
         for (PolyglotInstrument instrument : engine.idToInstrument.values()) {
-            if (instrument.isCreated()) {
+            if (instrument.isInitialized()) {
                 invokeContextThreadFactory(locals, instrument.contextThreadLocalLocations, thread);
             }
         }
@@ -1422,7 +1426,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         Object[] locals = new Object[locations.locations.length];
 
         for (PolyglotInstrument instrument : engine.idToInstrument.values()) {
-            if (instrument.isCreated()) {
+            if (instrument.isInitialized()) {
                 invokeContextLocalsFactory(locals, instrument.contextLocalLocations);
             }
         }
