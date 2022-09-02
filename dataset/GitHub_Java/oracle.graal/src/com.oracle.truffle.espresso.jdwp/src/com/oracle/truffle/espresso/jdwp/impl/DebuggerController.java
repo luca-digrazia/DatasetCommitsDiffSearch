@@ -327,14 +327,14 @@ public final class DebuggerController implements ContextsListener {
         return lock;
     }
 
-    public void disposeDebugger(boolean prepareReconnect) {
+    public void disposeDebugger() {
         // Creating a new thread, because the reset method
         // will interrupt all active jdwp threads, which might
         // include the current one if we received a DISPOSE command.
         new Thread(new Runnable() {
             @Override
             public void run() {
-                instrument.reset(prepareReconnect);
+                instrument.reset(true);
                 eventListener.vmDied();
             }
         }).start();

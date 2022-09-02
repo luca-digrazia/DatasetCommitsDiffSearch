@@ -248,7 +248,7 @@ public final class JDWPContextImpl implements JDWPContext {
 
     @Override
     public Object[] getTopLevelThreadGroups() {
-        return new Object[]{context.getMainThreadGroup()};
+        return new Object[]{context.getSystemThreadGroup()};
     }
 
     @Override

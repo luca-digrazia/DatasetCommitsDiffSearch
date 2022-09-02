@@ -35,6 +35,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
 
     public static final String ID = "jdwp";
 
+    public final SimpleLock suspendStartupLock = new SimpleLock();
     private DebuggerController controller;
     private TruffleInstrument.Env env;
     private JDWPContext context;
@@ -104,7 +105,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
             if (controller.shouldWaitForAttach()) {
                 doConnect();
                 // take all initial commands from the debugger before resuming to main thread
-             /*   synchronized (suspendStartupLock) {
+                synchronized (suspendStartupLock) {
                     suspendStartupLock.acquire();
                     try {
                         while (suspendStartupLock.isLocked()) {
@@ -113,7 +114,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
                     } catch (InterruptedException e) {
                         throw new RuntimeException("JDWP connection interrupted");
                     }
-                }*/
+                }
             } else {
                 // don't suspend until debugger attaches, so fire up deamon thread
                 Thread handshakeThread = new Thread(this, "jdwp-handshake-thread");
@@ -143,5 +144,9 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
 
     public JDWPContext getContext() {
         return context;
+    }
+
+    public SimpleLock getSuspendStartupLock() {
+        return suspendStartupLock;
     }
 }

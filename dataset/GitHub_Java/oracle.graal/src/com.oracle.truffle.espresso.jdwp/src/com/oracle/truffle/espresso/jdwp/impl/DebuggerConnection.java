@@ -113,7 +113,7 @@ public final class DebuggerConnection implements Commands {
                 DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.SUBMIT_BREAKPOINT, null);
                 debuggerCommand.setSourceLocation(new SourceLocation(lineInfo.getSlashName(), (int) lineInfo.getLine(), context));
                 debuggerCommand.setBreakpointInfo(info);
-                addBlocking(debuggerCommand);
+                queue.add(debuggerCommand);
                 return null;
             }
         };
@@ -126,7 +126,7 @@ public final class DebuggerConnection implements Commands {
             public Void call() throws Exception {
                 DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.SUBMIT_EXCEPTION_BREAKPOINT, null);
                 debuggerCommand.setBreakpointInfo(info);
-                addBlocking(debuggerCommand);
+                queue.add(debuggerCommand);
                 return null;
             }
         };
@@ -199,13 +199,20 @@ public final class DebuggerConnection implements Commands {
                     if (!started) {
                         // in startup sequence
                         if (time == -1) {
-                            // setup the grace period
+                            // first packet processed
+                            processPacket(Packet.fromByteArray(connection.readPacket()));
                             time = System.currentTimeMillis();
                             limit = time + GRACE_PERIOD;
                         } else {
                             long currentTime = System.currentTimeMillis();
                             if (currentTime > limit) {
                                 started = true;
+                                // allow the main thread to continue starting up the program
+                                SimpleLock lock = controller.getInstrument().getSuspendStartupLock();
+                                synchronized (lock) {
+                                    lock.release();
+                                    lock.notifyAll();
+                                }
                                 processPacket(Packet.fromByteArray(connection.readPacket()));
                             } else {
                                 // check if a packet is available
@@ -528,7 +535,13 @@ public final class DebuggerConnection implements Commands {
                         break;
                 }
             }
-            // run futures before sending the reply
+            if (result != null && result.getReply() != null) {
+                JDWPLogger.log("replying to command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
+                connection.queuePacket(result.getReply());
+            } else {
+                JDWPLogger.log("no result for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
+            }
+
             if (result != null && result.getFutures() != null) {
                 try {
                     for (Callable<Void> future : result.getFutures()) {
@@ -539,12 +552,6 @@ public final class DebuggerConnection implements Commands {
                 } catch (Exception e) {
                     JDWPLogger.log("Failed to run future for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
                 }
-            }
-            if (result != null && result.getReply() != null) {
-                JDWPLogger.log("replying to command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
-                connection.queuePacket(result.getReply());
-            } else {
-                JDWPLogger.log("no result for command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
             }
         }
     }
