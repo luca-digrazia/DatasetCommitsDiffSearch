@@ -80,7 +80,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -117,6 +116,8 @@ public class ValueAssert {
     };
     private static final TypeLiteral<Function<Object, Object>> FUNCTION = new TypeLiteral<Function<Object, Object>>() {
     };
+
+    private static final boolean AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
 
     public static void assertValue(Value value) {
         assertValue(value, detectSupportedTypes(value));
@@ -264,35 +265,38 @@ public class ValueAssert {
                         assertNull(value.as(Function.class));
                         assertNull(value.as(IsFunctionalInterfaceVarArgs.class));
                     } else if (!value.canInstantiate()) {
-                        /*
-                         * Proxy mapping fails in AOT mode if not configured. That is fine.
-                         */
-                        if (value.hasMembers()) {
-                            assertFails(() -> value.as(FUNCTION).apply(null), UnsupportedOperationException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(123), UnsupportedOperationException.class);
-                        } else if (!value.isHostObject() || (!(value.asHostObject() instanceof Function))) {
-                            assertFails(() -> value.as(FUNCTION), ClassCastException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
+                        if (!AOT) {
+                            /*
+                             * Proxy mapping fails in AOT mode if not configured. That is fine.
+                             */
+                            if (value.hasMembers()) {
+                                assertFails(() -> value.as(FUNCTION).apply(null), UnsupportedOperationException.class);
+                                assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(123), UnsupportedOperationException.class);
+                            } else if (!value.isHostObject() || (!(value.asHostObject() instanceof Function))) {
+                                assertFails(() -> value.as(FUNCTION), ClassCastException.class);
+                                assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
+                            }
                         }
                     }
                     break;
                 case INSTANTIABLE:
                     assertFalse(value.canInstantiate());
-                    // TODO remove PolyglotException if GR-21743 and GR-21744 is fixed.
-                    assertFails(() -> value.newInstance(), UnsupportedOperationException.class, PolyglotException.class);
+                    assertFails(() -> value.newInstance(), UnsupportedOperationException.class);
                     if (value.isNull()) {
                         assertNull(value.as(Function.class));
                         assertNull(value.as(IsFunctionalInterfaceVarArgs.class));
                     } else if (!value.canExecute()) {
-                        /*
-                         * Proxy mapping fails in AOT mode if not configured. That is fine.
-                         */
-                        if (value.hasMembers()) {
-                            assertFails(() -> value.as(FUNCTION).apply(null), UnsupportedOperationException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(123), UnsupportedOperationException.class);
-                        } else if (!value.isHostObject() || (!(value.asHostObject() instanceof Function))) {
-                            assertFails(() -> value.as(FUNCTION), ClassCastException.class);
-                            assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
+                        if (!AOT) {
+                            /*
+                             * Proxy mapping fails in AOT mode if not configured. That is fine.
+                             */
+                            if (value.hasMembers()) {
+                                assertFails(() -> value.as(FUNCTION).apply(null), UnsupportedOperationException.class);
+                                assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class).foobarbaz(123), UnsupportedOperationException.class);
+                            } else if (!value.isHostObject() || (!(value.asHostObject() instanceof Function))) {
+                                assertFails(() -> value.as(FUNCTION), ClassCastException.class);
+                                assertFails(() -> value.as(IsFunctionalInterfaceVarArgs.class), ClassCastException.class);
+                            }
                         }
                     }
                     break;
@@ -684,39 +688,23 @@ public class ValueAssert {
         }
     }
 
-    @SafeVarargs
-    private static void assertFails(Runnable runnable, Class<? extends Throwable>... exceptionType) {
+    private static void assertFails(Runnable runnable, Class<? extends Throwable> exceptionType) {
         assertFails(() -> {
             runnable.run();
             return null;
         }, exceptionType);
     }
 
-    @SafeVarargs
-    private static void assertFails(Callable<?> callable, Class<? extends Throwable>... exceptionTypes) {
+    private static void assertFails(Callable<?> callable, Class<? extends Throwable> exceptionType) {
         try {
             callable.call();
         } catch (Throwable t) {
-            boolean found = false;
-            for (Class<? extends Throwable> exceptionType : exceptionTypes) {
-                if (exceptionType.isInstance(t)) {
-                    found = true;
-                }
-            }
-            if (!found) {
-                Set<String> names = new LinkedHashSet<>();
-                for (Class<? extends Throwable> exceptionType : exceptionTypes) {
-                    names.add(exceptionType.getName());
-                }
-                throw new AssertionError("expected instanceof " + names + " was " + t.getClass().getName(), t);
+            if (!exceptionType.isInstance(t)) {
+                throw new AssertionError("expected instanceof " + exceptionType.getName() + " was " + t.getClass().getName(), t);
             }
             return;
         }
-        Set<String> names = new LinkedHashSet<>();
-        for (Class<? extends Throwable> exceptionType : exceptionTypes) {
-            names.add(exceptionType.getName());
-        }
-        fail("expected " + names + " but no exception was thrown");
+        fail("expected " + exceptionType.getName() + " but no exception was thrown");
     }
 
     private static void assertValueNumber(Value value) {
