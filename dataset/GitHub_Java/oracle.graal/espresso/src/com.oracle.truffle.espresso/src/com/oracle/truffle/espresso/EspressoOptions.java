@@ -22,12 +22,9 @@
  */
 package com.oracle.truffle.espresso;
 
-import java.io.File;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
@@ -57,7 +54,7 @@ public final class EspressoOptions {
                         @Override
                         public List<Path> apply(String paths) {
                             try {
-                                return Collections.unmodifiableList(parsePaths(paths));
+                                return Collections.unmodifiableList(Utils.parsePaths(paths));
                             } catch (InvalidPathException e) {
                                 throw new IllegalArgumentException(e);
                             }
@@ -69,7 +66,7 @@ public final class EspressoOptions {
                         @Override
                         public List<String> apply(String strings) {
                             try {
-                                return Collections.unmodifiableList(splitByFileSeparator(strings));
+                                return Collections.unmodifiableList(Utils.parseStrings(strings));
                             } catch (InvalidPathException e) {
                                 throw new IllegalArgumentException(e);
                             }
@@ -159,18 +156,6 @@ public final class EspressoOptions {
     @Option(help = "Enable system assertions.", //
                     category = OptionCategory.USER, stability = OptionStability.STABLE) //
     public static final OptionKey<Boolean> EnableSystemAssertions = new OptionKey<>(false);
-
-    public static List<Path> parsePaths(String paths) {
-        List<Path> list = new ArrayList<>();
-        for (String path : splitByFileSeparator(paths)) {
-            list.add(Paths.get(path));
-        }
-        return list;
-    }
-
-    private static List<String> splitByFileSeparator(String strings) {
-        return new ArrayList<>(Arrays.asList(strings.split(File.pathSeparator)));
-    }
 
     public enum SpecCompliancyMode {
         STRICT,
@@ -437,10 +422,6 @@ public final class EspressoOptions {
                     "Agents are not fully implemented yet.", //
                     category = OptionCategory.INTERNAL, stability = OptionStability.EXPERIMENTAL) //
     public static final OptionKey<String> JavaAgent = new OptionKey<>("");
-
-    @Option(help = "Native backend used by Espresso, if not specified, Espresso will pick one depending on the environment.", //
-                    category = OptionCategory.EXPERT, stability = OptionStability.EXPERIMENTAL) //
-    public static final OptionKey<String> NativeBackend = new OptionKey<>("");
 
     public static final String INCEPTION_NAME = System.getProperty("espresso.inception.name", "#");
 }
