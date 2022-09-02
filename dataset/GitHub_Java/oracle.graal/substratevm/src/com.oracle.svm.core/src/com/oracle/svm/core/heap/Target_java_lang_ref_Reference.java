@@ -94,12 +94,12 @@ public final class Target_java_lang_ref_Reference<T> {
      * stores by the garbage collector do not change the type of the referent.
      */
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ComputeReferenceValue.class) //
-    @ExcludeFromReferenceMap(reason = "Field is manually processed by the garbage collector.", onlyIf = Always.class) //
+    @ExcludeFromReferenceMap("Field is manually processed by the garbage collector.") //
     T referent;
 
     @SuppressWarnings("unused") //
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    @ExcludeFromReferenceMap(reason = "Some GCs process this field manually.", onlyIf = NotCardRememberedSetHeap.class) //
+    @ExcludeFromReferenceMap(value = "Some GCs process this field manually.", condition = NotCardRememberedSetHeap.class) //
     transient Target_java_lang_ref_Reference<?> discovered;
 
     @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ComputeQueueValue.class) //
@@ -219,14 +219,6 @@ class ComputeTrue implements CustomFieldValueComputer {
 class NotCardRememberedSetHeap implements BooleanSupplier {
     @Override
     public boolean getAsBoolean() {
-        return SubstrateOptions.LowLatencyGCReferenceHandling.getValue();
-    }
-}
-
-@Platforms(Platform.HOSTED_ONLY.class)
-class Always implements BooleanSupplier {
-    @Override
-    public boolean getAsBoolean() {
-        return SubstrateOptions.UseCardRememberedSetHeap.getValue() || SubstrateOptions.LowLatencyGCReferenceHandling.getValue();
+        return !SubstrateOptions.UseCardRememberedSetHeap.getValue();
     }
 }

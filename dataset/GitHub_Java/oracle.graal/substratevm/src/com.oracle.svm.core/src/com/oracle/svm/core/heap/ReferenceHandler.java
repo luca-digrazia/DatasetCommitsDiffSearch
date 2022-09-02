@@ -54,10 +54,15 @@ public final class ReferenceHandler {
          */
         StackOverflowCheck.singleton().makeYellowZoneAvailable();
         try {
-            ReferenceInternals.processPendingReferences();
-            processCleaners();
-        } catch (Throwable t) {
-            VMError.shouldNotReachHere("Reference processing and cleaners must handle all potential exceptions", t);
+            ThreadingSupportImpl.pauseRecurringCallback("An exception in a recurring callback must not interrupt pending reference processing because it could result in a memory leak.");
+            try {
+                ReferenceInternals.processPendingReferences();
+                processCleaners();
+            } catch (Throwable t) {
+                VMError.shouldNotReachHere("Reference processing and cleaners must handle all potential exceptions", t);
+            } finally {
+                ThreadingSupportImpl.resumeRecurringCallback();
+            }
         } finally {
             StackOverflowCheck.singleton().protectYellowZone();
         }

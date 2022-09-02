@@ -37,7 +37,6 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.jdk.JDK11OrEarlier;
 import com.oracle.svm.core.jdk.JDK11OrLater;
 import com.oracle.svm.core.jdk.JDK14OrLater;
@@ -172,10 +171,11 @@ final class Target_java_lang_Thread {
         daemon = asDaemon;
     }
 
-    @Uninterruptible(reason = "called from uninterruptible code", mayBeInlined = true)
     @Substitute
     static Thread currentThread() {
-        return JavaThreads.currentThread.get();
+        Thread result = JavaThreads.currentThread.get();
+        assert result != null : "java.lang.Thread not assigned when thread was attached to the VM";
+        return result;
     }
 
     @Substitute
@@ -289,10 +289,10 @@ final class Target_java_lang_Thread {
             return;
         }
 
-        JavaThreads.interrupt(JavaThreads.fromTarget(this));
-        JavaThreads.unpark(JavaThreads.fromTarget(this));
-
-        JavaThreads.wakeUpVMConditionWaiters();
+        Thread thread = JavaThreads.fromTarget(this);
+        JavaThreads.interrupt(thread);
+        JavaThreads.unpark(thread);
+        JavaThreads.wakeUpVMConditionWaiters(thread);
     }
 
     @Substitute
