@@ -249,8 +249,8 @@ public class SubstrateOptions {
     @Option(help = "Export Invocation API symbols.", type = OptionType.User)//
     public static final HostedOptionKey<Boolean> JNIExportSymbols = new HostedOptionKey<>(true);
 
-    @Option(help = "Alignment of AOT and JIT compiled code in bytes. For example, Intel advises to align code to at least 128 bytes for best cache performance.")//
-    public static final HostedOptionKey<Integer> CodeAlignment = new HostedOptionKey<>(128);
+    @Option(help = "Alignment of AOT and JIT compiled code in bytes.")//
+    public static final HostedOptionKey<Integer> CodeAlignment = new HostedOptionKey<>(16);
 
     /*
      * Object and array allocation options.
@@ -357,9 +357,6 @@ public class SubstrateOptions {
     public static boolean useLLVMBackend() {
         return "llvm".equals(CompilerBackend.getValue());
     }
-
-    @Option(help = "Revert to using previous native-image type check.")//
-    public static final HostedOptionKey<Boolean> UseLegacyTypeCheck = new HostedOptionKey<>(false);
 
     @Option(help = "Emit substitutions for UTF16 and latin1 compression", type = OptionType.Debug)//
     public static final HostedOptionKey<Boolean> EmitStringEncodingSubstitutions = new HostedOptionKey<>(true);
