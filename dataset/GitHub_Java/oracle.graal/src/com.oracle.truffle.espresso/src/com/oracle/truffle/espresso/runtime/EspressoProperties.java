@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -31,9 +30,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import com.oracle.truffle.espresso.EspressoLanguage;
+import org.graalvm.home.HomeFinder;
 import org.graalvm.options.OptionValues;
 
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.meta.EspressoError;
@@ -48,7 +48,7 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 public interface EspressoProperties {
     Path javaHome();
 
-    Path espressoLibraryPath();
+    List<Path> espressoLibraryPath();
 
     List<Path> classpath();
 
@@ -62,7 +62,7 @@ public interface EspressoProperties {
 
     abstract class Builder {
         private Path javaHome;
-        private Path espressoLibraryPath;
+        private List<Path> espressoLibraryPath;
         private List<Path> classpath;
         private List<Path> bootClasspath;
         private List<Path> javaLibraryPath;
@@ -71,7 +71,7 @@ public interface EspressoProperties {
 
         abstract Path defaultJavaHome();
 
-        abstract Path defaultEspressoLibraryPath();
+        abstract List<Path> defaultEspressoLibraryPath();
 
         abstract List<Path> defaultClasspath();
 
@@ -137,12 +137,12 @@ public interface EspressoProperties {
             return extDirs != null ? extDirs : defaultExtDirs();
         }
 
-        public Builder espressoLibraryPath(Path newEspressoLibraryPath) {
+        public Builder espressoLibraryPath(List<Path> newEspressoLibraryPath) {
             this.espressoLibraryPath = newEspressoLibraryPath;
             return this;
         }
 
-        public Path espressoLibraryPath() {
+        public List<Path> espressoLibraryPath() {
             return espressoLibraryPath != null ? espressoLibraryPath : defaultEspressoLibraryPath();
         }
 
@@ -154,7 +154,7 @@ public interface EspressoProperties {
                 private final List<Path> javaLibraryPath = Objects.requireNonNull(Builder.this.javaLibraryPath(), "javaLibraryPath not defined");
                 private final List<Path> bootLibraryPath = Objects.requireNonNull(Builder.this.bootLibraryPath(), "bootLibraryPath not defined");
                 private final List<Path> extDirs = Objects.requireNonNull(Builder.this.extDirs(), "extDirs not defined");
-                private final Path espressoLibraryPath = Objects.requireNonNull(Builder.this.espressoLibraryPath(), "espressoLibraryPath not defined");
+                private final List<Path> espressoLibraryPath = Objects.requireNonNull(Builder.this.espressoLibraryPath(), "espressoLibraryPath not defined");
 
                 @Override
                 public Path javaHome() {
@@ -162,7 +162,7 @@ public interface EspressoProperties {
                 }
 
                 @Override
-                public Path espressoLibraryPath() {
+                public List<Path> espressoLibraryPath() {
                     return espressoLibraryPath;
                 }
 
@@ -213,7 +213,7 @@ public interface EspressoProperties {
             builder.espressoLibraryPath(options.get(EspressoOptions.EspressoLibraryPath));
         } else {
             Path espressoHome = Paths.get(language.getEspressoHome());
-            builder.espressoLibraryPath(espressoHome.resolve("lib"));
+            builder.espressoLibraryPath(Arrays.asList(espressoHome.resolve("lib")));
         }
 
         if (options.hasBeenSet(EspressoOptions.Classpath)) {
@@ -255,8 +255,6 @@ public interface EspressoProperties {
                 return new LinuxBuilder();
             case Darwin:
                 return new DarwinBuilder();
-            case Windows:
-                return new WindowsBuilder();
             default:
                 throw EspressoError.shouldNotReachHere(os + " not supported");
         }
@@ -298,12 +296,12 @@ abstract class PlatformBuilder extends EspressoProperties.Builder {
 
     @Override
     Path defaultJavaHome() {
-        throw EspressoError.shouldNotReachHere("Java 8 home not defined, use --java.JavaHome=/path/to/java8/home/jre");
+        throw new IllegalStateException("javaHome not defined");
     }
 
     @Override
-    Path defaultEspressoLibraryPath() {
-        throw EspressoError.shouldNotReachHere("Espresso library path not defined, use --java.EspressoLibraryPath=/path/to/espresso/lib/");
+    List<Path> defaultEspressoLibraryPath() {
+        throw new IllegalStateException("espressoLibraryPath not defined");
     }
 }
 
@@ -329,7 +327,7 @@ enum OS {
         if (name.startsWith("Windows")) {
             return OS.Windows;
         }
-        throw EspressoError.shouldNotReachHere("unknown OS: " + name);
+        throw new IllegalArgumentException("unknown OS: " + name);
     }
 
     public static OS getCurrent() {
@@ -414,70 +412,5 @@ final class DarwinBuilder extends PlatformBuilder {
         paths.add(javaHome().resolve(EXTENSIONS_DIR));
         paths.addAll(SYS_EXTENSIONS_DIRS);
         return paths;
-    }
-}
-
-final class WindowsBuilder extends PlatformBuilder {
-
-    private final Path WINDOWS_ROOT = Paths.get(System.getenv("SystemRoot"));
-
-    private final Path PACKAGE_DIR = Paths.get("Sun", "Java");
-
-    @Override
-    List<Path> defaultJavaLibraryPath() {
-        // Win32 library search order (See the documentation for LoadLibrary):
-        //
-        // 1. The directory from which application is loaded.
-        // 2. The system wide Java Extensions directory (Java only)
-        // 3. System directory (GetSystemDirectory)
-        // 4. Windows directory (GetWindowsDirectory)
-        // 5. The PATH environment variable
-        // 6. The current directory
-        List<Path> libraryPath = new ArrayList<>();
-
-        // 1. The directory from which application is loaded.
-        // HotSpot's uses the following snippet:
-        // GetModuleFileName(NULL, tmp, sizeof(tmp));
-        // *(strrchr(tmp, '\\')) = '\0';
-        // strcat(library_path, tmp);
-        //
-        // Since Espresso may run standalone, we point to the "would be" path as if Espresso was the
-        // "java.exe" executable e.g. "jre/bin"
-        libraryPath.add(javaHome().resolve("bin"));
-
-        // 2. The system wide Java Extensions directory (Java only)
-        libraryPath.add(WINDOWS_ROOT.resolve(PACKAGE_DIR).resolve("bin"));
-
-        // 3. System directory (GetSystemDirectory)
-        libraryPath.add(WINDOWS_ROOT.resolve("system32"));
-
-        // 4. Windows directory (GetWindowsDirectory)
-        libraryPath.add(WINDOWS_ROOT);
-
-        // 5. The PATH environment variable
-        String envPath = System.getenv("PATH");
-        if (envPath != null) {
-            String[] paths = envPath.split(File.pathSeparator);
-            for (String p : paths) {
-                libraryPath.add(Paths.get(p));
-            }
-        }
-
-        // 6. The current directory
-        libraryPath.add(Paths.get("."));
-
-        return libraryPath;
-    }
-
-    @Override
-    List<Path> defaultBootLibraryPath() {
-        return Collections.singletonList(javaHome().resolve("lib"));
-    }
-
-    @Override
-    List<Path> defaultExtDirs() {
-        return Arrays.asList(
-                        javaHome().resolve(EXTENSIONS_DIR),
-                        WINDOWS_ROOT.resolve(PACKAGE_DIR).resolve(EXTENSIONS_DIR));
     }
 }
