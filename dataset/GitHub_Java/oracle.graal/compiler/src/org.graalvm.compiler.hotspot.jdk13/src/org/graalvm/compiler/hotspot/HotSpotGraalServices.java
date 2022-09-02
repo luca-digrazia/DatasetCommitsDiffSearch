@@ -26,9 +26,6 @@ package org.graalvm.compiler.hotspot;
 
 import jdk.vm.ci.hotspot.HotSpotMetaData;
 
-/**
- * JDK 13 version of {@code HotSpotGraalServices}.
- */
 public class HotSpotGraalServices {
 
     /**
@@ -46,9 +43,5 @@ public class HotSpotGraalServices {
     @SuppressWarnings("unused")
     public static CompilationContext openLocalCompilationContext(Object description) {
         return null;
-    }
-
-    public static void exit(int status) {
-        System.exit(status);
     }
 }

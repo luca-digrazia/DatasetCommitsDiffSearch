@@ -27,10 +27,14 @@ package org.graalvm.compiler.hotspot;
 import jdk.vm.ci.hotspot.HotSpotMetaData;
 
 /**
- * JDK 12 version of {@code HotSpotGraalServices}.
+ * Interface to HotSpot specific functionality that abstracts over which JDK version Graal is
+ * running on.
  */
 public class HotSpotGraalServices {
 
+    /**
+     * Get the implicit exceptions section of a {@code HotSpotMetaData} if it exists.
+     */
     @SuppressWarnings("unused")
     public static byte[] getImplicitExceptionBytes(HotSpotMetaData metaData) {
         // Only supported by JDK13
@@ -44,9 +48,5 @@ public class HotSpotGraalServices {
     @SuppressWarnings("unused")
     public static CompilationContext openLocalCompilationContext(Object description) {
         return null;
-    }
-
-    public static void exit(int status) {
-        System.exit(status);
     }
 }
