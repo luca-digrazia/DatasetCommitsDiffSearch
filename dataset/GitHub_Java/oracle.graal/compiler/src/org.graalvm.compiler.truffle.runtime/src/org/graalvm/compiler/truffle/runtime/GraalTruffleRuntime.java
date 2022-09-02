@@ -87,7 +87,6 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameInstanceVisitor;
@@ -925,29 +924,22 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     public JavaKind getJavaKindForFrameSlotKind(int frameSlotKindTag) {
         if (frameSlotKindTag == FrameSlotKind.Boolean.tag) {
             return JavaKind.Boolean;
-        }
-        if (frameSlotKindTag == FrameSlotKind.Byte.tag) {
+        } else if (frameSlotKindTag == FrameSlotKind.Byte.tag) {
             return JavaKind.Byte;
-        }
-        if (frameSlotKindTag == FrameSlotKind.Int.tag) {
+        } else if (frameSlotKindTag == FrameSlotKind.Int.tag) {
             return JavaKind.Int;
-        }
-        if (frameSlotKindTag == FrameSlotKind.Float.tag) {
+        } else if (frameSlotKindTag == FrameSlotKind.Float.tag) {
             return JavaKind.Float;
-        }
-        if (frameSlotKindTag == FrameSlotKind.Long.tag) {
+        } else if (frameSlotKindTag == FrameSlotKind.Long.tag) {
             return JavaKind.Long;
-        }
-        if (frameSlotKindTag == FrameSlotKind.Double.tag) {
+        } else if (frameSlotKindTag == FrameSlotKind.Double.tag) {
             return JavaKind.Double;
-        }
-        if (frameSlotKindTag == FrameSlotKind.Object.tag) {
+        } else if (frameSlotKindTag == FrameSlotKind.Object.tag) {
             return JavaKind.Object;
-        }
-        if (frameSlotKindTag == FrameSlotKind.Illegal.tag) {
+        } else if (frameSlotKindTag == FrameSlotKind.Illegal.tag) {
             return JavaKind.Illegal;
         }
-        throw new IllegalArgumentException("Unknown FrameSlotKind tag: " + frameSlotKindTag);
+        return JavaKind.Illegal;
     }
 
     @Override
@@ -970,7 +962,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             case Illegal:
                 return FrameSlotKind.Illegal.tag;
         }
-        throw new IllegalArgumentException("No FrameSlotKind for Java kind " + kind);
+        return FrameSlotKind.Illegal.tag;
     }
 
     @Override
@@ -1005,11 +997,6 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     @Override
     public boolean isTruffleBoundary(ResolvedJavaMethod method) {
         return getAnnotation(TruffleBoundary.class, method) != null;
-    }
-
-    @Override
-    public boolean isSpecializationMethod(ResolvedJavaMethod method) {
-        return getAnnotation(Specialization.class, method) != null;
     }
 
     @Override

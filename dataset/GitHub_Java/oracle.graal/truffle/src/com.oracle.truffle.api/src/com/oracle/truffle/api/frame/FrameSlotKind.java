@@ -45,6 +45,8 @@ public enum FrameSlotKind {
     /** @since 0.8 or earlier */
     Object,
     /** @since 0.8 or earlier */
+    Illegal,
+    /** @since 0.8 or earlier */
     Long,
     /** @since 0.8 or earlier */
     Int,
@@ -55,9 +57,7 @@ public enum FrameSlotKind {
     /** @since 0.8 or earlier */
     Boolean,
     /** @since 0.8 or earlier */
-    Byte,
-    /** @since 0.8 or earlier */
-    Illegal;
+    Byte;
 
     /** @since 0.8 or earlier */
     public final byte tag;
