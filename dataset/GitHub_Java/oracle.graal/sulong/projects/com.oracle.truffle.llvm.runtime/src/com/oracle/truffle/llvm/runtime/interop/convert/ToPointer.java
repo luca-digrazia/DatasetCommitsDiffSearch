@@ -155,7 +155,7 @@ public abstract class ToPointer extends ForeignToLLVM {
             return value;
         } else if (value instanceof LLVMInternalTruffleObject) {
             return LLVMManagedPointer.create((LLVMInternalTruffleObject) value);
-        } else if (value instanceof TruffleObject && notLLVM(value)) {
+        } else if (value instanceof TruffleObject && notLLVM((TruffleObject) value)) {
             LLVMTypedForeignObject typed = LLVMTypedForeignObject.create((TruffleObject) value, type);
             return LLVMManagedPointer.create(typed);
         } else {

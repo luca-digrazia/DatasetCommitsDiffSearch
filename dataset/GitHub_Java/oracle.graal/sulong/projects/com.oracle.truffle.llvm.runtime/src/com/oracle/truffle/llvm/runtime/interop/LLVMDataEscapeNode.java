@@ -203,12 +203,12 @@ public abstract class LLVMDataEscapeNode extends LLVMNode {
     }
 
     @Specialization
-    protected static TruffleObject escapingJavaByteArray(LLVMVirtualAllocationAddress address, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    static protected TruffleObject escapingJavaByteArray(LLVMVirtualAllocationAddress address, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return address.copy();
     }
 
     @Specialization(guards = "escapingValue == null")
-    protected static LLVMNativePointer escapingNull(@SuppressWarnings("unused") Object escapingValue, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
+    static protected LLVMNativePointer escapingNull(@SuppressWarnings("unused") Object escapingValue, @SuppressWarnings("unused") LLVMInteropType.Structured type) {
         return LLVMNativePointer.createNull();
     }
 }
