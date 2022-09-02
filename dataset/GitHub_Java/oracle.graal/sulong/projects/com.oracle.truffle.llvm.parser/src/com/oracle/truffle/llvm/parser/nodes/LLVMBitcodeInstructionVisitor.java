@@ -29,14 +29,6 @@
  */
 package com.oracle.truffle.llvm.parser.nodes;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.Objects;
-
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.llvm.parser.LLVMLivenessAnalysis;
@@ -132,6 +124,14 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.Type.TypeArrayBuilder;
 import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 import com.oracle.truffle.llvm.runtime.types.symbols.SSAValue;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.Objects;
 
 public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
@@ -399,20 +399,13 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             argNodes[argIndex] = nodeFactory.createGetUniqueStackSpace(targetType, uniquesRegion, frame);
             argIndex++;
         }
-
-        // realArgumentCount = argumentCount - varArgCount
-        int realArgumentCount = call.getCallTarget().getType() instanceof FunctionType ? ((FunctionType) call.getCallTarget().getType()).getNumberOfArguments() : argumentCount;
-
         final SymbolImpl target = call.getCallTarget();
         for (int i = call.getArgumentCount() - 1; i >= 0; i--) {
             argNodes[argIndex + i] = resolveOptimized(call.getArgument(i), i, target, call.getArguments());
             argTypes.set(argIndex + i, call.getArgument(i).getType());
-            boolean isVarArg = i >= realArgumentCount;
             final AttributesGroup paramAttr = call.getParameterAttributesGroup(i);
             if (isByValue(paramAttr)) {
                 argNodes[argIndex + i] = capsuleAddressByValue(argNodes[argIndex + i], argTypes.get(argIndex + i), paramAttr);
-            } else if (isVarArg && isArrayByValue(argTypes.get(argIndex + i), argNodes[argIndex + i])) {
-                argNodes[argIndex + i] = capsuleArrayByValue(argNodes[argIndex + i], argTypes.get(argIndex + i));
             }
         }
 
@@ -585,17 +578,12 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
 
         SymbolImpl target = call.getCallTarget();
 
-        int realArgumentCount = call.getCallTarget().getType() instanceof FunctionType ? ((FunctionType) call.getCallTarget().getType()).getNumberOfArguments() : argumentCount;
-
         for (int i = call.getArgumentCount() - 1; i >= 0; i--) {
             argNodes[argIndex + i] = resolveOptimized(call.getArgument(i), i, target, call.getArguments());
             argTypes.set(argIndex + i, call.getArgument(i).getType());
             final AttributesGroup paramAttr = call.getParameterAttributesGroup(i);
-            boolean isVarArg = i >= realArgumentCount;
             if (isByValue(paramAttr)) {
                 argNodes[argIndex + i] = capsuleAddressByValue(argNodes[argIndex + i], argTypes.get(argIndex + i), paramAttr);
-            } else if (isVarArg && isArrayByValue(argTypes.get(argIndex + i), argNodes[argIndex + i])) {
-                argNodes[argIndex + i] = capsuleArrayByValue(argNodes[argIndex + i], argTypes.get(argIndex + i));
             }
         }
 
@@ -637,18 +625,12 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             argNodes[argIndex] = nodeFactory.createGetUniqueStackSpace(targetType, uniquesRegion, frame);
             argIndex++;
         }
-
-        int realArgumentCount = call.getCallTarget().getType() instanceof FunctionType ? ((FunctionType) call.getCallTarget().getType()).getNumberOfArguments() : argumentCount;
-
         for (int i = call.getArgumentCount() - 1; i >= 0; i--) {
             argNodes[argIndex + i] = resolveOptimized(call.getArgument(i), i, target, call.getArguments());
             argTypes.set(argIndex + i, call.getArgument(i).getType());
             final AttributesGroup paramAttr = call.getParameterAttributesGroup(i);
-            boolean isVarArg = i >= realArgumentCount;
             if (isByValue(paramAttr)) {
                 argNodes[argIndex + i] = capsuleAddressByValue(argNodes[argIndex + i], argTypes.get(argIndex + i), paramAttr);
-            } else if (isVarArg && isArrayByValue(argTypes.get(argIndex + i), argNodes[argIndex + i])) {
-                argNodes[argIndex + i] = capsuleArrayByValue(argNodes[argIndex + i], argTypes.get(argIndex + i));
             }
         }
 
@@ -691,17 +673,12 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         argsType.set(argIndex, new PointerType(null));
         argIndex++;
 
-        int realArgumentCount = call.getCallTarget().getType() instanceof FunctionType ? ((FunctionType) call.getCallTarget().getType()).getNumberOfArguments() : argumentCount;
-
         for (int i = call.getArgumentCount() - 1; i >= 0; i--) {
             args[argIndex + i] = symbols.resolve(call.getArgument(i));
             argsType.set(argIndex + i, call.getArgument(i).getType());
             final AttributesGroup paramAttr = call.getParameterAttributesGroup(i);
-            boolean isVarArg = i >= realArgumentCount;
             if (isByValue(paramAttr)) {
                 args[argIndex + i] = capsuleAddressByValue(args[argIndex + i], argsType.get(argIndex + i), paramAttr);
-            } else if (isVarArg && isArrayByValue(argsType.get(argIndex + i), args[argIndex + i])) {
-                args[argIndex + i] = capsuleArrayByValue(args[argIndex + i], argsType.get(argIndex + i));
             }
         }
 
@@ -809,7 +786,7 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             }
 
             if (offset != 0) {
-                final LLVMExpressionNode oneLiteralNode = CommonNodeFactory.createLiteral(1, PrimitiveType.I32);
+                final LLVMExpressionNode oneLiteralNode = nodeFactory.createLiteral(1, PrimitiveType.I32);
                 targetAddress = nodeFactory.createTypedElementPointer(offset, extract.getType(), targetAddress, oneLiteralNode);
             }
 
@@ -886,7 +863,7 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
     @Override
     public void visit(LoadInstruction load) {
         LLVMExpressionNode source = resolveOptimized(load.getSource());
-        LLVMExpressionNode result = nodeFactory.createLoad(load.getType(), source);
+        LLVMExpressionNode result = CommonNodeFactory.createLoad(load.getType(), source);
 
         createFrameWrite(result, load);
     }
@@ -1123,16 +1100,16 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
             // casts to smaller types in the factoryfacade won't work
             switch (llvmType.getPrimitiveKind()) {
                 case I8:
-                    cases[i] = CommonNodeFactory.createLiteral((byte) zwitch.getCaseValue(i), llvmType);
+                    cases[i] = nodeFactory.createLiteral((byte) zwitch.getCaseValue(i), llvmType);
                     break;
                 case I16:
-                    cases[i] = CommonNodeFactory.createLiteral((short) zwitch.getCaseValue(i), llvmType);
+                    cases[i] = nodeFactory.createLiteral((short) zwitch.getCaseValue(i), llvmType);
                     break;
                 case I32:
-                    cases[i] = CommonNodeFactory.createLiteral((int) zwitch.getCaseValue(i), llvmType);
+                    cases[i] = nodeFactory.createLiteral((int) zwitch.getCaseValue(i), llvmType);
                     break;
                 default:
-                    cases[i] = CommonNodeFactory.createLiteral(zwitch.getCaseValue(i), llvmType);
+                    cases[i] = nodeFactory.createLiteral(zwitch.getCaseValue(i), llvmType);
             }
         }
 
@@ -1238,16 +1215,6 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         }
     }
 
-    private LLVMExpressionNode capsuleArrayByValue(LLVMExpressionNode child, Type type) {
-        try {
-            final long size = type.getSize(dataLayout);
-            int alignment = type.getAlignment(dataLayout);
-            return nodeFactory.createVarArgCompoundValue(size, alignment, child);
-        } catch (TypeOverflowException e) {
-            return Type.handleOverflowExpression(e);
-        }
-    }
-
     private static boolean isByValue(AttributesGroup parameter) {
         if (parameter == null) {
             return false;
@@ -1260,12 +1227,6 @@ public final class LLVMBitcodeInstructionVisitor implements SymbolVisitor {
         }
 
         return false;
-    }
-
-    private static boolean isArrayByValue(Type type, @SuppressWarnings("unused") LLVMExpressionNode exprNode) {
-        return type instanceof ArrayType;
-        // return ((exprNode instanceof LLVMStructLoadNode) || (exprNode instanceof
-        // LLVMArrayLiteralNode) && (type instanceof ArrayType));
     }
 
     private void assignSourceLocation(LLVMInstrumentableNode node, Instruction sourceInstruction) {
