@@ -24,13 +24,14 @@
  */
 package com.oracle.truffle.tools.agentscript.impl;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.tools.agentscript.FrameLibrary;
 
 public abstract class AccessorFrameLibrary {
-    public static AccessorFrameLibrary DEFAULT;
+    @CompilerDirectives.CompilationFinal public static AccessorFrameLibrary DEFAULT;
 
     protected AccessorFrameLibrary() {
         if (DEFAULT != null) {
@@ -39,5 +40,5 @@ public abstract class AccessorFrameLibrary {
         DEFAULT = this;
     }
 
-    protected abstract FrameLibrary.Env create(Node where, Frame frame, TruffleInstrument.Env env);
+    protected abstract FrameLibrary.Query create(Node where, Frame frame, TruffleInstrument.Env env);
 }
