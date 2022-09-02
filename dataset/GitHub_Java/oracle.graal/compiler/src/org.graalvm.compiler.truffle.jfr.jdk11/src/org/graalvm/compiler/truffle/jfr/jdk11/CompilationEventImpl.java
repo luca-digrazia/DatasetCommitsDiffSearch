@@ -28,19 +28,23 @@ import jdk.jfr.BooleanFlag;
 import jdk.jfr.Category;
 import jdk.jfr.Description;
 import jdk.jfr.DataAmount;
+import jdk.jfr.Event;
 import jdk.jfr.Label;
 import jdk.jfr.MemoryAddress;
 import jdk.jfr.StackTrace;
 import jdk.jfr.Unsigned;
+import com.oracle.truffle.api.RootCallTarget;
 import org.graalvm.compiler.truffle.jfr.CompilationEvent;
 
 @Category("Truffle Compiler")
 @Label("Compilation")
 @Description("Truffe Compilation")
 @StackTrace(false)
-class CompilationEventImpl extends RootFunctionEventImpl implements CompilationEvent {
+class CompilationEventImpl extends Event implements CompilationEvent {
 
     @Label("Succeeded") @Description("Compilation Status") @BooleanFlag public boolean success;
+
+    @Label("Source") @Description("Compiled Source") public String source;
 
     @Label("Compiled Code Size") @Description("Compiled Code Size") @DataAmount @Unsigned public int compiledCodeSize;
 
@@ -50,9 +54,9 @@ class CompilationEventImpl extends RootFunctionEventImpl implements CompilationE
 
     @Label("Dispatched Calls") @Description("Dispatched Calls") @Unsigned public int dispatchedCalls;
 
-    @Label("Graal Nodes") @Description("Graal Node Count") @Unsigned public int graalNodeCount;
+    @Label("Graal Nodes") @Description("Graal Nodes Count") @Unsigned public int graalNodeCount;
 
-    @Label("Truffle Nodes") @Description("Truffle Node Count") @Unsigned public int peNodeCount;
+    @Label("Partial Eval Nodes") @Description("Partial Evalualtion Nodes Count") @Unsigned public int peNodeCount;
 
     private transient CompilationFailureEventImpl failure;
 
@@ -71,7 +75,12 @@ class CompilationEventImpl extends RootFunctionEventImpl implements CompilationE
     public void failed(boolean permanent, CharSequence reason) {
         end();
         this.success = false;
-        this.failure = new CompilationFailureEventImpl(source, rootFunction, permanent, reason);
+        this.failure = new CompilationFailureEventImpl(source, permanent, reason);
+    }
+
+    @Override
+    public void setSource(RootCallTarget target) {
+        this.source = EventFactoryImpl.targetName(target);
     }
 
     @Override
@@ -106,9 +115,9 @@ class CompilationEventImpl extends RootFunctionEventImpl implements CompilationE
 
     @Override
     public void publish() {
-        super.publish();
+        commit();
         if (failure != null) {
-            failure.publish();
+            failure.commit();
         }
     }
 }

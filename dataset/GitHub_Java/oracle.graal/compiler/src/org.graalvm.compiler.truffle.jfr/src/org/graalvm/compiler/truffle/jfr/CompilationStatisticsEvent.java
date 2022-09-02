@@ -25,7 +25,6 @@
 package org.graalvm.compiler.truffle.jfr;
 
 public interface CompilationStatisticsEvent extends Event {
-
     void setCompiledMethods(long compiledMethods);
 
     void setBailouts(long bailouts);
