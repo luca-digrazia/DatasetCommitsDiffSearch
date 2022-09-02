@@ -378,7 +378,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         super(method);
         CompilerAsserts.neverPartOfCompilation();
         CodeAttribute codeAttribute = method.getCodeAttribute();
-        this.bs = new BytecodeStream(codeAttribute.getOriginalCode());
+        this.bs = new BytecodeStream(codeAttribute.getCode());
         FrameSlot[] slots = frameDescriptor.getSlots().toArray(new FrameSlot[0]);
 
         this.locals = Arrays.copyOfRange(slots, 0, codeAttribute.getMaxLocals());
@@ -1776,11 +1776,6 @@ public final class BytecodeNode extends EspressoMethodNode {
                 // During resolution of the symbolic reference to the method, any of the exceptions
                 // pertaining to method resolution (&sect;5.4.3.3) can be thrown.
                 Method resolutionSeed = resolveMethod(opcode, bs.readCPI(curBCI));
-                if (resolutionSeed.isRemovedByRedefition()) {
-                    CompilerDirectives.transferToInterpreter();
-                    throw Meta.throwException(Meta.initExceptionWithMessage(getMeta().java_lang_NoSuchMethodError,
-                                    resolutionSeed.getDeclaringKlass().getNameAsString().replace('/', '.') + "." + resolutionSeed.getNameAsString() + resolutionSeed.getSignatureAsString()));
-                }
                 QuickNode invoke = dispatchQuickened(top, curBCI, opcode, statementIndex, resolutionSeed, getContext().InlineFieldAccessors);
                 quick = injectQuick(curBCI, invoke, QUICK);
             }
