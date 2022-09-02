@@ -118,9 +118,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     private final CodeAttribute codeAttribute;
 
     @CompilationFinal private int refKind;
-
     @CompilationFinal //
-    private CallTarget callTarget;
+    private volatile CallTarget callTarget;
 
     @CompilationFinal(dimensions = 1) //
     private ObjectKlass[] checkedExceptions;
@@ -364,14 +363,13 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
      * Ensure any callTarget is called immediately before a BCI is advanced, or it could violate the
      * specs on class init.
      */
-    @TruffleBoundary
     public CallTarget getCallTarget() {
         if (callTarget == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            Meta meta = getMeta();
             if (poisonPill) {
-                throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "Conflicting default methods: " + this.getName());
+                throw Meta.throwExceptionWithMessage(getMeta().java_lang_IncompatibleClassChangeError, "Conflicting default methods: " + this.getName());
             }
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+
             // Initializing a class costs a lock, do it outside of this method's lock to avoid
             // congestion.
             // Note that requesting a call target is immediately followed by a call to the method,
@@ -412,13 +410,14 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                             }
                         }
 
+                        Meta meta = getMeta();
                         Method findNative = meta.java_lang_ClassLoader_findNative;
 
                         // Lookup the short name first, otherwise lookup the long name (with
                         // signature).
-                        callTarget = lookupJniCallTarget(findNative, false);
+                        callTarget = lookupJniRootNode(findNative, false);
                         if (callTarget == null) {
-                            callTarget = lookupJniCallTarget(findNative, true);
+                            callTarget = lookupJniRootNode(findNative, true);
                         }
 
                         // TODO(peterssen): Search JNI methods with OS prefix/suffix
@@ -445,7 +444,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                         }
                     } else {
                         if (codeAttribute == null) {
-                            throw Meta.throwExceptionWithMessage(meta.java_lang_AbstractMethodError,
+                            throw Meta.throwExceptionWithMessage(getMeta().java_lang_AbstractMethodError,
                                             "Calling abstract method: " + getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
                         }
 
@@ -456,9 +455,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                         }
                         // BCI slot is always the latest.
                         FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
-                        EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(this, frameDescriptor, monitorSlot, bciSlot));
-
-                        callTarget = Truffle.getRuntime().createCallTarget(rootNode);
+                        EspressoRootNode root = EspressoRootNode.create(frameDescriptor, new BytecodeNode(this, frameDescriptor, monitorSlot, bciSlot));
+                        callTarget = Truffle.getRuntime().createCallTarget(root);
                     }
                 }
             }
@@ -468,9 +466,6 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     private boolean usesMonitors() {
-        if (isSynchronized()) {
-            return (usesMonitors = 1) != 0;
-        }
         if (codeAttribute != null) {
             if (usesMonitors != -1) {
                 return usesMonitors != 0;
@@ -498,7 +493,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return descriptor;
     }
 
-    private CallTarget lookupJniCallTarget(Method findNative, boolean fullSignature) {
+    private CallTarget lookupJniRootNode(Method findNative, boolean fullSignature) {
         String mangledName = Mangle.mangleMethod(this, fullSignature);
         long handle = (long) findNative.invokeWithConversions(null, getDeclaringKlass().getDefiningClassLoader(), mangledName);
         if (handle == 0) { // not found
@@ -669,9 +664,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return Signatures.parameterCount(getParsedSignature(), false);
     }
 
-    public static Method getHostReflectiveMethodRoot(StaticObject seed) {
+    public static Method getHostReflectiveMethodRoot(StaticObject seed, Meta meta) {
         assert seed.getKlass().getMeta().java_lang_reflect_Method.isAssignableFrom(seed.getKlass());
-        Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
@@ -683,9 +677,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return target;
     }
 
-    public static Method getHostReflectiveConstructorRoot(StaticObject seed) {
+    public static Method getHostReflectiveConstructorRoot(StaticObject seed, Meta meta) {
         assert seed.getKlass().getMeta().java_lang_reflect_Constructor.isAssignableFrom(seed.getKlass());
-        Meta meta = seed.getKlass().getMeta();
         StaticObject curMethod = seed;
         Method target = null;
         while (target == null) {
@@ -922,8 +915,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         }
         // BCI slot is always the latest.
         FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
-        EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result, frameDescriptor, monitorSlot, bciSlot));
-        result.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
+        EspressoRootNode root = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result, frameDescriptor, monitorSlot, bciSlot));
+        result.callTarget = Truffle.getRuntime().createCallTarget(root);
 
         return result;
     }
