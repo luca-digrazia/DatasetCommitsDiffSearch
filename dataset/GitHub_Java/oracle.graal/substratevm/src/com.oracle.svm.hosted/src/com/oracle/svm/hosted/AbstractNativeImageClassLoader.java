@@ -1,27 +1,3 @@
-/*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
- * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
- *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
- *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
- *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
- *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
- */
 package com.oracle.svm.hosted;
 
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
@@ -141,7 +117,7 @@ public abstract class AbstractNativeImageClassLoader extends SecureClassLoader {
 
     protected static class Util {
         /**
-         * {@code ClassLoader#loadClass(String, boolean)} is the terminal method that gets invoked
+         * {@link ClassLoader#loadClass(String, boolean)} is the terminal method that gets invoked
          * when resolving a class, unfortunately it is protected method meant to be overridden.
          * Since this class delegates to the appropriate ClassLoader, the method needs to be called
          * via reflection to by pass the protected visibility
@@ -171,7 +147,7 @@ public abstract class AbstractNativeImageClassLoader extends SecureClassLoader {
         }
 
         /**
-         * {@code ClassLoader#findResource(String)} is the terminal method that gets invoked when
+         * {@link ClassLoader#findResource(String)} is the terminal method that gets invoked when
          * finding a resource, unfortunately it is protected method meant to be overridden. Since
          * this class delegates to the appropriate ClassLoader, the method needs to be called via
          * reflection to by pass the protected visibility
@@ -240,7 +216,7 @@ public abstract class AbstractNativeImageClassLoader extends SecureClassLoader {
         protected void init() {
             Set<Path> uniquePaths = new TreeSet<>(Comparator.comparing(ClassInit::toRealPath));
             uniquePaths.addAll(nativeImageClassLoader.classpath());
-            uniquePaths.parallelStream().forEach(path -> loadClassesFromPath(path));
+            uniquePaths.parallelStream().forEach(path -> loadClassesFromPath(executor, path));
         }
 
         private static Path toRealPath(Path p) {
@@ -251,15 +227,15 @@ public abstract class AbstractNativeImageClassLoader extends SecureClassLoader {
             }
         }
 
-        private static final Set<Path> excludeDirectories = getExcludeDirectories();
+        private static Set<Path> excludeDirectories = getExcludeDirectories();
 
         private static Set<Path> getExcludeDirectories() {
             Path root = Paths.get("/");
-            return Stream.of("dev", "sys", "proc", "etc", "var", "tmp", "boot", "lost+found")
-                            .map(root::resolve).collect(Collectors.toSet());
+            return Arrays.asList("dev", "sys", "proc", "etc", "var", "tmp", "boot", "lost+found")
+                            .stream().map(root::resolve).collect(Collectors.toSet());
         }
 
-        private void loadClassesFromPath(Path path) {
+        private void loadClassesFromPath(ForkJoinPool executor, Path path) {
             if (Files.exists(path)) {
                 if (Files.isRegularFile(path)) {
                     try {
@@ -273,23 +249,25 @@ public abstract class AbstractNativeImageClassLoader extends SecureClassLoader {
                         }
                         if (probeJarFileSystem != null) {
                             try (FileSystem jarFileSystem = probeJarFileSystem) {
-                                loadClassesFromPath(jarFileSystem.getPath("/"), Collections.emptySet());
+                                loadClassesFromPath(executor, jarFileSystem.getPath("/"), Collections.emptySet());
                             }
                         }
                     } catch (ClosedByInterruptException ignored) {
                         throw new InterruptImageBuilding();
-                    } catch (IOException | URISyntaxException e) {
+                    } catch (IOException e) {
+                        throw shouldNotReachHere(e);
+                    } catch (URISyntaxException e) {
                         throw shouldNotReachHere(e);
                     }
                 } else {
-                    loadClassesFromPath(path, excludeDirectories);
+                    loadClassesFromPath(executor, path, excludeDirectories);
                 }
             }
         }
 
         protected static final String CLASS_EXTENSION = ".class";
 
-        private void loadClassesFromPath(Path root, Set<Path> excludes) {
+        private void loadClassesFromPath(ForkJoinPool executor, Path root, Set<Path> excludes) {
             FileVisitor<Path> visitor = new SimpleFileVisitor<Path>() {
                 private final char fileSystemSeparatorChar = root.getFileSystem().getSeparator().charAt(0);
 
@@ -302,7 +280,7 @@ public abstract class AbstractNativeImageClassLoader extends SecureClassLoader {
                 }
 
                 @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
                     if (excludes.contains(file.getParent())) {
                         return FileVisitResult.SKIP_SIBLINGS;
                     }
@@ -314,7 +292,7 @@ public abstract class AbstractNativeImageClassLoader extends SecureClassLoader {
                 }
 
                 @Override
-                public FileVisitResult visitFileFailed(Path file, IOException exc) {
+                public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
                     /* Silently ignore inaccessible files or directories. */
                     return FileVisitResult.CONTINUE;
                 }
