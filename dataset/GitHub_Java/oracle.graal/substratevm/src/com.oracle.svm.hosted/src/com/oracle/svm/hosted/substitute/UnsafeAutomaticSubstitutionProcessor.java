@@ -128,7 +128,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
     private final AnnotationSubstitutionProcessor annotationSubstitutions;
     private final Map<ResolvedJavaField, ComputedValueField> fieldSubstitutions;
 
-    private final List<ResolvedJavaType> supressWarnings;
+    private final List<ResolvedJavaType> suppressWarnings;
 
     private ResolvedJavaMethod unsafeObjectFieldOffsetFieldMethod;
     private ResolvedJavaMethod unsafeObjectFieldOffsetClassStringMethod;
@@ -147,7 +147,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         this.snippetReflection = snippetReflection;
         this.annotationSubstitutions = annotationSubstitutions;
         this.fieldSubstitutions = new ConcurrentHashMap<>();
-        this.supressWarnings = new ArrayList<>();
+        this.suppressWarnings = new ArrayList<>();
     }
 
     public void init(ImageClassLoader loader, MetaAccessProvider originalMetaAccess, SVMHost hostVM) {
@@ -249,7 +249,10 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
          * by default.
          */
         try {
-            supressWarnings.add(originalMetaAccess.lookupJavaType(Class.forName("sun.security.provider.ByteArrayAccess")));
+            suppressWarnings.add(originalMetaAccess.lookupJavaType(Class.forName("sun.security.provider.ByteArrayAccess")));
+            if (JavaVersionUtil.JAVA_SPEC >= 11) {
+                suppressWarnings.add(originalMetaAccess.lookupJavaType(Class.forName("jdk.internal.misc.InnocuousThread")));
+            }
         } catch (ClassNotFoundException e) {
             throw VMError.shouldNotReachHere(e);
         }
@@ -302,7 +305,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         if (hostType.isArray()) {
             return;
         }
-
         /* Detect field offset computation in static initializers. */
         ResolvedJavaMethod clinit = hostType.getClassInitializer();
 
@@ -879,7 +881,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
     }
 
     private boolean warningsAreWhiteListed(ResolvedJavaType type) {
-        return supressWarnings.contains(type);
+        return suppressWarnings.contains(type);
     }
 
     private ResolvedJavaType findSubstitutionType(ResolvedJavaType type) {
@@ -898,8 +900,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         HighTierContext context = new HighTierContext(GraalAccess.getOriginalProviders(), null, OptimisticOptimizations.NONE);
         graph.setGuardsStage(GuardsStage.FIXED_DEOPTS);
 
-        GraphBuilderPhase.Instance builderPhase = new ClassInitializerGraphBuilderPhase(context,
-                        GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true).withAllowIncompleteClasspath(true),
+        GraphBuilderPhase.Instance builderPhase = new ClassInitializerGraphBuilderPhase(context, GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true),
                         context.getOptimisticOptimizations());
         builderPhase.apply(graph, context);
 
