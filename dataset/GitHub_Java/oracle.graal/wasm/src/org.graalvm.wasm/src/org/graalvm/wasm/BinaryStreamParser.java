@@ -45,6 +45,8 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import org.graalvm.wasm.constants.GlobalModifier;
 import org.graalvm.wasm.exception.Failure;
 import org.graalvm.wasm.exception.WasmException;
+import org.graalvm.wasm.memory.UnsafeWasmMemory;
+import sun.misc.Unsafe;
 
 import static com.oracle.truffle.api.nodes.ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN;
 
@@ -222,7 +224,8 @@ public abstract class BinaryStreamParser {
     }
 
     public static byte rawPeek1(byte[] data, int initialOffset) {
-        return data[initialOffset];
+        return UnsafeWasmMemory.unsafe.getByte(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + initialOffset * Unsafe.ARRAY_BYTE_INDEX_SCALE);
+        // return data[initialOffset];
     }
 
     @ExplodeLoop(kind = FULL_EXPLODE_UNTIL_RETURN)
