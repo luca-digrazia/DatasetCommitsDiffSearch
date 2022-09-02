@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,40 +30,29 @@
 package com.oracle.truffle.llvm.runtime.nodes.asm.syscall;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.llvm.runtime.LLVMSyscallEntry;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 
-public final class LLVMUnsupportedSyscallNode extends LLVMSyscallOperationNode {
+public class LLVMUnsupportedSyscallNode extends LLVMSyscallOperationNode {
 
-    private final LLVMSyscallEntry syscall;
     private final long nr;
 
     public static LLVMUnsupportedSyscallNode create(long nr) {
-        return new LLVMUnsupportedSyscallNode(nr, null);
+        return new LLVMUnsupportedSyscallNode(nr);
     }
 
-    public static LLVMUnsupportedSyscallNode create(LLVMSyscallEntry syscall) {
-        return new LLVMUnsupportedSyscallNode(syscall.value(), syscall);
-    }
-
-    private LLVMUnsupportedSyscallNode(long nr, LLVMSyscallEntry syscall) {
+    private LLVMUnsupportedSyscallNode(long nr) {
         this.nr = nr;
-        this.syscall = syscall;
     }
 
     @Override
-    public String getName() {
-        if (syscall != null) {
-            return syscall.toString();
-        }
+    public final String getName() {
         return "unsupported(" + nr + ")";
     }
 
     @Override
     @CompilerDirectives.TruffleBoundary
-    public long executeLong(Object rdi, Object rsi, Object rdx, Object r10, Object r8, Object r9) {
-        String details = syscall != null ? syscall.toString() : "0x" + Long.toHexString(nr) + " (" + nr + ")";
-        throw new LLVMUnsupportedException(this, LLVMUnsupportedException.UnsupportedReason.UNSUPPORTED_SYSCALL, String.format("%s (%s %s)", details, LLVMInfo.SYSNAME, LLVMInfo.MACHINE));
+    public long execute(Object rdi, Object rsi, Object rdx, Object r10, Object r8, Object r9) {
+        throw new LLVMUnsupportedException(this, LLVMUnsupportedException.UnsupportedReason.UNSUPPORTED_SYSCALL, "0x" + Long.toHexString(nr) + " (" + nr + ")");
     }
 }

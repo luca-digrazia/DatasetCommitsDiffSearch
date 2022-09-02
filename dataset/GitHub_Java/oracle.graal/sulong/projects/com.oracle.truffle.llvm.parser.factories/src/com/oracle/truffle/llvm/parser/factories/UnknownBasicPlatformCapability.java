@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.parser.factories;
 import com.oracle.truffle.llvm.runtime.LLVMSyscallEntry;
 import com.oracle.truffle.llvm.runtime.memory.LLVMSyscallOperationNode;
 import com.oracle.truffle.llvm.runtime.nodes.asm.syscall.LLVMUnsupportedSyscallNode;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 /**
  * Fallback implementation for unknown platforms.
@@ -63,15 +62,4 @@ final class UnknownBasicPlatformCapability extends BasicPlatformCapability<Unkno
     protected LLVMSyscallOperationNode createSyscallNode(UnknownSyscalls syscall) {
         throw new UnsupportedOperationException("Should not reach.");
     }
-
-    @Override
-    public Object createVAListStorage() {
-        throw new UnsupportedOperationException("Should not reach.");
-    }
-
-    @Override
-    public Type getVAListType() {
-        throw new UnsupportedOperationException();
-    }
-
 }
