@@ -2115,7 +2115,7 @@ final class JDWP {
                     }
                 }
 
-                Set<Object> ownedMonitors = controller.getEventListener().getOwnedMonitors(thread);
+                Set<Object> ownedMonitors = context.getOwnedMonitors(thread);
                 reply.writeInt(ownedMonitors.size());
 
                 for (Object monitor : ownedMonitors) {

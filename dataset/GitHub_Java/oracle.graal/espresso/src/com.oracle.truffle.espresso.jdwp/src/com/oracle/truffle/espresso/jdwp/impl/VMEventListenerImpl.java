@@ -25,34 +25,29 @@ package com.oracle.truffle.espresso.jdwp.impl;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.regex.Pattern;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.debug.Breakpoint;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.espresso.jdwp.api.CallFrame;
 import com.oracle.truffle.espresso.jdwp.api.FieldBreakpoint;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.MethodHook;
+import com.oracle.truffle.espresso.jdwp.api.MethodBreakpoint;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
-import com.oracle.truffle.espresso.jdwp.api.MethodVariable;
 import com.oracle.truffle.espresso.jdwp.api.TagConstants;
 
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 public final class VMEventListenerImpl implements VMEventListener {
-
-    public static final InteropLibrary UNCACHED = InteropLibrary.getUncached();
 
     private final Ids<Object> ids;
     private final JDWPContext context;
@@ -74,6 +69,7 @@ public final class VMEventListenerImpl implements VMEventListener {
     private int vmStartRequestId;
     private final List<PacketStream> heldEvents = new ArrayList<>();
     private final Map<Object, Object> currentContendedMonitor = new HashMap<>();
+    private final Map<Object, Map<Object, MonitorInfo>> monitorInfos = new HashMap<>();
     private final Object initialThread;
 
     public VMEventListenerImpl(DebuggerController controller, Object initialThread) {
@@ -152,69 +148,13 @@ public final class VMEventListenerImpl implements VMEventListener {
 
     @Override
     @TruffleBoundary
-    public boolean onMethodEntry(MethodRef method, Object scope) {
-        boolean active = false;
-        // collect variable information from scope
-        List<MethodVariable> variables = new ArrayList<>(1);
-        try {
-            if (UNCACHED.hasMembers(scope)) {
-                Object identifiers = UNCACHED.getMembers(scope);
-                if (UNCACHED.hasArrayElements(identifiers)) {
-                    long size = UNCACHED.getArraySize(identifiers);
-                    for (long i = 0; i < size; i++) {
-                        String identifier = (String) UNCACHED.readArrayElement(identifiers, i);
-                        Object value = UNCACHED.readMember(scope, identifier);
-                        variables.add(new MethodVariable(identifier, value));
-                    }
-                }
-            }
-        } catch (UnsupportedMessageException | InvalidArrayIndexException | UnknownIdentifierException e) {
-            // not able to fetch locals, so leave variables list empty
-        }
-
-        for (MethodHook hook : method.getMethodHooks()) {
-            // pass on the variables to the method entry hook
-            if (hook.onMethodEnter(method, variables.toArray(new MethodVariable[variables.size()]))) {
-                // OK, tell the Debug API to suspend the thread now
-                debuggerController.prepareMethodBreakpoint(new MethodBreakpointEvent((MethodBreakpointInfo) hook, null));
-                debuggerController.suspend(context.asGuestThread(Thread.currentThread()));
-                active = true;
-            }
-            switch (hook.getKind()) {
-                case ONE_TIME:
-                    if (hook.hasFired()) {
-                        method.removedMethodHook(hook);
-                    }
-                    break;
-                case INDEFINITE:
-                    // leave the hook active
-                    break;
-            }
-        }
-        return active;
-    }
-
-    @Override
-    @TruffleBoundary
     public boolean onMethodReturn(MethodRef method, Object returnValue) {
         boolean active = false;
-        for (MethodHook hook : method.getMethodHooks()) {
-            if (hook.onMethodExit(method, returnValue)) {
-                // OK, tell the Debug API to suspend the thread now
-                debuggerController.prepareMethodBreakpoint(new MethodBreakpointEvent((MethodBreakpointInfo) hook, returnValue));
-                debuggerController.suspend(context.asGuestThread(Thread.currentThread()));
-                active = true;
-            }
-            switch (hook.getKind()) {
-                case ONE_TIME:
-                    if (hook.hasFired()) {
-                        method.removedMethodHook(hook);
-                    }
-                    break;
-                case INDEFINITE:
-                    // leave the hook active
-                    break;
-            }
+        for (MethodBreakpoint info : method.getMethodBreakpointInfos()) {
+            // OK, tell the Debug API to suspend the thread now
+            debuggerController.prepareMethodBreakpoint(new MethodBreakpointEvent((MethodBreakpointInfo) info, returnValue));
+            debuggerController.suspend(context.asGuestThread(Thread.currentThread()));
+            active = true;
         }
         return active;
     }
@@ -813,6 +753,69 @@ public final class VMEventListenerImpl implements VMEventListener {
     @Override
     public Object getCurrentContendedMonitor(Object guestThread) {
         return currentContendedMonitor.get(guestThread);
+    }
+
+    @Override
+    @TruffleBoundary
+    public void onMonitorEnter(Object monitor) {
+        Object thread = context.asGuestThread(Thread.currentThread());
+        Map<Object, MonitorInfo> monitorInfoMap = monitorInfos.get(thread);
+        if (monitorInfoMap == null) {
+            monitorInfoMap = new HashMap<>();
+            monitorInfos.put(thread, monitorInfoMap);
+        }
+        MonitorInfo monitorInfo = monitorInfoMap.get(monitor);
+        if (monitorInfo == null) {
+            monitorInfoMap.put(monitor, new MonitorInfo(1));
+        } else {
+            monitorInfo.incrementEntryCount();
+        }
+    }
+
+    @Override
+    @TruffleBoundary
+    public void onMonitorExit(Object monitor) {
+        Object thread = context.asGuestThread(Thread.currentThread());
+        Map<Object, MonitorInfo> monitorInfoMap = monitorInfos.get(thread);
+        if (monitorInfoMap == null) {
+            JDWPLogger.log("Unbalanced monitor exit detected in JDWP event listener", JDWPLogger.LogLevel.ALL);
+            return;
+        }
+        MonitorInfo monitorInfo = monitorInfoMap.get(monitor);
+        if (monitorInfo == null) {
+            JDWPLogger.log("Unbalanced monitor exit detected in JDWP", JDWPLogger.LogLevel.ALL);
+        } else {
+            if (monitorInfo.decrementEntryCount() == 0) {
+                monitorInfoMap.remove(monitor);
+                if (monitorInfoMap.isEmpty()) {
+                    monitorInfos.remove(thread);
+                }
+            }
+        }
+    }
+
+    @Override
+    public Set<Object> getOwnedMonitors(Object guestThread) {
+        if (!monitorInfos.containsKey(guestThread)) {
+            return Collections.emptySet();
+        }
+        return monitorInfos.get(guestThread).keySet();
+    }
+
+    @Override
+    public void sendInitialThreadStartedEvents() {
+        for (Object allGuestThread : context.getAllGuestThreads()) {
+            threadStarted(allGuestThread);
+        }
+    }
+
+    @Override
+    public MonitorInfo getMonitorInfo(Object guestThread, Object monitor) {
+        Map<Object, MonitorInfo> monitorInfoMap = monitorInfos.get(guestThread);
+        if (monitorInfoMap != null) {
+            return monitorInfoMap.get(monitor);
+        }
+        return null;
     }
 
     @Override

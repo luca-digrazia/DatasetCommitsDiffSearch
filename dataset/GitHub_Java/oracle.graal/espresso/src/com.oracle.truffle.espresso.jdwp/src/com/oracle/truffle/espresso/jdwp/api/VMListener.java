@@ -22,6 +22,8 @@
  */
 package com.oracle.truffle.espresso.jdwp.api;
 
+import java.util.Set;
+
 public interface VMListener {
 
     void vmStarted(boolean suspend);
@@ -121,4 +123,26 @@ public interface VMListener {
      * @return the current contended monitor object
      */
     Object getCurrentContendedMonitor(Object guestThread);
+
+    /**
+     * Callback method when a monitor has been taken.
+     *
+     * @param monitor the monitor
+     */
+    void onMonitorEnter(Object monitor);
+
+    /**
+     * Callback method when a monitor is released.
+     *
+     * @param monitor the monitor object
+     */
+    void onMonitorExit(Object monitor);
+
+    /**
+     * Returns all owned guest-language monitor object of the input thread.
+     *
+     * @param guestThread the guest thread
+     * @return the owned monitor objects
+     */
+    Set<Object> getOwnedMonitors(Object guestThread);
 }
