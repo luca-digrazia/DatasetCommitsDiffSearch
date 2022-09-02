@@ -26,17 +26,19 @@ package com.oracle.truffle.tools.profiler.test;
 
 import java.io.ByteArrayOutputStream;
 
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Source;
+import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 
 import com.oracle.truffle.api.instrumentation.SourceSectionFilter;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.vm.PolyglotEngine;
 
 public abstract class AbstractProfilerTest {
 
-    protected PolyglotEngine engine;
+    protected Context context;
     protected final ByteArrayOutputStream out = new ByteArrayOutputStream();
     protected final ByteArrayOutputStream err = new ByteArrayOutputStream();
 
@@ -56,8 +58,18 @@ public abstract class AbstractProfilerTest {
                     "CALL(bar)" +
             ")");
 
+    protected static void expectProfilerException(Runnable configProfiler, Runnable runProfiler) {
+        try {
+            configProfiler.run();
+            runProfiler.run();
+            Assert.fail("Exception expected.");
+        } catch (Exception e) {
+            Assert.assertEquals("class com.oracle.truffle.tools.profiler.ProfilerException", e.getClass().toString());
+        }
+    }
+
     protected Source makeSource(String s) {
-        return Source.newBuilder(s).mimeType(InstrumentationTestLanguage.MIME_TYPE).name("test").build();
+        return Source.newBuilder(InstrumentationTestLanguage.ID, s, "test").buildLiteral();
     }
 
     protected static final SourceSectionFilter NO_INTERNAL_ROOT_TAG_FILTER = SourceSectionFilter.
@@ -74,11 +86,16 @@ public abstract class AbstractProfilerTest {
 
     @Before
     public void setup() {
-        engine = PolyglotEngine.newBuilder().setIn(System.in).setOut(out).setErr(err).build();
+        context = Context.newBuilder().in(System.in).out(out).err(err).build();
     }
 
-    protected void execute(Source source) {
-        engine.eval(source).get();
+    protected void eval(Source source) {
+        context.eval(source);
+    }
+
+    @After
+    public void after() {
+        context.close();
     }
 
 }
