@@ -29,11 +29,8 @@
  */
 package com.oracle.truffle.llvm.parser.macho;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import com.oracle.truffle.llvm.parser.binary.BinaryParser;
 import com.oracle.truffle.llvm.parser.macho.MachOSegmentCommand.MachOSection;
@@ -50,13 +47,13 @@ public final class MachOFile {
     private static final int MH_OBJECT = 0x1; /* relocatable object file */
     private static final int MH_EXECUTE = 0x2; /* demand paged executable file */
     private static final int MH_DYLIB = 0x6; /* dynamically bound shared library */
-    private static final int MH_BUNDLE = 0x8; /* dynamicly bound bundle file */
 
     // currently unused types:
     @SuppressWarnings("unused") private static final int MH_FVMLIB = 0x3;
     @SuppressWarnings("unused") private static final int MH_CORE = 0x4;
     @SuppressWarnings("unused") private static final int MH_PRELOAD = 0x5;
     @SuppressWarnings("unused") private static final int MH_DYLINKER = 0x7;
+    @SuppressWarnings("unused") private static final int MH_BUNDLE = 0x8;
     @SuppressWarnings("unused") private static final int MH_DYLIB_STUB = 0x9;
 
     private final MachOHeader header;
@@ -77,29 +74,14 @@ public final class MachOFile {
         return header;
     }
 
-    private Stream<MachOLoadCommand> getLoadCommand(int cmdId) {
-        return Arrays.stream(loadCommandTable.getLoadCommands()).filter(cmd -> cmd.getCmd() == cmdId);
-    }
-
-    public List<String> getDyLibs(String origin) {
-        return getLoadCommand(MachOLoadCommand.LC_LOAD_DYLIB).map(MachODylibCommand.class::cast).map(e -> fixupRPath(origin, e.getName())).collect(Collectors.toList());
-    }
-
-    public List<String> getRPaths(String origin) {
-        return getLoadCommand(MachOLoadCommand.LC_RPATH).map(MachORPathCommand.class::cast).map(e -> fixupRPath(origin, e.getName())).collect(Collectors.toList());
-    }
-
-    private static final Pattern RPATH_PATTERN = Pattern.compile("@loader_path");
-
-    /**
-     * Replaces special rpath tokens. Currently, only {@code @loader_path} is supported and will be
-     * replace by the directory containing executable or shared object.
-     */
-    private static String fixupRPath(String origin, String path) {
-        if (origin == null) {
-            return path;
+    public List<String> getDyLibs() {
+        List<String> dylibs = new ArrayList<>();
+        for (MachOLoadCommand lc : loadCommandTable.getLoadCommands()) {
+            if (lc instanceof MachODylibCommand) {
+                dylibs.add(((MachODylibCommand) lc).getName());
+            }
         }
-        return RPATH_PATTERN.matcher(path).replaceAll(origin);
+        return dylibs;
     }
 
     public ByteSequence extractBitcode() {
@@ -107,7 +89,6 @@ public final class MachOFile {
             case MH_OBJECT:
                 return getSectionData(INTERMEDIATE_SEGMENT, BITCODE_SECTION);
             case MH_DYLIB:
-            case MH_BUNDLE:
             case MH_EXECUTE:
                 return getSectionData(LLVM_SEGMENT, BUNDLE_SECTION);
             default:
