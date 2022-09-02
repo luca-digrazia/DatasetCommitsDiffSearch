@@ -36,7 +36,6 @@ import java.util.stream.Collectors;
 
 import com.oracle.truffle.espresso.jdwp.api.VMListener;
 import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
-import com.oracle.truffle.espresso.jdwp.impl.EmptyListener;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import org.graalvm.polyglot.Engine;
 
@@ -196,7 +195,6 @@ public final class EspressoContext {
 
     public void initializeContext() {
         assert !this.initialized;
-        eventListener = new EmptyListener();
         spawnVM();
         this.initialized = true;
         this.jdwpContext = new JDWPContextImpl(this);
@@ -504,13 +502,7 @@ public final class EspressoContext {
     // Thread management
 
     public StaticObject getGuestThreadFromHost(Thread host) {
-        try {
-            return threadManager.getGuestThreadFromHost(host);
-        } catch (Exception e) {
-            // return the main guest thread for any unknown
-            // host threads.
-            return getMainThread();
-        }
+        return threadManager.getGuestThreadFromHost(host);
     }
 
     public StaticObject getCurrentThread() {
@@ -571,7 +563,7 @@ public final class EspressoContext {
         return mainThreadCreated;
     }
 
-    public StaticObject getMainThread() {
+    public Object getMainThread() {
         return threadManager.getMainThread();
     }
 
