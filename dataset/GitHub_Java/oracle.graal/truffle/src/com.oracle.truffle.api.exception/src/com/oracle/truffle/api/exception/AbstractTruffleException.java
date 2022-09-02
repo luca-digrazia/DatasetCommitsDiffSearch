@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,8 +40,11 @@
  */
 package com.oracle.truffle.api.exception;
 
+import org.graalvm.polyglot.PolyglotException;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -85,7 +88,7 @@ import com.oracle.truffle.api.source.SourceSection;
  *
  *     &#64;ExportMessage
  *     ExceptionType getExceptionType() {
- *         return ExceptionType.SYNTAX_ERROR;
+ *         return ExceptionType.PARSE_ERROR;
  *     }
  *
  *     &#64;ExportMessage
@@ -108,7 +111,24 @@ import com.oracle.truffle.api.source.SourceSection;
  * }
  * </pre>
  *
- * The following snippet shows a typical implementation of an exit exception.
+ * The following snippet shows a typical implementation of an interrupt exception.
+ *
+ * <pre>
+ * &#64;ExportLibrary(InteropLibrary.class)
+ * final class MyLanguageInterruptException extends AbstractTruffleException {
+ *
+ *     MyLanguageInterruptException(String message, Node location) {
+ *         super(message, location);
+ *     }
+ *
+ *     &#64;ExportMessage
+ *     ExceptionType getExceptionType() {
+ *         return ExceptionType.INTERRUPT;
+ *     }
+ * }
+ * </pre>
+ *
+ * The following snippet shows a typical implementation of an soft exit exception.
  *
  * <pre>
  * &#64;ExportLibrary(InteropLibrary.class)
@@ -119,11 +139,6 @@ import com.oracle.truffle.api.source.SourceSection;
  *     MyLanguageExitException(String message, int exitStatus, Node location) {
  *         super(message, location);
  *         this.exitStatus = exitStatus;
- *     }
- *
- *     &#64;ExportMessage
- *     boolean isExceptionUnwind() {
- *         return true;
  *     }
  *
  *     &#64;ExportMessage
@@ -138,36 +153,20 @@ import com.oracle.truffle.api.source.SourceSection;
  * }
  * </pre>
  *
- * The following snippet shows a typical implementation of a cancel exception.
- *
- * <pre>
- * &#64;ExportLibrary(InteropLibrary.class)
- * final class MyLanguageCancelException extends AbstractTruffleException {
- *
- *     MyLanguageCancelException(String message, Node location) {
- *         super(message, location);
- *         this.unwind = unwind;
- *     }
- *
- *     &#64;ExportMessage
- *     boolean isExceptionUnwind() {
- *         return true;
- *     }
- *
- *     &#64;ExportMessage
- *     ExceptionType getExceptionType() {
- *         return ExceptionType.CANCEL;
- *     }
- * }
- * </pre>
- *
  * @since 20.3
  */
 @SuppressWarnings({"serial", "deprecation"})
 public abstract class AbstractTruffleException extends RuntimeException implements TruffleObject, com.oracle.truffle.api.TruffleException {
 
+    /**
+     * The constant for an unlimited stack trace element limit.
+     *
+     * @since 20.3
+     */
+    public static final int UNLIMITED_STACK_TRACE = -1;
+
     private final int stackTraceElementLimit;
-    private final Throwable internalCause;
+    private final Throwable cause;
     private final Node location;
     private Throwable lazyStackTrace;
 
@@ -177,7 +176,7 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
      * @since 20.3
      */
     protected AbstractTruffleException() {
-        this(null, null, -1, null);
+        this(null, null, UNLIMITED_STACK_TRACE, null);
     }
 
     /**
@@ -186,7 +185,7 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
      * @since 20.3
      */
     protected AbstractTruffleException(Node location) {
-        this(null, null, -1, location);
+        this(null, null, UNLIMITED_STACK_TRACE, location);
     }
 
     /**
@@ -195,7 +194,7 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
      * @since 20.3
      */
     protected AbstractTruffleException(String message) {
-        this(message, null, -1, null);
+        this(message, null, UNLIMITED_STACK_TRACE, null);
     }
 
     /**
@@ -204,23 +203,47 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
      * @since 20.3
      */
     protected AbstractTruffleException(String message, Node location) {
-        this(message, null, -1, location);
+        this(message, null, UNLIMITED_STACK_TRACE, location);
+    }
+
+    /**
+     * Creates a new AbstractTruffleException initialized from the given prototype. The exception
+     * message, internal cause, stack trace limit, location, suppressed exceptions and Truffle stack
+     * trace of a newly created {@link AbstractTruffleException} are inherited from the given
+     * {@link AbstractTruffleException}.
+     *
+     * @since 20.3
+     */
+    @TruffleBoundary
+    protected AbstractTruffleException(AbstractTruffleException prototype) {
+        this(prototype.getMessage(), prototype.getCause(), prototype.getStackTraceElementLimit(), prototype.getLocation());
+        for (Throwable t : prototype.getSuppressed()) {
+            this.addSuppressed(t);
+        }
+        TruffleStackTrace.fillIn(prototype);
+        assert prototype.lazyStackTrace != null : "Prototype mast have a stack trace after fillIn.";
+        this.lazyStackTrace = prototype.lazyStackTrace;
     }
 
     /**
      * Creates a new AbstractTruffleException.
      *
      * @param message the exception message or {@code null}
-     * @param internalCause a Truffle exception causing this exception or {@code null}
-     * @param stackTraceElementLimit a stack trace limit. Use {@code -1} for unlimited stack trace
-     *            length.
+     * @param cause an internal or {@link AbstractTruffleException} causing this exception or
+     *            {@code null}. If internal errors are passed as cause, they are not accessible by
+     *            other languages or the embedder. In other words,
+     *            {@link InteropLibrary#getExceptionCause(Object)} or
+     *            {@link PolyglotException#getCause()} will return <code>null</code> for internal
+     *            errors.
+     * @param stackTraceElementLimit a stack trace limit. Use {@link #UNLIMITED_STACK_TRACE} for
+     *            unlimited stack trace length.
      *
      * @since 20.3
      */
-    protected AbstractTruffleException(String message, Throwable internalCause, int stackTraceElementLimit, Node location) {
-        super(message, checkCause(internalCause));
+    protected AbstractTruffleException(String message, Throwable cause, int stackTraceElementLimit, Node location) {
+        super(message, cause);
         this.stackTraceElementLimit = stackTraceElementLimit;
-        this.internalCause = internalCause;
+        this.cause = cause;
         this.location = location;
     }
 
@@ -345,7 +368,7 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
     @Deprecated
     @Override
     public final boolean isCancelled() {
-        return getExceptionType() == ExceptionType.CANCEL;
+        return false;
     }
 
     /**
@@ -378,6 +401,18 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
     }
 
     /**
+     * Returns {@code true} if the exception indicates that the application thread was interrupted.
+     *
+     * @deprecated Use {@link InteropLibrary#getExceptionType(Object)}.
+     * @since 20.3
+     */
+    @Deprecated
+    @Override
+    public boolean isInterrupted() {
+        return getExceptionType() == ExceptionType.INTERRUPT;
+    }
+
+    /**
      * Setting a cause is not supported.
      *
      * @deprecated Pass in the cause using the constructors instead.
@@ -387,7 +422,7 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
     @TruffleBoundary
     @Override
     @SuppressWarnings("sync-override")
-    public final Throwable initCause(Throwable cause) {
+    public final Throwable initCause(Throwable throwable) {
         throw new UnsupportedOperationException("Not supported. Pass in the cause using the constructors instead.");
     }
 
@@ -399,7 +434,7 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
     @Override
     @SuppressWarnings("sync-override")
     public final Throwable getCause() {
-        return internalCause;
+        return cause;
     }
 
     Throwable getLazyStackTrace() {
@@ -419,10 +454,7 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
     }
 
     @SuppressWarnings("deprecation")
-    private static Throwable checkCause(Throwable t) {
-        if (t != null && !(t instanceof com.oracle.truffle.api.TruffleException)) {
-            throw new IllegalArgumentException("The " + t + " must be TruffleException subclass.");
-        }
-        return t;
+    static boolean isTruffleException(Throwable t) {
+        return t instanceof com.oracle.truffle.api.TruffleException;
     }
 }
