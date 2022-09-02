@@ -587,4 +587,9 @@ public final class EspressoLauncher extends AbstractLanguageLauncher {
             return toPrepend;
         }
     }
+
+    @Override
+    protected String[] getDefaultLanguages() {
+        return new String[]{"java"};
+    }
 }
