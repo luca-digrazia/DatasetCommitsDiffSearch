@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.configure.trace;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -145,9 +144,6 @@ class ReflectionProcessor extends AbstractProcessor {
                 expectSize(args, 2);
                 String name = (String) args.get(0);
                 List<?> parameterTypes = (List<?>) args.get(1);
-                if (parameterTypes == null) { // tolerated and equivalent to no parameter types
-                    parameterTypes = Collections.emptyList();
-                }
                 configuration.getOrCreateType(clazz).addMethod(name, SignatureUtil.toInternalSignature(parameterTypes), memberKind);
                 break;
             }
@@ -156,9 +152,6 @@ class ReflectionProcessor extends AbstractProcessor {
                 memberKind = ConfigurationMemberKind.DECLARED; // fall through
             case "getConstructor": {
                 List<String> parameterTypes = singleElement(args);
-                if (parameterTypes == null) { // tolerated and equivalent to no parameter types
-                    parameterTypes = Collections.emptyList();
-                }
                 String signature = SignatureUtil.toInternalSignature(parameterTypes);
                 configuration.getOrCreateType(clazz).addMethod(ConfigurationMethod.CONSTRUCTOR_NAME, signature, memberKind);
                 break;
