@@ -41,7 +41,6 @@
 package org.graalvm.wasm;
 
 import com.oracle.truffle.api.CallTarget;
-import org.graalvm.wasm.exception.Failure;
 import org.graalvm.wasm.nodes.WasmIndirectCallNode;
 
 import com.oracle.truffle.api.dsl.Cached;
@@ -56,12 +55,9 @@ public class WasmFunctionInstance implements TruffleObject {
     private final CallTarget target;
 
     /**
-     * Represents a call target that is a WebAssembly function or an imported function.
-     *
-     * If the function is imported, then function is set to {@code null}.
+     * Represents a WebAssembly function.
      */
     public WasmFunctionInstance(WasmFunction function, CallTarget target) {
-        Assert.assertNotNull(target, "Call target must be non-null", Failure.UNSPECIFIED_INTERNAL);
         this.function = function;
         this.target = target;
     }

@@ -214,6 +214,19 @@ import static org.graalvm.wasm.constants.Instructions.RETURN;
 import static org.graalvm.wasm.constants.Instructions.SELECT;
 import static org.graalvm.wasm.constants.Instructions.UNREACHABLE;
 
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage.ContextReference;
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.RepeatingNode;
 import org.graalvm.wasm.Assert;
 import org.graalvm.wasm.BinaryStreamParser;
 import org.graalvm.wasm.SymbolTable;
@@ -230,19 +243,7 @@ import org.graalvm.wasm.exception.WasmTrap;
 import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.memory.WasmMemoryException;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.nodes.LoopNode;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.RepeatingNode;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
@@ -363,7 +364,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
             switch (opcode) {
                 case UNREACHABLE:
                     trace("unreachable");
-                    throw WasmTrap.create(this, "unreachable");
+                    throw new WasmTrap(this, "unreachable");
                 case NOP:
                     trace("noop");
                     break;
@@ -529,7 +530,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                             return unwindCounter;
                         }
                     }
-                    throw WasmExecutionException.create(this, "Should not reach here");
+                    throw new WasmExecutionException(this, "Should not reach here");
                 }
                 case RETURN: {
                     // A return statement causes the termination of the current function, i.e.
@@ -563,7 +564,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     DirectCallNode callNode = (DirectCallNode) children[childrenOffset];
                     childrenOffset++;
 
-                    Object[] args = createArgumentsForCall(frame, function.typeIndex(), numArgs, stackPointer);
+                    Object[] args = createArgumentsForCall(frame, function, numArgs, stackPointer);
                     stackPointer -= args.length;
 
                     trace("direct call to function %s (%d args)", function, args.length);
@@ -598,7 +599,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                             break;
                         }
                         default: {
-                            throw WasmTrap.format(this, "Unknown return type: %d", returnType);
+                            throw new WasmTrap(this, "Unknown return type: " + returnType);
                         }
                     }
 
@@ -612,22 +613,14 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     final Object[] elements = table.elements();
                     final int elementIndex = popInt(frame, stackPointer);
                     if (elementIndex < 0 || elementIndex >= elements.length) {
-                        throw WasmTrap.format(this, "Element index '%d' out of table bounds.", elementIndex);
+                        throw new WasmTrap(this, "Element index '" + elementIndex + "' out of table bounds.");
                     }
                     // Currently, table elements may only be functions.
                     // We can add a check here when this changes in the future.
-                    final Object element = elements[elementIndex];
-                    if (element == null) {
-                        throw WasmTrap.format(this, "Table element at index %d is uninitialized.", elementIndex);
-                    }
-                    final WasmFunction function;
-                    final CallTarget target;
-                    if (element instanceof WasmFunctionInstance) {
-                        final WasmFunctionInstance functionInstance = (WasmFunctionInstance) element;
-                        function = functionInstance.function();
-                        target = functionInstance.target();
-                    } else {
-                        throw WasmTrap.format(this, "Unknown table element type: %s", element);
+                    final WasmFunctionInstance functionInstance = (WasmFunctionInstance) elements[elementIndex];
+                    final WasmFunction function = functionInstance.function();
+                    if (function == null) {
+                        throw new WasmTrap(this, "Table element at index " + elementIndex + " is uninitialized.");
                     }
 
                     // Extract the function type index.
@@ -644,12 +637,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     offset += 1;
 
                     // Validate that the function type matches the expected type.
-                    if (function != null && expectedTypeEquivalenceClass != function.typeEquivalenceClass()) {
+                    if (expectedTypeEquivalenceClass != function.typeEquivalenceClass()) {
                         // TODO: This check may be too rigorous, as the WebAssembly specification
                         // seems to allow multiple definitions of the same type.
                         // We should refine the check.
-                        throw WasmTrap.format(this, "Actual (type %d of function %s) and expected (type %d in module %s) types differ in the indirect call.",
-                                        function.typeIndex(), function.name(), expectedFunctionTypeIndex, instance().name());
+                        throw new WasmTrap(this, Assert.format("Actual (type %d of function %s) and expected (type %d in module %s) types differ in the indirect call.",
+                                        function.typeIndex(), function.name(), expectedFunctionTypeIndex, instance().name()));
                     }
 
                     // Invoke the resolved function.
@@ -657,10 +650,11 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     childrenOffset++;
 
                     int numArgs = instance().symbolTable().functionTypeArgumentCount(expectedFunctionTypeIndex);
-                    Object[] args = createArgumentsForCall(frame, expectedFunctionTypeIndex, numArgs, stackPointer);
+                    Object[] args = createArgumentsForCall(frame, function, numArgs, stackPointer);
                     stackPointer -= args.length;
 
                     trace("indirect call to function %s (%d args)", function, args.length);
+                    final CallTarget target = functionInstance.target();
                     final Object result = callNode.execute(target, args);
                     trace("return from indirect_call to function %s : %s", function, result);
                     // At the moment, WebAssembly functions may return up to one value.
@@ -693,7 +687,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                             break;
                         }
                         default: {
-                            throw WasmTrap.format(this, "Unknown return type: %d", returnType);
+                            throw new WasmTrap(this, "Unknown return type: " + returnType);
                         }
                     }
 
@@ -756,7 +750,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                             break;
                         }
                         default: {
-                            throw WasmTrap.create(this, "Local variable cannot have the void type.");
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
                         }
                     }
                     break;
@@ -800,7 +794,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                             break;
                         }
                         default: {
-                            throw WasmTrap.create(this, "Local variable cannot have the void type.");
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
                         }
                     }
                     break;
@@ -852,7 +846,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                             break;
                         }
                         default: {
-                            throw WasmTrap.create(this, "Local variable cannot have the void type.");
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
                         }
                     }
                     break;
@@ -901,7 +895,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                             break;
                         }
                         default: {
-                            throw WasmTrap.create(this, "Local variable cannot have the void type.");
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
                         }
                     }
                     break;
@@ -953,7 +947,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                             break;
                         }
                         default: {
-                            throw WasmTrap.create(this, "Local variable cannot have the void type.");
+                            throw new WasmTrap(this, "Local variable cannot have the void type.");
                         }
                     }
                     break;
@@ -1063,11 +1057,11 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 break;
                             }
                             default: {
-                                throw WasmTrap.format(this, "Unknown load opcode: %d", opcode);
+                                throw new WasmTrap(this, "Unknown load opcode: " + opcode);
                             }
                         }
                     } catch (WasmMemoryException e) {
-                        throw WasmTrap.create(this, "memory address out-of-bounds");
+                        throw new WasmTrap(this, "memory address out-of-bounds");
                     }
                     stackPointer++;
                     break;
@@ -1180,11 +1174,11 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 break;
                             }
                             default: {
-                                throw WasmTrap.format(this, "Unknown store opcode: %d", opcode);
+                                throw new WasmTrap(this, "Unknown store opcode: " + opcode);
                             }
                         }
                     } catch (WasmMemoryException e) {
-                        throw WasmTrap.create(this, "memory address out-of-bounds");
+                        throw new WasmTrap(this, "memory address out-of-bounds");
                     }
 
                     break;
@@ -1193,7 +1187,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     // Skip the 0x00 constant.
                     offset++;
                     trace("memory_size");
-                    int pageSize = instance().memory().pageSize();
+                    int pageSize = (int) (instance().memory().pageSize());
                     pushInt(frame, stackPointer, pageSize);
                     stackPointer++;
                     break;
@@ -1205,7 +1199,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     stackPointer--;
                     int extraSize = popInt(frame, stackPointer);
                     final WasmMemory memory = instance().memory();
-                    int pageSize = memory.pageSize();
+                    int pageSize = (int) memory.pageSize();
                     if (memory.grow(extraSize)) {
                         pushInt(frame, stackPointer, pageSize);
                         stackPointer++;
@@ -2349,7 +2343,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case F32_DEMOTE_F64: {
-                    throw WasmExecutionException.create(this, "not implemented: F32_DEMOTE_F64");
+                    throw new NotImplementedException();
                 }
                 case F64_CONVERT_I32_S:
                 case F64_CONVERT_I32_U: {
@@ -2372,7 +2366,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case F64_PROMOTE_F32: {
-                    throw WasmExecutionException.create(this, "not implemented: F64_PROMOTE_F32");
+                    throw new NotImplementedException();
                 }
                 case I32_REINTERPRET_F32: {
                     // As we don't store type information for the frame slots (everything is stored
@@ -2426,13 +2420,13 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @ExplodeLoop
-    private Object[] createArgumentsForCall(VirtualFrame frame, int functionTypeIndex, int numArgs, int stackPointerOffset) {
+    private Object[] createArgumentsForCall(VirtualFrame frame, WasmFunction function, int numArgs, int stackPointerOffset) {
         CompilerAsserts.partialEvaluationConstant(numArgs);
         Object[] args = new Object[numArgs];
         int stackPointer = stackPointerOffset;
         for (int i = numArgs - 1; i >= 0; --i) {
             stackPointer--;
-            byte type = instance().symbolTable().functionTypeArgumentTypeAt(functionTypeIndex, i);
+            byte type = instance().symbolTable().functionTypeArgumentTypeAt(function.typeIndex(), i);
             switch (type) {
                 case ValueTypes.I32_TYPE:
                     args[i] = popInt(frame, stackPointer);
@@ -2447,7 +2441,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     args[i] = popAsDouble(frame, stackPointer);
                     break;
                 default: {
-                    throw WasmTrap.format(this, "Unknown type: %d", type);
+                    throw new WasmTrap(this, "Unknown type: " + type);
                 }
             }
         }
@@ -2474,7 +2468,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     @Override
     public boolean executeRepeating(VirtualFrame frame) {
-        throw WasmExecutionException.create(this, "This method should never have been called.");
+        throw new WasmExecutionException(this, "This method should never have been called.");
     }
 
     @Override
@@ -2500,7 +2494,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
             case NONE:
                 return BinaryStreamParser.peekUnsignedInt32(codeEntry().data(), offset);
             default:
-                throw WasmExecutionException.create(this, "Invalid StoreConstantsInPoolChoice");
+                throw new WasmExecutionException(this, "Invalid StoreConstantsInPoolChoice");
         }
     }
 
@@ -2518,7 +2512,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
             case NONE:
                 return BinaryStreamParser.peekSignedInt32(codeEntry().data(), offset);
             default:
-                throw WasmExecutionException.create(this, "Invalid StoreConstantsInPoolChoice");
+                throw new WasmExecutionException(this, "Invalid StoreConstantsInPoolChoice");
         }
     }
 
@@ -2536,7 +2530,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
             case NONE:
                 return BinaryStreamParser.peekSignedInt64(codeEntry().data(), offset);
             default:
-                throw WasmExecutionException.create(this, "Invalid StoreConstantsInPoolChoice");
+                throw new WasmExecutionException(this, "Invalid StoreConstantsInPoolChoice");
         }
     }
 
@@ -2549,7 +2543,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
             case NONE:
                 return peekLeb128Length(offset);
             default:
-                throw WasmExecutionException.create(this, "Invalid StoreConstantsInPoolChoice");
+                throw new WasmExecutionException(this, "Invalid StoreConstantsInPoolChoice");
         }
     }
 
@@ -2574,7 +2568,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
             case NONE:
                 return 0;
             default:
-                throw WasmExecutionException.create(this, "Invalid StoreConstantsInPoolChoice");
+                throw new WasmExecutionException(this, "Invalid StoreConstantsInPoolChoice");
         }
     }
 

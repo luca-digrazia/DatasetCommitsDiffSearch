@@ -124,7 +124,6 @@ public class Linker {
             assignTypeEquivalenceClasses();
             for (WasmInstance instance : instances.values()) {
                 instance.module().setParsed();
-                instance.setLinked();
             }
             for (WasmInstance instance : instances.values()) {
                 final WasmFunction start = instance.symbolTable().startFunction();
