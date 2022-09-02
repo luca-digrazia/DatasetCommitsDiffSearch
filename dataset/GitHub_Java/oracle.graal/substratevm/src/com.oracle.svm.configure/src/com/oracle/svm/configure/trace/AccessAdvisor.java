@@ -36,12 +36,10 @@ public final class AccessAdvisor {
         internalsFilter.addOrGetChildren("**", RuleNode.Inclusion.Include);
         internalsFilter.addOrGetChildren("java.**", RuleNode.Inclusion.Exclude);
         internalsFilter.addOrGetChildren("javax.**", RuleNode.Inclusion.Exclude);
-        internalsFilter.addOrGetChildren("javax.security.auth.**", RuleNode.Inclusion.Include);
         internalsFilter.addOrGetChildren("sun.**", RuleNode.Inclusion.Exclude);
         internalsFilter.addOrGetChildren("com.sun.**", RuleNode.Inclusion.Exclude);
         internalsFilter.addOrGetChildren("jdk.**", RuleNode.Inclusion.Exclude);
         internalsFilter.addOrGetChildren("org.graalvm.compiler.**", RuleNode.Inclusion.Exclude);
-        internalsFilter.addOrGetChildren("org.graalvm.libgraal.**", RuleNode.Inclusion.Exclude);
         internalsFilter.removeRedundantNodes();
     }
 
@@ -135,11 +133,11 @@ public final class AccessAdvisor {
     }
 
     public boolean shouldIgnoreJniNewObjectArray(LazyValue<String> arrayClass, LazyValue<String> callerClass) {
-        if (shouldIgnoreCaller(callerClass)) {
-            return true;
-        }
         if (!heuristicsEnabled) {
             return false;
+        }
+        if (shouldIgnoreCaller(callerClass)) {
+            return true;
         }
         if (callerClass.get() == null && "[Ljava.lang.String;".equals(arrayClass.get())) {
             /*
