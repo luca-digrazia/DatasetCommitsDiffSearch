@@ -389,22 +389,13 @@ class Stack {
     }
 
     int mergeInto(StackFrame stackFrame) {
-        if (size != stackFrame.stackSize) {
+        if (top != stackFrame.stack.length) {
             throw new VerifyError("Inconsistent stack height: " + top + " != " + stackFrame.stack.length);
         }
-        int secondIndex = 0;
-        for (int index = 0; index < top; index++) {
-            Operand op1 = stack[index];
-            Operand op2 = stackFrame.stack[secondIndex++];
-            if (!op1.compliesWithInMerge(op2)) {
-                return index;
+        for (int i = 0; i < top; i++) {
+            if (!stack[i].compliesWithInMerge(stackFrame.stack[i])) {
+                return i;
             }
-            if (isType2(op1) && op2 == Invalid) {
-                if (stackFrame.stack[secondIndex++] != Invalid) {
-                    throw new VerifyError("Inconsistent stack Map: " + op1 + " vs. " + op2 + " and " + stackFrame.stack[secondIndex - 1]);
-                }
-            }
-
         }
         return -1;
     }
