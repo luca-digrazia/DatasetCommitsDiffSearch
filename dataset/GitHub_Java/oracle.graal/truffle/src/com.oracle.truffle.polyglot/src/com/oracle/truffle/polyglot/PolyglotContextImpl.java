@@ -1507,18 +1507,10 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         if (locations == null) {
             return;
         }
-        try {
-            for (int i = 0; i < locations.length; i++) {
-                LocalLocation location = locations[i];
-                assert locals[location.index] == null : "local already initialized";
-                locals[location.index] = location.invokeFactory(this, null);
-            }
-        } catch (Throwable t) {
-            // reset values again the language failed to initialize
-            for (int i = 0; i < locations.length; i++) {
-                locals[locations[i].index] = null;
-            }
-            throw t;
+        for (int i = 0; i < locations.length; i++) {
+            LocalLocation location = locations[i];
+            assert locals[location.index] == null : "local already initialized";
+            locals[location.index] = location.invokeFactory(this, null);
         }
     }
 
@@ -1537,18 +1529,10 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         if (locations == null) {
             return;
         }
-        try {
-            for (int i = 0; i < locations.length; i++) {
-                LocalLocation location = locations[i];
-                assert threadLocals[location.index] == null : "local already initialized";
-                threadLocals[location.index] = location.invokeFactory(this, thread);
-            }
-        } catch (Throwable t) {
-            // reset values again the language failed to initialize
-            for (int i = 0; i < locations.length; i++) {
-                threadLocals[locations[i].index] = null;
-            }
-            throw t;
+        for (int i = 0; i < locations.length; i++) {
+            LocalLocation location = locations[i];
+            assert threadLocals[location.index] == null : "local already initialized";
+            threadLocals[location.index] = location.invokeFactory(this, thread);
         }
     }
 
