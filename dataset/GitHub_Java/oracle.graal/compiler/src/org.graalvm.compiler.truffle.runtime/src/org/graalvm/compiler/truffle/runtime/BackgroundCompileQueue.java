@@ -254,16 +254,16 @@ public class BackgroundCompileQueue {
         private final CancellableCompileTask task;
         private final WeakReference<OptimizedCallTarget> targetRef;
         private final Request request;
-        private final boolean priorityQueue;
-        private final boolean multiTier;
+        private final boolean firstTierPriority;
+        private final boolean lastTierPriority;
 
         RequestImpl(long id, Priority priority, WeakReference<OptimizedCallTarget> targetRef, CancellableCompileTask task, Request request) {
             this.id = id;
             this.priority = priority;
             this.targetRef = targetRef;
             OptimizedCallTarget target = targetRef.get();
-            priorityQueue = target != null && target.getOptionValue(PolyglotCompilerOptions.PriorityQueue);
-            multiTier = target != null && target.getOptionValue(PolyglotCompilerOptions.MultiTier);
+            firstTierPriority = target != null && target.getOptionValue(PolyglotCompilerOptions.CompilationPriorityFirstTier);
+            lastTierPriority = target != null && target.getOptionValue(PolyglotCompilerOptions.CompilationPriorityLastTier);
             this.task = task;
             this.request = request;
         }
@@ -274,21 +274,14 @@ public class BackgroundCompileQueue {
             if (tierCompare != 0) {
                 return tierCompare;
             }
-            if (priorityQueueEnabled()) {
+            if ((firstTierPriority && priority.tier == Priority.Tier.FIRST) ||
+                            (lastTierPriority && priority.tier == Priority.Tier.LAST)) {
                 int valueCompare = -1 * Long.compare(priority.value, that.priority.value);
                 if (valueCompare != 0) {
                     return valueCompare;
                 }
             }
             return Long.compare(this.id, that.id);
-        }
-
-        /**
-         * We only want priority for the "escape from interpreter" compilations. If multi tier is
-         * enabled, that means *only* first tier compilations, otherwise it means last tier.
-         */
-        private boolean priorityQueueEnabled() {
-            return priorityQueue && ((multiTier && priority.tier == Priority.Tier.FIRST) || (!multiTier && priority.tier == Priority.Tier.LAST));
         }
 
         @SuppressWarnings("try")

@@ -491,7 +491,7 @@ public final class PolyglotCompilerOptions {
 
     // Compilation queue
     @Option(help = "Use the priority of first tier compilation jobs in the compilation queue.", category = OptionCategory.INTERNAL)
-    public static final OptionKey<Boolean> CompilationPriorityFirstTier = new OptionKey<>(true);
+    public static final OptionKey<Boolean> CompilationPriorityFirstTier = new OptionKey<>(false);
 
     @Option(help = "Use the priority of last tier compilation jobs in the compilation queue.", category = OptionCategory.INTERNAL)
     public static final OptionKey<Boolean> CompilationPriorityLastTier = new OptionKey<>(false);
