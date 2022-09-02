@@ -123,7 +123,7 @@ public final class NativeLibrarySupport {
             if (loadLibrary0(libpath, false)) {
                 return;
             }
-            File altpath = Target_jdk_internal_loader_ClassLoaderHelper.mapAlternativeName(libpath);
+            File altpath = Target_java_lang_ClassLoaderHelper.mapAlternativeName(libpath);
             if (altpath != null && loadLibrary0(libpath, false)) {
                 return;
             }
