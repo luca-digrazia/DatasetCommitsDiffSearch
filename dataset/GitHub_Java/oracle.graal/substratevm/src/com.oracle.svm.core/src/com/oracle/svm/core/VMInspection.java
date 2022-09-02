@@ -31,7 +31,6 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.TimeZone;
-import java.util.function.BooleanSupplier;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.options.Option;
@@ -51,7 +50,6 @@ import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.stack.JavaStackWalker;
 import com.oracle.svm.core.stack.ThreadStackPrinter.StackFramePrintVisitor;
-import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.thread.JavaVMOperation;
 import com.oracle.svm.core.thread.VMThreads;
 
@@ -86,13 +84,6 @@ public class VMInspection implements Feature {
     public static boolean isEnabled() {
         return VMInspectionOptions.AllowVMInspection.getValue();
     }
-
-    public static final class IsEnabled implements BooleanSupplier {
-        @Override
-        public boolean getAsBoolean() {
-            return VMInspection.isEnabled();
-        }
-    }
 }
 
 class VMInspectionOptions {
@@ -112,7 +103,6 @@ class DumpAllStacks implements SignalHandler {
     public void handle(Signal arg0) {
         JavaVMOperation.enqueueBlockingSafepoint("DumpAllStacks", () -> {
             Log log = Log.log();
-            log.string("Full thread dump:").newline().newline();
             for (IsolateThread vmThread = VMThreads.firstThread(); vmThread.isNonNull(); vmThread = VMThreads.nextThread(vmThread)) {
                 if (vmThread == CurrentIsolate.getCurrentThread()) {
                     /* Skip the signal handler stack */
@@ -130,22 +120,7 @@ class DumpAllStacks implements SignalHandler {
     }
 
     private static void dumpStack(Log log, IsolateThread vmThread) {
-        Thread javaThread = JavaThreads.fromVMThread(vmThread);
-        if (javaThread != null) {
-            log.character('"').string(javaThread.getName()).character('"');
-            log.string(" #").signed(javaThread.getId());
-            if (javaThread.isDaemon()) {
-                log.string(" daemon");
-            }
-        } else {
-            log.string("(no Java thread)");
-        }
-        log.string(" tid=0x").zhex(vmThread.rawValue());
-        if (javaThread != null) {
-            log.string(" state=").string(javaThread.getState().name());
-        }
-        log.newline();
-
+        log.string("VMThread ").zhex(vmThread.rawValue()).spaces(2).string(VMThreads.StatusSupport.getStatusString(vmThread)).newline();
         log.indent(true);
         JavaStackWalker.walkThread(vmThread, StackFramePrintVisitor.SINGLETON, log);
         log.indent(false);
