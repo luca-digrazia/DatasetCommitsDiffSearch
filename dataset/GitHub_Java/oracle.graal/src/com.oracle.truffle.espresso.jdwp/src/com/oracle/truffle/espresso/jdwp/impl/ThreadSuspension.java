@@ -79,16 +79,7 @@ public final class ThreadSuspension {
             // suspended through a hard suspension, which means that thread is
             // still running until the callback from the Debug API is fired
             // or it's blocked or waiting
-
-            // return the real suspension count unless it's 0
-            // in which case the hard suspension counts as 1
-            for (int i = 0; i < threads.length; i++) {
-                if (thread == threads[i]) {
-                    int count = suspensionCount[i];
-                    return count + 1; // add the hard suspension
-                }
-            }
-            return 1; // hard suspended
+            return 1;
         }
 
         for (int i = 0; i < threads.length; i++) {
@@ -96,15 +87,11 @@ public final class ThreadSuspension {
                 return suspensionCount[i];
             }
         }
-        // in case the thread has not been suspended ever
+        // this should never be reached
         return 0;
     }
 
     public void addHardSuspendedThread(Object thread) {
-        // register the thread by calling suspend, but leave the suspension
-        // count untouched by calling resume afterwards.
-        suspendThread(thread);
-        resumeThread(thread);
         hardSuspendedThreads.add(thread);
     }
 

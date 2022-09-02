@@ -234,7 +234,7 @@ public final class DebuggerConnection implements Commands {
                     // we closed the session, so let the thread run dry
                 }
             }
-            controller.leaveTruffleContext();
+            context.leaveTruffleContext();
         }
 
         private void processPacket(Packet packet) {
@@ -246,7 +246,7 @@ public final class DebuggerConnection implements Commands {
             } else {
                 // process a command packet from debugger
                 JDWPLogger.log("received command(%d.%d)", JDWPLogger.LogLevel.PACKET, packet.cmdSet, packet.cmd);
-                controller.enterTruffleContext();
+                context.enterTruffleContext();
 
                 switch (packet.cmdSet) {
                     case JDWP.VirtualMachine.ID: {
