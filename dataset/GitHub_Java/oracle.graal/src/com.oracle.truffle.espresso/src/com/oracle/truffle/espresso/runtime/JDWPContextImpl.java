@@ -5,10 +5,13 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.JDWPSetup;
+import com.oracle.truffle.espresso.jdwp.impl.JDWPVirtualMachine;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
+import com.oracle.truffle.espresso.jdwp.api.NullKlass;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPCallFrame;
+import com.oracle.truffle.espresso.jdwp.impl.JDWPVirtualMachineImpl;
 import com.oracle.truffle.espresso.jdwp.impl.TagConstants;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -29,11 +32,15 @@ public final class JDWPContextImpl implements JDWPContext {
     public static final String JAVA_LANG_THREAD_GROUP = "Ljava/lang/ThreadGroup;";
 
 
+    public static final NullKlass NULL_KLASS = new NullKlass();
+
     private final EspressoContext context;
+    private final JDWPVirtualMachine vm;
     private final Ids<Object> ids;
 
     public JDWPContextImpl(EspressoContext context) {
         this.context = context;
+        this.vm = new JDWPVirtualMachineImpl();
         this.ids = new Ids<>(StaticObject.NULL);
     }
 
@@ -68,6 +75,11 @@ public final class JDWPContextImpl implements JDWPContext {
     @Override
     public boolean isValidThreadGroup(Object threadGroup) {
         return context.isValidThreadGroup(threadGroup);
+    }
+
+    @Override
+    public KlassRef getNullKlass() {
+        return NULL_KLASS;
     }
 
     @Override
@@ -135,6 +147,19 @@ public final class JDWPContextImpl implements JDWPContext {
     }
 
     @Override
+    public JDWPVirtualMachine getVirtualMachine() {
+        return vm;
+    }
+
+    @Override
+    public KlassRef getKlassFromRootNode(RootNode root) {
+        if (root != null && root instanceof EspressoRootNode) {
+            return ((EspressoRootNode) root).getMethod().getDeclaringKlass();
+        }
+        return null;
+    }
+
+    @Override
     public MethodRef getMethodFromRootNode(RootNode root) {
         if (root != null && root instanceof EspressoRootNode) {
             return ((EspressoRootNode) root).getMethod();
@@ -145,7 +170,12 @@ public final class JDWPContextImpl implements JDWPContext {
     @Override
     public KlassRef getRefType(Object object) {
         if (object instanceof StaticObject) {
-            return ((StaticObject) object).getKlass();
+            if (StaticObject.NULL == object) {
+                // null object
+                return getNullKlass();
+            } else {
+                return ((StaticObject) object).getKlass();
+            }
         } else {
             throw new IllegalStateException("object " + object + " is not a static object");
         }
