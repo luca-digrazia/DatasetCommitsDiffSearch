@@ -22,6 +22,7 @@
  */
 package com.oracle.truffle.espresso.jdwp.api;
 
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPCallFrame;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPVirtualMachine;
