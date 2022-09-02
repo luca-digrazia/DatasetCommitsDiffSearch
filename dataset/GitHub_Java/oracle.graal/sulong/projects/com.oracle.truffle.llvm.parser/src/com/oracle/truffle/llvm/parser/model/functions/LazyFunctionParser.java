@@ -32,12 +32,7 @@ package com.oracle.truffle.llvm.parser.model.functions;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.listeners.Function;
-import com.oracle.truffle.llvm.parser.listeners.FunctionMDOnly;
-import com.oracle.truffle.llvm.parser.listeners.MetadataSubprogramOnly.MDSubprogramParsedException;
-import com.oracle.truffle.llvm.parser.listeners.ParameterAttributes;
-import com.oracle.truffle.llvm.parser.listeners.Types;
 import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoFunctionProcessor;
-import com.oracle.truffle.llvm.parser.model.IRScope;
 import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
 import com.oracle.truffle.llvm.parser.text.LLSourceBuilder;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
@@ -45,30 +40,21 @@ import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 public final class LazyFunctionParser {
 
     private final LLVMScanner.LazyScanner scanner;
-    public final IRScope scope;
-    private final Types types;
-    private final FunctionDefinition function;
-    private final int mode;
-    private final ParameterAttributes paramAttributes;
+    private final Function parser;
     private final LLSourceBuilder llSource;
 
     private boolean isParsed;
 
-    public LazyFunctionParser(LLVMScanner.LazyScanner scanner, IRScope scope, Types types, FunctionDefinition function, int mode, ParameterAttributes paramAttributes, LLSourceBuilder llSource) {
+    public LazyFunctionParser(LLVMScanner.LazyScanner scanner, Function parser, LLSourceBuilder llSource) {
         this.scanner = scanner;
-        this.scope = scope;
-        this.types = types;
-        this.function = function;
-        this.mode = mode;
-        this.paramAttributes = paramAttributes;
+        this.parser = parser;
         this.llSource = llSource;
         this.isParsed = false;
     }
 
     public void parse(DebugInfoFunctionProcessor diProcessor, Source bitcodeSource, LLVMParserRuntime runtime) {
         if (!isParsed) {
-            synchronized (scope) {
-                Function parser = new Function(scope, types, function, mode, paramAttributes);
+            synchronized (parser.getScope()) {
                 parser.setupScope();
                 scanner.scanBlock(parser);
                 diProcessor.process(parser.getFunction(), parser.getScope(), bitcodeSource, runtime.getContext());
@@ -76,25 +62,6 @@ public final class LazyFunctionParser {
                     llSource.applySourceLocations(parser.getFunction(), runtime);
                 }
                 isParsed = true;
-            }
-        }
-    }
-
-    public void parseLinkageName(LLVMParserRuntime runtime) {
-        synchronized (scope) {
-            FunctionMDOnly parser = new FunctionMDOnly(scope, types, function);
-            try {
-                parser.setupScope();
-                scanner.scanBlock(parser);
-            } catch (MDSubprogramParsedException e) {
-                // if linkageName/displayName is found, an exception is thrown (s.t.
-                // parsing/searching does not have to be continued)
-                final String displayName = e.displayName;
-                final String linkageName = e.linkageName;
-
-                if (linkageName != null && runtime.getFileScope().getFunction(displayName) == null) {
-                    runtime.getFileScope().registerLinkageName(displayName, linkageName);
-                }
             }
         }
     }
