@@ -104,6 +104,7 @@ public class SerializationChecksumCalculator {
     }
 
     private static class Holder {
+
         static final boolean warningPrinted;
         static {
             // Checkstyle: stop
@@ -111,10 +112,10 @@ public class SerializationChecksumCalculator {
             // Checkstyle: resume
             warningPrinted = true;
         }
-    }
 
-    public static boolean printUsageWarning() {
-        return Holder.warningPrinted;
+        static boolean printWarning() {
+            return warningPrinted;
+        }
     }
 
     /**
@@ -129,6 +130,7 @@ public class SerializationChecksumCalculator {
             }
             MessageDigest md = createMessageDigest();
             if (targetConstructorClassName != null && targetConstructorClassName.length() > 0) {
+                Holder.printWarning();
                 String currentClassName = serializationClassName;
                 Class<?> currentClass = serializationClass;
                 while (!targetConstructorClassName.equals(currentClassName)) {

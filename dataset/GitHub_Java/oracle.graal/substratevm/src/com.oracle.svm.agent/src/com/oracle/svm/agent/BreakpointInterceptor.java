@@ -144,9 +144,6 @@ final class BreakpointInterceptor {
     /** Enables experimental support for instrumenting class lookups via {@code ClassLoader}. */
     private static boolean experimentalClassLoaderSupport = false;
 
-    /* Write checksums into serialization-config.json file */
-    private static boolean writeSerializationChecksums = false;
-
     /**
      * Locations in methods where explicit calls to {@code ClassLoader.loadClass} have been found.
      */
@@ -869,33 +866,25 @@ final class BreakpointInterceptor {
     private static boolean objectStreamClassConstructor(JNIEnvironment jni, Breakpoint bp) {
         JNIObjectHandle serializeTargetClass = getObjectArgument(1);
         String serializeTargetClassName = getClassNameOrNull(jni, serializeTargetClass);
-
+        String checksum = "0";
+        List<SerializationInfo> traceCandidates = new ArrayList<>();
+        CheckSumCalculator checkSumCalculator = new CheckSumCalculator(jni, bp);
         JNIObjectHandle objectStreamClassInstance = newObjectL(jni, bp.clazz, bp.method, serializeTargetClass);
-        boolean validObjectStreamClassInstance = nullHandle().notEqual(objectStreamClassInstance);
+        Object result = nullHandle().notEqual(objectStreamClassInstance);
         if (clearException(jni)) {
-            validObjectStreamClassInstance = false;
+            result = false;
         }
-
         // Skip Lambda class serialization
         if (serializeTargetClassName.contains("$$Lambda$")) {
             return true;
         }
-
-        String checksum = null;
-        CheckSumCalculator checkSumCalculator = null;
-        if (writeSerializationChecksums) {
-            checksum = "0";
-            if (validObjectStreamClassInstance) {
-                try {
-                    checkSumCalculator = new CheckSumCalculator(jni, bp);
-                    checksum = checkSumCalculator.calculateChecksum(getConsClassName(jni, bp.clazz, objectStreamClassInstance), serializeTargetClassName, serializeTargetClass);
-                } catch (NoSuchAlgorithmException e) {
-                    throw VMError.shouldNotReachHere("Building serialization checksum failed", e);
-                }
+        if (result.equals(true)) {
+            try {
+                checksum = checkSumCalculator.calculateChecksum(getConsClassName(jni, bp.clazz, objectStreamClassInstance), serializeTargetClassName, serializeTargetClass);
+            } catch (NoSuchAlgorithmException e) {
+                throw VMError.shouldNotReachHere("Building serialization checksum failed", e);
             }
         }
-
-        List<SerializationInfo> traceCandidates = new ArrayList<>();
         traceCandidates.add(new SerializationInfo(serializeTargetClassName, checksum));
 
         /*
@@ -921,14 +910,12 @@ final class BreakpointInterceptor {
                         if (!jniFunctions().getIsSameObject().invoke(jni, oscInstanceInSlot, objectStreamClassInstance)) {
                             JNIObjectHandle oscClazz = callObjectMethod(jni, oscInstanceInSlot, javaIoObjectStreamClassForClassMId);
                             String oscClassName = getClassNameOrNull(jni, oscClazz);
-                            String calculatedChecksum = null;
-                            if (checkSumCalculator != null) {
-                                try {
-                                    calculatedChecksum = checkSumCalculator.calculateChecksum(getConsClassName(jni,
-                                                    bp.clazz, oscInstanceInSlot), oscClassName, oscClazz);
-                                } catch (NoSuchAlgorithmException e) {
-                                    throw VMError.shouldNotReachHere("Building serialization checksum failed", e);
-                                }
+                            String calculatedChecksum;
+                            try {
+                                calculatedChecksum = checkSumCalculator.calculateChecksum(getConsClassName(jni,
+                                                bp.clazz, oscInstanceInSlot), oscClassName, oscClazz);
+                            } catch (NoSuchAlgorithmException e) {
+                                throw VMError.shouldNotReachHere("Building serialization checksum failed", e);
                             }
                             traceCandidates.add(new SerializationInfo(oscClassName, calculatedChecksum));
                         }
@@ -943,7 +930,7 @@ final class BreakpointInterceptor {
                                 null,
                                 null,
                                 null,
-                                validObjectStreamClassInstance,
+                                result,
                                 // serializeTargetClassName, checksum);
                                 serializationInfo.className, serializationInfo.checksum);
                 guarantee(!testException(jni));
@@ -1040,12 +1027,11 @@ final class BreakpointInterceptor {
                     JvmtiEnv.class, JNIEnvironment.class, JNIObjectHandle.class, JNIObjectHandle.class);
 
     public static void onLoad(JvmtiEnv jvmti, JvmtiEventCallbacks callbacks, TraceWriter writer, NativeImageAgent nativeImageTracingAgent,
-                    boolean exptlClassLoaderSupport, boolean serializationChecksums) {
+                    boolean exptlClassLoaderSupport) {
 
         BreakpointInterceptor.traceWriter = writer;
         BreakpointInterceptor.agent = nativeImageTracingAgent;
         BreakpointInterceptor.experimentalClassLoaderSupport = exptlClassLoaderSupport;
-        BreakpointInterceptor.writeSerializationChecksums = serializationChecksums;
 
         JvmtiCapabilities capabilities = UnmanagedMemory.calloc(SizeOf.get(JvmtiCapabilities.class));
         check(jvmti.getFunctions().GetCapabilities().invoke(jvmti, capabilities));
