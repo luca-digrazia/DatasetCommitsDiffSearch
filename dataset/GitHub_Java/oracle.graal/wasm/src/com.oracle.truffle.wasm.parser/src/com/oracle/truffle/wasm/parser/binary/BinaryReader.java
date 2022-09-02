@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -90,10 +90,10 @@ public class BinaryReader {
                 case 0x09:
                     readElementSection();
                     break;
-                case 0x0A:
+                case 0x10:
                     readCodeSection();
                     break;
-                case 0x0B:
+                case 0x11:
                     readDataSection();
                     break;
                 default:
@@ -132,49 +132,17 @@ public class BinaryReader {
     }
 
     public void readTableSection() {
+
     }
 
     public void readMemorySection() {
+
     }
 
     private void readDataSection() {
     }
 
     private void readCodeSection() {
-        int numCodeEntries = readVectorLength();
-        for (int entry = 0; entry < numCodeEntries; entry++) {
-            int codeEntrySize = readUnsignedLEB128();
-            int startOffset = offset;
-            readCodeEntry(codeEntrySize);
-            Assert.assertEquals(offset - startOffset, codeEntrySize, String.format("Code entry %d size is incorrect", entry));
-        }
-    }
-
-    private void readCodeEntry(int codeEntrySize) {
-        int startOffset = offset;
-        int numLocals = readVectorLength();
-        WasmCodeEntry codeEntry = new WasmCodeEntry(numLocals);
-        for (int local = 0; local < numLocals; local++) {
-            throw new RuntimeException("Not implemented");
-        }
-        int expressionSize = codeEntrySize - (offset - startOffset);
-        codeEntry.expression = new WasmBlock(data, offset, expressionSize);
-        readCodeEntryExpression(codeEntry.expression);
-        // TODO: For structured code, we need to set the expressionSize later
-    }
-
-    private void readCodeEntryExpression(WasmBlock currentBlock) {
-        byte instruction;
-        do {
-            instruction = read1();
-            switch (instruction) {
-                case 0x41:  // i32.const
-                    int val = readSignedLEB128();
-                    break;
-                default:
-                    break;
-            }
-        } while (instruction != 0x0B);
     }
 
     private void readElementSection() {
@@ -262,57 +230,44 @@ public class BinaryReader {
         return (x0 << 24) | (x1 << 16) | (x2 << 8) | x3;
     }
 
+    // TODO: not implemented yet
     public int readSignedLEB128() {
-        int result = 0;
-        int shift = 0;
-        byte b;
-        do {
-          b = read1();
-          result |= ((b & 0x7F) << shift);
-          shift += 7;
-        } while ((b & 0x80) != 0);
-
-        if ((shift < 32) && (b & 0x40) == 0) {
-            result |= (~0 << shift);
-        }
-        return result;
+        throw new RuntimeException();
     }
 
     public int peakUnsignedLEB128(int ahead) {
-        int result = 0;
-        int shift = 0;
+        int number = 0;
         int i = 0;
         do {
             byte b = peak1(i + ahead);
-            result |= (b & 0x7F) << shift;
+            number |= (b & 0x7F) << (7 * i);
             if ((b & 0x80) == 0) {
                 break;
             }
-            shift += 7;
             i++;
-        } while (shift < 35);
-        if (shift == 35) {
+        } while (i < 5);
+        if (i == 5) {
             Assert.fail("Unsigned LEB128 overflow");
         }
-        return result;
+        return number;
     }
 
     // This is used for indices, so we don't expect values larger than 2^31.
     public int readUnsignedLEB128() {
-        int result = 0;
-        int shift = 0;
+        int number = 0;
+        int i = 0;
         do {
             byte b = read1();
-            result |= (b & 0x7F) << shift;
+            number |= (b & 0x7F) << (7 * i);
             if ((b & 0x80) == 0) {
                 break;
             }
-            shift += 7;
-        } while (shift < 35);
-        if (shift == 35) {
+            i++;
+        } while (i < 5);
+        if (i == 5) {
             Assert.fail("Unsigned LEB128 overflow");
         }
-        return result;
+        return number;
     }
 
     public int readVectorLength() {
