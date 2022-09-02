@@ -35,7 +35,6 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.options.EnumOptionKey;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
-import org.graalvm.compiler.options.OptionStability;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.serviceprovider.GraalServices;
@@ -95,12 +94,12 @@ public class DebugOptions {
     @Option(help = "Pattern for specifying scopes in which logging is enabled. " +
                    "See the Dump option for the pattern syntax.", type = OptionType.Debug)
     public static final OptionKey<String> Verify = new OptionKey<>(null);
-    @Option(help = "file:doc-files/DumpHelp.txt", type = OptionType.Debug, stability = OptionStability.STABLE)
+    @Option(help = "file:doc-files/DumpHelp.txt", type = OptionType.Debug)
     public static final OptionKey<String> Dump = new OptionKey<>(null);
     @Option(help = "Pattern for specifying scopes in which logging is enabled. " +
                    "See the Dump option for the pattern syntax.", type = OptionType.Debug)
     public static final OptionKey<String> Log = new OptionKey<>(null);
-    @Option(help = "file:doc-files/MethodFilterHelp.txt", stability = OptionStability.STABLE)
+    @Option(help = "file:doc-files/MethodFilterHelp.txt")
     public static final OptionKey<String> MethodFilter = new OptionKey<>(null);
     @Option(help = "Only check MethodFilter against the root method in the context if true, otherwise check all methods", type = OptionType.Debug)
     public static final OptionKey<Boolean> MethodFilterRootOnly = new OptionKey<>(false);
@@ -122,7 +121,7 @@ public class DebugOptions {
     public static final OptionKey<String> MetricsThreadFilter = new OptionKey<>(null);
     @Option(help = "Enable debug output for stub code generation and snippet preparation.", type = OptionType.Debug)
     public static final OptionKey<Boolean> DebugStubsAndSnippets = new OptionKey<>(false);
-    @Option(help = "Send compiler IR to dump handlers on error.", type = OptionType.Debug)
+    @Option(help = "Send Graal compiler IR to dump handlers on error.", type = OptionType.Debug)
     public static final OptionKey<Boolean> DumpOnError = new OptionKey<>(false);
     @Option(help = "Intercept also bailout exceptions", type = OptionType.Debug)
     public static final OptionKey<Boolean> InterceptBailout = new OptionKey<>(false);
