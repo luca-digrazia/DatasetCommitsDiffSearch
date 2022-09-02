@@ -536,15 +536,11 @@ class SVMMBean implements DynamicMBean {
         private static final int POLL_INTERVAL_MS = 2000;
 
         private MBeanServer platformMBeanServer;
-
-        /**
-         * Set of isolates yet to be processed for MBean registrations.
-         */
-        private final Set<Long> pendingIsolates;
+        private final Set<Long> todo;
 
         private Factory() {
             super("Libgraal MBean Registration");
-            this.pendingIsolates = new LinkedHashSet<>();
+            this.todo = new LinkedHashSet<>();
             this.setPriority(Thread.MIN_PRIORITY);
             this.setDaemon(true);
         }
@@ -561,7 +557,7 @@ class SVMMBean implements DynamicMBean {
                 try {
                     synchronized (this) {
                         // Wait until there are deferred registrations to process
-                        while (pendingIsolates.isEmpty()) {
+                        while (todo.isEmpty()) {
                             wait();
                         }
                         try {
@@ -582,11 +578,11 @@ class SVMMBean implements DynamicMBean {
         }
 
         /**
-         * Called by {@code MBeanProxy} in SVM heap to notify this factory of an isolate with
-         * {@link DynamicMBean}s that need registration.
+         * Called by {@code MBeanProxy} in SVM heap to notify the factory thread about new
+         * {@link DynamicMBean}s.
          */
         synchronized void signalRegistrationRequest(long isolate) {
-            pendingIsolates.add(isolate);
+            todo.add(isolate);
             notify();
         }
 
@@ -596,7 +592,7 @@ class SVMMBean implements DynamicMBean {
          */
         synchronized void unregister(long isolate, String[] objectIds) {
             // Remove pending registration requests
-            pendingIsolates.remove(isolate);
+            todo.remove(isolate);
             MBeanServer mBeanServer = findMBeanServer();
             if (mBeanServer == null) {
                 // Nothing registered yet.
@@ -606,7 +602,7 @@ class SVMMBean implements DynamicMBean {
                 try {
                     ObjectName objectName = new ObjectName(objectId);
                     if (mBeanServer.isRegistered(objectName)) {
-                        mBeanServer.unregisterMBean(objectName);
+                        mBeanServer.unregisterMBean(new ObjectName(objectId));
                     }
                 } catch (MalformedObjectNameException | MBeanRegistrationException | InstanceNotFoundException e) {
                     e.printStackTrace(TTY.out);
@@ -660,9 +656,9 @@ class SVMMBean implements DynamicMBean {
          * @throws UnsupportedOperationException can be thrown by {@link MBeanServer}
          */
         private boolean process() {
-            for (Iterator<Long> iter = pendingIsolates.iterator(); iter.hasNext();) {
-                long isolate = iter.next();
-                iter.remove();
+            for (Iterator<Long> todoIt = todo.iterator(); todoIt.hasNext();) {
+                long isolate = todoIt.next();
+                todoIt.remove();
                 try (IsolateThreadScope scope = IsolateThreadScope.open(isolate)) {
                     long[] svmRegistrations = HotSpotToSVMCalls.pollRegistrations(scope.getIsolateThread());
                     if (svmRegistrations.length > 0) {
