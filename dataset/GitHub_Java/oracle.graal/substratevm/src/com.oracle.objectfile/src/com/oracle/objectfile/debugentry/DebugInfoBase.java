@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugFileInfo;
 import org.graalvm.compiler.debug.DebugContext;
 
 import com.oracle.objectfile.debuginfo.DebugInfoProvider;
@@ -389,12 +388,10 @@ public abstract class DebugInfoBase {
         return fileEntry;
     }
 
-    protected FileEntry ensureFileEntry(DebugFileInfo debugFileInfo) {
-        String fileName = debugFileInfo.fileName();
+    protected FileEntry ensureFileEntry(String fileName, Path filePath, Path cachePath) {
         if (fileName == null || fileName.length() == 0) {
             return null;
         }
-        Path filePath = debugFileInfo.filePath();
         Path fileAsPath;
         if (filePath == null) {
             fileAsPath = Paths.get(fileName);
@@ -404,7 +401,7 @@ public abstract class DebugInfoBase {
         /* Reuse any existing entry. */
         FileEntry fileEntry = findFile(fileAsPath);
         if (fileEntry == null) {
-            fileEntry = addFileEntry(fileName, filePath, debugFileInfo.cachePath());
+            fileEntry = addFileEntry(fileName, filePath, cachePath);
         }
         return fileEntry;
     }
