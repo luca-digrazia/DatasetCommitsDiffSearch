@@ -892,7 +892,7 @@ public final class MethodVerifier implements ContextAccess {
     }
 
     /**
-     * Performs the verification for the method associated with this MethodVerifier instance
+     * Performs the verification for the method associated with this
      */
     private synchronized void verify() {
         if (code.endBCI() == 0) {
