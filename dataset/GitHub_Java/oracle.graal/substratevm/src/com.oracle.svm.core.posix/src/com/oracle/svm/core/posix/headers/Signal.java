@@ -39,7 +39,6 @@ import org.graalvm.nativeimage.c.struct.CFieldOffset;
 import org.graalvm.nativeimage.c.struct.CPointerTo;
 import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.WordPointer;
-import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.PointerBase;
 
 /**
@@ -135,7 +134,7 @@ public class Signal {
     @CStruct
     public interface ucontext_t extends PointerBase {
         /*-
-            // AMD64 userlevel context.
+            // Userlevel context.
             typedef struct ucontext
               {
                 unsigned long int uc_flags;
@@ -145,7 +144,7 @@ public class Signal {
                 __sigset_t uc_sigmask;
                 struct _libc_fpstate __fpregs_mem;
               } ucontext_t;
-
+        
             // Context to describe whole processor state.
             typedef struct
               {
@@ -159,35 +158,9 @@ public class Signal {
         @Platforms(Platform.LINUX_AMD64.class)
         GregsPointer uc_mcontext_gregs();
 
-        /*-
-        // AArch64 userlevel context.
-        typedef struct ucontext
-        {
-            unsigned long uc_flags;
-            struct ucontext *uc_link;
-            stack_t uc_stack;
-            __sigset_t uc_sigmask;
-            mcontext_t uc_mcontext;
-        } ucontext_t;
-        typedef struct sigcontext mcontext_t;
-        struct sigcontext {
-                __u64 fault_address;
-                // AArch64 registers
-                __u64 regs[31];
-                __u64 sp;
-                __u64 pc;
-                __u64 pstate;
-                // 4K reserved for FP/SIMD state and future expansion
-                __u8 __reserved[4096] __attribute__((__aligned__(16)));
-        };
-        */
-        @CFieldAddress("uc_mcontext")
-        @Platforms(Platform.LINUX_AArch64.class)
-        mcontext_t uc_mcontext();
-
         @CField("uc_mcontext")
         @Platforms(Platform.DARWIN_AMD64.class)
-        MContext64 uc_mcontext64();
+        MContext64 uc_mcontext();
 
     }
 
@@ -248,25 +221,7 @@ public class Signal {
 
         @CFieldOffset("__ss.__rflags")
         int efl_offset();
-    }
 
-    @CStruct
-    @Platforms(Platform.LINUX_AArch64.class)
-    public interface mcontext_t extends PointerBase {
-        @CField
-        long fault_address();
-
-        @CFieldAddress
-        GregsPointer regs();
-
-        @CField
-        long sp();
-
-        @CField
-        long pc();
-
-        @CField
-        long pstate();
     }
 
     /** Advanced interface to a C signal handler. */
@@ -393,7 +348,7 @@ public class Signal {
 
     /** An alphabetical list of Linux-specific signals. */
     /* Workaround for GR-7858: @Platform @CEnum members. */
-    @Platforms(InternalPlatform.LINUX_AND_JNI.class)
+    @Platforms(Platform.LINUX.class)
     @CEnum
     @CContext(PosixDirectives.class)
     public enum LinuxSignalEnum {
@@ -408,7 +363,7 @@ public class Signal {
 
     /** An alphabetical list of Darwin-specific signals. */
     /* Workaround for GR-7858: @Platform @CEnum members. */
-    @Platforms(InternalPlatform.DARWIN_AND_JNI.class)
+    @Platforms(Platform.DARWIN.class)
     @CEnum
     @CContext(PosixDirectives.class)
     public enum DarwinSignalEnum {
