@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -72,6 +72,7 @@ import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyExecutable;
 import org.junit.After;
 import org.junit.Test;
+import org.junit.Ignore;
 
 import com.oracle.truffle.api.test.polyglot.ValueAssert.Trait;
 
@@ -943,7 +944,11 @@ public class HostAccessTest {
         assertEquals(1, invoked.get());
     }
 
+    /*
+     * Test for GR-15593.
+     */
     @Test
+    @Ignore
     public void testRecursion() {
         HostAccess.Builder builder = HostAccess.newBuilder();
         builder.targetTypeMapping(Value.class, Integer.class, (v) -> {
@@ -957,13 +962,8 @@ public class HostAccessTest {
             assertNull(context.asValue(42).as(Integer.class));
             fail();
         } catch (PolyglotException e) {
-            // which type of exception ends up here depends on where the stack overflow happens
-            if (e.isGuestException()) {
-                assertTrue(e.isInternalError());
-            } else {
-                assertTrue(e.isHostException());
-                assertTrue(e.asHostException() instanceof StackOverflowError);
-            }
+            assertTrue(e.isHostException());
+            assertTrue(e.asHostException() instanceof StackOverflowError);
         }
     }
 
