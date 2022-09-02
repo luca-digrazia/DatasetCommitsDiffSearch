@@ -30,6 +30,7 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.BranchProfile;
@@ -74,6 +75,7 @@ public class DFAStateNode extends DFAAbstractStateNode {
     private static final byte FLAG_ANCHORED_FINAL_STATE = 1 << 1;
     private static final byte FLAG_HAS_BACKWARD_PREFIX_STATE = 1 << 2;
 
+    private final short id;
     private final byte flags;
     @Child LoopOptimizationNode loopOptimizationNode;
     @Children protected final CharMatcher[] matchers;
@@ -87,8 +89,9 @@ public class DFAStateNode extends DFAAbstractStateNode {
     }
 
     public DFAStateNode(short id, byte flags, LoopOptimizationNode loopOptimizationNode, short[] successors, CharMatcher[] matchers, AllTransitionsInOneTreeMatcher allTransitionsInOneTreeMatcher) {
-        super(id, successors);
+        super(successors);
         assert id > 0;
+        this.id = id;
         this.flags = flags;
         this.loopOptimizationNode = loopOptimizationNode;
         this.matchers = matchers;
@@ -116,6 +119,11 @@ public class DFAStateNode extends DFAAbstractStateNode {
     @Override
     public DFAStateNode createNodeSplitCopy(short copyID) {
         return new DFAStateNode(this, copyID);
+    }
+
+    @Override
+    public short getId() {
+        return id;
     }
 
     public final CharMatcher[] getMatchers() {
@@ -182,68 +190,67 @@ public class DFAStateNode extends DFAAbstractStateNode {
      * different successor is found. This special handling allows for partial loop unrolling inside
      * the DFA, as well as some optimizations in {@link CGTrackingDFAStateNode}.
      *
-     * @param locals a virtual frame as described by {@link TRegexDFAExecutorProperties}.
+     * @param frame a virtual frame as described by {@link TRegexDFAExecutorProperties}.
      * @param executor this node's parent {@link TRegexDFAExecutorNode}.
      * @param compactString {@code true} if the input string is a compact string, must be partial
      *            evaluation constant.
      */
     @Override
-    public void executeFindSuccessor(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor, boolean compactString) {
+    public void executeFindSuccessor(VirtualFrame frame, TRegexDFAExecutorNode executor, boolean compactString) {
         CompilerAsserts.partialEvaluationConstant(this);
         CompilerAsserts.partialEvaluationConstant(compactString);
         if (hasLoopToSelf()) {
             if (executor.isForward() && loopOptimizationNode.indexOfChars != null) {
-                runIndexOf(locals, executor, compactString);
+                runIndexOf(frame, executor, compactString);
             } else {
-                while (executor.hasNext(locals)) {
-                    if (!checkMatch(locals, executor, compactString)) {
-                        checkFinalState(locals, prevIndex(locals));
+                while (executor.hasNext(frame)) {
+                    if (!checkMatch(frame, executor, compactString)) {
+                        checkFinalState(frame, executor, prevIndex(frame, executor));
                         return;
                     }
                 }
-                locals.setSuccessorIndex(atEnd(locals, executor));
+                executor.setSuccessorIndex(frame, atEnd(frame, executor));
             }
         } else {
-            if (!executor.hasNext(locals)) {
-                locals.setSuccessorIndex(atEnd(locals, executor));
+            if (!executor.hasNext(frame)) {
+                executor.setSuccessorIndex(frame, atEnd(frame, executor));
                 return;
             }
-            checkFinalState(locals, curIndex(locals));
-            checkMatch(locals, executor, compactString);
+            checkFinalState(frame, executor, curIndex(frame, executor));
+            checkMatch(frame, executor, compactString);
         }
     }
 
-    private void runIndexOf(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor, boolean compactString) {
-        final int preLoopIndex = locals.getIndex();
-        int indexOfResult = loopOptimizationNode.getIndexOfNode().execute(locals.getInput(),
+    private void runIndexOf(VirtualFrame frame, TRegexDFAExecutorNode executor, boolean compactString) {
+        final int preLoopIndex = executor.getIndex(frame);
+        int indexOfResult = loopOptimizationNode.getIndexOfNode().execute(executor.getInput(frame),
                         preLoopIndex,
-                        locals.getCurMaxIndex(),
+                        executor.getCurMaxIndex(frame),
                         loopOptimizationNode.indexOfChars);
         if (indexOfResult < 0) {
-            locals.setIndex(locals.getCurMaxIndex());
-            locals.setSuccessorIndex(atEnd(locals, executor));
+            executor.setIndex(frame, executor.getCurMaxIndex(frame));
+            executor.setSuccessorIndex(frame, atEnd(frame, executor));
         } else {
-            checkFinalState(locals, indexOfResult);
+            checkFinalState(frame, executor, indexOfResult);
             if (successors.length == 2) {
                 int successor = (getLoopToSelf() + 1) % 2;
                 CompilerAsserts.partialEvaluationConstant(successor);
-                locals.setIndex(indexOfResult + 1);
-                locals.setSuccessorIndex(successor);
+                executor.setIndex(frame, indexOfResult + 1);
+                executor.setSuccessorIndex(frame, successor);
             } else {
-                locals.setIndex(indexOfResult);
-                checkMatch(locals, executor, compactString);
+                executor.setIndex(frame, indexOfResult);
+                checkMatch(frame, executor, compactString);
             }
         }
     }
 
     /**
      * Finds the first matching transition. The index of the element of {@link #getMatchers()} that
-     * matched the current input character (
-     * {@link TRegexDFAExecutorNode#getChar(TRegexDFAExecutorLocals)}) or
+     * matched the current input character ( {@link TRegexDFAExecutorNode#getChar(VirtualFrame)}) or
      * {@link #FS_RESULT_NO_SUCCESSOR} is stored via
-     * {@link TRegexDFAExecutorLocals#setSuccessorIndex(int)}.
+     * {@link TRegexDFAExecutorNode#setSuccessorIndex(VirtualFrame, int)}.
      *
-     * @param locals a virtual frame as described by {@link TRegexDFAExecutorProperties}.
+     * @param frame a virtual frame as described by {@link TRegexDFAExecutorProperties}.
      * @param executor this node's parent {@link TRegexDFAExecutorNode}.
      * @param compactString {@code true} if the input string is a compact string, must be partial
      *            evaluation constant.
@@ -251,78 +258,77 @@ public class DFAStateNode extends DFAAbstractStateNode {
      *         otherwise.
      */
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN)
-    private boolean checkMatch(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor, boolean compactString) {
-        final char c = executor.getChar(locals);
-        executor.advance(locals);
+    private boolean checkMatch(VirtualFrame frame, TRegexDFAExecutorNode executor, boolean compactString) {
+        final char c = executor.getChar(frame);
+        executor.advance(frame);
         if (treeTransitionMatching()) {
-            int successor = getTreeMatcher().checkMatchTree1(locals, executor, this, c);
+            int successor = getTreeMatcher().checkMatchTree1(frame, executor, this, c);
             assert sameResultAsRegularMatchers(executor, c, compactString, successor) : this.toString();
-            locals.setSuccessorIndex(successor);
+            executor.setSuccessorIndex(frame, successor);
             return isLoopToSelf(successor);
         } else {
             for (int i = 0; i < matchers.length; i++) {
                 if (matchers[i].execute(c, compactString)) {
                     CompilerAsserts.partialEvaluationConstant(i);
-                    locals.setSuccessorIndex(i);
+                    executor.setSuccessorIndex(frame, i);
                     return isLoopToSelf(i);
                 }
             }
-            locals.setSuccessorIndex(FS_RESULT_NO_SUCCESSOR);
+            executor.setSuccessorIndex(frame, FS_RESULT_NO_SUCCESSOR);
             return false;
         }
     }
 
-    private void checkFinalState(TRegexDFAExecutorLocals locals, int index) {
+    private void checkFinalState(VirtualFrame frame, TRegexDFAExecutorNode executor, int index) {
         CompilerAsserts.partialEvaluationConstant(this);
         if (isFinalState()) {
-            storeResult(locals, index, false);
+            storeResult(frame, executor, index, false);
         }
     }
 
     /**
-     * Gets called if {@link TRegexDFAExecutorLocals#getCurMaxIndex()} is reached (!
-     * {@link TRegexDFAExecutorNode#hasNext(TRegexDFAExecutorLocals)}). In
-     * {@link BackwardDFAStateNode}, execution may still continue here, which is why this method can
-     * return a successor index.
+     * Gets called if {@link TRegexDFAExecutorNode#getCurMaxIndex(VirtualFrame)} is reached (!
+     * {@link TRegexDFAExecutorNode#hasNext(VirtualFrame)}). In {@link BackwardDFAStateNode},
+     * execution may still continue here, which is why this method can return a successor index.
      *
-     * @param locals a virtual frame as described by {@link TRegexDFAExecutorProperties}.
+     * @param frame a virtual frame as described by {@link TRegexDFAExecutorProperties}.
      * @param executor this node's parent {@link TRegexDFAExecutorNode}.
      * @return a successor index.
      */
-    int atEnd(TRegexDFAExecutorLocals locals, TRegexDFAExecutorNode executor) {
+    int atEnd(VirtualFrame frame, TRegexDFAExecutorNode executor) {
         CompilerAsserts.partialEvaluationConstant(this);
-        boolean anchored = isAnchoredFinalState() && executor.atEnd(locals);
+        boolean anchored = isAnchoredFinalState() && executor.atEnd(frame);
         if (isFinalState() || anchored) {
-            storeResult(locals, curIndex(locals), anchored);
+            storeResult(frame, executor, curIndex(frame, executor), anchored);
         }
         return FS_RESULT_NO_SUCCESSOR;
     }
 
-    void storeResult(TRegexDFAExecutorLocals locals, int index, @SuppressWarnings("unused") boolean anchored) {
+    void storeResult(VirtualFrame frame, TRegexDFAExecutorNode executor, int index, @SuppressWarnings("unused") boolean anchored) {
         CompilerAsserts.partialEvaluationConstant(this);
-        locals.setResultInt(index);
+        executor.setResultInt(frame, index);
     }
 
-    int curIndex(TRegexDFAExecutorLocals locals) {
+    int curIndex(VirtualFrame frame, TRegexDFAExecutorNode executor) {
         CompilerAsserts.partialEvaluationConstant(this);
-        return locals.getIndex();
+        return executor.getIndex(frame);
     }
 
-    int prevIndex(TRegexDFAExecutorLocals locals) {
+    int prevIndex(VirtualFrame frame, TRegexDFAExecutorNode executor) {
         CompilerAsserts.partialEvaluationConstant(this);
-        return locals.getIndex() - 1;
+        return executor.getIndex(frame) - 1;
     }
 
-    int nextIndex(TRegexDFAExecutorLocals locals) {
+    int nextIndex(VirtualFrame frame, TRegexDFAExecutorNode executor) {
         CompilerAsserts.partialEvaluationConstant(this);
-        return locals.getIndex() + 1;
+        return executor.getIndex(frame) + 1;
     }
 
     @TruffleBoundary
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        DebugUtil.appendNodeId(sb, getId()).append(": ");
+        DebugUtil.appendNodeId(sb, id).append(": ");
         if (!treeTransitionMatching()) {
             sb.append(matchers.length).append(" successors");
         }
@@ -353,7 +359,7 @@ public class DFAStateNode extends DFAAbstractStateNode {
                 transitions.append(Json.obj(Json.prop("matcher", matchers[i].toString()), Json.prop("target", successors[i])));
             }
         }
-        return Json.obj(Json.prop("id", getId()),
+        return Json.obj(Json.prop("id", id),
                         Json.prop("anchoredFinalState", isAnchoredFinalState()),
                         Json.prop("finalState", isFinalState()),
                         Json.prop("loopToSelf", hasLoopToSelf()),
