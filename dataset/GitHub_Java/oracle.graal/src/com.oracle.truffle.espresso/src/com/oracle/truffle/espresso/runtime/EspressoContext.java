@@ -35,11 +35,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import com.oracle.truffle.espresso.debugger.VMEventListeners;
+import com.oracle.truffle.espresso.debugger.jdwp.JDWPDebuggerController;
+import com.oracle.truffle.espresso.debugger.jdwp.JDWPInstrument;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import org.graalvm.polyglot.Engine;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.espresso.EspressoLanguage;
@@ -78,6 +83,7 @@ public final class EspressoContext {
     private final Set<Thread> activeThreads = Collections.newSetFromMap(new ConcurrentHashMap<Thread, Boolean>());
 
     private final AtomicInteger klassIdProvider = new AtomicInteger();
+    private JDWPDebuggerController controller;
 
     public int getNewId() {
         return klassIdProvider.getAndIncrement();
@@ -180,8 +186,30 @@ public final class EspressoContext {
 
     public void initializeContext() {
         assert !this.initialized;
+        jdwpInit();
         spawnVM();
         this.initialized = true;
+        VMInitializedListeners.getDefault().fire();
+    }
+
+    private void jdwpInit() {
+        // enable JDWP instrumenter only if options are set (assumed valid if non-null)
+        if (JDWPOptions != null) {
+            this.controller = env.lookup(env.getInstruments().get(JDWPInstrument.ID), JDWPDebuggerController.class);
+            controller.initialize(JDWPOptions, this);
+        }
+    }
+
+    public Source findOrCreateSource(Method method) {
+        String sourceFile = method.getSourceFile();
+        if (sourceFile == null) {
+            return null;
+        } else {
+            TruffleFile file = env.getInternalTruffleFile(sourceFile);
+            Source source = Source.newBuilder("java", file).content(Source.CONTENT_NONE).build();
+            // sources are interned so no cache needed (hopefully)
+            return source;
+        }
     }
 
     public Meta getMeta() {
@@ -259,7 +287,8 @@ public final class EspressoContext {
         meta.Thread_name.set(mainThread, meta.toGuestString("mainThread"));
         meta.Thread_priority.set(mainThread, 5);
         mainThread.setHiddenField(meta.HIDDEN_HOST_THREAD, Thread.currentThread());
-        host2guest.put(Thread.currentThread(), mainThread);
+        mainThread.setIntField(meta.Thread_state, Target_java_lang_Thread.State.RUNNABLE.value);
+        putHost2Guest(Thread.currentThread(), mainThread);
         activeThreads.add(Thread.currentThread());
         // Lock object used by NIO.
         meta.Thread_blockerLock.set(mainThread, meta.Object.allocateInstance());
@@ -341,6 +370,9 @@ public final class EspressoContext {
             getJNI().dispose();
         }
     }
+    public JDWPDebuggerController getJDWPController() {
+        return controller;
+    }
 
     public Substitutions getSubstitutions() {
         return substitutions;
@@ -368,6 +400,7 @@ public final class EspressoContext {
 
     public void putHost2Guest(Thread hostThread, StaticObject guest) {
         host2guest.put(hostThread, guest);
+        VMEventListeners.getDefault().threadStarted(guest);
     }
 
     public StaticObject getHost2Guest(Thread hostThread) {
@@ -376,10 +409,19 @@ public final class EspressoContext {
 
     public void registerThread(Thread thread) {
         activeThreads.add(thread);
+
     }
 
     public void unregisterThread(Thread thread) {
         activeThreads.remove(thread);
+        StaticObject staticObject = host2guest.get(thread);
+        if (staticObject != null) {
+            VMEventListeners.getDefault().threadDied(staticObject);
+        }
+    }
+
+    public StaticObject[] getAllGuestThreads() {
+        return host2guest.values().toArray(new StaticObject[0]);
     }
 
     // region Options

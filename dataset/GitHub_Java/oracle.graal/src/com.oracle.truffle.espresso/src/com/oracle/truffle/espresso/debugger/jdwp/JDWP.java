@@ -24,19 +24,11 @@ package com.oracle.truffle.espresso.debugger.jdwp;
 
 import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.descriptors.Symbol;
-import com.oracle.truffle.espresso.impl.ArrayKlass;
-import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
-import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.JavaKind;
-import com.oracle.truffle.espresso.meta.Local;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-
-import java.util.ArrayList;
-import java.util.List;
 
 class JDWP {
 
@@ -71,7 +63,7 @@ class JDWP {
                 reply.writeInt(loaded.length);
                 for (Klass klass : loaded) {
                     reply.writeByte(TypeTag.getKind(klass));
-                    reply.writeLong(Ids.getIdAsLong(klass));
+                    reply.writeByteArray(Ids.getId(klass));
                     if (klass instanceof ObjectKlass) {
                         ObjectKlass objectKlass = (ObjectKlass) klass;
                         reply.writeInt(ClassStatusConstants.fromEspressoStatus(objectKlass.getState()));
@@ -93,7 +85,7 @@ class JDWP {
                 StaticObject[] allThreads = controller.getContext().getAllGuestThreads();
                 reply.writeInt(allThreads.length);
                 for (StaticObject t : allThreads) {
-                    reply.writeLong(Ids.getIdAsLong(t));
+                    reply.writeByteArray(Ids.getId(t));
                 }
                 return reply;
             }
@@ -116,25 +108,8 @@ class JDWP {
         static class RESUME {
             public static final int ID = 9;
 
-            static PacketStream createReply(Packet packet, JDWPDebuggerController controller) {
-                controller.resume();
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                return reply;
-            }
-        }
-
-        static class CAPABILITIES {
-            public static final int ID = 12;
-
             static PacketStream createReply(Packet packet) {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                reply.writeBoolean(true); // canWatchFieldModification
-                reply.writeBoolean(true); // canWatchFieldAccess
-                reply.writeBoolean(false); // canGetBytecodes
-                reply.writeBoolean(true); // canGetSyntheticAttribute
-                reply.writeBoolean(false); // canGetOwnedMonitorInfo
-                reply.writeBoolean(false); // canGetCurrentContendedMonitor
-                reply.writeBoolean(false); // canGetMonitorInfo
                 return reply;
             }
         }
@@ -146,38 +121,38 @@ class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 // TODO(Gregersen) - figure out what capabilities we want to expose
-                reply.writeBoolean(true); // canWatchFieldModification
-                reply.writeBoolean(true); // canWatchFieldAccess
-                reply.writeBoolean(false); // canGetBytecodes
-                reply.writeBoolean(true); // canGetSyntheticAttribute
-                reply.writeBoolean(false); // canGetOwnedMonitorInfo
-                reply.writeBoolean(false); // canGetCurrentContendedMonitor
-                reply.writeBoolean(false); // canGetMonitorInfo
-                reply.writeBoolean(false); // canRedefineClasses
-                reply.writeBoolean(false); // canAddMethod
-                reply.writeBoolean(false); // canUnrestrictedlyRedefineClasses
-                reply.writeBoolean(false); // canPopFrames
-                reply.writeBoolean(false); // canUseInstanceFilters
-                reply.writeBoolean(false); // canGetSourceDebugExtension
-                reply.writeBoolean(false); // canRequestVMDeathEvent
-                reply.writeBoolean(false); // canSetDefaultStratum
-                reply.writeBoolean(false); // canGetInstanceInfo
-                reply.writeBoolean(false); // canRequestMonitorEvents
-                reply.writeBoolean(false); // canGetMonitorFrameInfo
-                reply.writeBoolean(false); // canUseSourceNameFilters
-                reply.writeBoolean(false); // canGetConstantPool
-                reply.writeBoolean(false); // canForceEarlyReturn
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
-                reply.writeBoolean(false); // reserved for future
+                reply.writeBoolean(true);
+                reply.writeBoolean(true);
+                reply.writeBoolean(false);
+                reply.writeBoolean(true);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
+                reply.writeBoolean(false);
                 return reply;
             }
         }
@@ -185,84 +160,6 @@ class JDWP {
 
     static class ReferenceType {
         public static final int ID = 2;
-
-        static class CLASSLOADER {
-            public static final int ID = 2;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long refTypeId = input.readLong();
-                Klass klass = (Klass) Ids.fromId((int)refTypeId);
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                StaticObject loader = klass.getDefiningClassLoader();
-                reply.writeLong(Ids.getIdAsLong(loader));
-                return reply;
-            }
-        }
-
-        static class SOURCE_FILE {
-            public static final int ID = 7;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long refTypeId = input.readLong();
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                Klass klass = (Klass) Ids.fromId((int)refTypeId);
-
-                String sourceFile = "Generated";
-                Method[] methods = klass.getDeclaredMethods();
-                for (Method method : methods) {
-                    if (method.getSourceFile() != null && !"Generated".equals(method.getSourceFile())) {
-                        sourceFile = method.getSourceFile();
-                        break;
-                    }
-                }
-                reply.writeString(sourceFile);
-                return reply;
-            }
-        }
-
-        static class INTERFACES {
-            public static final int ID = 10;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long refTypeId = input.readLong();
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                Klass klass = (Klass) Ids.fromId((int)refTypeId);
-                ObjectKlass[] interfaces = klass.getInterfaces();
-
-                reply.writeInt(interfaces.length);
-                for (ObjectKlass itf : interfaces) {
-                    reply.writeLong(Ids.getIdAsLong(itf));
-                }
-                return reply;
-            }
-        }
-
-        // list which only purpose is to have hard references to created ClassObjectId objects
-        private static final List<ClassObjectId> classObjectIds = new ArrayList<>();
-
-        static class CLASS_OBJECT {
-            public static final int ID = 11;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long refTypeId = input.readLong();
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                Klass klass = (Klass) Ids.fromId((int)refTypeId);
-
-                // wrap this in ClassIdObject
-                ClassObjectId id = new ClassObjectId(klass);
-                classObjectIds.add(id);
-                reply.writeLong(Ids.getIdAsLong(id));
-                return reply;
-            }
-        }
 
         static class SIGNATURE_WITH_GENERIC {
             public static final int ID = 13;
@@ -272,38 +169,21 @@ class JDWP {
                 long refTypeId = input.readLong();
 
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                Klass klass = (Klass) Ids.fromId((int) refTypeId);
-                Symbol<Symbol.Type> type = klass.getType();
-
-                reply.writeString(type.toString());
+                Object object = Ids.fromId((int) refTypeId);
+                Klass refType = null;
+                if (object instanceof Klass) {
+                    refType = (Klass) object;
+                } else if (object instanceof StaticObject) {
+                    StaticObject staticObject = (StaticObject) object;
+                    refType = staticObject.getKlass();
+                } else {
+                    throw new RuntimeException("not implemented yet");
+                }
+                reply.writeString(refType.getType().toString());
                 reply.writeString(""); // TODO(Gregersen) - generic signature
                 return reply;
             }
         }
-
-        static class FIELDS_WITH_GENERIC {
-            public static final int ID = 14;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long refTypeId = input.readLong();
-                Klass refType = (Klass) Ids.fromId((int) refTypeId);
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                Field[] declaredFields = refType.getDeclaredFields();
-                int numDeclaredFields = declaredFields.length;
-                reply.writeInt(numDeclaredFields);
-                for (Field field : declaredFields) {
-                    reply.writeLong(Ids.getIdAsLong(field));
-                    reply.writeString(field.getName().toString());
-                    reply.writeString(field.getType().toString());
-                    reply.writeString(field.getGenericSignature());
-                    reply.writeInt(field.getModifiers());
-                }
-                return reply;
-            }
-        }
-
         static class METHODS_WITH_GENERIC {
             public static final int ID = 15;
 
@@ -317,37 +197,11 @@ class JDWP {
                 int numDeclaredMethods = declaredMethods.length;
                 reply.writeInt(numDeclaredMethods);
                 for (Method method : declaredMethods) {
-                    reply.writeLong(Ids.getIdAsLong(method));
+                    reply.writeByteArray(Ids.getId(method));
                     reply.writeString(method.getName().toString());
                     reply.writeString(method.getRawSignature().toString());
                     reply.writeString(""); // TODO(Gregersen) - get the generic signature
                     reply.writeInt(method.getModifiers());
-                }
-                return reply;
-            }
-        }
-    }
-
-    static class ClassType {
-        public static final int ID = 3;
-
-        static class SUPERCLASS {
-
-            public static final int ID = 1;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                long classId = input.readLong();
-                Klass refType = (Klass) Ids.fromId((int) classId);
-                boolean isJavaLangObject = refType.isJavaLangObject();
-
-                if (isJavaLangObject) {
-                    reply.writeLong(0);
-                } else {
-                    ObjectKlass superKlass = refType.getSuperKlass();
-                    reply.writeLong(Ids.getIdAsLong(superKlass));
                 }
                 return reply;
             }
@@ -413,43 +267,6 @@ class JDWP {
                 return reply;
             }
         }
-        static class VARIABLE_TABLE_WITH_GENERIC {
-            public static final int ID = 5;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long refTypeId = input.readLong();
-                long methodId = input.readLong();
-
-                Method method = (Method) Ids.fromId((int)methodId);
-                Klass[] params = method.resolveParameterKlasses();
-                int argCnt = 0; // the number of words in the frame used by the arguments
-                for (Klass klass : params)  {
-                    if (klass.isPrimitive()) {
-                        if (klass.getJavaKind() == JavaKind.Double || klass.getJavaKind() == JavaKind.Long) {
-                            argCnt += 2;
-                        } else {
-                            argCnt++;
-                        }
-                    }
-                }
-                Local[] locals = method.getLocalVariableTable().getLocals();
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                reply.writeInt(argCnt);
-                reply.writeInt(locals.length);
-                for (Local local : locals) {
-                    reply.writeLong(local.getStartBCI());
-                    reply.writeString(local.getName().toString());
-                    reply.writeString(local.getType().toString());
-                    reply.writeString(""); // TODO(Gregersen) - generic signature
-                    reply.writeInt(local.getEndBCI() - local.getStartBCI());
-                    reply.writeInt(local.getSlot());
-                }
-
-                return reply;
-            }
-        }
     }
 
     static class ObjectReference {
@@ -462,101 +279,10 @@ class JDWP {
                 PacketStream input = new PacketStream(packet);
                 long objectId = input.readLong();
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                Object object = Ids.fromId((int) objectId);
-                // can be either a ClassObjectId or a StaticObject
-                Klass klass;
-                if (object instanceof StaticObject) {
-                    klass = ((StaticObject) object).getKlass();
-                } else {
-                    klass = ((ClassObjectId) object).getRefType();
-                }
-
-                reply.writeByte(TypeTag.getKind(klass));
-                reply.writeLong(Ids.getIdAsLong(klass));
-
-                return reply;
-            }
-        }
-
-        static class GET_VALUES {
-            public static final int ID = 2;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long objectId = input.readLong();
-                StaticObject staticObject = (StaticObject) Ids.fromId((int) objectId);
-                int numFields = input.readInt();
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                reply.writeInt(numFields);
-
-                for (int i = 0; i < numFields; i++) {
-                    long fieldId = input.readLong();
-                    Field field = (Field) Ids.fromId((int) fieldId);
-                    Object value = field.get(staticObject);
-                    writeValue(TagConstants.fromJavaKind(field.getKind()), value, reply);
-                }
-
-                return reply;
-            }
-        }
-
-        static class INVOKE_METHOD {
-            public static final int ID = 6;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long objectId = input.readLong();
-                long threadId = input.readLong();
-                long classId = input.readLong();
-                long methodId = input.readLong();
-                int arguments = input.readInt();
-
-                Object[] args = new Object[arguments];
-                for (int i = 0; i < arguments; i++) {
-                    byte valueKind = input.readByte();
-                    args[i] = readValue(valueKind, input);
-                }
-                int options = input.readInt(); // TODO(Gregersen) - handle invocation options
-
-                Object callee = Ids.fromId((int)objectId);
-                Method method = (Method) Ids.fromId((int)methodId);
-                StaticObject thread = (StaticObject) Ids.fromId((int) threadId);
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                try {
-                    Object value = method.invokeWithConversions(callee, args);
-                    if (value != null) {
-                        if (value instanceof StaticObject) {
-                            StaticObject staticObject = (StaticObject) value;
-                            writeValue(TagConstants.fromJavaKind(staticObject.getKlass().getJavaKind()), value, reply);
-                        }
-                    }
-                    else { // return value in null
-                        reply.writeByte(TagConstants.OBJECT);
-                        reply.writeLong(0);
-                    }
-                } catch (ClassCastException ex) {
-                    throw new RuntimeException("Not implemented yet!");
-                } catch (Throwable t) {
-                    reply.writeLong(0);
-                    reply.writeByte(TagConstants.OBJECT);
-                    reply.writeLong(Ids.getIdAsLong(t));
-                }
-                return reply;
-            }
-        }
-
-        static class IS_COLLECTED {
-            public static final int ID = 9;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long objectId = input.readLong();
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 StaticObject object = (StaticObject) Ids.fromId((int) objectId);
-                reply.writeBoolean(object == Ids.UNKNOWN);
+                Klass klass = object.getKlass();
+                reply.writeByte(TypeTag.getKind(klass));
+                reply.writeByteArray(Ids.getId(klass));
                 return reply;
             }
         }
@@ -572,7 +298,7 @@ class JDWP {
                 PacketStream input = new PacketStream(packet);
                 long threadId = input.readLong();
                 StaticObject thread = (StaticObject) Ids.fromId((int)threadId);
-                String threadName = context.getMeta().Thread_name.get(thread).toString();
+                String threadName = ((StaticObject) context.getMeta().Thread_name.get(thread)).toString();
 
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeString(threadName);
@@ -583,11 +309,12 @@ class JDWP {
         static class RESUME {
             public static final int ID = 3;
 
-            static PacketStream createReply(Packet packet, JDWPDebuggerController controller) {
+            static PacketStream createReply(Packet packet, EspressoContext context) {
                 PacketStream input = new PacketStream(packet);
                 long threadId = input.readLong();
                 StaticObject thread = (StaticObject) Ids.fromId((int)threadId);
-                controller.resume(); // TODO(Gregersen) - resume the specified thread
+                String threadName = ((StaticObject) context.getMeta().Thread_name.get(thread)).toString();
+                // TODO(Gregersen) - implement resume call here
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 return reply;
             }
@@ -603,6 +330,7 @@ class JDWP {
                 int espressoThreadState = (int) context.getMeta().Thread_state.get(thread);
                 int threadStatus = getThreadStatus(espressoThreadState);
                 //System.out.println("thread state for thread " + thread + " is: " + threadStatus);
+
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeInt(threadStatus);
                 //System.out.println("suspended thread? " + ThreadSuspension.isSuspended(thread));
@@ -700,9 +428,7 @@ class JDWP {
                 long threadId = input.readLong();
                 StaticObject thread = (StaticObject) Ids.fromId((int)threadId);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                int suspensionCount = ThreadSuspension.getSuspensionCount(thread);
-                //System.out.println("Suspension count: " + suspensionCount);
-                reply.writeInt(suspensionCount);
+                reply.writeInt(ThreadSuspension.getSuspensionCount(thread));
                 return reply;
             }
         }
@@ -725,234 +451,11 @@ class JDWP {
         }
     }
 
-    static class ArrayReference {
-        public static final int ID = 13;
-
-        static class LENGTH {
-            public static final int ID = 1;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long arrayId = input.readLong();
-                StaticObject array = (StaticObject) Ids.fromId((int)arrayId);
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                reply.writeInt(array.length());
-                return reply;
-            }
-        }
-
-        static class GET_VALUES {
-            public static final int ID = 2;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long arrayId = input.readLong();
-                int index = input.readInt();
-                int length = input.readInt();
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                StaticObject array = (StaticObject) Ids.fromId((int)arrayId);
-                ArrayKlass arrayKlass = (ArrayKlass) array.getKlass();
-                byte tag = TagConstants.fromJavaKind(arrayKlass.getComponentType().getJavaKind());
-                if (arrayKlass.getDimension() > 1) {
-                    tag = TagConstants.ARRAY;
-                }
-                reply.writeByte(tag);
-                reply.writeInt(length);
-                for (int i = index; i < index + length; i++) {
-                    Object theValue = array.get(i);
-                    writeValue(tag, theValue, reply);
-                }
-                return reply;
-            }
-        }
-    }
-
     static class EventRequest {
         public static final int ID = 15;
 
         static class SET {
             public static final int ID = 1;
-        }
-
-        static class CLEAR {
-            public static final int ID = 2;
-        }
-    }
-
-    static class StackFrame {
-        public static final int ID = 16;
-
-        static class GET_VALUES {
-            public static final int ID = 1;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                long threadId = input.readLong();
-                long frameId = input.readLong();
-                int slots = input.readInt();
-                reply.writeInt(slots);
-
-                JDWPCallFrame frame = (JDWPCallFrame) Ids.fromId((int)frameId);
-                StaticObject thisValue = frame.getThisValue();
-                Object[] variables = frame.getVariables();
-                int offset = thisValue != null ? 1 : 0;
-
-                // below assumes the debugger asks for slot values in increasing order
-                for (int i = 0; i < slots; i++) {
-                    int slot = input.readInt();
-                    Object value = variables[slot - offset];
-
-                    byte sigbyte = input.readByte();
-                    JavaKind kind = TagConstants.toJavaKind(sigbyte);
-                    if (kind == null && sigbyte == TagConstants.ARRAY) {
-                        // Array type
-                        reply.writeByte(TagConstants.ARRAY);
-                        reply.writeLong(Ids.getIdAsLong(value));
-                    } else {
-                        writeValue(sigbyte, value, reply);
-                    }
-                    // TODO(Gregersen) - verify sigbyte against actual value type
-                }
-                return reply;
-            }
-        }
-
-        static class THIS_OBJECT {
-            public static final int ID = 3;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long threadId = input.readLong();
-                long frameId = input.readLong();
-
-                JDWPCallFrame frame = (JDWPCallFrame) Ids.fromId((int)frameId);
-                StaticObject thisValue = frame.getThisValue();
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                reply.writeByte(TagConstants.OBJECT);
-
-                if (thisValue != null) {
-                    reply.writeLong(Ids.getIdAsLong(thisValue));
-                }
-                else {
-                    reply.writeLong(0);
-                }
-                return reply;
-            }
-        }
-    }
-
-    static class ClassObjectReference {
-        public static final int ID = 17;
-
-        static class REFLECTED_TYPE {
-            public static final int ID = 1;
-
-            static PacketStream createReply(Packet packet) {
-                PacketStream input = new PacketStream(packet);
-                long classObjectId = input.readLong();
-
-                ClassObjectId id = (ClassObjectId) Ids.fromId((int)classObjectId);
-
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                reply.writeByte(TypeTag.getKind(id.getRefType()));
-                reply.writeLong(Ids.getIdAsLong(id.getRefType()));
-                return reply;
-            }
-        }
-    }
-
-    private static Object readValue(byte valueKind, PacketStream input) {
-        switch (valueKind) {
-            case TagConstants.BOOLEAN: return input.readBoolean();
-            case TagConstants.BYTE: return input.readByte();
-            case TagConstants.SHORT: return input.readShort();
-            case TagConstants.CHAR: return input.readChar();
-            case TagConstants.INT: return input.readInt();
-            case TagConstants.FLOAT: return input.readFloat();
-            case TagConstants.LONG: return input.readLong();
-            case TagConstants.DOUBLE: return input.readDouble();
-            case TagConstants.OBJECT: return Ids.fromId((int)input.readLong());
-            default: throw EspressoError.shouldNotReachHere();
-        }
-    }
-
-    private static void writeValue(byte tag, Object value, PacketStream reply) {
-        switch (tag) {
-            case TagConstants.BOOLEAN:
-                reply.writeByte(TagConstants.BOOLEAN);
-                reply.writeBoolean((boolean)value);
-                break;
-            case TagConstants.BYTE:
-                reply.writeByte(TagConstants.BYTE);
-                if (value.getClass() == Long.class) {
-                    long unboxed = (long) value;
-                    reply.writeByte((byte) unboxed);
-                } else {
-                    reply.writeByte((byte) ((long) value));
-                }
-                break;
-            case TagConstants.SHORT:
-                reply.writeByte(TagConstants.SHORT);
-                if (value.getClass() == Long.class) {
-                    long unboxed = (long) value;
-                    reply.writeShort((short) unboxed);
-                } else {
-                    reply.writeShort((short) (value));
-                }
-                break;
-            case TagConstants.CHAR:
-                reply.writeByte(TagConstants.CHAR);
-                if (value.getClass() == Long.class) {
-                    long unboxed = (long) value;
-                    reply.writeChar((char) unboxed);
-                } else {
-                    reply.writeChar((char) value);
-                }
-                break;
-            case TagConstants.INT:
-                reply.writeByte(TagConstants.INT);
-                if (value.getClass() == Long.class) {
-                    long unboxed = (long) value;
-                    reply.writeInt((int) unboxed);
-                } else {
-                    reply.writeInt((int) value);
-                }
-                break;
-            case TagConstants.FLOAT:
-                reply.writeByte(TagConstants.FLOAT);
-                if (value.getClass() == Long.class) {
-                    long unboxed = (long) value;
-                    reply.writeFloat((float) unboxed);
-                } else {
-                    reply.writeFloat((float) value);
-                }
-                break;
-            case TagConstants.LONG:
-                reply.writeByte(TagConstants.LONG);
-                reply.writeLong((long) value);
-                break;
-            case TagConstants.DOUBLE:
-                reply.writeByte(TagConstants.DOUBLE);
-                if (value.getClass() == Long.class) {
-                    long unboxed = (long) value;
-                    reply.writeDouble((double) unboxed);
-                } else {
-                    reply.writeDouble((double) value);
-                }
-                break;
-            case TagConstants.OBJECT:
-                reply.writeByte(TagConstants.OBJECT);
-                reply.writeLong(Ids.getIdAsLong(value));
-                break;
-            case TagConstants.ARRAY:
-                reply.writeByte(TagConstants.ARRAY);
-                reply.writeLong(Ids.getIdAsLong(value));
-            default: throw EspressoError.shouldNotReachHere();
         }
     }
 }

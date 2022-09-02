@@ -22,18 +22,13 @@
  */
 package com.oracle.truffle.espresso.debugger.jdwp;
 
-import com.oracle.truffle.espresso.runtime.StaticObject;
 import java.lang.ref.WeakReference;
 
 public class Ids {
 
     private static volatile long uniqueID = 1;
     private static WeakReference[] objects = new WeakReference[1];
-
-    static {
-        // initialize with StaticObject.NULL
-        getIdAsLong(StaticObject.NULL);
-    }
+    public static Object UNKNOWN = new Object();
 
     public static long getIdAsLong(Object object) {
         // lookup in cache
@@ -41,7 +36,6 @@ public class Ids {
             // really slow lookup path
             Object obj = objects[i].get();
             if (obj == object) {
-                //System.out.println("returning ID: " + i + " from cache for object: " + object);
                 return i;
             }
         }
@@ -49,13 +43,16 @@ public class Ids {
         return generateUniqueId(object);
     }
 
+    public static byte[] getId(Object object) {
+        return toByteArray(getIdAsLong(object));
+    }
+
     public static Object fromId(int id) {
         WeakReference ref = objects[id];
         Object o = ref.get();
         if (o == null) {
-            return StaticObject.NULL;
+            return UNKNOWN;
         } else {
-            //System.out.println("getting object: " + o + " from ID: " + id);
             return o;
         }
     }
@@ -68,8 +65,27 @@ public class Ids {
         System.arraycopy(objects, 1, expandedArray, 1, objects.length - 1);
         expandedArray[objects.length] = new WeakReference<>(object);
         objects = expandedArray;
-        //System.out.println("ID: " + id + " for object: " + object);
         return id;
+    }
+
+    public static byte[] toByteArray(long l) {
+        byte[] b = new byte[8];
+        b[7] = (byte) (l);
+        l >>>= 8;
+        b[6] = (byte) (l);
+        l >>>= 8;
+        b[5] = (byte) (l);
+        l >>>= 8;
+        b[4] = (byte) (l);
+        l >>>= 8;
+        b[3] = (byte) (l);
+        l >>>= 8;
+        b[2] = (byte) (l);
+        l >>>= 8;
+        b[1] = (byte) (l);
+        l >>>= 8;
+        b[0] = (byte) (l);
+        return b;
     }
 }
 

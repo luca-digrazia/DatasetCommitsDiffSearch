@@ -40,14 +40,13 @@ public class ThreadSuspension {
                 suspensionCount[i]++;
             }
         }
-        // not yet registered, so add to array
+        // not yet suspended, so add to array
         StaticObject[] expanded = new StaticObject[threads.length + 1];
         System.arraycopy(threads, 0, expanded, 0, threads.length);
         expanded[threads.length] = thread;
 
         int[] temp = new int[threads.length + 1];
         System.arraycopy(suspensionCount, 0, temp, 0, threads.length);
-        // set the thread as suspended with suspension count 1
         temp[threads.length] = 1;
 
         threads = expanded;
@@ -59,8 +58,6 @@ public class ThreadSuspension {
             if (thread == threads[i]) {
                 if (suspensionCount[i] > 0) {
                     suspensionCount[i]--;
-                    // only decrease the suspension count once!
-                    break;
                 }
             }
         }

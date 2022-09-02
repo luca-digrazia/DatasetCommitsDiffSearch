@@ -20,46 +20,12 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.espresso.debugger;
+package com.oracle.truffle.espresso.debugger.jdwp;
 
-public class BreakpointInfo {
-
-    private final int requestId;
-    private final byte typeTag;
-    private final long classId;
-    private final long methodId;
-    private final long bci;
-
-    public BreakpointInfo(int requestId, byte tag, long classId, long methodId, long bci) {
-        this.requestId = requestId;
-        this.typeTag = tag;
-        this.classId = classId;
-        this.methodId = methodId;
-        this.bci = bci;
-    }
-
-    public int getRequestId() {
-        return requestId;
-    }
-
-    public long getClassId() {
-        return classId;
-    }
-
-    public long getMethodId() {
-        return methodId;
-    }
-
-    public byte getTypeTag() {
-        return typeTag;
-    }
-
-    public long getBci() {
-        return bci;
-    }
-
-    @Override
-    public String toString() {
-        return "typeTag: " + typeTag + ", classId: " + classId + ", methodId: " + methodId + ", bci: " + bci;
-    }
+public class ThreadStatusConstants {
+    public static final int ZOMBIE = 0;
+    public static final int RUNNING = 1;
+    public static final int SLEEPING = 2;
+    public static final int MONITOR = 3;
+    public static final int WAIT = 4;
 }

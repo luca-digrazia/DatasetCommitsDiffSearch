@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import com.oracle.truffle.espresso.jdwp.api.LineNumberTableRef;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.runtime.Attribute;
@@ -32,15 +31,13 @@ import com.oracle.truffle.espresso.runtime.Attribute;
  *
  * @see "https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.7.12"
  */
-public final class LineNumberTable extends Attribute implements LineNumberTableRef {
+public final class LineNumberTable extends Attribute {
 
     public static final Symbol<Name> NAME = Name.LineNumberTable;
 
     public static final LineNumberTable EMPTY = new LineNumberTable(NAME, Entry.EMPTY_ARRAY);
 
     private final Entry[] entries;
-
-    private int lastLine = -1;
 
     public LineNumberTable(Symbol<Name> name, Entry[] entries) {
         super(name, null);
@@ -72,18 +69,7 @@ public final class LineNumberTable extends Attribute implements LineNumberTableR
         return -1;
     }
 
-    public int getLastLine() {
-        if (lastLine != -1) {
-            return lastLine;
-        }
-        int max = -1;
-        for (Entry entry : entries) {
-            max = Math.max(max, entry.getLineNumber());
-        }
-        return max;
-    }
-
-    public static final class Entry implements EntryRef {
+    public static final class Entry {
 
         public static final Entry[] EMPTY_ARRAY = new Entry[0];
 

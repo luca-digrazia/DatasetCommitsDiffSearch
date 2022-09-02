@@ -20,46 +20,39 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.espresso.debugger;
+package com.oracle.truffle.espresso.debugger.jdwp;
 
-public class BreakpointInfo {
+import com.oracle.truffle.api.debug.DebugStackFrame;
+import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.espresso.runtime.StaticObject;
 
-    private final int requestId;
-    private final byte typeTag;
-    private final long classId;
-    private final long methodId;
-    private final long bci;
+public class SuspendedInfo {
 
-    public BreakpointInfo(int requestId, byte tag, long classId, long methodId, long bci) {
-        this.requestId = requestId;
-        this.typeTag = tag;
-        this.classId = classId;
-        this.methodId = methodId;
-        this.bci = bci;
+    private SuspendedEvent event;
+    private int suspendStrategy;
+    private JDWPCallFrame[] stackFrames;
+    private StaticObject thread;
+
+    SuspendedInfo(SuspendedEvent event, int strategy, JDWPCallFrame[] stackFrames, StaticObject thread) {
+        this.event = event;
+        this.suspendStrategy = strategy;
+        this.stackFrames = stackFrames;
+        this.thread = thread;
     }
 
-    public int getRequestId() {
-        return requestId;
+    public SuspendedEvent getEvent() {
+        return event;
     }
 
-    public long getClassId() {
-        return classId;
+    public int getSuspendStrategy() {
+        return suspendStrategy;
     }
 
-    public long getMethodId() {
-        return methodId;
+    public JDWPCallFrame[] getStackFrames() {
+        return stackFrames;
     }
 
-    public byte getTypeTag() {
-        return typeTag;
-    }
-
-    public long getBci() {
-        return bci;
-    }
-
-    @Override
-    public String toString() {
-        return "typeTag: " + typeTag + ", classId: " + classId + ", methodId: " + methodId + ", bci: " + bci;
+    public StaticObject getThread() {
+        return thread;
     }
 }

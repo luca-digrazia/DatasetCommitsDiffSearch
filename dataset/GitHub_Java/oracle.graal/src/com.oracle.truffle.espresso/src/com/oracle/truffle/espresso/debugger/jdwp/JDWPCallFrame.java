@@ -22,26 +22,18 @@
  */
 package com.oracle.truffle.espresso.debugger.jdwp;
 
-import com.oracle.truffle.espresso.runtime.StaticObject;
-
 public class JDWPCallFrame {
 
     private final byte typeTag;
     private final long classId;
     private final long methodId;
     private final long codeIndex;
-    private final long threadId;
-    private final StaticObject thisValue;
-    private final Object[] variables;
 
-    JDWPCallFrame(long threadId, byte typeTag, long classId, long methodId, long codeIndex, StaticObject thisValue, Object[] variables) {
-        this.threadId = threadId;
+    JDWPCallFrame(byte typeTag, long classId, long methodId, long codeIndex) {
         this.typeTag = typeTag;
         this.classId = classId;
         this.methodId = methodId;
         this.codeIndex = codeIndex;
-        this.thisValue = thisValue;
-        this.variables = variables;
     }
 
     public byte getTypeTag() {
@@ -58,17 +50,5 @@ public class JDWPCallFrame {
 
     public long getCodeIndex() {
         return codeIndex;
-    }
-
-    public long getThreadId() {
-        return threadId;
-    }
-
-    public StaticObject getThisValue() {
-        return thisValue;
-    }
-
-    public Object[] getVariables() {
-        return variables;
     }
 }

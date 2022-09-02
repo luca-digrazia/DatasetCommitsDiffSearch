@@ -37,7 +37,6 @@ public class VMEventListenerImpl implements VMEventListener {
     private final SocketConnection connection;
     private HashSet<ClassPrepareRequest> classPrepareRequests = new HashSet<>();
     private int threadStartedRequestId;
-    private int threadDeathRequestId;
 
     public VMEventListenerImpl(SocketConnection connection) {
         this.connection = connection;
@@ -72,18 +71,12 @@ public class VMEventListenerImpl implements VMEventListener {
             stream.writeByte(RequestedJDWPEvents.CLASS_PREPARE);
             stream.writeInt(request.getRequestId());
 
-            stream.writeLong(Ids.getIdAsLong(currentThread));
+            stream.writeByteArray(Ids.getId(currentThread));
             stream.writeByte(TypeTag.CLASS);
-            stream.writeLong(Ids.getIdAsLong(klass));
+            stream.writeByteArray(Ids.getId(klass));
             stream.writeString(klass.getType().toString());
             stream.writeInt(klass.getState()); // class status
             connection.queuePacket(stream);
-            // give the debugger a little time to send breakpoint requests
-            try {
-                Thread.sleep(30);
-            } catch (Exception e) {
-                // ignore
-            }
         }
     }
 
@@ -104,27 +97,6 @@ public class VMEventListenerImpl implements VMEventListener {
         stream.writeLong(info.getClassId());
         stream.writeLong(info.getMethodId());
         stream.writeLong(info.getBci());
-        //System.out.println("sending BP hit at index: " + info.getBci());
-        connection.queuePacket(stream);
-    }
-
-    @Override
-    public void stepCompleted(int commandRequestId, JDWPCallFrame currentFrame) {
-        PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
-
-        stream.writeByte(SuspendStrategy.EVENT_THREAD); // TODO(Gregersen) - implemented suspend policies
-        stream.writeInt(1); // # events in reply
-
-        stream.writeByte(RequestedJDWPEvents.SINGLE_STEP);
-        stream.writeInt(commandRequestId);
-        stream.writeLong(currentFrame.getThreadId());
-
-        // location
-        stream.writeByte(currentFrame.getTypeTag());
-        stream.writeLong(currentFrame.getClassId());
-        stream.writeLong(currentFrame.getMethodId());
-        stream.writeLong(currentFrame.getCodeIndex());
-        //System.out.println("sending step completed command at index: " + currentFrame.getCodeIndex());
         connection.queuePacket(stream);
     }
 
@@ -147,13 +119,8 @@ public class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void threadDied(StaticObject thread) {
-        PacketStream stream = new PacketStream().commandPacket().commandSet(64).command(100);
-        stream.writeByte(SuspendStrategy.NONE);
-        stream.writeInt(1); // # events in reply
-        stream.writeByte(RequestedJDWPEvents.THREAD_DEATH);
-        stream.writeInt(threadDeathRequestId);
-        stream.writeLong(Ids.getIdAsLong(thread));
-        connection.queuePacket(stream);
+        System.out.println("Thread: " + thread + " died");
+        // TODO(Gregersen) - not implemented yet
     }
 
     @Override
@@ -168,6 +135,6 @@ public class VMEventListenerImpl implements VMEventListener {
 
     @Override
     public void addThreadDiedRequestId(int id) {
-        this.threadDeathRequestId = id;
+        // TODO(Gregersen) - not implemented yet
     }
 }

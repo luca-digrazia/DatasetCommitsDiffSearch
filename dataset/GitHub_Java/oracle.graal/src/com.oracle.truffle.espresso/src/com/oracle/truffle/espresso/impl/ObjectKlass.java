@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,6 +37,7 @@ import com.oracle.truffle.espresso.classfile.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.InnerClassesAttribute;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
+import com.oracle.truffle.espresso.debugger.VMEventListeners;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -107,11 +108,11 @@ public final class ObjectKlass extends Klass {
     @CompilationFinal //
     boolean needsRecursiveInit = false;
 
-    private static final int LOADED = 0;
-    private static final int LINKED = 1;
-    private static final int PREPARED = 2;
-    private static final int INITIALIZED = 3;
-    private static final int ERRONEOUS = 99;
+    public static final int LOADED = 0;
+    public static final int LINKED = 1;
+    public static final int PREPARED = 2;
+    public static final int INITIALIZED = 3;
+    public static final int ERRONEOUS = 99;
 
     public final Attribute getAttribute(Symbol<Name> name) {
         return linkedKlass.getAttribute(name);
@@ -171,33 +172,6 @@ public final class ObjectKlass extends Klass {
         }
         this.itableLength = iKlassTable.length;
         this.initState = LINKED;
-        assert verifyTables();
-    }
-
-    private boolean verifyTables() {
-        if (vtable != null) {
-            for (int i = 0; i < vtable.length; i++) {
-                if (isInterface()) {
-                    if (vtable[i].getITableIndex() != i) {
-                        return false;
-                    }
-                } else {
-                    if (vtable[i].getVTableIndex() != i) {
-                        return false;
-                    }
-                }
-            }
-        }
-        if (itable != null) {
-            for (Method[] table : itable) {
-                for (int i = 0; i < table.length; i++) {
-                    if (table[i].getITableIndex() != i) {
-                        return false;
-                    }
-                }
-            }
-        }
-        return true;
     }
 
     @Override
@@ -230,6 +204,10 @@ public final class ObjectKlass extends Klass {
         return initState == INITIALIZED;
     }
 
+    public int getState() {
+        return initState;
+    }
+
     private boolean isPrepared() {
         return initState == PREPARED;
     }
@@ -257,6 +235,8 @@ public final class ObjectKlass extends Klass {
                      */
                     prepare();
                     initState = PREPARED;
+                    VMEventListeners.getDefault().classPrepared(this, getContext().getHost2Guest(Thread.currentThread()));
+
                     if (getSuperKlass() != null) {
                         getSuperKlass().initialize();
                     }
@@ -279,7 +259,6 @@ public final class ObjectKlass extends Klass {
                     }
                 } catch (Throwable e) {
                     System.err.println("Host exception happened during class initialization");
-                    e.printStackTrace();
                     setErroneous();
                     throw e;
                 }
@@ -302,47 +281,47 @@ public final class ObjectKlass extends Klass {
                 }
                 switch (f.getKind()) {
                     case Boolean: {
-                        boolean c = getConstantPool().intAt(a.getConstantValueIndex()) != 0;
+                        boolean c = getConstantPool().intAt(a.getConstantvalueIndex()) != 0;
                         f.set(getStatics(), c);
                         break;
                     }
                     case Byte: {
-                        byte c = (byte) getConstantPool().intAt(a.getConstantValueIndex());
+                        byte c = (byte) getConstantPool().intAt(a.getConstantvalueIndex());
                         f.set(getStatics(), c);
                         break;
                     }
                     case Short: {
-                        short c = (short) getConstantPool().intAt(a.getConstantValueIndex());
+                        short c = (short) getConstantPool().intAt(a.getConstantvalueIndex());
                         f.set(getStatics(), c);
                         break;
                     }
                     case Char: {
-                        char c = (char) getConstantPool().intAt(a.getConstantValueIndex());
+                        char c = (char) getConstantPool().intAt(a.getConstantvalueIndex());
                         f.set(getStatics(), c);
                         break;
                     }
                     case Int: {
-                        int c = getConstantPool().intAt(a.getConstantValueIndex());
+                        int c = getConstantPool().intAt(a.getConstantvalueIndex());
                         f.set(getStatics(), c);
                         break;
                     }
                     case Float: {
-                        float c = getConstantPool().floatAt(a.getConstantValueIndex());
+                        float c = getConstantPool().floatAt(a.getConstantvalueIndex());
                         f.set(getStatics(), c);
                         break;
                     }
                     case Long: {
-                        long c = getConstantPool().longAt(a.getConstantValueIndex());
+                        long c = getConstantPool().longAt(a.getConstantvalueIndex());
                         f.set(getStatics(), c);
                         break;
                     }
                     case Double: {
-                        double c = getConstantPool().doubleAt(a.getConstantValueIndex());
+                        double c = getConstantPool().doubleAt(a.getConstantvalueIndex());
                         f.set(getStatics(), c);
                         break;
                     }
                     case Object: {
-                        StaticObject c = getConstantPool().resolvedStringAt(a.getConstantValueIndex());
+                        StaticObject c = getConstantPool().resolvedStringAt(a.getConstantvalueIndex());
                         f.set(getStatics(), c);
                         break;
                     }
@@ -552,18 +531,17 @@ public final class ObjectKlass extends Klass {
         return iKlassTable;
     }
 
-    final int lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, Klass subClass) {
-        for (int i = 0; i < vtable.length; i++) {
-            Method m = vtable[i];
+    final Method lookupVirtualMethod(Symbol<Name> name, Symbol<Signature> signature, Klass subClass) {
+        for (Method m : vtable) {
             if (!m.isPrivate() && m.getName() == name && m.getRawSignature() == signature) {
                 if (m.isProtected() || m.isPublic()) {
-                    return i;
+                    return m;
                 } else if (sameRuntimePackage(subClass)) {
-                    return i;
+                    return m;
                 }
             }
         }
-        return -1;
+        return null;
     }
 
     final List<Method> lookupVirtualMethodOverrides(Symbol<Name> name, Symbol<Signature> signature, Klass subKlass, List<Method> result) {
