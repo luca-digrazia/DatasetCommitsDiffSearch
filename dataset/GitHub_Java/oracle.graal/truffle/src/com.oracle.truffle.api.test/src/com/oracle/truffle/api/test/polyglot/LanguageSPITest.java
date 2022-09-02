@@ -93,6 +93,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.Option;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
@@ -355,11 +356,7 @@ public class LanguageSPITest {
                 future.get();
                 fail();
             } catch (ExecutionException e) {
-                Throwable cause = e.getCause();
-                if (!(cause instanceof PolyglotException)) {
-                    throw new AssertionError(cause);
-                }
-                PolyglotException polyglotException = (PolyglotException) cause;
+                PolyglotException polyglotException = (PolyglotException) e.getCause();
                 assertTrue(polyglotException.isCancelled());
             }
             engine.close();
@@ -595,6 +592,39 @@ public class LanguageSPITest {
         context.close();
         // inner context automatically closed
         assertEquals(1, returnedInnerContext.disposeCalled);
+    }
+
+    @Test
+    public void testParseOtherLanguage() {
+        Context context = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).build();
+        eval(context, new Function<Env, Object>() {
+            @SuppressWarnings("deprecation")
+            public Object apply(Env t) {
+                assertCorrectTarget(t.parse(Source.newBuilder("").language(ContextAPITestLanguage.ID).name("").build()));
+                assertCorrectTarget(t.parse(Source.newBuilder("").mimeType(ContextAPITestLanguage.MIME).name("").build()));
+                // this is here for compatibility because mime types and language ids were allowed
+                // in between.
+                assertCorrectTarget(t.parse(Source.newBuilder("").mimeType(ContextAPITestLanguage.ID).name("").build()));
+
+                assertCorrectTarget(t.parse(Source.newBuilder(ContextAPITestLanguage.ID, "", "").name("").build()));
+                assertCorrectTarget(t.parse(Source.newBuilder(ContextAPITestLanguage.ID, "", "").mimeType(ContextAPITestLanguage.MIME).name("").build()));
+                // this is here for compatibility because mime types and language ids were allowed
+                // in between.
+                try {
+                    t.parse(Source.newBuilder(ContextAPITestLanguage.ID, "", "").mimeType("text/invalid").build());
+                    Assert.fail();
+                } catch (IllegalArgumentException e) {
+                    // illegal mime type
+                }
+                return null;
+            }
+
+            private void assertCorrectTarget(CallTarget target) {
+                Assert.assertEquals(ContextAPITestLanguage.ID, ((RootCallTarget) target).getRootNode().getLanguageInfo().getId());
+            }
+
+        });
+        context.close();
     }
 
     @Test
