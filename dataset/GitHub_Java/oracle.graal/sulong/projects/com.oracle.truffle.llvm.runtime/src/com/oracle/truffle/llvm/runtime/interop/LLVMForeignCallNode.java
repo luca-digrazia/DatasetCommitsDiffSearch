@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.runtime.interop;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -152,7 +151,7 @@ public class LLVMForeignCallNode extends RootNode {
         }
     }
 
-    @CompilationFinal private ContextReference<LLVMContext> ctxRef;
+    private final ContextReference<LLVMContext> ctxRef;
     private final LLVMInteropType.Structured returnBaseType;
 
     @Child LLVMGetStackNode getStack;
@@ -162,6 +161,7 @@ public class LLVMForeignCallNode extends RootNode {
 
     public LLVMForeignCallNode(LLVMLanguage language, LLVMFunctionDescriptor function, LLVMInteropType interopType) {
         super(language);
+        this.ctxRef = language.getContextReference();
         this.returnBaseType = getReturnBaseType(interopType);
         this.getStack = LLVMGetStackNode.create();
         this.callNode = DirectCallNode.create(getCallTarget(function));
@@ -178,10 +178,6 @@ public class LLVMForeignCallNode extends RootNode {
     @Override
     public Object execute(VirtualFrame frame) {
         Object result;
-        if (ctxRef == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            ctxRef = lookupContextReference(LLVMLanguage.class);
-        }
         LLVMThreadingStack threadingStack = ctxRef.get().getThreadingStack();
         LLVMStack stack = getStack.executeWithTarget(threadingStack, Thread.currentThread());
         try (StackPointer stackPointer = stack.newFrame()) {
