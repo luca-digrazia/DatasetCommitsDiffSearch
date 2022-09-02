@@ -47,6 +47,7 @@ import jdk.vm.ci.hotspot.HotSpotForeignCallTarget;
 import jdk.vm.ci.meta.AllocatableValue;
 import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.Value;
 
 /**
@@ -120,10 +121,11 @@ public class HotSpotForeignCallLinkageImpl extends HotSpotForeignCallTarget impl
     }
 
     private static JavaType asJavaType(Class<?> type, MetaAccessProvider metaAccess, WordTypes wordTypes) {
-        if (wordTypes.isWord(type)) {
-            return metaAccess.lookupJavaType(wordTypes.getWordKind().toJavaClass());
+        ResolvedJavaType javaType = metaAccess.lookupJavaType(type);
+        if (wordTypes.isWord(javaType)) {
+            javaType = metaAccess.lookupJavaType(wordTypes.getWordKind().toJavaClass());
         }
-        return metaAccess.lookupJavaType(type);
+        return javaType;
     }
 
     public HotSpotForeignCallLinkageImpl(HotSpotForeignCallDescriptor descriptor, long address, RegisterEffect effect,

@@ -30,8 +30,11 @@ import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.NativeCall;
 import static jdk.vm.ci.meta.Value.ILLEGAL;
 import static org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.JUMP_ADDRESS;
 import static org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.RegisterEffect.DESTROYS_ALL_CALLER_SAVE_REGISTERS;
+import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Reexecutability.NOT_REEXECUTABLE;
+import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
 import static org.graalvm.compiler.hotspot.replacements.CRC32CSubstitutions.UPDATE_BYTES_CRC32C;
 import static org.graalvm.compiler.hotspot.replacements.CRC32Substitutions.UPDATE_BYTES_CRC32;
+import static org.graalvm.word.LocationIdentity.any;
 
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
@@ -79,10 +82,10 @@ public class AArch64HotSpotForeignCallsProvider extends HotSpotHostForeignCallsP
 
         // These stubs do callee saving
         if (config.useCRC32Intrinsics) {
-            registerForeignCall(UPDATE_BYTES_CRC32, config.updateBytesCRC32Stub, NativeCall);
+            registerForeignCall(UPDATE_BYTES_CRC32, config.updateBytesCRC32Stub, NativeCall, LEAF, NOT_REEXECUTABLE, any());
         }
         if (config.useCRC32CIntrinsics) {
-            registerForeignCall(UPDATE_BYTES_CRC32C, config.updateBytesCRC32C, NativeCall);
+            registerForeignCall(UPDATE_BYTES_CRC32C, config.updateBytesCRC32C, NativeCall, LEAF, NOT_REEXECUTABLE, any());
         }
 
         super.initialize(providers, options);
