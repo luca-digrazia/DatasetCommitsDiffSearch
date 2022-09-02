@@ -68,11 +68,11 @@ public class ELFObjectFile extends ObjectFile {
     private ELFOsAbi osabi = ELFOsAbi.getSystemNativeValue();
     private char abiVersion;
     private ELFClass fileClass = ELFClass.getSystemNativeValue();
-    private ELFMachine machine;
+    private ELFMachine machine = ELFMachine.getSystemNativeValue();
     private long processorSpecificFlags; // FIXME: to encapsulate (EF_* in elf.h)
     private final boolean runtimeDebugInfoGeneration;
 
-    private ELFObjectFile(ELFMachine machine, boolean runtimeDebugInfoGeneration) {
+    public ELFObjectFile(ELFMachine machine, boolean runtimeDebugInfoGeneration) {
         this.runtimeDebugInfoGeneration = runtimeDebugInfoGeneration;
         // Create the elements of an empty ELF file:
         // 1. create header
@@ -89,11 +89,13 @@ public class ELFObjectFile extends ObjectFile {
     }
 
     public ELFObjectFile() {
-        this(false);
+        this(System.getProperty("svm.targetArch") == null ?
+               ELFMachine.getSystemNativeValue(): ELFMachine.from(System.getProperty("svm.targetArch")));
     }
 
     public ELFObjectFile(boolean runtimeDebugInfoGeneration) {
-        this(System.getProperty("svm.targetArch") == null ? ELFMachine.getSystemNativeValue() : ELFMachine.from(System.getProperty("svm.targetArch")), runtimeDebugInfoGeneration);
+        this(System.getProperty("svm.targetArch") == null ?
+                ELFMachine.getSystemNativeValue(): ELFMachine.from(System.getProperty("svm.targetArch")), runtimeDebugInfoGeneration);
     }
 
     @Override
