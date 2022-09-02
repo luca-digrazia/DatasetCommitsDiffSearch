@@ -43,7 +43,7 @@ import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatures;
-import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
+import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.reports.ReportUtils;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.WeakIdentityHashMap;
@@ -52,7 +52,7 @@ import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.NativeImageGenerator;
 import com.oracle.svm.hosted.NativeImageOptions;
-import com.oracle.svm.hosted.c.GraalAccess;
+import com.oracle.svm.hosted.meta.HostedType;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -145,7 +145,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
 
     @Override
     public boolean shouldInitializeAtRuntime(ResolvedJavaType type) {
-        return computeInitKindAndMaybeInitializeClass(getJavaClass(type)) != InitKind.BUILD_TIME;
+        return computeInitKindAndMaybeInitializeClass(toAnalysisType(type).getJavaClass()) != InitKind.BUILD_TIME;
     }
 
     @Override
@@ -155,7 +155,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
 
     @Override
     public void maybeInitializeHosted(ResolvedJavaType type) {
-        computeInitKindAndMaybeInitializeClass(getJavaClass(type));
+        computeInitKindAndMaybeInitializeClass(toAnalysisType(type).getJavaClass());
     }
 
     /**
@@ -209,8 +209,8 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
                         " to explicitly request delayed initialization of this class.";
     }
 
-    private static Class<?> getJavaClass(ResolvedJavaType type) {
-        return OriginalClassProvider.getJavaClass(GraalAccess.getOriginalSnippetReflection(), type);
+    private static AnalysisType toAnalysisType(ResolvedJavaType type) {
+        return type instanceof HostedType ? ((HostedType) type).getWrapped() : (AnalysisType) type;
     }
 
     @Override
@@ -340,7 +340,7 @@ public class ConfigurableClassInitialization implements ClassInitializationSuppo
     private static String getTraceString(StackTraceElement[] trace) {
         StringBuilder b = new StringBuilder();
 
-        for (int i = 0; i < trace.length; i++) {
+        for (int i = START_OF_THE_TRACE; i < trace.length; i++) {
             StackTraceElement stackTraceElement = trace[i];
             b.append("\tat ").append(stackTraceElement.toString()).append("\n");
         }
