@@ -191,23 +191,22 @@ public final class NativeImageHeapWriter {
         write(buffer, index, con, info);
     }
 
-    private void writeObjectHeader(RelocatableBuffer buffer, int index, ObjectInfo obj) {
+    private void writeDynamicHub(RelocatableBuffer buffer, int index, DynamicHub target) {
+        assert target != null : "Null DynamicHub found during native image generation.";
         mustBeReferenceAligned(index);
 
-        DynamicHub hub = obj.getClazz().getHub();
-        assert hub != null : "Null DynamicHub found during native image generation.";
-        ObjectInfo hubInfo = heap.getObjectInfo(hub);
-        assert hubInfo != null : "Unknown object " + hub.toString() + " found. Static field or an object referenced from a static field changed during native image generation?";
+        ObjectInfo targetInfo = heap.getObjectInfo(target);
+        assert targetInfo != null : "Unknown object " + target.toString() + " found. Static field or an object referenced from a static field changed during native image generation?";
 
         ObjectHeader objectHeader = Heap.getHeap().getObjectHeader();
         if (NativeImageHeap.useHeapBase()) {
-            long targetOffset = hubInfo.getAddress();
-            long headerBits = objectHeader.encodeAsImageHeapObjectHeader(obj, targetOffset);
+            long targetOffset = targetInfo.getAddress();
+            long headerBits = objectHeader.encodeAsImageHeapObjectHeader(targetOffset);
             writeReferenceValue(buffer, index, headerBits);
         } else {
             // The address of the DynamicHub target will be added by the link editor.
-            long headerBits = objectHeader.encodeAsImageHeapObjectHeader(obj, 0L);
-            addDirectRelocationWithAddend(buffer, index, hub, headerBits);
+            long headerBits = objectHeader.encodeAsImageHeapObjectHeader(0L);
+            addDirectRelocationWithAddend(buffer, index, target, headerBits);
         }
     }
 
@@ -295,10 +294,12 @@ public final class NativeImageHeapWriter {
         final int indexInBuffer = info.getIndexInBuffer(objectLayout.getHubOffset());
         assert objectLayout.isAligned(indexInBuffer);
 
-        writeObjectHeader(buffer, indexInBuffer, info);
+        final HostedClass clazz = info.getClazz();
+        final DynamicHub hub = clazz.getHub();
+
+        writeDynamicHub(buffer, indexInBuffer, hub);
 
         ByteBuffer bufferBytes = buffer.getByteBuffer();
-        HostedClass clazz = info.getClazz();
         if (clazz.isInstanceClass()) {
             JavaConstant con = SubstrateObjectConstant.forObject(info.getObject());
 
@@ -343,7 +344,6 @@ public final class NativeImageHeapWriter {
                     writeField(buffer, info, field, con, info);
                 }
             }
-            DynamicHub hub = clazz.getHub();
             if (hub.getHashCodeOffset() != 0) {
                 bufferBytes.putInt(info.getIndexInBuffer(hub.getHashCodeOffset()), info.getIdentityHashCode());
             }
