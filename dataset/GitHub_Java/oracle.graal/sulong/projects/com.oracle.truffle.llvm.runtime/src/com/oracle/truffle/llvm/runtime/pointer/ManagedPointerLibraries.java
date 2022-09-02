@@ -108,13 +108,13 @@ abstract class ManagedPointerLibraries extends CommonPointerLibraries {
 
     @ExportMessage
     static boolean isForeign(LLVMPointerImpl receiver,
-                    @CachedLibrary("receiver.object") LLVMAsForeignLibrary foreigns) {
+                    @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns) {
         return isForeignTest(receiver, foreigns);
     }
 
     @ExportMessage
     static Object asForeign(LLVMPointerImpl receiver,
-                    @CachedLibrary("receiver.object") LLVMAsForeignLibrary foreigns) {
+                    @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns) {
         return foreigns.asForeign(receiver.object);
     }
 
