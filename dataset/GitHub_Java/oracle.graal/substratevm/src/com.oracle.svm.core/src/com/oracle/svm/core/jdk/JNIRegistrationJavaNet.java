@@ -65,6 +65,7 @@ class JNIRegistrationJavaNet extends JNIRegistrationUtil implements Feature {
 
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess a) {
+
         /*
          * It is difficult to track down all the places where exceptions are thrown via JNI. And
          * unconditional registration is cheap because the exception classes have no dependency on
@@ -116,9 +117,10 @@ class JNIRegistrationJavaNet extends JNIRegistrationUtil implements Feature {
 
             a.registerReachabilityHandler(JNIRegistrationJavaNet::registerPlainSocketImplInitProto,
                             method(a, "java.net.PlainSocketImpl", "initProto"));
-
-            a.registerReachabilityHandler(JNIRegistrationJavaNet::registerExtendedOptionsImplInit,
-                            method(a, "sun.net.ExtendedOptionsImpl", "init"));
+            if (JavaVersionUtil.JAVA_SPEC <= 8) {
+                a.registerReachabilityHandler(JNIRegistrationJavaNet::registerExtendedOptionsImplInit,
+                                method(a, "sun.net.ExtendedOptionsImpl", "init"));
+            }
         }
     }
 
