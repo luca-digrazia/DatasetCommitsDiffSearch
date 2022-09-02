@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -35,61 +35,55 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
+import com.oracle.truffle.api.TruffleLanguage.LanguageReference;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.NodeChildren;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.ConditionProfile;
+import com.oracle.truffle.llvm.runtime.IDGenerater;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunction;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionCode;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.LLVMIRFunction;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMSymbol;
+import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
+import com.oracle.truffle.llvm.runtime.memory.LLVMHandleMemoryBase;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.func.LLVMDispatchNode;
+import com.oracle.truffle.llvm.runtime.nodes.func.LLVMDispatchNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
-import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor.LLVMIRFunction;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
-import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
-import com.oracle.truffle.llvm.runtime.memory.LLVMStack.StackPointer;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.func.LLVMDispatchNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
-import com.oracle.truffle.llvm.runtime.types.Type;
 
 @NodeChildren({@NodeChild(type = LLVMExpressionNode.class), @NodeChild(type = LLVMExpressionNode.class)})
 public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
 
-    @Child private LLVMDerefHandleGetReceiverNode derefHandleGetReceiverNode;
-
     @CompilationFinal private ContextReference<LLVMContext> contextRef;
 
-    protected LLVMDerefHandleGetReceiverNode getDerefHandleGetReceiverNode() {
-        if (derefHandleGetReceiverNode == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            derefHandleGetReceiverNode = insert(LLVMDerefHandleGetReceiverNode.create());
-        }
-        return derefHandleGetReceiverNode;
-    }
-
-    @CompilationFinal private LLVMMemory cachedMemory;
-
-    private LLVMMemory getLLVMMemoryCached() {
-        if (cachedMemory == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            cachedMemory = getLLVMMemory();
-        }
-        return cachedMemory;
-    }
+    @CompilationFinal private LanguageReference<LLVMLanguage> languageRef;
 
     protected boolean isAutoDerefHandle(LLVMNativePointer addr) {
-        return getLLVMMemoryCached().isDerefHandleMemory(addr.asNative());
+        if (languageRef == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            languageRef = lookupLanguageReference(LLVMLanguage.class);
+        }
+        // checking the bit is cheaper than getting the assumption in interpreted mode
+        if (CompilerDirectives.inCompiledCode() && languageRef.get().getNoDerefHandleAssumption().isValid()) {
+            return false;
+        }
+        return LLVMHandleMemoryBase.isDerefHandleMemory(addr.asNative());
     }
 
     protected abstract static class DecoratedRoot extends RootNode {
@@ -103,27 +97,23 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
         @Child private DirectCallNode funcCallNode;
         @Child private DirectCallNode wrapperCallNode;
 
-        protected NativeDecoratedRoot(TruffleLanguage<?> language, LLVMFunctionDescriptor func, LLVMFunctionDescriptor wrapper) {
+        protected NativeDecoratedRoot(TruffleLanguage<?> language, LLVMFunctionDescriptor descriptor, LLVMFunctionDescriptor wrapper) {
             super(language);
-            this.funcCallNode = Truffle.getRuntime().createDirectCallNode(func.getLLVMIRFunction());
-            this.wrapperCallNode = Truffle.getRuntime().createDirectCallNode(wrapper.getLLVMIRFunction());
+            this.funcCallNode = Truffle.getRuntime().createDirectCallNode(descriptor.getFunctionCode().getLLVMIRFunctionSlowPath());
+            this.wrapperCallNode = Truffle.getRuntime().createDirectCallNode(wrapper.getFunctionCode().getLLVMIRFunctionSlowPath());
             this.funcCallNode.cloneCallTarget();
             this.wrapperCallNode.cloneCallTarget();
             this.funcCallNode.forceInlining();
             this.wrapperCallNode.forceInlining();
         }
 
+        @SuppressWarnings("try")
         @Override
         public Object execute(VirtualFrame frame) {
             Object[] arguments = frame.getArguments();
-            Object result;
-            try (StackPointer sp = ((StackPointer) arguments[0]).newFrame()) {
-                result = funcCallNode.call(arguments);
-            }
+            Object result = funcCallNode.call(arguments);
             Object[] wrapperArgs = new Object[]{arguments[0], result};
-            try (StackPointer sp = ((StackPointer) arguments[0]).newFrame()) {
-                return wrapperCallNode.call(wrapperArgs);
-            }
+            return wrapperCallNode.call(wrapperArgs);
         }
 
     }
@@ -136,20 +126,19 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
 
         protected ForeignDecoratedRoot(TruffleLanguage<?> language, FunctionType type, Object func, LLVMFunctionDescriptor wrapper) {
             super(language);
-            this.funcCallNode = LLVMDispatchNodeGen.create(type);
+            this.funcCallNode = LLVMDispatchNodeGen.create(type, wrapper.getLLVMFunction());
             this.func = func;
-            this.wrapperCallNode = Truffle.getRuntime().createDirectCallNode(wrapper.getLLVMIRFunction());
+            this.wrapperCallNode = Truffle.getRuntime().createDirectCallNode(wrapper.getFunctionCode().getLLVMIRFunctionSlowPath());
             this.wrapperCallNode.cloneCallTarget();
         }
 
+        @SuppressWarnings("try")
         @Override
         public Object execute(VirtualFrame frame) {
             Object[] arguments = frame.getArguments();
             Object result = funcCallNode.executeDispatch(func, arguments);
             Object[] wrapperArgs = new Object[]{arguments[0], result};
-            try (StackPointer sp = ((StackPointer) arguments[0]).newFrame()) {
-                return wrapperCallNode.call(wrapperArgs);
-            }
+            return wrapperCallNode.call(wrapperArgs);
         }
 
     }
@@ -161,8 +150,9 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
 
     @Specialization(guards = "isAutoDerefHandle(func)")
     protected Object decorateDerefHandle(LLVMNativePointer func, LLVMNativePointer wrapper,
-                    @Cached("createBinaryProfile()") ConditionProfile isFunctionDescriptorProfile) {
-        LLVMManagedPointer resolved = getDerefHandleGetReceiverNode().execute(func);
+                    @Cached LLVMDerefHandleGetReceiverNode getReceiver,
+                    @Cached ConditionProfile isFunctionDescriptorProfile) {
+        LLVMManagedPointer resolved = getReceiver.execute(func);
         if (isFunctionDescriptorProfile.profile(isFunctionDescriptor(resolved.getObject()))) {
             return decorate(resolved, wrapper);
         }
@@ -175,19 +165,22 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
     }
 
     @Specialization(guards = {"isAutoDerefHandle(func)", "isFunctionDescriptor(wrapper.getObject())"})
+    @GenerateAOT.Exclude
     protected Object decorateDerefHandle(LLVMNativePointer func, LLVMManagedPointer wrapper,
-                    @Cached("createBinaryProfile()") ConditionProfile isFunctionDescriptorProfile) {
-        LLVMManagedPointer resolved = getDerefHandleGetReceiverNode().execute(func);
+                    @Cached LLVMDerefHandleGetReceiverNode getReceiver,
+                    @Cached ConditionProfile isFunctionDescriptorProfile,
+                    @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns) {
+        LLVMManagedPointer resolved = getReceiver.execute(func);
         if (isFunctionDescriptorProfile.profile(isFunctionDescriptor(resolved.getObject()))) {
             return decorate(resolved, wrapper);
-        } else if (isForeignFunction(resolved.getObject())) {
+        } else if (foreigns.isForeign(resolved.getObject())) {
             return decorateForeign(resolved, wrapper);
         }
         return doGeneric(func, wrapper);
     }
 
     private Object decorateForeign(LLVMManagedPointer resolved, LLVMManagedPointer wrapper) {
-        LLVMTypedForeignObject foreign = (LLVMTypedForeignObject) resolved.getObject();
+        Object foreign = resolved.getObject();
         return decorateForeign(foreign, (LLVMFunctionDescriptor) wrapper.getObject());
     }
 
@@ -209,27 +202,25 @@ public abstract class LLVMTruffleDecorateFunction extends LLVMIntrinsic {
     @TruffleBoundary
     private Object decorate(LLVMFunctionDescriptor function, LLVMFunctionDescriptor wrapperFunction) {
         assert function != null && wrapperFunction != null;
-        FunctionType newFunctionType = new FunctionType(wrapperFunction.getType().getReturnType(), function.getType().getArgumentTypes(), function.getType().isVarargs());
+        FunctionType type = wrapperFunction.getLLVMFunction().getType();
+        FunctionType newFunctionType = FunctionType.copy(type);
         NativeDecoratedRoot decoratedRoot = new NativeDecoratedRoot(lookupLanguageReference(LLVMLanguage.class).get(), function, wrapperFunction);
-        return registerRoot(function.getLibrary(), newFunctionType, decoratedRoot);
+        return registerRoot(function.getLLVMFunction().getStringPath(), newFunctionType, decoratedRoot);
     }
 
     @TruffleBoundary
     private Object decorateForeign(Object function, LLVMFunctionDescriptor wrapperFunction) {
         assert function != null && wrapperFunction != null;
-        FunctionType newFunctionType = new FunctionType(wrapperFunction.getType().getReturnType(), Type.EMPTY_ARRAY, true);
+        FunctionType newFunctionType = new FunctionType(wrapperFunction.getLLVMFunction().getType().getReturnType(), 0, true);
         DecoratedRoot decoratedRoot = new ForeignDecoratedRoot(lookupLanguageReference(LLVMLanguage.class).get(), newFunctionType, function, wrapperFunction);
-        return registerRoot(wrapperFunction.getLibrary(), newFunctionType, decoratedRoot);
+        return registerRoot(wrapperFunction.getLLVMFunction().getStringPath(), newFunctionType, decoratedRoot);
     }
 
-    private Object registerRoot(ExternalLibrary lib, FunctionType newFunctionType, DecoratedRoot decoratedRoot) {
-        LLVMIRFunction function = new LLVMIRFunction(Truffle.getRuntime().createCallTarget(decoratedRoot), null);
-        LLVMFunctionDescriptor wrappedFunction = new LLVMFunctionDescriptor(getContext(), "<wrapper>", newFunctionType, -1, function, lib);
+    private static Object registerRoot(String path, FunctionType newFunctionType, DecoratedRoot decoratedRoot) {
+        LLVMIRFunction function = new LLVMIRFunction(LLVMLanguage.createCallTarget(decoratedRoot), null);
+        LLVMFunction functionDetail = LLVMFunction.create("<wrapper>", function, newFunctionType, IDGenerater.INVALID_ID, LLVMSymbol.INVALID_INDEX, false, path, false);
+        LLVMFunctionDescriptor wrappedFunction = new LLVMFunctionDescriptor(functionDetail, new LLVMFunctionCode(functionDetail));
         return LLVMManagedPointer.create(wrappedFunction);
-    }
-
-    protected static boolean isForeignFunction(Object object) {
-        return object instanceof LLVMTypedForeignObject;
     }
 
     private LLVMContext getContext() {
