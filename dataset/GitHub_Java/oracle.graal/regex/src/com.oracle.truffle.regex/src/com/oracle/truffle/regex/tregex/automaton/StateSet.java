@@ -50,35 +50,44 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
-import com.oracle.truffle.regex.util.Assertions;
 
 /**
  * A specialized set for sequentially indexed objects. Uses an {@link StateIndex index} for mapping
  * indices to actual objects.
  */
-public interface StateSet<SI extends StateIndex<? super S>, S> extends Set<S>, Iterable<S>, JsonConvertible {
+public interface StateSet<S> extends Set<S>, Iterable<S>, JsonConvertible {
 
-    static <SI extends StateIndex<? super S>, S> StateSet<SI, S> create(SI stateIndex) {
-        return new StateSetImpl<>(stateIndex);
+    static <T> StateSet<T> create(StateIndex<? super T> stateIndex) {
+        return stateIndex.getNumberOfStates() > 64 ? new StateSetImpl.StateSetImplBitSet<>(stateIndex) : new SmallStateSetImpl<>(stateIndex);
     }
 
-    static <SI extends StateIndex<? super S>, S> StateSet<SI, S> create(SI stateIndex, S initial) {
-        StateSet<SI, S> s = create(stateIndex);
+    static <T> StateSet<T> create(StateIndex<? super T> stateIndex, T initial) {
+        StateSet<T> s = create(stateIndex);
         s.add(initial);
         return s;
     }
 
-    static <SI extends StateIndex<? super S>, S> StateSet<SI, S> create(SI stateIndex, Collection<S> initial) {
-        StateSet<SI, S> s = create(stateIndex);
+    static <T> StateSet<T> create(StateIndex<? super T> stateIndex, Collection<T> initial) {
+        StateSet<T> s = create(stateIndex);
         s.addAll(initial);
         return s;
     }
 
-    StateSet<SI, S> copy();
+    static <T> StateSet<T> createWithBackingSortedArray(StateIndex<? super T> stateIndex) {
+        return stateIndex.getNumberOfStates() > 64 ? new StateSetImpl.StateSetImplSortedArray<>(stateIndex) : new SmallStateSetImpl<>(stateIndex);
+    }
 
-    SI getStateIndex();
+    StateSet<S> copy();
 
-    boolean isDisjoint(StateSet<SI, ? extends S> other);
+    StateIndex<? super S> getStateIndex();
+
+    void addBatch(S state);
+
+    void addBatchFinish();
+
+    void replace(S oldState, S newState);
+
+    boolean isDisjoint(StateSet<? extends S> other);
 
     /**
      * Returns the hash code value for this set.
@@ -97,7 +106,7 @@ public interface StateSet<SI extends StateIndex<? super S>, S> extends Set<S>, I
         for (S s : this) {
             array[i++] = getStateIndex().getId(s);
         }
-        assert Assertions.isSorted(array);
+        assert isSorted(array);
         return array;
     }
 
@@ -137,5 +146,16 @@ public interface StateSet<SI extends StateIndex<? super S>, S> extends Set<S>, I
     @Override
     default JsonValue toJson() {
         return Json.array(this);
+    }
+
+    static boolean isSorted(int[] array) {
+        int prev = Integer.MIN_VALUE;
+        for (int i : array) {
+            if (prev > i) {
+                return false;
+            }
+            prev = i;
+        }
+        return true;
     }
 }

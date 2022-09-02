@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.regex.tregex.nodes;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.Node;
 
@@ -64,103 +63,20 @@ public abstract class TRegexExecutorNode extends Node {
         return root.inputLength(locals.getInput());
     }
 
-    /**
-     * Returns {@code true} iff the index is at the beginning of the input string in respect to
-     * {@link #isForward()}.
-     */
-    public boolean inputAtBegin(TRegexExecutorLocals locals) {
-        return locals.getIndex() == (isForward() ? 0 : getInputLength(locals));
-    }
-
-    /**
-     * Returns {@code true} iff the index is at the end of the input string in respect to
-     * {@link #isForward()}.
-     */
-    public boolean inputAtEnd(TRegexExecutorLocals locals) {
-        return locals.getIndex() == (isForward() ? getInputLength(locals) : 0);
-    }
-
-    public int getMinIndex(@SuppressWarnings("unused") TRegexExecutorLocals locals) {
-        return 0;
-    }
-
-    public int getMaxIndex(TRegexExecutorLocals locals) {
-        return locals.getMaxIndex();
-    }
-
-    public boolean inputHasNext(TRegexExecutorLocals locals) {
-        return isForward() ? locals.getIndex() < getMaxIndex(locals) : locals.getIndex() > getMinIndex(locals);
-    }
-
-    public int inputRead(TRegexExecutorLocals locals) {
-        return inputRead(locals, locals.getIndex());
-    }
-
-    public int inputRead(TRegexExecutorLocals locals, int index) {
+    public char getChar(TRegexExecutorLocals locals) {
         assert root != null;
-        locals.setNextIndex(isForward() ? index + 1 : index - 1);
-        return root.inputRead(locals.getInput(), isForward() ? index : index - 1);
+        return root.inputCharAt(locals.getInput(), locals.getIndex());
     }
 
-    public void inputAdvance(TRegexExecutorLocals locals) {
-        assert isForward() ? locals.getIndex() < locals.getNextIndex() : locals.getIndex() > locals.getNextIndex();
-        locals.setIndex(locals.getNextIndex());
-    }
-
-    public void inputSkip(TRegexExecutorLocals locals) {
-        locals.setIndex(isForward() ? locals.getIndex() + 1 : locals.getIndex() - 1);
-    }
-
-    public void inputSkipReverse(TRegexExecutorLocals locals) {
-        locals.setIndex(isForward() ? locals.getIndex() - 1 : locals.getIndex() + 1);
-    }
-
-    public void inputIncRaw(TRegexExecutorLocals locals) {
-        inputIncRaw(locals, 1);
-    }
-
-    public void inputIncRaw(TRegexExecutorLocals locals, int offset) {
-        assert offset > 0;
-        locals.setIndex(isForward() ? locals.getIndex() + offset : locals.getIndex() - offset);
-    }
-
-    public int countUpTo(TRegexExecutorLocals locals, int max, int nCodePoints) {
-        CompilerAsserts.partialEvaluationConstant(nCodePoints);
-        if (nCodePoints > 0) {
-            assert isForward();
-            int i = 0;
-            int index = locals.getIndex();
-            while (index < max && i < nCodePoints) {
-                // TODO: decode here
-                index++;
-                i++;
-            }
-            return i;
-        }
-        return 0;
-    }
-
-    public int rewindUpTo(TRegexExecutorLocals locals, int min, int nCodePoints) {
-        CompilerAsserts.partialEvaluationConstant(nCodePoints);
-        if (nCodePoints > 0) {
-            assert isForward();
-            int i = 0;
-            while (locals.getIndex() > min && i < nCodePoints) {
-                // TODO: decode here
-                locals.setIndex(locals.getIndex() - 1);
-                i++;
-            }
-            return i;
-        }
-        return 0;
+    public char getCharAt(TRegexExecutorLocals locals, int index) {
+        assert root != null;
+        return root.inputCharAt(locals.getInput(), index);
     }
 
     protected int getNumberOfCaptureGroups() {
         assert root != null;
         return root.getNumberOfCaptureGroups();
     }
-
-    public abstract boolean isForward();
 
     /**
      * Returns {@code true} if this executor may write any new capture group boundaries.

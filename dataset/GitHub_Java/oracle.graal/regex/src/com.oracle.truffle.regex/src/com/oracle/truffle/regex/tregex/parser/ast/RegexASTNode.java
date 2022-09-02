@@ -70,7 +70,7 @@ public abstract class RegexASTNode implements JsonConvertible {
     static final int FLAG_HAS_BACK_REFERENCES = 1 << 17;
     static final int FLAG_CHARACTER_CLASS_WAS_SINGLE_CHAR = 1 << 18;
 
-    private int id = -1;
+    private short id = -1;
     private RegexASTNode parent;
     private int flags;
     private int minPath = 0;
@@ -106,15 +106,15 @@ public abstract class RegexASTNode implements JsonConvertible {
         return id >= 0;
     }
 
-    public int getId() {
+    public short getId() {
         assert idInitialized();
         return id;
     }
 
     public void setId(int id) {
         assert !idInitialized();
-        assert id <= TRegexOptions.TRegexParserTreeMaxSize;
-        this.id = id;
+        assert id <= TRegexOptions.TRegexMaxParseTreeSize;
+        this.id = (short) id;
     }
 
     /**

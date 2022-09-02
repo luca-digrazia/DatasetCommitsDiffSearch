@@ -78,21 +78,21 @@ public class PureNFAState extends BasicState<PureNFAState, PureNFATransition> {
     private static final byte FLAG_IS_LOOK_AROUND_NEGATED = 1 << N_FLAGS;
     private static final byte FLAG_IS_DETERMINISTIC = 1 << N_FLAGS + 1;
 
-    private final int astNodeId;
-    private final int extraId;
+    private final short astNodeId;
+    private final short extraId;
     private final byte kind;
     private final CodePointSet charSet;
 
-    public PureNFAState(int id, Term t) {
+    public PureNFAState(short id, Term t) {
         super(id, EMPTY_TRANSITIONS);
         this.astNodeId = t.getId();
         this.kind = getKind(t);
-        this.extraId = isLookAround() ? t.asLookAroundAssertion().getSubTreeId() : isBackReference() ? t.asBackReference().getGroupNr() : -1;
+        this.extraId = isLookAround() ? t.asLookAroundAssertion().getSubTreeId() : isBackReference() ? (short) t.asBackReference().getGroupNr() : -1;
         this.charSet = isCharacterClass() ? t.asCharacterClass().getCharSet() : null;
         setLookAroundNegated(isLookAround() && t.asLookAroundAssertion().isNegated());
     }
 
-    public int getAstNodeId() {
+    public short getAstNodeId() {
         return astNodeId;
     }
 
@@ -150,12 +150,12 @@ public class PureNFAState extends BasicState<PureNFAState, PureNFATransition> {
         return charSet;
     }
 
-    public int getLookAroundId() {
+    public short getLookAroundId() {
         assert isLookAround();
         return extraId;
     }
 
-    public int getBackRefNumber() {
+    public short getBackRefNumber() {
         assert isBackReference();
         return extraId;
     }
@@ -222,6 +222,7 @@ public class PureNFAState extends BasicState<PureNFAState, PureNFATransition> {
             }
         }
         return true;
+
     }
 
     @Override
