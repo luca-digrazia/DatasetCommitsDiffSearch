@@ -108,4 +108,9 @@ public abstract class InvokeInterfaceNode extends QuickNode {
     private int getResultAt() {
         return top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver
     }
+
+    @Override
+    public int getOpcode() {
+        return Bytecodes.INVOKEINTERFACE;
+    }
 }

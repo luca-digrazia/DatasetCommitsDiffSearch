@@ -97,4 +97,9 @@ public final class InvokeStaticNode extends QuickNode {
     public boolean removedByRedefintion() {
         return method.getMethod().isRemovedByRedefition();
     }
+
+    @Override
+    public int getOpcode() {
+        return Bytecodes.INVOKESTATIC;
+    }
 }

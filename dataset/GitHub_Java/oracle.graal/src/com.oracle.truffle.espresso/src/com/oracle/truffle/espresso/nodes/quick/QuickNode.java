@@ -23,9 +23,10 @@
 package com.oracle.truffle.espresso.nodes.quick;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoInstrumentableQuickNode;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -34,15 +35,6 @@ public abstract class QuickNode extends EspressoInstrumentableQuickNode {
 
     public static final QuickNode[] EMPTY_ARRAY = new QuickNode[0];
 
-    @CompilationFinal private boolean exceptionProfile;
-
-    protected final void enterExceptionProfile() {
-        if (!exceptionProfile) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            exceptionProfile = true;
-        }
-    }
-
     protected final int top;
 
     private final int callerBCI;
@@ -50,7 +42,6 @@ public abstract class QuickNode extends EspressoInstrumentableQuickNode {
     protected QuickNode(int top, int callerBCI) {
         this.top = top;
         this.callerBCI = callerBCI;
-        this.exceptionProfile = false;
     }
 
     @Override
@@ -62,10 +53,13 @@ public abstract class QuickNode extends EspressoInstrumentableQuickNode {
 
     public abstract boolean producedForeignObject(VirtualFrame frame);
 
-    protected final StaticObject nullCheck(StaticObject value) {
+    // TODO(peterssen): Make this a node?
+    public static StaticObject nullCheck(StaticObject value) {
         if (StaticObject.isNull(value)) {
-            enterExceptionProfile();
-            throw getBytecodesNode().getMeta().throwNullPointerException();
+            CompilerDirectives.transferToInterpreter();
+            // TODO(peterssen): Profile whether null was hit or not.
+            Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+            throw meta.throwNullPointerException();
         }
         return value;
     }
@@ -81,5 +75,11 @@ public abstract class QuickNode extends EspressoInstrumentableQuickNode {
     @Override
     public SourceSection getSourceSection() {
         return getBytecodesNode().getSourceSectionAtBCI(callerBCI);
+    }
+
+    public int getOpcode() {
+        // invoke quickening nodes override this with the actual opcode
+        // it's only relevant for invoke nodes
+        return -1;
     }
 }
