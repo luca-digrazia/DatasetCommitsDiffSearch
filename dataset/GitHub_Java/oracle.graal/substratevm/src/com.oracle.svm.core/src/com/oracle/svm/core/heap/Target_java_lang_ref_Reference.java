@@ -33,9 +33,12 @@ import java.lang.reflect.Field;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
+import org.graalvm.word.Pointer;
 
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.ExcludeFromReferenceMap;
 import com.oracle.svm.core.annotate.KeepOriginal;
+import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.CustomFieldValueComputer;
 import com.oracle.svm.core.annotate.Substitute;
@@ -43,7 +46,6 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.annotate.UnknownClass;
-import com.oracle.svm.core.jdk.CleanerSupport;
 import com.oracle.svm.core.jdk.JDK11OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.util.VMError;
@@ -53,30 +55,24 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
 /**
- * Substitution of {@link Reference}, which is the abstract base class of all non-strong reference
- * classes, the basis of the {@linkplain CleanerSupport cleaner mechanism,} and subject to special
- * treatment by the garbage collector.
- * <p>
- * Implementation methods are in the separate class {@link ReferenceInternals} because
- * {@link Reference} can be subclassed and subclasses could otherwise inadvertently override
- * injected methods by declaring methods with identical names and signatures, or override methods
- * such as {@link #enqueue()} with an incompatible implementation, which is problematic because some
- * of the methods are invoked during garbage collection.
+ * The implementation of {@link java.lang.ref.Reference}, which is the abstract base class of all
+ * non-strong reference classes, the basis of the {@linkplain com.oracle.svm.core.jdk.CleanerSupport
+ * cleaner mechanism,} and subject to special treatment by the garbage collector.
  * <p>
  * This class serves three purposes:
  * <ul>
  * <li>It has a {@linkplain #rawReferent reference to an object,} which is not strong. Therefore, if
  * the object is not otherwise strongly reachable, the garbage collector can choose to reclaim it
  * and will then set our reference (and possibly others) to {@code null}.
- * <li>It has {@linkplain #nextDiscovered linkage} to become part of a linked list of reference
- * objects that are discovered during garbage collection, when allocation is restricted.
+ * <li>It has {@linkplain #nextDiscovered linkage} to be part of a linked list of reference objects
+ * that are discovered during garbage collection, when allocation is restricted.
  * <li>It has {@linkplain #nextInQueue linkage} to optionally become part of a
  * {@linkplain #futureQueue linked reference queue,} which is used to clean up resources associated
  * with reclaimed objects.
  * </ul>
  */
 @UnknownClass
-@TargetClass(Reference.class)
+@TargetClass(java.lang.ref.Reference.class)
 @Substitute
 public final class Target_java_lang_ref_Reference<T> {
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.FieldOffset, name = "rawReferent", declClass = Target_java_lang_ref_Reference.class) //
@@ -116,7 +112,7 @@ public final class Target_java_lang_ref_Reference<T> {
 
     @SuppressWarnings("unused") //
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
-    Reference<?> nextDiscovered;
+    Target_java_lang_ref_Reference<?> nextDiscovered;
 
     /**
      * The queue to which this reference object will be added when the referent becomes unreachable.
@@ -130,7 +126,7 @@ public final class Target_java_lang_ref_Reference<T> {
      * reference object on the queue. If the reference is not (yet) on a queue, set to {@code this}.
      */
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ComputeThisInstanceValue.class) //
-    Reference<?> nextInQueue;
+    Target_java_lang_ref_Reference<?> nextInQueue;
 
     @Substitute
     Target_java_lang_ref_Reference(T referent) {
@@ -144,41 +140,41 @@ public final class Target_java_lang_ref_Reference<T> {
         this.nextDiscovered = null;
         this.isDiscovered = false;
         this.futureQueue = queue;
-        ReferenceQueueInternals.doClearQueuedState(ReferenceInternals.uncast(this));
+        Target_java_lang_ref_ReferenceQueue.clearQueuedState(this);
         this.initialized = true;
     }
 
     @Substitute
-    T get() {
+    public T get() {
         return rawReferent;
     }
 
     @Substitute
-    void clear() {
+    public void clear() {
         ReferenceInternals.doClear(this);
     }
 
     @Substitute
-    boolean enqueue() {
+    public boolean enqueue() {
         return ReferenceInternals.doEnqueue(this);
     }
 
     @Substitute
-    boolean isEnqueued() {
-        return ReferenceInternals.isEnqueued(ReferenceInternals.uncast(this));
+    public boolean isEnqueued() {
+        return ReferenceInternals.testIsEnqueued(this);
     }
 
     @Substitute
     @TargetElement(onlyWith = JDK8OrEarlier.class)
     @SuppressWarnings("unused")
-    static boolean tryHandlePending(boolean waitForNotify) {
+    private static boolean tryHandlePending(boolean waitForNotify) {
         throw VMError.unimplemented();
     }
 
     @Substitute
     @TargetElement(onlyWith = JDK11OrLater.class)
     @SuppressWarnings("unused")
-    static boolean waitForReferenceProcessing() {
+    private static boolean waitForReferenceProcessing() {
         throw VMError.unimplemented();
     }
 
@@ -190,8 +186,25 @@ public final class Target_java_lang_ref_Reference<T> {
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
     @SuppressWarnings("unused")
-    static void reachabilityFence(Object ref) {
+    public static void reachabilityFence(Object ref) {
         GraalDirectives.blackhole(ref);
+    }
+
+    public static final class TestingBackDoor {
+
+        private TestingBackDoor() {
+        }
+
+        @NeverInline("Prevent the access from moving around")
+        public static Pointer getReferentPointer(Reference<?> that) {
+            return ReferenceInternals.getReferentPointer(SubstrateUtil.cast(that, Target_java_lang_ref_Reference.class));
+        }
+
+        public static Reference<?> getNextDiscoveredReference(Reference<?> that) {
+            Target_java_lang_ref_Reference<?> cast = SubstrateUtil.cast(that, Target_java_lang_ref_Reference.class);
+            Target_java_lang_ref_Reference<?> next = ReferenceInternals.getNextDiscovered(cast);
+            return SubstrateUtil.cast(next, Reference.class);
+        }
     }
 }
 
