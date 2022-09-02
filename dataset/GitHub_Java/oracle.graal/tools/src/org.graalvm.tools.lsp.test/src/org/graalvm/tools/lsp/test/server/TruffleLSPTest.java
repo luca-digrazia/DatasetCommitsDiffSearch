@@ -24,30 +24,28 @@
  */
 package org.graalvm.tools.lsp.test.server;
 
+import java.io.File;
+import java.io.IOException;
 import java.net.URI;
-import java.nio.file.Paths;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Context.Builder;
-import org.graalvm.tools.lsp.api.ContextAwareExecutor;
-import org.graalvm.tools.lsp.api.ContextAwareExecutorRegistry;
-import org.graalvm.tools.lsp.api.VirtualLanguageServerFileProvider;
+import org.graalvm.tools.lsp.server.ContextAwareExecutor;
 import org.graalvm.tools.lsp.exceptions.DiagnosticsNotification;
-import org.graalvm.tools.lsp.launcher.filesystem.LSPFileSystem;
+import org.graalvm.tools.lsp.instrument.EnvironmentProvider;
+import org.graalvm.tools.lsp.server.LSPFileSystem;
 import org.graalvm.tools.lsp.server.TruffleAdapter;
-import org.graalvm.tools.lsp.server.types.Position;
 import org.graalvm.tools.lsp.server.types.Range;
-import org.graalvm.tools.lsp.test.instrument.TruffleAdapterProvider;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Instrument;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.BeforeClass;
 
 public abstract class TruffleLSPTest {
 
@@ -80,30 +78,25 @@ public abstract class TruffleLSPTest {
                     "  return abc();\n" +   // 13
                     "}\n";                  // 14
 
-    private static AtomicInteger globalCounter;
     protected Engine engine;
     protected TruffleAdapter truffleAdapter;
     protected Context context;
 
-    @BeforeClass
-    public static void classSetup() {
-        globalCounter = new AtomicInteger();
-    }
-
     @Before
     public void setup() {
-        engine = Engine.newBuilder().option("lspTestInstrument", "true").allowExperimentalOptions(true).build();
-        Instrument instrument = engine.getInstruments().get("lspTestInstrument");
-        VirtualLanguageServerFileProvider lspFileProvider = instrument.lookup(VirtualLanguageServerFileProvider.class);
+        engine = Engine.newBuilder().allowExperimentalOptions(true).build();
+        Instrument instrument = engine.getInstruments().get("lsp");
+        EnvironmentProvider envProvider = instrument.lookup(EnvironmentProvider.class);
+
+        truffleAdapter = new TruffleAdapter(envProvider.getEnvironment(), true);
 
         Builder contextBuilder = Context.newBuilder();
         contextBuilder.allowAllAccess(true);
-        contextBuilder.fileSystem(LSPFileSystem.newReadOnlyFileSystem(Paths.get("."), lspFileProvider));
+        contextBuilder.fileSystem(LSPFileSystem.newReadOnlyFileSystem(truffleAdapter));
         contextBuilder.engine(engine);
         context = contextBuilder.build();
         context.enter();
 
-        ContextAwareExecutorRegistry registry = instrument.lookup(ContextAwareExecutorRegistry.class);
         ContextAwareExecutor executorWrapper = new ContextAwareExecutor() {
 
             @Override
@@ -121,6 +114,7 @@ public abstract class TruffleLSPTest {
             public <T> Future<T> executeWithNestedContext(Callable<T> taskWithResult, boolean cached) {
                 try (Context newContext = contextBuilder.build()) {
                     newContext.enter();
+                    newContext.initialize("sl");
                     try {
                         return CompletableFuture.completedFuture(taskWithResult.call());
                     } catch (Exception e) {
@@ -134,6 +128,31 @@ public abstract class TruffleLSPTest {
             }
 
             @Override
+            public <T> Future<T> executeWithNestedContext(Callable<T> taskWithResult, int timeoutMillis, Callable<T> onTimeoutTask) {
+                if (timeoutMillis <= 0) {
+                    return executeWithNestedContext(taskWithResult, false);
+                } else {
+                    CompletableFuture<Future<T>> future = CompletableFuture.supplyAsync(() -> executeWithNestedContext(taskWithResult, false));
+                    try {
+                        return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
+                    } catch (TimeoutException e) {
+                        future.cancel(true);
+                        try {
+                            return CompletableFuture.completedFuture(onTimeoutTask.call());
+                        } catch (Exception timeoutTaskException) {
+                            CompletableFuture<T> cf = new CompletableFuture<>();
+                            cf.completeExceptionally(timeoutTaskException);
+                            return cf;
+                        }
+                    } catch (InterruptedException | ExecutionException e) {
+                        CompletableFuture<T> cf = new CompletableFuture<>();
+                        cf.completeExceptionally(e);
+                        return cf;
+                    }
+                }
+            }
+
+            @Override
             public void shutdown() {
             }
 
@@ -141,10 +160,8 @@ public abstract class TruffleLSPTest {
             public void resetContextCache() {
             }
         };
-        registry.register(executorWrapper);
 
-        truffleAdapter = instrument.lookup(TruffleAdapterProvider.class).getTruffleAdapter();
-        truffleAdapter.initialize();
+        truffleAdapter.register(envProvider.getEnvironment(), executorWrapper);
     }
 
     @After
@@ -154,7 +171,13 @@ public abstract class TruffleLSPTest {
     }
 
     public URI createDummyFileUriForSL() {
-        return URI.create("file:///tmp/truffle-lsp-test-file-" + globalCounter.incrementAndGet() + ".sl");
+        try {
+            File dummy = File.createTempFile("truffle-lsp-test-file-", ".sl");
+            dummy.deleteOnExit();
+            return dummy.getCanonicalFile().toPath().toUri();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     protected DiagnosticsNotification getDiagnosticsNotification(ExecutionException e) {
