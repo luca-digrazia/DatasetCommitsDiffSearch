@@ -87,7 +87,6 @@ public final class Field extends Member<Type> implements FieldRef {
         return linkedField.getKind();
     }
 
-    @Override
     public int getModifiers() {
         return linkedField.getFlags() & Constants.JVM_RECOGNIZED_FIELD_MODIFIERS;
     }
@@ -113,7 +112,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     @Override
     public String toString() {
-        return getDeclaringKlass().getNameAsString() + "." + getName() + ": " + getType();
+        return "EspressoField<" + getDeclaringKlass() + "." + getName() + ":" + getType() + ">";
     }
 
     public Klass resolveTypeKlass() {
@@ -284,7 +283,7 @@ public final class Field extends Member<Type> implements FieldRef {
     // region helper methods
     private Object getObjectHelper(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             return linkedField.getObjectVolatile(obj);
         } else {
@@ -294,7 +293,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     private void setObjectHelper(StaticObject obj, Object value, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             linkedField.setObjectVolatile(obj, value);
         } else {
@@ -309,7 +308,7 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public StaticObject getObject(StaticObject obj, boolean forceVolatile) {
-        assert !isHidden() : this + " is hidden, use getHiddenObject";
+        assert !isHidden();
         return (StaticObject) getObjectHelper(obj, forceVolatile);
     }
 
@@ -318,21 +317,21 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public void setObject(StaticObject obj, Object value, boolean forceVolatile) {
-        assert !isHidden() : this + " is hidden, use setHiddenObject";
+        assert !isHidden();
         setObjectHelper(obj, value, forceVolatile);
     }
 
     public StaticObject getAndSetObject(StaticObject obj, StaticObject value) {
         obj.checkNotForeign();
-        assert !isHidden() : this + " is hidden";
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert !isHidden();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         return (StaticObject) linkedField.getAndSetObject(obj, value);
     }
 
     public boolean compareAndSwapObject(StaticObject obj, Object before, Object after) {
         obj.checkNotForeign();
-        assert !isHidden() : this + " is hidden";
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert !isHidden();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         return linkedField.compareAndSwapObject(obj, before, after);
     }
 
@@ -342,7 +341,7 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public Object getHiddenObject(StaticObject obj, boolean forceVolatile) {
-        assert isHidden() : this + " is not hidden, use getObject";
+        assert isHidden();
         return getObjectHelper(obj, forceVolatile);
     }
 
@@ -351,7 +350,7 @@ public final class Field extends Member<Type> implements FieldRef {
     }
 
     public void setHiddenObject(StaticObject obj, Object value, boolean forceVolatile) {
-        assert isHidden() : this + " is not hidden, use setObject";
+        assert isHidden();
         setObjectHelper(obj, value, forceVolatile);
     }
     // endregion Hidden Object
@@ -364,7 +363,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public boolean getBoolean(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             return linkedField.getBooleanVolatile(obj);
         } else {
@@ -378,7 +377,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public void setBoolean(StaticObject obj, boolean value, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             linkedField.setBooleanVolatile(obj, value);
         } else {
@@ -394,7 +393,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public byte getByte(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             return linkedField.getByteVolatile(obj);
         } else {
@@ -408,7 +407,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public void setByte(StaticObject obj, byte value, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             linkedField.setByteVolatile(obj, value);
         } else {
@@ -424,7 +423,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public char getChar(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             return linkedField.getCharVolatile(obj);
         } else {
@@ -438,7 +437,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public void setChar(StaticObject obj, char value, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             linkedField.setCharVolatile(obj, value);
         } else {
@@ -454,7 +453,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public double getDouble(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             return linkedField.getDoubleVolatile(obj);
         } else {
@@ -468,7 +467,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public void setDouble(StaticObject obj, double value, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             linkedField.setDoubleVolatile(obj, value);
         } else {
@@ -485,7 +484,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public float getFloat(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             return linkedField.getFloatVolatile(obj);
         } else {
@@ -499,7 +498,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public void setFloat(StaticObject obj, float value, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             linkedField.setFloatVolatile(obj, value);
         } else {
@@ -515,7 +514,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public int getInt(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             return linkedField.getIntVolatile(obj);
         } else {
@@ -529,7 +528,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public void setInt(StaticObject obj, int value, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             linkedField.setIntVolatile(obj, value);
         } else {
@@ -539,7 +538,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public boolean compareAndSwapInt(StaticObject obj, int before, int after) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         return linkedField.compareAndSwapInt(obj, before, after);
     }
     // endregion int
@@ -551,7 +550,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public long getLong(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind().needsTwoSlots();
         if (isVolatile() || forceVolatile) {
             return linkedField.getLongVolatile(obj);
@@ -566,7 +565,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public void setLong(StaticObject obj, long value, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind().needsTwoSlots();
         if (isVolatile() || forceVolatile) {
             linkedField.setLongVolatile(obj, value);
@@ -577,7 +576,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public boolean compareAndSwapLong(StaticObject obj, long before, long after) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         assert getKind().needsTwoSlots();
         return linkedField.compareAndSwapLong(obj, before, after);
     }
@@ -590,7 +589,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public short getShort(StaticObject obj, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             return linkedField.getShortVolatile(obj);
         } else {
@@ -604,7 +603,7 @@ public final class Field extends Member<Type> implements FieldRef {
 
     public void setShort(StaticObject obj, short value, boolean forceVolatile) {
         obj.checkNotForeign();
-        assert getDeclaringKlass().isAssignableFrom(obj.getKlass()) : this + " does not exist in " + obj.getKlass();
+        assert getDeclaringKlass().isAssignableFrom(obj.getKlass());
         if (isVolatile() || forceVolatile) {
             linkedField.setShortVolatile(obj, value);
         } else {
@@ -714,8 +713,8 @@ public final class Field extends Member<Type> implements FieldRef {
      */
     static final class StableBoolean {
 
-        @CompilationFinal private volatile Assumption unchanged;
-        @CompilationFinal private volatile boolean value;
+        @CompilerDirectives.CompilationFinal private volatile Assumption unchanged;
+        @CompilerDirectives.CompilationFinal private volatile boolean value;
 
         StableBoolean(boolean initialValue) {
             this.value = initialValue;
@@ -724,15 +723,19 @@ public final class Field extends Member<Type> implements FieldRef {
 
         @SuppressFBWarnings(value = "UG_SYNC_SET_UNSYNC_GET", justification = "The get method returns a volatile field.")
         public boolean get() {
-            if (!unchanged.isValid()) {
+            if (unchanged.isValid()) {
+                return value;
+            } else {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
+                return value;
             }
-            return value;
         }
 
         /**
          * This method needs to be behind a boundary due to the fact that compiled code will
          * constant fold the value, hence the first check might yield a wrong result.
+         * 
+         * @param value
          */
         @CompilerDirectives.TruffleBoundary
         public synchronized void set(boolean value) {
