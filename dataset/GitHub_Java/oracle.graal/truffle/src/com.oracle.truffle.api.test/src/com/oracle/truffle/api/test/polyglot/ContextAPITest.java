@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -115,28 +115,6 @@ public class ContextAPITest {
 
         context.leave();
         context.close();
-    }
-
-    @Test
-    public void testCloseBeforeLeave() {
-        for (int i = 0; i < 10; i++) {
-            Context context = Context.create();
-            for (int j = 0; j < i; j++) {
-                context.enter();
-            }
-            context.close();
-            // we have already left the context
-            try {
-                Context.getCurrent();
-                fail();
-            } catch (IllegalStateException e) {
-            }
-            for (int j = 0; j < i; j++) {
-                // additional leave calls are allowed
-                // this allows to simplify some error recovery code
-                context.leave();
-            }
-        }
     }
 
     @Test
@@ -309,8 +287,20 @@ public class ContextAPITest {
         context.getPolyglotBindings().getMember("");
         context.enter();
 
+        try {
+            context.close();
+            fail();
+        } catch (IllegalStateException e) {
+        }
+
         context.getPolyglotBindings().getMember("");
         context.enter();
+
+        try {
+            context.close();
+            fail();
+        } catch (IllegalStateException e) {
+        }
 
         if (depth < 3) {
             Context innerContext = Context.create();
@@ -320,6 +310,12 @@ public class ContextAPITest {
 
         context.leave();
 
+        try {
+            context.close();
+            fail();
+        } catch (IllegalStateException e) {
+        }
+
         context.leave();
 
         try {
@@ -327,6 +323,7 @@ public class ContextAPITest {
             fail();
         } catch (IllegalStateException e) {
         }
+
     }
 
     @Test
@@ -409,24 +406,18 @@ public class ContextAPITest {
         context.close();
     }
 
-    @ExportLibrary(InteropLibrary.class)
-    @SuppressWarnings({"static-method", "unused"})
-    static final class ContextTestFunction implements TruffleObject {
-
-        @ExportMessage
-        boolean isExecutable() {
-            return true;
-        }
-
-        @ExportMessage
-        Object execute(Object[] arguments) {
-            return 42;
-        }
-
-    }
-
     private static void testExecute(Context context) {
-        ContextAPITestLanguage.runinside = (env) -> new ContextTestFunction();
+        ContextAPITestLanguage.runinside = (env) -> new ProxyLegacyInteropObject() {
+            @Override
+            public boolean isExecutable() {
+                return true;
+            }
+
+            @Override
+            public Object execute(Object[] args) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
+                return 42;
+            }
+        };
         Value executable = context.eval(ContextAPITestLanguage.ID, "");
         assertEquals(42, executable.execute().asInt());
         assertEquals(42, executable.execute(42).asInt());
