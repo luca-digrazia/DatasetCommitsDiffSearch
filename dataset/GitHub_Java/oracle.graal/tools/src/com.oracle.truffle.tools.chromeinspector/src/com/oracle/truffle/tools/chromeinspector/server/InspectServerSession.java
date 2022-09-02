@@ -60,7 +60,6 @@ public final class InspectServerSession implements MessageEndpoint {
     private final ProfilerDomain profiler;
     private final InspectorExecutionContext context;
     private volatile MessageEndpoint messageEndpoint;
-    private volatile JSONMessageListener jsonMessageListener;
     private CommandProcessThread processThread;
 
     private InspectServerSession(RuntimeDomain runtime, DebuggerDomain debugger, ProfilerDomain profiler,
@@ -101,18 +100,6 @@ public final class InspectServerSession implements MessageEndpoint {
         }
     }
 
-    public void setJSONMessageListener(JSONMessageListener messageListener) {
-        this.jsonMessageListener = messageListener;
-        if (messageListener != null && processThread == null) {
-            EventHandler eh = new EventHandlerImpl();
-            runtime.setEventHandler(eh);
-            debugger.setEventHandler(eh);
-            profiler.setEventHandler(eh);
-            processThread = new CommandProcessThread();
-            processThread.start();
-        }
-    }
-
     @Override
     public void sendText(String message) {
         Command cmd;
@@ -126,52 +113,6 @@ public final class InspectServerSession implements MessageEndpoint {
             return;
         }
         processThread.push(cmd);
-    }
-
-    public void sendCommand(Command cmd) {
-        if (context.isSynchronous()) {
-            sendCommandSync(cmd);
-        } else {
-            processThread.push(cmd);
-        }
-    }
-
-    private void sendCommandSync(Command cmd) {
-        CommandPostProcessor postProcessor = new CommandPostProcessor();
-        JSONObject result;
-        try {
-            Params resultParams = processCommand(cmd, postProcessor);
-            if (resultParams == null) {
-                result = Result.emptyResult(cmd.getId());
-            } else {
-                if (resultParams.getJSONObject() != null) {
-                    result = new Result(resultParams).toJSON(cmd.getId());
-                } else {
-                    result = null;
-                }
-            }
-        } catch (CommandProcessException cpex) {
-            result = new ErrorResponse(cmd.getId(), -32601, cpex.getLocalizedMessage()).toJSON();
-        } catch (ThreadDeath td) {
-            throw td;
-        } catch (Throwable t) {
-            PrintWriter err = context.getErr();
-            if (err != null) {
-                t.printStackTrace(err);
-            }
-            result = new ErrorResponse(cmd.getId(), -32601, "Processing of '" + cmd.getMethod() + "' has caused " + t.getLocalizedMessage()).toJSON();
-        }
-        if (result != null) {
-            JSONMessageListener jsonListener = jsonMessageListener;
-            if (jsonListener != null) {
-                jsonListener.onMessage(result);
-            }
-        }
-        postProcessor.run();
-    }
-
-    public void consoleAPICall(String type, Object text) {
-        runtime.notifyConsoleAPICalled(type, text);
     }
 
     @Override
@@ -254,8 +195,8 @@ public final class InspectServerSession implements MessageEndpoint {
             case "Debugger.getPossibleBreakpoints":
                 json = cmd.getParams().getJSONObject();
                 resultParams = debugger.getPossibleBreakpoints(
-                                Location.create(json.getJSONObject("start")),
-                                Location.create(json.getJSONObject("end")),
+                                Location.create(json.optJSONObject("start")),
+                                Location.create(json.optJSONObject("end")),
                                 json.optBoolean("restrictToFunction"));
                 break;
             case "Debugger.getScriptSource":
@@ -414,10 +355,6 @@ public final class InspectServerSession implements MessageEndpoint {
                     }
                 }
             }
-            JSONMessageListener jsonListener = jsonMessageListener;
-            if (jsonListener != null) {
-                jsonListener.onMessage(event.toJSON());
-            }
         }
 
     }
@@ -479,20 +416,20 @@ public final class InspectServerSession implements MessageEndpoint {
                     break;
                 }
                 CommandPostProcessor postProcessor = new CommandPostProcessor();
-                JSONObject result;
+                String resultMsg;
                 try {
                     Params resultParams = processCommand(cmd, postProcessor);
                     if (resultParams == null) {
-                        result = Result.emptyResult(cmd.getId());
+                        resultMsg = Result.emptyResultToJSONString(cmd.getId());
                     } else {
                         if (resultParams.getJSONObject() != null) {
-                            result = new Result(resultParams).toJSON(cmd.getId());
+                            resultMsg = new Result(resultParams).toJSONString(cmd.getId());
                         } else {
-                            result = null;
+                            resultMsg = null;
                         }
                     }
                 } catch (CommandProcessException cpex) {
-                    result = new ErrorResponse(cmd.getId(), -32601, cpex.getLocalizedMessage()).toJSON();
+                    resultMsg = new ErrorResponse(cmd.getId(), -32601, cpex.getLocalizedMessage()).toJSONString();
                 } catch (ThreadDeath td) {
                     throw td;
                 } catch (Throwable t) {
@@ -500,13 +437,13 @@ public final class InspectServerSession implements MessageEndpoint {
                     if (err != null) {
                         t.printStackTrace(err);
                     }
-                    result = new ErrorResponse(cmd.getId(), -32601, "Processing of '" + cmd.getMethod() + "' has caused " + t.getLocalizedMessage()).toJSON();
+                    resultMsg = new ErrorResponse(cmd.getId(), -32601, "Processing of '" + cmd.getMethod() + "' has caused " + t.getLocalizedMessage()).toJSONString();
                 }
-                if (result != null) {
+                if (resultMsg != null) {
                     MessageEndpoint listener = messageEndpoint;
                     if (listener != null) {
                         try {
-                            listener.sendText(result.toString());
+                            listener.sendText(resultMsg);
                         } catch (IOException ex) {
                             PrintStream log = context.getLogger();
                             if (log != null) {
@@ -514,10 +451,6 @@ public final class InspectServerSession implements MessageEndpoint {
                                 log.flush();
                             }
                         }
-                    }
-                    JSONMessageListener jsonListener = jsonMessageListener;
-                    if (jsonListener != null) {
-                        jsonListener.onMessage(result);
                     }
                 }
                 postProcessor.run();
