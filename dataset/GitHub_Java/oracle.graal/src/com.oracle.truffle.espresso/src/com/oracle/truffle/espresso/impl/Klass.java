@@ -107,7 +107,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
 
         // Look for public static fields.
         for (Field f : getDeclaredFields()) {
-            if (f.isPublic() && f.isStatic() && member.equals(f.getNameAsString())) {
+            if (f.isStatic() && f.isPublic() && member.equals(f.getNameAsString())) {
                 return true;
             }
         }
@@ -138,11 +138,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         // Look for public static fields.
         for (Field f : getDeclaredFields()) {
             if (f.isPublic() && f.isStatic() && member.equals(f.getNameAsString())) {
-                Object result = f.get(tryInitializeAndGetStatics());
-                if (result instanceof StaticObject && ((StaticObject) result).isForeignObject()) {
-                    return ((StaticObject) result).rawForeignObject();
-                }
-                return result;
+                return f.get(tryInitializeAndGetStatics());
             }
         }
 
