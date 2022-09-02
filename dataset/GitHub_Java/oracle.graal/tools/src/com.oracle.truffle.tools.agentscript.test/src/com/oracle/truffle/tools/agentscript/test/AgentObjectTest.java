@@ -26,7 +26,6 @@ package com.oracle.truffle.tools.agentscript.test;
 
 import com.oracle.truffle.api.instrumentation.test.InstrumentationTestLanguage;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
-import java.util.Map;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Source;
@@ -40,27 +39,18 @@ import org.junit.Test;
 
 public class AgentObjectTest {
     public interface API {
-        public interface Context {
+        public interface EventContext {
             String name();
         }
 
         @FunctionalInterface
         public interface OnEventHandler {
-            void eventHasJustHappened(Context ctx);
-        }
-
-        @FunctionalInterface
-        public interface OnEventWithFrameHandler {
-            void eventHasJustHappened(Context ctx, Map<String, Object> frame);
+            void eventHasJustHappened(EventContext c);
         }
 
         void on(String event, OnEventHandler handler);
 
-        void on(String event, OnEventWithFrameHandler handler);
-
         void on(String event, OnEventHandler handler, OnConfig config);
-
-        void on(String event, OnEventWithFrameHandler handler, OnConfig config);
 
         final class OnConfig {
             public final boolean expressions;
@@ -103,14 +93,14 @@ public class AgentObjectTest {
 
             boolean[] program = {false};
             String[] functionName = {null};
-            agentAPI.on("enter", (ctx, frame) -> {
-                if (ctx.name().length() == 0) {
+            agentAPI.on("enter", (ev) -> {
+                if (ev.name().length() == 0) {
                     assertFalse("Program root is entered just once", program[0]);
                     program[0] = true;
                     return;
                 }
                 assertNull("No function entered yet", functionName[0]);
-                functionName[0] = ctx.name();
+                functionName[0] = ev.name();
             }, new API.OnConfig(false, false, true));
 
             // @formatter:off
@@ -138,11 +128,9 @@ public class AgentObjectTest {
             API agentAPI = agent.as(API.class);
             Assert.assertNotNull("Agent API obtained", agentAPI);
 
-            int[] loopIndexSum = {0};
-            agentAPI.on("enter", (ctx, frame) -> {
-                Object index = frame.get("loopIndex0");
-                assertTrue("Number as expected: " + index, index instanceof Number);
-                loopIndexSum[0] += ((Number) index).intValue();
+            int[] statementCounter = {0};
+            agentAPI.on("enter", (ev) -> {
+                statementCounter[0]++;
             }, new API.OnConfig(false, true, false));
 
             // @formatter:off
@@ -158,7 +146,7 @@ public class AgentObjectTest {
             // @formatter:on
             c.eval(sampleScript);
 
-            assertEquals("0,1,2,...9 indexes", 10 * 9 / 2, loopIndexSum[0]);
+            assertEquals("10 statements", 10, statementCounter[0]);
         }
     }
 
@@ -170,7 +158,7 @@ public class AgentObjectTest {
             Assert.assertNotNull("Agent API obtained", agentAPI);
 
             int[] expressionCounter = {0};
-            agentAPI.on("enter", (ev, frame) -> {
+            agentAPI.on("enter", (ev) -> {
                 expressionCounter[0]++;
             }, new API.OnConfig(true, false, false));
 
