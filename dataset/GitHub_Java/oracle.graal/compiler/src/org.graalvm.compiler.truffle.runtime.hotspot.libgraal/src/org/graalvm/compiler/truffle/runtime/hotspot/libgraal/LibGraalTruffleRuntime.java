@@ -135,7 +135,7 @@ final class LibGraalTruffleRuntime extends AbstractHotSpotTruffleRuntime {
     @Override
     public String getName() {
         String name = super.getName();
-        return name + " compiler-native";
+        return name + " Native";
     }
 
     /**
