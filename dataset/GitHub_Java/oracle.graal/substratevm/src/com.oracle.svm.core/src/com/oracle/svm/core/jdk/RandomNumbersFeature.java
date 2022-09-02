@@ -26,12 +26,10 @@ package com.oracle.svm.core.jdk;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-import com.oracle.svm.core.annotate.AutomaticFeature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 
-@AutomaticFeature
 public class RandomNumbersFeature implements Feature {
 
     @Override
