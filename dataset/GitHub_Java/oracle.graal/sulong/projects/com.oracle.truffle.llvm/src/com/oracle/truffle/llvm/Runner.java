@@ -936,8 +936,8 @@ final class Runner {
     /**
      * Marker for renamed symbols. Keep in sync with `sulong-internal.h`.
      */
-    static final String SULONG_RENAME_MARKER = "___sulong_import_";
-    static final int SULONG_RENAME_MARKER_LEN = SULONG_RENAME_MARKER.length();
+    private static final String SULONG_RENAME_MARKER = "___sulong_import_";
+    public static final int SULONG_RENAME_MARKER_LEN = SULONG_RENAME_MARKER.length();
 
     private static void resolveRenamedSymbols(LLVMParserResult parserResult, ParseContext parseContext) {
         EconomicMap<ExternalLibrary, LLVMParserResult> libToRes = EconomicMap.create();
@@ -999,23 +999,6 @@ final class Runner {
                     } else {
                         throw new LLVMLinkerException(String.format("The symbol %s could not be imported because library %s was not found", external.getName(), libs.get(lib)));
                     }
-                }
-            } else if (CXXDemangler.isRenamedNamespaceSymbol(name)) {
-                ArrayList<String> namespaces = CXXDemangler.decodeNamespace(name);
-                final String lib = CXXDemangler.getAndRemoveLibraryName(namespaces);
-                LLVMScope scope = scopes.get(lib);
-                if (scope != null) {
-                    final String originalName = CXXDemangler.encodeNamespace(namespaces);
-                    LLVMFunction originalSymbol = scope.getFunction(originalName);
-                    if (originalSymbol == null) {
-                        throw new LLVMLinkerException(
-                                        String.format("The symbol %s could not be imported because the symbol %s was not found in library %s", external.getName(), originalName, libs.get(lib)));
-                    }
-                    LLVMAlias alias = new LLVMAlias(parserResult.getRuntime().getLibrary(), name, originalSymbol);
-                    parserResult.getRuntime().getFileScope().register(alias);
-                    it.remove();
-                } else {
-                    throw new LLVMLinkerException(String.format("The symbol %s could not be imported because library %s was not found", external.getName(), lib));
                 }
             }
         }
@@ -1493,6 +1476,7 @@ final class Runner {
                     if (localGlobal != null && localGlobal.isGlobalVariable() && !(global.equals(localGlobal.asGlobalVariable()))) {
                         // Cannot override with a hidden global symbol from the localScope
                         allocOverrideSymbolsList.add(new AllocExistingSymbolNode(global, LLVMAccessSymbolNodeGen.create(localGlobal)));
+
                     }
                 }
             }
@@ -1585,7 +1569,7 @@ final class Runner {
 
     private static StaticInitsNode createGlobalVariableInitializer(FrameDescriptor rootFrame, LLVMParserResult parserResult, Object moduleName) {
         LLVMParserRuntime runtime = parserResult.getRuntime();
-        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, rootFrame, GetStackSpaceFactory.createAllocaFactory(), parserResult.getDataLayout(), false);
+        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, rootFrame, GetStackSpaceFactory.createAllocaFactory(), parserResult.getDataLayout());
         final List<LLVMStatementNode> globalNodes = new ArrayList<>();
         for (GlobalVariable global : parserResult.getDefinedGlobals()) {
             final LLVMStatementNode store = createGlobalInitialization(runtime, symbolResolver, global, parserResult.getDataLayout());
@@ -1699,7 +1683,7 @@ final class Runner {
         }
     }
 
-    static byte[] decodeBase64(CharSequence charSequence) {
+    private static byte[] decodeBase64(CharSequence charSequence) {
         byte[] result = new byte[charSequence.length()];
         for (int i = 0; i < result.length; i++) {
             char ch = charSequence.charAt(i);
