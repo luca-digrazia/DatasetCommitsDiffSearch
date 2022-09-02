@@ -58,6 +58,11 @@ final class SourceAccessor extends Accessor {
     private SourceAccessor() {
     }
 
+    @Override
+    public SourceSupport sourceSupport() {
+        return new SourceSupportImpl();
+    }
+
     static Collection<ClassLoader> allLoaders() {
         return ACCESSOR.loaders();
     }

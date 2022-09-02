@@ -50,7 +50,7 @@ final class DumpAccessor extends Accessor {
     private DumpAccessor() {
     }
 
-    static final class DumpImpl extends DumpSupport {
+    private static final DumpSupport DUMP_SUPPORT = new DumpSupport() {
         @SuppressWarnings("deprecation")
         @Override
         public void dump(Node newNode, Node newChild, CharSequence reason) {
@@ -64,5 +64,10 @@ final class DumpAccessor extends Accessor {
                 }
             }
         }
+    };
+
+    @Override
+    public DumpSupport dumpSupport() {
+        return DUMP_SUPPORT;
     }
 }

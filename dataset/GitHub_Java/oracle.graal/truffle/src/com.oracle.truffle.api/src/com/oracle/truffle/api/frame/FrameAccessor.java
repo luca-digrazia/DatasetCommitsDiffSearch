@@ -44,7 +44,8 @@ import com.oracle.truffle.api.impl.Accessor;
 
 final class FrameAccessor extends Accessor {
 
-    @SuppressWarnings("unused") static final FrameAccessor ACCESSOR = new FrameAccessor();
+    @SuppressWarnings("unused")
+    static final FrameAccessor ACCESSOR = new FrameAccessor();
 
     @Override
     public FrameSupport framesSupport() {
