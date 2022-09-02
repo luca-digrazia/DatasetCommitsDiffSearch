@@ -197,6 +197,7 @@ public class SerializationFeature implements Feature {
 
 final class SerializationBuilder {
 
+    private final FeatureImpl.BeforeAnalysisAccessImpl access;
     private final Object reflectionFactory;
     private final Method newConstructorForSerializationMethod1;
     private final Method newConstructorForSerializationMethod2;
@@ -219,6 +220,7 @@ final class SerializationBuilder {
             throw VMError.shouldNotReachHere(e);
         }
         stubConstructor = newConstructorForSerialization(SerializationSupport.StubForAbstractClass.class, null);
+        this.access = access;
 
         serializationSupport = new SerializationSupport();
         ImageSingletons.add(SerializationRegistry.class, serializationSupport);
