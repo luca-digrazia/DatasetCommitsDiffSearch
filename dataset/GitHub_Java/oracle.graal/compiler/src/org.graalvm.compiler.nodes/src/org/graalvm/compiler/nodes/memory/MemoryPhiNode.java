@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,8 +24,6 @@
  */
 package org.graalvm.compiler.nodes.memory;
 
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
-
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeInputList;
@@ -36,11 +34,13 @@ import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.word.LocationIdentity;
 
+import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_0;
+
 /**
  * Memory {@code PhiNode}s merge memory dependencies at control flow merges.
  */
 @NodeInfo(nameTemplate = "Phi({i#values}) {p#locationIdentity/s}", allowedUsageTypes = {InputType.Memory}, size = SIZE_0)
-public final class MemoryPhiNode extends PhiNode implements SingleMemoryKill {
+public final class MemoryPhiNode extends PhiNode implements MemoryNode {
 
     public static final NodeClass<MemoryPhiNode> TYPE = NodeClass.create(MemoryPhiNode.class);
     @Input(InputType.Memory) NodeInputList<ValueNode> values;
@@ -70,15 +70,5 @@ public final class MemoryPhiNode extends PhiNode implements SingleMemoryKill {
     @Override
     protected String valueDescription() {
         return locationIdentity.toString();
-    }
-
-    @Override
-    public LocationIdentity getKilledLocationIdentity() {
-        return getLocationIdentity();
-    }
-
-    @Override
-    public PhiNode patchPhi(AbstractMergeNode newMerge) {
-        return graph().addWithoutUnique(new MemoryPhiNode(newMerge, getLocationIdentity()));
     }
 }
