@@ -46,20 +46,20 @@ import java.util.Objects;
 /**
  * A version utility to canonicalize and compare GraalVM versions. The GraalVM version string is not
  * standardized and may change without notice. This class is designed to evolve with GraalVM to
- * cover all used version formats in use. It allows create, validate and compare GraalVM versions.
- * Do not rely on the format of the raw version string or the result of {@link #toString()}, only
- * use it to produce output for humans.
+ * cover all used version formats in use. It allows to create, validate and compare GraalVM
+ * versions. Do not rely on the format of the raw version string or the result of
+ * {@link #toString()}, only use it to produce output for humans.
  * <p>
  * To create version instances of a particular version use the {@link #create(int...)} factory
  * method. Use {@link #getCurrent()} to lookup the current GraalVM version or {@link #parse(String)}
  * to parse it from a raw string.
  * <p>
  *
- * <h3>Usage example:</h3> This code example compares the the current GraalVM version to be at least
+ * <h3>Usage example:</h3> This code example compares the current GraalVM version to be at least
  * 19.3 and fails if it is not.
  *
  * <pre>
- * if (Version.getCurrent().compareTo(19, 3) <= 0) {
+ * if (Version.getCurrent().compareTo(19, 3) < 0) {
  *     throw new IllegalStateException("Invalid GraalVM version. Must be at least 19.3.");
  * }
  * </pre>
@@ -144,7 +144,7 @@ public final class Version implements Comparable<Version> {
     }
 
     /**
-     * Returns <code>true</code> if this is a support release build of GraalVM else
+     * Returns <code>true</code> if this is a supported release build of GraalVM else
      * <code>false</code>. Use this for implementation assertions that verify that only releases are
      * deployed to production.
      *
@@ -156,7 +156,7 @@ public final class Version implements Comparable<Version> {
     }
 
     /**
-     * Returns <code>true</code> if this is a support release build of GraalVM else
+     * Returns <code>true</code> if this is an unsupported snapshot build of GraalVM else
      * <code>false</code>. Use this for implementation assertions that verify that only releases are
      * deployed to production.
      *
@@ -254,7 +254,6 @@ public final class Version implements Comparable<Version> {
      * Parses a GraalVM version from its String raw format. Throws {@link IllegalArgumentException}
      * if the passed string is not a valid GraalVM version.
      *
-     * @see Version format specification
      * @since 19.3
      */
     public static Version parse(String versionString) throws IllegalArgumentException {
@@ -262,11 +261,19 @@ public final class Version implements Comparable<Version> {
         return new Version(versionString);
     }
 
+    /**
+     * Constructs a new GraalVM version from a list of version numbers. The versions must not be
+     * <code>null</code> and none of the version numbers must be negative. At least one version
+     * number must be non-zero.
+     *
+     * @see #compareTo(int...)
+     * @since 19.3
+     */
     public static Version create(int... versions) throws IllegalArgumentException {
         Objects.requireNonNull(versions);
         int[] useVersions = trimTrailingZeros(versions);
         if (useVersions.length == 0) {
-            throw new IllegalArgumentException("At least one non-zero version must e specified.");
+            throw new IllegalArgumentException("At least one non-zero version must be specified.");
         }
         for (int i = 0; i < useVersions.length; i++) {
             if (useVersions[i] < 0) {
