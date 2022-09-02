@@ -88,15 +88,6 @@ public class ProxyConnectionFactory implements URLConnectionFactory {
         this.urlBase = urlBase;
     }
 
-    public ProxyConnectionFactory setProxy(boolean secure, String proxyURI) {
-        if (secure) {
-            envHttpsProxy = proxyURI;
-        } else {
-            envHttpProxy = proxyURI;
-        }
-        return this;
-    }
-
     public URLConnection openConnection(URI relative, Consumer<URLConnection> configCallback) throws IOException {
         if (relative != null) {
             try {
@@ -211,17 +202,13 @@ public class ProxyConnectionFactory implements URLConnectionFactory {
                     throw new AssertionError(detectedType.name());
             }
             c.run();
-            synchronized (conn) {
-                if (conn[0] == null) {
-                    if (ex3.get() != null) {
-                        throw ex3.get();
-                    } else if (ex2.get() != null) {
-                        throw ex2.get();
-                    }
-                    throw new ConnectException(feedback.l10n("EXC_CannotConnectTo", url));
-                } else {
-                    return conn[0];
+            if (conn[0] == null) {
+                if (ex3.get() != null) {
+                    throw ex3.get();
+                } else if (ex2.get() != null) {
+                    throw ex2.get();
                 }
+                throw new ConnectException(feedback.l10n("EXC_CannotConnectTo", url));
             }
         }
 

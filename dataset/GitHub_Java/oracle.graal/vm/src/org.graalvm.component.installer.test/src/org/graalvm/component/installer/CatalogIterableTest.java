@@ -56,7 +56,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
-public class CatalogIterableTest extends CommandTestBase {
+public class CatalogIterableTest extends CommandTestBase implements SoftwareChannel {
     @Rule public final ProxyResource proxyResource = new ProxyResource();
 
     @Override
@@ -292,12 +292,22 @@ public class CatalogIterableTest extends CommandTestBase {
     }
 
     @Override
-    public MetadataLoader createLocalFileLoader(ComponentInfo ci, Path localFile, boolean verify) throws IOException {
+    public boolean setupLocation(String urlString) {
+        // OK
+        return true;
+    }
+
+    @Override
+    public void init(CommandInput input, Feedback output) {
+    }
+
+    @Override
+    public MetadataLoader createLocalFileLoader(Path localFile, boolean verify) throws IOException {
         return new JarMetaLoader(new JarFile(localFile.toFile(), verify), this);
     }
 
     @Override
-    public FileDownloader configureDownloader(ComponentInfo ci, FileDownloader dn) {
+    public FileDownloader configureDownloader(FileDownloader dn) {
         return dn;
     }
 }

@@ -27,7 +27,6 @@ package org.graalvm.component.installer.remote;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
@@ -36,7 +35,6 @@ import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -45,7 +43,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 import org.graalvm.component.installer.Feedback;
-import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.URLConnectionFactory;
 
 /**
@@ -60,7 +57,6 @@ public final class FileDownloader {
     private final URL sourceURL;
     private final Feedback feedback;
 
-    private File downloadDir;
     private File localFile;
     private long size;
     private static boolean deleteTemporary = !Boolean.FALSE.toString().equals(System.getProperty("org.graalvm.component.installer.deleteTemporary"));
@@ -86,14 +82,6 @@ public final class FileDownloader {
 
     public void setShaDigest(byte[] shaDigest) {
         this.shaDigest = shaDigest;
-    }
-
-    public File getDownloadDir() {
-        return downloadDir;
-    }
-
-    public void setDownloadDir(File downloadDir) {
-        this.downloadDir = downloadDir;
     }
 
     public static void setDeleteTemporary(boolean deleteTemporary) {
@@ -224,7 +212,14 @@ public final class FileDownloader {
     }
 
     static String fingerPrint(byte[] digest) {
-        return SystemUtils.fingerPrint(digest);
+        StringBuilder sb = new StringBuilder(digest.length * 3);
+        for (int i = 0; i < digest.length; i++) {
+            if (i > 0) {
+                sb.append(':');
+            }
+            sb.append(String.format("%02x", (digest[i] & 0xff)));
+        }
+        return sb.toString();
     }
 
     byte[] getDigest() {
@@ -260,17 +255,10 @@ public final class FileDownloader {
         return this;
     }
 
-    private void copySubtree(Path from) throws IOException {
-        Path to = Files.createTempDirectory(createTempDir().toPath(), "download");
-        SystemUtils.copySubtree(from, to);
-        localFile = to.toFile();
-    }
-
     public void download() throws IOException {
-        boolean fromFile = sourceURL.getProtocol().equals("file");
         if (fileDescription != null) {
             if (!feedback.verboseOutput("MSG_DownloadingVerbose", getFileDescription(), getSourceURL())) {
-                feedback.output(fromFile ? "MSG_UsingFile" : "MSG_Downloading", getFileDescription(), getSourceURL().getHost());
+                feedback.output("MSG_Downloading", getFileDescription());
             }
         } else {
             feedback.output("MSG_DownloadingFrom", getSourceURL());
@@ -282,20 +270,7 @@ public final class FileDownloader {
             return;
         }
 
-        if (fromFile) {
-            try {
-                Path p = Paths.get(sourceURL.toURI());
-                if (Files.isDirectory(p)) {
-                    copySubtree(p);
-                    return;
-                }
-            } catch (URISyntaxException ex) {
-                throw new IOException(ex);
-            }
-        }
-
         URLConnection conn = getConnectionFactory().createConnection(sourceURL, this::configureHeaders);
-
         size = conn.getContentLengthLong();
         verbose = feedback.verbosePart("MSG_DownloadReceivingBytes", toKB(size));
         if (verbose) {
@@ -307,7 +282,7 @@ public final class FileDownloader {
 
         setupProgress();
         ByteBuffer bb = ByteBuffer.allocate(TRANSFER_LENGTH);
-        localFile = deleteOnExit(File.createTempFile("download", "", downloadDir == null ? createTempDir() : downloadDir)); // NOI18N
+        localFile = deleteOnExit(File.createTempFile("download", "", createTempDir())); // NOI18N
         boolean first = displayProgress;
         boolean success = false;
         try (

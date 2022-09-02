@@ -80,11 +80,4 @@ public interface MetadataLoader extends Closeable {
 
     void setNoVerifySymlinks(boolean noVerifySymlinks);
 
-    /**
-     * Completes the metadata. The entire file may be loaded in order to load all the metadata.
-     * 
-     * @throws IOException if the metadata load fails.
-     * @return ComponentInfo with completed metadata
-     */
-    ComponentInfo completeMetadata() throws IOException;
 }

@@ -66,7 +66,6 @@ public class FileDownloaderTest extends NetworkTestBase {
     public void setUp() throws Exception {
         super.setUp();
         delegateFeedback(new FA());
-        Handler.clear();
     }
 
     @Test
@@ -236,9 +235,13 @@ public class FileDownloaderTest extends NetworkTestBase {
         pcf.envHttpProxy = "http://localhost:11111";
         pcf.envHttpsProxy = "http://localhost:11111";
 
+        synchronized (proxyConnect) {
+            proxyConnect.nextChunk = 130 * 1024;
+            proxyConnect.readException = new FileNotFoundException();
+        }
+
+        exception.expect(FileNotFoundException.class);
         dn.download();
-        URLConnection c = clu.openConnection();
-        assertEquals(c.getContentLengthLong(), dn.getLocalFile().length());
     }
 
     /**

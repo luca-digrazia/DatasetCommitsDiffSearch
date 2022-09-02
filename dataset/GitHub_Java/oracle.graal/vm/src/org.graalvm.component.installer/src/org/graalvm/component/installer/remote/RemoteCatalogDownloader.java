@@ -91,8 +91,12 @@ public class RemoteCatalogDownloader implements SoftwareChannel {
 
     @Override
     public boolean setupLocation(String urlString) {
-        // should be never called, this is just a delegating adapter
-        throw new IllegalStateException();
+        for (SoftwareChannel ch : channels) {
+            if (ch.setupLocation(catalogString)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
