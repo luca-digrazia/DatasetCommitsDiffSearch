@@ -439,15 +439,11 @@ public class BinaryParser extends BinaryStreamParser {
         // Used when branching out of nested blocks (br and br_if instructions).
         state.pushContinuationReturnLength(currentBlock.continuationTypeLength());
 
-        // The end instruction of this block is initially assumed not to be reachable.
-        state.pushEndReachability(false);
-
         int opcode;
         do {
             opcode = read1() & 0xFF;
             switch (opcode) {
                 case Instructions.UNREACHABLE:
-                    state.setReachable(false);
                     break;
                 case Instructions.NOP:
                     break;
@@ -484,14 +480,6 @@ public class BinaryParser extends BinaryStreamParser {
                 case Instructions.ELSE:
                     break;
                 case Instructions.END:
-                    // The end instruction is reachable either if it was targeted by a branch within this block
-                    // (which includes branch instructions in nested blocks), or if the current state is reachable.
-                    state.setReachable(state.popEndReachability() | state.isReachable());
-                    // If the end instruction is not reachable, then the stack size must be adjusted to match
-                    // the stack size at the continuation point.
-                    if (!state.isReachable()) {
-                        state.setStackSize(state.getStackState(0) + state.getContinuationReturnLength(0));
-                    }
                     break;
                 case Instructions.BR: {
                     // TODO: restore check
@@ -510,12 +498,10 @@ public class BinaryParser extends BinaryStreamParser {
                     state.useIntConstant(targetStackSize);
                     final int continuationReturnLength = state.getContinuationReturnLength(unwindLevel);
                     state.useIntConstant(continuationReturnLength);
-                    if (state.isReachable()) {
-                        // Ensure that the target end instruction becomes reachable.
-                        state.setEndReachableAt(unwindLevel, true);
-                    }
                     // This instruction is stack-polymorphic.
-                    state.setReachable(false);
+                    if ((peek1() & 0xFF) == Instructions.END) {
+                        state.setStackSize(state.getStackState(0) + state.getContinuationReturnLength(0));
+                    }
                     break;
                 }
                 case Instructions.BR_IF: {
@@ -534,10 +520,6 @@ public class BinaryParser extends BinaryStreamParser {
                     state.useByteConstant(bytesConsumed[0]);
                     state.useIntConstant(state.getStackState(unwindLevel));
                     state.useIntConstant(state.getContinuationReturnLength(unwindLevel));
-                    if (state.isReachable()) {
-                        // Ensure that the target end instruction becomes reachable.
-                        state.setEndReachableAt(unwindLevel, true);
-                    }
                     break;
                 }
                 case Instructions.BR_TABLE: {
@@ -554,14 +536,10 @@ public class BinaryParser extends BinaryStreamParser {
                     // The BR_TABLE instruction behaves like a 'switch' statement.
                     // There is one extra label for the 'default' case.
                     for (int i = 0; i != numLabels + 1; ++i) {
-                        final int unwindLevel = readLabelIndex();
-                        // Ensure that the target end instruction becomes reachable.
-                        if (state.isReachable()) {
-                            state.setEndReachableAt(unwindLevel, true);
-                        }
-                        branchTable[1 + 2 * i + 0] = unwindLevel;
-                        branchTable[1 + 2 * i + 1] = state.getStackState(unwindLevel);
-                        final int blockReturnLength = state.getContinuationReturnLength(unwindLevel);
+                        final int targetLabel = readLabelIndex();
+                        branchTable[1 + 2 * i + 0] = targetLabel;
+                        branchTable[1 + 2 * i + 1] = state.getStackState(targetLabel);
+                        final int blockReturnLength = state.getContinuationReturnLength(targetLabel);
                         if (returnLength == -1) {
                             returnLength = blockReturnLength;
                         } else {
@@ -573,7 +551,11 @@ public class BinaryParser extends BinaryStreamParser {
                     // The offset to the branch table.
                     state.saveBranchTable(branchTable);
                     // This instruction is stack-polymorphic.
-                    state.setReachable(false);
+                    if ((peek1() & 0xFF) == Instructions.END) {
+                        final int targetStackSize = state.getStackState(0);
+                        final int continuationReturnLength = state.getContinuationReturnLength(0);
+                        state.setStackSize(targetStackSize + continuationReturnLength);
+                    }
                     break;
                 }
                 case Instructions.RETURN: {
@@ -583,8 +565,12 @@ public class BinaryParser extends BinaryStreamParser {
                     }
                     state.useLongConstant(state.stackStateCount());
                     state.useIntConstant(state.getRootBlockReturnLength());
-                    // This instruction is stack-polymorphic.
-                    state.setReachable(false);
+                    // Pop values from the stack if in the block-end position.
+                    if ((peek1() & 0xFF) == Instructions.END) {
+                        final int targetStackSize = state.getStackState(0);
+                        final int continuationReturnLength = state.getContinuationReturnLength(0);
+                        state.setStackSize(targetStackSize + continuationReturnLength);
+                    }
                     break;
                 }
                 case Instructions.CALL: {
