@@ -26,16 +26,6 @@
 package org.graalvm.compiler.hotspot;
 
 import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.JDK;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.JDK_8245443;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.JDK_8246347;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.JDK_8209961;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.JDK_UPDATE;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.JVMCI;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.JVMCI_20_1_b01;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.JVMCI_20_2_b01;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.JVMCI_20_2_b04;
-import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.jvmciGE;
 
 import org.graalvm.compiler.code.CompilationResult;
 
@@ -52,8 +42,8 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
     OSR_ENTRY(false),
     EXCEPTION_HANDLER_ENTRY(false),
     DEOPT_HANDLER_ENTRY(false),
-    DEOPT_MH_HANDLER_ENTRY(false, JVMCI ? jvmciGE(JVMCI_20_2_b01) : JDK_8246347),
-    FRAME_COMPLETE(true, JVMCI ? jvmciGE(JVMCI_20_1_b01) : JDK_8245443),
+    DEOPT_MH_HANDLER_ENTRY(false, true),
+    FRAME_COMPLETE(true, true),
     INVOKEINTERFACE(false),
     INVOKEVIRTUAL(false),
     INVOKESTATIC(false),
@@ -64,12 +54,12 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
     POLL_FAR(false),
     POLL_RETURN_FAR(false),
     CARD_TABLE_ADDRESS(true),
-    NARROW_KLASS_BASE_ADDRESS(true, JDK > 9),
-    NARROW_OOP_BASE_ADDRESS(true, JDK > 9),
-    CRC_TABLE_ADDRESS(true, JDK > 9),
-    LOG_OF_HEAP_REGION_GRAIN_BYTES(true, JDK > 9),
-    VERIFY_OOPS(true, JVMCI ? jvmciGE(JVMCI_20_2_b04) : JDK_8209961),
-    VERIFY_OOP_COUNT_ADDRESS(true, JVMCI ? jvmciGE(JVMCI_20_2_b04) : JDK_8209961);
+    NARROW_KLASS_BASE_ADDRESS(true),
+    NARROW_OOP_BASE_ADDRESS(true),
+    CRC_TABLE_ADDRESS(true),
+    LOG_OF_HEAP_REGION_GRAIN_BYTES(true, true),
+    VERIFY_OOPS(true, true),
+    VERIFY_OOP_COUNT_ADDRESS(true, true);
 
     private final boolean isMarkAfter;
     @NativeImageReinitialize private Integer value;
@@ -79,23 +69,20 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
         this(isMarkAfter, false);
     }
 
-    HotSpotMarkId(boolean isMarkAfter, boolean required) {
+    HotSpotMarkId(boolean isMarkAfter, boolean optional) {
         this.isMarkAfter = isMarkAfter;
-        this.optional = !required;
-        this.value = getValue();
+        this.optional = optional;
     }
 
     private Integer getValue() {
-        Long result = HotSpotJVMCIRuntime.runtime().getConfigStore().getConstants().get("CodeInstaller::" + name());
-        if (result != null) {
-            return result.intValue();
-        } else if (!optional) {
-            throw shouldNotReachHere("Unsupported Mark " + name());
+        if (value == null) {
+            Long result = HotSpotJVMCIRuntime.runtime().getConfigStore().getConstants().get("CodeInstaller::" + name());
+            if (result != null) {
+                this.value = result.intValue();
+            } else if (!optional) {
+                throw shouldNotReachHere("Unsupported Mark " + name());
+            }
         }
-        return null;
-    }
-
-    private Integer value() {
         return value;
     }
 
@@ -122,7 +109,7 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
     @Override
     public String toString() {
         return "HotSpotCodeMark{" + name() +
-                        ", value=" + value() +
+                        ", value=" + getValue() +
                         ", optional=" + optional +
                         '}';
     }
