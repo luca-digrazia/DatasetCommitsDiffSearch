@@ -72,7 +72,7 @@ public final class TruffleTreeDumper {
             try {
                 dumpASTAndCallTrees(debug, callTarget, inliningDecision, inliningDecision.getTruffleNodeSources());
             } catch (IOException ex) {
-                throw new RuntimeException("Failed to dump AST: " + callTarget, ex);
+                throw rethrowSilently(RuntimeException.class, ex);
             }
         }
     }
@@ -129,6 +129,11 @@ public final class TruffleTreeDumper {
                 }
             }
         }
+    }
+
+    @SuppressWarnings({"unused", "unchecked"})
+    private static <E extends Exception> E rethrowSilently(Class<E> type, Throwable ex) throws E {
+        throw (E) ex;
     }
 
     @SuppressWarnings("deprecation")
