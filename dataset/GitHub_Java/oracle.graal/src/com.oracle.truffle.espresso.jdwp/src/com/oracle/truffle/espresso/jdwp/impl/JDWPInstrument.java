@@ -26,6 +26,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
+import com.oracle.truffle.espresso.jdwp.api.VMEventListeners;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -35,7 +36,6 @@ import java.util.Collection;
 public class JDWPInstrument extends TruffleInstrument implements Runnable {
 
     public static final String ID = "jdwp";
-    public static Object suspendStartupLock = new Object();
 
     private JDWPDebuggerController controller;
     TruffleInstrument.Env env;
@@ -44,11 +44,11 @@ public class JDWPInstrument extends TruffleInstrument implements Runnable {
     private Collection<Thread> activeThreads = new ArrayList<>();
 
     @Override
-    protected void onCreate(TruffleInstrument.Env instrumentEnv) {
+    protected void onCreate(TruffleInstrument.Env env) {
         assert controller == null;
+        this.env = env;
         controller = new JDWPController(this);
-        this.env = instrumentEnv;
-        this.env.registerService(controller);
+        env.registerService(controller);
     }
 
     public void reset() {
@@ -99,15 +99,15 @@ public class JDWPInstrument extends TruffleInstrument implements Runnable {
     }
 
     @CompilerDirectives.TruffleBoundary
-    public void init(JDWPContext jdwpContext) {
-        this.context = jdwpContext;
+    public void init(JDWPContext context) {
+        this.context = context;
         try {
             if (controller.shouldWaitForAttach()) {
                 doConnect();
                 // take all initial commands from the debugger before resuming to main thread
-                synchronized (suspendStartupLock) {
+                synchronized (JDWP.suspendStartupLock) {
                     try {
-                        suspendStartupLock.wait();
+                        JDWP.suspendStartupLock.wait();
                     } catch (InterruptedException e) {
                         throw new RuntimeException("JDWP connection interrupted");
                     }

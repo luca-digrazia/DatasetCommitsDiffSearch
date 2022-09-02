@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.Callable;
 
 public class DebuggerConnection implements JDWPCommands {
 
@@ -455,11 +454,9 @@ public class DebuggerConnection implements JDWPCommands {
                 System.err.println("no result for command(" + packet.cmdSet + "." + packet.cmd + ")");
             }
 
-            if (result != null && result.getFutures() != null) {
+            if (result != null && result.getFuture() != null) {
                 try {
-                    for (Callable future : result.getFutures()) {
-                        future.call();
-                    }
+                    result.getFuture().call();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }

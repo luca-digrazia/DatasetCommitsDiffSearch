@@ -31,7 +31,6 @@ import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
 
@@ -101,13 +100,13 @@ class JDWP {
             static JDWPResult createReply(Packet packet, JDWPDebuggerController controller) {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                return new JDWPResult(reply, Collections.singletonList(new Callable() {
+                return new JDWPResult(reply, new Callable() {
                     @Override
                     public Object call() throws Exception {
                         controller.disposeDebugger();
                         return null;
                     }
-                }));
+                });
             }
         }
 
@@ -1017,7 +1016,7 @@ class JDWP {
                     return new JDWPResult(reply);
                 }
 
-                controller.resume(thread);
+                controller.resume(thread, false);
                 return new JDWPResult(reply);
             }
         }
