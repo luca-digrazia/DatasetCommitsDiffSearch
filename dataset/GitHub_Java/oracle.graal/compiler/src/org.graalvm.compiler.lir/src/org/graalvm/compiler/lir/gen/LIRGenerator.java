@@ -46,6 +46,7 @@ import org.graalvm.compiler.core.common.spi.ForeignCallLinkage;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.spi.LIRKindTool;
 import org.graalvm.compiler.core.common.type.Stamp;
+import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.graph.NodeSourcePosition;
@@ -386,6 +387,24 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         return blockScope;
     }
 
+    private final class MatchScope implements DebugCloseable {
+
+        private MatchScope(AbstractBlockBase<?> block) {
+            currentBlock = block;
+        }
+
+        @Override
+        public void close() {
+            currentBlock = null;
+        }
+
+    }
+
+    public final DebugCloseable getMatchScope(AbstractBlockBase<?> block) {
+        MatchScope matchScope = new MatchScope(block);
+        return matchScope;
+    }
+
     @Override
     public void emitIncomingValues(Value[] params) {
         ((LabelOp) res.getLIR().getLIRforBlock(getCurrentBlock()).get(0)).setIncomingValues(params);
@@ -457,8 +476,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
         double minDensity = 1 / Math.sqrt(strategy.getAverageEffort());
         Optional<Hasher> hasher = hasherFor(keyConstants, minDensity);
         double hashTableSwitchDensity = hasher.map(h -> keyCount / (double) h.cardinality()).orElse(0d);
-        // The value range computation below may overflow, so compute it as a long.
-        long valueRange = (long) keyConstants[keyCount - 1].asInt() - (long) keyConstants[0].asInt() + 1;
+        long valueRange = keyConstants[keyCount - 1].asLong() - keyConstants[0].asLong() + 1;
         double tableSwitchDensity = keyCount / (double) valueRange;
 
         /*
@@ -480,7 +498,7 @@ public abstract class LIRGenerator implements LIRGeneratorTool {
                     targets[i] = defaultTarget;
                 }
                 for (int i = 0; i < keyCount; i++) {
-                    int idx = h.hash(keyConstants[i].asInt());
+                    int idx = h.hash(keyConstants[i].asLong());
                     keys[idx] = keyConstants[i];
                     targets[idx] = keyTargets[i];
                 }
