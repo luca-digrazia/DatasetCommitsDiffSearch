@@ -255,7 +255,6 @@ public abstract class NativeEnv {
         return fromUTF8Ptr(interopAsPointer(buffPtr));
     }
 
-    @TruffleBoundary
     public static String fromUTF8Ptr(long rawBytesPtr) {
         if (rawBytesPtr == 0) {
             return null;
