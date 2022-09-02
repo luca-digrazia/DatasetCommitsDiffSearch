@@ -24,12 +24,15 @@
  */
 package com.oracle.graal.pointsto.reports;
 
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
@@ -37,24 +40,28 @@ import java.util.function.Consumer;
 
 import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
 import com.oracle.graal.pointsto.meta.AnalysisField;
-import com.oracle.graal.pointsto.meta.AnalysisMethod;
 
+import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.common.JVMCIError;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 public class ReportUtils {
+
     static final String CONNECTING_INDENT = "\u2502   "; // "| "
     static final String EMPTY_INDENT = "    ";
     static final String CHILD = "\u251c\u2500\u2500 "; // "|-- "
     static final String LAST_CHILD = "\u2514\u2500\u2500 "; // "`-- "
 
-    static final Comparator<AnalysisMethod> methodComparator = Comparator.comparing(m -> m.format("%H.%n(%p)"));
-    static final Comparator<AnalysisField> fieldComparator = (f1, f2) -> f1.format("%H.%n").compareTo(f2.format("%H.%n"));
+    public static final Comparator<ResolvedJavaMethod> methodComparator = Comparator.comparing(m -> m.format("%H.%n(%p)"));
+    static final Comparator<AnalysisField> fieldComparator = Comparator.comparing(f -> f.format("%H.%n"));
     static final Comparator<InvokeTypeFlow> invokeComparator = Comparator.comparing(i -> i.getTargetMethod().format("%H.%n(%p)"));
+    static final Comparator<BytecodePosition> positionMethodComparator = Comparator.comparing(pos -> pos.getMethod().format("%H.%n(%p)"));
+    static final Comparator<BytecodePosition> positionComparator = positionMethodComparator.thenComparing(pos -> pos.getBCI());
 
     /**
      * Print a report in the format: path/name_timeStamp.extension. The path is relative to the
      * working directory.
-     * 
+     *
      * @param description the description of the report
      * @param path the path (relative to the working directory if the argument represents a relative
      *            path)
@@ -81,10 +88,11 @@ public class ReportUtils {
      */
     public static void report(String description, Path file, Consumer<PrintWriter> reporter) {
         Path folder = file.getParent();
-        if (folder == null) {
-            throw new IllegalArgumentException("File must be valid file name");
+        Path fileName = file.getFileName();
+        if (folder == null || fileName == null) {
+            throw new IllegalArgumentException("File parameter must be a file, got: " + file);
         }
-        reportImpl(description, folder, file.getFileName().toString(), reporter);
+        reportImpl(description, folder, fileName.toString(), reporter);
     }
 
     private static void reportImpl(String description, Path folder, String fileName, Consumer<PrintWriter> reporter) {
@@ -95,7 +103,7 @@ public class ReportUtils {
 
             try (FileWriter fw = new FileWriter(Files.createFile(file).toFile())) {
                 try (PrintWriter writer = new PrintWriter(fw)) {
-                    System.out.println("Printing " + description + " to " + file.toAbsolutePath());
+                    System.out.println("# Printing " + description + " to: " + getCWDRelativePath(file));
                     reporter.accept(writer);
                 }
             }
@@ -105,4 +113,56 @@ public class ReportUtils {
         }
     }
 
+    /** Returns a path relative to the current working directory if possible. */
+    public static Path getCWDRelativePath(Path path) {
+        Path cwd = Paths.get("").toAbsolutePath();
+        try {
+            return cwd.relativize(path);
+        } catch (IllegalArgumentException e) {
+            /* Relativization failed (e.g., the `path` is not absolute or is on another drive). */
+            return path;
+        }
+    }
+
+    /*
+     * Extract the actual image file name when the imageName is specified as
+     * 'parent-directory/image-name'.
+     */
+    public static String extractImageName(String imageName) {
+        return imageName.substring(imageName.lastIndexOf(File.separatorChar) + 1);
+    }
+
+    /**
+     * Print a report in the file given by {@code file} parameter. If the {@code file} is relative
+     * it's resolved to the working directory.
+     *
+     * @param description the description of the report
+     * @param file the path (relative to the working directory if the argument represents a relative
+     *            path) to file to store a report into.
+     * @param reporter a consumer that writes to a FileOutputStream
+     * @param append flag to append onto file
+     */
+    public static void report(String description, Path file, boolean append, Consumer<OutputStream> reporter) {
+        Path folder = file.getParent();
+        Path fileName = file.getFileName();
+        if (folder == null || fileName == null) {
+            throw new IllegalArgumentException("File parameter must be a file, got: " + file);
+        }
+        reportImpl(description, folder, fileName.toString(), reporter, append);
+    }
+
+    private static void reportImpl(String description, Path folder, String fileName, Consumer<OutputStream> reporter, boolean append) {
+        try {
+            Path reportDir = Files.createDirectories(folder);
+            Path file = reportDir.resolve(fileName);
+            try (OutputStream fos = Files.newOutputStream(file, StandardOpenOption.CREATE, StandardOpenOption.WRITE,
+                            append ? StandardOpenOption.APPEND : StandardOpenOption.TRUNCATE_EXISTING)) {
+                System.out.println("# Printing " + description + " to: " + getCWDRelativePath(file));
+                reporter.accept(fos);
+                fos.flush();
+            }
+        } catch (IOException e) {
+            throw JVMCIError.shouldNotReachHere(e);
+        }
+    }
 }

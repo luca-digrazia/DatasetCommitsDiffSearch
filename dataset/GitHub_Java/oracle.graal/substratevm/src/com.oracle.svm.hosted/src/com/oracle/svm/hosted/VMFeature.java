@@ -58,8 +58,7 @@ public class VMFeature implements Feature {
     }
 
     protected VM createVMSingletonValue() {
-        String config = System.getProperty("org.graalvm.config", "CE");
-        return new VM(config);
+        return new VM("CE");
     }
 
     @Override
