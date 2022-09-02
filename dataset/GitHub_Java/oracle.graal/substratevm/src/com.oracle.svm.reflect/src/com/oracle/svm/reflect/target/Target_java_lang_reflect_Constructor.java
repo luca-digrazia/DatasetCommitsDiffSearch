@@ -29,8 +29,6 @@ package com.oracle.svm.reflect.target;
 import java.lang.reflect.AnnotatedType;
 import java.lang.reflect.Constructor;
 
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Inject;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
@@ -71,9 +69,7 @@ public final class Target_java_lang_reflect_Constructor {
     @Substitute
     public AnnotatedType getAnnotatedReceiverType() {
         Target_java_lang_reflect_Constructor holder = ReflectionHelper.getHolder(this);
-        return JavaVersionUtil.JAVA_SPEC == 8
-                        ? ReflectionHelper.requireNonNull(holder.annotatedReceiverType, "Annotated receiver type must be computed during native image generation")
-                        : holder.annotatedReceiverType; // can be null (JDK-8044629)
+        return ReflectionHelper.requireNonNull(holder.annotatedReceiverType, "Annotated receiver type must be computed during native image generation");
     }
 
     /**
