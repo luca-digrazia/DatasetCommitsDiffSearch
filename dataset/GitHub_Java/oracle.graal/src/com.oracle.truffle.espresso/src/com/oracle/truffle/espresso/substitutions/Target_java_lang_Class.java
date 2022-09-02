@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -335,7 +335,7 @@ public final class Target_java_lang_Class {
                                 /* declaringKlass */ m.getDeclaringKlass().mirror(),
                                 /* parameterTypes */ parameterTypes,
                                 /* checkedExceptions */ checkedExceptions,
-                                /* modifiers */ m.getMethodModifiers(),
+                                /* modifiers */ m.getModifiers(),
                                 /* slot */ i, // TODO(peterssen): Fill method slot.
                                 /* signature */ genericSignature,
 
@@ -448,7 +448,7 @@ public final class Target_java_lang_Class {
                                 /* parameterTypes */ parameterTypes,
                                 /* returnType */ m.resolveReturnKlass().mirror(),
                                 /* checkedExceptions */ checkedExceptions,
-                                /* modifiers */ m.getMethodModifiers(),
+                                /* modifiers */ m.getModifiers(),
                                 /* slot */ i, // TODO(peterssen): Fill method slot.
                                 /* signature */ genericSignature,
 
@@ -494,7 +494,7 @@ public final class Target_java_lang_Class {
 
     @Substitution(hasReceiver = true)
     public static int getModifiers(@Host(Class.class) StaticObject self) {
-        return self.getMirrorKlass().getClassModifiers();
+        return self.getMirrorKlass().getModifiers();
     }
 
     @Substitution(hasReceiver = true)
@@ -706,7 +706,7 @@ public final class Target_java_lang_Class {
     public static @Host(Class[].class) StaticObject getDeclaredClasses0(@Host(Class.class) StaticObject self) {
         Meta meta = self.getKlass().getMeta();
         Klass klass = self.getMirrorKlass();
-        if (klass.isPrimitive() || klass.isArray()) {
+        if (klass.isPrimitive() || !klass.isInstanceClass()) {
             return meta.Class.allocateArray(0);
         }
         ObjectKlass instanceKlass = (ObjectKlass) klass;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -758,7 +758,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     // region SetStatic*Field
 
     @JniImpl
-    public void SetStaticObjectField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, long fieldHandle, @Host(Object.class) StaticObject val) {
+    public void SetStaticObjectField(@SuppressWarnings("unused") @Host(Class.class) StaticObject unused, long fieldHandle, Object val) {
         Field field = fieldIds.getObject(fieldHandle);
         assert field.isStatic();
         field.set(field.getDeclaringKlass().tryInitializeAndGetStatics(), val);
@@ -825,7 +825,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     // region Set*Field
 
     @JniImpl
-    public void SetObjectField(StaticObject obj, long fieldHandle, @Host(Object.class) StaticObject val) {
+    public void SetObjectField(StaticObject obj, long fieldHandle, Object val) {
         Field field = fieldIds.getObject(fieldHandle);
         field.set(obj, val);
     }
