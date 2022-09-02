@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,7 +31,6 @@ import java.util.Queue;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
-import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
@@ -64,7 +63,6 @@ import org.graalvm.compiler.nodes.calc.BinaryArithmeticNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.LeftShiftNode;
 import org.graalvm.compiler.nodes.calc.MulNode;
-import org.graalvm.compiler.nodes.calc.NarrowNode;
 import org.graalvm.compiler.nodes.calc.NegateNode;
 import org.graalvm.compiler.nodes.calc.SignExtendNode;
 import org.graalvm.compiler.nodes.calc.SubNode;
@@ -189,14 +187,8 @@ public class LoopEx {
         @Override
         public boolean apply(Node n) {
             if (loopBegin().graph().isNew(mark, n)) {
-                // Newly created nodes are unknown. It is invariant if all of its inputs are
-                // invariants.
-                for (Node input : n.inputs()) {
-                    if (!apply(input)) {
-                        return false;
-                    }
-                }
-                return true;
+                // Newly created nodes are unknown.
+                return false;
             }
             return isOutsideLoop(n);
         }
@@ -206,38 +198,24 @@ public class LoopEx {
         int count = 0;
         StructuredGraph graph = loopBegin().graph();
         InvariantPredicate invariant = new InvariantPredicate();
-        NodeBitMap newLoopNodes = graph.createNodeBitMap();
         for (BinaryArithmeticNode<?> binary : whole().nodes().filter(BinaryArithmeticNode.class)) {
             if (!binary.isAssociative()) {
                 continue;
             }
-            ValueNode result = BinaryArithmeticNode.reassociateMatchedValues(binary, invariant, binary.getX(), binary.getY(), NodeView.DEFAULT);
-            if (result == binary) {
-                result = BinaryArithmeticNode.reassociateUnmatchedValues(binary, invariant, NodeView.DEFAULT);
-            }
+            ValueNode result = BinaryArithmeticNode.reassociate(binary, invariant, binary.getX(), binary.getY(), NodeView.DEFAULT);
             if (result != binary) {
                 if (!result.isAlive()) {
                     assert !result.isDeleted();
                     result = graph.addOrUniqueWithInputs(result);
-                    // Save all new added loop variants.
-                    newLoopNodes.markAndGrow(result);
-                    for (Node input : result.inputs()) {
-                        if (whole().nodes().isNew(input) && !invariant.apply(input)) {
-                            newLoopNodes.markAndGrow(input);
-                        }
-                    }
                 }
                 DebugContext debug = graph.getDebug();
                 if (debug.isLogEnabled()) {
-                    debug.log("%s : Re-associated %s into %s", graph.method().format("%H::%n"), binary, result);
+                    debug.log("%s : Reassociated %s into %s", graph.method().format("%H::%n"), binary, result);
                 }
                 binary.replaceAtUsages(result);
                 GraphUtil.killWithUnusedFloatingInputs(binary);
                 count++;
             }
-        }
-        if (newLoopNodes.isNotEmpty()) {
-            whole().nodes().union(newLoopNodes);
         }
         return count != 0;
     }
@@ -458,10 +436,6 @@ public class LoopEx {
                     if (!isValidConvert && op instanceof ZeroExtendNode) {
                         ZeroExtendNode zeroExtendNode = (ZeroExtendNode) op;
                         isValidConvert = zeroExtendNode.isInputAlwaysPositive() || ((IntegerStamp) zeroExtendNode.stamp(NodeView.DEFAULT)).isPositive();
-                    }
-                    if (!isValidConvert && op instanceof NarrowNode) {
-                        NarrowNode narrow = (NarrowNode) op;
-                        isValidConvert = NumUtil.isSignedNbit(narrow.getResultBits(), ((IntegerStamp) narrow.getValue().stamp(NodeView.DEFAULT)).upMask());
                     }
 
                     if (isValidConvert) {
