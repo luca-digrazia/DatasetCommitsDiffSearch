@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2019, Red Hat Inc. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,14 +22,23 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.nodes.gc;
+package com.oracle.svm.core.jdk;
 
-import org.graalvm.compiler.nodes.extended.RawLoadNode;
-import org.graalvm.compiler.nodes.memory.FixedAccessNode;
-import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
+import com.oracle.svm.core.annotate.Substitute;
+import com.oracle.svm.core.annotate.TargetClass;
+import com.oracle.svm.core.annotate.TargetElement;
 
-public interface BarrierSet {
-    void addBarriers(FixedAccessNode n);
+@TargetClass(className = "com.sun.xml.internal.bind.v2.runtime.reflect.opt.Injector", onlyWith = JDK8OrEarlier.class)
+public final class Target_com_sun_xml_internal_bind_v2_runtime_reflect_opt_Injector {
 
-    BarrierType readBarrierType(RawLoadNode load);
+    /*
+     * The following method in Java 8 JAXB implementation contains a code that leads to an image
+     * build failure.
+     */
+    @SuppressWarnings({"static-method", "unused"})
+    @Substitute
+    @TargetElement
+    private Class<?> inject(String className, byte[] image) {
+        return null;
+    }
 }

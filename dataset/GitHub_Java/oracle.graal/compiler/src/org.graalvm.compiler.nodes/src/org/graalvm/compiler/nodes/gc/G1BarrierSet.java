@@ -32,7 +32,6 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.extended.ArrayRangeWrite;
 import org.graalvm.compiler.nodes.extended.RawLoadNode;
-import org.graalvm.compiler.nodes.extended.RawStoreNode;
 import org.graalvm.compiler.nodes.java.AbstractCompareAndSwapNode;
 import org.graalvm.compiler.nodes.java.LoweredAtomicReadAndWriteNode;
 import org.graalvm.compiler.nodes.memory.FixedAccessNode;
@@ -43,20 +42,16 @@ import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.type.StampTool;
 
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
 public class G1BarrierSet implements BarrierSet {
-    private final ResolvedJavaType objectArrayType;
-    private final ResolvedJavaType referenceType;
-    private final String referentFieldName;
-    private final ReferenceOffsets referenceOffsets;
 
-    public G1BarrierSet(ResolvedJavaType objectArrayType, ResolvedJavaType referenceType, String referentFieldName, ReferenceOffsets referenceOffsets) {
-        this.objectArrayType = objectArrayType;
+    private final ResolvedJavaType referenceType;
+    private final long referentFieldOffset;
+
+    public G1BarrierSet(ResolvedJavaType referenceType, long referentFieldOffset) {
         this.referenceType = referenceType;
-        this.referentFieldName = referentFieldName;
-        this.referenceOffsets = referenceOffsets;
+        this.referentFieldOffset = referentFieldOffset;
     }
 
     @Override
@@ -64,17 +59,14 @@ public class G1BarrierSet implements BarrierSet {
         if (load.object().getStackKind() == JavaKind.Object &&
                         load.accessKind() == JavaKind.Object &&
                         !StampTool.isPointerAlwaysNull(load.object())) {
-            long referentOffset = referenceOffsets.getReferentOffset();
-            assert referentOffset > 0;
-
-            if (load.offset().isJavaConstant() && referentOffset != load.offset().asJavaConstant().asLong()) {
+            if (load.offset().isJavaConstant() && referentFieldOffset != load.offset().asJavaConstant().asLong()) {
                 // Reading at a constant offset which is different than the referent field.
                 return BarrierType.NONE;
             }
             ResolvedJavaType type = StampTool.typeOrNull(load.object());
             if (type != null && referenceType.isAssignableFrom(type)) {
                 // It's definitely a field of a Reference type
-                if (load.offset().isJavaConstant() && referentOffset == load.offset().asJavaConstant().asLong()) {
+                if (load.offset().isJavaConstant() && referentFieldOffset == load.offset().asJavaConstant().asLong()) {
                     // Exactly Reference.referent
                     return BarrierType.WEAK_FIELD;
                 }
@@ -85,45 +77,6 @@ public class G1BarrierSet implements BarrierSet {
                 // The object is a supertype of Reference with an unknown offset or a constant
                 // offset which is the same as Reference.referent.
                 return BarrierType.MAYBE_WEAK_FIELD;
-            }
-        }
-        return BarrierType.NONE;
-    }
-
-    @Override
-    public BarrierType storeBarrierType(RawStoreNode store) {
-        return store.needsBarrier() ? guessStoreBarrierType(store.object(), store.value()) : BarrierType.NONE;
-    }
-
-    @Override
-    public BarrierType fieldLoadBarrierType(ResolvedJavaField field, JavaKind storageKind) {
-        if (field.getJavaKind() == JavaKind.Object && referenceType.equals(field.getDeclaringClass()) &&
-                        field.getName().equals(referentFieldName)) {
-            return BarrierType.WEAK_FIELD;
-        }
-        return BarrierType.NONE;
-    }
-
-    @Override
-    public BarrierType fieldStoreBarrierType(ResolvedJavaField field, JavaKind storageKind) {
-        return storageKind == JavaKind.Object ? BarrierType.FIELD : BarrierType.NONE;
-    }
-
-    @Override
-    public BarrierType arrayStoreBarrierType(JavaKind storageKind) {
-        return storageKind == JavaKind.Object ? BarrierType.ARRAY : BarrierType.NONE;
-    }
-
-    @Override
-    public BarrierType guessStoreBarrierType(ValueNode object, ValueNode value) {
-        if (value.getStackKind() == JavaKind.Object && object.getStackKind() == JavaKind.Object) {
-            ResolvedJavaType type = StampTool.typeOrNull(object);
-            if (type != null && type.isArray()) {
-                return BarrierType.ARRAY;
-            } else if (type == null || type.isAssignableFrom(objectArrayType)) {
-                return BarrierType.UNKNOWN;
-            } else {
-                return BarrierType.FIELD;
             }
         }
         return BarrierType.NONE;
@@ -175,8 +128,6 @@ public class G1BarrierSet implements BarrierSet {
                         addG1PreWriteBarrier(node, node.getAddress(), expectedValue, doLoad, nullCheck, graph);
                     }
                     if (writeRequiresPostBarrier(node, writtenValue)) {
-                        // Use a precise barrier for everything that might be an array write. Being
-                        // too precise with the barriers does not cause any correctness issues.
                         boolean precise = barrierType != BarrierType.FIELD;
                         addG1PostWriteBarrier(node, node.getAddress(), writtenValue, precise, graph);
                     }
@@ -188,11 +139,9 @@ public class G1BarrierSet implements BarrierSet {
     }
 
     @SuppressWarnings("unused")
-    protected boolean writeRequiresPostBarrier(FixedAccessNode node, ValueNode writtenValue) {
-        // Without help from the runtime all writes (except null writes) require an explicit post
-        // barrier.
-        assert isObjectValue(writtenValue);
-        return !StampTool.isPointerAlwaysNull(writtenValue);
+    protected boolean writeRequiresPostBarrier(FixedAccessNode initializingWrite, ValueNode writtenValue) {
+        // Without help from the runtime all writes require an explicit post barrier.
+        return true;
     }
 
     private static void addArrayRangeBarriers(ArrayRangeWrite write) {

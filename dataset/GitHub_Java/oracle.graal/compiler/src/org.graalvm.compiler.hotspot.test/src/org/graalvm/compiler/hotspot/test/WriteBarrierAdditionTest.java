@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,6 @@ package org.graalvm.compiler.hotspot.test;
 import static org.graalvm.compiler.core.common.GraalOptions.FullUnroll;
 import static org.graalvm.compiler.core.common.GraalOptions.LoopPeeling;
 import static org.graalvm.compiler.core.common.GraalOptions.PartialEscapeAnalysis;
-import static org.graalvm.compiler.core.common.GraalOptions.PartialUnroll;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.referentOffset;
 
 import java.lang.ref.Reference;
@@ -339,7 +338,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
                         Assert.assertEquals(referentOffset(getMetaAccess()), constDisp.asLong());
                     }
                 }
-                Assert.assertTrue(BarrierType.WEAK_FIELD == read.getBarrierType() || BarrierType.PHANTOM_FIELD == read.getBarrierType());
+                Assert.assertTrue(BarrierType.WEAK_FIELD == read.getBarrierType() || BarrierType.MAYBE_WEAK_FIELD == read.getBarrierType());
                 if (config.useG1GC) {
                     Assert.assertTrue(read.next() instanceof G1ReferentFieldReadBarrier);
                 }
@@ -348,7 +347,7 @@ public class WriteBarrierAdditionTest extends HotSpotGraalCompilerTest {
     }
 
     protected Result testWithoutPEA(String name, Object... args) {
-        return test(new OptionValues(getInitialOptions(), PartialEscapeAnalysis, false, FullUnroll, false, LoopPeeling, false, PartialUnroll, false), name, args);
+        return test(new OptionValues(getInitialOptions(), PartialEscapeAnalysis, false, FullUnroll, false, LoopPeeling, false), name, args);
     }
 
     @Before
