@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ package com.oracle.svm.hosted.thread;
 
 import java.util.List;
 
-import com.oracle.svm.core.graal.nodes.ReadIsolateThreadFloatingNode;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.extended.MembarNode;
@@ -43,10 +42,8 @@ import org.graalvm.util.GuardedAnnotationAccess;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.ForceFixedRegisterReads;
-import com.oracle.svm.core.c.NonmovableArray;
-import com.oracle.svm.core.c.NonmovableArrays;
 import com.oracle.svm.core.graal.GraalFeature;
-import com.oracle.svm.core.graal.nodes.ReadIsolateThreadFixedNode;
+import com.oracle.svm.core.graal.nodes.ReadRegisterFixedNode;
 import com.oracle.svm.core.graal.nodes.ReadRegisterFloatingNode;
 import com.oracle.svm.core.graal.thread.AddressOfVMThreadLocalNode;
 import com.oracle.svm.core.graal.thread.CompareAndSetVMThreadLocalNode;
@@ -204,9 +201,9 @@ public class VMThreadMTFeature implements GraalFeature {
          */
         boolean forceFixedReads = GuardedAnnotationAccess.isAnnotationPresent(b.getMethod(), ForceFixedRegisterReads.class);
         if (isDeoptTarget || usedForAddress || forceFixedReads) {
-            return b.add(new ReadIsolateThreadFixedNode());
+            return b.add(ReadRegisterFixedNode.forIsolateThread());
         } else {
-            return b.add(new ReadIsolateThreadFloatingNode());
+            return b.add(ReadRegisterFloatingNode.forIsolateThread());
         }
     }
 
@@ -281,8 +278,7 @@ public class VMThreadMTFeature implements GraalFeature {
 
         InstanceReferenceMapEncoder encoder = new InstanceReferenceMapEncoder();
         encoder.add(referenceMap);
-        NonmovableArray<Byte> referenceMapEncoding = encoder.encodeAll();
-        objectReferenceWalker.vmThreadReferenceMapEncoding = NonmovableArrays.getHostedArray(referenceMapEncoding);
+        objectReferenceWalker.vmThreadReferenceMapEncoding = encoder.encodeAll(null);
         objectReferenceWalker.vmThreadReferenceMapIndex = encoder.lookupEncoding(referenceMap);
         objectReferenceWalker.vmThreadSize = nextOffset;
 
