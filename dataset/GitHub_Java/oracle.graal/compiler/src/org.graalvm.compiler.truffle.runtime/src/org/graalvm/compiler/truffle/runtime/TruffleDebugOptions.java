@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.compiler.truffle.options.OptionValuesImpl;
 import static org.graalvm.compiler.truffle.runtime.TruffleDebugOptions.PrintGraphTarget.File;
 
 import java.util.Map;
@@ -71,7 +70,7 @@ final class TruffleDebugOptions {
         }
 
         static OptionType<PrintGraphTarget> getOptionType() {
-            return new OptionType<>(PrintGraphTarget.class.getSimpleName(), PrintGraphTarget::valueOf);
+            return new OptionType<>(PrintGraphTarget.class.getSimpleName(), File, PrintGraphTarget::valueOf);
         }
     }
 
@@ -99,4 +98,5 @@ final class TruffleDebugOptions {
 
     // Initialized by the options of the same name in org.graalvm.compiler.debug.DebugOptions
     @Option(help = "", category = OptionCategory.INTERNAL) public static final OptionKey<PrintGraphTarget> PrintGraph = new OptionKey<>(File, PrintGraphTarget.getOptionType());
+    @Option(help = "", category = OptionCategory.INTERNAL) public static final OptionKey<Boolean> PrintTruffleTrees = new OptionKey<>(true);
 }
