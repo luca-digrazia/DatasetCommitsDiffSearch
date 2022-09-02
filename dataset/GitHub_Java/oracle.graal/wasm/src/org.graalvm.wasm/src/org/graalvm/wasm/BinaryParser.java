@@ -60,6 +60,7 @@ import org.graalvm.wasm.nodes.WasmBlockNode;
 import org.graalvm.wasm.nodes.WasmCallStubNode;
 import org.graalvm.wasm.nodes.WasmIfNode;
 import org.graalvm.wasm.nodes.WasmIndirectCallNode;
+import org.graalvm.wasm.nodes.WasmNode;
 import org.graalvm.wasm.nodes.WasmRootNode;
 
 import java.nio.ByteBuffer;
@@ -92,8 +93,6 @@ public class BinaryParser extends BinaryStreamParser {
             return parsingException;
         }
     }
-
-    private static final int[] EMPTY_INT_ARRAY = new int[0];
 
     private static final int MIN_DEFAULT_STACK_SIZE = 1_000_000;
     private static final int MAX_DEFAULT_ASYNC_STACK_SIZE = 10_000_000;
@@ -415,8 +414,6 @@ public class BinaryParser extends BinaryStreamParser {
         /* Initialize the Truffle-related components required for execution. */
         if (state.intConstants().length > 0) {
             rootNode.codeEntry().setIntConstants(state.intConstants());
-        } else {
-            rootNode.codeEntry().setIntConstants(EMPTY_INT_ARRAY);
         }
         if (state.branchTables().length > 0) {
             rootNode.codeEntry().setBranchTables(state.branchTables());
