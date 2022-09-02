@@ -40,6 +40,9 @@
  */
 package org.graalvm.wasm;
 
+import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import static com.oracle.truffle.api.CompilerDirectives.transferToInterpreter;
+
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -47,14 +50,11 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
-import org.graalvm.wasm.collection.IntArrayList;
 import org.graalvm.wasm.constants.GlobalModifier;
+import org.graalvm.wasm.collection.IntArrayList;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import static com.oracle.truffle.api.CompilerDirectives.transferToInterpreter;
 
 /**
  * Represents an instantiated WebAssembly module.
@@ -73,21 +73,6 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
         return module().name();
     }
 
-    public WasmFunctionInstance getMainFunction() {
-        final WasmFunction mainFunction = symbolTable().exportedFunctions().get("_main");
-        if (mainFunction != null) {
-            return functionInstance(mainFunction);
-        }
-        if (symbolTable().startFunction() != null) {
-            return functionInstance(symbolTable().startFunction());
-        }
-        return null;
-    }
-
-    private WasmFunctionInstance functionInstance(WasmFunction function) {
-        return new WasmFunctionInstance(function, target(function.index()));
-    }
-
     @ExportMessage
     boolean hasMembers() {
         return true;
@@ -99,7 +84,8 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
         final SymbolTable symbolTable = symbolTable();
         final WasmFunction function = symbolTable.exportedFunctions().get(member);
         if (function != null) {
-            return functionInstance(function);
+            final WasmFunctionInstance instance = new WasmFunctionInstance(function, target(function.index()));
+            return instance;
         }
         final Integer globalIndex = symbolTable.exportedGlobals().get(member);
         if (globalIndex != null) {

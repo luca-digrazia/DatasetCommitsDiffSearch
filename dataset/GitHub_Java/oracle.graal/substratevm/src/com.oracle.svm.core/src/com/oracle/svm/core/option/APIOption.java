@@ -130,10 +130,8 @@ public @interface APIOption {
         }
 
         public static String groupName(APIOptionGroup group) {
-            if (group.name() == null || group.name().isEmpty()) {
-                VMError.shouldNotReachHere("Invalid APIOptionGroup.name() for " + group.getClass().getName());
-            }
-
+            VMError.guarantee(group.name() != null && !group.name().isEmpty(),
+                            "Invalid APIOptionGroup.name() for " + group.getClass().getName());
             return optionName(group.name()) + group.valueSeparator();
         }
     }

@@ -139,7 +139,7 @@ public class Linker {
     private void linkTopologically() {
         final Resolver[] sortedResolutions = resolutionDag.toposort();
         for (Resolver resolver : sortedResolutions) {
-            resolver.runActionOnce();
+            resolver.runAction();
         }
     }
 
@@ -826,7 +826,7 @@ public class Linker {
                 return "Resolver(" + element + ")";
             }
 
-            public void runActionOnce() {
+            public void runAction() {
                 if (this.action != null) {
                     this.action.run();
                     this.action = null;

@@ -43,8 +43,7 @@ package org.graalvm.wasm;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import org.graalvm.wasm.constants.GlobalModifier;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
+import org.graalvm.wasm.exception.BinaryParserException;
 
 import static com.oracle.truffle.api.nodes.ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN;
 
@@ -91,7 +90,7 @@ public abstract class BinaryStreamParser {
             shift += 7;
         } while (shift < 35);
         if (shift == 35) {
-            Assert.fail("Unsigned LEB128 overflow", Failure.UNSPECIFIED_MALFORMED);
+            Assert.fail("Unsigned LEB128 overflow");
         }
 
         return result;
@@ -112,7 +111,7 @@ public abstract class BinaryStreamParser {
             i++;
         } while (shift < 35);
         if (shift == 35) {
-            Assert.fail("Unsigned LEB128 overflow", Failure.UNSPECIFIED_MALFORMED);
+            Assert.fail("Unsigned LEB128 overflow");
         }
         return result;
     }
@@ -166,7 +165,7 @@ public abstract class BinaryStreamParser {
         } else if (mut == GlobalModifier.MUTABLE) {
             return mut;
         } else {
-            throw Assert.fail("Invalid mutability flag: " + mut, Failure.UNSPECIFIED_MALFORMED);
+            throw Assert.fail("Invalid mutability flag: " + mut);
         }
     }
 
@@ -178,7 +177,7 @@ public abstract class BinaryStreamParser {
 
     public static byte peek1(byte[] data, int offset) {
         if (offset < 0 || offset >= data.length) {
-            throw WasmException.format(Failure.UNSPECIFIED_MALFORMED, "The binary is truncated at: %d", offset);
+            throw BinaryParserException.format("The binary is truncated at: %d", offset);
         }
         return data[offset];
     }
@@ -223,14 +222,14 @@ public abstract class BinaryStreamParser {
 
     protected byte peek1() {
         if (offset < 0 || offset >= data.length) {
-            throw WasmException.format(Failure.UNSPECIFIED_MALFORMED, "The binary is truncated at: %d", offset);
+            throw BinaryParserException.format("The binary is truncated at: %d", offset);
         }
         return data[offset];
     }
 
     protected byte peek1(int ahead) {
         if (offset + ahead < 0 || offset + ahead >= data.length) {
-            throw WasmException.format(Failure.UNSPECIFIED_MALFORMED, "The binary is truncated at: %d", offset + ahead);
+            throw BinaryParserException.format("The binary is truncated at: %d", offset + ahead);
         }
         return data[offset + ahead];
     }
@@ -265,7 +264,7 @@ public abstract class BinaryStreamParser {
             case WasmType.F64_TYPE:
                 break;
             default:
-                Assert.fail(String.format("Invalid value type: 0x%02X", b), Failure.UNSPECIFIED_MALFORMED);
+                Assert.fail(String.format("Invalid value type: 0x%02X", b));
         }
         return b;
     }
@@ -299,8 +298,7 @@ public abstract class BinaryStreamParser {
             case NONE:
                 return false;
             default:
-                // TODO(mbovel): should be an internal error.
-                throw WasmException.create(Failure.UNSPECIFIED_MALFORMED, "Invalid StoreConstantsInPoolChoice");
+                throw new BinaryParserException("Invalid StoreConstantsInPoolChoice");
         }
     }
 }
