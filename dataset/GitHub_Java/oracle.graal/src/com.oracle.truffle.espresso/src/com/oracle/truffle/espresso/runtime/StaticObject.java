@@ -24,13 +24,6 @@ package com.oracle.truffle.espresso.runtime;
 
 import static com.oracle.truffle.api.CompilerDirectives.castExact;
 import static com.oracle.truffle.espresso.impl.Klass.STATIC_TO_CLASS;
-import static com.oracle.truffle.espresso.runtime.InteropUtils.inSafeIntegerRange;
-import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostByte;
-import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostFloat;
-import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostInt;
-import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostLong;
-import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostShort;
-import static com.oracle.truffle.espresso.runtime.InteropUtils.isNegativeZero;
 import static com.oracle.truffle.espresso.vm.InterpreterToVM.instanceOf;
 
 import java.lang.reflect.Array;
@@ -115,272 +108,6 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    public boolean isBoolean() {
-        if (isNull(this)) {
-            return false;
-        }
-        return klass == klass.getMeta().java_lang_Boolean;
-    }
-
-    @ExportMessage
-    public boolean asBoolean() throws UnsupportedMessageException {
-        if (!isBoolean()) {
-            throw UnsupportedMessageException.create();
-        }
-        return (boolean) klass.getMeta().java_lang_Boolean_value.get(this);
-    }
-
-    @ExportMessage
-    public boolean isNumber() {
-        if (isNull(this)) {
-            return false;
-        }
-
-        Meta meta = klass.getMeta();
-        return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Integer || klass == meta.java_lang_Long || klass == meta.java_lang_Float ||
-                klass == meta.java_lang_Double;
-    }
-
-    @ExportMessage
-    boolean fitsInByte() {
-        if (isNull(this)) {
-            return false;
-        }
-        if (isAtMostByte(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Short) {
-            short content = getShortField(meta.java_lang_Short_value);
-            return (byte) content == content;
-        }
-        if (klass == meta.java_lang_Integer) {
-            int content = getIntField(meta.java_lang_Integer_value);
-            return (byte) content == content;
-        }
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            return (byte) content == content;
-        }
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return (byte) content == content && !isNegativeZero(content);
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return (byte) content == content && !isNegativeZero(content);
-        }
-        return false;
-    }
-
-    @ExportMessage
-    boolean fitsInShort() {
-        if (isNull(this)) {
-            return false;
-        }
-        if (isAtMostShort(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Integer) {
-            int content = getIntField(meta.java_lang_Integer_value);
-            return (short) content == content;
-        }
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            return (short) content == content;
-        }
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return (short) content == content && !isNegativeZero(content);
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return (short) content == content && !isNegativeZero(content);
-        }
-        return false;
-    }
-
-    @ExportMessage
-    public boolean fitsInInt() {
-        if (isNull(this)) {
-            return false;
-        }
-        if (isAtMostInt(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            return (int) content == content;
-        }
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return inSafeIntegerRange(content) && !isNegativeZero(content) && (int) content == content;
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return (int) content == content && !isNegativeZero(content);
-        }
-        return false;
-    }
-
-    @ExportMessage
-    boolean fitsInLong() {
-        if (isNull(this)) {
-            return false;
-        }
-        if (isAtMostLong(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
-        }
-        return false;
-
-    }
-
-    @ExportMessage
-    boolean fitsInFloat() {
-        if (isNull(this)) {
-            return false;
-        }
-        if (isAtMostFloat(klass)) {
-            return true;
-        }
-
-        Meta meta = klass.getMeta();
-        // We might lose precision when we convert an int or a long to a float, however, we still
-        // perform the conversion.
-        // This is consistent with Truffle interop, see GR-22718 for more details.
-        if (klass == meta.java_lang_Integer) {
-            int content = getIntField(meta.java_lang_Integer_value);
-            float floatContent = content;
-            return (int) floatContent == content;
-        }
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            float floatContent = content;
-            return (long) floatContent == content;
-        }
-        if (klass == meta.java_lang_Double) {
-            double content = getDoubleField(meta.java_lang_Double_value);
-            return !Double.isFinite(content) || (float) content == content;
-        }
-        return false;
-    }
-
-    @ExportMessage
-    boolean fitsInDouble() {
-        if (isNull(this)) {
-            return false;
-        }
-
-        Meta meta = klass.getMeta();
-        if (isAtMostInt(klass) || klass == meta.java_lang_Double) {
-            return true;
-        }
-        if (klass == meta.java_lang_Long) {
-            long content = getLongField(meta.java_lang_Long_value);
-            double doubleContent = content;
-            return (long) doubleContent == content;
-        }
-        if (klass == meta.java_lang_Float) {
-            float content = getFloatField(meta.java_lang_Float_value);
-            return !Float.isFinite(content) || (double) content == content;
-        }
-        return false;
-    }
-
-    private Number readNumberValue() throws UnsupportedMessageException {
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Byte) {
-            return (Byte) meta.java_lang_Byte_value.get(this);
-        }
-        if (klass == meta.java_lang_Short) {
-            return (Short) meta.java_lang_Short_value.get(this);
-        }
-        if (klass == meta.java_lang_Integer) {
-            return (Integer) meta.java_lang_Integer_value.get(this);
-        }
-        if (klass == meta.java_lang_Long) {
-            return (Long) meta.java_lang_Long_value.get(this);
-        }
-        if (klass == meta.java_lang_Float) {
-            return (Float) meta.java_lang_Float_value.get(this);
-        }
-        if (klass == meta.java_lang_Double) {
-            return (Double) meta.java_lang_Double_value.get(this);
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw UnsupportedMessageException.create();
-    }
-
-    @ExportMessage
-    byte asByte() throws UnsupportedMessageException {
-        if (!fitsInByte()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().byteValue();
-    }
-
-    @ExportMessage
-    short asShort() throws UnsupportedMessageException {
-        if (!fitsInShort()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().shortValue();
-    }
-
-    @ExportMessage
-    public int asInt() throws UnsupportedMessageException {
-        if (!fitsInInt()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().intValue();
-    }
-
-    @ExportMessage
-    long asLong() throws UnsupportedMessageException {
-        if (!fitsInLong()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().longValue();
-    }
-
-    @ExportMessage
-    float asFloat() throws UnsupportedMessageException {
-        if (!fitsInFloat()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().floatValue();
-    }
-
-    @ExportMessage
-    double asDouble() throws UnsupportedMessageException {
-        if (!fitsInDouble()) {
-            CompilerDirectives.transferToInterpreter();
-            throw UnsupportedMessageException.create();
-        }
-        return readNumberValue().doubleValue();
-    }
-
-    @ExportMessage
     long getArraySize() {
         return length();
     }
@@ -394,7 +121,7 @@ public final class StaticObject implements TruffleObject {
     abstract static class ReadArrayElement {
         @Specialization(guards = "isBooleanArray(receiver)")
         static Object doBoolean(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
@@ -406,7 +133,7 @@ public final class StaticObject implements TruffleObject {
 
         @Specialization(guards = "isByteArray(receiver)")
         static Object doByte(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
@@ -418,7 +145,7 @@ public final class StaticObject implements TruffleObject {
 
         @Specialization(guards = "isShortArray(receiver)")
         static Object doShort(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
@@ -430,7 +157,7 @@ public final class StaticObject implements TruffleObject {
 
         @Specialization(guards = "isIntArray(receiver)")
         static Object doInt(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
@@ -442,7 +169,7 @@ public final class StaticObject implements TruffleObject {
 
         @Specialization(guards = "isLongArray(receiver)")
         static Object doLong(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
@@ -454,7 +181,7 @@ public final class StaticObject implements TruffleObject {
 
         @Specialization(guards = "isFloatArray(receiver)")
         static Object doFloat(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
@@ -466,7 +193,7 @@ public final class StaticObject implements TruffleObject {
 
         @Specialization(guards = "isDoubleArray(receiver)")
         static Object doDouble(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
@@ -478,7 +205,7 @@ public final class StaticObject implements TruffleObject {
 
         @Specialization(guards = {"receiver.isArray()", "!isPrimitiveArray(receiver)"})
         static Object doObject(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             try {
@@ -494,7 +221,7 @@ public final class StaticObject implements TruffleObject {
         @Specialization(guards = "isBooleanArray(receiver)", limit = "1")
         static void doBoolean(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             boolean boolValue;
@@ -513,7 +240,7 @@ public final class StaticObject implements TruffleObject {
         @Specialization(guards = "isByteArray(receiver)", limit = "1")
         static void doByte(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             byte byteValue;
@@ -532,7 +259,7 @@ public final class StaticObject implements TruffleObject {
         @Specialization(guards = "isShortArray(receiver)", limit = "1")
         static void doShort(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             short shortValue;
@@ -551,7 +278,7 @@ public final class StaticObject implements TruffleObject {
         @Specialization(guards = "isIntArray(receiver)", limit = "1")
         static void doInt(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             int intValue;
@@ -570,7 +297,7 @@ public final class StaticObject implements TruffleObject {
         @Specialization(guards = "isLongArray(receiver)", limit = "1")
         static void doLong(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             long longValue;
@@ -589,7 +316,7 @@ public final class StaticObject implements TruffleObject {
         @Specialization(guards = "isFloatArray(receiver)", limit = "1")
         static void doFloat(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             float floatValue;
@@ -608,7 +335,7 @@ public final class StaticObject implements TruffleObject {
         @Specialization(guards = "isDoubleArray(receiver)", limit = "1")
         static void doDouble(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
+            if (index > Integer.MAX_VALUE) {
                 throw InvalidArrayIndexException.create(index);
             }
             double doubleValue;
