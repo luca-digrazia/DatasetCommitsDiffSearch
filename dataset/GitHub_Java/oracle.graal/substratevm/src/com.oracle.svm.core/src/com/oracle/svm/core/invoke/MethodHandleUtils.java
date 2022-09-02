@@ -24,19 +24,33 @@
  */
 package com.oracle.svm.core.invoke;
 
+import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
+
 import java.lang.invoke.MethodHandle;
 import java.util.function.BooleanSupplier;
-
-import org.graalvm.compiler.debug.GraalError;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AlwaysInline;
 
+import jdk.vm.ci.meta.MetaAccessProvider;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 // Checkstyle: stop
 import sun.invoke.util.Wrapper;
 // Checkstyle: resume
 
 public class MethodHandleUtils {
+    public static Object cast(Object obj, Class<?> type) {
+        Wrapper destinationWrapper;
+        if (type.isPrimitive()) {
+            destinationWrapper = Wrapper.forPrimitiveType(type);
+        } else if (Wrapper.isWrapperType(type)) {
+            destinationWrapper = Wrapper.forWrapperType(type);
+        } else {
+            destinationWrapper = Wrapper.OBJECT;
+        }
+        return destinationWrapper.cast(obj, type);
+    }
+
     @AlwaysInline("constant fold as much as possible in signature polymorphic wrappers")
     public static long longUnbox(Object retVal, MethodHandle methodHandle) {
         return longUnbox(retVal, methodHandle.type().returnType());
@@ -63,7 +77,7 @@ public class MethodHandleUtils {
             case LONG:
                 return (long) retVal;
             default:
-                throw new GraalError("Unexpected type for unbox function: " + returnType);
+                throw shouldNotReachHere("Unexpected type for unbox function");
         }
     }
 
@@ -91,7 +105,7 @@ public class MethodHandleUtils {
             case INT:
                 return (int) retVal;
             default:
-                throw new GraalError("Unexpected type for unbox function: " + returnType);
+                throw shouldNotReachHere("Unexpected type for unbox function");
         }
     }
 
@@ -115,8 +129,20 @@ public class MethodHandleUtils {
             case SHORT:
                 return (short) retVal;
             default:
-                throw new GraalError("Unexpected type for unbox function: " + returnType);
+                throw shouldNotReachHere("Unexpected type for unbox function");
         }
+    }
+
+    public static ResolvedJavaMethod getThrowUnsupportedOperationException(MetaAccessProvider metaAccess) {
+        try {
+            return metaAccess.lookupJavaMethod(MethodHandleUtils.class.getMethod("throwUnsupportedOperationException"));
+        } catch (NoSuchMethodException e) {
+            throw shouldNotReachHere();
+        }
+    }
+
+    public static void throwUnsupportedOperationException() {
+        throw new UnsupportedOperationException("MethodHandle.invoke() and MethodHandle.invokeExact() cannot be invoked through reflection");
     }
 
     public static class MethodHandlesSupported implements BooleanSupplier {
