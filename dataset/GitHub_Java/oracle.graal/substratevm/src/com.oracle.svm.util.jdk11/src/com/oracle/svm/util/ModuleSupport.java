@@ -61,7 +61,7 @@ public final class ModuleSupport {
          * Open up module that contains the bundleClass so that ResourceBundle.getBundle can
          * succeed.
          */
-        ModuleSupport.openModuleByClass(bundleClass, ModuleSupport.class);
+        ModuleSupport.openModule(bundleClass, ModuleSupport.class);
         return ResourceBundle.getBundle(bundleName, locale, bundleClass.getModule());
     }
 
@@ -114,7 +114,7 @@ public final class ModuleSupport {
         return result;
     }
 
-    public static void openModuleByClass(Class<?> declaringClass, Class<?> accessingClass) {
+    public static void openModule(Class<?> declaringClass, Class<?> accessingClass) {
         Module declaringModule = declaringClass.getModule();
         String packageName = declaringClass.getPackageName();
         Module accessingModule = accessingClass == null ? null : accessingClass.getModule();
@@ -127,29 +127,8 @@ public final class ModuleSupport {
         }
     }
 
-    /**
-     * Exports and opens a single package {@code packageName} in the module named {@code moduleName}
-     * to all unnamed modules.
-     */
-    @SuppressWarnings("unused")
-    public static void exportAndOpenPackageToClass(String moduleName, String packageName, boolean optional, Class<?> accessingClass) {
-        Optional<Module> value = ModuleLayer.boot().findModule(moduleName);
-        if (value.isEmpty()) {
-            if (!optional) {
-                throw new NoSuchElementException(moduleName);
-            }
-            return;
-        }
-        Module declaringModule = value.get();
-        Module accessingModule = accessingClass == null ? null : accessingClass.getModule();
-        if (accessingModule != null && accessingModule.isNamed()) {
-            if (!declaringModule.isOpen(packageName, accessingModule)) {
-                Modules.addOpens(declaringModule, packageName, accessingModule);
-            }
-        } else {
-            Modules.addOpensToAllUnnamed(declaringModule, packageName);
-        }
-
+    public static ClassLoader getPlatformClassLoader() {
+        return ClassLoader.getPlatformClassLoader();
     }
 
     /**
