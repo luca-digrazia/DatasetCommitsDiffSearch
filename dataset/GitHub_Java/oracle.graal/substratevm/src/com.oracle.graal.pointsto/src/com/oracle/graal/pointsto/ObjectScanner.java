@@ -336,7 +336,6 @@ public abstract class ObjectScanner {
 
         try {
             AnalysisType type = analysisType(bb, valueObj);
-            type.registerAsReachable();
 
             if (type.isInstanceClass()) {
                 /* Scan constant's instance fields. */

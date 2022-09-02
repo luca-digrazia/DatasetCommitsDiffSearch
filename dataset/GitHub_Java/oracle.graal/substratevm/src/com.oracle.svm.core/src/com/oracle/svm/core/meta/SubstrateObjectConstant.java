@@ -24,9 +24,6 @@
  */
 package com.oracle.svm.core.meta;
 
-import com.oracle.svm.core.SubstrateUtil;
-import com.oracle.svm.core.hub.DynamicHub;
-
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -154,24 +151,11 @@ public abstract class SubstrateObjectConstant implements JavaConstant, Compressi
         return getIdentityHashCode();
     }
 
-    public abstract int getIdentityHashCode();
-
-    public static int computeIdentityHashCode(Object object) {
-        if (SubstrateUtil.HOSTED && object instanceof DynamicHub) {
-            /*
-             * We need to use the identity hash code of the original java.lang.Class object and not
-             * of the DynamicHub, so that hash maps that are filled during image generation and use
-             * Class keys still work at run time.
-             */
-            return System.identityHashCode(((DynamicHub) object).getHostedJavaClass());
-        } else {
-            return System.identityHashCode(object);
-        }
-    }
+    protected abstract int getIdentityHashCode();
 
     @Override
     public String toString() {
-        return getClass().getSimpleName() + '[' + getJavaKind().getJavaName() + ']';
+        return getJavaKind().getJavaName(); // + "[" + toValueString() + "]" + object;
     }
 
     public abstract ResolvedJavaType getType(MetaAccessProvider provider);
