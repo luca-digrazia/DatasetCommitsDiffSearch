@@ -860,8 +860,8 @@ public class FlatNodeGenFactory {
                         }
                     }
                     TypeMirror languageType = cache.getLanguageType();
-                    boolean needsCheck = false;
-                    if (!usedGuards.isEmpty()) {
+                    boolean needsCheck = true;
+                    if (usedGuards.isEmpty()) {
                         needsCheck = languagesChecked.add(ElementUtils.getTypeId(languageType));
                     }
                     CodeTreeBuilder b = builder.create();
@@ -1024,9 +1024,6 @@ public class FlatNodeGenFactory {
         for (SpecializationData specialization : filteredSpecializations) {
             boolean resetSpecializationClass = false;
             for (CacheExpression cache : specialization.getCaches()) {
-                if (cache.isAlwaysInitialized()) {
-                    continue;
-                }
                 if (cache.isCachedLibraryManuallyDispatched()) {
                     if (useSpecializationClass(specialization)) {
                         resetSpecializationClass = true;
@@ -1038,7 +1035,7 @@ public class FlatNodeGenFactory {
                 }
             }
 
-            if (resetSpecializationClass || specialization.hasMultipleInstances()) {
+            if (resetSpecializationClass) {
                 builder.startStatement();
                 builder.string("this.", createSpecializationFieldName(specialization));
                 builder.string(" = null");
