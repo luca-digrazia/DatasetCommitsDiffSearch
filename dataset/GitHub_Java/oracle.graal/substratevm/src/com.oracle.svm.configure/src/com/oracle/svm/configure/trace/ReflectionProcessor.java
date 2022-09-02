@@ -39,10 +39,10 @@ class ReflectionProcessor extends AbstractProcessor {
     private final ReflectionConfiguration configuration = new ReflectionConfiguration();
     private final ProxyConfiguration proxyConfiguration = new ProxyConfiguration();
     private final ResourceConfiguration resourceConfiguration = new ResourceConfiguration();
-    private final AccessAdvisor advisor;
+    private boolean filter = true;
 
-    ReflectionProcessor(AccessAdvisor advisor) {
-        this.advisor = advisor;
+    public void setFilterEnabled(boolean enabled) {
+        filter = enabled;
     }
 
     public ReflectionConfiguration getConfiguration() {
@@ -81,11 +81,11 @@ class ReflectionProcessor extends AbstractProcessor {
                 resourceConfiguration.addLocationIndependent(singleElement(args));
                 return;
         }
-        String clazz = (String) entry.get("class");
         String callerClass = (String) entry.get("caller_class");
-        if (advisor.shouldIgnore(() -> callerClass)) {
+        if (filter && (!isInLivePhase() || isInternalClass(callerClass))) {
             return;
         }
+        String clazz = (String) entry.get("class");
         String declaringClass = (String) entry.get("declaring_class");
         boolean declared = false;
         switch (function) {

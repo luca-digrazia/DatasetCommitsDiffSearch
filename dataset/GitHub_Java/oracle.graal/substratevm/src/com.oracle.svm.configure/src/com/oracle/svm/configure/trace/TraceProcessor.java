@@ -36,15 +36,15 @@ import com.oracle.svm.configure.config.ResourceConfiguration;
 import com.oracle.svm.core.util.json.JSONParser;
 
 public class TraceProcessor extends AbstractProcessor {
-    private final AccessAdvisor advisor = new AccessAdvisor();
-    private final JniProcessor jniProcessor = new JniProcessor(advisor);
-    private final ReflectionProcessor reflectionProcessor = new ReflectionProcessor(advisor);
+    private final JniProcessor jniProcessor = new JniProcessor();
+    private final ReflectionProcessor reflectionProcessor = new ReflectionProcessor();
 
     public TraceProcessor() {
     }
 
     public void setFilterEnabled(boolean enabled) {
-        advisor.setIgnoreInternalAccesses(enabled);
+        jniProcessor.setFilterEnabled(enabled);
+        reflectionProcessor.setFilterEnabled(enabled);
     }
 
     public JniConfiguration getJniConfiguration() {
@@ -110,7 +110,6 @@ public class TraceProcessor extends AbstractProcessor {
 
     @Override
     void setInLivePhase(boolean live) {
-        advisor.setInLivePhase(live);
         jniProcessor.setInLivePhase(live);
         reflectionProcessor.setInLivePhase(live);
         super.setInLivePhase(live);
