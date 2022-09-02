@@ -132,20 +132,13 @@ public class GraalHotSpotVMConfigAccess {
     protected static final Version JVMCI_19_3_b07 = new Version3(19, 3, 7);
 
     public static boolean jvmciGE(Version v) {
-        return JVMCI_PRERELEASE || !JVMCI_VERSION.isLessThan(v);
+        return !JVMCI_VERSION.isLessThan(v);
     }
 
     public static final int JDK = JavaVersionUtil.JAVA_SPEC;
     public static final boolean IS_OPENJDK = getProperty("java.vm.name", "").startsWith("OpenJDK");
-    public static final Version JVMCI_VERSION;
-    public static final boolean JVMCI;
-    public static final boolean JVMCI_PRERELEASE;
-    static {
-        String vmVersion = getProperty("java.vm.version");
-        JVMCI_VERSION = Version.parse(vmVersion);
-        JVMCI_PRERELEASE = vmVersion.contains("SNAPSHOT") || vmVersion.contains("internal");
-        JVMCI = JVMCI_VERSION != null || JVMCI_PRERELEASE;
-    }
+    public static final Version JVMCI_VERSION = Version.parse(getProperty("java.vm.version"));
+    public static final boolean JVMCI = JVMCI_VERSION != null;
 
     private List<String> missing;
     private List<String> unexpected;
@@ -171,9 +164,6 @@ public class GraalHotSpotVMConfigAccess {
     }
 
     private static List<String> recordError(String name, List<String> list, String unexpectedValue) {
-        if (JVMCI_PRERELEASE) {
-            return list;
-        }
         List<String> result = list == null ? new ArrayList<>() : list;
         StackTraceElement[] trace = new Exception().getStackTrace();
         String message = name;
@@ -198,11 +188,9 @@ public class GraalHotSpotVMConfigAccess {
     protected void reportErrors() {
         if (missing != null || unexpected != null) {
             String jvmci = JVMCI_VERSION == null ? "" : " jvmci-" + JVMCI_VERSION;
-            String runtime = String.format("JDK %d%s %s-%s (java.home=%s, java.vm.name=%s, java.vm.version=%s)",
-                            JDK, jvmci, osName, osArch,
+            String runtime = String.format("JDK %d%s %s-%s (java.home=%s, java.vm.name=%s)", JDK, jvmci, osName, osArch,
                             getProperty("java.home"),
-                            getProperty("java.vm.name"),
-                            getProperty("java.vm.version"));
+                            getProperty("java.vm.name"));
             List<String> messages = new ArrayList<>();
             if (missing != null) {
                 messages.add(String.format("VM config values missing that should be present in %s:%n    %s", runtime,
