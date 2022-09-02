@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,6 +24,7 @@
  */
 package org.graalvm.polyglot.nativeapi.types;
 
+import org.graalvm.nativeimage.Isolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.nativeimage.c.CContext;
@@ -38,6 +41,9 @@ import org.graalvm.word.PointerBase;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.c.CTypedef;
+import com.oracle.svm.core.c.function.CEntryPointCreateIsolateParameters;
+import com.oracle.svm.core.c.function.CEntryPointNativeFunctions.IsolatePointer;
+import com.oracle.svm.core.c.function.CEntryPointNativeFunctions.IsolateThreadPointer;
 
 @CContext(PolyglotNativeAPICContext.class)
 public class PolyglotNativeAPITypes {
@@ -74,7 +80,7 @@ public class PolyglotNativeAPITypes {
         public native int getCValue();
     }
 
-    @CStruct("poly_extended_error_info")
+    @CStruct(value = "poly_extended_error_info")
     public interface PolyglotExtendedErrorInfo extends PointerBase {
 
         @CField("error_code")
@@ -86,7 +92,7 @@ public class PolyglotNativeAPITypes {
     }
 
     @CPointerTo(value = PolyglotExtendedErrorInfo.class)
-    public interface ExtendedErrorInfoPointer extends PointerBase {
+    public interface PolyglotExtendedErrorInfoPointer extends PointerBase {
 
         void write(PolyglotExtendedErrorInfo value);
 
@@ -103,13 +109,13 @@ public class PolyglotNativeAPITypes {
 
     @CPointerTo(nameOfCType = "poly_engine")
     @CTypedef(name = "poly_engine")
-    public interface PolyglotEngine extends PointerBase, ObjectHandle {
+    public interface PolyglotEngine extends PointerBase, PolyglotHandle {
     }
 
     @CPointerTo(nameOfCType = "poly_engine")
-    public interface PolyglotEnginePointer extends PointerBase, ObjectHandle {
+    public interface PolyglotEnginePointer extends PointerBase, PolyglotHandle {
 
-        void write(ObjectHandle value);
+        void write(PolyglotHandle value);
 
     }
 
@@ -119,13 +125,48 @@ public class PolyglotNativeAPITypes {
 
     }
 
-    @CPointerTo(nameOfCType = "poly_context")
-    @CTypedef(name = "poly_context")
-    public interface PolyglotContext extends PointerBase, ObjectHandle {
+    @CPointerTo(nameOfCType = "poly_reference")
+    @CTypedef(name = "poly_reference")
+    public interface PolyglotReference extends PointerBase, PolyglotHandle {
+
+    }
+
+    @CPointerTo(nameOfCType = "poly_reference")
+    public interface PolyglotReferencePointer extends PointerBase, PolyglotHandle {
+        void write(PolyglotReference value);
     }
 
     @CPointerTo(nameOfCType = "poly_context")
-    public interface PolyglotContextPointer extends PointerBase, ObjectHandle {
+    @CTypedef(name = "poly_context")
+    public interface PolyglotContext extends PointerBase, PolyglotHandle {
+    }
+
+    @CPointerTo(nameOfCType = "poly_context")
+    public interface PolyglotContextPointer extends PointerBase, PolyglotHandle {
+
+        void write(ObjectHandle value);
+
+    }
+
+    @CPointerTo(nameOfCType = "poly_context_builder")
+    @CTypedef(name = "poly_context_builder")
+    public interface PolyglotContextBuilder extends PointerBase, PolyglotHandle {
+    }
+
+    @CPointerTo(nameOfCType = "poly_context_builder")
+    public interface PolyglotContextBuilderPointer extends PointerBase, PolyglotHandle {
+
+        void write(ObjectHandle value);
+
+    }
+
+    @CPointerTo(nameOfCType = "poly_engine_builder")
+    @CTypedef(name = "poly_engine_builder")
+    public interface PolyglotEngineBuilder extends PointerBase, PolyglotHandle {
+    }
+
+    @CPointerTo(nameOfCType = "poly_engine_builder")
+    public interface PolyglotEngineBuilderPointer extends PointerBase, PolyglotHandle {
 
         void write(ObjectHandle value);
 
@@ -133,13 +174,26 @@ public class PolyglotNativeAPITypes {
 
     @CPointerTo(nameOfCType = "poly_value")
     @CTypedef(name = "poly_value")
-    public interface PolyglotValue extends PointerBase, ObjectHandle {
+    public interface PolyglotValue extends PointerBase, PolyglotHandle {
+    }
+
+    @CPointerTo(nameOfCType = "poly_language")
+    @CTypedef(name = "poly_language")
+    public interface PolyglotLanguage extends PointerBase, PolyglotHandle {
+    }
+
+    @CPointerTo(nameOfCType = "poly_language")
+    public interface PolyglotLanguagePointer extends PointerBase, PolyglotHandle {
+
+        void write(ObjectHandle value);
+
+        void write(int i, ObjectHandle value);
     }
 
     @CPointerTo(nameOfCType = "poly_value")
-    public interface PolyglotValuePointer extends PointerBase, ObjectHandle {
+    public interface PolyglotValuePointer extends PointerBase, PolyglotHandle {
 
-        PolyglotValue read(int index);
+        PolyglotValue read(long index);
 
         void write(ObjectHandle value);
 
@@ -148,7 +202,7 @@ public class PolyglotNativeAPITypes {
 
     @CPointerTo(nameOfCType = "poly_callback_info")
     @CTypedef(name = "poly_callback_info")
-    public interface PolyglotCallbackInfo extends ObjectHandle, PointerBase {
+    public interface PolyglotCallbackInfo extends PointerBase, PolyglotHandle {
     }
 
     @CTypedef(name = "poly_callback")
@@ -157,8 +211,25 @@ public class PolyglotNativeAPITypes {
         PolyglotValue invoke(PolyglotIsolateThread ithread, PolyglotCallbackInfo info);
     }
 
-    @CStruct(value = "poly_thread", isIncomplete = true)
+    @CStruct(isIncomplete = true)
     @CTypedef(name = "poly_thread")
     public interface PolyglotIsolateThread extends IsolateThread {
+    }
+
+    @CPointerTo(nameOfCType = "poly_thread")
+    public interface PolyglotIsolateThreadPointer extends IsolateThreadPointer {
+    }
+
+    @CStruct(isIncomplete = true)
+    @CTypedef(name = "poly_isolate")
+    public interface PolyglotIsolate extends Isolate {
+    }
+
+    @CPointerTo(nameOfCType = "poly_isolate")
+    public interface PolyglotIsolatePointer extends IsolatePointer {
+    }
+
+    @CStruct("poly_isolate_params")
+    public interface PolyglotIsolateParameters extends CEntryPointCreateIsolateParameters {
     }
 }
