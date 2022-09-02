@@ -40,8 +40,6 @@ public class CompilerLoggingTest extends TruffleCompilerImplTest {
 
     private static final String FORMAT_FAILURE = "Failed to compile %s due to %s";
     private static final String FORMAT_SUCCESS = "Compiled %s";
-    private static final String MESSAGE_TO_STREAM = "begin";
-    private static final String MESSAGE_TO_TTY = "end";
 
     @Test
     public void testLogging() throws IOException {
@@ -54,7 +52,7 @@ public class CompilerLoggingTest extends TruffleCompilerImplTest {
                 OptimizedCallTarget compilable = (OptimizedCallTarget) runtime.createCallTarget(RootNode.createConstantNode(true));
                 compilable.call();
                 String logContent = new String(logOut.toByteArray());
-                String expected = String.format(FORMAT_SUCCESS, compilable.getName()) + MESSAGE_TO_STREAM + MESSAGE_TO_TTY;
+                String expected = String.format(FORMAT_SUCCESS, compilable.getName());
                 assertTrue("Expected " + expected + " in " + logContent, logContent.contains(expected));
             } finally {
                 runtime.removeListener(listener);
@@ -67,18 +65,13 @@ public class CompilerLoggingTest extends TruffleCompilerImplTest {
         @Override
         public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, TruffleCompilerListener.GraphInfo graph, TruffleCompilerListener.CompilationResultInfo result) {
             TTY.printf(FORMAT_SUCCESS, target.getName());
-            printCommon();
+            TTY.flush();
         }
 
         @Override
         public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanentBailout) {
             TTY.printf(FORMAT_FAILURE, target.getName(), reason);
-            printCommon();
-        }
-
-        private static void printCommon() {
-            TTY.out().out().print(MESSAGE_TO_STREAM);
-            TTY.println(MESSAGE_TO_TTY);
+            TTY.flush();
         }
     }
 }

@@ -66,7 +66,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
@@ -192,7 +191,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     @CompilationFinal private HostToGuestCodeCache hostToGuestCodeCache;
 
     final SpecializationStatistics specializationStatistics;
-    final Function<String, TruffleLogger> engineLoggerSupplier;
+    final Supplier<TruffleLogger> engineLoggerSupplier;
     private volatile TruffleLogger engineLogger;
 
     PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, Map<String, String> options,
@@ -261,11 +260,17 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         Map<String, String> originalEngineOptions = new HashMap<>();
         Map<PolyglotLanguage, Map<String, String>> languagesOptions = new HashMap<>();
         Map<PolyglotInstrument, Map<String, String>> instrumentsOptions = new HashMap<>();
-        LogConfig logConfig = new LogConfig();
+        LogConfig logOptions = new LogConfig();
 
-        parseOptions(options, useSystemProperties, originalEngineOptions, languagesOptions, instrumentsOptions, logConfig);
-        this.logLevels = logConfig.logLevels;
-        this.logHandler = logHandler != null ? logHandler : createLogHandler(logConfig, this.err);
+        parseOptions(options, useSystemProperties, originalEngineOptions, languagesOptions, instrumentsOptions, logOptions);
+        this.logLevels = logOptions.logLevels;
+        if (logHandler != null) {
+            this.logHandler = logHandler;
+        } else if (ALLOW_IO && logOptions.logFile != null) {
+            this.logHandler = PolyglotLoggers.getFileHandler(logOptions.logFile);
+        } else {
+            this.logHandler = PolyglotLoggers.createDefaultHandler(INSTRUMENT.getOut(this.err));
+        }
 
         boolean useAllowExperimentalOptions = allowExperimentalOptions || Boolean.parseBoolean(EngineAccessor.RUNTIME.getSavedProperty(PROP_ALLOW_EXPERIMENTAL_OPTIONS));
         this.engineOptionValues.putAll(originalEngineOptions, useAllowExperimentalOptions);
@@ -387,7 +392,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             synchronized (this) {
                 result = this.engineLogger;
                 if (result == null) {
-                    this.engineLogger = result = this.engineLoggerSupplier.apply(OPTION_GROUP_ENGINE);
+                    this.engineLogger = result = this.engineLoggerSupplier.get();
                 }
             }
         }
@@ -438,10 +443,16 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         Map<PolyglotInstrument, Map<String, String>> instrumentsOptions = new HashMap<>();
 
         assert this.logLevels.isEmpty();
-        LogConfig logConfig = new LogConfig();
-        parseOptions(newOptions, newUseSystemProperties, originalEngineOptions, languagesOptions, instrumentsOptions, logConfig);
-        logLevels = logConfig.logLevels;
-        this.logHandler = newLogHandler != null ? newLogHandler : createLogHandler(logConfig, err);
+        LogConfig logOptions = new LogConfig();
+        parseOptions(newOptions, newUseSystemProperties, originalEngineOptions, languagesOptions, instrumentsOptions, logOptions);
+        logLevels = logOptions.logLevels;
+        if (newLogHandler != null) {
+            this.logHandler = newLogHandler;
+        } else if (ALLOW_IO && logOptions.logFile != null) {
+            this.logHandler = PolyglotLoggers.getFileHandler(logOptions.logFile);
+        } else {
+            this.logHandler = PolyglotLoggers.createDefaultHandler(INSTRUMENT.getOut(this.err));
+        }
         boolean useAllowExperimentalOptions = newAllowExperimentalOptions || Boolean.parseBoolean(EngineAccessor.RUNTIME.getSavedProperty(PROP_ALLOW_EXPERIMENTAL_OPTIONS));
         this.engineOptionValues.putAll(originalEngineOptions, useAllowExperimentalOptions);
 
@@ -460,18 +471,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
         registerShutDownHook();
         return true;
-    }
-
-    private static Handler createLogHandler(LogConfig logConfig, DispatchOutputStream errDispatchOutputStream) {
-        if (logConfig.logFile != null) {
-            if (ALLOW_IO) {
-                return PolyglotLoggers.getFileHandler(logConfig.logFile);
-            } else {
-                throw PolyglotEngineException.illegalState("The `log.file` option is not allowed when the allowIO() privilege is removed at image build time.");
-            }
-        } else {
-            return PolyglotLoggers.createDefaultHandler(INSTRUMENT.getOut(errDispatchOutputStream));
-        }
     }
 
     private static void createInstruments(Map<PolyglotInstrument, Map<String, String>> instrumentsOptions, boolean allowExperimentalOptions) {
