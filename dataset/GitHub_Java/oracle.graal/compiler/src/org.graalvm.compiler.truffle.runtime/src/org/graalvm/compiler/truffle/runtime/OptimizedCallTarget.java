@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -1266,7 +1265,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             if (callNode != null) {
                 callers.add(callNode);
             }
-            PolymorphicSpecializeDump.dumpPolymorphicSpecialize(this, toDump, callers);
+            PolymorphicSpecializeDump.dumpPolymorphicSpecialize(toDump, callers);
         }
     }
 
