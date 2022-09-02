@@ -304,6 +304,11 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return assumption;
     }
 
+    @Override
+    public JavaConstant getNodeRewritingAssumptionConstant() {
+        return runtime().forObject(getNodeRewritingAssumption());
+    }
+
     /**
      * @return an existing or the newly initialized node rewriting assumption.
      */
@@ -569,7 +574,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             return true;
         }
         if (!isCompiling()) {
-            if (!engine.acceptForCompilation(getRootNode())) {
+            if (!runtime().acceptForCompilation(getRootNode())) {
                 // do not try to compile again
                 compilationFailed = true;
                 return false;
