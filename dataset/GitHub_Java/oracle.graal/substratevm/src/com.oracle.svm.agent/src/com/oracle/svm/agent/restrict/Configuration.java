@@ -27,6 +27,8 @@ package com.oracle.svm.agent.restrict;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.oracle.svm.agent.Agent;
+
 public class Configuration {
     private final Map<String, ConfigurationType> types = new HashMap<>();
 
