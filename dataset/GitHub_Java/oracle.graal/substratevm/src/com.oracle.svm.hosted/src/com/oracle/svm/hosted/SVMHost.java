@@ -84,7 +84,6 @@ import com.oracle.svm.core.classinitialization.EnsureClassInitializedNode;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.stackvalue.StackValueNode;
-import com.oracle.svm.core.graal.thread.VMThreadLocalAccess;
 import com.oracle.svm.core.heap.StoredContinuation;
 import com.oracle.svm.core.heap.Target_java_lang_ref_Reference;
 import com.oracle.svm.core.hub.DynamicHub;
@@ -111,7 +110,7 @@ import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public class SVMHost implements HostVM {
+public final class SVMHost implements HostVM {
     private final ConcurrentHashMap<AnalysisType, DynamicHub> typeToHub = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<DynamicHub, AnalysisType> hubToType = new ConcurrentHashMap<>();
 
@@ -303,37 +302,6 @@ public class SVMHost implements HostVM {
         assert shouldInitializeAtRuntime || type.getWrapped().isInitialized() : "Types that are not marked for runtime initializations must have been initialized: " + type;
 
         return !shouldInitializeAtRuntime;
-    }
-
-    private final boolean parseOnce = SubstrateOptions.parseOnce();
-
-    @Override
-    public GraphBuilderConfiguration updateGraphBuilderConfiguration(GraphBuilderConfiguration config, AnalysisMethod method) {
-        return config.withRetainLocalVariables(retainLocalVariables());
-    }
-
-    private boolean retainLocalVariables() {
-        if (parseOnce) {
-            /*
-             * Disabling liveness analysis preserves the values of local variables beyond the
-             * bytecode-liveness. This greatly helps debugging. When local variable numbers are
-             * reused by javac, local variables can still get illegal values. Since we cannot
-             * "restore" such illegal values during deoptimization, we cannot disable liveness
-             * analysis for deoptimization target methods.
-             * 
-             * TODO: ParseOnce does not support deoptimization targets yet, this needs to be added
-             * later.
-             */
-            return SubstrateOptions.Optimize.getValue() <= 0;
-
-        } else {
-            /*
-             * We want to always disable the liveness analysis, since we want the points-to analysis
-             * to be as conservative as possible. The analysis results can then be used with the
-             * liveness analysis enabled or disabled.
-             */
-            return true;
-        }
     }
 
     @Override
@@ -537,6 +505,7 @@ public class SVMHost implements HostVM {
             message += "This can happen when using the image build server. ";
             message += "To fix the issue you must reset all static state from the bootclasspath and application classpath that points to the application objects. ";
             message += "If the offending code is in JDK code please file a bug with GraalVM. ";
+            message += "As an workaround you can disable the image build server by adding " + SubstrateOptions.NO_SERVER + " to the command line. ";
             throw new UnsupportedFeatureException(message);
         }
     }
@@ -549,12 +518,8 @@ public class SVMHost implements HostVM {
 
     @Override
     public void methodAfterParsingHook(BigBang bb, AnalysisMethod method, StructuredGraph graph) {
-        if (graph != null) {
-            graph.setGuardsStage(StructuredGraph.GuardsStage.FIXED_DEOPTS);
-
-            for (BiConsumer<AnalysisMethod, StructuredGraph> methodAfterParsingHook : methodAfterParsingHooks) {
-                methodAfterParsingHook.accept(method, graph);
-            }
+        for (BiConsumer<AnalysisMethod, StructuredGraph> methodAfterParsingHook : methodAfterParsingHooks) {
+            methodAfterParsingHook.accept(method, graph);
         }
     }
 
@@ -636,13 +601,10 @@ public class SVMHost implements HostVM {
             if (field.isStatic() && (!method.isClassInitializer() || !field.getDeclaringClass().equals(method.getDeclaringClass()))) {
                 classInitializerSideEffect.put(method, true);
             }
-        } else if (n instanceof UnsafeAccessNode || n instanceof VMThreadLocalAccess) {
+        } else if (n instanceof UnsafeAccessNode) {
             /*
              * Unsafe memory access nodes are rare, so it does not pay off to check what kind of
              * field they are accessing.
-             * 
-             * Methods that access a thread-local value cannot be initialized at image build time
-             * because such values are not available yet.
              */
             classInitializerSideEffect.put(method, true);
         } else if (n instanceof EnsureClassInitializedNode) {

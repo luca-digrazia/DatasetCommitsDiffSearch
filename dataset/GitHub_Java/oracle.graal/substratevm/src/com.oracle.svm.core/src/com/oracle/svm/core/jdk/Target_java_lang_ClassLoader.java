@@ -24,11 +24,13 @@
  */
 package com.oracle.svm.core.jdk;
 
+import java.io.ByteArrayInputStream;
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.net.URLConnection;
+import java.net.URLClassLoader;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,10 +38,10 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Vector;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.Delete;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
@@ -49,82 +51,143 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.hub.ClassForNameSupport;
 import com.oracle.svm.core.hub.DynamicHub;
-import com.oracle.svm.core.hub.PredefinedClassesSupport;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
-@TargetClass(className = "jdk.internal.loader.Resource", onlyWith = JDK11OrLater.class)
-@SuppressWarnings("unused")
-final class Target_jdk_internal_loader_Resource_JDK11OrLater {
+@TargetClass(classNameProvider = Package_jdk_internal_loader.class, className = "URLClassPath")
+@SuppressWarnings("static-method")
+final class Target_jdk_internal_loader_URLClassPath {
 
+    /* Reset fields that can store a Zip file via sun.misc.URLClassPath$JarLoader.jar. */
+
+    @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClass = ArrayList.class)//
+    private ArrayList<?> loaders;
+
+    @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClass = HashMap.class)//
+    private HashMap<String, ?> lmap;
+
+    /* The original locations of the .jar files are no longer available at run time. */
+    @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClass = ArrayList.class)//
+    private ArrayList<URL> path;
+
+    /*
+     * We are defensive and also handle private native methods by marking them as deleted. If they
+     * are reachable, the user is certainly doing something wrong. But we do not want to fail with a
+     * linking error.
+     */
+
+    @Delete
+    @TargetElement(onlyWith = JDK8OrEarlier.class)
+    private static native URL[] getLookupCacheURLs(ClassLoader loader);
+
+    @Delete
+    @TargetElement(onlyWith = JDK8OrEarlier.class)
+    private static native int[] getLookupCacheForClassLoader(ClassLoader loader, String name);
+
+    @Delete
+    @TargetElement(onlyWith = JDK8OrEarlier.class)
+    private static native boolean knownToNotExist0(ClassLoader loader, String className);
 }
 
-@TargetClass(className = "sun.misc.Resource", onlyWith = JDK8OrEarlier.class)
-@SuppressWarnings("unused")
-final class Target_sun_misc_Resource_JDK8OrEarlier {
+@TargetClass(URLClassLoader.class)
+@SuppressWarnings("static-method")
+final class Target_java_net_URLClassLoader {
+    @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClass = WeakHashMap.class)//
+    private WeakHashMap<Closeable, Void> closeables;
 
+    @Substitute
+    private InputStream getResourceAsStream(String name) {
+        List<byte[]> arr = Resources.get(name);
+        return arr == null ? null : new ByteArrayInputStream(arr.get(0));
+    }
+
+    @Substitute
+    @SuppressWarnings("unused")
+    protected Class<?> findClass(final String name) {
+        throw VMError.unsupportedFeature("Loading bytecodes.");
+    }
 }
 
-@SuppressWarnings("unchecked")
-class ResourcesHelper {
+@TargetClass(className = "jdk.internal.loader.BuiltinClassLoader", onlyWith = JDK11OrLater.class)
+@SuppressWarnings("static-method")
+final class Target_jdk_internal_loader_BuiltinClassLoader {
 
-    private static <T> T urlToResource(String resourceName, URL url) {
-        try {
-            if (url == null) {
-                return null;
-            }
-            URLConnection urlConnection = url.openConnection();
-            Object resource = JDKVersionSpecificResourceBuilder.buildResource(resourceName, url, urlConnection);
-            VMError.guarantee(resource != null);
-            return (T) resource;
-        } catch (IOException e) {
-            return null;
-        } catch (ClassCastException classCastException) {
-            throw VMError.shouldNotReachHere(classCastException);
+    @Substitute
+    public URL findResource(@SuppressWarnings("unused") String mn, String name) {
+        List<byte[]> arr = Resources.get(name);
+        return arr == null ? null : Resources.createURL(name, arr.get(0));
+    }
+
+    @Substitute
+    public URL findResource(String name) {
+        List<byte[]> arr = Resources.get(name);
+        return arr == null ? null : Resources.createURL(name, arr.get(0));
+    }
+
+    @Substitute
+    public InputStream findResourceAsStream(@SuppressWarnings("unused") String mn, String name) {
+        List<byte[]> arr = Resources.get(name);
+        return arr == null ? null : new ByteArrayInputStream(arr.get(0));
+    }
+
+    @Substitute
+    public Enumeration<URL> findResources(String name) {
+        List<byte[]> arr = Resources.get(name);
+        if (arr == null) {
+            return Collections.emptyEnumeration();
         }
-    }
-
-    static <T> T nameToResource(String resourceName) {
-        return urlToResource(resourceName, nameToResourceURL(resourceName));
-    }
-
-    static <T> Enumeration<T> nameToResources(String resourceName) {
-        Enumeration<URL> urls = Resources.createURLs(resourceName);
-        List<T> resourceURLs = new ArrayList<>();
-        while (urls.hasMoreElements()) {
-            resourceURLs.add(urlToResource(resourceName, urls.nextElement()));
+        List<URL> res = new ArrayList<>(arr.size());
+        for (byte[] data : arr) {
+            res.add(Resources.createURL(name, data));
         }
-        return Collections.enumeration(resourceURLs);
+        return Collections.enumeration(res);
+    }
+}
+
+@TargetClass(className = "jdk.internal.loader.Loader", onlyWith = JDK11OrLater.class)
+@SuppressWarnings({"unused", "static-method"})
+final class Target_jdk_internal_loader_Loader {
+
+    @Substitute
+    private URL findResource(String mn, String name) {
+        return findResource(name);
     }
 
-    static URL nameToResourceURL(String resourceName) {
-        return Resources.createURL(resourceName);
+    @Substitute
+    private URL findResource(String name) {
+        List<byte[]> arr = Resources.get(name);
+        return arr == null ? null : Resources.createURL(name, arr.get(0));
     }
 
-    static InputStream nameToResourceInputStream(String resourceName) throws IOException {
-        URL url = nameToResourceURL(resourceName);
-        return url != null ? url.openStream() : null;
-    }
-
-    static List<URL> nameToResourceListURLs(String resourcesName) {
-        Enumeration<URL> urls = Resources.createURLs(resourcesName);
-        List<URL> resourceURLs = new ArrayList<>();
-        while (urls.hasMoreElements()) {
-            resourceURLs.add(urls.nextElement());
+    @Substitute
+    private Enumeration<URL> findResources(String name) {
+        List<byte[]> arr = Resources.get(name);
+        if (arr == null) {
+            return Collections.emptyEnumeration();
         }
-        return resourceURLs;
+        List<URL> res = new ArrayList<>(arr.size());
+        for (byte[] data : arr) {
+            res.add(Resources.createURL(name, data));
+        }
+        return Collections.enumeration(res);
     }
 
-    static Enumeration<URL> nameToResourceEnumerationURLs(String resourcesName) {
-        return Collections.enumeration(nameToResourceListURLs(resourcesName));
+    @Substitute
+    private URL getResource(String name) {
+        return findResource(name);
+    }
+
+    @Substitute
+    private Enumeration<URL> getResources(String name) {
+        return findResources(name);
     }
 }
 
 @TargetClass(ClassLoader.class)
 @SuppressWarnings("static-method")
-public final class Target_java_lang_ClassLoader {
+final class Target_java_lang_ClassLoader {
 
     /**
      * This field can be safely deleted, but that would require substituting the entire constructor
@@ -168,22 +231,42 @@ public final class Target_java_lang_ClassLoader {
 
     @Substitute
     private URL getResource(String name) {
-        return ResourcesHelper.nameToResourceURL(name);
+        return getSystemResource(name);
+    }
+
+    @Substitute
+    private InputStream getResourceAsStream(String name) {
+        return getSystemResourceAsStream(name);
     }
 
     @Substitute
     private Enumeration<URL> getResources(String name) {
-        return ResourcesHelper.nameToResourceEnumerationURLs(name);
+        return getSystemResources(name);
     }
 
     @Substitute
-    public InputStream getResourceAsStream(String name) {
-        return Resources.createInputStream(name);
+    private static URL getSystemResource(String name) {
+        List<byte[]> arr = Resources.get(name);
+        return arr == null ? null : Resources.createURL(name, arr.get(0));
     }
 
     @Substitute
-    public static InputStream getSystemResourceAsStream(String name) {
-        return Resources.createInputStream(name);
+    private static InputStream getSystemResourceAsStream(String name) {
+        List<byte[]> arr = Resources.get(name);
+        return arr == null ? null : new ByteArrayInputStream(arr.get(0));
+    }
+
+    @Substitute
+    private static Enumeration<URL> getSystemResources(String name) {
+        List<byte[]> arr = Resources.get(name);
+        if (arr == null) {
+            return Collections.emptyEnumeration();
+        }
+        List<URL> res = new ArrayList<>(arr.size());
+        for (byte[] data : arr) {
+            res.add(Resources.createURL(name, data));
+        }
+        return Collections.enumeration(res);
     }
 
     @Substitute
@@ -209,7 +292,7 @@ public final class Target_java_lang_ClassLoader {
              */
             throw new ClassNotFoundException(name);
         }
-        return ClassForNameSupport.forName(name, false, SubstrateUtil.cast(this, ClassLoader.class));
+        return ClassForNameSupport.forName(name, false);
     }
 
     @Alias
@@ -233,8 +316,7 @@ public final class Target_java_lang_ClassLoader {
     @TargetElement(onlyWith = JDK11OrLater.class) //
     @SuppressWarnings({"unused"})
     Class<?> loadClass(Target_java_lang_Module module, String name) {
-        /* The module system is not supported for now, therefore the module parameter is ignored. */
-        return ClassForNameSupport.forNameOrNull(name, false, SubstrateUtil.cast(this, ClassLoader.class));
+        return ClassForNameSupport.forNameOrNull(name, false);
     }
 
     /**
@@ -254,6 +336,13 @@ public final class Target_java_lang_ClassLoader {
     }
 
     @Substitute //
+    @TargetElement(onlyWith = JDK11OrLater.class) //
+    @SuppressWarnings({"unused"})
+    protected URL findResource(String moduleName, String name) throws IOException {
+        throw VMError.unsupportedFeature("JDK11OrLater: Target_java_lang_ClassLoader.findResource(String, String)");
+    }
+
+    @Substitute //
     @SuppressWarnings({"unused"})
     Object getClassLoadingLock(String className) {
         throw VMError.unsupportedFeature("Target_java_lang_ClassLoader.getClassLoadingLock(String)");
@@ -265,7 +354,7 @@ public final class Target_java_lang_ClassLoader {
         if (name == null) {
             return null;
         }
-        return ClassForNameSupport.forNameOrNull(name, false, SubstrateUtil.cast(this, ClassLoader.class));
+        return ClassForNameSupport.forNameOrNull(name, false);
     }
 
     @Substitute
@@ -319,37 +408,20 @@ public final class Target_java_lang_ClassLoader {
 
     @Substitute
     @SuppressWarnings({"unused", "static-method"})
-    Class<?> defineClass(byte[] b, int off, int len) throws ClassFormatError {
-        return PredefinedClassesSupport.loadClass(SubstrateUtil.cast(this, ClassLoader.class), null, b, off, len, null);
-    }
-
-    @Substitute
-    @SuppressWarnings({"unused", "static-method"})
-    Class<?> defineClass(String name, byte[] b, int off, int len) throws ClassFormatError {
-        return PredefinedClassesSupport.loadClass(SubstrateUtil.cast(this, ClassLoader.class), name, b, off, len, null);
+    private Class<?> defineClass(String name, byte[] b, int off, int len) {
+        throw VMError.unsupportedFeature("Defining classes from new bytecodes run time.");
     }
 
     @Substitute
     @SuppressWarnings({"unused", "static-method"})
     private Class<?> defineClass(String name, byte[] b, int off, int len, ProtectionDomain protectionDomain) {
-        return PredefinedClassesSupport.loadClass(SubstrateUtil.cast(this, ClassLoader.class), name, b, off, len, protectionDomain);
+        throw VMError.unsupportedFeature("Defining classes from new bytecodes run time.");
     }
 
     @Substitute
     @SuppressWarnings({"unused", "static-method"})
     private Class<?> defineClass(String name, java.nio.ByteBuffer b, ProtectionDomain protectionDomain) {
-        byte[] array;
-        int off;
-        int len = b.remaining();
-        if (b.hasArray()) {
-            array = b.array();
-            off = b.position() + b.arrayOffset();
-        } else {
-            array = new byte[len];
-            b.get(array);
-            off = 0;
-        }
-        return PredefinedClassesSupport.loadClass(SubstrateUtil.cast(this, ClassLoader.class), name, array, off, len, null);
+        throw VMError.unsupportedFeature("Defining classes from new bytecodes run time.");
     }
 
     @Delete
