@@ -44,12 +44,17 @@ import java.io.IOException;
 
 import org.junit.Test;
 
-import org.graalvm.wasm.test.WasmFileSuite;
+import org.graalvm.wasm.test.WasmSuiteBase;
 
-public class WatSuite extends WasmFileSuite {
+public class WatSuite extends WasmSuiteBase {
     @Override
     protected String testResource() {
         return "wat";
+    }
+
+    @Override
+    protected String includedExternalModules() {
+        return super.includedExternalModules() + ",memory,env:emscripten";
     }
 
     @Override

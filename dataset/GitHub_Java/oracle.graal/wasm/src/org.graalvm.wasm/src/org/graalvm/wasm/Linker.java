@@ -54,8 +54,8 @@ import org.graalvm.wasm.memory.WasmMemory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Stack;
 import java.util.function.Consumer;
 
 public class Linker {
@@ -288,7 +288,7 @@ public class Linker {
         resolutionDag.resolveLater(new ExportMemoryDecl(module.name(), exportedMemoryName), dependencies, resolveAction);
     }
 
-    void resolveDataSection(WasmModule module, int dataSectionId, long baseAddress, int byteLength, byte[] data, boolean priorDataSectionsResolved) {
+    void resolveDataSection(WasmModule module, int dataSectionId, long baseAddress, int byteLength, byte[] data) {
         Assert.assertNotNull(module.symbolTable().importedMemory(), String.format("No memory declared or imported in the module '%s'", module.name()));
         final Runnable resolveAction = () -> {
             WasmMemory memory = module.symbolTable().memory();
@@ -299,9 +299,7 @@ public class Linker {
                 memory.store_i32_8(baseAddress + writeOffset, b);
             }
         };
-        final ImportMemoryDecl importMemoryDecl = new ImportMemoryDecl(module.name(), module.symbolTable().importedMemory());
-        final Decl[] dependencies = priorDataSectionsResolved ? new Decl[]{importMemoryDecl} : new Decl[]{importMemoryDecl, new DataDecl(module.name(), dataSectionId - 1)};
-        resolutionDag.resolveLater(new DataDecl(module.name(), dataSectionId), dependencies, resolveAction);
+        resolutionDag.resolveLater(new DataDecl(module.name(), dataSectionId), new Decl[]{new ImportMemoryDecl(module.name(), module.symbolTable().importedMemory())}, resolveAction);
     }
 
     static class ResolutionDag {
@@ -341,7 +339,7 @@ public class Linker {
             final String moduleName;
             final String memoryName;
 
-            ExportMemoryDecl(String moduleName, String memoryName) {
+            public ExportMemoryDecl(String moduleName, String memoryName) {
                 this.moduleName = moduleName;
                 this.memoryName = memoryName;
             }
@@ -426,7 +424,7 @@ public class Linker {
             resolutions.clear();
         }
 
-        private static String renderCycle(List<Decl> stack) {
+        private static String renderCycle(Stack<Decl> stack) {
             StringBuilder result = new StringBuilder();
             String arrow = "";
             for (Decl decl : stack) {
@@ -436,7 +434,7 @@ public class Linker {
             return result.toString();
         }
 
-        private void toposort(Decl decl, Map<Decl, Boolean> marks, ArrayList<Resolver> sorted, List<Decl> stack) {
+        private void toposort(Decl decl, Map<Decl, Boolean> marks, ArrayList<Resolver> sorted, Stack<Decl> stack) {
             final Resolver resolver = resolutions.get(decl);
             if (resolver != null) {
                 final Boolean mark = marks.get(decl);
@@ -450,12 +448,12 @@ public class Linker {
                                     renderCycle(stack)));
                 }
                 marks.put(decl, Boolean.FALSE);
-                stack.add(decl);
+                stack.push(decl);
                 for (Decl dependency : resolver.dependencies) {
                     toposort(dependency, marks, sorted, stack);
                 }
                 marks.put(decl, Boolean.TRUE);
-                stack.remove(stack.size() - 1);
+                stack.pop();
                 sorted.add(resolver);
             }
         }
@@ -464,7 +462,7 @@ public class Linker {
             Map<Decl, Boolean> marks = new HashMap<>();
             ArrayList<Resolver> sorted = new ArrayList<>();
             for (Decl decl : resolutions.keySet()) {
-                toposort(decl, marks, sorted, new ArrayList<>());
+                toposort(decl, marks, sorted, new Stack<>());
             }
             return sorted.toArray(new Resolver[sorted.size()]);
         }
