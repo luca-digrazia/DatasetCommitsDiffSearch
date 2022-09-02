@@ -27,6 +27,6 @@ package com.oracle.svm.core.jdk.serialize;
 
 public interface SerializationRegistry {
 
-    Object getSerializationConstructorAccessor(Class<?> serializationTargetClass, Class<?> targetConstructorClass);
+    Object getSerializationConstructorAccessorClass(Class<?> serializationTargetClass, Class<?> targetConstructorClass);
 
 }
