@@ -128,11 +128,7 @@ public final class DebuggerController implements ContextsListener {
     }
 
     public int getListeningPort() {
-        return Integer.parseInt(options.port);
-    }
-
-    public String getHost() {
-        return options.host;
+        return Integer.parseInt(options.address);
     }
 
     public void setCommandRequestId(Object thread, int commandRequestId, byte suspendPolicy, boolean isPopFrames) {
