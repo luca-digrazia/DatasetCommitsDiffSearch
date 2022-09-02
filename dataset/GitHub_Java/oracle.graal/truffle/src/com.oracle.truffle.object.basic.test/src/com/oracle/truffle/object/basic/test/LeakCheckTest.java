@@ -72,6 +72,8 @@ public class LeakCheckTest {
             fullShapeRefs.add(new WeakReference<>(obj.getShape()));
         }
 
+        System.out.println(Runtime.getRuntime().maxMemory());
+
         System.gc();
         for (WeakReference<Shape> fullShapeRef : fullShapeRefs) {
             assertNull("Shape should have been garbage-collected", fullShapeRef.get());
