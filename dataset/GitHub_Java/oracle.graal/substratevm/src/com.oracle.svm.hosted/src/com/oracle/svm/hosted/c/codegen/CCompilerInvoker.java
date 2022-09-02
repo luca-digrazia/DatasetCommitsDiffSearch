@@ -42,7 +42,6 @@ import java.util.stream.Collectors;
 
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
 
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
@@ -57,6 +56,7 @@ import com.oracle.svm.hosted.c.util.FileUtils;
 import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.code.Architecture;
+import org.graalvm.nativeimage.Platform;
 
 public abstract class CCompilerInvoker {
 
@@ -185,9 +185,8 @@ public abstract class CCompilerInvoker {
                                 JavaVersionUtil.JAVA_SPEC, compilerInfo);
             }
             if (guessArchitecture(compilerInfo.targetArch) != AMD64.class) {
-                String targetPrefix = compilerInfo.targetArch.matches("(.*x|i\\d)86$") ? "32-bit architecture " : "";
-                UserError.abort("Native-image building on Windows currently only supports target architecture: %s (%s%s unsupported)",
-                                AMD64.class.getSimpleName(), targetPrefix, compilerInfo.targetArch);
+                UserError.abort("Native-image building on Windows currently only supports target architecture: %s (%s unsupported)",
+                                AMD64.class.getSimpleName(), compilerInfo.targetArch);
             }
         }
 
@@ -423,7 +422,6 @@ public abstract class CCompilerInvoker {
                 return AArch64.class;
             case "i686":
             case "80x86": /* Windows notation */
-            case "x86":
                 /* Graal does not support 32-bit architectures */
             default:
                 return null;
