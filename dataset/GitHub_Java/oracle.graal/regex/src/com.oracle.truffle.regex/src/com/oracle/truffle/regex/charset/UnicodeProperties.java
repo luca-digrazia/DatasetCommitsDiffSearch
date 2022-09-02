@@ -45,11 +45,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 public class UnicodeProperties {
 
     public static CodePointSet getProperty(String propertySpec) {
-        return getProperty(propertySpec, false);
-    }
-
-    public static CodePointSet getProperty(String propertySpec, boolean caseInsensitive) {
-        return evaluatePropertySpec(normalizePropertySpec(propertySpec, caseInsensitive));
+        return evaluatePropertySpec(normalizePropertySpec(propertySpec));
     }
 
     /**
@@ -64,88 +60,68 @@ public class UnicodeProperties {
         return UnicodePropertyData.retrieveProperty(propertySpec);
     }
 
-    private static String normalizePropertySpec(String propertySpec, boolean caseInsensitive) {
+    private static String normalizePropertySpec(String propertySpec) {
         int equals = propertySpec.indexOf('=');
         if (equals >= 0) {
-            String propertyName = normalizePropertyName(propertySpec.substring(0, equals), caseInsensitive);
+            String propertyName = normalizePropertyName(propertySpec.substring(0, equals));
             String propertyValue = propertySpec.substring(equals + 1);
             switch (propertyName) {
                 case "gc":
-                    propertyValue = normalizeGeneralCategoryName(propertyValue, caseInsensitive);
+                    propertyValue = normalizeGeneralCategoryName(propertyValue);
                     break;
                 case "sc":
                 case "scx":
-                    propertyValue = normalizeScriptName(propertyValue, caseInsensitive);
+                    propertyValue = normalizeScriptName(propertyValue);
                     break;
                 default:
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     throw new IllegalArgumentException(String.format("Binary property %s cannot appear to the left of '=' in a Unicode property escape", propertySpec.substring(0, equals)));
             }
             return propertyName + "=" + propertyValue;
-        } else if (isSupportedGeneralCategory(propertySpec, caseInsensitive)) {
-            return "gc=" + normalizeGeneralCategoryName(propertySpec, caseInsensitive);
+        } else if (isGeneralCategoryName(propertySpec)) {
+            return "gc=" + normalizeGeneralCategoryName(propertySpec);
         } else {
-            return normalizePropertyName(propertySpec, caseInsensitive);
+            return normalizePropertyName(propertySpec);
         }
     }
 
-    private static String normalizePropertyName(String propertyName, boolean caseInsensitive) {
-        String caseCorrectPropertyName = propertyName;
-        if (caseInsensitive) {
-            caseCorrectPropertyName = UnicodePropertyDataRuby.PROPERTY_ALIASES_LOWERCASE.get(propertyName.toLowerCase(), propertyName);
-        }
-        if (!UnicodePropertyData.PROPERTY_ALIASES.containsKey(caseCorrectPropertyName)) {
+    private static boolean isGeneralCategoryName(String generalCategoryName) {
+        return UnicodePropertyData.GENERAL_CATEGORY_ALIASES.containsKey(generalCategoryName);
+    }
+
+    private static String normalizePropertyName(String propertyName) {
+        if (!UnicodePropertyData.PROPERTY_ALIASES.containsKey(propertyName)) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new IllegalArgumentException(String.format("Unsupported Unicode character property '%s'", propertyName));
         }
-        return UnicodePropertyData.PROPERTY_ALIASES.get(caseCorrectPropertyName);
+        return UnicodePropertyData.PROPERTY_ALIASES.get(propertyName);
     }
 
-    private static String normalizeGeneralCategoryName(String generalCategoryName, boolean caseInsensitive) {
-        String caseCorrectGeneralCategoryName = generalCategoryName;
-        if (caseInsensitive) {
-            caseCorrectGeneralCategoryName = UnicodePropertyDataRuby.GENERAL_CATEGORY_ALIASES_LOWERCASE.get(generalCategoryName.toLowerCase(), generalCategoryName);
-        }
-        if (!UnicodePropertyData.GENERAL_CATEGORY_ALIASES.containsKey(caseCorrectGeneralCategoryName)) {
+    private static String normalizeGeneralCategoryName(String generalCategoryName) {
+        if (!UnicodePropertyData.GENERAL_CATEGORY_ALIASES.containsKey(generalCategoryName)) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new IllegalArgumentException(String.format("Unknown Unicode character general category '%s'", generalCategoryName));
         }
-        return UnicodePropertyData.GENERAL_CATEGORY_ALIASES.get(caseCorrectGeneralCategoryName);
+        return UnicodePropertyData.GENERAL_CATEGORY_ALIASES.get(generalCategoryName);
     }
 
-    private static String normalizeScriptName(String scriptName, boolean caseInsensitive) {
-        String caseCorrectScriptName = scriptName;
-        if (caseInsensitive) {
-            caseCorrectScriptName = UnicodePropertyDataRuby.SCRIPT_ALIASES_LOWERCASE.get(scriptName.toLowerCase(), scriptName);
-        }
-        if (!UnicodePropertyData.SCRIPT_ALIASES.containsKey(caseCorrectScriptName)) {
+    private static String normalizeScriptName(String scriptName) {
+        if (!UnicodePropertyData.SCRIPT_ALIASES.containsKey(scriptName)) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new IllegalArgumentException(String.format("Unkown Unicode script name '%s'", scriptName));
         }
-        return UnicodePropertyData.SCRIPT_ALIASES.get(caseCorrectScriptName);
+        return UnicodePropertyData.SCRIPT_ALIASES.get(scriptName);
     }
 
-    public static boolean isSupportedProperty(String propertyName, boolean caseInsensitive) {
-        if (caseInsensitive) {
-            return UnicodePropertyDataRuby.PROPERTY_ALIASES_LOWERCASE.containsKey(propertyName.toLowerCase());
-        } else {
-            return UnicodePropertyData.PROPERTY_ALIASES.containsKey(propertyName);
-        }
+    public static boolean isSupportedProperty(String propertyName) {
+        return UnicodePropertyData.PROPERTY_ALIASES.containsKey(propertyName);
     }
 
-    public static boolean isSupportedGeneralCategory(String generalCategoryName, boolean caseInsensitive) {
-        if (caseInsensitive) {
-            return UnicodePropertyDataRuby.GENERAL_CATEGORY_ALIASES_LOWERCASE.containsKey(generalCategoryName.toLowerCase());
-        } else {
-            return UnicodePropertyData.GENERAL_CATEGORY_ALIASES.containsKey(generalCategoryName);
-        }
+    public static boolean isSupportedGeneralCategory(String generalCategoryName) {
+        return UnicodePropertyData.GENERAL_CATEGORY_ALIASES.containsKey(generalCategoryName);
     }
 
-    public static boolean isSupportedScript(String scriptName, boolean caseInsensitive) {
-        if (caseInsensitive) {
-            return UnicodePropertyDataRuby.SCRIPT_ALIASES_LOWERCASE.containsKey(scriptName.toLowerCase());
-        } else {
-            return UnicodePropertyData.SCRIPT_ALIASES.containsKey(scriptName);
-        }
+    public static boolean isSupportedScript(String scriptName) {
+        return UnicodePropertyData.SCRIPT_ALIASES.containsKey(scriptName);
     }
 }
