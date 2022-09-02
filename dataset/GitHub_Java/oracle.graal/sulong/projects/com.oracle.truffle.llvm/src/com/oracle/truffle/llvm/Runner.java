@@ -75,7 +75,6 @@ import com.oracle.truffle.llvm.parser.model.functions.FunctionSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.ArrayConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.constants.aggregate.StructureConstant;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
-import com.oracle.truffle.llvm.parser.model.target.TargetDataLayout;
 import com.oracle.truffle.llvm.parser.nodes.LLVMSymbolReadResolver;
 import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
 import com.oracle.truffle.llvm.parser.util.Pair;
@@ -136,11 +135,13 @@ final class Runner {
     private final LLVMContext context;
     private final DefaultLoader loader;
     private final LLVMLanguage language;
+    private final NodeFactory nodeFactory;
 
     Runner(LLVMContext context, DefaultLoader loader) {
         this.context = context;
         this.loader = loader;
         this.language = context.getLanguage();
+        this.nodeFactory = language.getActiveConfiguration().createNodeFactory(context);
     }
 
     /**
@@ -203,7 +204,7 @@ final class Runner {
                         InitializeModuleNode[] initModules) {
             for (int i = 0; i < parserResults.size(); i++) {
                 LLVMParserResult res = parserResults.get(i);
-                initSymbols[offset + i] = new InitializeSymbolsNode(runner.context, res, res.getRuntime().getNodeFactory());
+                initSymbols[offset + i] = new InitializeSymbolsNode(runner.context, res, runner.nodeFactory);
                 initModules[offset + i] = new InitializeModuleNode(runner, rootFrame, res);
             }
         }
@@ -680,13 +681,10 @@ final class Runner {
                     dependencyQueue.addLast(dependency);
                 }
             }
-            TargetDataLayout layout = module.getTargetDataLayout();
-            DataLayout targetDataLayout = new DataLayout(layout.getDataLayout());
-            NodeFactory nodeFactory = context.getLanguage().getActiveConfiguration().createNodeFactory(context, targetDataLayout);
             LLVMScope fileScope = new LLVMScope();
             LLVMParserRuntime runtime = new LLVMParserRuntime(context, library, fileScope, nodeFactory);
             LLVMParser parser = new LLVMParser(source, runtime);
-            LLVMParserResult parserResult = parser.parse(module, targetDataLayout, nodeFactory);
+            LLVMParserResult parserResult = parser.parse(module);
             parserResults.add(parserResult);
             return parserResult;
         } else if (!library.isNative()) {
@@ -879,7 +877,7 @@ final class Runner {
             this.dataLayout = parserResult.getDataLayout();
 
             this.globalVarInit = runner.createGlobalVariableInitializer(rootFrame, parserResult);
-            this.protectRoData = parserResult.getRuntime().getNodeFactory().createProtectGlobalsBlock();
+            this.protectRoData = runner.nodeFactory.createProtectGlobalsBlock();
             this.constructor = runner.createConstructor(parserResult);
         }
 
@@ -928,13 +926,13 @@ final class Runner {
             // for fetching the address of the global that we want to initialize, we must use the
             // file scope because we are initializing the globals of the current file
             LLVMGlobal globalDescriptor = runtime.getFileScope().getGlobalVariable(global.getName());
-            final LLVMExpressionNode globalVarAddress = runtime.getNodeFactory().createLiteral(globalDescriptor, new PointerType(global.getType()));
+            final LLVMExpressionNode globalVarAddress = nodeFactory.createLiteral(globalDescriptor, new PointerType(global.getType()));
             if (size != 0) {
                 if (type instanceof ArrayType || type instanceof StructureType) {
-                    return runtime.getNodeFactory().createStore(globalVarAddress, constant, type);
+                    return nodeFactory.createStore(globalVarAddress, constant, type);
                 } else {
                     Type t = global.getValue().getType();
-                    return runtime.getNodeFactory().createStore(globalVarAddress, constant, t);
+                    return nodeFactory.createStore(globalVarAddress, constant, t);
                 }
             }
         }
@@ -959,13 +957,13 @@ final class Runner {
     private LLVMStatementNode[] createStructor(String name, LLVMParserResult parserResult, Comparator<Pair<Integer, ?>> priorityComparator) {
         for (GlobalVariable globalVariable : parserResult.getDefinedGlobals()) {
             if (globalVariable.getName().equals(name)) {
-                return resolveStructor(parserResult.getRuntime().getFileScope(), globalVariable, priorityComparator, parserResult.getDataLayout(), parserResult.getRuntime().getNodeFactory());
+                return resolveStructor(parserResult.getRuntime().getFileScope(), globalVariable, priorityComparator, parserResult.getDataLayout());
             }
         }
         return LLVMStatementNode.NO_STATEMENTS;
     }
 
-    private LLVMStatementNode[] resolveStructor(LLVMScope fileScope, GlobalVariable globalSymbol, Comparator<Pair<Integer, ?>> priorityComparator, DataLayout dataLayout, NodeFactory nodeFactory) {
+    private LLVMStatementNode[] resolveStructor(LLVMScope fileScope, GlobalVariable globalSymbol, Comparator<Pair<Integer, ?>> priorityComparator, DataLayout dataLayout) {
         if (!(globalSymbol.getValue() instanceof ArrayConstant)) {
             // array globals of length 0 may be initialized with scalar null
             return LLVMStatementNode.NO_STATEMENTS;
