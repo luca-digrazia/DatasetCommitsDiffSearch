@@ -1,11 +1,13 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2018, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,17 +26,17 @@
 
 package jdk.tools.jaotc.aarch64;
 
-import jdk.tools.jaotc.StubInformation;
-import jdk.tools.jaotc.ELFMacroAssembler;
+import static jdk.vm.ci.aarch64.AArch64.r12;
+import static jdk.vm.ci.aarch64.AArch64.r16;
+import static jdk.vm.ci.aarch64.AArch64.r17;
+import static jdk.vm.ci.aarch64.AArch64.r9;
 
 import org.graalvm.compiler.asm.aarch64.AArch64Address;
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
 
-
+import jdk.tools.jaotc.ELFMacroAssembler;
+import jdk.tools.jaotc.StubInformation;
 import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.code.Register;
-
-import static jdk.vm.ci.aarch64.AArch64.*;
 
 public final class AArch64ELFMacroAssembler extends AArch64MacroAssembler implements ELFMacroAssembler {
 
@@ -52,7 +54,7 @@ public final class AArch64ELFMacroAssembler extends AArch64MacroAssembler implem
     @Override
     public byte[] getPLTJumpCode() {
         // The main dispatch instruction
-        addressOf(r16);
+        adrpAdd(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
 
@@ -66,27 +68,27 @@ public final class AArch64ELFMacroAssembler extends AArch64MacroAssembler implem
     @Override
     public byte[] getPLTStaticEntryCode(StubInformation stub) {
         // The main dispatch instruction
-        addressOf(r16);
+        adrpAdd(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setDispatchJumpOffset(position());
 
-        // C2I stub used to call interpreter.  First load r12
+        // C2I stub used to call interpreter. First load r12
         // (i.e. rmethod) with a pointer to the Method structure ...
-        addressOf(r12);
+        adrpAdd(r12);
         ldr(64, r12, AArch64Address.createBaseRegisterOnlyAddress(r12));
         nop();
         stub.setMovOffset(position());
 
         // ... then jump to the interpreter.
-        addressOf(r16);
+        adrpAdd(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setC2IJumpOffset(position());
 
         // Call to VM runtime to resolve the call.
         stub.setResolveJumpStart(position());
-        addressOf(r16);
+        adrpAdd(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setResolveJumpOffset(position());
@@ -102,20 +104,20 @@ public final class AArch64ELFMacroAssembler extends AArch64MacroAssembler implem
     public byte[] getPLTVirtualEntryCode(StubInformation stub) {
         // Fixup an inline cache.
         // Load r9 with a pointer to the Klass.
-        addressOf(r17);
+        adrpAdd(r17);
         ldr(64, r9, AArch64Address.createBaseRegisterOnlyAddress(r17));
         nop();
         stub.setMovOffset(position());
 
         // Jump to the method.
-        addressOf(r16);
+        adrpAdd(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setDispatchJumpOffset(position());
 
         // Call to VM runtime to resolve the call.
         stub.setResolveJumpStart(position());
-        addressOf(r16);
+        adrpAdd(r16);
         ldr(64, r16, AArch64Address.createBaseRegisterOnlyAddress(r16));
         jmp(r16);
         stub.setResolveJumpOffset(position());

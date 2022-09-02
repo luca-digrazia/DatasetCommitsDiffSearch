@@ -919,25 +919,17 @@ public class AArch64MacroAssembler extends AArch64Assembler {
         super.csinc(size, dst, zr, zr, condition.negate());
     }
 
-    private static ExtendType getLSLExtendType(int size) {
-        assert size == 32 || size == 64;
-        return size == 32 ? ExtendType.UXTW : ExtendType.UXTX;
-    }
-
     /**
      * dst = src1 + src2.
      *
      * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null. Can be zr if src1 != sp. Can be sp if
-     *            src1 != zr.
-     * @param src1 general purpose register. May not be null. Can be zr if dst != sp. Can be sp if
-     *            dst != zr.
+     * @param dst general purpose register. May not be null.
+     * @param src1 general purpose register. May not be null.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
     public void add(int size, Register dst, Register src1, Register src2) {
-        assert !(dst.equals(sp) && src1.equals(zr)) && !(dst.equals(zr) && src1.equals(sp));
         if (dst.equals(sp) || src1.equals(sp)) {
-            super.add(size, dst, src1, src2, getLSLExtendType(size), 0);
+            super.add(size, dst, src1, src2, ExtendType.UXTX, 0);
         } else {
             super.add(size, dst, src1, src2, ShiftType.LSL, 0);
         }
@@ -947,34 +939,15 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      * dst = src1 + src2 and sets condition flags.
      *
      * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null or stackpointer.
+     * @param dst general purpose register. May not be null.
      * @param src1 general purpose register. May not be null.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
     public void adds(int size, Register dst, Register src1, Register src2) {
-        if (src1.equals(sp)) {
-            super.adds(size, dst, src1, src2, getLSLExtendType(size), 0);
+        if (dst.equals(sp) || src1.equals(sp)) {
+            super.adds(size, dst, src1, src2, ExtendType.UXTX, 0);
         } else {
             super.adds(size, dst, src1, src2, ShiftType.LSL, 0);
-        }
-    }
-
-    /**
-     * dst = src1 - src2.
-     *
-     * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null. Can be zr if src1 != sp. Can be sp if
-     *            src1 != zr.
-     * @param src1 general purpose register. May not be null. Can be zr if dst != sp. Can be sp if
-     *            dst != zr.
-     * @param src2 general purpose register. May not be null or stackpointer.
-     */
-    public void sub(int size, Register dst, Register src1, Register src2) {
-        assert !(dst.equals(sp) && src1.equals(zr)) && !(dst.equals(zr) && src1.equals(sp));
-        if (dst.equals(sp) || src1.equals(sp)) {
-            super.sub(size, dst, src1, src2, getLSLExtendType(size), 0);
-        } else {
-            super.sub(size, dst, src1, src2, ShiftType.LSL, 0);
         }
     }
 
@@ -982,15 +955,31 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      * dst = src1 - src2 and sets condition flags.
      *
      * @param size register size. Has to be 32 or 64.
-     * @param dst general purpose register. May not be null or stackpointer.
+     * @param dst general purpose register. May not be null.
      * @param src1 general purpose register. May not be null.
      * @param src2 general purpose register. May not be null or stackpointer.
      */
     public void subs(int size, Register dst, Register src1, Register src2) {
-        if (src1.equals(sp)) {
-            super.subs(size, dst, src1, src2, getLSLExtendType(size), 0);
+        if (dst.equals(sp) || src1.equals(sp)) {
+            super.subs(size, dst, src1, src2, ExtendType.UXTX, 0);
         } else {
             super.subs(size, dst, src1, src2, ShiftType.LSL, 0);
+        }
+    }
+
+    /**
+     * dst = src1 - src2.
+     *
+     * @param size register size. Has to be 32 or 64.
+     * @param dst general purpose register. May not be null.
+     * @param src1 general purpose register. May not be null.
+     * @param src2 general purpose register. May not be null or stackpointer.
+     */
+    public void sub(int size, Register dst, Register src1, Register src2) {
+        if (dst.equals(sp) || src1.equals(sp)) {
+            super.sub(size, dst, src1, src2, ExtendType.UXTX, 0);
+        } else {
+            super.sub(size, dst, src1, src2, ShiftType.LSL, 0);
         }
     }
 
@@ -1813,25 +1802,28 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      * Compares x and y and sets condition flags.
      *
      * @param size register size. Has to be 32 or 64.
-     * @param x general purpose register. May not be null.
+     * @param x general purpose register. May not be null or stackpointer.
      * @param y general purpose register. May not be null or stackpointer.
      */
     public void cmp(int size, Register x, Register y) {
         assert size == 32 || size == 64;
-        subs(size, zr, x, y);
+        super.subs(size, zr, x, y, ShiftType.LSL, 0);
     }
 
     /**
      * Compares x to y and sets condition flags.
      *
      * @param size register size. Has to be 32 or 64.
-     * @param x general purpose register. May not be null or zero-register.
+     * @param x general purpose register. May not be null or stackpointer.
      * @param y comparison immediate, {@link #isComparisonImmediate(long)} has to be true for it.
      */
     public void cmp(int size, Register x, int y) {
         assert size == 32 || size == 64;
-        assert isComparisonImmediate(y);
-        subs(size, zr, x, y);
+        if (y < 0) {
+            super.adds(size, zr, x, -y);
+        } else {
+            super.subs(size, zr, x, y);
+        }
     }
 
     /**
