@@ -594,7 +594,7 @@ public final class ObjectKlass extends Klass {
         return staticFieldTable[slot];
     }
 
-    public Field requireHiddenField(Symbol<Name> fieldName) {
+    public Field lookupHiddenField(Symbol<Name> fieldName) {
         // Hidden fields are (usually) located at the end of the field table.
         for (int i = fieldTable.length - 1; i >= 0; i--) {
             Field f = fieldTable[i];
@@ -602,7 +602,7 @@ public final class ObjectKlass extends Klass {
                 return f;
             }
         }
-        throw EspressoError.shouldNotReachHere("Missing hidden field ", fieldName, " in ", this);
+        throw EspressoError.shouldNotReachHere();
     }
 
     // Exposed to LookupVirtualMethodNode
