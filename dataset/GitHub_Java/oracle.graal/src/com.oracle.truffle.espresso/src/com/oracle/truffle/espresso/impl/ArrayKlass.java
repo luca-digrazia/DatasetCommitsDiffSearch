@@ -23,11 +23,7 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_ABSTRACT;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_PRIVATE;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_PROTECTED;
-import static com.oracle.truffle.espresso.classfile.Constants.ACC_PUBLIC;
+import java.lang.reflect.Modifier;
 
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -37,6 +33,12 @@ import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
+
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_ABSTRACT;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_PRIVATE;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_PROTECTED;
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_PUBLIC;
 
 public final class ArrayKlass extends Klass {
 
