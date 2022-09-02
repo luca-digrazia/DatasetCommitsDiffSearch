@@ -104,7 +104,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             this.languageInstance = languageInstance;
             this.sourceCache = languageInstance.getSourceCache();
             this.activePolyglotThreads = new HashSet<>();
-            this.polyglotGuestBindings = new PolyglotBindings(PolyglotLanguageContext.this);
+            this.polyglotGuestBindings = new PolyglotBindings(PolyglotLanguageContext.this, context.polyglotBindings);
             this.uncaughtExceptionHandler = new PolyglotUncaughtExceptionHandler();
             this.valueCache = new ConcurrentHashMap<>();
             this.accessibleInternalLanguages = computeAccessibleLanguages(config, true);
@@ -290,14 +290,14 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         if (this.hostBindings == null) {
             synchronized (this) {
                 if (this.hostBindings == null) {
-                    Object prev = context.engine.enterIfNeeded(context);
+                    Object prev = context.enterIfNeeded();
                     try {
                         Iterable<Scope> scopes = LANGUAGE.findTopScopes(env);
                         this.hostBindings = this.asValue(PolyglotLanguageBindings.create(scopes));
                     } catch (Throwable t) {
                         throw PolyglotImpl.wrapGuestException(this, t);
                     } finally {
-                        context.engine.leaveIfNeeded(prev, context);
+                        context.leaveIfNeeded(prev);
                     }
                 }
             }
@@ -331,11 +331,11 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         return localEnv;
     }
 
-    boolean finalizeContext(boolean notifyInstruments) {
+    boolean finalizeContext() {
         if (!finalized) {
             finalized = true;
             LANGUAGE.finalizeContext(env);
-            if (eventsEnabled && notifyInstruments) {
+            if (eventsEnabled) {
                 EngineAccessor.INSTRUMENT.notifyLanguageContextFinalized(context.engine, context.truffleContext, language.info);
             }
             return true;
@@ -348,7 +348,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         Env localEnv = this.env;
         if (localEnv != null) {
             if (!lazy.activePolyglotThreads.isEmpty()) {
-                throw new IllegalStateException("The language did not complete all polyglot threads but should have: " + lazy.activePolyglotThreads);
+                throw new AssertionError("The language did not complete all polyglot threads but should have: " + lazy.activePolyglotThreads);
             }
             for (PolyglotThreadInfo threadInfo : context.getSeenThreads().values()) {
                 assert threadInfo != PolyglotThreadInfo.NULL;
@@ -365,8 +365,8 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         return false;
     }
 
-    void notifyDisposed(boolean notifyInstruments) {
-        if (eventsEnabled && notifyInstruments) {
+    void notifyDisposed() {
+        if (eventsEnabled) {
             EngineAccessor.INSTRUMENT.notifyLanguageContextDisposed(context.engine, context.truffleContext, language.info);
         }
         language.freeInstance(lazy.languageInstance);
@@ -377,7 +377,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         assert Thread.currentThread() == thread;
         synchronized (context) {
             lazy.activePolyglotThreads.add(thread);
-            return context.engine.enter(context);
+            return context.enter();
         }
     }
 
@@ -397,7 +397,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
                 }
             }
             lazy.activePolyglotThreads.remove(thread);
-            context.engine.leave(prev, context);
+            context.leave(prev);
             seenThreads.remove(thread);
         }
         EngineAccessor.INSTRUMENT.notifyThreadFinished(context.engine, context.truffleContext, thread);
@@ -570,8 +570,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
 
     void checkAccess(PolyglotLanguage accessingLanguage) {
         context.engine.checkState();
-        context.checkClosed();
-        if (context.disposing) {
+        if (context.closed || context.disposing) {
             throw new PolyglotIllegalStateException("The Context is already closed.");
         }
         if (!context.config.isAccessPermitted(accessingLanguage, language)) {
@@ -768,17 +767,12 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
 
     synchronized PolyglotValue lookupValueCache(Object guestValue) {
         assert toGuestValue(guestValue) == guestValue : "Not a valid guest value: " + guestValue + ". Only interop values are allowed to be exported.";
-        Object prev = context.engine.enterIfNeeded(context);
-        try {
-            PolyglotValue cache = lazy.valueCache.computeIfAbsent(guestValue.getClass(), new Function<Class<?>, PolyglotValue>() {
-                public PolyglotValue apply(Class<?> t) {
-                    return PolyglotValue.createInteropValue(PolyglotLanguageContext.this, (TruffleObject) guestValue, guestValue.getClass());
-                }
-            });
-            return cache;
-        } finally {
-            context.engine.leaveIfNeeded(prev, context);
-        }
+        PolyglotValue cache = lazy.valueCache.computeIfAbsent(guestValue.getClass(), new Function<Class<?>, PolyglotValue>() {
+            public PolyglotValue apply(Class<?> t) {
+                return PolyglotValue.createInteropValue(PolyglotLanguageContext.this, (TruffleObject) guestValue, guestValue.getClass());
+            }
+        });
+        return cache;
     }
 
     static final class ToHostValueNode {
