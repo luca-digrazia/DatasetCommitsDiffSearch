@@ -66,7 +66,7 @@ public abstract class Substitutor extends SubstitutionProfiler {
             return hasReceiver;
         }
 
-        public boolean isValidFor(@SuppressWarnings("unused") JavaVersion version) {
+        public boolean isValidFor(JavaVersion version) {
             return true;
         }
     }
