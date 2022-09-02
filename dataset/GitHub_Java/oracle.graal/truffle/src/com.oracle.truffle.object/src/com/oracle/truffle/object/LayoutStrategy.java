@@ -112,7 +112,7 @@ public abstract class LayoutStrategy {
                     return definePropertyGeneralize(oldShape, existing, value, locationFactory, putFlags);
                 }
             } else {
-                return definePropertyChangeFlags(oldShape, existing, value, propertyFlags, putFlags);
+                return definePropertyChangeFlags(oldShape, value, propertyFlags, existing, putFlags);
             }
         }
     }
@@ -158,27 +158,32 @@ public abstract class LayoutStrategy {
 
     protected abstract Location createLocationForValue(ShapeImpl shape, Object value, long putFlags);
 
-    protected ShapeImpl definePropertyChangeFlags(ShapeImpl oldShape, Property existing, Object value, int propertyFlags, long putFlags) {
-        assert existing.getFlags() != propertyFlags;
-        oldShape.onPropertyTransition(existing);
-        if (existing.getLocation().canSet(value)) {
-            Property newProperty = Property.create(existing.getKey(), existing.getLocation(), propertyFlags);
-            return replaceProperty(oldShape, existing, newProperty);
+    private ShapeImpl definePropertyChangeFlags(ShapeImpl oldShape, Object value, int propertyFlags, Property existing, long putFlags) {
+        assert existing != null && propertyFlags != existing.getFlags();
+        Location oldLocation = existing.getLocation();
+        Location newLocation;
+        if (oldLocation.canSet(value)) {
+            newLocation = oldLocation;
         } else {
-            return generalizePropertyWithFlags(oldShape, existing, value, propertyFlags, putFlags);
+            newLocation = oldShape.allocator().locationForValueUpcast(value, oldLocation, putFlags);
         }
+        Property newProperty = Property.create(existing.getKey(), newLocation, propertyFlags);
+        oldShape.onPropertyTransition(existing);
+        return replaceProperty(oldShape, existing, newProperty);
     }
 
+    /** @since 1.0 */
     protected ShapeImpl definePropertyGeneralize(ShapeImpl oldShape, Property oldProperty, Object value, LocationFactory locationFactory, long putFlags) {
-        oldShape.onPropertyTransition(oldProperty);
         if (Flags.isSeparateShape(putFlags)) {
             Location newLocation = createLocationForValue(oldShape, value, putFlags, locationFactory);
             Property newProperty = oldProperty.relocate(newLocation);
+            oldShape.onPropertyTransition(oldProperty);
             return separateReplaceProperty(oldShape, oldProperty, newProperty);
         } else if (oldProperty.getLocation().isValue()) {
             Location newLocation = createLocationForValue(oldShape, value, putFlags, locationFactory);
             Property newProperty = oldProperty.relocate(newLocation);
             // Always use direct replace for value locations to avoid shape explosion
+            oldShape.onPropertyTransition(oldProperty);
             return directReplaceProperty(oldShape, oldProperty, newProperty);
         } else {
             return generalizeProperty(oldProperty, value, oldShape, oldShape, putFlags);
@@ -191,13 +196,6 @@ public abstract class LayoutStrategy {
         Property newProperty = oldProperty.relocate(newLocation);
         nextShape.onPropertyTransition(oldProperty);
         return replaceProperty(nextShape, oldProperty, newProperty);
-    }
-
-    protected ShapeImpl generalizePropertyWithFlags(ShapeImpl currentShape, Property oldProperty, Object value, int propertyFlags, long putFlags) {
-        assert !oldProperty.getLocation().canSet(value);
-        Location newLocation = currentShape.allocator().locationForValueUpcast(value, oldProperty.getLocation(), putFlags);
-        Property newProperty = Property.create(oldProperty.getKey(), newLocation, propertyFlags);
-        return replaceProperty(currentShape, oldProperty, newProperty);
     }
 
     /** @since 0.17 or earlier */
@@ -429,8 +427,7 @@ public abstract class LayoutStrategy {
             Property property = ((AddPropertyTransition) transition).getProperty();
             ShapeImpl newShape;
             if (append) {
-                Property newProperty = property.relocate(shape.allocator().moveLocation(property.getLocation()));
-                newShape = addProperty(shape, newProperty, true);
+                newShape = shape.append(property);
             } else {
                 newShape = addProperty(shape, property, false);
             }

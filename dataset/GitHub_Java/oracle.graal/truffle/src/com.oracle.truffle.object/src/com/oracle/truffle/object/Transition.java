@@ -78,10 +78,6 @@ public abstract class Transition {
     /** @since 0.17 or earlier */
     public abstract boolean isDirect();
 
-    protected boolean hasConstantLocation() {
-        return false;
-    }
-
     /** @since 0.17 or earlier */
     public abstract static class PropertyTransition extends Transition {
         protected final Property property;
@@ -138,11 +134,6 @@ public abstract class Transition {
 
         public int getPropertyFlags() {
             return flags;
-        }
-
-        @Override
-        protected boolean hasConstantLocation() {
-            return getProperty().getLocation().isConstant();
         }
     }
 
@@ -327,11 +318,6 @@ public abstract class Transition {
         @Override
         public String toString() {
             return String.format("replace(%s,%s)", getPropertyBefore(), getPropertyAfter());
-        }
-
-        @Override
-        protected boolean hasConstantLocation() {
-            return getPropertyBefore().getLocation().isConstant() || getPropertyAfter().getLocation().isConstant();
         }
     }
 
