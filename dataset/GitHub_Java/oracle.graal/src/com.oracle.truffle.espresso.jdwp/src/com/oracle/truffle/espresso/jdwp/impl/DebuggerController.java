@@ -139,7 +139,6 @@ public final class DebuggerController implements ContextsListener {
     }
 
     public void setCommandRequestId(Object thread, int commandRequestId, byte suspendPolicy) {
-        JDWPLogger.log("Adding step command request in thread %s with ID %s", JDWPLogger.LogLevel.STEPPING, getThreadName(thread), commandRequestId);
         commandRequestIds.put(thread, new SteppingInfo(commandRequestId, suspendPolicy));
     }
 
@@ -525,10 +524,14 @@ public final class DebuggerController implements ContextsListener {
         JDWPLogger.log("Suspending event thread: %s with new suspension count: %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
 
         // if during stepping, send a step completed event back to the debugger
-        SteppingInfo info = commandRequestIds.remove(thread);
+        SteppingInfo info = commandRequestIds.get(thread);
         if (info != null) {
             eventListener.stepCompleted(info.getRequestId(), info.getSuspendPolicy(), thread, currentFrame);
         }
+        // reset
+        commandRequestIds.put(thread, null);
+
+        JDWPLogger.log("lock.wait() for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
 
         // no reason to hold a hard suspension status, since now
         // we have the actual suspension status and suspended information
@@ -545,7 +548,6 @@ public final class DebuggerController implements ContextsListener {
                 // in case a thread job is already posted on this thread
                 checkThreadJobsAndRun(thread);
                 while (lock.isLocked()) {
-                    JDWPLogger.log("lock.wait() for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
                     lock.wait();
                 }
             } catch (InterruptedException e) {
