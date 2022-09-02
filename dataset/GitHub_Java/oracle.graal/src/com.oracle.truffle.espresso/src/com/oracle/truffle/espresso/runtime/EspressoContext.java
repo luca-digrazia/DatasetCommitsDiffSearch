@@ -72,6 +72,7 @@ public final class EspressoContext {
     private Classpath bootClasspath;
     private String[] mainArguments;
     private Source mainSourceFile;
+    private StaticObject mainThread;
 
     @CompilationFinal //
     private Meta meta;
@@ -170,7 +171,12 @@ public final class EspressoContext {
 
     private void spawnVM() {
 
+        System.err.println("Before spawnVM: " + BytecodeNode.bcCount.get());
+
         long ticks = System.currentTimeMillis();
+
+        // FIXME(peterssen): Contextualize the JniENv, even if shared libraries are isolated,
+        // currently we assume a singleton context.
 
         initVmProperties();
 
@@ -202,7 +208,19 @@ public final class EspressoContext {
 
         EspressoContext context = EspressoLanguage.getCurrentContext();
 
-        createMainThread(context);
+        StaticObjectImpl mainThread = (StaticObjectImpl) meta.Thread.allocateInstance();
+        StaticObject threadGroup = meta.ThreadGroup.allocateInstance();
+        meta.ThreadGroup_maxPriority.set(threadGroup, Thread.MAX_PRIORITY);
+        meta.Thread_group.set(mainThread, threadGroup);
+        meta.Thread_name.set(mainThread, meta.toGuestString("mainThread"));
+        meta.Thread_priority.set(mainThread, 5);
+        mainThread.setHiddenField(HIDDEN_HOST_THREAD, Thread.currentThread());
+        // host2guest should be in the context
+        host2guest.put(Thread.currentThread(), mainThread);
+
+        // Lock object used by NIO.
+        meta.Thread_blockerLock.set(mainThread, meta.Object.allocateInstance());
+        context.setMainThread(mainThread);
 
         // Finalizer is not public.
         initializeKnownClass(Type.java_lang_ref_Finalizer);
@@ -223,22 +241,7 @@ public final class EspressoContext {
             initializeKnownClass(type);
         }
 
-        System.err.println("spawnVM: " + (System.currentTimeMillis() - ticks) + " ms");
-    }
-
-    private void createMainThread(EspressoContext context) {
-        StaticObjectImpl mainThread = (StaticObjectImpl) meta.Thread.allocateInstance();
-        StaticObject threadGroup = meta.ThreadGroup.allocateInstance();
-        meta.ThreadGroup_maxPriority.set(threadGroup, Thread.MAX_PRIORITY);
-        meta.Thread_group.set(mainThread, threadGroup);
-        meta.Thread_name.set(mainThread, meta.toGuestString("mainThread"));
-        meta.Thread_priority.set(mainThread, 5);
-        mainThread.setHiddenField(HIDDEN_HOST_THREAD, Thread.currentThread());
-        // host2guest should be in the context
-        host2guest.put(Thread.currentThread(), mainThread);
-
-        // Lock object used by NIO.
-        meta.Thread_blockerLock.set(mainThread, meta.Object.allocateInstance());
+        System.err.println("After spawnVM: " + (System.currentTimeMillis() - ticks) + " ms " + BytecodeNode.bcCount.get());
     }
 
     private EspressoProperties vmProperties;
@@ -262,6 +265,14 @@ public final class EspressoContext {
 
     public VM getVM() {
         return vm;
+    }
+
+    public @Host(Thread.class) StaticObject getMainThread() {
+        return mainThread;
+    }
+
+    public void setMainThread(@Host(Thread.class) StaticObject mainThread) {
+        this.mainThread = mainThread;
     }
 
     public Types getTypes() {
