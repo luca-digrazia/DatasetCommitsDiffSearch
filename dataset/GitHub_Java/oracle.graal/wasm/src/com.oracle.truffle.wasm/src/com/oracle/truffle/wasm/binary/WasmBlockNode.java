@@ -199,6 +199,7 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.NOP;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.SELECT;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.UNREACHABLE;
 
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -786,7 +787,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 8);
-                                context.memory().store_i32_8(address, (byte) value);
+                                context.memory().store_i32_8(address, value);
                                 break;
                             }
                             case I32_STORE_16: {
@@ -796,7 +797,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 16);
-                                context.memory().store_i32_16(address, (short) value);
+                                context.memory().store_i32_16(address, value);
                                 break;
                             }
                             case I64_STORE_8: {
@@ -806,7 +807,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 8);
-                                context.memory().store_i64_8(address, (byte) value);
+                                context.memory().store_i64_8(address, value);
                                 break;
                             }
                             case I64_STORE_16: {
@@ -816,7 +817,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 16);
-                                context.memory().store_i64_16(address, (short) value);
+                                context.memory().store_i64_16(address, value);
                                 break;
                             }
                             case I64_STORE_32: {
@@ -826,7 +827,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
                                 context.memory().validateAddress(address, 32);
-                                context.memory().store_i64_32(address, (int) value);
+                                context.memory().store_i64_32(address, value);
                                 break;
                             }
                         }

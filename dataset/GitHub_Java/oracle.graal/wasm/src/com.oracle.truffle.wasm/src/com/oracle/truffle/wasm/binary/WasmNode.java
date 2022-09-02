@@ -33,7 +33,6 @@ package com.oracle.truffle.wasm.binary;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.wasm.binary.exception.WasmExecutionException;
 
 public abstract class WasmNode extends Node implements WasmNodeInterface {
     @CompilationFinal private WasmModule wasmModule;
@@ -60,11 +59,6 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
      */
     @CompilationFinal private int numericLiteralLength;
 
-    /**
-     * The number of branch tables used by this node.
-     */
-    @CompilationFinal private int branchTableLength;
-
     public WasmNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int byteLength, int byteConstantLength, int numericLiteralLength) {
         this.wasmModule = wasmModule;
         this.codeEntry = codeEntry;
@@ -84,10 +78,6 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
     public abstract int execute(WasmContext context, VirtualFrame frame);
 
     public abstract byte returnTypeId();
-
-    protected void wasmError(String message) {
-        throw new WasmExecutionException(this, message);
-    }
 
     public int returnTypeLength() {
         switch (returnTypeId()) {
@@ -137,13 +127,5 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
 
     public void setNumericLiteralLength(int numericLiteralLength) {
         this.numericLiteralLength = numericLiteralLength;
-    }
-
-    public int branchTableLength() {
-        return branchTableLength;
-    }
-
-    public void setBranchTableLength(int branchTableLength) {
-        this.branchTableLength = branchTableLength;
     }
 }

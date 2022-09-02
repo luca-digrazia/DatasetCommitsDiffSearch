@@ -42,8 +42,7 @@ public class WasmCodeEntry {
     @CompilationFinal(dimensions = 1) private byte[] localTypes;
     @CompilationFinal(dimensions = 1) private byte[] byteConstants;
     @CompilationFinal(dimensions = 1) private int[] intConstants;
-    @CompilationFinal(dimensions = 1) private long[] longConstants;
-    @CompilationFinal(dimensions = 2) private int[][] branchTables;
+    @CompilationFinal(dimensions = 1) private long[] numericLiterals;
 
     public WasmCodeEntry(int functionIndex, byte[] data) {
         this.functionIndex = functionIndex;
@@ -53,7 +52,7 @@ public class WasmCodeEntry {
         this.localTypes = null;
         this.byteConstants = null;
         this.intConstants = null;
-        this.longConstants = null;
+        this.numericLiterals = null;
     }
 
     public byte[] data() {
@@ -124,32 +123,24 @@ public class WasmCodeEntry {
         this.intConstants = intConstants;
     }
 
-    public long longConstant(int index) {
-        return longConstants[index];
+    public long numericLiteral(int index) {
+        return numericLiterals[index];
     }
 
-    public int longConstantAsInt(int index) {
-        return (int) longConstants[index];
+    public int numericLiteralAsInt(int index) {
+        return (int) numericLiterals[index];
     }
 
-    public float longConstantAsFloat(int index) {
-        return Float.intBitsToFloat(longConstantAsInt(index));
+    public float numericLiteralAsFloat(int index) {
+        return Float.intBitsToFloat(numericLiteralAsInt(index));
     }
 
-    public double longConstantAsDouble(int index) {
-        return Double.longBitsToDouble(longConstants[index]);
+    public double numericLiteralAsDouble(int index) {
+        return Double.longBitsToDouble(numericLiterals[index]);
     }
 
-    public void setLongConstants(long[] longConstants) {
-        this.longConstants = longConstants;
-    }
-
-    public int[] branchTable(int index) {
-        return branchTables[index];
-    }
-
-    public void setBranchTables(int[][] branchTables) {
-        this.branchTables = branchTables;
+    public void setNumericLiterals(long[] numericLiterals) {
+        this.numericLiterals = numericLiterals;
     }
 
     public int numLocals() {

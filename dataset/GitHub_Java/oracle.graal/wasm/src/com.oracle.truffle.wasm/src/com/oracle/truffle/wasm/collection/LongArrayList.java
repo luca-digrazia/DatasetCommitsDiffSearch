@@ -29,7 +29,7 @@
  */
 package com.oracle.truffle.wasm.collection;
 
-public final class LongArrayList {
+public class LongArrayList {
     private static final long[] EMPTY_LONG_ARRAY = new long[0];
 
     private long[] array;
