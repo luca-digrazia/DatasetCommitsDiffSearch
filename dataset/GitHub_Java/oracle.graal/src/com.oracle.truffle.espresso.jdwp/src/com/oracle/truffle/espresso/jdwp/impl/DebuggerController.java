@@ -526,13 +526,13 @@ public final class DebuggerController implements ContextsListener {
 
     private void checkThreadJobsAndRun(Object thread) {
         if (threadJobs.containsKey(thread)) {
-            // re-acquire the thread lock after completing
-            // the job, to avoid the thread resuming.
-            getSuspendLock(thread).acquire();
             // a thread job was posted on this thread
             // only wake up to perform the job a go back to sleep
             ThreadJob job = threadJobs.remove(thread);
             job.runJob();
+            // re-acquire the thread lock after completing
+            // the job, to avoid the thread resuming.
+            getSuspendLock(thread).acquire();
             lockThread(thread);
         }
     }
@@ -596,7 +596,7 @@ public final class DebuggerController implements ContextsListener {
                     }
                 } else if (info.isExceptionBreakpoint()) {
                     // get the specific exception type if any
-                    KlassRef klass = info.getKlass(); // null means no filtering
+                    KlassRef klass = info.getKlass();
                     Throwable exception = getRawException(event.getException());
                     if (exception == null) {
                         JDWPLogger.log("Unable to retrieve raw exception for %s", JDWPLogger.LogLevel.ALL, event.getException());
@@ -615,10 +615,7 @@ public final class DebuggerController implements ContextsListener {
                     // properly due to this.
                     // we need to do a real type check here, since subclasses
                     // of the specified exception should also hit.
-                    if (klass == null) {
-                        // always hit when broad exception filter is used
-                        hit = true;
-                    } else if (klass == null || getContext().isInstanceOf(guestException, klass)) {
+                    if (getContext().isInstanceOf(guestException, klass)) {
                         JDWPLogger.log("Exception type matched the klass type: %s", JDWPLogger.LogLevel.STEPPING, klass.getNameAsString());
                         // check filters if we should not suspend
                         Pattern[] positivePatterns = info.getFilter().getIncludePatterns();
