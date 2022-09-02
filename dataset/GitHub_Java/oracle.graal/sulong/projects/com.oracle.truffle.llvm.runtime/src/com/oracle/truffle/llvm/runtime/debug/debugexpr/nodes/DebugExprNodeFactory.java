@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
-import java.util.Collection;
 import java.util.List;
 
 import com.oracle.truffle.api.Scope;
@@ -45,16 +44,16 @@ import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
 public final class DebugExprNodeFactory {
 
-    private Collection<Scope> scopes;
-    private Collection<Scope> globalScopes;
+    private Iterable<Scope> scopes;
+    private Iterable<Scope> globalScopes;
 
-    private DebugExprNodeFactory(Collection<Scope> scopes, Collection<Scope> globalScopes) {
+    private DebugExprNodeFactory(Iterable<Scope> scopes, Iterable<Scope> globalScopes) {
         // this.nodeFactory = nodeFactory;
         this.scopes = scopes;
         this.globalScopes = globalScopes;
     }
 
-    public static DebugExprNodeFactory create(Collection<Scope> scopes, Collection<Scope> globalScopes) {
+    public static DebugExprNodeFactory create(Iterable<Scope> scopes, Iterable<Scope> globalScopes) {
         return new DebugExprNodeFactory(scopes, globalScopes);
     }
 

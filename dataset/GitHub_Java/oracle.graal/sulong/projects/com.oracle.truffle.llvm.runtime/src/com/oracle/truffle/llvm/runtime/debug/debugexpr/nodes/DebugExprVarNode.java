@@ -29,12 +29,10 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
-import java.util.Collection;
 import java.util.List;
 
 import org.graalvm.collections.Pair;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.dsl.Specialization;
@@ -48,14 +46,12 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
 public abstract class DebugExprVarNode extends LLVMExpressionNode implements MemberAccessible {
 
-    static final Scope[] NO_SCOPES = {};
-
     private final String name;
-    @CompilationFinal(dimensions = 1) private final Scope[] scopes;
+    private Iterable<Scope> scopes;
 
-    DebugExprVarNode(String name, Collection<Scope> scopes) {
+    DebugExprVarNode(String name, Iterable<Scope> scopes) {
         this.name = name;
-        this.scopes = scopes.toArray(NO_SCOPES);
+        this.scopes = scopes;
     }
 
     @TruffleBoundary
@@ -118,7 +114,7 @@ public abstract class DebugExprVarNode extends LLVMExpressionNode implements Mem
         throw DebugExprException.symbolNotFound(this, name, null);
     }
 
-    public DebugExprFunctionCallNode createFunctionCall(List<DebugExpressionPair> arguments, Collection<Scope> globalScopes) {
-        return DebugExprFunctionCallNodeGen.create(name, arguments, globalScopes.toArray(NO_SCOPES));
+    public DebugExprFunctionCallNode createFunctionCall(List<DebugExpressionPair> arguments, Iterable<Scope> globalScopes) {
+        return DebugExprFunctionCallNodeGen.create(name, arguments, globalScopes);
     }
 }

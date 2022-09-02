@@ -29,13 +29,12 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.NodeLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
@@ -45,40 +44,43 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 public abstract class DebugExprTypeofNode extends LLVMExpressionNode {
 
     private final String name;
-    private final Node location;
+    private Iterable<Scope> scopes;
 
-    public DebugExprTypeofNode(String name, Node location) {
+    public DebugExprTypeofNode(String name, Iterable<Scope> scopes) {
         this.name = name;
-        this.location = location;
+        this.scopes = scopes;
     }
 
+    @TruffleBoundary
     @Specialization
-    public LLVMSourceType getLLVMSourceType(VirtualFrame frame) {
-        NodeLibrary nodeLibrary = NodeLibrary.getUncached();
-        InteropLibrary interopLibrary = InteropLibrary.getUncached();
-        try {
-            LLVMDebuggerValue entries = (LLVMDebuggerValue) nodeLibrary.getScope(location, frame, false);
-            if (interopLibrary.isMemberReadable(entries, name)) {
-                Object member = interopLibrary.readMember(entries, name);
-                LLVMDebuggerValue ldv = (LLVMDebuggerValue) member;
-                Object metaObj = ldv.resolveMetaObject();
-                return (LLVMSourceType) metaObj;
+    public LLVMSourceType getLLVMSourceType() {
+        InteropLibrary library = InteropLibrary.getFactory().getUncached();
+        for (Scope scope : scopes) {
+            Object vars = scope.getVariables();
+            try {
+                if (library.isMemberReadable(vars, name)) {
+                    Object member = library.readMember(vars, name);
+                    LLVMDebuggerValue ldv = (LLVMDebuggerValue) member;
+                    Object metaObj = ldv.resolveMetaObject();
+                    return (LLVMSourceType) metaObj;
+                }
+
+            } catch (ClassCastException e) {
+                // member has no value, e.g. if the compiler has eliminated unused symbols
+                // OR metaObj is no primitive type
+                throw DebugExprException.create(this, "\"%s\" cannot be casted to a LLVMDebuggerValue", name);
+            } catch (UnsupportedMessageException e) {
+                // should only happen if hasMembers == false
+                throw DebugExprException.symbolNotFound(this, name, null);
+            } catch (UnknownIdentifierException e) {
+                throw DebugExprException.symbolNotFound(this, e.getUnknownIdentifier(), null);
             }
-        } catch (ClassCastException e) {
-            // member has no value, e.g. if the compiler has eliminated unused symbols
-            // OR metaObj is no primitive type
-            throw DebugExprException.create(this, "\"%s\" cannot be casted to a LLVMDebuggerValue", name);
-        } catch (UnsupportedMessageException e) {
-            // should only happen if hasMembers == false
-            throw DebugExprException.symbolNotFound(this, name, null);
-        } catch (UnknownIdentifierException e) {
-            throw DebugExprException.symbolNotFound(this, e.getUnknownIdentifier(), null);
         }
         return LLVMSourceType.UNKNOWN;
     }
 
-    public DebugExprType getType(VirtualFrame frame) {
-        return DebugExprType.getTypeFromSymbolTableMetaObject(getLLVMSourceType(frame));
+    public DebugExprType getType() {
+        return DebugExprType.getTypeFromSymbolTableMetaObject(getLLVMSourceType());
     }
 
     public String getName() {

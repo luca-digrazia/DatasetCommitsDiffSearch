@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -72,9 +71,8 @@ public abstract class DebugExprArrayElementNode extends LLVMExpressionNode {
                 getmembers = library.getMembers(baseMember);
                 if (library.isArrayElementReadable(getmembers, idx)) {
                     Object arrayElement = library.readArrayElement(getmembers, idx);
-                    String identifier = library.asString(arrayElement);
-                    if (library.isMemberReadable(baseMember, identifier)) {
-                        Object member = library.readMember(baseMember, identifier);
+                    if (library.isMemberReadable(baseMember, arrayElement.toString())) {
+                        Object member = library.readMember(baseMember, arrayElement.toString());
                         return type.parse(member);
                     }
                 }
@@ -93,16 +91,12 @@ public abstract class DebugExprArrayElementNode extends LLVMExpressionNode {
         throw DebugExprException.create(this, "Array access of " + baseMember + " not possible");
     }
 
-    @TruffleBoundary
-    private static int toIntIndex(Object index) {
-        return Integer.parseInt(index.toString());
-    }
-
     @Specialization
     public Object doGeneric(Object baseMember, Object index,
                     @CachedLibrary(limit = "3") InteropLibrary library) {
         // in case of a complex expression as index (e.g. outerArray[innerArray[2]]), the
         // index is no Integer but a LLVMDebugObject$Primitive instead
-        return doIntIndex(baseMember, toIntIndex(index), library);
+        int idx = Integer.parseInt(index.toString());
+        return doIntIndex(baseMember, idx, library);
     }
 }

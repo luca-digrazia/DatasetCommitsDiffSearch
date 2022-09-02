@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,10 +29,12 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.parser;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-public class DebugExprException extends RuntimeException {
+public final class DebugExprException extends RuntimeException {
 
     private static final long serialVersionUID = -5083864640686842678L;
 
@@ -44,7 +46,9 @@ public class DebugExprException extends RuntimeException {
         this.message = message;
     }
 
-    public static final DebugExprException typeError(LLVMExpressionNode operation, Object... members) {
+    @TruffleBoundary
+    public static DebugExprException typeError(LLVMExpressionNode operation, Object... members) {
+        CompilerDirectives.transferToInterpreter();
         StringBuilder sb = new StringBuilder();
         sb.append("unexpected type ");
         if (members != null && members.length > 0 && members[0] != null) {
@@ -64,7 +68,9 @@ public class DebugExprException extends RuntimeException {
         return new DebugExprException(operation, sb.toString());
     }
 
-    public static final DebugExprException symbolNotFound(LLVMExpressionNode operation, String name, Object receiver) {
+    @TruffleBoundary
+    public static DebugExprException symbolNotFound(LLVMExpressionNode operation, String name, Object receiver) {
+        CompilerDirectives.transferToInterpreter();
         StringBuilder sb = new StringBuilder();
         sb.append(name);
         sb.append(" not found");
@@ -75,12 +81,14 @@ public class DebugExprException extends RuntimeException {
         return new DebugExprException(operation, sb.toString());
     }
 
-    public static final DebugExprException nullObject(Object member, String description) {
+    @TruffleBoundary
+    public static DebugExprException nullObject(String description) {
         return new DebugExprException(null, "member at " + description + " is not available");
     }
 
-    public static final DebugExprException create(LLVMExpressionNode operation, String message) {
-        return new DebugExprException(operation, message);
+    @TruffleBoundary
+    public static DebugExprException create(LLVMExpressionNode operation, String message, Object... args) {
+        return new DebugExprException(operation, String.format(message, args));
     }
 
     @Override
