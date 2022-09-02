@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@
 package org.graalvm.compiler.replacements.test;
 
 import java.lang.reflect.InvocationTargetException;
-import java.util.Arrays;
 
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
@@ -154,20 +153,13 @@ public abstract class MethodSubstitutionTest extends GraalCompilerTest {
         }
     }
 
-    protected static StructuredGraph assertInGraph(StructuredGraph graph, Class<?>... clazzes) {
+    protected static StructuredGraph assertInGraph(StructuredGraph graph, Class<?> clazz) {
         for (Node node : graph.getNodes()) {
-            for (Class<?> clazz : clazzes) {
-                if (clazz.isInstance(node)) {
-                    return graph;
-                }
+            if (clazz.isInstance(node)) {
+                return graph;
             }
         }
-        if (clazzes.length == 1) {
-            fail("Graph does not contain a node of class " + clazzes[0].getName());
-        } else {
-            fail("Graph does not contain a node of one these classes class " + Arrays.toString(clazzes));
-
-        }
+        fail("Graph does not contain a node of class " + clazz.getName());
         return graph;
     }
 

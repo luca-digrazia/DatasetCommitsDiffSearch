@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,9 +29,9 @@ import static jdk.vm.ci.aarch64.AArch64.r3;
 import static jdk.vm.ci.hotspot.HotSpotCallingConventionType.NativeCall;
 import static jdk.vm.ci.meta.Value.ILLEGAL;
 import static org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.JUMP_ADDRESS;
+import static org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.Reexecutability.NOT_REEXECUTABLE;
 import static org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.RegisterEffect.DESTROYS_ALL_CALLER_SAVE_REGISTERS;
-import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Reexecutability.NOT_REEXECUTABLE;
-import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.LEAF;
+import static org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage.Transition.LEAF;
 import static org.graalvm.compiler.hotspot.replacements.CRC32CSubstitutions.UPDATE_BYTES_CRC32C;
 import static org.graalvm.compiler.hotspot.replacements.CRC32Substitutions.UPDATE_BYTES_CRC32;
 import static org.graalvm.word.LocationIdentity.any;
