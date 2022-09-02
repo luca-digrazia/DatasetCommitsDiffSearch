@@ -30,7 +30,6 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.First
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
-import org.graalvm.compiler.truffle.runtime.GraalCompilerDirectives;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 import org.junit.Assert;
@@ -57,7 +56,7 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
                 return "callee:interpreter";
             }
             boundary();
-            if (GraalCompilerDirectives.inFirstTier()) {
+            if (CompilerDirectives.inFirstTier()) {
                 return "callee:first-tier";
             }
             if (CompilerDirectives.inCompilationRoot()) {
@@ -111,21 +110,16 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
     private static class MultiTierWithLoopRootNode extends RootNode {
         @Child private LoopNode loop;
         private final MultiTierCompilationTest.MultiTierLoopBodyNode body;
-        public int firstTierCallCount;
 
         MultiTierWithLoopRootNode(MultiTierLoopBodyNode body) {
             super(null);
             this.loop = Truffle.getRuntime().createLoopNode(body);
             this.body = body;
-            this.firstTierCallCount = 0;
         }
 
         @Override
         public Object execute(VirtualFrame frame) {
             body.iteration = 0;
-            if (GraalCompilerDirectives.inFirstTier()) {
-                this.firstTierCallCount += 1;
-            }
             final Object result = loop.execute(frame);
             return result;
         }
@@ -162,7 +156,7 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
                 if (CompilerDirectives.inInterpreter()) {
                     return "break:interpreter";
                 }
-                if (GraalCompilerDirectives.inFirstTier()) {
+                if (CompilerDirectives.inFirstTier()) {
                     return "break:first-tier";
                 }
                 return "break:second-tier";
@@ -170,7 +164,7 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
             if (CompilerDirectives.inInterpreter()) {
                 return "continue:interpreter";
             }
-            if (GraalCompilerDirectives.inFirstTier()) {
+            if (CompilerDirectives.inFirstTier()) {
                 return "continue:first-tier";
             }
             return "continue:last-tier";
@@ -274,9 +268,8 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
                         "true").option("engine.FirstTierInlining", "false").option("engine.Splitting", "false").option("engine.FirstTierCompilationThreshold", String.valueOf(firstThreshold)).option(
                                         "engine.CompilationThreshold", String.valueOf(secondThreshold)).build());
 
-        MultiTierLoopBodyNode body = new MultiTierLoopBodyNode(firstThreshold);
-        final MultiTierWithLoopRootNode rootNode = new MultiTierWithLoopRootNode(body);
-        OptimizedCallTarget rootTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(rootNode);
+        MultiTierLoopBodyNode body = new MultiTierLoopBodyNode(100);
+        OptimizedCallTarget rootTarget = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new MultiTierWithLoopRootNode(body));
 
         Assert.assertEquals("break:interpreter", rootTarget.call());
         Assert.assertEquals("break:first-tier", rootTarget.call());
@@ -285,7 +278,6 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
         }
         rootTarget.call();
         Assert.assertEquals("break:second-tier", rootTarget.call());
-        Assert.assertEquals(9, rootNode.firstTierCallCount);
     }
 
 }
