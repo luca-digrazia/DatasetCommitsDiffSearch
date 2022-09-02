@@ -38,22 +38,22 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package org.graalvm.wasm.test.suites.webassembly;
+package org.graalvm.wasm.test.suites.linker;
 
 import java.io.IOException;
 
 import org.graalvm.wasm.test.WasmFileSuite;
 import org.junit.Test;
 
-public class EmscriptenSuite extends WasmFileSuite {
+public class LinkerSuite extends WasmFileSuite {
     @Override
     protected String testResource() {
-        return "emcc";
+        return "linker";
     }
 
     @Override
     protected String includedExternalModules() {
-        return super.includedExternalModules() + ",env:emscripten";
+        return super.includedExternalModules();
     }
 
     @Override

@@ -40,17 +40,6 @@
  */
 package org.graalvm.wasm.test;
 
-import com.oracle.truffle.api.Truffle;
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.PolyglotException;
-import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.Value;
-import org.graalvm.wasm.predefined.testutil.TestutilModule;
-import org.graalvm.wasm.test.options.WasmTestOptions;
-import org.graalvm.wasm.utils.cases.WasmCase;
-import org.graalvm.wasm.utils.cases.WasmCaseData;
-import org.junit.Assert;
-
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -65,6 +54,18 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.PolyglotException;
+import org.graalvm.polyglot.Source;
+import org.graalvm.polyglot.Value;
+import org.graalvm.wasm.predefined.testutil.TestutilModule;
+import org.graalvm.wasm.test.options.WasmTestOptions;
+import org.graalvm.wasm.utils.cases.WasmCase;
+import org.graalvm.wasm.utils.cases.WasmCaseData;
+import org.junit.Assert;
+
+import com.oracle.truffle.api.Truffle;
 
 import static junit.framework.TestCase.fail;
 
@@ -132,31 +133,15 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
         return inCI() || inWindows();
     }
 
-    private static Value findMain(Context context) {
-        for (String moduleName : context.getBindings("wasm").getMemberKeys()) {
-            final Value module = context.getBindings("wasm").getMember(moduleName);
-            if (module.hasMember("_start")) {
-                return module.getMember("_start");
-            }
-            if (module.hasMember("_main")) {
-                return module.getMember("_main");
-            }
-        }
-        return null;
-    }
-
     private static void runInContext(WasmCase testCase, Context context, List<Source> sources, int iterations, String phaseIcon, String phaseLabel) {
         boolean requiresZeroMemory = Boolean.parseBoolean(testCase.options().getProperty("zero-memory", "false"));
 
         final PrintStream oldOut = System.out;
         try {
             resetStatus(oldOut, PHASE_PARSE_ICON, "parsing");
-            final Value[] instances = new Value[sources.size()];
 
             try {
-                for (int i = 0; i < instances.length; ++i) {
-                    instances[i] = context.eval(sources.get(i));
-                }
+                sources.forEach(context::eval);
             } catch (PolyglotException e) {
                 validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
                 return;
@@ -167,12 +152,13 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
             // Execute the main function (exported as "_main").
             // Then, optionally save memory and globals, and compare them.
             // Execute a special function, which resets memory and globals to their default values.
-            Value mainFunction = findMain(context);
-            final Value testutil = context.getBindings("wasm").getMember("testutil");
-            Value resetMemories = testutil.getMember(TestutilModule.Names.RESET_MEMORIES);
-            Value reinitInstance = testutil.getMember(TestutilModule.Names.REINIT_INSTANCE);
-            Value saveContext = testutil.getMember(TestutilModule.Names.SAVE_CONTEXT);
-            Value compareContexts = testutil.getMember(TestutilModule.Names.COMPARE_CONTEXTS);
+            Value mainFunction = context.getBindings("wasm").getMember("_start");
+            if (mainFunction == null) {
+                mainFunction = context.getBindings("wasm").getMember("_main");
+            }
+            Value resetContext = context.getBindings("wasm").getMember(TestutilModule.Names.RESET_CONTEXT);
+            Value saveContext = context.getBindings("wasm").getMember(TestutilModule.Names.SAVE_CONTEXT);
+            Value compareContexts = context.getBindings("wasm").getMember(TestutilModule.Names.COMPARE_CONTEXTS);
 
             resetStatus(oldOut, phaseIcon, phaseLabel);
             ByteArrayOutputStream capturedStdout;
@@ -199,12 +185,8 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
                     }
 
                     // Reset context state.
-                    if (iterationNeedsStateCheck(i + 1) || requiresZeroMemory) {
-                        resetMemories.execute();
-                    }
-                    for (final Value instance : instances) {
-                        reinitInstance.execute(instance);
-                    }
+                    boolean zeroMemory = iterationNeedsStateCheck(i + 1) || requiresZeroMemory;
+                    resetContext.execute(zeroMemory);
 
                     validateResult(testCase.data().resultValidator(), result, capturedStdout);
                 } catch (PolyglotException e) {
@@ -337,11 +319,11 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
         Map<WasmCase, Throwable> errors = new LinkedHashMap<>();
         System.out.println();
         System.out.println("--------------------------------------------------------------------------------");
-        System.out.printf("Running: %s ", suiteName());
+        System.out.print(String.format("Running: %s ", suiteName()));
         if (allTestCases.size() != qualifyingTestCases.size()) {
-            System.out.printf("(%d/%d tests - you have enabled filters)%n", qualifyingTestCases.size(), allTestCases.size());
+            System.out.println(String.format("(%d/%d tests - you have enabled filters)", qualifyingTestCases.size(), allTestCases.size()));
         } else {
-            System.out.printf("(%d tests)%n", qualifyingTestCases.size());
+            System.out.println(String.format("(%d tests)", qualifyingTestCases.size()));
         }
         System.out.println("--------------------------------------------------------------------------------");
         System.out.println("Using runtime: " + Truffle.getRuntime().toString());
@@ -392,15 +374,15 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
         System.out.println("Finished running: " + suiteName());
         if (!errors.isEmpty()) {
             for (Map.Entry<WasmCase, Throwable> entry : errors.entrySet()) {
-                System.err.printf("Failure in: %s.%s%n", suiteName(), entry.getKey().name());
+                System.err.println(String.format("Failure in: %s.%s", suiteName(), entry.getKey().name()));
                 System.err.println(entry.getValue().getClass().getSimpleName() + ": " + entry.getValue().getMessage());
                 entry.getValue().printStackTrace();
             }
-            System.err.printf("\uD83D\uDCA5\u001B[31m %d/%d Wasm tests passed.\u001B[0m%n", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size());
+            System.err.println(String.format("\uD83D\uDCA5\u001B[31m %d/%d Wasm tests passed.\u001B[0m", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size()));
             System.out.println();
             fail();
         } else {
-            System.out.printf("\uD83C\uDF40\u001B[32m %d/%d Wasm tests passed.\u001B[0m%n", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size());
+            System.out.println(String.format("\uD83C\uDF40\u001B[32m %d/%d Wasm tests passed.\u001B[0m", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size()));
             System.out.println();
         }
     }
@@ -414,7 +396,8 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
             if (process.waitFor() != 0) {
                 return -1;
             }
-            return Integer.parseInt(output.split(" ")[1]);
+            final int width = Integer.parseInt(output.split(" ")[1]);
+            return width;
         } catch (IOException e) {
             System.err.println("Could not retrieve terminal width: " + e.getMessage());
             return -1;
