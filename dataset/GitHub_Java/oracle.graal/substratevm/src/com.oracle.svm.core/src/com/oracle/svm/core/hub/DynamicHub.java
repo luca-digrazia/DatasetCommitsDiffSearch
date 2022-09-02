@@ -264,8 +264,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
     private static final LazyFinalReference<Target_java_lang_Module> singleModule = new LazyFinalReference<>(Target_java_lang_Module::new);
 
-    private final LazyFinalReference<String> packageName = new LazyFinalReference<>(this::computePackageName);
-
     @Platforms(Platform.HOSTED_ONLY.class)
     public DynamicHub(String name, boolean isLocalClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName, int modifiers,
                     Target_java_lang_ClassLoader classLoader) {
@@ -1058,23 +1056,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     @Substitute //
     @TargetElement(onlyWith = JDK9OrLater.class)
     public String getPackageName() {
-        return packageName.get();
-    }
-
-    private String computePackageName() {
-        String pn = null;
-        DynamicHub me = this;
-        while (me.isArray()) {
-            me = (DynamicHub) me.getComponentType();
-        }
-        if (me.isPrimitive()) {
-            pn = "java.lang";
-        } else {
-            String cn = me.getName();
-            int dot = cn.lastIndexOf('.');
-            pn = (dot != -1) ? cn.substring(0, dot).intern() : "";
-        }
-        return pn;
+        throw VMError.unsupportedFeature("JDK9OrLater: DynamicHub.getPackageName()");
     }
 
     @Override
