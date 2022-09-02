@@ -42,7 +42,6 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.MemoryWalker;
-import com.oracle.svm.core.SubstrateGCOptions;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AlwaysInline;
@@ -438,32 +437,32 @@ public final class HeapImpl extends Heap {
 
     @Fold
     static boolean getVerifyHeapBeforeGC() {
-        return (SubstrateGCOptions.VerifyHeap.getValue() || HeapOptions.VerifyHeapBeforeCollection.getValue());
+        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyHeapBeforeCollection.getValue());
     }
 
     @Fold
     static boolean getVerifyHeapAfterGC() {
-        return (SubstrateGCOptions.VerifyHeap.getValue() || HeapOptions.VerifyHeapAfterCollection.getValue());
+        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyHeapAfterCollection.getValue());
     }
 
     @Fold
     static boolean getVerifyStackBeforeGC() {
-        return (SubstrateGCOptions.VerifyHeap.getValue() || HeapOptions.VerifyStackBeforeCollection.getValue());
+        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyStackBeforeCollection.getValue());
     }
 
     @Fold
     static boolean getVerifyStackAfterGC() {
-        return (SubstrateGCOptions.VerifyHeap.getValue() || HeapOptions.VerifyStackAfterCollection.getValue());
+        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyStackAfterCollection.getValue());
     }
 
     @Fold
     static boolean getVerifyDirtyCardBeforeGC() {
-        return (SubstrateGCOptions.VerifyHeap.getValue() || HeapOptions.VerifyDirtyCardsBeforeCollection.getValue());
+        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyDirtyCardsBeforeCollection.getValue());
     }
 
     @Fold
     static boolean getVerifyDirtyCardAfterGC() {
-        return (SubstrateGCOptions.VerifyHeap.getValue() || HeapOptions.VerifyDirtyCardsAfterCollection.getValue());
+        return (SubstrateOptions.VerifyHeap.getValue() || HeapOptions.VerifyDirtyCardsAfterCollection.getValue());
     }
 
     @NeverInline("Starting a stack walk in the caller frame")
