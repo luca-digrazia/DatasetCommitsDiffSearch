@@ -39,7 +39,6 @@ import com.oracle.svm.hosted.FeatureImpl;
 import com.oracle.svm.hosted.classinitialization.ClassInitializationFeature;
 import com.oracle.svm.hosted.classinitialization.ClassInitializationSupport;
 import com.oracle.svm.util.ReflectionUtil;
-import com.oracle.svm.util.WorkerThreadMarker;
 
 /**
  * Complain if there are types that can not move from the image generator heap to the image heap.
@@ -55,22 +54,10 @@ public class DisallowedImageHeapObjectFeature implements Feature {
         access.registerObjectReplacer(this::replacer);
     }
 
-    private static final Class<?> CANCELLABLE_CLASS;
-    static {
-        try {
-            CANCELLABLE_CLASS = Class.forName("sun.nio.fs.Cancellable");
-        } catch (ClassNotFoundException ex) {
-            throw VMError.shouldNotReachHere(ex);
-        }
-    }
-
     private Object replacer(Object original) {
         /* Started Threads can not be in the image heap. */
         if (original instanceof Thread) {
             final Thread asThread = (Thread) original;
-            if (asThread instanceof WorkerThreadMarker) {
-                return ((WorkerThreadMarker) asThread).asTerminated();
-            }
             if (asThread.getState() != Thread.State.NEW && asThread.getState() != Thread.State.TERMINATED) {
                 throw error("Detected a started Thread in the image heap. " +
                                 "Threads running in the image generator are no longer running at image run time. " +
@@ -111,12 +98,6 @@ public class DisallowedImageHeapObjectFeature implements Feature {
             throw error("Detected a ZipFile object in the image heap. " +
                             "A ZipFile object contains pointers to unmanaged C memory and file descriptors, and these resources are no longer available at image run time. " +
                             classInitialization.objectInstantiationTraceMessage(original, "Try avoiding to initialize the class that caused initialization of the direct Buffer."));
-        }
-
-        if (CANCELLABLE_CLASS.isInstance(original)) {
-            throw error("Detected an instance of a class that extends " + CANCELLABLE_CLASS.getTypeName() + ": " + original.getClass().getTypeName() + ". " +
-                            "It contains a pointer to unmanaged C memory, which is no longer available at image run time. " +
-                            classInitialization.objectInstantiationTraceMessage(original, "Try avoiding to initialize the class that caused initialization of the object."));
         }
 
         return original;
