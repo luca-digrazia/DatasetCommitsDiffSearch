@@ -138,7 +138,7 @@ public class ContextSensitiveAnalysisObject extends AnalysisObject {
             mergeInstanceFieldFlow(bb, fieldTypeStore, mergedWith);
         }
 
-        return fieldTypeStore.writeFlow().filterFlow(bb);
+        return fieldTypeStore.filterFlow(bb);
     }
 
     @Override
