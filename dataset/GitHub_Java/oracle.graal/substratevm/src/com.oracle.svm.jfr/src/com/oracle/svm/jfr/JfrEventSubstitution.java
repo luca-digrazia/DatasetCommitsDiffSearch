@@ -25,13 +25,15 @@
 package com.oracle.svm.jfr;
 
 //Checkstyle: allow reflection
+
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.RuntimeReflection;
 
 import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
@@ -49,10 +51,11 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import sun.misc.Unsafe;
 
+@Platforms(Platform.HOSTED_ONLY.class)
 public class JfrEventSubstitution extends SubstitutionProcessor {
 
     private final ResolvedJavaType jdkJfrEvent;
-    private final Map<ResolvedJavaType, Boolean> typeSubstitution;
+    private final ConcurrentHashMap<ResolvedJavaType, Boolean> typeSubstitution;
 
     JfrEventSubstitution(MetaAccessProvider metaAccess) {
         jdkJfrEvent = metaAccess.lookupJavaType(Event.class);
@@ -62,12 +65,9 @@ public class JfrEventSubstitution extends SubstitutionProcessor {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public ResolvedJavaType lookup(ResolvedJavaType type) {
         if (!jdkJfrEvent.equals(type) && jdkJfrEvent.isAssignableFrom(type) && !type.isAbstract()) {
-            typeSubstitution.computeIfAbsent(type, (t) -> {
-                return initEventClass(t);
-            });
+            typeSubstitution.computeIfAbsent(type, JfrEventSubstitution::initEventClass);
         }
         return type;
     }
@@ -77,7 +77,7 @@ public class JfrEventSubstitution extends SubstitutionProcessor {
             Class<? extends Event> newEventClass = OriginalClassProvider.getJavaClass(GraalAccess.getOriginalSnippetReflection(), eventType).asSubclass(Event.class);
             eventType.initialize();
             SecuritySupport.registerEvent(newEventClass);
-            JfrAllEvents.registerEventClass(newEventClass);
+            JfrJavaEvents.registerEventClass(newEventClass);
             JVM.getJVM().retransformClasses(new Class<?>[]{newEventClass});
             Field field = ReflectionUtil.lookupField(newEventClass, "eventHandler");   // EventInstrumentation.FIELD_EVENT_HANDLER
             RuntimeReflection.register(field);
@@ -87,6 +87,11 @@ public class JfrEventSubstitution extends SubstitutionProcessor {
         }
     }
 
+    /**
+     * The method EventWriter.reset() is private but it is called by the EventHandler classes, which
+     * are generated automatically. To prevent bytecode parsing issues, we patch the visibility of
+     * that method using the hacky way below.
+     */
     private static void changeWriterResetMethod(ResolvedJavaType eventWriterType) {
         for (ResolvedJavaMethod m : eventWriterType.getDeclaredMethods()) {
             if (m.getName().equals("reset")) {
@@ -97,10 +102,11 @@ public class JfrEventSubstitution extends SubstitutionProcessor {
 
     private static void setPublicModifier(ResolvedJavaMethod m) {
         try {
-            Class<?> method = m.getClass();
-            Method metaspaceMethodM = method.getDeclaredMethod("getMetaspaceMethod");
+            Class<?> hotspotMethodClass = m.getClass();
+            Method metaspaceMethodM = getMethodToFetchMetaspaceMethod(hotspotMethodClass);
             metaspaceMethodM.setAccessible(true);
             long metaspaceMethod = (Long) metaspaceMethodM.invoke(m);
+            VMError.guarantee(metaspaceMethod != 0);
             // Checkstyle: stop
             Class<?> hotSpotVMConfigC = Class.forName("jdk.vm.ci.hotspot.HotSpotVMConfig");
             // Checkstyle: resume
@@ -116,6 +122,15 @@ public class JfrEventSubstitution extends SubstitutionProcessor {
             unsafe.putInt(metaspaceMethod + methodAccessFlagsOffset, newModifiers);
         } catch (Exception ex) {
             throw VMError.shouldNotReachHere(ex);
+        }
+    }
+
+    private static Method getMethodToFetchMetaspaceMethod(Class<?> method) throws NoSuchMethodException {
+        // The exact method depends on the JVMCI version.
+        try {
+            return method.getDeclaredMethod("getMetaspaceMethod");
+        } catch (NoSuchMethodException e) {
+            return method.getDeclaredMethod("getMetaspacePointer");
         }
     }
 }
