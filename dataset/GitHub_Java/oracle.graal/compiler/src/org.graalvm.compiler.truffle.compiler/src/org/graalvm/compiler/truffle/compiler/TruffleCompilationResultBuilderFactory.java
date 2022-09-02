@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,7 +30,7 @@ import java.util.Set;
 
 import org.graalvm.compiler.asm.Assembler;
 import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
+import org.graalvm.compiler.core.common.spi.CodeGenProviders;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
@@ -41,12 +41,12 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.truffle.compiler.nodes.TruffleAssumption;
 
-import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.Register;
 import jdk.vm.ci.meta.Assumptions.Assumption;
 
 /**
  * A mechanism for Truffle to update a {@link CompilationResult} before it is
- * {@linkplain CompilationResult#close() closed} by the Graal compiler.
+ * {@linkplain CompilationResult#close() closed} by the compiler.
  */
 class TruffleCompilationResultBuilderFactory implements CompilationResultBuilderFactory {
 
@@ -66,13 +66,14 @@ class TruffleCompilationResultBuilderFactory implements CompilationResultBuilder
     }
 
     @Override
-    public CompilationResultBuilder createBuilder(CodeCacheProvider codeCache, ForeignCallsProvider foreignCalls, FrameMap frameMap, Assembler asm, DataBuilder dataBuilder, FrameContext frameContext,
-                    OptionValues options, DebugContext debug, CompilationResult compilationResult) {
-        return new CompilationResultBuilder(codeCache, foreignCalls, frameMap, asm, dataBuilder, frameContext, options, debug, compilationResult) {
+    public CompilationResultBuilder createBuilder(CodeGenProviders providers, FrameMap frameMap, Assembler asm, DataBuilder dataBuilder, FrameContext frameContext,
+                    OptionValues options, DebugContext debug, CompilationResult compilationResult, Register uncompressedNullRegister) {
+        return new CompilationResultBuilder(providers, frameMap, asm, dataBuilder, frameContext, options, debug, compilationResult, uncompressedNullRegister) {
             @Override
             protected void closeCompilationResult() {
                 CompilationResult result = this.compilationResult;
                 result.setMethods(graph.method(), graph.getMethods());
+                result.setSpeculationLog(graph.getSpeculationLog());
                 result.setBytecodeSize(graph.getBytecodeSize());
 
                 Set<Assumption> newAssumptions = new HashSet<>();

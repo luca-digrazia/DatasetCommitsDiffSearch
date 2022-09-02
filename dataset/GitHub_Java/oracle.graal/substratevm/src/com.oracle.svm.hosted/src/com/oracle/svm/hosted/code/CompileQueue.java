@@ -101,7 +101,7 @@ import org.graalvm.compiler.phases.util.GraphOrder;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.SnippetTemplate;
 import org.graalvm.compiler.replacements.nodes.MacroNode;
-import org.graalvm.compiler.virtual.phases.ea.ReadEliminationPhase;
+import org.graalvm.compiler.virtual.phases.ea.EarlyReadEliminationPhase;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
 import org.graalvm.nativeimage.ImageSingletons;
 
@@ -114,7 +114,6 @@ import com.oracle.graal.pointsto.util.Timer;
 import com.oracle.graal.pointsto.util.Timer.StopTimer;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AlwaysInlineAllCallees;
-import com.oracle.svm.core.annotate.AlwaysInlineSelectCallees;
 import com.oracle.svm.core.annotate.DeoptTest;
 import com.oracle.svm.core.annotate.NeverInlineTrivial;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
@@ -636,10 +635,6 @@ public class CompileQueue {
         if (callee.compilationInfo.isTrivialMethod()) {
             return true;
         }
-        AlwaysInlineSelectCallees selectCallees = getCallerAnnotation(invoke, AlwaysInlineSelectCallees.class);
-        if (selectCallees != null && Arrays.stream(selectCallees.callees()).anyMatch(c -> c.equals(callee.getQualifiedName()))) {
-            return true;
-        }
         return false;
     }
 
@@ -661,18 +656,12 @@ public class CompileQueue {
     }
 
     public static boolean callerAnnotatedWith(Invoke invoke, Class<? extends Annotation> annotationClass) {
-        return getCallerAnnotation(invoke, annotationClass) != null;
-    }
-
-    private static <T extends Annotation> T getCallerAnnotation(Invoke invoke, Class<T> annotationClass) {
         for (FrameState state = invoke.stateAfter(); state != null; state = state.outerFrameState()) {
-            assert state.getMethod() != null : state;
-            T annotation = state.getMethod().getAnnotation(annotationClass);
-            if (annotation != null) {
-                return annotation;
+            if (state.getMethod().getAnnotation(annotationClass) != null) {
+                return true;
             }
         }
-        return null;
+        return false;
     }
 
     protected void compileAll() throws InterruptedException {
@@ -1035,7 +1024,7 @@ public class CompileQueue {
 
         PhaseSuite<HighTierContext> highTier = suites.getHighTier();
         VMError.guarantee(highTier.removePhase(PartialEscapePhase.class));
-        VMError.guarantee(highTier.removePhase(ReadEliminationPhase.class));
+        VMError.guarantee(highTier.removePhase(EarlyReadEliminationPhase.class));
         PhaseSuite<MidTierContext> midTier = suites.getMidTier();
         VMError.guarantee(midTier.removePhase(FloatingReadPhase.class));
         PhaseSuite<LowTierContext> lowTier = suites.getLowTier();
