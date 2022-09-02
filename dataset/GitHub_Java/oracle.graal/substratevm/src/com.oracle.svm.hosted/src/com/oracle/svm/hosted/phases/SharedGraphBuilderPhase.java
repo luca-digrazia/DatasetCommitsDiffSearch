@@ -384,7 +384,7 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
             return DeoptimizationSupport.enabled() && !SubstrateUtil.isBuildingLibgraal();
         }
 
-        protected boolean isMethodDeoptTarget() {
+        private boolean isMethodDeoptTarget() {
             return method instanceof SharedMethod && ((SharedMethod) method).isDeoptTarget();
         }
 
