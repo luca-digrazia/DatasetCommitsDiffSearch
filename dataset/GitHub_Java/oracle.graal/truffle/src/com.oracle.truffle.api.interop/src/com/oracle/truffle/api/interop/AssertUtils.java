@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -107,10 +107,6 @@ final class AssertUtils {
         return String.format("Invariant contract violation for receiver %s and index %s.", formatValue(receiver), arg);
     }
 
-    static String violationInvariant(Object receiver, Object arg) {
-        return String.format("Invariant contract violation for receiver %s and key %s.", formatValue(receiver), formatValue(arg));
-    }
-
     private static String violationReturn(Object receiver, Object returnValue) {
         return String.format("Post-condition contract violation for receiver %s and return value %s.",
                         formatValue(receiver), formatValue(returnValue));
@@ -122,43 +118,17 @@ final class AssertUtils {
                         formatValue(receiver), formatValue(arg));
     }
 
-    static boolean validInteropReturn(Object receiver, Object arg) {
+    static boolean validReturn(Object receiver, Object arg) {
         assert isInteropValue(arg) : violationReturn(receiver, arg);
         return true;
     }
 
-    static boolean validProtocolReturn(Object receiver, Object arg) {
-        assert InteropLibrary.isValidProtocolValue(arg) : violationReturn(receiver, arg);
-        return true;
-    }
-
-    static boolean validInteropArgument(Object receiver, Object arg) {
+    static boolean validArgument(Object receiver, Object arg) {
         if (arg == null) {
             throw new NullPointerException(violationArgument(receiver, arg));
         }
-        if (!InteropLibrary.isValidValue(arg)) {
+        if (!isInteropValue(arg)) {
             throw new ClassCastException(violationArgument(receiver, arg));
-        }
-        return true;
-    }
-
-    static boolean validProtocolArgument(Object receiver, Object arg) {
-        if (arg == null) {
-            throw new NullPointerException(violationArgument(receiver, arg));
-        }
-        if (!InteropLibrary.isValidProtocolValue(arg)) {
-            throw new ClassCastException(violationArgument(receiver, arg));
-        }
-        return true;
-    }
-
-    static boolean assertString(Object receiver, Object string) {
-        InteropLibrary uncached = InteropLibrary.getUncached(string);
-        assert uncached.isString(string) : violationPost(receiver, string);
-        try {
-            assert uncached.asString(string) != null : violationPost(receiver, string);
-        } catch (UnsupportedMessageException e) {
-            assert false; // should be handled by uncached assertions
         }
         return true;
     }
@@ -176,43 +146,17 @@ final class AssertUtils {
                         formatValue(receiver), formatValue(arg));
     }
 
-    @SuppressWarnings("deprecation")
     static boolean isInteropValue(Object o) {
-        return InteropLibrary.isValidValue(o);
+        return o instanceof TruffleObject || o instanceof Boolean || o instanceof Byte || o instanceof Short || o instanceof Integer || o instanceof Long || o instanceof Float ||
+                        o instanceof Double || o instanceof Character || o instanceof String;
     }
 
     static boolean validArguments(Object receiver, Object[] args) {
         assert args != null : violationPre(receiver);
         for (Object arg : args) {
-            assert validInteropArgument(receiver, arg);
+            assert validArgument(receiver, arg);
         }
         return true;
-    }
-
-    static boolean validScope(Object o) {
-        if (!(o instanceof TruffleObject)) {
-            return false;
-        }
-        InteropLibrary uncached = InteropLibrary.getUncached(o);
-        assert uncached.isScope(o) : String.format("Invariant contract violation for receiver %s: is not a scope.", formatValue(o));
-        assert uncached.hasMembers(o) : String.format("Invariant contract violation for receiver %s: does not have members.", formatValue(o));
-        return true;
-    }
-
-    static String violationScopeMemberLengths(Object allMembers, Object parentMembers) {
-        return String.format("Scope members of %s do not contain all scope parent members of %s", allMembers, parentMembers);
-    }
-
-    static boolean validScopeMemberLengths(long allSize, long parentSize, Object allMembers, Object parentMembers) {
-        assert allSize >= parentSize : String.format("Scope members of %s (count = %d) do not contain all scope parent members of %s (count = %d)", allMembers, allSize, parentMembers, parentSize);
-        return allSize >= parentSize;
-    }
-
-    static boolean validScopeMemberNames(String allElementName, String parentElementName, Object allMembers, Object parentMembers, long allIndex, long parentIndex) {
-        assert allElementName.equals(parentElementName) : String.format(
-                        "Member %s of scope %s at [%d] does not equal to member %s of parent scope %s at [%d]. Scope must contain all members from parent scopes.",
-                        allElementName, allMembers, allIndex, parentElementName, parentMembers, parentIndex);
-        return allElementName.equals(parentElementName);
     }
 
     static boolean preCondition(Object receiver) {
