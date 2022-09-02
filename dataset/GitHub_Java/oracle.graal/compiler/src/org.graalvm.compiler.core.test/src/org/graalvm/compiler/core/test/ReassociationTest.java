@@ -25,6 +25,7 @@
  */
 package org.graalvm.compiler.core.test;
 
+import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.iterators.FilteredNodeIterable;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -173,6 +174,32 @@ public class ReassociationTest extends GraalCompilerTest {
 
     public static int refMulSnippet() {
         return (rnd1 * rnd2) * 15;
+    }
+
+    @Test
+    public void testMulPositive() {
+        testReassociateConstant("testMulPositiveSnippet", "refMulPositiveSnippet");
+    }
+
+    public static int testMulPositiveSnippet() {
+        return rnd1 * (3 * rnd2) * 5;
+    }
+
+    public static int refMulPositiveSnippet() {
+        return (rnd1 * rnd2) * 15;
+    }
+
+    @Test
+    public void testMulPositive2() {
+        testReassociateConstant("testMulPositive2Snippet", "refMulPositive2Snippet");
+    }
+
+    public static int testMulPositive2Snippet() {
+        return rnd1 * (3 * rnd2) * 7;
+    }
+
+    public static int refMulPositive2Snippet() {
+        return (rnd1 * rnd2) * 21;
     }
 
     @Test
@@ -349,10 +376,12 @@ public class ReassociationTest extends GraalCompilerTest {
     private void testReassociateConstant(String testMethod, String refMethod) {
         test(testMethod);
         StructuredGraph refGraph = parseEager(refMethod, AllowAssumptions.NO);
-        new ReassociationPhase().apply(refGraph);
+        createCanonicalizerPhase().apply(refGraph, getProviders());
+        new ReassociationPhase(createCanonicalizerPhase()).apply(refGraph, getDefaultMidTierContext());
         createCanonicalizerPhase().apply(refGraph, getProviders());
         StructuredGraph testGraph = parseEager(testMethod, AllowAssumptions.NO);
-        new ReassociationPhase().apply(testGraph);
+        createCanonicalizerPhase().apply(testGraph, getProviders());
+        new ReassociationPhase(createCanonicalizerPhase()).apply(testGraph, getDefaultMidTierContext());
         createCanonicalizerPhase().apply(testGraph, getProviders());
         assertEquals(refGraph, testGraph);
         // Test whether the final graph is the expected one.
@@ -372,6 +401,7 @@ public class ReassociationTest extends GraalCompilerTest {
     public static int testLoopSnippet1() {
         for (int i = 0; i < LENGTH; i++) {
             arr[i] = i * rnd1 * i * rnd2;
+            GraalDirectives.controlFlowAnchor();
         }
         return arr[100];
     }
@@ -379,6 +409,7 @@ public class ReassociationTest extends GraalCompilerTest {
     public static int refLoopSnippet1() {
         for (int i = 0; i < LENGTH; i++) {
             arr[i] = i * i * (rnd1 * rnd2);
+            GraalDirectives.controlFlowAnchor();
         }
         return arr[100];
     }
@@ -391,6 +422,7 @@ public class ReassociationTest extends GraalCompilerTest {
     public static int testLoopSnippet2() {
         for (int i = 0; i < LENGTH; i++) {
             arr[i] = (i * 2) * (i * 4);
+            GraalDirectives.controlFlowAnchor();
         }
         return arr[100];
     }
@@ -398,6 +430,7 @@ public class ReassociationTest extends GraalCompilerTest {
     public static int refLoopSnippet2() {
         for (int i = 0; i < LENGTH; i++) {
             arr[i] = i * i * 8;
+            GraalDirectives.controlFlowAnchor();
         }
         return arr[100];
     }
@@ -425,6 +458,7 @@ public class ReassociationTest extends GraalCompilerTest {
         for (int i = 0; i < LENGTH; i++) {
             int var = i * i;
             arr[i] = var + (inv1 + inv2 - 3);
+            GraalDirectives.controlFlowAnchor();
         }
         return arr[100];
     }
@@ -438,6 +472,7 @@ public class ReassociationTest extends GraalCompilerTest {
         int inv = rnd1 + rnd2;
         for (int i = 0; i < LENGTH; i += (inv + 1)) {
             arr[i] = i;
+            GraalDirectives.controlFlowAnchor();
         }
         return arr[rnd2];
     }
@@ -452,6 +487,7 @@ public class ReassociationTest extends GraalCompilerTest {
         int i = LENGTH;
         for (; i > 0;) {
             i -= inv + 4;
+            GraalDirectives.controlFlowAnchor();
         }
         return i;
     }
@@ -467,7 +503,7 @@ public class ReassociationTest extends GraalCompilerTest {
         StructuredGraph graph = parseEager(method, AllowAssumptions.NO);
         FilteredNodeIterable<Node> binarys = graph.getNodes().filter(node -> node instanceof BinaryArithmeticNode);
         List<Node> oldBinarys = binarys.snapshot();
-        new ReassociationPhase().apply(graph);
+        new ReassociationPhase(createCanonicalizerPhase()).apply(graph, getDefaultMidTierContext());
         boolean changed = false;
         for (Node node : oldBinarys) {
             if (node.isDeleted()) {
