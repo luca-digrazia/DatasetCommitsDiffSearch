@@ -289,7 +289,11 @@ abstract class HostMethodDesc {
                     handle = makeMethodHandle();
                     methodHandle = handle;
                 }
-                return invokeHandle(handle, receiver, arguments);
+                try {
+                    return invokeHandle(handle, receiver, arguments);
+                } catch (ClassCastException ex) {
+                    throw HostInteropErrors.unsupportedTypeException(arguments, ex);
+                }
             }
 
             @TruffleBoundary(allowInlining = true)
@@ -330,6 +334,8 @@ abstract class HostMethodDesc {
                     Object ret;
                     try {
                         ret = invokeHandle(methodHandle, receiver, arguments);
+                    } catch (ClassCastException ex) {
+                        throw HostInteropReflect.rethrow(HostInteropErrors.unsupportedTypeException(arguments, ex));
                     } catch (Throwable e) {
                         throw HostInteropReflect.rethrow(e);
                     }

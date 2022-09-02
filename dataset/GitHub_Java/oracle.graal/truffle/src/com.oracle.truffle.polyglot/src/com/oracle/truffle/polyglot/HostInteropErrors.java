@@ -87,20 +87,8 @@ final class HostInteropErrors {
         throw newArrayIndexOutOfBounds(message);
     }
 
-    @TruffleBoundary
-    static RuntimeException invalidArrayIndex(PolyglotLanguageContext context, Object receiver, Type componentType, int index) {
-        String message = String.format("Invalid array index %s for %s[] %s.", index, formatComponentType(componentType), getValueInfo(context, receiver));
-        throw newArrayIndexOutOfBounds(message);
-    }
-
     private static Object formatComponentType(Type componentType) {
         return (componentType == null || componentType == Object.class) ? "Object" : componentType.getTypeName();
-    }
-
-    @TruffleBoundary
-    static RuntimeException arrayReadUnsupported(PolyglotLanguageContext context, Object receiver, Type componentType) {
-        String message = String.format("Unsupported array read operation for %s[] %s.", formatComponentType(componentType), getValueInfo(context, receiver));
-        throw newUnsupportedOperationException(message);
     }
 
     @TruffleBoundary
@@ -198,27 +186,27 @@ final class HostInteropErrors {
 
     private static RuntimeException newNullPointerException(String message) {
         CompilerDirectives.transferToInterpreter();
-        throw PolyglotEngineException.nullPointer(message);
+        throw new PolyglotNullPointerException(message);
     }
 
     private static RuntimeException newUnsupportedOperationException(String message) {
         CompilerDirectives.transferToInterpreter();
-        throw PolyglotEngineException.unsupported(message);
+        throw new PolyglotUnsupportedException(message);
     }
 
     private static RuntimeException newClassCastException(String message) {
         CompilerDirectives.transferToInterpreter();
-        throw PolyglotEngineException.classCast(message);
+        throw new PolyglotClassCastException(message);
     }
 
     private static RuntimeException newIllegalArgumentException(String message) {
         CompilerDirectives.transferToInterpreter();
-        throw PolyglotEngineException.illegalArgument(message);
+        throw new PolyglotIllegalArgumentException(message);
     }
 
     private static RuntimeException newArrayIndexOutOfBounds(String message) {
         CompilerDirectives.transferToInterpreter();
-        throw PolyglotEngineException.arrayIndexOutOfBounds(message);
+        throw new PolyglotArrayIndexOutOfBoundsException(message);
     }
 
     @TruffleBoundary
