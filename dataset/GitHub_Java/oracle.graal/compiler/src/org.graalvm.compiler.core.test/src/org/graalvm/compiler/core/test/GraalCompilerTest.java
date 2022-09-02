@@ -124,9 +124,10 @@ import org.graalvm.compiler.phases.tiers.TargetProvider;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.compiler.runtime.RuntimeProvider;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.test.AddExports;
 import org.graalvm.compiler.test.GraalTest;
-import org.graalvm.compiler.test.ModuleSupport;
+import org.graalvm.compiler.test.JLModule;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -195,7 +196,9 @@ public abstract class GraalCompilerTest extends GraalTest {
      * as of JDK 9.
      */
     protected final void exportPackage(Class<?> moduleMember, String packageName) {
-        ModuleSupport.exportPackageTo(moduleMember, packageName, getClass());
+        if (JavaVersionUtil.JAVA_SPEC > 8) {
+            JLModule.exportPackageTo(moduleMember, packageName, getClass());
+        }
     }
 
     /**
@@ -1325,8 +1328,6 @@ public abstract class GraalCompilerTest extends GraalTest {
         }
     }
 
-    protected static final Object NO_BIND = new Object();
-
     protected void bindArguments(StructuredGraph graph, Object[] argsToBind) {
         ResolvedJavaMethod m = graph.method();
         Object receiver = isStatic(m.getModifiers()) ? null : this;
@@ -1334,12 +1335,9 @@ public abstract class GraalCompilerTest extends GraalTest {
         JavaType[] parameterTypes = m.toParameterTypes();
         assert parameterTypes.length == args.length;
         for (ParameterNode param : graph.getNodes(ParameterNode.TYPE)) {
-            Object arg = args[param.index()];
-            if (arg != NO_BIND) {
-                JavaConstant c = getSnippetReflection().forBoxed(parameterTypes[param.index()].getJavaKind(), arg);
-                ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
-                param.replaceAtUsages(replacement);
-            }
+            JavaConstant c = getSnippetReflection().forBoxed(parameterTypes[param.index()].getJavaKind(), args[param.index()]);
+            ConstantNode replacement = ConstantNode.forConstant(c, getMetaAccess(), graph);
+            param.replaceAtUsages(replacement);
         }
     }
 
