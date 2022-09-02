@@ -186,9 +186,7 @@ public class Linker {
                 throw new WasmLinkerException(String.format("The memory '%s' in the imported module '%s' has maximum size %d, but module '%s' imports it with maximum size '%d'",
                                 importedMemoryName, importedModuleName, memory.maxSize(), module.name(), maxSize));
             }
-            if (memory.size() < initSize) {
-                memory.grow(initSize - memory.size());
-            }
+            memory.grow(initSize);
             return memory;
         }
     }

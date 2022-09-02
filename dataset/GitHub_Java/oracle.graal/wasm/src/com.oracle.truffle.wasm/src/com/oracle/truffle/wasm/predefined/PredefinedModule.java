@@ -29,67 +29,72 @@
  */
 package com.oracle.truffle.wasm.predefined;
 
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.wasm.binary.WasmCodeEntry;
-import com.oracle.truffle.wasm.binary.WasmFunction;
-import com.oracle.truffle.wasm.binary.WasmLanguage;
-import com.oracle.truffle.wasm.binary.WasmModule;
-import com.oracle.truffle.wasm.binary.WasmRootNode;
-import com.oracle.truffle.wasm.binary.exception.WasmException;
-import com.oracle.truffle.wasm.predefined.emscripten.AbortNode;
-import com.oracle.truffle.wasm.predefined.emscripten.EmscriptenMemcpyBig;
-import com.oracle.truffle.wasm.predefined.emscripten.EmscriptenModule;
-import com.oracle.truffle.wasm.predefined.emscripten.NoOp;
-import com.oracle.truffle.wasm.predefined.emscripten.WasiFdWrite;
-
 import java.util.HashMap;
 import java.util.Map;
 
-public abstract class PredefinedModule {
-    private static final Map<String, PredefinedModule> predefinedModules = new HashMap<String, PredefinedModule>() {
-        {
-            put("emscripten", new EmscriptenModule());
-        }
-    };
+import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.wasm.binary.Assert;
+import com.oracle.truffle.wasm.binary.ReferenceTypes;
+import com.oracle.truffle.wasm.binary.WasmContext;
+import com.oracle.truffle.wasm.binary.WasmFunction;
+import com.oracle.truffle.wasm.binary.WasmLanguage;
+import com.oracle.truffle.wasm.binary.WasmModule;
+import com.oracle.truffle.wasm.binary.constants.GlobalResolution;
+import com.oracle.truffle.wasm.binary.exception.WasmException;
+import com.oracle.truffle.wasm.binary.memory.WasmMemory;
+import com.oracle.truffle.wasm.predefined.emscripten.EmscriptenModule;
+import com.oracle.truffle.wasm.predefined.testutil.TestutilModule;
 
-    public static void importFunction(String functionName, WasmModule module, WasmRootNode rootNode, WasmCodeEntry codeEntry) {
-        switch (functionName) {
-            case "_emscripten_memcpy_big": {
-                rootNode.setBody(new EmscriptenMemcpyBig(module, codeEntry));
-                break;
-            }
-            case "___wasi_fd_write": {
-                rootNode.setBody(new WasiFdWrite(module, codeEntry));
-                break;
-            }
-            default: {
-                rootNode.setBody(new NoOp(module, codeEntry));
-                codeEntry.initStackSlots(rootNode.getFrameDescriptor(), 1);
-            }
-        }
+public abstract class PredefinedModule {
+    private static final Map<String, PredefinedModule> predefinedModules = new HashMap<>();
+
+    static {
+        final Map<String, PredefinedModule> pm = predefinedModules;
+        pm.put("emscripten", new EmscriptenModule());
+        pm.put("testutil", new TestutilModule());
     }
 
-    public static WasmModule createPredefined(WasmLanguage language, String name, String predefinedModuleName) {
+    public static WasmModule createPredefined(WasmLanguage language, WasmContext context, String name, String predefinedModuleName) {
         final PredefinedModule predefinedModule = predefinedModules.get(predefinedModuleName);
         if (predefinedModule == null) {
             throw new WasmException("Unknown predefined module: " + predefinedModuleName);
         }
-        return predefinedModule.createModule(language, name);
+        return predefinedModule.createModule(language, context, name);
     }
 
-    protected abstract WasmModule createModule(WasmLanguage language, String name);
+    protected abstract WasmModule createModule(WasmLanguage language, WasmContext context, String name);
 
     protected WasmFunction defineFunction(WasmModule module, String name, byte[] paramTypes, byte[] retTypes, RootNode rootNode) {
         // We could check if the same function type had already been allocated,
         // but this is just an optimization, and probably not very important,
         // since predefined modules have a relatively small size.
         final int typeIdx = module.symbolTable().allocateFunctionType(paramTypes, retTypes);
-        final WasmFunction function = module.symbolTable().allocateExportedFunction(typeIdx, name);
+        final WasmFunction function = module.symbolTable().declareExportedFunction(typeIdx, name);
         RootCallTarget callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         function.setCallTarget(callTarget);
         return function;
+    }
+
+    protected int defineGlobal(WasmContext context, WasmModule module, String name, int valueType, int mutability, long value) {
+        int index = module.symbolTable().maxGlobalIndex() + 1;
+        int address = module.symbolTable().declareExportedGlobal(context, name, index, valueType, mutability, GlobalResolution.DECLARED);
+        context.globals().storeLong(address, value);
+        return index;
+    }
+
+    protected int defineTable(WasmContext context, WasmModule module, String tableName, int initSize, int maxSize, byte type) {
+        Assert.assertByteEqual(type, ReferenceTypes.FUNCREF, "Only function types are currently supported in tables.");
+        module.symbolTable().allocateTable(context, initSize, maxSize);
+        module.symbolTable().exportTable(tableName);
+        return 0;
+    }
+
+    protected WasmMemory defineMemory(WasmContext context, WasmModule module, String memoryName, int initSize, int maxSize) {
+        final WasmMemory memory = module.symbolTable().allocateMemory(context, initSize, maxSize);
+        module.symbolTable().exportMemory(memoryName);
+        return memory;
     }
 
     protected byte[] types(byte... args) {

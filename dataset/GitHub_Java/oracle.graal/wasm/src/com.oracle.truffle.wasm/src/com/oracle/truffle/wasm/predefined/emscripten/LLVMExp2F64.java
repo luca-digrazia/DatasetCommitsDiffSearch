@@ -46,12 +46,12 @@ public class LLVMExp2F64 extends WasmPredefinedRootNode {
         Object[] args = frame.getArguments();
         assert args.length == 1;
         for (Object arg : args) {
-            trace("argument: %s", arg);
+            logger.finest(() -> "argument: " + arg);
         }
 
         double x = (double) args[0];
 
-        trace("LLVMExp2F64 EXECUTE");
+        logger.finest("LLVMExp2F64 EXECUTE");
 
         return exp2(x);
     }

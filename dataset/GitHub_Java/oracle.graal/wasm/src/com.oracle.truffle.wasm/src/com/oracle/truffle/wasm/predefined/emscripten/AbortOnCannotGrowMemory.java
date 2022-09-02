@@ -41,7 +41,7 @@ public class AbortOnCannotGrowMemory extends AbortNode {
 
     @Override
     public Object execute(VirtualFrame frame) {
-        trace("AbortOnCannotGrowMemory EXECUTE");
+        logger.finest("AbortOnCannotGrowMemory EXECUTE");
         return super.execute(frame);
     }
 

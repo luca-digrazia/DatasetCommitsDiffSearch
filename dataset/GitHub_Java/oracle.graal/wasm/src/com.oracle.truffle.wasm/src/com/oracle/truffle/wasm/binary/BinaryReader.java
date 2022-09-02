@@ -405,7 +405,8 @@ public class BinaryReader extends BinaryStreamReader {
                     // See GlobalModifier.
                     byte mutability = read1();
                     int index = module.symbolTable().maxGlobalIndex() + 1;
-                    context.linker().importGlobal(module, index, moduleName, memberName, type, mutability);
+                    final GlobalResolution resolution = context.linker().tryResolveGlobal(module, moduleName, memberName, type, mutability);
+                    module.symbolTable().importGlobal(language.getContextReference().get(), moduleName, memberName, index, type, mutability, resolution);
                     break;
                 }
                 default: {
@@ -829,16 +830,11 @@ public class BinaryReader extends BinaryStreamReader {
                     break;
                 }
                 case MEMORY_SIZE: {
-                    // Skip the constant 0x00.
-                    read1();
-                    state.push();
+                    read1();  // 0x00
                     break;
                 }
                 case MEMORY_GROW: {
-                    // Skip the constant 0x00.
-                    read1();
-                    state.pop();
-                    state.push();
+                    read1();  // 0x00
                     break;
                 }
                 case I32_CONST: {

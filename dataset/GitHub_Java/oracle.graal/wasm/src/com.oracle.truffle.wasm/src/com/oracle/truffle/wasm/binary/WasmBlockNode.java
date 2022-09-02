@@ -1038,29 +1038,13 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case MEMORY_SIZE: {
-                    // Skip the 0x00 constant.
-                    offset++;
+                    offset++;  // 0x00
                     logger.finest("memory_size");
-                    int pageSize = (int) (module().symbolTable().memory().pageSize());
-                    pushInt(frame, stackPointer, pageSize);
-                    stackPointer++;
                     break;
                 }
                 case MEMORY_GROW: {
-                    // Skip the 0x00 constant.
-                    offset++;
+                    offset++;  // 0x00
                     logger.finest("memory_grow");
-                    stackPointer--;
-                    int extraSize = popInt(frame, stackPointer);
-                    final WasmMemory memory = module().symbolTable().memory();
-                    int pageSize = (int) memory.pageSize();
-                    if (memory.grow(extraSize)) {
-                        pushInt(frame, stackPointer, pageSize);
-                        stackPointer++;
-                    } else {
-                        pushInt(frame, stackPointer, -1);
-                        stackPointer++;
-                    }
                     break;
                 }
                 case I32_CONST: {

@@ -27,31 +27,37 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.wasm.predefined.emscripten;
+package com.oracle.truffle.wasm.predefined.testutil;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.wasm.binary.WasmCodeEntry;
-import com.oracle.truffle.wasm.binary.WasmContext;
 import com.oracle.truffle.wasm.binary.WasmLanguage;
+import com.oracle.truffle.wasm.binary.WasmModule;
+import com.oracle.truffle.wasm.binary.WasmVoidResult;
 import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
 
-public class EmscriptenGetHeapSize extends WasmPredefinedRootNode {
-    public EmscriptenGetHeapSize(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
+public class ResetGlobalsNode extends WasmPredefinedRootNode {
+    public ResetGlobalsNode(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
         super(language, codeEntry, memory);
     }
 
     @Override
     public Object execute(VirtualFrame frame) {
-        WasmContext context = contextReference().get();
-
-        logger.finest("EmscriptenGetHeapSize EXECUTE");
-
-        return memory.size();
+        resetGlobals();
+        return WasmVoidResult.getInstance();
     }
 
     @Override
     public String name() {
-        return "_emscripten_get_heap_size";
+        return TestutilModule.Names.RESET_GLOBALS;
+    }
+
+    @CompilerDirectives.TruffleBoundary
+    private void resetGlobals() {
+        // TODO: Reset globals in all modules of the context.
+        WasmModule module = contextReference().get().modules().get("test");
+        contextReference().get().linker().resetGlobalState(module, module.data());
     }
 }

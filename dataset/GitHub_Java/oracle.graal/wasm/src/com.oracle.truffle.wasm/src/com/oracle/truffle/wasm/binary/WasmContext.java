@@ -38,28 +38,55 @@ import java.util.Map;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.wasm.predefined.PredefinedModule;
 
 public class WasmContext {
-    private static final long DEFAULT_MEMORY_SIZE = 1 << 25;
-
     private Env env;
     private WasmLanguage language;
+    private Memories memories;
+    private Globals globals;
+    private Tables tables;
+    private Linker linker;
     private Map<String, WasmModule> modules;
-    private WasmMemory memory;
+
+    public static WasmContext getCurrent() {
+        return WasmLanguage.getCurrentContext();
+    }
 
     public WasmContext(Env env, WasmLanguage language) {
         this.env = env;
         this.language = language;
+        this.globals = new Globals();
+        this.tables = new Tables();
+        this.memories = new Memories();
         this.modules = new HashMap<>();
-        this.memory = new UnsafeWasmMemory(DEFAULT_MEMORY_SIZE);
+        this.linker = new Linker(language);
+        initializePredefinedModules(env);
     }
 
     public CallTarget parse(Source source) {
-        return env.parse(source);
+        // TODO: Not used -- can we remove this?
+        return env.parsePublic(source);
     }
 
     public WasmLanguage language() {
         return language;
+    }
+
+    public Memories memories() {
+        return memories;
+    }
+
+    public Globals globals() {
+        return globals;
+    }
+
+    public Tables tables() {
+        return tables;
+    }
+
+    public Linker linker() {
+        return linker;
     }
 
     public Iterable<Scope> getTopScopes() {
@@ -72,7 +99,30 @@ public class WasmContext {
         return scopes;
     }
 
+    /**
+     * Returns the map with all the modules that have been fully parsed, initialized and linked
+     * against other such modules.
+     */
+    public Map<String, WasmModule> modules() {
+        return modules;
+    }
+
     void registerModule(WasmModule module) {
         modules.put(module.name(), module);
+    }
+
+    private void initializePredefinedModules(Env env) {
+        final String extraModuleValue = WasmOptions.PredefinedModules.getValue(env.getOptions());
+        if (extraModuleValue.equals("")) {
+            return;
+        }
+        final String[] moduleSpecs = extraModuleValue.split(",");
+        for (String moduleSpec : moduleSpecs) {
+            final String[] parts = moduleSpec.split(":");
+            final String name = parts[0];
+            final String key = parts[1];
+            final WasmModule module = PredefinedModule.createPredefined(language, this, name, key);
+            modules.put(name, module);
+        }
     }
 }

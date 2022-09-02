@@ -47,14 +47,14 @@ public class GetTimeOfDay extends WasmPredefinedRootNode {
         Object[] args = frame.getArguments();
         assert args.length == 2;
         for (Object arg : args) {
-            trace("GetTimeOfDay argument: %s", arg);
+            logger.finest(() -> "argument: " + arg);
         }
 
         WasmContext context = contextReference().get();
 
         int ptr = (int) args[0];
 
-        trace("GetTimeOfDay EXECUTE");
+        logger.finest("GetTimeOfDay EXECUTE");
 
         long now = getCurrentTime();
         memory.store_i32(ptr, (int) (now / 1000));
