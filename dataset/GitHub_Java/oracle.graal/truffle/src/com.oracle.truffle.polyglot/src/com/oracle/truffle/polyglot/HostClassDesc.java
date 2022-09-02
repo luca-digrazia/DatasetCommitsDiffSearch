@@ -140,9 +140,6 @@ final class HostClassDesc {
 
             if (Modifier.isPublic(type.getModifiers())) {
                 for (Constructor<?> c : type.getConstructors()) {
-                    if (!hostAccess.allowsAccess(c)) {
-                        continue;
-                    }
                     SingleMethod overload = SingleMethod.unreflect(c);
                     ctor = ctor == null ? overload : merge(ctor, overload);
                 }

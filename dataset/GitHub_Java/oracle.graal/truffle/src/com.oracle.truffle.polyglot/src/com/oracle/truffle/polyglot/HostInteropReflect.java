@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -587,7 +587,7 @@ abstract class ProxyInvokeNode extends Node {
                     @Cached("getMethodGenericReturnType(method)") Type returnType,
                     @CachedLibrary("receiver") InteropLibrary receivers,
                     @CachedLibrary(limit = "LIMIT") InteropLibrary members,
-                    @Cached ConditionProfile branchProfile,
+                    @Cached("createBinaryProfile()") ConditionProfile branchProfile,
                     @Cached("create()") ToHostNode toHost) {
         Object result = invokeOrExecute(languageContext, receiver, arguments, name, receivers, members, branchProfile);
         return toHost.execute(result, returnClass, returnType, languageContext, true);
