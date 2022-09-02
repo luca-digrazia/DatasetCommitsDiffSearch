@@ -713,14 +713,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return getElementalType().isFinalFlagSet();
     }
 
-    @Override
-    public final boolean isFinalFlagSet() {
-        /*
-         * HotSpot's Class Hierarchy Analysis does not allow inlining invoke interface pointing to
-         * never overriden default interface methods. We cirumvent this CHA limitation here by using
-         * an invokespecial, which is inlinable.
-         */
-        return ModifiersProvider.super.isFinalFlagSet() /* || isLeafAssumption() */;
+    public final boolean isFinal() {
+        return ModifiersProvider.super.isFinalFlagSet();
     }
 
     /**
