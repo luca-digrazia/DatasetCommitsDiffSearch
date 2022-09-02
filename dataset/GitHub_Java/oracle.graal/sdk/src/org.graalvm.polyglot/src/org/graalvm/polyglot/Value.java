@@ -197,7 +197,7 @@ public final class Value {
     }
 
     /**
-     * Returns the qualified name of a metaobject as {@link #isString() String}.
+     * Returns the qualified name of a metaobject as {@link String}.
      * <p>
      * <b>Sample interpretations:</b> The qualified name of a Java class includes the package name
      * and its class name. JavaScript does not have the notion of qualified name and therefore
@@ -1264,7 +1264,7 @@ public final class Value {
      *
      * @throws IllegalStateException if the underlying context is already closed.
      * @see Duration
-     * @see #asDuration()
+     * @see #asDate()
      * @since 19.2.0
      */
     public boolean isDuration() {
@@ -1324,29 +1324,6 @@ public final class Value {
      */
     public Context getContext() {
         return impl.getContext();
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * @since 20.1
-     */
-    @Override
-    public boolean equals(Object obj) {
-        if (!(obj instanceof Value)) {
-            return false;
-        }
-        return impl.equalsImpl(receiver, ((Value) obj).receiver);
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * @since 20.1
-     */
-    @Override
-    public int hashCode() {
-        return impl.hashCodeImpl(receiver);
     }
 
     /**
