@@ -45,6 +45,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
+import org.graalvm.wasm.exception.Failure;
 
 public final class WasmCodeEntry {
     private final WasmFunction function;
@@ -76,6 +77,7 @@ public final class WasmCodeEntry {
     public byte[] data() {
         return data;
     }
+
 
     public void initLocalSlots(FrameDescriptor frameDescriptor) {
         this.localsSlot = frameDescriptor.addFrameSlot(1, FrameSlotKind.Object);

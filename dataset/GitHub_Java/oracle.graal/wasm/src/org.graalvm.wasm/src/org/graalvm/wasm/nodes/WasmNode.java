@@ -120,7 +120,11 @@ public abstract class WasmNode extends Node implements WasmNodeInterface {
         return byteLength;
     }
 
+    abstract int byteConstantLength();
+
     abstract int intConstantLength();
+
+    abstract int longConstantLength();
 
     abstract int branchTableLength();
 

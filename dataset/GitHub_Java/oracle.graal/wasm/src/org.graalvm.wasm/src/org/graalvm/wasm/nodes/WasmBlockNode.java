@@ -377,7 +377,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         final int constPolicy = instance().storeConstantsPolicy().ordinal();
         final byte[] data = codeEntry().data();
         final int blockByteLength = Math.min(data.length - startOffset, byteLength());
-        final WasmMemory memory = instance().memory();
         try {
             final int offsetLimit = startOffset + blockByteLength;
             while (offset < offsetLimit) {
@@ -810,7 +809,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         offset += offsetDelta;
                         // endregion
 
-                        load(memory, stack, stackPointer - 1, opcode, memOffset);
+                        load(stack, stackPointer - 1, opcode, memOffset);
                         break;
                     }
                     case I32_STORE:
@@ -835,7 +834,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         offset += offsetDelta;
                         // endregion
 
-                        store(memory, stack, stackPointer, opcode, memOffset);
+                        store(stack, stackPointer, opcode, memOffset);
                         stackPointer -= 2;
 
                         break;
@@ -843,7 +842,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     case MEMORY_SIZE: {
                         // Skip the 0x00 constant.
                         offset++;
-                        int pageSize = memory.pageSize();
+                        int pageSize = instance().memory().pageSize();
                         pushInt(stack, stackPointer, pageSize);
                         stackPointer++;
                         break;
@@ -853,6 +852,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         offset++;
                         stackPointer--;
                         int extraSize = popInt(stack, stackPointer);
+                        final WasmMemory memory = instance().memory();
                         int pageSize = memory.pageSize();
                         if (memory.grow(extraSize)) {
                             pushInt(stack, stackPointer, pageSize);
@@ -1372,9 +1372,10 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         return -1;
     }
 
-    private void load(WasmMemory memory, long[] stack, int stackPointer, int opcode, int memOffset) {
+    private void load(long[] stack, int stackPointer, int opcode, int memOffset) {
         int baseAddress = popInt(stack, stackPointer);
         int address = baseAddress + memOffset;
+        WasmMemory memory = instance().memory();
 
         try {
             switch (opcode) {
@@ -1457,7 +1458,9 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         }
     }
 
-    private void store(WasmMemory memory, long[] stack, int stackPointer, int opcode, int memOffset) {
+    private void store(long[] stack, int stackPointer, int opcode, int memOffset) {
+        WasmMemory memory = instance().memory();
+
         try {
             switch (opcode) {
                 case I32_STORE: {
