@@ -47,7 +47,6 @@ import com.oracle.truffle.espresso.runtime.EspressoException;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 
 public final class ClassRedefinition {
@@ -245,16 +244,16 @@ public final class ClassRedefinition {
         }
 
         // detect method changes (including constructors)
-        List<ParserMethod> oldMethods = new ArrayList<>(Arrays.asList(oldParserKlass.getMethods()));
-        List<ParserMethod> newMethods = new ArrayList<>(Arrays.asList(newParserKlass.getMethods()));
+        ParserMethod[] oldMethods = oldParserKlass.getMethods();
+        ParserMethod[] newMethods = newParserKlass.getMethods();
 
         if (ClassRedefinition.REDEFINITION_SUPPORT == RedefinitionSupport.METHOD_BODY) {
             // we only need to hunt down method bodies changes then
             // so return immediately when we see an added/removed method
-            if (oldMethods.size() < newMethods.size()) {
+            if (oldMethods.length < newMethods.length) {
                 return ClassChange.ADD_METHOD;
             }
-            if (oldMethods.size() > newMethods.size()) {
+            if (oldMethods.length > newMethods.length) {
                 return ClassChange.REMOVE_METHOD;
             }
         }
@@ -264,14 +263,15 @@ public final class ClassRedefinition {
         if (!Arrays.equals(oldParserKlass.getConstantPool().getRawBytes(), newParserKlass.getConstantPool().getRawBytes())) {
             constantPoolChanged = true;
         }
-        Iterator<ParserMethod> oldIt = oldMethods.iterator();
-        while (oldIt.hasNext()) {
-            ParserMethod oldMethod = oldIt.next();
+
+        for (int i = 0; i < oldMethods.length; i++) {
+            ParserMethod oldMethod = oldMethods[i];
             // verify that there is a new corresponding method
-            Iterator<ParserMethod> newIt = newMethods.iterator();
-            while (newIt.hasNext()) {
-                ParserMethod newMethod = newIt.next();
+            boolean found = false;
+            for (int j = 0; j < newMethods.length; j++) {
+                ParserMethod newMethod = newMethods[j];
                 if (isSameMethod(oldMethod, newMethod)) {
+                    found = true;
                     // detect method changes
                     ClassChange change = detectMethodChanges(oldMethod, newMethod);
                     switch (change) {
@@ -293,19 +293,35 @@ public final class ClassRedefinition {
                         default:
                             return change;
                     }
-                    newIt.remove();
-                    oldIt.remove();
                     break;
                 }
             }
+            if (!found) {
+                collectedChanges.addRemovedMethod(oldMethod);
+            }
         }
-        collectedChanges.addNewMethods(newMethods);
-        collectedChanges.addRemovedMethods(oldMethods);
 
-        if (!oldMethods.isEmpty()) {
-            result = ClassChange.REMOVE_METHOD;
-        } else if (!newMethods.isEmpty()) {
+        // find the added methods if any
+        if (oldMethods.length < newMethods.length || !collectedChanges.getRemovedMethods().isEmpty()) {
+            for (int i = 0; i < newMethods.length; i++) {
+                ParserMethod newMethod = newMethods[i];
+                boolean found = false;
+                for (int j = 0; j < oldMethods.length; j++) {
+                    ParserMethod oldMethod = oldMethods[j];
+                    if (isSameMethod(oldMethod, newMethod)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    collectedChanges.addNewMethod(newMethod);
+                }
+            }
             result = ClassChange.ADD_METHOD;
+        }
+        // removed methods are higher order changes
+        if (!collectedChanges.getRemovedMethods().isEmpty()) {
+            result = ClassChange.REMOVE_METHOD;
         }
         return result;
     }
