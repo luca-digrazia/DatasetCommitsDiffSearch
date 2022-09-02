@@ -48,7 +48,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -92,7 +92,7 @@ public final class JFRListener extends AbstractGraalTruffleRuntimeListener {
     }
 
     public static Predicate<ResolvedJavaMethod> createInstrumentedMethodFilter() {
-        return new JFRInstrumentedMethodFilter();
+        return factory != null ? new JFRInstrumentedMethodFilter(factory) : (m) -> false;
     }
 
     @Override
@@ -254,19 +254,18 @@ public final class JFRListener extends AbstractGraalTruffleRuntimeListener {
 
     private static final class JFRInstrumentedMethodFilter implements Predicate<ResolvedJavaMethod> {
 
-        private enum State {
-            NEW,
-            ACTIVE,
-            INACTIVE
-        }
-
         private final Set<InstrumentedMethodPattern> instrumentedMethodPatterns;
         private final Set<ResolvedJavaMethod> cache;
-        private final AtomicReference<State> state = new AtomicReference<>(State.NEW);
-        private volatile Class<? extends Annotation> requiredAnnotation;
+        private final Class<? extends Annotation> requiredAnnotation;
+        private final AtomicBoolean active = new AtomicBoolean();
         private volatile ResolvedJavaType resolvedJfrEventClass;
 
-        JFRInstrumentedMethodFilter() {
+        JFRInstrumentedMethodFilter(EventFactory factory) {
+            requiredAnnotation = factory.getRequiredAnnotation();
+            factory.addInitializationListener(() -> {
+                active.set(true);
+            });
+            active.compareAndSet(false, factory.isInitialized());
             this.instrumentedMethodPatterns = new HashSet<>();
             this.instrumentedMethodPatterns.add(new InstrumentedMethodPattern("begin", "()V"));
             this.instrumentedMethodPatterns.add(new InstrumentedMethodPattern("commit", "()V"));
@@ -279,14 +278,8 @@ public final class JFRListener extends AbstractGraalTruffleRuntimeListener {
 
         @Override
         public boolean test(ResolvedJavaMethod method) {
-            // Initialization must be deferred into the image executtion time
-            State currentState = state.get();
-            if (currentState == State.NEW) {
-                currentState = initialize();
-            }
-
-            // If JFR is not active or we are in the image build time return false
-            if (currentState == State.NEW || currentState == State.INACTIVE) {
+            // If JFR is not active return false
+            if (!active.get()) {
                 return false;
             }
 
@@ -313,23 +306,6 @@ public final class JFRListener extends AbstractGraalTruffleRuntimeListener {
                 cache.add(method);
             }
             return res;
-        }
-
-        private State initialize() {
-            // Do not initialize during image building.
-            if (!ImageInfo.inImageBuildtimeCode()) {
-                if (factory != null) {
-                    requiredAnnotation = factory.getRequiredAnnotation();
-                    factory.addInitializationListener(() -> {
-                        state.set(State.ACTIVE);
-                    });
-                    State currentState = factory.isInitialized() ? State.ACTIVE : State.INACTIVE;
-                    state.compareAndSet(State.NEW, currentState);
-                } else {
-                    state.set(State.INACTIVE);
-                }
-            }
-            return state.get();
         }
 
         private ResolvedJavaType getJFREventClass(ResolvedJavaType accessingClass) {
