@@ -923,7 +923,7 @@ public final class MethodVerifier implements ContextAccess {
             }
             StackFrame res = new StackFrame(fullStack, locals);
             if (pos == 0) {
-                res.lastLocal = -1;
+                res.lastLocal = 0;
                 return res;
             }
             if (locals[pos - 1] == Invalid && pos - 2 > 0 && isType2(locals[pos - 2])) {
@@ -981,11 +981,7 @@ public final class MethodVerifier implements ContextAccess {
         }
         int nextBCI = 0;
         if (USE_STACK_MAP_FRAMES) {
-            try {
-                initStackFrames();
-            } catch (IndexOutOfBoundsException e) {
-                throw new VerifyError("Could not construct stackFrames due to invalid maxStack or maxLocals value: " + e.getMessage());
-            }
+            initStackFrames();
         }
         Stack stack = new Stack(maxStack);
         Locals locals = new Locals(this);
@@ -2188,7 +2184,7 @@ public final class MethodVerifier implements ContextAccess {
         mergeIndex = locals.mergeInto(stackMap);
         if (mergeIndex != -1) {
             if (USE_STACK_MAP_FRAMES) {
-                throw new VerifyError("Wrong local map frames in class file: " + thisKlass + '.' + methodName);
+                throw new VerifyError("Wrong local map frames in class file.");
             }
             // We can ALWAYS merge locals.
             mergedLocals = new Operand[maxLocals];

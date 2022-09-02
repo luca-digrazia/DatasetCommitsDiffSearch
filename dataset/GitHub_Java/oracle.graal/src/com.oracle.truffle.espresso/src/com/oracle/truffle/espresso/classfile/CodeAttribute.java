@@ -29,13 +29,11 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.runtime.Attribute;
 
-import static com.oracle.truffle.espresso.classfile.ClassfileParser.JAVA_6_VERSION;
-
 public final class CodeAttribute extends Attribute {
 
     public static final Symbol<Name> NAME = Name.Code;
 
-    private final int majorVersion;
+    private final boolean useStackMaps;
 
     private final int maxStack;
     private final int maxLocals;
@@ -49,14 +47,14 @@ public final class CodeAttribute extends Attribute {
     @CompilationFinal(dimensions = 1) //
     private final Attribute[] attributes;
 
-    public CodeAttribute(Symbol<Name> name, int maxStack, int maxLocals, byte[] code, ExceptionHandler[] exceptionHandlerEntries, Attribute[] attributes, int majorVersion) {
+    public CodeAttribute(Symbol<Name> name, int maxStack, int maxLocals, byte[] code, ExceptionHandler[] exceptionHandlerEntries, Attribute[] attributes, boolean useStackMaps) {
         super(name, null);
         this.maxStack = maxStack;
         this.maxLocals = maxLocals;
         this.code = code;
         this.exceptionHandlerEntries = exceptionHandlerEntries;
         this.attributes = attributes;
-        this.majorVersion = majorVersion;
+        this.useStackMaps = useStackMaps;
     }
 
     public int getMaxStack() {
@@ -106,10 +104,6 @@ public final class CodeAttribute extends Attribute {
     }
 
     public final boolean useStackMaps() {
-        return majorVersion >= JAVA_6_VERSION;
-    }
-
-    public int getMajorVersion() {
-        return majorVersion;
+        return useStackMaps;
     }
 }
