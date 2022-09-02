@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,156 +29,229 @@
  */
 package com.oracle.truffle.llvm.runtime.memory;
 
-import java.util.function.BinaryOperator;
 import java.util.function.IntBinaryOperator;
 import java.util.function.LongBinaryOperator;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
+import com.oracle.truffle.llvm.runtime.config.LLVMCapability;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
-public abstract class LLVMMemory {
+public abstract class LLVMMemory implements LLVMCapability {
 
     /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMMemSetNode} instead. */
     @Deprecated
-    public abstract void memset(LLVMNativePointer address, long size, byte value);
+    public abstract void memset(Node location, LLVMNativePointer address, long size, byte value);
 
     /** Use {@link com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode} instead. */
     @Deprecated
-    public abstract void copyMemory(long sourceAddress, long targetAddress, long length);
+    public abstract void copyMemory(Node location, long sourceAddress, long targetAddress, long length);
 
-    public abstract void free(LLVMNativePointer address);
+    public final void free(Node location, LLVMNativePointer address) {
+        free(location, address.asNative());
+    }
 
-    public abstract void free(long address);
+    public abstract void free(Node location, long address);
 
-    public abstract LLVMNativePointer allocateMemory(long size);
+    public abstract LLVMNativePointer allocateMemory(Node location, long size);
 
     /**
      * Use a realloc node instead.
      */
     @Deprecated
-    public abstract LLVMNativePointer reallocateMemory(LLVMNativePointer addr, long size);
+    public abstract LLVMNativePointer reallocateMemory(Node location, LLVMNativePointer addr, long size);
 
-    public abstract boolean getI1(LLVMNativePointer addr);
+    public final boolean getI1(Node location, LLVMNativePointer addr) {
+        return getI1(location, addr.asNative());
+    }
 
-    public abstract boolean getI1(long ptr);
+    public abstract boolean getI1(Node location, long ptr);
 
-    public abstract byte getI8(LLVMNativePointer addr);
+    public final byte getI8(Node location, LLVMNativePointer addr) {
+        return getI8(location, addr.asNative());
+    }
 
-    public abstract byte getI8(long ptr);
+    public abstract byte getI8(Node location, long ptr);
 
-    public abstract short getI16(LLVMNativePointer addr);
+    public final short getI16(Node location, LLVMNativePointer addr) {
+        return getI16(location, addr.asNative());
+    }
 
-    public abstract short getI16(long ptr);
+    public abstract short getI16(Node location, long ptr);
 
-    public abstract int getI32(LLVMNativePointer addr);
+    public final int getI32(Node location, LLVMNativePointer addr) {
+        return getI32(location, addr.asNative());
+    }
 
-    public abstract int getI32(long ptr);
+    public abstract int getI32(Node location, long ptr);
 
-    public abstract LLVMIVarBit getIVarBit(LLVMNativePointer addr, int bitWidth);
+    public abstract LLVMIVarBit getIVarBit(Node location, LLVMNativePointer addr, int bitWidth);
 
-    public abstract long getI64(LLVMNativePointer addr);
+    public final long getI64(Node location, LLVMNativePointer addr) {
+        return getI64(location, addr.asNative());
+    }
 
-    public abstract long getI64(long ptr);
+    public abstract long getI64(Node location, long ptr);
 
-    public abstract float getFloat(LLVMNativePointer addr);
+    public final float getFloat(Node location, LLVMNativePointer addr) {
+        return getFloat(location, addr.asNative());
+    }
 
-    public abstract float getFloat(long ptr);
+    public abstract float getFloat(Node location, long ptr);
 
-    public abstract double getDouble(LLVMNativePointer addr);
+    public final double getDouble(Node location, LLVMNativePointer addr) {
+        return getDouble(location, addr.asNative());
+    }
 
-    public abstract double getDouble(long ptr);
+    public abstract double getDouble(Node location, long ptr);
 
-    public abstract LLVM80BitFloat get80BitFloat(LLVMNativePointer addr);
+    public abstract LLVM80BitFloat get80BitFloat(Node location, LLVMNativePointer addr);
 
-    public abstract LLVMNativePointer getPointer(LLVMNativePointer addr);
+    public final LLVMNativePointer getPointer(Node location, LLVMNativePointer addr) {
+        return getPointer(location, addr.asNative());
+    }
 
-    public abstract LLVMNativePointer getPointer(long ptr);
+    public abstract LLVMNativePointer getPointer(Node location, long ptr);
 
-    public abstract void putI1(LLVMNativePointer addr, boolean value);
+    public final void putI1(Node location, LLVMNativePointer addr, boolean value) {
+        putI1(location, addr.asNative(), value);
+    }
 
-    public abstract void putI1(long ptr, boolean value);
+    public abstract void putI1(Node location, long ptr, boolean value);
 
-    public abstract void putI8(LLVMNativePointer addr, byte value);
+    public final void putI8(Node location, LLVMNativePointer addr, byte value) {
+        putI8(location, addr.asNative(), value);
+    }
 
-    public abstract void putI8(long ptr, byte value);
+    public abstract void putI8(Node location, long ptr, byte value);
 
-    public abstract void putI16(LLVMNativePointer addr, short value);
+    public final void putI16(Node location, LLVMNativePointer addr, short value) {
+        putI16(location, addr.asNative(), value);
+    }
 
-    public abstract void putI16(long ptr, short value);
+    public abstract void putI16(Node location, long ptr, short value);
 
-    public abstract void putI32(LLVMNativePointer addr, int value);
+    public final void putI32(Node location, LLVMNativePointer addr, int value) {
+        putI32(location, addr.asNative(), value);
+    }
 
-    public abstract void putI32(long ptr, int value);
+    public abstract void putI32(Node location, long ptr, int value);
 
-    public abstract void putI64(LLVMNativePointer addr, long value);
+    public final void putI64(Node location, LLVMNativePointer addr, long value) {
+        putI64(location, addr.asNative(), value);
+    }
 
-    public abstract void putI64(long ptr, long value);
+    public abstract void putI64(Node location, long ptr, long value);
 
-    public abstract void putIVarBit(LLVMNativePointer addr, LLVMIVarBit value);
+    public final void putIVarBit(Node location, LLVMNativePointer addr, LLVMIVarBit value) {
+        putIVarBit(location, addr.asNative(), value);
+    }
 
-    public abstract void putFloat(LLVMNativePointer addr, float value);
+    public abstract void putIVarBit(Node location, long ptr, LLVMIVarBit value);
 
-    public abstract void putFloat(long ptr, float value);
+    public final void putFloat(Node location, LLVMNativePointer addr, float value) {
+        putFloat(location, addr.asNative(), value);
+    }
 
-    public abstract void putDouble(LLVMNativePointer addr, double value);
+    public abstract void putFloat(Node location, long ptr, float value);
 
-    public abstract void putDouble(long ptr, double value);
+    public final void putDouble(Node location, LLVMNativePointer addr, double value) {
+        putDouble(location, addr.asNative(), value);
+    }
 
-    public abstract void put80BitFloat(LLVMNativePointer addr, LLVM80BitFloat value);
+    public abstract void putDouble(Node location, long ptr, double value);
 
-    public abstract void put80BitFloat(long ptr, LLVM80BitFloat value);
+    public final void put80BitFloat(Node location, LLVMNativePointer addr, LLVM80BitFloat value) {
+        put80BitFloat(location, addr.asNative(), value);
+    }
 
-    public abstract void putPointer(LLVMNativePointer addr, LLVMNativePointer value);
+    public abstract void put80BitFloat(Node location, long ptr, LLVM80BitFloat value);
 
-    public abstract void putPointer(LLVMNativePointer addr, long ptrValue);
+    public final void putPointer(Node location, LLVMNativePointer addr, LLVMNativePointer value) {
+        putPointer(location, addr.asNative(), value.asNative());
+    }
 
-    public abstract void putPointer(long ptr, LLVMNativePointer value);
+    public final void putPointer(Node location, LLVMNativePointer addr, long ptrValue) {
+        putPointer(location, addr.asNative(), ptrValue);
+    }
 
-    public abstract void putPointer(long ptr, long ptrValue);
+    public final void putPointer(Node location, long ptr, LLVMNativePointer value) {
+        putPointer(location, ptr, value.asNative());
+    }
 
-    public abstract void putByteArray(LLVMNativePointer addr, byte[] bytes);
+    public abstract void putPointer(Node location, long ptr, long ptrValue);
 
-    public abstract void putByteArray(long ptr, byte[] bytes);
+    public final void putByteArray(Node location, LLVMNativePointer addr, byte[] bytes) {
+        putByteArray(location, addr.asNative(), bytes);
+    }
 
-    public abstract CMPXCHGI32 compareAndSwapI32(LLVMNativePointer p, int comparisonValue, int newValue);
+    public abstract void putByteArray(Node location, long ptr, byte[] bytes);
 
-    public abstract CMPXCHGI64 compareAndSwapI64(LLVMNativePointer p, long comparisonValue, long newValue);
+    public abstract CMPXCHGI32 compareAndSwapI32(Node location, LLVMNativePointer p, int comparisonValue, int newValue);
 
-    public abstract CMPXCHGI8 compareAndSwapI8(LLVMNativePointer p, byte comparisonValue, byte newValue);
+    public abstract CMPXCHGI64 compareAndSwapI64(Node location, LLVMNativePointer p, long comparisonValue, long newValue);
 
-    public abstract CMPXCHGI16 compareAndSwapI16(LLVMNativePointer p, short comparisonValue, short newValue);
+    public abstract CMPXCHGI8 compareAndSwapI8(Node location, LLVMNativePointer p, byte comparisonValue, byte newValue);
 
-    public abstract long getAndSetI64(LLVMNativePointer address, long value);
+    public abstract CMPXCHGI16 compareAndSwapI16(Node location, LLVMNativePointer p, short comparisonValue, short newValue);
 
-    public abstract long getAndAddI64(LLVMNativePointer address, long value);
+    public abstract long getAndSetI64(Node location, LLVMNativePointer address, long value);
 
-    public abstract long getAndSubI64(LLVMNativePointer address, long value);
+    public abstract long getAndAddI64(Node location, LLVMNativePointer address, long value);
 
-    public abstract long getAndOpI64(LLVMNativePointer address, long value, LongBinaryOperator f);
+    public abstract long getAndSubI64(Node location, LLVMNativePointer address, long value);
 
-    public abstract int getAndSetI32(LLVMNativePointer address, int value);
+    public abstract long getAndOpI64(Node location, LLVMNativePointer address, long value, LongBinaryOperator f);
 
-    public abstract int getAndAddI32(LLVMNativePointer address, int value);
+    public abstract int getAndSetI32(Node location, LLVMNativePointer address, int value);
 
-    public abstract int getAndSubI32(LLVMNativePointer address, int value);
+    public abstract int getAndAddI32(Node location, LLVMNativePointer address, int value);
 
-    public abstract int getAndOpI32(LLVMNativePointer address, int value, IntBinaryOperator f);
+    public abstract int getAndSubI32(Node location, LLVMNativePointer address, int value);
 
-    public abstract short getAndOpI16(LLVMNativePointer address, short value, BinaryOperator<Short> f);
+    public abstract int getAndOpI32(Node location, LLVMNativePointer address, int value, IntBinaryOperator f);
 
-    public abstract byte getAndOpI8(LLVMNativePointer address, byte value, BinaryOperator<Byte> f);
+    @FunctionalInterface
+    public interface ShortBinaryOperator {
 
-    public abstract boolean getAndOpI1(LLVMNativePointer address, boolean value, BinaryOperator<Boolean> f);
+        short apply(short a, short b);
+    }
 
-    public abstract void fullFence();
+    public abstract short getAndOpI16(Node location, LLVMNativePointer address, short value, ShortBinaryOperator f);
 
-    public abstract long allocateHandle(boolean autoDeref);
+    @FunctionalInterface
+    public interface ByteBinaryOperator {
 
-    public abstract boolean isHandleMemory(long addr);
+        byte apply(byte a, byte b);
+    }
 
-    public abstract boolean isDerefHandleMemory(long addr);
+    public abstract byte getAndOpI8(Node location, LLVMNativePointer address, byte value, ByteBinaryOperator f);
+
+    @FunctionalInterface
+    public interface BooleanBinaryOperator {
+
+        boolean apply(boolean a, boolean b);
+    }
+
+    public abstract boolean getAndOpI1(Node location, LLVMNativePointer address, boolean value, BooleanBinaryOperator f);
+
+    public abstract static class HandleContainer {
+
+        public abstract LLVMNativePointer allocate(Node location, Object value);
+
+        public abstract void free(Node location, long address);
+
+        public abstract LLVMManagedPointer getValue(Node location, long address);
+
+        public abstract boolean isHandle(long address);
+
+    }
+
+    public abstract HandleContainer createHandleContainer(boolean deref, Assumption noHandleAssumption);
 
     @ValueType
     public static final class CMPXCHGI8 {
