@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -42,16 +42,16 @@ package org.graalvm.wasm.exception;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
 
 /**
  * Thrown for various error condition when using the Wasm-JS API.
  */
-public class WasmJsApiException extends RuntimeException implements TruffleException {
+public class WasmJsApiException extends AbstractTruffleException {
 
     public enum Kind {
         TypeError,
+        RangeError,
         LinkError
     }
 
@@ -66,8 +66,30 @@ public class WasmJsApiException extends RuntimeException implements TruffleExcep
         this.kind = kind;
     }
 
-    @Override
-    public Node getLocation() {
-        return null;
+    @TruffleBoundary
+    public WasmJsApiException(Kind kind, String message, Throwable cause) {
+        super(message, cause, UNLIMITED_STACK_TRACE, null);
+        CompilerAsserts.neverPartOfCompilation();
+        this.kind = kind;
     }
+
+    public Kind kind() {
+        return kind;
+    }
+
+    @TruffleBoundary
+    public static WasmJsApiException format(WasmJsApiException.Kind kind, String s) {
+        return new WasmJsApiException(kind, s);
+    }
+
+    @TruffleBoundary
+    public static WasmJsApiException format(WasmJsApiException.Kind kind, String s, Object arg) {
+        return new WasmJsApiException(kind, String.format(s, arg));
+    }
+
+    @TruffleBoundary
+    public static WasmJsApiException format(WasmJsApiException.Kind kind, String s, Object... args) {
+        return new WasmJsApiException(kind, String.format(s, args));
+    }
+
 }

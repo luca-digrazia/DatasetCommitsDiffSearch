@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -41,26 +41,109 @@
 package org.graalvm.wasm.api;
 
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.library.ExportLibrary;
-import org.graalvm.wasm.GlobalRegistry;
+import com.oracle.truffle.api.library.ExportMessage;
+import org.graalvm.wasm.exception.WasmJsApiException;
 
 @ExportLibrary(InteropLibrary.class)
 public class Global extends Dictionary {
-    private final GlobalRegistry registry;
-    private final GlobalDescriptor descriptor;
+    private final ValueType valueType;
+    private final boolean mutable;
+    private Object value;
 
-    public Global(GlobalRegistry registry, GlobalDescriptor descriptor) {
-        this.registry = registry;
-        this.descriptor = descriptor;
+    public Global(String valueType, boolean mutable, Object value) {
+        this.valueType = ValueType.valueOf(valueType);
+        this.mutable = mutable;
+        setInternal(value);
         addMembers(new Object[]{
-                        "descriptor", this.descriptor,
-                        "valueOf", new Executable(args -> get()),
-                        "value", new Executable(args -> get()),
+                        "descriptor", new GlobalDescriptor(valueType, mutable),
+                        "valueOf", new Executable(args -> get())
         });
     }
 
     public Object get() {
-        // TODO: Get the value from the global registry.
-        return null;
+        return value;
     }
+
+    public ValueType valueType() {
+        return valueType;
+    }
+
+    public boolean mutable() {
+        return mutable;
+    }
+
+    public void set(Object value) {
+        if (!mutable) {
+            throw WasmJsApiException.format(WasmJsApiException.Kind.TypeError, "Global is not mutable.");
+        }
+        setInternal(value);
+    }
+
+    private void setInternal(Object value) {
+        switch (valueType) {
+            case i32:
+                if (!(value instanceof Integer)) {
+                    throw WasmJsApiException.format(WasmJsApiException.Kind.TypeError, "Global type %s, value: %s", valueType, value);
+                }
+                this.value = value;
+                break;
+            case i64:
+                if (!(value instanceof Long)) {
+                    throw WasmJsApiException.format(WasmJsApiException.Kind.TypeError, "Global type %s, value: %s", valueType, value);
+                }
+                this.value = value;
+                break;
+            case f32:
+                if (!(value instanceof Float)) {
+                    throw WasmJsApiException.format(WasmJsApiException.Kind.TypeError, "Global type %s, value: %s", valueType, value);
+                }
+                this.value = value;
+                break;
+            case f64:
+                if (!(value instanceof Double)) {
+                    throw WasmJsApiException.format(WasmJsApiException.Kind.TypeError, "Global type %s, value: %s", valueType, value);
+                }
+                this.value = value;
+                break;
+        }
+    }
+
+    @ExportMessage
+    @Override
+    public boolean isMemberReadable(String member) {
+        return "value".equals(member) || super.isMemberReadable(member);
+    }
+
+    @ExportMessage
+    public boolean isMemberModifiable(String member) {
+        return "value".equals(member);
+    }
+
+    @SuppressWarnings({"unused"})
+    @ExportMessage
+    public boolean isMemberInsertable(String member) {
+        return false;
+    }
+
+    @ExportMessage
+    @Override
+    public Object readMember(String member) throws UnknownIdentifierException {
+        if ("value".equals(member)) {
+            return get();
+        } else {
+            return super.readMember(member);
+        }
+    }
+
+    @ExportMessage
+    public void writeMember(String member, Object newValue) throws UnknownIdentifierException {
+        if ("value".equals(member)) {
+            set(newValue);
+        } else {
+            throw unknown(member);
+        }
+    }
+
 }
