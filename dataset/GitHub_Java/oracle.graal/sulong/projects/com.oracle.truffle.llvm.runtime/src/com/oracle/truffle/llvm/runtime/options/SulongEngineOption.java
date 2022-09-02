@@ -64,6 +64,12 @@ public final class SulongEngineOption {
                    "Paths are delimited by a colon \'" + OPTION_ARRAY_SEPARATOR + "\'.")
     public static final OptionKey<String> LIBRARY_PATH = new OptionKey<>("");
 
+    @Option(name = "llvm.sourcePath",
+            category = OptionCategory.USER,
+            help = "This option is deprecated. Use --inspect.SourcePath instead.",
+            deprecated = true)
+    public static final OptionKey<String> SOURCE_PATH = new OptionKey<>("");
+
     public static final String LOAD_CXX_LIBRARIES_NAME = "llvm.loadC++Libraries";
     @Option(name = LOAD_CXX_LIBRARIES_NAME,
             category = OptionCategory.EXPERT,
@@ -72,12 +78,6 @@ public final class SulongEngineOption {
                    "plain bitcode files, since executables (ELF, Mach-O) usually have a " +
                    "dependency on both of them. Thus, the option is off by default.")
     public static final OptionKey<Boolean> LOAD_CXX_LIBRARIES = new OptionKey<>(false);
-
-    public static final String CXX_INTEROP_NAME = "llvm.C++Interop";
-    @Option(name = CXX_INTEROP_NAME,
-            category = OptionCategory.EXPERT,
-            help = "Enables using C++ code and features via interop.")
-    public static final OptionKey<Boolean> CXX_INTEROP = new OptionKey<>(false);
 
     @Option(name = "llvm.enableExternalNativeAccess",
             category = OptionCategory.USER,
@@ -162,6 +162,11 @@ public final class SulongEngineOption {
             category = OptionCategory.INTERNAL,
             help = "Prints a C stack trace when abort() is called.")
     public static final OptionKey<Boolean> STACKTRACE_ON_ABORT = new OptionKey<>(false);
+
+    @Option(name = "llvm.printToolchainPath",
+            category = OptionCategory.INTERNAL,
+            help = "Enables the intrinisc for printing the toolchain path.")
+    public static final OptionKey<Boolean> PRINT_TOOLCHAIN_PATH = new OptionKey<>(false);
 
     @Option(name = "llvm.traceIR",
             category = OptionCategory.EXPERT,
