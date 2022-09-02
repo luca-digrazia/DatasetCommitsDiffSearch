@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,7 +46,6 @@ import org.graalvm.compiler.asm.amd64.AMD64Assembler.VexMoveOp;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.asm.amd64.AVXKind;
 import org.graalvm.compiler.asm.amd64.AVXKind.AVXSize;
-import org.graalvm.compiler.core.common.type.DataPointerConstant;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LIRInstructionClass;
@@ -163,38 +162,6 @@ public class AMD64VectorMove {
         }
     }
 
-    @Opcode("VMOVE")
-    public static class MoveFromArrayConstOp extends AMD64LIRInstruction implements LoadConstantOp {
-        public static final LIRInstructionClass<MoveFromArrayConstOp> TYPE = LIRInstructionClass.create(MoveFromArrayConstOp.class);
-
-        @Def({REG, STACK}) protected AllocatableValue result;
-        private final DataPointerConstant input;
-
-        public MoveFromArrayConstOp(AllocatableValue result, DataPointerConstant input) {
-            super(TYPE);
-            this.result = result;
-            this.input = input;
-        }
-
-        @Override
-        public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            AMD64Kind kind = (AMD64Kind) result.getPlatformKind();
-            assert kind.isXMM() : "Can only move array to XMM register";
-            int alignment = crb.dataBuilder.ensureValidDataAlignment(input.getAlignment());
-            VMOVDQU32.emit(masm, AVXKind.getRegisterSize(result), asRegister(result), (AMD64Address) crb.recordDataReferenceInCode(input, alignment));
-        }
-
-        @Override
-        public Constant getConstant() {
-            return input;
-        }
-
-        @Override
-        public AllocatableValue getResult() {
-            return result;
-        }
-    }
-
     @Opcode("VSTACKMOVE")
     public static final class StackMoveOp extends AMD64LIRInstruction implements ValueMoveOp {
         public static final LIRInstructionClass<StackMoveOp> TYPE = LIRInstructionClass.create(StackMoveOp.class);
@@ -236,15 +203,17 @@ public class AMD64VectorMove {
         }
     }
 
-    public abstract static class VectorMemOp extends AMD64VectorInstruction {
+    public abstract static class VectorMemOp extends AMD64LIRInstruction {
 
+        protected final AVXSize size;
         protected final VexMoveOp op;
 
         @Use({COMPOSITE}) protected AMD64AddressValue address;
         @State protected LIRFrameState state;
 
         protected VectorMemOp(LIRInstructionClass<? extends VectorMemOp> c, AVXSize size, VexMoveOp op, AMD64AddressValue address, LIRFrameState state) {
-            super(c, size);
+            super(c);
+            this.size = size;
             this.op = op;
             this.address = address;
             this.state = state;

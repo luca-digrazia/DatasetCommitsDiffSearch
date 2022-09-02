@@ -589,7 +589,7 @@ public class AMD64Move {
                 masm.movdbl(asRegister(result, AMD64Kind.DOUBLE), asRegister(input, AMD64Kind.DOUBLE));
                 break;
             default:
-                throw GraalError.shouldNotReachHere("kind=" + kind + " input=" + input + " result=" + result);
+                throw GraalError.shouldNotReachHere("kind=" + kind);
         }
     }
 
@@ -615,7 +615,7 @@ public class AMD64Move {
                 masm.movsd(dest, input);
                 break;
             default:
-                throw GraalError.shouldNotReachHere("kind=" + kind + " input=" + input + " result=" + result);
+                throw GraalError.shouldNotReachHere();
         }
     }
 
@@ -641,7 +641,7 @@ public class AMD64Move {
                 masm.movdbl(result, src);
                 break;
             default:
-                throw GraalError.shouldNotReachHere("kind=" + kind + " input=" + input + " result=" + result);
+                throw GraalError.shouldNotReachHere();
         }
     }
 
@@ -974,8 +974,9 @@ public class AMD64Move {
         @Override
         protected final void emitConversion(Register resultRegister, Register inputRegister, Register nullRegister, AMD64MacroAssembler masm) {
             if (inputRegister.equals(resultRegister)) {
+                masm.subq(inputRegister, nullRegister);
                 Label done = new Label();
-                masm.subqAndJcc(inputRegister, nullRegister, Equal, done, true);
+                masm.jccb(Equal, done);
                 masm.addq(inputRegister, nullRegister);
                 masm.bind(done);
             } else {
