@@ -262,12 +262,11 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      * It is only set to non-null in {@link #compile(boolean)} in a synchronized block.
      *
      * It is only {@linkplain #resetCompilationTask() set to null} by the
-     * {@linkplain CancellableCompileTask task} itself when: 1) The task is canceled before the
-     * compilation has started, or 2) The compilation has finished (successfully or not). Canceling
-     * the task after the compilation has started does not reset the task until the compilation
-     * finishes.
+     * {@linkplain CompilationTask task} itself when: 1) The task is canceled before the compilation
+     * has started, or 2) The compilation has finished (successfully or not). Canceling the task
+     * after the compilation has started does not reset the task until the compilation finishes.
      */
-    private volatile CancellableCompileTask compilationTask;
+    private volatile CompilationTask compilationTask;
 
     private volatile boolean needsSplit;
 
@@ -504,12 +503,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return intCallCount >= engine.callThresholdInInterpreter //
                         && intLoopCallCount >= engine.callAndLoopThresholdInInterpreter //
                         && !compilationFailed //
-                        && !isSubmittedForCompilation()
-                        /*
-                         * Compilation of OSR loop call target is scheduled in
-                         * OptimizedOSRLoopNode#compileImpl.
-                         */
-                        && !(getRootNode() instanceof OSRRootNode);
+                        && !isSubmittedForCompilation();
     }
 
     public final boolean shouldCompile() {
@@ -518,14 +512,10 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     // Note: {@code PartialEvaluator} looks up this method by name and signature.
     protected final Object profiledPERoot(Object[] originalArguments) {
-        if (GraalCompilerDirectives.inFirstTier()) {
-            if (firstTierCall()) {
-                // synchronous compiles may trigger this case.
-                CompilerDirectives.transferToInterpreter();
-                return doInvoke(originalArguments);
-            }
-        }
         Object[] args = originalArguments;
+        if (GraalCompilerDirectives.inFirstTier()) {
+            firstTierCall();
+        }
         if (CompilerDirectives.inCompiledCode()) {
             args = injectArgumentsProfile(originalArguments);
         }
@@ -647,7 +637,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
                 return false;
             }
 
-            CancellableCompileTask task = null;
+            CompilationTask task = null;
             // Do not try to compile this target concurrently,
             // but do not block other threads if compilation is not asynchronous.
             synchronized (this) {
@@ -672,7 +662,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return false;
     }
 
-    public final boolean maybeWaitForTask(CancellableCompileTask task) {
+    public final boolean maybeWaitForTask(CompilationTask task) {
         boolean mayBeAsynchronous = engine.backgroundCompilation;
         runtime().finishCompilation(this, task, mayBeAsynchronous);
         // not async compile and compilation successful
@@ -688,7 +678,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     public final void waitForCompilation() {
-        CancellableCompileTask task = compilationTask;
+        CompilationTask task = compilationTask;
         if (task != null) {
             runtime().finishCompilation(this, task, false);
         }
@@ -733,13 +723,12 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      */
     public final boolean invalidate(Object source, CharSequence reason) {
         cachedNonTrivialNodeCount = -1;
-        boolean invalidated = false;
         if (isAlive()) {
             invalidateCode();
             runtime().getListener().onCompilationInvalidated(this, source, reason);
-            invalidated = true;
+            return true;
         }
-        return cancelCompilation(reason) || invalidated;
+        return cancelCompilation(reason);
     }
 
     final OptimizedCallTarget cloneUninitialized() {
@@ -805,7 +794,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     private boolean cancelAndResetCompilationTask() {
-        CancellableCompileTask task = this.compilationTask;
+        CompilationTask task = this.compilationTask;
         if (task != null) {
             synchronized (this) {
                 task = this.compilationTask;
@@ -1371,7 +1360,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         return System.identityHashCode(this);
     }
 
-    final CancellableCompileTask getCompilationTask() {
+    final CompilationTask getCompilationTask() {
         return compilationTask;
     }
 

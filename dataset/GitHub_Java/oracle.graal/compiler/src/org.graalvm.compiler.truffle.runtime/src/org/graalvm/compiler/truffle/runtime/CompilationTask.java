@@ -48,11 +48,11 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
     private volatile boolean cancelled;
     private volatile boolean started;
 
-    static CompilationTask initializationTask(WeakReference<OptimizedCallTarget> targetRef, Consumer<CompilationTask> action) {
+    public static CompilationTask initializationTask(WeakReference<OptimizedCallTarget> targetRef, Consumer<CompilationTask> action) {
         return new CompilationTask(BackgroundCompileQueue.Priority.INITIALIZATION, targetRef, action, 0);
     }
 
-    static CompilationTask compilationTask(BackgroundCompileQueue.Priority priority, WeakReference<OptimizedCallTarget> targetRef, GraalTruffleRuntime runtime, long id) {
+    public static CompilationTask compilationTask(BackgroundCompileQueue.Priority priority, WeakReference<OptimizedCallTarget> targetRef, GraalTruffleRuntime runtime, long id) {
         return new CompilationTask(priority, targetRef, runtime.compilationAction, id);
     }
 
@@ -163,10 +163,7 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
     }
 
     /**
-     * Since {@link BackgroundCompileQueue} uses a {@link java.util.concurrent.ThreadPoolExecutor}
-     * to run compilations, and since the executor expects each {@link Callable} (in our case, the
-     * {@link CompilationTask}) to be converted into a {@link FutureTask} we use this wrapper around
-     * the {@link CompilationTask} just for compatibility with the executor.
+     * TODO: explain why this is needed.
      */
     static class ExecutorServiceWrapper extends FutureTask<Void> implements Comparable<ExecutorServiceWrapper> {
         final CompilationTask compileTask;

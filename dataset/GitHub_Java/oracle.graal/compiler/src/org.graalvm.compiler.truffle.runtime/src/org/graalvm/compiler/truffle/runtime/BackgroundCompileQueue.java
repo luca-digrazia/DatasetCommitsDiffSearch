@@ -163,7 +163,7 @@ public class BackgroundCompileQueue {
 
     public CompilationTask submitCompilation(Priority priority, OptimizedCallTarget target) {
         final WeakReference<OptimizedCallTarget> targetReference = new WeakReference<>(target);
-        CompilationTask compilationTask = CompilationTask.compilationTask(priority, targetReference, nextId());
+        CompilationTask compilationTask = CompilationTask.compilationTask(priority, targetReference, runtime, nextId());
         return submitTask(compilationTask);
     }
 
@@ -240,13 +240,14 @@ public class BackgroundCompileQueue {
         // nop
     }
 
-    static class Priority {
+    // TODO: public only for tests
+    public static class Priority {
 
         public static final Priority INITIALIZATION = new Priority(0, Tier.INITIALIZATION);
         final Tier tier;
         final int value;
 
-        Priority(int value, Tier tier) {
+        public Priority(int value, Tier tier) {
             this.value = value;
             this.tier = tier;
         }
