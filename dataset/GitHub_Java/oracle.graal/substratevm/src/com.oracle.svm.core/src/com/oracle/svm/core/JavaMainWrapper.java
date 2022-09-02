@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,19 +24,22 @@
  */
 package com.oracle.svm.core;
 
+//Checkstyle: allow reflection
+
 import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
-import java.util.function.Consumer;
 
-import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.word.Word;
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
+import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
@@ -43,31 +48,26 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.allocationprofile.AllocationSite;
-import com.oracle.svm.core.amd64.AMD64CPUFeatureAccess;
-import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.annotate.AlwaysInline;
+import com.oracle.svm.core.c.CGlobalData;
+import com.oracle.svm.core.c.CGlobalDataFactory;
+import com.oracle.svm.core.c.function.CEntryPointActions;
+import com.oracle.svm.core.c.function.CEntryPointCreateIsolateParameters;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
-import com.oracle.svm.core.c.function.CEntryPointSetup.EnterCreateIsolatePrologue;
-import com.oracle.svm.core.heap.Heap;
-import com.oracle.svm.core.jdk.RuntimeFeature;
+import com.oracle.svm.core.jdk.InternalVMMethod;
 import com.oracle.svm.core.jdk.RuntimeSupport;
-import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.option.RuntimeOptionParser;
-import com.oracle.svm.core.properties.RuntimePropertyParser;
-import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.thread.JavaThreads;
 import com.oracle.svm.core.util.Counter;
-import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.code.Architecture;
-import jdk.vm.ci.code.TargetDescription;
 
+@InternalVMMethod
 public class JavaMainWrapper {
-
-    /* C runtime argument count and argument vector */
-    private static int argc;
-    private static CCharPointerPointer argv;
-    /* Remember original argument vector length */
+    /*
+     * Parameters used to create the main isolate, including C runtime argument count and argument
+     * vector
+     */
+    public static final CGlobalData<CEntryPointCreateIsolateParameters> MAIN_ISOLATE_PARAMETERS = CGlobalDataFactory.createBytes(() -> SizeOf.get(CEntryPointCreateIsolateParameters.class));
 
     static {
         /* WordFactory.boxFactory is initialized by the static initializer of Word. */
@@ -77,93 +77,120 @@ public class JavaMainWrapper {
 
     public static class JavaMainSupport {
 
-        public static void executeStartupHooks() {
-            RuntimeSupport runtimeSupport = RuntimeSupport.getRuntimeSupport();
-            executeHooks(runtimeSupport.getStartupHooks(), runtimeSupport::removeStartupHook);
-        }
+        final MethodHandle javaMainHandle;
+        final String javaMainClassName;
 
-        public static void executeShutdownHooks() {
-            RuntimeSupport runtimeSupport = RuntimeSupport.getRuntimeSupport();
-            executeHooks(runtimeSupport.getShutdownHooks(), runtimeSupport::removeShutdownHook);
-        }
-
-        private static void executeHooks(List<Runnable> hooks, Consumer<Runnable> deleteHookAction) {
-            List<Throwable> hookExceptions = new ArrayList<>();
-
-            for (Runnable hook : hooks) {
-                deleteHookAction.accept(hook);
-                try {
-                    hook.run();
-                } catch (Throwable ex) {
-                    hookExceptions.add(ex);
-                }
-            }
-
-            // report all hook exceptions, but do not re-throw
-            if (hookExceptions.size() > 0) {
-                for (Throwable ex : hookExceptions) {
-                    ex.printStackTrace(Log.logStream());
-                }
-            }
-        }
-
-        private final MethodHandle javaMainHandle;
+        public String[] mainArgs;
 
         @Platforms(Platform.HOSTED_ONLY.class)
-        public JavaMainSupport(MethodHandle javaMainHandle) {
-            this.javaMainHandle = javaMainHandle;
+        public JavaMainSupport(Method javaMainMethod) throws IllegalAccessException {
+            this.javaMainHandle = MethodHandles.lookup().unreflect(javaMainMethod);
+            this.javaMainClassName = javaMainMethod.getDeclaringClass().getName();
         }
 
-        @Fold
-        public MethodHandle getJavaMainHandle() {
-            assert javaMainHandle != null;
-            return javaMainHandle;
+        public String getJavaCommand() {
+            if (mainArgs != null) {
+                StringBuilder commandLine = new StringBuilder(javaMainClassName);
+
+                for (String arg : mainArgs) {
+                    commandLine.append(' ');
+                    commandLine.append(arg);
+                }
+                return commandLine.toString();
+            }
+            return null;
+        }
+
+        public List<String> getInputArguments() {
+            CEntryPointCreateIsolateParameters args = MAIN_ISOLATE_PARAMETERS.get();
+            if (args.getArgv().isNonNull() && args.getArgc() > 0) {
+                String[] unmodifiedArgs = SubstrateUtil.getArgs(args.getArgc(), args.getArgv());
+                List<String> inputArgs = new ArrayList<>(Arrays.asList(unmodifiedArgs));
+
+                if (mainArgs != null) {
+                    inputArgs.removeAll(Arrays.asList(mainArgs));
+                }
+                return Collections.unmodifiableList(inputArgs);
+            }
+            return Collections.emptyList();
         }
     }
 
-    /** A shutdown hook to print the PrintGCSummary output. */
-    public static class PrintGCSummaryShutdownHook implements Runnable {
-        @Override
-        public void run() {
-            Heap.getHeap().getGC().printGCSummary();
+    /**
+     * Used by JavaMainWrapper and any user supplied main entry point (from
+     * {@link org.graalvm.nativeimage.hosted.Feature.AfterRegistrationAccess}).
+     */
+    @AlwaysInline(value = "Single callee from the main entry point.")
+    public static int runCore() {
+        Architecture imageArchitecture = ImageSingletons.lookup(SubstrateTargetDescription.class).arch;
+        CPUFeatureAccess cpuFeatureAccess = ImageSingletons.lookup(CPUFeatureAccess.class);
+        cpuFeatureAccess.verifyHostSupportsArchitecture(imageArchitecture);
+
+        int exitCode;
+        try {
+            if (SubstrateOptions.ParseRuntimeOptions.getValue()) {
+                /*
+                 * When options are not parsed yet, it is also too early to run the startup hooks
+                 * because they often depend on option values. The user is expected to manually run
+                 * the startup hooks after setting all option values.
+                 */
+                RuntimeSupport.getRuntimeSupport().executeStartupHooks();
+            }
+
+            /*
+             * Invoke the application's main method. Invoking the main method via a method handle
+             * preserves exceptions, while invoking the main method via reflection would wrap
+             * exceptions in a InvocationTargetException.
+             */
+            JavaMainSupport mainSupport = ImageSingletons.lookup(JavaMainSupport.class);
+            mainSupport.javaMainHandle.invokeExact(mainSupport.mainArgs);
+
+            /* The application terminated normally. */
+            exitCode = 0;
+
+        } catch (Throwable ex) {
+            JavaThreads.dispatchUncaughtException(Thread.currentThread(), ex);
+
+            /*
+             * The application terminated with exception. Note that the exit code is set to 1 even
+             * if an uncaught exception handler is registered. This behavior is the same on the Java
+             * HotSpot VM.
+             */
+            exitCode = 1;
+
+        } finally {
+            /*
+             * Shutdown sequence: First wait for all non-daemon threads to exit.
+             */
+            JavaThreads.singleton().joinAllNonDaemons();
+            /*
+             * Run shutdown hooks (both our own hooks and application-registered hooks. Note that
+             * this can start new non-daemon threads. We are not responsible to wait until they have
+             * exited.
+             */
+            RuntimeSupport.getRuntimeSupport().shutdown();
+
+            Counter.logValues();
         }
+        return exitCode;
     }
 
     @CEntryPoint
-    @CEntryPointOptions(prologue = EnterCreateIsolatePrologue.class, include = CEntryPointOptions.NotIncludedAutomatically.class)
-    public static int run(int paramArgc, CCharPointerPointer paramArgv) throws Exception {
-        JavaMainWrapper.argc = paramArgc;
-        JavaMainWrapper.argv = paramArgv;
-        Architecture imageArchitecture = ImageSingletons.lookup(TargetDescription.class).arch;
-        AMD64CPUFeatureAccess.verifyHostSupportsArchitecture(imageArchitecture);
-        String[] args = SubstrateUtil.getArgs(paramArgc, paramArgv);
-        if (SubstrateOptions.ParseRuntimeOptions.getValue()) {
-            args = RuntimeOptionParser.singleton().parse(args, RuntimeOptionParser.DEFAULT_OPTION_PREFIX);
-            args = RuntimeOptionParser.singleton().parse(args, "-Dgraal.");
-            args = RuntimePropertyParser.parse(args);
-        }
-        try {
-            final RuntimeSupport rs = RuntimeSupport.getRuntimeSupport();
-            if (AllocationSite.Options.AllocationProfiling.getValue()) {
-                rs.addShutdownHook(new AllocationSite.AllocationProfilingShutdownHook());
-            }
-            if (SubstrateOptions.PrintGCSummary.getValue()) {
-                rs.addShutdownHook(new PrintGCSummaryShutdownHook());
-            }
-            try {
-                JavaMainSupport.executeStartupHooks();
-                ImageSingletons.lookup(JavaMainSupport.class).getJavaMainHandle().invokeExact(args);
-            } finally { // always execute the shutdown hooks
-                JavaMainSupport.executeShutdownHooks();
-            }
-        } catch (Throwable ex) {
-            SnippetRuntime.reportUnhandledExceptionJava(ex);
-        }
+    @CEntryPointOptions(prologue = EnterCreateIsolateWithCArgumentsPrologue.class, include = CEntryPointOptions.NotIncludedAutomatically.class)
+    @SuppressWarnings("unused")
+    public static int run(int argc, CCharPointerPointer argv) {
+        return runCore();
+    }
 
-        JavaThreads.singleton().joinAllNonDaemons();
-        Counter.logValues();
-
-        return 0;
+    private static boolean isArgumentBlockSupported() {
+        if (!Platform.includedIn(Platform.LINUX.class) && !Platform.includedIn(Platform.DARWIN.class)) {
+            return false;
+        }
+        CEntryPointCreateIsolateParameters args = MAIN_ISOLATE_PARAMETERS.get();
+        if (args.getArgv().isNull() || args.getArgc() <= 0) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -180,22 +207,28 @@ public class JavaMainWrapper {
      * @return maximum length of C chars that can be stored in the program argument part of the
      *         contiguous memory block without writing into the environment variables part.
      */
-    public static long getCRuntimeArgumentBlockLength() {
-        VMError.guarantee(argv.notEqual(WordFactory.zero()) && argc > 0, "Requires JavaMainWrapper.run(int, CCharPointerPointer) entry point!");
+    public static int getCRuntimeArgumentBlockLength() {
+        if (!isArgumentBlockSupported()) {
+            return -1;
+        }
 
-        CCharPointer firstArgPos = argv.read(0);
+        CEntryPointCreateIsolateParameters args = MAIN_ISOLATE_PARAMETERS.get();
+        CCharPointer firstArgPos = args.getArgv().read(0);
         if (argvLength.equal(WordFactory.zero())) {
             // Get char* to last program argument
-            CCharPointer lastArgPos = argv.read(argc - 1);
+            CCharPointer lastArgPos = args.getArgv().read(args.getArgc() - 1);
             // Determine the length of the last program argument
             UnsignedWord lastArgLength = SubstrateUtil.strlen(lastArgPos);
             // Determine maximum C string length that can be stored in the program argument part
             argvLength = WordFactory.unsigned(lastArgPos.rawValue()).add(lastArgLength).subtract(WordFactory.unsigned(firstArgPos.rawValue()));
         }
-        return argvLength.rawValue();
+        return Math.toIntExact(argvLength.rawValue());
     }
 
     public static boolean setCRuntimeArgument0(String arg0) {
+        if (!isArgumentBlockSupported()) {
+            throw new UnsupportedOperationException("Argument vector support not available");
+        }
         boolean arg0truncation = false;
 
         try (CCharPointerHolder arg0Pin = CTypeConversion.toCString(arg0)) {
@@ -209,53 +242,39 @@ public class JavaMainWrapper {
             }
             arg0truncation = arg0Length.aboveThan(origLength);
 
-            CCharPointer firstArgPos = argv.read(0);
+            CCharPointer firstArgPos = MAIN_ISOLATE_PARAMETERS.get().getArgv().read(0);
             // Copy the new arg0 to the original argv[0] position
-            MemoryUtil.copyConjointMemoryAtomic(WordFactory.pointer(arg0Pointer.rawValue()), WordFactory.pointer(firstArgPos.rawValue()), newArgLength);
+            MemoryUtil.copy((Pointer) arg0Pointer, (Pointer) firstArgPos, newArgLength);
             // Zero-out the remaining space
-            MemoryUtil.fillToMemoryAtomic((Pointer) WordFactory.unsigned(firstArgPos.rawValue()).add(newArgLength), origLength.subtract(newArgLength), (byte) 0);
+            MemoryUtil.fill(((Pointer) firstArgPos).add(newArgLength), origLength.subtract(newArgLength), (byte) 0);
         }
 
         // Let caller know if truncation happened
         return arg0truncation;
     }
 
-    @AutomaticFeature
-    public static class ExposeCRuntimeArgumentBlockFeature implements Feature {
-        @Override
-        public List<Class<? extends Feature>> getRequiredFeatures() {
-            return Arrays.asList(RuntimeFeature.class);
+    public static String getCRuntimeArgument0() {
+        if (!isArgumentBlockSupported()) {
+            throw new UnsupportedOperationException("Argument vector support not available");
         }
-
-        @Override
-        public void afterRegistration(AfterRegistrationAccess access) {
-            RuntimeSupport rs = RuntimeSupport.getRuntimeSupport();
-            rs.addCommandPlugin(new GetCRuntimeArgumentBlockLengthCommand());
-            rs.addCommandPlugin(new SetCRuntimeArgument0Command());
-        }
+        return CTypeConversion.toJavaString(MAIN_ISOLATE_PARAMETERS.get().getArgv().read(0));
     }
 
-    private static class GetCRuntimeArgumentBlockLengthCommand implements CompilerCommandPlugin {
-        @Override
-        public String name() {
-            return "com.oracle.svm.core.JavaMainWrapper.getCRuntimeArgumentBlockLength()long";
-        }
+    private static class EnterCreateIsolateWithCArgumentsPrologue {
+        private static final CGlobalData<CCharPointer> errorMessage = CGlobalDataFactory.createCString(
+                        "Failed to create the main Isolate.");
 
-        @Override
-        public Object apply(Object[] args) {
-            return getCRuntimeArgumentBlockLength();
-        }
-    }
+        @SuppressWarnings("unused")
+        public static void enter(int paramArgc, CCharPointerPointer paramArgv) {
+            CEntryPointCreateIsolateParameters args = MAIN_ISOLATE_PARAMETERS.get();
+            args.setVersion(3);
+            args.setArgc(paramArgc);
+            args.setArgv(paramArgv);
 
-    private static class SetCRuntimeArgument0Command implements CompilerCommandPlugin {
-        @Override
-        public String name() {
-            return "com.oracle.svm.core.JavaMainWrapper.setCRuntimeArgument0(String)boolean";
-        }
-
-        @Override
-        public Object apply(Object[] args) {
-            return setCRuntimeArgument0((String) args[0]);
+            int code = CEntryPointActions.enterCreateIsolate(args);
+            if (code != 0) {
+                CEntryPointActions.failFatally(code, errorMessage.get());
+            }
         }
     }
 }
