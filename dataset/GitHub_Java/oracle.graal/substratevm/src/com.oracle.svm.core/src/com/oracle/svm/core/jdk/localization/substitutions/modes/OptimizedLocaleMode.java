@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,13 +24,13 @@
  */
 package com.oracle.svm.core.jdk.localization.substitutions.modes;
 
-import com.oracle.svm.core.jdk.localization.LocalizationFeature;
-
 import java.util.function.BooleanSupplier;
+
+import com.oracle.svm.core.jdk.localization.LocalizationSupport;
 
 public class OptimizedLocaleMode implements BooleanSupplier {
     @Override
     public boolean getAsBoolean() {
-        return LocalizationFeature.optimizedMode();
+        return LocalizationSupport.optimizedMode();
     }
 }
