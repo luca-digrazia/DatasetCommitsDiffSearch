@@ -22,20 +22,19 @@
  */
 package com.oracle.truffle.espresso.impl;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 
-import java.util.ArrayList;
-import java.util.List;
-
 class LinkedFieldTable {
     static class CreationResult {
         final LinkedField[] instanceFields;
         final LinkedField[] staticFields;
-        final LinkedField[] hiddenFields;
 
         final int[][] leftoverHoles;
 
@@ -45,11 +44,10 @@ class LinkedFieldTable {
         final int objectFields;
         final int staticObjectFields;
 
-        CreationResult(LinkedField[] instanceFields, LinkedField[] staticFields, LinkedField[] hiddenFields, int[][] leftoverHoles, int primitiveFieldTotalByteCount,
-                        int primitiveStaticFieldTotalByteCount, int fieldTableLength, int objectFields, int staticObjectFields) {
+        CreationResult(LinkedField[] instanceFields, LinkedField[] staticFields, int[][] leftoverHoles, int primitiveFieldTotalByteCount, int primitiveStaticFieldTotalByteCount, int fieldTableLength,
+                        int objectFields, int staticObjectFields) {
             this.instanceFields = instanceFields;
             this.staticFields = staticFields;
-            this.hiddenFields = hiddenFields;
             this.leftoverHoles = leftoverHoles;
             this.primitiveFieldTotalByteCount = primitiveFieldTotalByteCount;
             this.primitiveStaticFieldTotalByteCount = primitiveStaticFieldTotalByteCount;
@@ -83,7 +81,6 @@ class LinkedFieldTable {
     public static CreationResult create(LinkedKlass linkedKlass) {
         ArrayList<LinkedField> instanceFields = new ArrayList<>();
         ArrayList<LinkedField> staticFields = new ArrayList<>();
-        ArrayList<LinkedField> hiddenFields;
 
         int[] primitiveCounts = new int[N_PRIMITIVES];
         int[] staticPrimitiveCounts = new int[N_PRIMITIVES];
@@ -120,7 +117,7 @@ class LinkedFieldTable {
 
         ParserField[] parserFields = linkedKlass.getParserKlass().getFields();
         for (int i = 0; i < parserFields.length; i++) {
-            LinkedField f = new LinkedField(parserFields[i], linkedKlass);
+            LinkedField f = new LinkedField(parserFields[i]);
             if (f.isStatic()) {
                 f.setSlot(nextStaticFieldTableSlot++);
                 if (f.getKind().isPrimitive()) {
@@ -181,14 +178,13 @@ class LinkedFieldTable {
             }
         }
 
-        hiddenFields = createHiddenFields(linkedKlass.getType(), linkedKlass, nextFieldTableSlot, nextObjectFieldIndex);
-        nextFieldTableSlot += hiddenFields.size();
-        nextObjectFieldIndex += hiddenFields.size();
+        int hiddenFields = addHiddenFields(linkedKlass.getType(), instanceFields, nextFieldTableSlot, nextObjectFieldIndex);
+        nextFieldTableSlot += hiddenFields;
+        nextObjectFieldIndex += hiddenFields;
 
         return new CreationResult(
                         instanceFields.toArray(LinkedField.EMPTY_ARRAY),
                         staticFields.toArray(LinkedField.EMPTY_ARRAY),
-                        hiddenFields.toArray(LinkedField.EMPTY_ARRAY),
                         schedule.nextLeftoverHoles,
                         primitiveOffsets[N_PRIMITIVES - 1],
                         staticPrimitiveOffsets[N_PRIMITIVES - 1],
@@ -213,59 +209,51 @@ class LinkedFieldTable {
         return superTotalByteCount + order[i].getByteCount() - r;
     }
 
-    private static ArrayList<LinkedField> createHiddenFields(Symbol<Type> type, LinkedKlass linkedKlass, int nextFieldTableSlot, int nextObjectFieldIndex) {
-        ArrayList<LinkedField> hiddenFields = new ArrayList<>();
+    private static int addHiddenFields(Symbol<Type> type, ArrayList<LinkedField> instanceFields, int nextFieldTableSlot, int nextObjectFieldIndex) {
         int nfts = nextFieldTableSlot;
         int nofi = nextObjectFieldIndex;
         if (type == Type.java_lang_invoke_MemberName) {
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_VMTARGET));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_VMINDEX));
-            return hiddenFields;
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_VMTARGET, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_VMINDEX, nfts++, nofi++));
         } else if (type == Type.java_lang_reflect_Method) {
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_METHOD_KEY));
-            return hiddenFields;
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_METHOD_KEY, nfts++, nofi++));
         } else if (type == Type.java_lang_reflect_Constructor) {
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_CONSTRUCTOR_KEY));
-            return hiddenFields;
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_CONSTRUCTOR_KEY, nfts++, nofi++));
         } else if (type == Type.java_lang_reflect_Field) {
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_FIELD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_FIELD_KEY));
-            return hiddenFields;
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_FIELD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_FIELD_KEY, nfts++, nofi++));
         } else if (type == Type.java_lang_ref_Reference) {
             // All references (including strong) get an extra hidden field, this simplifies the code
             // for weak/soft/phantom/final references.
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_HOST_REFERENCE));
-            return hiddenFields;
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_HOST_REFERENCE, nfts++, nofi++));
         } else if (type == Type.java_lang_Throwable) {
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_FRAMES));
-            return hiddenFields;
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_FRAMES, nfts++, nofi++));
         } else if (type == Type.java_lang_Thread) {
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_HOST_THREAD));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_IS_ALIVE));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_INTERRUPTED));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_DEATH));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_DEATH_THROWABLE));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_SUSPEND_LOCK));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_HOST_THREAD, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_IS_ALIVE, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_INTERRUPTED, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_DEATH, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_DEATH_THROWABLE, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_SUSPEND_LOCK, nfts++, nofi++));
 
             // Only used for j.l.management bookkeeping.
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_THREAD_BLOCKED_OBJECT));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_THREAD_BLOCKED_COUNT));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_THREAD_WAITED_COUNT));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_THREAD_BLOCKED_OBJECT, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_THREAD_BLOCKED_COUNT, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_THREAD_WAITED_COUNT, nfts++, nofi++));
 
-            return hiddenFields;
         } else if (type == Type.java_lang_Class) {
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_SIGNERS));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_MIRROR_KLASS));
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_PROTECTION_DOMAIN));
-            return hiddenFields;
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_SIGNERS, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_MIRROR_KLASS, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_PROTECTION_DOMAIN, nfts++, nofi++));
         } else if (type == Type.java_lang_ClassLoader) {
-            hiddenFields.add(LinkedField.createHidden(linkedKlass, nfts++, nofi++, Name.HIDDEN_CLASS_LOADER_REGISTRY));
-            return hiddenFields;
-        } else {
-            return hiddenFields;
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_CLASS_LOADER_REGISTRY, nfts++, nofi++));
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_CLASS_LOADER_REGISTRY, nfts++, nofi++));
+        } else if (type == Type.java_lang_Module) {
+            instanceFields.add(LinkedField.createHidden(Name.HIDDEN_MODULE_ENTRY, nfts++, nofi++));
         }
+        return nfts - nextFieldTableSlot;
     }
 
     /**

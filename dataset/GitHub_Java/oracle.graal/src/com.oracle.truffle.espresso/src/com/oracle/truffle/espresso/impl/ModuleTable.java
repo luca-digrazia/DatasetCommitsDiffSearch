@@ -30,7 +30,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegistry> {
-    static final Object moduleLock = new Object();
+    public static final Object moduleLock = new Object();
 
     @Override
     public Object getLock() {
@@ -71,10 +71,6 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
         private boolean isOpen = false;
 
         private ArrayList<ModuleEntry> reads;
-
-        public ClassRegistry registry() {
-            return registry;
-        }
 
         public void addReads(ModuleEntry module) {
             if (!isNamed()) {

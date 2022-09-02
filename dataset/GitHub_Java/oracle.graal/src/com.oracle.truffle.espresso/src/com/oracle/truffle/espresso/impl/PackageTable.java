@@ -29,10 +29,9 @@ import java.util.ArrayList;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
 
-public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEntry> {
-    private static final Object packageLock = moduleLock;
+public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleTable.ModuleEntry> {
+    public static final Object packageLock = moduleLock;
 
     @Override
     public Object getLock() {
@@ -40,7 +39,7 @@ public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEn
     }
 
     @Override
-    public PackageEntry createEntry(Symbol<Name> name, ModuleEntry appendix) {
+    public PackageEntry createEntry(Symbol<Name> name, ModuleTable.ModuleEntry appendix) {
         return new PackageEntry(name, appendix);
     }
 
@@ -51,18 +50,18 @@ public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEn
             return name;
         }
 
-        public PackageEntry(Symbol<Name> name, ModuleEntry module) {
+        public PackageEntry(Symbol<Name> name, ModuleTable.ModuleEntry module) {
             this.name = name;
             this.module = module;
         }
 
         private final Symbol<Name> name;
-        private final ModuleEntry module;
-        private ArrayList<ModuleEntry> exports = null;
+        private final ModuleTable.ModuleEntry module;
+        private ArrayList<ModuleTable.ModuleEntry> exports = null;
         private boolean isUnqualifiedExports = false;
         private boolean isExportedAllUnnamed = false;
 
-        public void addExports(ModuleEntry module) {
+        public void addExports(ModuleTable.ModuleEntry module) {
             if (isUnqualifiedExports()) {
                 return;
             }
@@ -79,7 +78,7 @@ public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEn
             }
         }
 
-        public boolean isQualifiedExportTo(ModuleEntry m) {
+        public boolean isQualifiedExportTo(ModuleTable.ModuleEntry m) {
             if (isExportedAllUnnamed() && !m.isNamed()) {
                 return true;
             }
@@ -115,7 +114,7 @@ public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEn
             }
         }
 
-        public ModuleEntry module() {
+        public ModuleTable.ModuleEntry module() {
             return module;
         }
 

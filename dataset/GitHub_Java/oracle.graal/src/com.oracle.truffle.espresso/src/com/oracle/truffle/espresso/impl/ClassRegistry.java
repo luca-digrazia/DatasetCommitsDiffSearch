@@ -31,7 +31,6 @@ import com.oracle.truffle.espresso.classfile.ClassfileStream;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
-import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -114,12 +113,12 @@ public abstract class ClassRegistry implements ContextAccess {
     private final EspressoContext context;
 
     private final int loaderID;
-    protected final ModuleEntry unnamed;
+    protected final ModuleTable.ModuleEntry unnamed;
 
     private final PackageTable packages = new PackageTable();
     private final ModuleTable modules = new ModuleTable();
 
-    public ModuleEntry getUnnamedModule() {
+    public ModuleTable.ModuleEntry getUnnamedModule() {
         return unnamed;
     }
 
@@ -151,7 +150,7 @@ public abstract class ClassRegistry implements ContextAccess {
     protected ClassRegistry(EspressoContext context) {
         this.context = context;
         this.loaderID = context.getNewLoaderId();
-        this.unnamed = ModuleEntry.createUnnamedModuleEntry(StaticObject.NULL, this);
+        this.unnamed = ModuleTable.ModuleEntry.createUnnamedModuleEntry(null, this);
 
     }
 

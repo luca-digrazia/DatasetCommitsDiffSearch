@@ -149,9 +149,6 @@ public final class Symbol<T> extends ByteSequence {
             /* nop */
         }
 
-        // java.base
-        public static final Symbol<Name> java_base = StaticSymbols.putName("java.base");
-
         // general
         public static final Symbol<Name> _init_ = StaticSymbols.putName("<init>");
         public static final Symbol<Name> _clinit_ = StaticSymbols.putName("<clinit>");
@@ -448,8 +445,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Type> java_lang_ClassLoader = StaticSymbols.putType(java.lang.ClassLoader.class);
         public static final Symbol<Type> java_lang_ClassLoader$NativeLibrary = StaticSymbols.putType("Ljava/lang/ClassLoader$NativeLibrary;");
         public static final Symbol<Type> sun_misc_Launcher$ExtClassLoader = StaticSymbols.putType("Lsun/misc/Launcher$ExtClassLoader;");
-
-        public static final Symbol<Type> jdk_internal_ClassLoaders$PlatformClassLoader = StaticSymbols.putType("Ljdk/internal/loader/ClassLoaders$PlatformClassLoader;");
 
         // Primitive types.
         public static final Symbol<Type> _boolean = StaticSymbols.putType(boolean.class);
