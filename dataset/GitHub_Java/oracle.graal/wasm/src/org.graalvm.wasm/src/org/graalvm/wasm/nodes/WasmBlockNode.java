@@ -49,7 +49,6 @@ import com.oracle.truffle.api.ExactMath;
 import com.oracle.truffle.api.HostCompilerDirectives.BytecodeInterpreterSwitch;
 import com.oracle.truffle.api.HostCompilerDirectives.BytecodeInterpreterSwitchBoundary;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.frame.FrameSlotTypeException;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -634,15 +633,14 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                             CompilerDirectives.transferToInterpreter();
                             throw WasmException.format(Failure.UNINITIALIZED_ELEMENT, this, "Table element at index %d is uninitialized.", elementIndex);
                         }
-                        final WasmFunctionInstance functionInstance;
                         final WasmFunction function;
                         final CallTarget target;
                         final WasmContext.Uid functionInstanceContextUid;
                         if (element instanceof WasmFunctionInstance) {
-                            functionInstance = (WasmFunctionInstance) element;
+                            final WasmFunctionInstance functionInstance = (WasmFunctionInstance) element;
                             function = functionInstance.function();
                             target = functionInstance.target();
-                            functionInstanceContextUid = functionInstance.context().uid();
+                            functionInstanceContextUid = functionInstance.contextUid();
                         } else {
                             CompilerDirectives.transferToInterpreter();
                             throw WasmException.format(Failure.UNSPECIFIED_TRAP, this, "Unknown table element type: %s", element);
@@ -685,15 +683,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         Object[] args = createArgumentsForCall(stacklocals, expectedFunctionTypeIndex, numArgs, stackPointer);
                         stackPointer -= args.length;
 
-                        TruffleContext truffleContext = functionInstance.context().environment().getContext();
-                        Object prev = truffleContext.enter(this);
-                        final Object result;
-                        try {
-                            result = executeIndirectCallNode(childrenOffset, target, args);
-                        } finally {
-                            truffleContext.leave(this, prev);
-                        }
-
+                        final Object result = executeIndirectCallNode(childrenOffset, target, args);
                         childrenOffset++;
 
                         // At the moment, WebAssembly functions may return up to one value.
