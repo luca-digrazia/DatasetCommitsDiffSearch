@@ -483,9 +483,9 @@ final class LanguageAccessor extends Accessor {
         }
 
         @Override
-        public boolean hasAllAccess(Object fileSystemContext) {
+        public boolean isDefaultFileSystem(Object fileSystemContext) {
             TruffleFile.FileSystemContext ctx = (TruffleFile.FileSystemContext) fileSystemContext;
-            return engineAccess().hasAllAccess(ctx.fileSystem);
+            return engineAccess().isDefaultFileSystem(ctx.fileSystem);
         }
 
         @Override
