@@ -585,7 +585,7 @@ class JDWP {
         static class REFERENCE_TYPE {
             public static final int ID = 1;
 
-            static PacketStream createReply(Packet packet, EspressoContext context) {
+            static PacketStream createReply(Packet packet) {
                 PacketStream input = new PacketStream(packet);
                 long objectId = input.readLong();
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
@@ -594,12 +594,7 @@ class JDWP {
                 // can be either a ClassObjectId or a StaticObject
                 Klass klass;
                 if (object instanceof StaticObject) {
-                    if (StaticObject.NULL == object) {
-                        // null object
-                        klass = NullKlass.getKlass(context);
-                    } else {
-                        klass = ((StaticObject) object).getKlass();
-                    }
+                    klass = ((StaticObject) object).getKlass();
                 } else {
                     klass = ((ClassObjectId) object).getRefType();
                 }
@@ -731,7 +726,7 @@ class JDWP {
                 long objectId = input.readLong();
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 StaticObject object = (StaticObject) Ids.fromId((int) objectId);
-                reply.writeBoolean(object == StaticObject.NULL);
+                reply.writeBoolean(object == Ids.UNKNOWN);
                 return reply;
             }
         }
@@ -749,11 +744,7 @@ class JDWP {
                 StaticObject string = (StaticObject) Ids.fromId((int) objectId);
 
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                if (string == StaticObject.NULL) {
-                    reply.writeString("null");
-                } else {
-                    reply.writeString(string.asString());
-                }
+                reply.writeString(string.asString());
                 return reply;
             }
         }
@@ -875,7 +866,7 @@ class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
                 // verify that we're replying for the currently suspended thread
-                if (Ids.fromId((int) threadId) == StaticObject.NULL) {
+                if (Ids.fromId((int) threadId) == Ids.UNKNOWN) {
                     reply.errorCode(20); // TODO(Gregersen) - setup and use error code constant
                     return reply;
                 }
