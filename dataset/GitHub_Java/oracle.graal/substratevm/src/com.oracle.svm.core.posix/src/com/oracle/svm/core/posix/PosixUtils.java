@@ -28,10 +28,7 @@ import java.io.FileDescriptor;
 import java.io.IOException;
 import java.util.function.Function;
 
-import com.oracle.svm.core.posix.linux.libc.GLibC;
-import com.oracle.svm.core.c.libc.LibCBase;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
@@ -39,6 +36,7 @@ import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
+import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.SignedWord;
 import org.graalvm.word.UnsignedWord;
@@ -93,8 +91,7 @@ public class PosixUtils {
             case "LC_MESSAGES":
                 return Locale.LC_MESSAGES();
         }
-
-        if (Platform.includedIn(Platform.LINUX.class) && ImageSingletons.lookup(LibCBase.class).getClass().equals(GLibC.class)) {
+        if (Platform.includedIn(InternalPlatform.LINUX_JNI_AND_SUBSTITUTIONS.class)) {
             switch (category) {
                 case "LC_PAPER":
                     return Locale.LC_PAPER();
@@ -207,10 +204,7 @@ public class PosixUtils {
                 return false;
             }
 
-            SignedWord n;
-            do {
-                n = Unistd.write(fd, curBuf, curLen);
-            } while (n.equal(-1) && CErrorNumber.getCErrorNumber() == Errno.EINTR());
+            SignedWord n = Unistd.write(fd, curBuf, curLen);
 
             if (n.equal(-1)) {
                 return false;
@@ -247,6 +241,22 @@ public class PosixUtils {
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public static void checkStatusIs0(int status, String message) {
         VMError.guarantee(status == 0, message);
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static boolean readEntirely(int fd, CCharPointer buffer, int bufferLen) {
+        int bufferOffset = 0;
+        for (;;) {
+            int readBytes = readBytes(fd, buffer, bufferLen - 1, bufferOffset);
+            if (readBytes < 0) { // NOTE: also when file does not fit in buffer
+                return false;
+            }
+            bufferOffset += readBytes;
+            if (readBytes == 0) { // EOF, terminate string
+                buffer.write(bufferOffset, (byte) 0);
+                return true;
+            }
+        }
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)

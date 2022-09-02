@@ -182,7 +182,6 @@ final class Util_jdk_internal_misc_Signal {
 
                     /* Create and start a daemon thread to dispatch to Java signal handlers. */
                     dispatchThread = new Thread(new DispatchThread());
-                    dispatchThread.setName("Signal Dispatcher");
                     dispatchThread.setDaemon(true);
                     dispatchThread.start();
                     RuntimeSupport.getRuntimeSupport().addTearDownHook(() -> DispatchThread.interrupt(dispatchThread));
