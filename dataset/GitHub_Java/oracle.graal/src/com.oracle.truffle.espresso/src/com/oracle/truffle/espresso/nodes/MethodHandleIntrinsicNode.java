@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,9 +27,14 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.object.DebugCounter;
 
+/**
+ * Top of the method handle intrinsic behavior implementation hierarchy.
+ */
 public abstract class MethodHandleIntrinsicNode extends Node implements ContextAccess {
-    static final boolean USE_CACHE = false;
+    protected static final DebugCounter hits = DebugCounter.create("MH cache hits");
+    protected static final DebugCounter miss = DebugCounter.create("MH cache miss");
 
     protected final Method method;
 
@@ -47,6 +52,10 @@ public abstract class MethodHandleIntrinsicNode extends Node implements ContextA
     @Override
     public EspressoContext getContext() {
         return method.getContext();
+    }
+
+    public boolean inliningEnabled() {
+        return getContext().InlineMethodHandle;
     }
 
     public abstract Object call(Object[] args);

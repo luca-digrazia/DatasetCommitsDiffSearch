@@ -87,7 +87,6 @@ public final class EspressoContext {
     private StaticObject mainThreadGroup;
 
     private final AtomicInteger klassIdProvider = new AtomicInteger();
-    public long initVMDoneMs;
     private boolean mainThreadCreated;
     private JDWPContextImpl jdwpContext;
     private VMListener eventListener;
@@ -135,39 +134,7 @@ public final class EspressoContext {
         this.SplitMethodHandles = JDWPOptions != null ? false : env.getOptions().get(EspressoOptions.SplitMethodHandles);
         this.Verify = env.getOptions().get(EspressoOptions.Verify);
         this.SpecCompliancyMode = env.getOptions().get(EspressoOptions.SpecCompliancy);
-        this.EnableManagement = env.getOptions().get(EspressoOptions.EnableManagement);
     }
-
-    public ManagementStats getManagementStats() {
-        return stats;
-    }
-
-    // region Management counters
-
-    public static class ManagementStats {
-        private int threadPeakCount;
-        private int threadTotalCount;
-
-        public int getThreadPeakCount() {
-            return threadPeakCount;
-        }
-
-        public void setThreadPeakCount(int threadPeakCount) {
-            this.threadPeakCount = threadPeakCount;
-        }
-
-        public int getThreadTotalCount() {
-            return threadTotalCount;
-        }
-
-        public void setThreadTotalCount(int threadTotalCount) {
-            this.threadTotalCount = threadTotalCount;
-        }
-    }
-
-    private ManagementStats stats = new ManagementStats();
-
-    // endregion Management counters
 
     public ClassRegistries getRegistries() {
         return registries;
@@ -387,7 +354,6 @@ public final class EspressoContext {
         this.outOfMemory = new EspressoException(outOfMemoryErrorInstance);
 
         EspressoLogger.log(Level.FINE, "VM booted in {0} ms", System.currentTimeMillis() - ticks);
-        initVMDoneMs = System.currentTimeMillis();
     }
 
     private void casNextIfNullAndMaybeClear(@SuppressWarnings("rawtypes") EspressoReference wrapper) {
@@ -655,7 +621,6 @@ public final class EspressoContext {
     public final EspressoOptions.VerifyMode Verify;
     public final JDWPOptions JDWPOptions;
     public final EspressoOptions.SpecCompliancyMode SpecCompliancyMode;
-    public final boolean EnableManagement;
 
     public EspressoOptions.SpecCompliancyMode specCompliancyMode() {
         return SpecCompliancyMode;
@@ -671,6 +636,23 @@ public final class EspressoContext {
 
     public StaticObject getMainThread() {
         return threadManager.getMainThread();
+    }
+
+    public boolean isValidThread(Object thread) {
+        StaticObject[] activeThreads = threadManager.activeThreads();
+
+        for (StaticObject activeThread : activeThreads) {
+            if (activeThread == thread) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @SuppressWarnings("static-method")
+    public boolean isValidThreadGroup(@SuppressWarnings("unused") Object threadGroup) {
+        // TODO(Gregersen) - validate if this is a valid threadgroup
+        return true;
     }
 
     public StaticObject getMainThreadGroup() {

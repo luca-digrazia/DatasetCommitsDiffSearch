@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,11 +22,9 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import java.nio.ByteBuffer;
 import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.espresso.classfile.constantpool.PoolConstant;
 
 /**
  * Immutable constant pool implementation backed by an array of constants.
@@ -39,13 +37,13 @@ final class ConstantPoolImpl extends ConstantPool {
     @CompilationFinal(dimensions = 1) //
     private final PoolConstant[] constants;
 
-    private final int totalPoolBytes;
+    private final byte[] rawBytes;
 
-    ConstantPoolImpl(PoolConstant[] constants, int majorVersion, int minorVersion, int totalPoolBytes) {
+    ConstantPoolImpl(PoolConstant[] constants, int majorVersion, int minorVersion, byte[] rawBytes) {
         this.constants = Objects.requireNonNull(constants);
         this.majorVersion = majorVersion;
         this.minorVersion = minorVersion;
-        this.totalPoolBytes = totalPoolBytes;
+        this.rawBytes = rawBytes;
     }
 
     @Override
@@ -55,12 +53,7 @@ final class ConstantPoolImpl extends ConstantPool {
 
     @Override
     public byte[] getRawBytes() {
-        byte[] bytes = new byte[totalPoolBytes];
-        ByteBuffer bb = ByteBuffer.wrap(bytes);
-        for (PoolConstant pc : constants) {
-            pc.dumpBytes(bb);
-        }
-        return bytes;
+        return rawBytes;
     }
 
     @Override

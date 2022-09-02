@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
@@ -80,7 +79,7 @@ public final class RequestedJDWPEvents {
         byte suspendPolicy = input.readByte();
         int modifiers = input.readInt();
 
-        RequestFilter filter = new RequestFilter(packet.id, eventKind, suspendPolicy);
+        RequestFilter filter = new RequestFilter(packet.id, eventKind, modifiers, suspendPolicy);
         JDWPLogger.log("New event request with ID: %d with kind: %d and %d modifiers", JDWPLogger.LogLevel.STEPPING, packet.id, eventKind, modifiers);
         for (int i = 0; i < modifiers; i++) {
             byte modKind = input.readByte();
@@ -105,30 +104,11 @@ public final class RequestedJDWPEvents {
                 }
                 break;
             case METHOD_EXIT_WITH_RETURN_VALUE:
-            case METHOD_EXIT:
-                MethodBreakpointInfo methodInfo = new MethodBreakpointInfo(filter);
-                methodInfo.addSuspendPolicy(suspendPolicy);
-                eventListener.addBreakpointRequest(filter.getRequestId(), methodInfo);
-                eventListener.increaseMethodBreakpointCount();
-                for (KlassRef klass : filter.getKlassRefPatterns()) {
-                    for (MethodRef method : klass.getDeclaredMethodRefs()) {
-                        method.addMethodBreakpointInfo(methodInfo);
-                        methodInfo.addMethod(method);
-                    }
-                }
-                filter.addBreakpointInfo(methodInfo);
-                break;
             case METHOD_ENTRY:
-                BreakpointInfo info = filter.getBreakpointInfo();
-                if (info == null) {
-                    info = new MethodBreakpointInfo(filter);
-                }
-                info.addSuspendPolicy(suspendPolicy);
-                eventListener.addBreakpointRequest(filter.getRequestId(), info);
-                prefutures.add(callback.createMethodEntryBreakpointCommand(info));
+            case METHOD_EXIT:
                 break;
             case BREAKPOINT:
-                info = filter.getBreakpointInfo();
+                BreakpointInfo info = filter.getBreakpointInfo();
                 info.addSuspendPolicy(suspendPolicy);
                 eventListener.addBreakpointRequest(filter.getRequestId(), info);
                 prefutures.add(callback.createLineBreakpointCommand(info));
@@ -170,10 +150,10 @@ public final class RequestedJDWPEvents {
                 eventListener.increaseFieldBreakpointCount();
                 break;
             case THREAD_START:
-                eventListener.addThreadStartedRequestId(packet.id, suspendPolicy);
+                eventListener.addThreadStartedRequestId(packet.id);
                 break;
             case THREAD_DEATH:
-                eventListener.addThreadDiedRequestId(packet.id, suspendPolicy);
+                eventListener.addThreadDiedRequestId(packet.id);
                 break;
             case CLASS_UNLOAD:
                 eventListener.addClassUnloadRequestId(packet.id);
@@ -183,18 +163,6 @@ public final class RequestedJDWPEvents {
                 break;
             case VM_DEATH: // no debuggers should request this event
                 eventListener.addVMDeathRequest(packet.id);
-                break;
-            case MONITOR_CONTENDED_ENTER:
-                eventListener.addMonitorContendedEnterRequest(packet.id, filter);
-                break;
-            case MONITOR_CONTENDED_ENTERED:
-                eventListener.addMonitorContendedEnteredRequest(packet.id, filter);
-                break;
-            case MONITOR_WAIT:
-                eventListener.addMonitorWaitRequest(packet.id, filter);
-                break;
-            case MONITOR_WAITED:
-                eventListener.addMonitorWaitedRequest(packet.id, filter);
                 break;
             default:
                 JDWPLogger.log("unhandled event kind %d", JDWPLogger.LogLevel.PACKET, eventKind);
@@ -339,15 +307,10 @@ public final class RequestedJDWPEvents {
                     case SINGLE_STEP:
                         break;
                     case METHOD_EXIT_WITH_RETURN_VALUE:
+                    case METHOD_ENTRY:
                     case METHOD_EXIT:
-                        MethodBreakpointInfo methodInfo = (MethodBreakpointInfo) requestFilter.getBreakpointInfo();
-                        for (MethodRef method : methodInfo.getMethods()) {
-                            method.removeMethodBreakpointInfo(requestFilter.getRequestId());
-                        }
-                        eventListener.decreaseMethodBreakpointCount();
                         break;
                     case BREAKPOINT:
-                    case METHOD_ENTRY:
                     case EXCEPTION:
                         eventListener.removeBreakpointRequest(requestFilter.getRequestId());
                         break;
@@ -361,25 +324,13 @@ public final class RequestedJDWPEvents {
                         eventListener.removeClassPrepareRequest(requestFilter.getRequestId());
                         break;
                     case THREAD_START:
-                        eventListener.removeThreadStartedRequestId();
+                        eventListener.addThreadStartedRequestId(packet.id);
                         break;
                     case THREAD_DEATH:
-                        eventListener.removeThreadDiedRequestId();
+                        eventListener.addThreadDiedRequestId(packet.id);
                         break;
                     case CLASS_UNLOAD:
                         eventListener.addClassUnloadRequestId(packet.id);
-                        break;
-                    case MONITOR_CONTENDED_ENTER:
-                        eventListener.removeMonitorContendedEnterRequest(requestId);
-                        break;
-                    case MONITOR_CONTENDED_ENTERED:
-                        eventListener.removeMonitorContendedEnteredRequest(requestId);
-                        break;
-                    case MONITOR_WAIT:
-                        eventListener.removeMonitorWaitRequest(requestId);
-                        break;
-                    case MONITOR_WAITED:
-                        eventListener.removeMonitorWaitedRequest(requestId);
                         break;
                     default:
                         JDWPLogger.log("unhandled event clear kind %d", JDWPLogger.LogLevel.PACKET, eventKind);

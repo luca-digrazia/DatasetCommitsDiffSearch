@@ -33,9 +33,7 @@ import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 import com.oracle.truffle.espresso.jdwp.api.TagConstants;
 
-import java.nio.file.Path;
 import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.Callable;
 
 import static com.oracle.truffle.espresso.jdwp.api.TagConstants.BOOLEAN;
@@ -47,8 +45,6 @@ final class JDWP {
 
     private static final boolean CAN_REDEFINE_CLASSES = false;
     private static final boolean CAN_GET_INSTANCE_INFO = false;
-    private static final boolean CAN_FORCE_EARLY_RETURN = false;
-    private static final boolean CAN_GET_MONITOR_FRAME_INFO = false;
 
     private static final int ACC_SYNTHETIC = 0x00001000;
     private static final int JDWP_SYNTHETIC = 0xF0000000;
@@ -156,13 +152,13 @@ final class JDWP {
             static CommandResult createReply(Packet packet, DebuggerController controller) {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
 
-                return new CommandResult(reply, null, Collections.singletonList(new Callable<Void>() {
+                return new CommandResult(reply, Collections.singletonList(new Callable<Void>() {
                     @Override
                     public Void call() throws Exception {
                         controller.disposeDebugger(true);
                         return null;
                     }
-                }));
+                }), null);
             }
         }
 
@@ -250,33 +246,11 @@ final class JDWP {
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.writeBoolean(true); // canWatchFieldModification
                 reply.writeBoolean(true); // canWatchFieldAccess
-                reply.writeBoolean(true); // canGetBytecodes
+                reply.writeBoolean(false); // canGetBytecodes
                 reply.writeBoolean(true); // canGetSyntheticAttribute
                 reply.writeBoolean(false); // canGetOwnedMonitorInfo
                 reply.writeBoolean(false); // canGetCurrentContendedMonitor
                 reply.writeBoolean(false); // canGetMonitorInfo
-                return new CommandResult(reply);
-            }
-        }
-
-        static class CLASS_PATHS {
-            public static final int ID = 13;
-
-            static CommandResult createReply(Packet packet, JDWPContext context) {
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                reply.writeString("");
-                List<Path> classPath = context.getClassPath();
-                reply.writeInt(classPath.size());
-                for (Path path : classPath) {
-                    reply.writeString(path.toAbsolutePath().toString());
-                }
-                List<Path> bootClassPath = context.getBootClassPath();
-                reply.writeInt(bootClassPath.size());
-                for (Path path : bootClassPath) {
-                    reply.writeString(path.toAbsolutePath().toString());
-                }
-
                 return new CommandResult(reply);
             }
         }
@@ -298,30 +272,6 @@ final class JDWP {
             }
         }
 
-        static class HOLD_EVENTS {
-            public static final int ID = 15;
-
-            static CommandResult createReply(Packet packet, JDWPContext context) {
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                context.holdEvents();
-
-                return new CommandResult(reply);
-            }
-        }
-
-        static class RELEASE_EVENTS {
-            public static final int ID = 16;
-
-            static CommandResult createReply(Packet packet, JDWPContext context) {
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                context.releaseEvents();
-
-                return new CommandResult(reply);
-            }
-        }
-
         static class CAPABILITIES_NEW {
             public static final int ID = 17;
 
@@ -330,7 +280,7 @@ final class JDWP {
 
                 reply.writeBoolean(true); // canWatchFieldModification
                 reply.writeBoolean(true); // canWatchFieldAccess
-                reply.writeBoolean(true); // canGetBytecodes
+                reply.writeBoolean(false); // canGetBytecodes
                 reply.writeBoolean(true); // canGetSyntheticAttribute
                 reply.writeBoolean(false); // canGetOwnedMonitorInfo
                 reply.writeBoolean(false); // canGetCurrentContendedMonitor
@@ -345,10 +295,10 @@ final class JDWP {
                 reply.writeBoolean(false); // canSetDefaultStratum
                 reply.writeBoolean(CAN_GET_INSTANCE_INFO); // canGetInstanceInfo
                 reply.writeBoolean(false); // canRequestMonitorEvents
-                reply.writeBoolean(CAN_GET_MONITOR_FRAME_INFO); // canGetMonitorFrameInfo
+                reply.writeBoolean(false); // canGetMonitorFrameInfo
                 reply.writeBoolean(false); // canUseSourceNameFilters
                 reply.writeBoolean(true); // canGetConstantPool
-                reply.writeBoolean(CAN_FORCE_EARLY_RETURN); // canForceEarlyReturn
+                reply.writeBoolean(false); // canForceEarlyReturn
                 reply.writeBoolean(false); // reserved for future
                 reply.writeBoolean(false); // reserved for future
                 reply.writeBoolean(false); // reserved for future
@@ -997,8 +947,7 @@ final class JDWP {
                     args[i] = readValue(valueKind, input, context);
                 }
 
-                int invocationOptions =  input.readInt();
-                byte suspensionStrategy = invocationOptions == 1 ? SuspendStrategy.EVENT_THREAD : SuspendStrategy.ALL;
+                /* int invocationOptions = */ input.readInt();
                 try {
                     // we have to call the method in the correct thread, so post a
                     // Callable to the controller and wait for the result to appear
@@ -1008,7 +957,7 @@ final class JDWP {
                         public Object call() throws Exception {
                             return method.invokeMethod(null, args);
                         }
-                    }, suspensionStrategy);
+                    });
                     controller.postJobForThread(job);
                     ThreadJob.JobResult result = job.getResult();
 
@@ -1057,8 +1006,7 @@ final class JDWP {
                     args[i] = readValue(valueKind, input, context);
                 }
 
-                int invocationOptions =  input.readInt();
-                byte suspensionStrategy = invocationOptions == 1 ? SuspendStrategy.EVENT_THREAD : SuspendStrategy.ALL;
+                /* int invocationOptions = */ input.readInt();
                 try {
                     // we have to call the method in the correct thread, so post a
                     // Callable to the controller and wait for the result to appear
@@ -1068,7 +1016,7 @@ final class JDWP {
                         public Object call() throws Exception {
                             return method.invokeMethod(null, args);
                         }
-                    }, suspensionStrategy);
+                    });
                     controller.postJobForThread(job);
                     ThreadJob.JobResult result = job.getResult();
 
@@ -1151,8 +1099,7 @@ final class JDWP {
                     args[i] = readValue(valueKind, input, context);
                 }
 
-                int invocationOptions =  input.readInt();
-                byte suspensionStrategy = invocationOptions == 1 ? SuspendStrategy.EVENT_THREAD : SuspendStrategy.ALL;
+                /* int invocationOptions = */ input.readInt();
                 try {
                     // we have to call the method in the correct thread, so post a
                     // Callable to the controller and wait for the result to appear
@@ -1162,7 +1109,7 @@ final class JDWP {
                         public Object call() throws Exception {
                             return method.invokeMethod(null, args);
                         }
-                    }, suspensionStrategy);
+                    });
                     controller.postJobForThread(job);
                     ThreadJob.JobResult result = job.getResult();
 
@@ -1307,6 +1254,11 @@ final class JDWP {
             }
         }
 
+        // TODO(Gregersen) - current disabled by Capabilities.
+        // tracked by /browse/GR-19817
+        // Enabling causes the NetBeans debugger to send wrong stepping
+        // events for step into/over so disabled for now. Perhaps the bytecode
+        // returned from method.getCode() is incorrect?
         static class BYTECODES {
             public static final int ID = 3;
 
@@ -1325,7 +1277,7 @@ final class JDWP {
                     return new CommandResult(reply);
                 }
 
-                byte[] code = method.getOriginalCode();
+                byte[] code = method.getCode();
 
                 reply.writeInt(code.length);
                 reply.writeByteArray(code);
@@ -1540,6 +1492,9 @@ final class JDWP {
                     byte valueKind = input.readByte();
                     args[i] = readValue(valueKind, input, context);
                 }
+                // TODO(Gregersen) - handle invocation options
+                // tracked by /browse/GR-19819
+                /* int options = */ input.readInt();
 
                 Object callee = context.getIds().fromId((int) objectId);
                 MethodRef method = verifyMethodRef(methodId, reply, context);
@@ -1550,8 +1505,6 @@ final class JDWP {
 
                 JDWPLogger.log("trying to invoke method: %s", JDWPLogger.LogLevel.PACKET, method.getNameAsString());
 
-                int invocationOptions =  input.readInt();
-                byte suspensionStrategy = invocationOptions == 1 ? SuspendStrategy.EVENT_THREAD : SuspendStrategy.ALL;
                 try {
                     // we have to call the method in the correct thread, so post a
                     // Callable to the controller and wait for the result to appear
@@ -1560,7 +1513,7 @@ final class JDWP {
                         public Object call() throws Exception {
                             return method.invokeMethod(callee, args);
                         }
-                    }, suspensionStrategy);
+                    });
                     controller.postJobForThread(job);
                     ThreadJob.JobResult result = job.getResult();
 
@@ -1989,38 +1942,6 @@ final class JDWP {
 
                 reply.writeInt(suspensionCount);
                 return new CommandResult(reply);
-            }
-        }
-
-        static class OWNED_MONITORS_STACK_DEPTH_INFO {
-            public static final int ID = 13;
-
-            static CommandResult createReply(Packet packet) {
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                if (!CAN_GET_MONITOR_FRAME_INFO) {
-                    // tracked by: /browse/GR-20413
-                    reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
-                    return new CommandResult(reply);
-                } else {
-                    throw new RuntimeException("Not implemented!");
-                }
-            }
-        }
-
-        static class FORCE_EARLY_RETURN {
-            public static final int ID = 14;
-
-            static CommandResult createReply(Packet packet) {
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-
-                if (!CAN_FORCE_EARLY_RETURN) {
-                    // tracked by: /browse/GR-20412
-                    reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
-                    return new CommandResult(reply);
-                } else {
-                    throw new RuntimeException("Not implemented!");
-                }
             }
         }
 
@@ -2459,20 +2380,6 @@ final class JDWP {
 
                 reply.writeByte(TypeTag.getKind(klass));
                 reply.writeLong(context.getIds().getIdAsLong(klass));
-                return new CommandResult(reply);
-            }
-        }
-    }
-
-    static class Event {
-        public static final int ID = 64;
-
-        static class COMPOSITE {
-            public static final int ID = 100;
-
-            static CommandResult createReply(Packet packet) {
-                PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                reply.errorCode(ErrorCodes.NOT_IMPLEMENTED);
                 return new CommandResult(reply);
             }
         }

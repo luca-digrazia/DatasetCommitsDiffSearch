@@ -348,8 +348,6 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
     private final BranchProfile unbalancedMonitorProfile = BranchProfile.create();
 
-    private int currentBCI;
-
     @TruffleBoundary
     public BytecodeNode(Method method, FrameDescriptor frameDescriptor, FrameSlot monitorSlot, FrameSlot bciSlot) {
         super(method);
@@ -367,10 +365,6 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     public BytecodeNode(BytecodeNode copy) {
         this(copy.getMethod(), copy.getRootNode().getFrameDescriptor(), copy.monitorSlot, copy.bciSlot);
         System.err.println("Copying node for " + getMethod());
-    }
-
-    public int getCurrentBCI() {
-        return currentBCI;
     }
 
     public SourceSection getSourceSectionAtBCI(int bci) {
@@ -604,7 +598,6 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 CompilerAsserts.partialEvaluationConstant(nextStatementIndex);
 
                 if (instrument != null) {
-                    this.currentBCI = curBCI;
                     instrument.notifyStatement(frame, statementIndex, nextStatementIndex);
                     statementIndex = nextStatementIndex;
                 }
@@ -1264,6 +1257,12 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
             instrumentation.notifyReturn(frame, statementIndex, toReturn);
         }
         return toReturn;
+    }
+
+    public void notifyEntry(VirtualFrame frame) {
+        if (instrumentation != null) {
+            instrumentation.notifyEntry(frame);
+        }
     }
 
     public InstrumentableNode materializeInstrumentableNodes(Set<Class<? extends Tag>> materializedTags) {
@@ -2388,11 +2387,9 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         @Child private MapperBCI hookBCIToNodeIndex;
 
         private final EspressoContext context;
-        private final Method method;
 
         InstrumentationSupport(Method method) {
             this.context = method.getContext();
-            this.method = method;
             LineNumberTable table = method.getLineNumberTable();
 
             if (table != LineNumberTable.EMPTY) {
@@ -2424,16 +2421,11 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         }
 
         public void notifyEntry(@SuppressWarnings("unused") VirtualFrame frame) {
-            // TODO(Gregersen) - method entry breakpoints are currently implemented by submitting
-            // first line breakpoints within each method. This works insofar the method has a valid
-            // line table. For classes compiled without debug information we could use this hook
-            // instead.
+            // TODO(Gregersen) - implement method entry breakpoint hooks
         }
 
-        public void notifyReturn(VirtualFrame frame, int statementIndex, Object returnValue) {
-            if (context.getJDWPListener().hasMethodBreakpoint(method, returnValue)) {
-                enterAt(frame, statementIndex);
-            }
+        public void notifyReturn(@SuppressWarnings("unused") VirtualFrame frame, @SuppressWarnings("unused") int statementIndex, @SuppressWarnings("unused") Object toReturn) {
+            // TODO(Gregersen) - implement method return breakpoint hooks
         }
 
         void notifyExceptionAt(VirtualFrame frame, Throwable t, int statementIndex) {
