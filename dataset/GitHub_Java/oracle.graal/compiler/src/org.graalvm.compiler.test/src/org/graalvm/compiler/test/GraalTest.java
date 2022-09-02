@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,14 +30,13 @@ import static org.graalvm.compiler.debug.DebugContext.NO_DESCRIPTION;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileAttribute;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -51,7 +50,6 @@ import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.GlobalMetrics;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.serviceprovider.GraalServices;
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.AssumptionViolatedException;
@@ -69,7 +67,16 @@ import sun.misc.Unsafe;
  */
 public class GraalTest {
 
-    public static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
+    public static final Unsafe UNSAFE;
+    static {
+        try {
+            Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+            theUnsafe.setAccessible(true);
+            UNSAFE = (Unsafe) theUnsafe.get(Unsafe.class);
+        } catch (Exception e) {
+            throw new RuntimeException("exception while trying to get Unsafe", e);
+        }
+    }
 
     protected Method getMethod(String methodName) {
         return getMethod(getClass(), methodName);
@@ -451,7 +458,7 @@ public class GraalTest {
         Runtime.getRuntime().addShutdownHook(new Thread("GlobalMetricsPrinter") {
             @Override
             public void run() {
-                // globalMetrics.print(new OptionValues(OptionValues.newOptionMap()));
+                globalMetrics.print(new OptionValues(OptionValues.newOptionMap()));
             }
         });
     }
@@ -497,30 +504,6 @@ public class GraalTest {
      */
     public static TestRule createTimeoutMillis(long milliseconds) {
         return createTimeout(milliseconds, TimeUnit.MILLISECONDS);
-    }
-
-    public static class TemporaryDirectory implements AutoCloseable {
-
-        public final Path path;
-        private IOException closeException;
-
-        public TemporaryDirectory(Path dir, String prefix, FileAttribute<?>... attrs) throws IOException {
-            path = Files.createTempDirectory(dir == null ? Paths.get(".") : dir, prefix, attrs);
-        }
-
-        @Override
-        public void close() {
-            closeException = removeDirectory(path);
-        }
-
-        public IOException getCloseException() {
-            return closeException;
-        }
-
-        @Override
-        public String toString() {
-            return path.toString();
-        }
     }
 
     /**
