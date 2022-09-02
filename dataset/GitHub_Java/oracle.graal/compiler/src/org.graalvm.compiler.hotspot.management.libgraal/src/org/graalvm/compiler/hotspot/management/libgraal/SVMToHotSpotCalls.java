@@ -34,14 +34,11 @@ import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 
-/**
- * Calls from SVM to HotSpot.
- */
 final class SVMToHotSpotCalls {
 
     private static final String CLASS_SERVICES = "jdk/vm/ci/services/Services";
-    private static final String[] METHOD_GET_FACTORY = {
-                    "getFactory",
+    private static final String[] METHOD_CREATE = {
+                    "createFactory",
                     "()Lorg/graalvm/compiler/hotspot/management/libgraal/runtime/SVMHotSpotGraalRuntimeMBean$Factory;"
     };
     private static final String[] METHOD_SIGNAL = {
@@ -68,8 +65,8 @@ final class SVMToHotSpotCalls {
         return env.getFunctions().getCallStaticObjectMethodA().call(env, servicesClass, getJVMCIClassLoaderId, nullPointer());
     }
 
-    static JNI.JObject getFactory(JNI.JNIEnv env, JNI.JClass svmToHotSpotEntryPointsClass) {
-        JNI.JMethodID createId = findMethod(env, svmToHotSpotEntryPointsClass, METHOD_GET_FACTORY);
+    static JNI.JObject createFactory(JNI.JNIEnv env, JNI.JClass svmToHotSpotEntryPointsClass) {
+        JNI.JMethodID createId = findMethod(env, svmToHotSpotEntryPointsClass, METHOD_CREATE);
         return env.getFunctions().getCallStaticObjectMethodA().call(env, svmToHotSpotEntryPointsClass, createId, nullPointer());
     }
 

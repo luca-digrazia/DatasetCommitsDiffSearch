@@ -98,9 +98,6 @@ import jdk.vm.ci.services.Services;
 public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     private static final boolean IS_AOT = Boolean.parseBoolean(Services.getSavedProperties().get("com.oracle.graalvm.isaot"));
-    /**
-     * A factory for {@link HotSpotGraalManagementRegistration} injected by {@code LibGraalFeature}.
-     */
     private static final Supplier<HotSpotGraalManagementRegistration> AOT_INJECTED_MANAGEMENT = null;
 
     private static boolean checkArrayIndexScaleInvariants(MetaAccessProvider metaAccess) {
@@ -175,7 +172,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
             management = GraalServices.loadSingle(HotSpotGraalManagementRegistration.class, false);
         }
         if (management != null) {
-            management.initialize(this, config);
+            management.initialize(this);
         }
 
         BackendMap backendMap = compilerConfigurationFactory.createBackendMap();
@@ -297,15 +294,13 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
                 HotSpotResolvedObjectType type = ((HotSpotResolvedJavaMethod) compilable).getDeclaringClass();
                 if (type instanceof HotSpotResolvedJavaType) {
                     Class<?> clazz = runtime().getMirror(type);
-                    if (clazz != null) {
-                        try {
-                            ClassLoader cl = clazz.getClassLoader();
-                            if (cl != null) {
-                                loaders.add(cl);
-                            }
-                        } catch (SecurityException e) {
-                            // This loader can obviously not be used for resolving class names
+                    try {
+                        ClassLoader cl = clazz.getClassLoader();
+                        if (cl != null) {
+                            loaders.add(cl);
                         }
+                    } catch (SecurityException e) {
+                        // This loader can obviously not be used for resolving class names
                     }
                 }
             }
@@ -355,7 +350,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         return null;
     }
 
-    @Override
     public HotSpotGC getGarbageCollector() {
         return garbageCollector;
     }
