@@ -23,6 +23,9 @@
 
 package com.oracle.truffle.espresso.nodes.helper;
 
+import java.util.Arrays;
+import java.util.List;
+
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
@@ -32,9 +35,23 @@ import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
+/**
+ * Implements specialized type checking in espresso.
+ * <p>
+ * This node has 3 stages of specialization:
+ * <ul>
+ * <li>Trivial: When the node has seen only cases which are trivial to check, only check for those.
+ * <li>Cached: The first time the node sees a non-trivial check start using a cache.
+ * <li>When the cache overflows, invalidate it and start specializing for the general case
+ * (interface, array, regular class...)
+ * </ul>
+ * <p>
+ * Note that this node can be used even if the type to check is known to be a constant, as all
+ * checks should fold.
+ */
 @SuppressWarnings("unused")
 public abstract class TypeCheckNode extends Node implements ContextAccess {
-    protected static final int LIMIT = 2;
+    protected static final int LIMIT = 4;
 
     private final EspressoContext context;
 
@@ -42,6 +59,17 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
 
     public TypeCheckNode(EspressoContext context) {
         this.context = context;
+        assert checkConsistency();
+    }
+
+    private boolean checkConsistency() {
+        ObjectKlass[] arrayInterfaces = getMeta().java_lang_Object_array.getSuperInterfaces();
+        assert arrayInterfaces != null : "Null interface array for array types.";
+        assert arrayInterfaces.length == 2 : "Unexpected number of interfaces for array types";
+        List<ObjectKlass> interfaceList = Arrays.asList(arrayInterfaces);
+        assert interfaceList.contains(getMeta().java_io_Serializable) : "j.l.Serializable removed from array superinterfaces";
+        assert interfaceList.contains(getMeta().java_lang_Cloneable) : "j.l.Cloneable removed from array superinterfaces";
+        return true;
     }
 
     @Specialization(guards = "typeToCheck == k")
@@ -51,7 +79,7 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
 
     @Specialization(guards = "isJLObject(typeToCheck)")
     protected boolean typeCheckJLObject(Klass typeToCheck, Klass k) {
-        return true;
+        return !k.isPrimitive();
     }
 
     @Specialization(guards = "isFinal(typeToCheck)")
@@ -59,33 +87,12 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
         return typeToCheck == k;
     }
 
-    @Specialization(replaces = {"typeCheckEquals", "typeCheckJLObject", "typeCheckFinal"}, guards = {"typeToCheck == cachedTTC", "k == cachedKlass"}, limit = "LIMIT")
+    @Specialization(guards = {"typeToCheck == cachedTTC", "k == cachedKlass"}, limit = "LIMIT")
     protected boolean typeCheckCached(Klass typeToCheck, Klass k,
                     @Cached("typeToCheck") Klass cachedTTC,
                     @Cached("k") Klass cachedKlass,
                     @Cached("doTypeCheck(typeToCheck, k)") boolean result) {
         return result;
-    }
-
-    @Specialization(replaces = "typeCheckCached", guards = "typeToCheck == k")
-    protected boolean typeCheckEqualsAfterCache(Klass typeToCheck, Klass k) {
-        return true;
-    }
-
-    @Specialization(replaces = "typeCheckCached", guards = "isJLObject(typeToCheck)")
-    protected boolean typeCheckJLObjectAfterCache(Klass typeToCheck, Klass k) {
-        return true;
-    }
-
-    @Specialization(replaces = "typeCheckCached", guards = "isFinal(typeToCheck)")
-    protected boolean typeCheckFinalAfterCache(ObjectKlass typeToCheck, Klass k) {
-        return typeToCheck == k;
-    }
-
-    @Specialization(replaces = "typeCheckCached", guards = "arraySameDim(typeToCheck, k)")
-    protected boolean typeCheckArraySameDim(ArrayKlass typeToCheck, ArrayKlass k,
-                    @Cached("createChild()") TypeCheckNode tcn) {
-        return tcn.executeTypeCheck(typeToCheck.getElementalType(), k.getElementalType());
     }
 
     @Specialization(replaces = "typeCheckCached", guards = "arrayBiggerDim(typeToCheck, k)")
@@ -99,14 +106,41 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
         return elem == getMeta().java_lang_Object || elem == getMeta().java_io_Serializable || elem == getMeta().java_lang_Cloneable;
     }
 
-    @Specialization(replaces = "typeCheckCached", guards = "isInterface(typeToCheck)")
-    protected boolean typeCheckInterface(Klass typeToCheck, ObjectKlass k) {
+    /*
+     * Type checks to j.l.Object or to final class are rare enough to not warrant a runtime check in
+     * the general case for re-specialization.
+     *
+     * However, the equality check should be common enough to be worth a runtime check in the
+     * general case to re-specialize.
+     */
+
+    @Specialization(replaces = "typeCheckCached", guards = {
+                    "typeToCheck != k", // Re-specialize to add typeCheckEquals
+                    "arraySameDim(typeToCheck, k)",
+    })
+    protected boolean typeCheckArraySameDim(ArrayKlass typeToCheck, ArrayKlass k,
+                    @Cached("createChild()") TypeCheckNode tcn) {
+        return tcn.executeTypeCheck(typeToCheck.getElementalType(), k.getElementalType());
+    }
+
+    @Specialization(replaces = "typeCheckCached", guards = "!k.isArray()")
+    protected boolean typeCheckArrayFalse(ArrayKlass typeToCheck, Klass k) {
+        return false;
+    }
+
+    @Specialization(replaces = "typeCheckCached", guards = {
+                    "typeToCheck != k", // Re-specialize to add typeCheckEquals
+                    "isInterface(typeToCheck)"})
+    protected boolean typeCheckInterface(Klass typeToCheck, Klass k) {
         return typeToCheck.checkInterfaceSubclassing(k);
     }
 
-    @Specialization(replaces = "typeCheckCached")
+    @Specialization(replaces = "typeCheckCached", guards = {
+                    "typeToCheck != k", // Re-specialize to add typeCheckEquals
+                    "!isInterface(typeToCheck)"
+    })
     protected boolean typeCheckRegular(Klass typeToCheck, Klass k) {
-        return typeToCheck.checkRegularClassSubclassing(k);
+        return typeToCheck.checkOrdinaryClassSubclassing(k);
     }
 
     protected final boolean isJLObject(Klass k) {
@@ -114,7 +148,7 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
     }
 
     protected static boolean isFinal(Klass k) {
-        return k.isFinal();
+        return k.isFinalFlagSet();
     }
 
     protected static boolean isPrimitive(Klass k) {
