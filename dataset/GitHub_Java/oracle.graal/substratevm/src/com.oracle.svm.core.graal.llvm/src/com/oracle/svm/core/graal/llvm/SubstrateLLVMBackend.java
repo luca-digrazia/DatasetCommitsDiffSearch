@@ -78,7 +78,6 @@ public class SubstrateLLVMBackend extends SubstrateBackend implements LLVMGenera
         LLVMIRBuilder builder = generator.getBuilder();
 
         builder.addMainFunction(generator.getLLVMFunctionType(method));
-        builder.setAttribute(builder.getMainFunction(), LLVM.LLVMAttributeFunctionIndex, "naked");
 
         LLVMBasicBlockRef block = builder.appendBasicBlock("main");
         builder.positionAtEnd(block);
@@ -86,9 +85,7 @@ public class SubstrateLLVMBackend extends SubstrateBackend implements LLVMGenera
         long startPatchpointId = LLVMIRBuilder.nextPatchpointId.getAndIncrement();
         builder.buildStackmap(builder.constantLong(startPatchpointId));
 
-        LLVM.LLVMValueRef methodBase = builder.buildInlineGetRegister(methodIdArg.getRegister().name);
-        LLVM.LLVMValueRef jumpAddress = builder.buildGEP(builder.buildIntToPtr(methodBase, builder.rawPointerType()), builder.constantInt(offset));
-        builder.buildInlineJump(jumpAddress);
+        builder.buildDebugtrap();
         builder.buildUnreachable();
 
         genResult.setModule(generator.getBuilder().getModule());
@@ -119,7 +116,7 @@ public class SubstrateLLVMBackend extends SubstrateBackend implements LLVMGenera
 
     @Override
     public NodeLLVMBuilder newNodeLLVMBuilder(StructuredGraph graph, LLVMGenerator generator) {
-        return new SubstrateNodeLLVMBuilder(graph, generator, getRuntimeConfiguration());
+        return new SubstrateNodeLLVMBuilder(graph, generator);
     }
 
     @Override
