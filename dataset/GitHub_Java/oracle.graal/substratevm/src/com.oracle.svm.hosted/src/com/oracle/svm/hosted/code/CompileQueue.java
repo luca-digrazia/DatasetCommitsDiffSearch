@@ -581,7 +581,7 @@ public class CompileQueue {
                                             invoke.callTarget().targetMethod().format("%H.%n(%p)") + " in " + (graph.method() == null ? graph.toString() : graph.method().format("%H.%n(%p)")));
                         }
 
-                        if (invoke.getInlineControl() == Invoke.InlineControl.Normal) {
+                        if (invoke.useForInlining()) {
                             inlined |= tryInlineTrivial(graph, invoke, !inlined);
                         }
                     }
@@ -918,6 +918,9 @@ public class CompileQueue {
         if (method.compilationInfo.specializedArguments != null) {
             // Do the specialization: replace the argument locals with the constant arguments.
             StructuredGraph graph = method.compilationInfo.graph;
+
+            /* Check that graph is in good shape before compilation. */
+            assert GraphOrder.assertSchedulableGraph(graph);
 
             int idx = 0;
             for (ConstantNode argument : method.compilationInfo.specializedArguments) {
