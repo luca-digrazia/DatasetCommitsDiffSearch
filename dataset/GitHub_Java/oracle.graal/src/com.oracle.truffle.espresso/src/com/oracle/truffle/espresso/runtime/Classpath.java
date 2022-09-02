@@ -309,16 +309,13 @@ public final class Classpath {
             for (String extDirPath : extDirs.split(File.pathSeparator)) {
                 final File extDir = new File(extDirPath);
                 if (extDir.isDirectory()) {
-                    File[] contents = extDir.listFiles();
-                    if (contents != null) {
-                        for (File file : contents) {
-                            if (file.isDirectory() ||
-                                            (file.isFile() && (file.getName().endsWith(".jar") || file.getName().endsWith(".zip")))) {
-                                if (buf.length() != 0) {
-                                    buf.append(File.pathSeparatorChar);
-                                }
-                                buf.append(file.getAbsolutePath());
+                    for (File file : extDir.listFiles()) {
+                        if (file.isDirectory() ||
+                                        (file.isFile() && (file.getName().endsWith(".jar") || file.getName().endsWith(".zip")))) {
+                            if (buf.length() != 0) {
+                                buf.append(File.pathSeparatorChar);
                             }
+                            buf.append(file.getAbsolutePath());
                         }
                     }
                 } else {

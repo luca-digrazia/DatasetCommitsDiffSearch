@@ -38,15 +38,15 @@ public final class Names {
         this.symbols = symbols;
     }
 
-    public Symbol<Name> lookup(ByteSequence bytes) {
+    public final Symbol<Name> lookup(ByteSequence bytes) {
         return symbols.lookup(bytes);
     }
 
-    public Symbol<Name> lookup(String name) {
+    public final Symbol<Name> lookup(String name) {
         return lookup(ByteSequence.create(name));
     }
 
-    public Symbol<Name> getOrCreate(String name) {
+    public final Symbol<Name> getOrCreate(String name) {
         return symbols.symbolify(ByteSequence.create(name));
     }
 }

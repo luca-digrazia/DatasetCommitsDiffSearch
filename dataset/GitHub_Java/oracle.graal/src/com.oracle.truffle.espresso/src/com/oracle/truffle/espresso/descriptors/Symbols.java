@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.descriptors;
 
-import com.oracle.truffle.api.CompilerDirectives;
-
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -54,7 +52,6 @@ public final class Symbols {
     }
 
     @SuppressWarnings("unchecked")
-    @CompilerDirectives.TruffleBoundary
     <T> Symbol<T> symbolify(final ByteSequence sequence) {
         final SymbolKey key = new SymbolKey(sequence);
         return (Symbol<T>) symbols.computeIfAbsent(key, new Function<SymbolKey, Symbol<?>>() {

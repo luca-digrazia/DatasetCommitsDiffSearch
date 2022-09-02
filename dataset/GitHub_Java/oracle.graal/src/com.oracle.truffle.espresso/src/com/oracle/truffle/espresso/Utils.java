@@ -24,25 +24,18 @@ package com.oracle.truffle.espresso;
 
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
-import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
-
-import java.io.File;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.oracle.truffle.nfi.types.NativeSimpleType;
 
 public final class Utils {
 
     public static NativeSimpleType kindToType(JavaKind kind, boolean javaToNative) {
         switch (kind) {
             case Boolean:
-                return NativeSimpleType.SINT8; // ?
+                return NativeSimpleType.UINT8; // ?
             case Short:
                 return NativeSimpleType.SINT16;
             case Char:
-                return NativeSimpleType.SINT16;
+                return NativeSimpleType.UINT16;
             case Long:
                 return NativeSimpleType.SINT64;
             case Float:
@@ -67,10 +60,4 @@ public final class Utils {
                 throw EspressoError.shouldNotReachHere();
         }
     }
-
-    public static List<Path> parsePaths(String paths) {
-        return Arrays.stream(paths.split(File.pathSeparator)).map(Paths::get).collect(Collectors.toList());
-    }
-
-
 }
