@@ -42,8 +42,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 
 import jdk.vm.ci.meta.SpeculationLog;
-
-import static com.oracle.truffle.api.nodes.RepeatingNode.CONTINUE_LOOP_STATUS;
+import org.graalvm.options.OptionValues;
 
 /**
  * Loop node implementation that supports on-stack-replacement with compiled code.
@@ -72,12 +71,15 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      */
     private int baseLoopCount;
 
-    private OptimizedOSRLoopNode(RepeatingNode repeatableNode) {
+    private final int osrThreshold;
+    private final int invalidationBackoff;
+
+    private OptimizedOSRLoopNode(RepeatingNode repeatableNode, int osrThreshold, int invalidationBackoff) {
         Objects.requireNonNull(repeatableNode);
         this.repeatableNode = repeatableNode;
+        this.osrThreshold = osrThreshold;
+        this.invalidationBackoff = invalidationBackoff;
     }
-
-    protected abstract int getInvalidationBackoff();
 
     /**
      * @param rootFrameDescriptor may be {@code null}.
@@ -89,8 +91,6 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
          */
         return new OSRRootNode(this, new FrameDescriptor(), clazz);
     }
-
-    protected abstract int getThreshold();
 
     @Override
     public final Node copy() {
@@ -105,46 +105,42 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     }
 
     @Override
-    public int executeLoopWithStatus(VirtualFrame frame) {
+    public void executeLoop(VirtualFrame frame) {
         if (CompilerDirectives.inInterpreter()) {
             try {
-                int status = CONTINUE_LOOP_STATUS;
-                while (status == CONTINUE_LOOP_STATUS) {
+                boolean done = false;
+                while (!done) {
                     if (compiledOSRLoop == null) {
-                        status = profilingLoop(frame);
+                        done = profilingLoop(frame);
                     } else {
-                        status = compilingLoop(frame);
+                        done = compilingLoop(frame);
                     }
                 }
-                return status;
             } finally {
                 baseLoopCount = 0;
             }
         } else {
-            int status;
-            while ((status = repeatableNode.executeRepeatingWithStatus(frame)) == CONTINUE_LOOP_STATUS) {
+            while (repeatableNode.executeRepeating(frame)) {
                 if (CompilerDirectives.inInterpreter()) {
                     // compiled method got invalidated. We might need OSR again.
-                    return executeLoopWithStatus(frame);
+                    executeLoop(frame);
+                    return;
                 }
             }
-            return status;
         }
     }
 
-    private int profilingLoop(VirtualFrame frame) {
+    private boolean profilingLoop(VirtualFrame frame) {
         int iterations = 0;
-        int threshold = getThreshold();
         try {
-            int status;
-            while ((status = repeatableNode.executeRepeatingWithStatus(frame)) == CONTINUE_LOOP_STATUS) {
+            while (repeatableNode.executeRepeating(frame)) {
                 // the baseLoopCount might be updated from a child loop during an iteration.
-                if (++iterations + baseLoopCount > threshold) {
+                if (++iterations + baseLoopCount > osrThreshold) {
                     compileLoop(frame);
-                    return status;
+                    return false;
                 }
             }
-            return status;
+            return true;
         } finally {
             baseLoopCount += iterations;
             reportParentLoopCount(iterations);
@@ -166,7 +162,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      * Forces OSR compilation for this loop.
      */
     public final void forceOSR() {
-        baseLoopCount = getThreshold();
+        baseLoopCount = osrThreshold;
         RootNode rootNode = getRootNode();
         VirtualFrame dummyFrame = Truffle.getRuntime().createVirtualFrame(new Object[0], rootNode != null ? rootNode.getFrameDescriptor() : new FrameDescriptor());
         compileLoop(dummyFrame);
@@ -176,42 +172,40 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         return compiledOSRLoop;
     }
 
-    private int compilingLoop(VirtualFrame frame) {
+    private boolean compilingLoop(VirtualFrame frame) {
         int iterations = 0;
         try {
-            int status;
             do {
                 OptimizedCallTarget target = compiledOSRLoop;
                 if (target == null) {
-                    return CONTINUE_LOOP_STATUS;
+                    return false;
                 }
                 if (target.isValid()) {
                     return callOSR(target, frame);
                 }
                 if (!target.isCompiling()) {
                     invalidateOSRTarget(this, "OSR compilation failed or cancelled");
-                    return CONTINUE_LOOP_STATUS;
+                    return false;
                 }
 
                 iterations++;
 
-            } while ((status = repeatableNode.executeRepeatingWithStatus(frame)) == CONTINUE_LOOP_STATUS);
-            return status;
+            } while (repeatableNode.executeRepeating(frame));
+            return true;
         } finally {
             baseLoopCount += iterations;
             reportParentLoopCount(iterations);
         }
     }
 
-    private int callOSR(OptimizedCallTarget target, VirtualFrame frame) {
-        Object status;
-        if (!(status = target.callOSR(frame)).equals(CONTINUE_LOOP_STATUS)) {
-            return (Integer) status;
+    private boolean callOSR(OptimizedCallTarget target, VirtualFrame frame) {
+        if (target.callOSR(frame) == Boolean.TRUE) {
+            return true;
         } else {
             if (!target.isValid()) {
                 invalidateOSRTarget(this, "OSR compilation got invalidated");
             }
-            return (Integer) status;
+            return false;
         }
     }
 
@@ -261,11 +255,10 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             public void run() {
                 OptimizedCallTarget target = compiledOSRLoop;
                 if (target != null) {
-                    int invalidationBackoff = getInvalidationBackoff();
                     if (invalidationBackoff < 0) {
                         throw new IllegalArgumentException("Invalid OSR invalidation backoff.");
                     }
-                    baseLoopCount = Math.min(getThreshold() - invalidationBackoff, baseLoopCount);
+                    baseLoopCount = Math.min(osrThreshold - invalidationBackoff, baseLoopCount);
                     compiledOSRLoop = null;
                     target.invalidate(source, reason);
                 }
@@ -278,17 +271,22 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      * disabled {@link OptimizedLoopNode} will be used instead.
      */
     public static LoopNode create(RepeatingNode repeat) {
+        // No RootNode accessible here, as repeat is not adopted.
+        OptionValues engineOptions = GraalTVMCI.getEngineData(null).engineOptions;
+
         // using static methods with LoopNode return type ensures
         // that only one loop node implementation gets loaded.
-        if (TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleOSR)) {
-            return createDefault(repeat);
+        if (PolyglotCompilerOptions.getValue(engineOptions, PolyglotCompilerOptions.OSR)) {
+            return createDefault(repeat, engineOptions);
         } else {
             return OptimizedLoopNode.create(repeat);
         }
     }
 
-    private static LoopNode createDefault(RepeatingNode repeatableNode) {
-        return new OptimizedDefaultOSRLoopNode(repeatableNode);
+    private static LoopNode createDefault(RepeatingNode repeatableNode, OptionValues options) {
+        return new OptimizedDefaultOSRLoopNode(repeatableNode,
+                        PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.OSRCompilationThreshold),
+                        PolyglotCompilerOptions.getValue(options, PolyglotCompilerOptions.InvalidationReprofileCount));
     }
 
     /**
@@ -334,18 +332,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      */
     private static final class OptimizedDefaultOSRLoopNode extends OptimizedOSRLoopNode {
 
-        OptimizedDefaultOSRLoopNode(RepeatingNode repeatableNode) {
-            super(repeatableNode);
-        }
-
-        @Override
-        protected int getInvalidationBackoff() {
-            return TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleInvalidationReprofileCount);
-        }
-
-        @Override
-        protected int getThreshold() {
-            return TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleOSRCompilationThreshold);
+        OptimizedDefaultOSRLoopNode(RepeatingNode repeatableNode, int osrThreshold, int invalidationBackoff) {
+            super(repeatableNode, osrThreshold, invalidationBackoff);
         }
 
     }
@@ -356,29 +344,15 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
      */
     private static final class OptimizedVirtualizingOSRLoopNode extends OptimizedOSRLoopNode {
 
-        private final int invalidationBackoff;
         @CompilationFinal(dimensions = 1) private final FrameSlot[] readFrameSlots;
         @CompilationFinal(dimensions = 1) private final FrameSlot[] writtenFrameSlots;
 
         private VirtualizingOSRRootNode previousRoot;
-        private final int osrThreshold;
 
         private OptimizedVirtualizingOSRLoopNode(RepeatingNode repeatableNode, int osrThreshold, int invalidationBackoff, FrameSlot[] readFrameSlots, FrameSlot[] writtenFrameSlots) {
-            super(repeatableNode);
-            this.invalidationBackoff = invalidationBackoff;
-            this.osrThreshold = osrThreshold;
+            super(repeatableNode, osrThreshold, invalidationBackoff);
             this.readFrameSlots = readFrameSlots;
             this.writtenFrameSlots = writtenFrameSlots;
-        }
-
-        @Override
-        protected int getThreshold() {
-            return osrThreshold;
-        }
-
-        @Override
-        public int getInvalidationBackoff() {
-            return invalidationBackoff;
         }
 
         @Override
@@ -426,13 +400,12 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
         protected Object executeImpl(VirtualFrame frame) {
             VirtualFrame parentFrame = clazz.cast(frame.getArguments()[0]);
-            int status;
-            while ((status = loopNode.getRepeatingNode().executeRepeatingWithStatus(parentFrame)) == CONTINUE_LOOP_STATUS) {
+            while (loopNode.getRepeatingNode().executeRepeating(parentFrame)) {
                 if (CompilerDirectives.inInterpreter()) {
-                    return CONTINUE_LOOP_STATUS;
+                    return Boolean.FALSE;
                 }
             }
-            return status;
+            return Boolean.TRUE;
         }
 
         @Override

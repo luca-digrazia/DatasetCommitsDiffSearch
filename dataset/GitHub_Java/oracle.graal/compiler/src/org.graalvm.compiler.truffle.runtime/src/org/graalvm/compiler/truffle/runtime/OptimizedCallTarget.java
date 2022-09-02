@@ -38,7 +38,6 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
-import org.graalvm.compiler.truffle.runtime.OptimizedOSRLoopNode.OSRRootNode;
 import org.graalvm.options.OptionKey;
 import org.graalvm.options.OptionValues;
 
@@ -137,10 +136,9 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         this.speculationLog = sourceCallTarget != null ? sourceCallTarget.getSpeculationLog() : null;
         this.rootNode = rootNode;
         final GraalTVMCI tvmci = runtime().getTvmci();
-        this.engineData = GraalTVMCI.getEngineData(rootNode);
-        // Do not adopt children of OSRRootNodes; we want to preserve the parent of the LoopNode.
-        this.uninitializedNodeCount = !(rootNode instanceof OSRRootNode) ? tvmci.adoptChildrenAndCount(this.rootNode) : -1;
-        this.knownCallNodes = engineData.options.isLegacySplitting() ? null : new ArrayList<>(1);
+        engineData = GraalTVMCI.getEngineData(rootNode);
+        uninitializedNodeCount = tvmci.adoptChildrenAndCount(this.rootNode);
+        knownCallNodes = engineData.options.isLegacySplitting() ? null : new ArrayList<>(1);
         tvmci.setCallTarget(rootNode, this);
     }
 
@@ -489,7 +487,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
         } else {
             clonedRoot = NodeUtil.cloneNode(uninitializedRootNode);
         }
-        return runtime().createClonedCallTarget(clonedRoot, this);
+        return (OptimizedCallTarget) runtime().createClonedCallTarget(this, clonedRoot);
     }
 
     /**
@@ -709,7 +707,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     int getUninitializedNodeCount() {
-        assert uninitializedNodeCount >= 0;
         return uninitializedNodeCount;
     }
 
