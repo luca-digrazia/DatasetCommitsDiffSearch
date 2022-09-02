@@ -41,7 +41,6 @@
 package org.graalvm.wasm;
 
 import static org.graalvm.wasm.TableRegistry.Table;
-import static org.graalvm.wasm.WasmUtil.unsignedInt32ToLong;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -54,7 +53,6 @@ import org.graalvm.wasm.constants.ImportIdentifier;
 import org.graalvm.wasm.constants.Instructions;
 import org.graalvm.wasm.constants.LimitsPrefix;
 import org.graalvm.wasm.constants.Section;
-import org.graalvm.wasm.exception.WasmException;
 import org.graalvm.wasm.exception.WasmLinkerException;
 import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.nodes.WasmBlockNode;
@@ -1235,9 +1233,7 @@ public class BinaryParser extends BinaryStreamParser {
     }
 
     private int readFunctionIndex() {
-        final int index = readUnsignedInt32();
-        module.symbolTable().checkFunctionIndex(index);
-        return index;
+        return readUnsignedInt32();
     }
 
     private int readTypeIndex() {
@@ -1301,7 +1297,7 @@ public class BinaryParser extends BinaryStreamParser {
         readLimits(MEMORY_MAX_PAGES, "initial memory size", "max memory size", out);
     }
 
-    private void readLimits(long upperBound, String minName, String maxName, int[] out) {
+    private void readLimits(long k, String minName, String maxName, int[] out) {
         byte limitsPrefix = readLimitsPrefix();
         switch (limitsPrefix) {
             case LimitsPrefix.NO_MAX: {
@@ -1319,12 +1315,12 @@ public class BinaryParser extends BinaryStreamParser {
         }
 
         // Convert min and max to longs to avoid checking bounds on overflowed values.
+        Assert.assertLongLessOrEqual(longMin, k, "Invalid " + minName);
         long longMin = unsignedInt32ToLong(out[0]);
         long longMax = unsignedInt32ToLong(out[1]);
-        Assert.assertLongLessOrEqual(longMin, upperBound, "Invalid " + minName + ", must be less than upper bound");
         if (out[1] != -1) {
-            Assert.assertLongLessOrEqual(longMax, upperBound, "Invalid " + maxName + ", must be less than upper bound");
-            Assert.assertLongLessOrEqual(longMin, longMax, "Invalid " + minName + ", must be less than " + maxName);
+            Assert.assertLongLessOrEqual(longMax, k, "Invalid " + maxName);
+            Assert.assertLongLessOrEqual(longMin, longMax, "Invalid " + minName);
         }
     }
 

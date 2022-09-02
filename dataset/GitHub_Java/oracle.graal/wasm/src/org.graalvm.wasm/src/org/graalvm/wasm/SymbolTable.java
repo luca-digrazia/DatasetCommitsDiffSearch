@@ -432,9 +432,7 @@ public class SymbolTable {
     }
 
     public WasmFunction function(int funcIndex) {
-        if (funcIndex < 0 || funcIndex >= numFunctions()) {
-            throw new WasmException(String.format("Function index out of bounds: %d should be < %d.", unsignedInt32ToLong(funcIndex), numFunctions()));
-        }
+        assert 0 <= funcIndex && funcIndex <= numFunctions() - 1;
         return functions[funcIndex];
     }
 
@@ -466,14 +464,7 @@ public class SymbolTable {
         if (startFunctionIndex == -1) {
             return null;
         }
-        final WasmFunction start = function(startFunctionIndex);
-        if (start.numArguments() != 0) {
-            throw new WasmException("Start function cannot take arguments.");
-        }
-        if (start.returnTypeLength() != 0) {
-            throw new WasmException("Start function cannot return a value.");
-        }
-        return start;
+        return functions[startFunctionIndex];
     }
 
     WasmModule module() {

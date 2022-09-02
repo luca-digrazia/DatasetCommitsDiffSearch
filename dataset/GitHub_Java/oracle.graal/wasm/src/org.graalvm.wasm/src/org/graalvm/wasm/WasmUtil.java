@@ -42,7 +42,7 @@
 package org.graalvm.wasm;
 
 public class WasmUtil {
-    public static long unsignedInt32ToLong(int n) {
+    static public long unsignedInt32ToLong(int n) {
         // See https://stackoverflow.com/a/22938125.
         return n & 0xFFFFFFFFL;
     }
