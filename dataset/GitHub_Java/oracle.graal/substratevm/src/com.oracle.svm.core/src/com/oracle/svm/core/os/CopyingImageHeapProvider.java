@@ -47,7 +47,7 @@ import com.oracle.svm.core.os.VirtualMemoryProvider.Access;
 import com.oracle.svm.core.util.UnsignedUtils;
 
 @AutomaticFeature
-@Platforms({Platform.WINDOWS.class})
+@Platforms({Platform.DARWIN.class, Platform.WINDOWS.class})
 class CopyingImageHeapProviderFeature implements Feature {
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
