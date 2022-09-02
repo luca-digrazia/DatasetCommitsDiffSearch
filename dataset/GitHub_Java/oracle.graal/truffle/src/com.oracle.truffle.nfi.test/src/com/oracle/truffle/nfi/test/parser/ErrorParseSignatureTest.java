@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,16 +38,44 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.nfi.test.parser.backend;
+package com.oracle.truffle.nfi.test.parser;
 
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.nfi.spi.types.NativeSignature;
+import org.junit.Test;
 
-public class TestSignature implements TruffleObject {
+public class ErrorParseSignatureTest extends ParseSignatureTest {
 
-    public final NativeSignature signature;
+    @Test(expected = IllegalArgumentException.class)
+    public void parseEmpty() {
+        parseSignature("");
+    }
 
-    TestSignature(NativeSignature signature) {
-        this.signature = signature;
+    @Test(expected = IllegalArgumentException.class)
+    public void parseUnknownToken() {
+        parseSignature("..");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void parseMissingParen() {
+        parseSignature("(sint32 : void");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void parseMissingComma() {
+        parseSignature("(sint32 float) : void");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void parseMissingColon() {
+        parseSignature("(sint32) void");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void parseMissingRetType() {
+        parseSignature("() : ");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void parseMissingVararg() {
+        parseSignature("(float, ...) : void");
     }
 }

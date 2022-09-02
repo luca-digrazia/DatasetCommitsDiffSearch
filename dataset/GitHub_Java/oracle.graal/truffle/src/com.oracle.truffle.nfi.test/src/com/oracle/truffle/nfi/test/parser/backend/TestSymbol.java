@@ -40,62 +40,34 @@
  */
 package com.oracle.truffle.nfi.test.parser.backend;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.TruffleLanguage.Env;
-import com.oracle.truffle.api.TruffleLanguage.Registration;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.nfi.spi.NFIBackend;
-import com.oracle.truffle.nfi.spi.NFIBackendFactory;
-import com.oracle.truffle.nfi.spi.NFIBackendTools;
-import com.oracle.truffle.nfi.spi.types.NativeLibraryDescriptor;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.nfi.spi.NativeSymbolLibrary;
+import com.oracle.truffle.nfi.spi.types.NativeSignature;
 
-@Registration(id = "test/nfi-backend", name = "NFITestBackend", internal = true, services = NFIBackendFactory.class)
-public class NFITestBackend extends TruffleLanguage<Env> {
+@ExportLibrary(NativeSymbolLibrary.class)
+class TestSymbol implements TruffleObject {
 
-    NFIBackendTools tools;
+    final String name;
 
-    NFIBackend backend = new NFIBackend() {
-
-        @Override
-        public CallTarget parse(NativeLibraryDescriptor descriptor) {
-            return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(new TestLibrary(descriptor)));
-        }
-    };
-
-    @Override
-    protected Env createContext(Env env) {
-        env.registerService(new NFIBackendFactory() {
-
-            @Override
-            public String getBackendId() {
-                return "test";
-            }
-
-            @Override
-            public NFIBackend createBackend(NFIBackendTools t) {
-                tools = t;
-                return backend;
-            }
-        });
-        return env;
+    TestSymbol(String name) {
+        this.name = name;
     }
 
-    @Override
-    protected CallTarget parse(ParsingRequest request) throws Exception {
-        return Truffle.getRuntime().createCallTarget(new RootNode(this) {
-
-            @Override
-            public Object execute(VirtualFrame frame) {
-                throw new UnsupportedOperationException("illegal access to internal language");
-            }
-        });
+    @ExportMessage
+    boolean isBindable() {
+        return true;
     }
 
-    @Override
-    protected boolean isObjectOfLanguage(Object object) {
-        return false;
+    @ExportMessage
+    Object prepareSignature(NativeSignature signature) {
+        return new TestSignature(signature);
+    }
+
+    @ExportMessage
+    Object call(Object signature, @SuppressWarnings("unused") Object[] args) {
+        // just return the signature, so it can be inspected by the test harness
+        return signature;
     }
 }
