@@ -48,13 +48,13 @@ class AMD64FrameAccessFeature implements Feature {
 public class AArch64FrameAccess extends FrameAccess {
     @Override
     public CodePointer readReturnAddress(Pointer sourceSp) {
-        /* Read the return address, which is stored immediately below the stack pointer. */
-        return (CodePointer) sourceSp.readWord(-returnAddressSize());
+        /* Read the return address, which is stored one word below the stack pointer. */
+        return (CodePointer) sourceSp.readWord(-returnAddressSize() - wordSize());
     }
 
     @Override
     public void writeReturnAddress(Pointer sourceSp, CodePointer newReturnAddress) {
-        sourceSp.writeWord(-returnAddressSize(), newReturnAddress);
+        sourceSp.writeWord(-returnAddressSize() - wordSize(), newReturnAddress);
     }
 
     @Fold
