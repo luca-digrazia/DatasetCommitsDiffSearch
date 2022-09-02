@@ -40,23 +40,23 @@
  */
 package org.graalvm.wasm.api;
 
+import org.graalvm.wasm.exception.Failure;
+import org.graalvm.wasm.exception.WasmException;
+import org.graalvm.wasm.exception.WasmJsApiException;
+import org.graalvm.wasm.memory.UnsafeWasmMemory;
+import org.graalvm.wasm.memory.WasmMemory;
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import org.graalvm.wasm.exception.WasmJsApiException;
-import org.graalvm.wasm.memory.ByteArrayWasmMemory;
-import org.graalvm.wasm.memory.WasmMemory;
-
-import static java.lang.Integer.compareUnsigned;
-import static org.graalvm.wasm.WasmUtil.minUnsigned;
-import static org.graalvm.wasm.api.JsConstants.JS_LIMITS;
 
 public class Memory extends Dictionary {
     private final MemoryDescriptor descriptor;
     private final WasmMemory memory;
 
     public Memory(WasmMemory memory) {
-        this.descriptor = new MemoryDescriptor(memory.declaredMinSize(), memory.declaredMaxSize());
+        this.descriptor = new MemoryDescriptor(memory.pageSize(), memory.maxPageSize());
         this.memory = memory;
         addMembers(new Object[]{
                         "descriptor", this.descriptor,
@@ -65,19 +65,8 @@ public class Memory extends Dictionary {
         });
     }
 
-    public static Memory create(int declaredMinSize, int declaredMaxSize) {
-        if (compareUnsigned(declaredMinSize, declaredMaxSize) > 0) {
-            throw new WasmJsApiException(WasmJsApiException.Kind.LinkError, "Min memory size exceeds max memory size");
-        } else if (compareUnsigned(declaredMinSize, JS_LIMITS.memoryInstanceSizeLimit()) > 0) {
-            throw new WasmJsApiException(WasmJsApiException.Kind.LinkError, "Min memory size exceeds implementation limit");
-        }
-        final int maxAllowedSize = minUnsigned(declaredMaxSize, JS_LIMITS.memoryInstanceSizeLimit());
-        final WasmMemory wasmMemory = new ByteArrayWasmMemory(declaredMinSize, declaredMaxSize, maxAllowedSize);
-        return new Memory(wasmMemory);
-    }
-
-    public static Memory create(Object descriptor) {
-        return create(initial(descriptor), maximum(descriptor));
+    public Memory(Object descriptor) {
+        this(new UnsafeWasmMemory(initial(descriptor), maximum(descriptor)));
     }
 
     private static int initial(Object descriptor) {
@@ -100,10 +89,15 @@ public class Memory extends Dictionary {
         return memory;
     }
 
+    @TruffleBoundary
+    private static WasmException rangeError() {
+        return WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Range error.");
+    }
+
     private long grow(int delta) {
-        final long pageSize = memory.size();
+        final long pageSize = memory.pageSize();
         if (!memory.grow(delta)) {
-            throw new WasmJsApiException(WasmJsApiException.Kind.LinkError, "Cannot grow memory above max limit");
+            throw rangeError();
         }
         return pageSize;
     }

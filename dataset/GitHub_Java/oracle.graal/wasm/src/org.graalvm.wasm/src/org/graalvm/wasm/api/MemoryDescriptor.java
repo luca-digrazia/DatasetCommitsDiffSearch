@@ -40,20 +40,24 @@
  */
 package org.graalvm.wasm.api;
 
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.library.ExportLibrary;
-
-@ExportLibrary(InteropLibrary.class)
 public class MemoryDescriptor extends Dictionary {
-    private final Long initial;
-    private final Long maximum;
+    private final Integer initial;
+    private final Integer maximum;
 
-    public MemoryDescriptor(Long initial, Long maximum) {
+    public MemoryDescriptor(Integer initial, Integer maximum) {
         this.initial = initial;
         this.maximum = maximum;
         addMembers(new Object[]{
                         "initial", this.initial,
                         "maximum", this.maximum,
         });
+    }
+
+    public int initial() {
+        return initial;
+    }
+
+    public int maximum() {
+        return maximum;
     }
 }

@@ -40,13 +40,10 @@
  */
 package org.graalvm.wasm.api;
 
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleContext;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+
 import org.graalvm.collections.Pair;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmFunction;
@@ -58,8 +55,13 @@ import org.graalvm.wasm.exception.WasmJsApiException;
 import org.graalvm.wasm.exception.WasmJsApiException.Kind;
 import org.graalvm.wasm.memory.WasmMemory;
 
-import java.util.HashMap;
-import java.util.Map;
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleContext;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 
 public class Instance extends Dictionary {
     private final TruffleContext truffleContext;
@@ -144,14 +146,12 @@ public class Instance extends Dictionary {
                         ensureImportModule(importModules, d.module()).addGlobal(d.name(), member);
                         break;
                     default:
-                        CompilerDirectives.transferToInterpreter();
                         throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Unimplemented case: " + d.kind());
                 }
 
                 i += 1;
             }
         } catch (InvalidArrayIndexException | UnknownIdentifierException | ClassCastException | UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
             throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Unexpected state.");
         }
 
@@ -268,14 +268,13 @@ public class Instance extends Dictionary {
                     final boolean mutable = instance.symbolTable().isGlobalMutable(index);
                     e.addMember(name, new ProxyGlobal(new GlobalDescriptor(valueType.name(), mutable), context.globals(), address));
                 }
-            } else if (instance.module().exportedMemoryNames().contains(name)) {
+            } else if (Objects.equals(instance.module().exportedMemory(), name)) {
                 final WasmMemory memory = instance.memory();
                 e.addMember(name, new Memory(memory));
-            } else if (instance.module().exportedTableNames().contains(name)) {
+            } else if (Objects.equals(instance.module().exportedTable(), name)) {
                 final WasmTable table = instance.table();
                 e.addMember(name, new Table(table));
             } else {
-                CompilerDirectives.transferToInterpreter();
                 throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Exported symbol list does not match the actual exports.");
             }
         }
