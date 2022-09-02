@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.agent.restrict;
 
-import static com.oracle.svm.configure.trace.LazyValueUtils.lazyNull;
-
 import java.util.Arrays;
 
 import com.oracle.svm.configure.config.ProxyConfiguration;
@@ -50,7 +48,7 @@ public class ProxyAccessVerifier extends AbstractAccessVerifier {
     }
 
     private boolean verifyProxyAccess(JNIEnvironment env, Object interfaceNames, JNIObjectHandle callerClass) {
-        if (shouldApproveWithoutChecks(lazyNull(), lazyClassNameOrNull(env, callerClass))) {
+        if (shouldApproveWithoutChecks(env, callerClass)) {
             return true;
         }
         return (interfaceNames instanceof String[]) && configuration.contains(Arrays.asList((String[]) interfaceNames));
