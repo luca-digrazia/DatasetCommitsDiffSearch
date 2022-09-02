@@ -264,10 +264,10 @@ public final class NFIContextExtension implements ContextExtension {
         throw new UnsupportedNativeTypeException(type);
     }
 
-    private String[] getNativeArgumentTypes(FunctionType functionType, int skipArguments) throws UnsupportedNativeTypeException {
-        String[] types = new String[functionType.getNumberOfArguments() - skipArguments];
-        for (int i = skipArguments; i < functionType.getNumberOfArguments(); i++) {
-            types[i - skipArguments] = getNativeType(functionType.getArgumentType(i));
+    private String[] getNativeTypes(Type[] argTypes, int skipArguments) throws UnsupportedNativeTypeException {
+        String[] types = new String[argTypes.length - skipArguments];
+        for (int i = skipArguments; i < argTypes.length; i++) {
+            types[i - skipArguments] = getNativeType(argTypes[i]);
         }
         return types;
     }
@@ -353,7 +353,7 @@ public final class NFIContextExtension implements ContextExtension {
         // TODO varargs
         CompilerAsserts.neverPartOfCompilation();
         String nativeRet = getNativeType(type.getReturnType());
-        String[] argTypes = getNativeArgumentTypes(type, skipArguments);
+        String[] argTypes = getNativeTypes(type.getArgumentTypes(), skipArguments);
         StringBuilder sb = new StringBuilder();
         sb.append("(");
         for (String a : argTypes) {
