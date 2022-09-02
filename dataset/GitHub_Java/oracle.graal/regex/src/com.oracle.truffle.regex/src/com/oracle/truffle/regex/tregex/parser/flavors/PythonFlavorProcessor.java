@@ -186,11 +186,12 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
      */
     private enum TermCategory {
         /**
-         * A beginning-of-string/line, end-of-string/line or (non)-word-boundary assertion.
+         * A lookahead, lookbehind, beginning-of-string/line, end-of-string/line or
+         * (non)-word-boundary assertion.
          */
         Assertion,
         /**
-         * A literal character, a character class, a group, a lookahead or a lookbehind.
+         * A literal character, a character class or a group.
          */
         Atom,
         /**
@@ -1453,17 +1454,17 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
     private void lookahead(boolean positive) {
         int start = position - 3;
         if (positive) {
-            emitSnippet("(?:(?=");
+            emitSnippet("(?=");
         } else {
-            emitSnippet("(?:(?!");
+            emitSnippet("(?!");
         }
         disjunction();
         if (match(")")) {
-            emitSnippet("))");
+            emitSnippet(")");
         } else {
             throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_SUBPATTERN, start);
         }
-        lastTerm = TermCategory.Atom;
+        lastTerm = TermCategory.Assertion;
     }
 
     /**
@@ -1472,19 +1473,19 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
     private void lookbehind(boolean positive) {
         int start = position - 4;
         if (positive) {
-            emitSnippet("(?:(?<=");
+            emitSnippet("(?<=");
         } else {
-            emitSnippet("(?:(?<!");
+            emitSnippet("(?<!");
         }
         lookbehindStack.push(new Lookbehind(groups + 1));
         disjunction();
         lookbehindStack.pop();
         if (match(")")) {
-            emitSnippet("))");
+            emitSnippet(")");
         } else {
             throw syntaxErrorAtAbs(PyErrorMessages.UNTERMINATED_SUBPATTERN, start);
         }
-        lastTerm = TermCategory.Atom;
+        lastTerm = TermCategory.Assertion;
     }
 
     /**
