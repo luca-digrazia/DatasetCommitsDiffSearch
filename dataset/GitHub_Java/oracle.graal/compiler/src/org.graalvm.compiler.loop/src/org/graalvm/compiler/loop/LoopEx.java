@@ -164,7 +164,7 @@ public class LoopEx {
 
     @Override
     public String toString() {
-        return (countedLoopChecked && isCounted() ? "CountedLoop [" + counted() + "] " : "Loop ") + "(depth=" + loop().getDepth() + ") " + loopBegin();
+        return (isCounted() ? "CountedLoop [" + counted() + "] " : "Loop ") + "(depth=" + loop().getDepth() + ") " + loopBegin();
     }
 
     private class InvariantPredicate implements NodePredicate {
@@ -387,7 +387,7 @@ public class LoopEx {
                 if (loop.isOutsideLoop(op)) {
                     continue;
                 }
-                if (op.hasExactlyOneUsage() && op.usages().first() == baseIvNode) {
+                if (op.usages().count() == 1 && op.usages().first() == baseIvNode) {
                     /*
                      * This is just the base induction variable increment with no other uses so
                      * don't bother reporting it.
