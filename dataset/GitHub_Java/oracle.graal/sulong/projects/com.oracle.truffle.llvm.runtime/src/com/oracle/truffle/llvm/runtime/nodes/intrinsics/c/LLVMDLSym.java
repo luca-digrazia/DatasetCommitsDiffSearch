@@ -30,7 +30,6 @@
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.c;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.NodeChild;
@@ -42,8 +41,6 @@ import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.NativeContextExtension;
-import com.oracle.truffle.llvm.runtime.NativeContextExtension.NativeLookupResult;
 import com.oracle.truffle.llvm.runtime.PlatformCapability;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
@@ -94,24 +91,10 @@ public abstract class LLVMDLSym extends LLVMIntrinsic {
         String name = readStr.executeWithTarget(symbolName);
         LLVMSymbol symbol = ctx.getGlobalScope().get(name);
         if (symbol == null) {
-            Object nativeSymbol = getNativeSymbol(name, ctx);
-            if (nativeSymbol == null) {
-                ctx.setDLError(2);
-                return LLVMNativePointer.createNull();
-            }
-            return nativeSymbol;
+            ctx.setDLError(2);
+            return LLVMNativePointer.createNull();
         }
         return ctx.getSymbol(symbol);
-    }
-
-    @TruffleBoundary
-    protected Object getNativeSymbol(String name, LLVMContext context) {
-        NativeContextExtension nativeContextExtension = context.getContextExtensionOrNull(NativeContextExtension.class);
-        if (nativeContextExtension != null) {
-            NativeLookupResult result = nativeContextExtension.getNativeFunctionOrNull(name);
-            return result.getObject();
-        }
-        return null;
     }
 
     protected boolean isRtldDefault(LLVMNativePointer libraryHandle) {
