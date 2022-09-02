@@ -312,6 +312,7 @@ public final class DefaultTruffleRuntime implements TruffleRuntime {
             this.callerFrame = callerFrame;
         }
 
+        @SuppressWarnings("deprecation")
         public Frame getFrame(FrameAccess access) {
             Frame localFrame = this.frame;
             switch (access) {
