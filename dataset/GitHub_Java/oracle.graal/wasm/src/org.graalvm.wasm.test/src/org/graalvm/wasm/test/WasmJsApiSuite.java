@@ -41,7 +41,6 @@
 package org.graalvm.wasm.test;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.function.Consumer;
 
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
@@ -51,11 +50,9 @@ import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.ByteSequence;
 import org.graalvm.wasm.WasmContext;
-import org.graalvm.wasm.api.ImportExportKind;
 import org.graalvm.wasm.api.Module;
 import org.graalvm.wasm.api.ModuleExportDescriptor;
 import org.graalvm.wasm.api.WebAssembly;
-import org.graalvm.wasm.api.WebAssemblyInstantiatedSource;
 import org.graalvm.wasm.predefined.testutil.TestutilModule;
 import org.graalvm.wasm.utils.Assert;
 import org.junit.Test;
@@ -65,31 +62,12 @@ public class WasmJsApiSuite {
     public void testCompile() throws IOException {
         runTest(context -> {
             final WebAssembly wasm = new WebAssembly(context);
-            final Module module = wasm.compile(binaryWithExports);
+            final Module module = wasm.compile(binary);
             try {
-                HashMap<String, ModuleExportDescriptor> exports = new HashMap<>();
-                int i = 0;
-                while (i < module.exports().getArraySize()) {
-                    final ModuleExportDescriptor d = (ModuleExportDescriptor) module.exports().readArrayElement(i);
-                    exports.put(d.name(), d);
-                    i++;
-                }
-                Assert.assertEquals("Should export main.", ImportExportKind.function, exports.get("main").kind());
-                Assert.assertEquals("Should export memory.", ImportExportKind.memory, exports.get("memory").kind());
-                Assert.assertEquals("Should export global __heap_base.", ImportExportKind.global, exports.get("__heap_base").kind());
-                Assert.assertEquals("Should export global __data_end.", ImportExportKind.global, exports.get("__data_end").kind());
-                Assert.assertEquals("Should have empty imports.", 0L, module.imports().getArraySize());
+                Assert.assertEquals("Should export main.", "main", ((ModuleExportDescriptor) module.exports().readArrayElement(0L)).name());
             } catch (InvalidArrayIndexException e) {
                 throw new RuntimeException(e);
             }
-        });
-    }
-
-    @Test
-    public void testInstantiate() throws IOException {
-        runTest(context -> {
-            final WebAssembly wasm = new WebAssembly(context);
-            final WebAssemblyInstantiatedSource instantiatedSource = wasm.instantiate(binaryWithExports, null);
         });
     }
 
@@ -97,7 +75,7 @@ public class WasmJsApiSuite {
         final Context.Builder contextBuilder = Context.newBuilder("wasm");
         contextBuilder.option("wasm.Builtins", "testutil:testutil");
         final Context context = contextBuilder.build();
-        Source.Builder sourceBuilder = Source.newBuilder("wasm", ByteSequence.create(binaryWithExports), "main");
+        Source.Builder sourceBuilder = Source.newBuilder("wasm", ByteSequence.create(binary), "main");
         Source source = sourceBuilder.build();
         context.eval(source);
         Value main = context.getBindings("wasm").getMember("main");
@@ -119,7 +97,7 @@ public class WasmJsApiSuite {
         }
     }
 
-    private static final byte[] binaryWithExports = new byte[]{
+    private static final byte[] binary = new byte[]{
                     (byte) 0x00,
                     (byte) 0x61,
                     (byte) 0x73,
