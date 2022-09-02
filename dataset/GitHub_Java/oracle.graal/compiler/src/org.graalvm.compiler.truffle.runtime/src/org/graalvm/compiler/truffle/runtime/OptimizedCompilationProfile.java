@@ -93,11 +93,7 @@ public final class OptimizedCompilationProfile {
             this.compilationCallThreshold = compileImmediately ? 0 : Math.min(firstTierCallThreshold, firstTierCallAndLoopThreshold);
             this.compilationCallAndLoopThreshold = firstTierCallAndLoopThreshold;
         }
-        if (engine.callTargetStatistics) {
-            this.timestamp = System.nanoTime();
-        } else {
-            this.timestamp = 0L;
-        }
+        this.timestamp = System.nanoTime();
     }
 
     @Override
