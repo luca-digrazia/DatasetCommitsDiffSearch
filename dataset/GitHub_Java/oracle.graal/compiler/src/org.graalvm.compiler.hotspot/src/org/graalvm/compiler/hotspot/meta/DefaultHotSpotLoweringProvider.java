@@ -869,11 +869,7 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             return;
         }
 
-        ForeignCallSignature signature = RuntimeCalls.runtimeCalls.get(node.getExceptionKind());
-        if (signature == null) {
-            throw new GraalError("No runtime call available to lower BytecodeExceptionKind " + node.getExceptionKind());
-        }
-        ForeignCallDescriptor descriptor = foreignCalls.getDescriptor(signature);
+        ForeignCallDescriptor descriptor = foreignCalls.getDescriptor(RuntimeCalls.runtimeCalls.get(node.getExceptionKind()));
         StructuredGraph graph = node.graph();
         List<ValueNode> arguments = node.getArguments();
 
