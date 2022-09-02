@@ -40,7 +40,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
-import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
@@ -380,7 +379,7 @@ public final class GraalTruffleRuntimeListenerTest extends TestWithPolyglotOptio
         }
 
         @Override
-        public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleMetaAccessProvider inliningDecision, TruffleCompilerListener.GraphInfo graph) {
+        public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, TruffleCompilerListener.GraphInfo graph) {
             if (isImportant(target)) {
                 events.add(EventType.TRUFFLE_TIER_FINISHED);
             }
@@ -394,8 +393,7 @@ public final class GraalTruffleRuntimeListenerTest extends TestWithPolyglotOptio
         }
 
         @Override
-        public void onCompilationSuccess(OptimizedCallTarget target, TruffleMetaAccessProvider inliningDecision, TruffleCompilerListener.GraphInfo graph,
-                        TruffleCompilerListener.CompilationResultInfo result) {
+        public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, TruffleCompilerListener.GraphInfo graph, TruffleCompilerListener.CompilationResultInfo result) {
             if (isImportant(target)) {
                 events.add(EventType.COMPILATION_SUCCESS);
             }
