@@ -540,7 +540,8 @@ public class HotSpotAllocationSnippets extends AllocationSnippets {
     @Override
     protected final void profileAllocation(AllocationProfilingData profilingData, UnsignedWord size) {
         if (doProfile(INJECTED_OPTIONVALUES)) {
-            String name = createName(INJECTED_OPTIONVALUES, profilingData);
+            HotSpotAllocationProfilingData hotspotAllocationProfilingData = (HotSpotAllocationProfilingData) profilingData;
+            String name = createName(INJECTED_OPTIONVALUES, hotspotAllocationProfilingData.path, hotspotAllocationProfilingData.typeContext);
 
             boolean context = withContext(INJECTED_OPTIONVALUES);
             DynamicCounterNode.counter("number of bytes allocated", name, size.rawValue(), context);
@@ -562,16 +563,15 @@ public class HotSpotAllocationSnippets extends AllocationSnippets {
     }
 
     @Fold
-    static String createName(@Fold.InjectedParameter OptionValues options, AllocationProfilingData profilingData) {
-        HotSpotAllocationProfilingData hotspotAllocationProfilingData = (HotSpotAllocationProfilingData) profilingData;
+    static String createName(@Fold.InjectedParameter OptionValues options, String path, String typeContext) {
         switch (ProfileAllocationsContext.getValue(options)) {
             case AllocatingMethod:
                 return "";
             case InstanceOrArray:
-                return hotspotAllocationProfilingData.path;
+                return path;
             case AllocatedType:
             case AllocatedTypesInMethod:
-                return hotspotAllocationProfilingData.typeContext;
+                return typeContext;
             case Total:
                 return "bytes";
             default:
