@@ -376,20 +376,7 @@ public final class JNIUtil {
      */
     private static int traceLevel() {
         if (traceLevel == null) {
-            String var;
-            try {
-                var = System.getenv(JNI_LIBGRAAL_TRACE_LEVEL_ENV_VAR_NAME);
-            } catch (LinkageError le) {
-                // The LinkageError caused by a NullPointerException in the
-                // ProcessEnvironment.<clinit>
-                // can be thrown when the call to the native ProcessEnvironment.environ returns null
-                // variable name.
-                // When this happens set the traceLevel to 0.
-                var = null;
-            } catch (Throwable t) {
-                TTY.printf("Unexpected exception %s while reading environment variable %s%n", t, JNI_LIBGRAAL_TRACE_LEVEL_ENV_VAR_NAME);
-                var = null;
-            }
+            String var = System.getenv(JNI_LIBGRAAL_TRACE_LEVEL_ENV_VAR_NAME);
             if (var != null) {
                 try {
                     traceLevel = Integer.parseInt(var);
