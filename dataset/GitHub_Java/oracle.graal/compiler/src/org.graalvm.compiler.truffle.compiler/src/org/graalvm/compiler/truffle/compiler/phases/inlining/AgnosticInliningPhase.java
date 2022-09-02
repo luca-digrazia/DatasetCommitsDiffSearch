@@ -91,6 +91,7 @@ public final class AgnosticInliningPhase extends BasePhase<CoreProviders> {
     }
 
     private boolean optionsAllowInlining() {
-        return request.options.get(PolyglotCompilerOptions.Inlining);
+        return request.options.get(PolyglotCompilerOptions.Inlining) &&
+                        (request.options.get(PolyglotCompilerOptions.Mode) != PolyglotCompilerOptions.EngineModeEnum.LATENCY);
     }
 }

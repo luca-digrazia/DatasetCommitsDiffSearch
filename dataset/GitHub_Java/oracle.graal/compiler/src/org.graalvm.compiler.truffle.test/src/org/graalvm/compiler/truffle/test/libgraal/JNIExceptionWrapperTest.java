@@ -162,10 +162,5 @@ public class JNIExceptionWrapperTest extends TestWithPolyglotOptions {
         public TruffleInliningData inliningData() {
             return inlining;
         }
-
-        @Override
-        public boolean hasNextTier() {
-            return false;
-        }
     }
 }

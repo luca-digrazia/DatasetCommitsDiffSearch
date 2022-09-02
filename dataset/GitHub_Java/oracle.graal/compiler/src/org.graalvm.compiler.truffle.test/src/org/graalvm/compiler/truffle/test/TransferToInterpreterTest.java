@@ -87,11 +87,6 @@ public class TransferToInterpreterTest extends TestWithPolyglotOptions {
         public TruffleInliningData inliningData() {
             return inlining;
         }
-
-        @Override
-        public boolean hasNextTier() {
-            return false;
-        }
     }
 
     private final class TestRootNode extends RootNode {
