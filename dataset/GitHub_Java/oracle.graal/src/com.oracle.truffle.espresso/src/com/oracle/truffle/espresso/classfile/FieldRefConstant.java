@@ -22,7 +22,7 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveFieldCount;
+import static com.oracle.truffle.espresso.nodes.BytecodesNode.resolveFieldCount;
 
 import java.util.Objects;
 
@@ -125,8 +125,6 @@ public interface FieldRefConstant extends MemberRefConstant {
                                 " throws IllegalAccessError");
                 throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(name));
             }
-
-            field.checkLoadingConstraints(accessingKlass.getDefiningClassLoader(), field.getDeclaringKlass().getDefiningClassLoader());
 
             return new Resolved(field);
         }

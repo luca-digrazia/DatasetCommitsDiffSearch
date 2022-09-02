@@ -22,7 +22,7 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
+import static com.oracle.truffle.espresso.nodes.BytecodesNode.resolveMethodCount;
 
 import java.util.Objects;
 
@@ -184,10 +184,6 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
                 System.err.println(EspressoOptions.INCEPTION_NAME + " Method access check of: " + method.getName() + " in " + holderKlass.getType() + " from " + accessingKlass.getType() +
                                 " throws IllegalAccessError");
                 throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(getName(pool)));
-            }
-
-            if (!method.isMethodHandleIntrinsic() && !(method.getRawSignature() == Signature.Object_ObjectArray)) {
-                method.checkLoadingConstraints(accessingKlass.getDefiningClassLoader(), method.getDeclaringKlass().getDefiningClassLoader());
             }
 
             return new Resolved(method);

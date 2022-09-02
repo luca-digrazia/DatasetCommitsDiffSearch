@@ -28,36 +28,34 @@ import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
+import com.oracle.svm.core.util.VMError;
 
 @TargetClass(classNameProvider = Package_jdk_internal_reflect.class, className = "Reflection")
 public final class Target_jdk_internal_reflect_Reflection {
 
     @Substitute
     @NeverInline("Starting a stack walk in the caller frame")
-    private static Class<?> getCallerClass() {
+    public static Class<?> getCallerClass() {
         return StackTraceUtils.getCallerClass(KnownIntrinsics.readCallerStackPointer());
     }
 
     @Substitute
     @TargetElement(onlyWith = JDK8OrEarlier.class) //
     @NeverInline("Starting a stack walk in the caller frame")
-    private static Class<?> getCallerClass(int depth) {
-        if (depth == 0) {
-            return Target_jdk_internal_reflect_Reflection.class;
-        }
-        return StackTraceUtils.getCallerClass(KnownIntrinsics.readCallerStackPointer(), depth - 1, false);
+    public static Class<?> getCallerClass(int depth) {
+        return StackTraceUtils.getCallerClass(KnownIntrinsics.readCallerStackPointer(), depth);
     }
 
     @Substitute
-    private static int getClassAccessFlags(Class<?> cls) {
+    public static int getClassAccessFlags(Class<?> cls) {
         return cls.getModifiers();
     }
 
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
-    private static boolean areNestMates(Class<?> currentClass, Class<?> memberClass) {
-        return DynamicHub.fromClass(currentClass).isNestmateOf(memberClass);
+    @SuppressWarnings({"unused"})
+    public static /* native */ boolean areNestMates(Class<?> currentClass, Class<?> memberClass) {
+        throw VMError.unsupportedFeature("JDK11OrLater: Target_jdk_internal_reflect_Reflection.areNestMates");
     }
 }

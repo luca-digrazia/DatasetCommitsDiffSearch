@@ -22,7 +22,7 @@
  */
 package com.oracle.truffle.espresso.classfile;
 
-import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
+import static com.oracle.truffle.espresso.nodes.BytecodesNode.resolveMethodCount;
 
 import java.util.Objects;
 
@@ -132,8 +132,6 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
                                 accessingKlass.getType() + " throws IllegalAccessError");
                 throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(name));
             }
-
-            method.checkLoadingConstraints(accessingKlass.getDefiningClassLoader(), method.getDeclaringKlass().getDefiningClassLoader());
 
             return new Resolved(method);
         }

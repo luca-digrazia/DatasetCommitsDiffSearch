@@ -614,12 +614,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                 Klass klass = clazz.getMirrorKlass();
                 klass.safeInitialize();
                 // Lookup only if name and type are known symbols.
-                if (Name.CLINIT.equals(methodName)) {
-                    // Never search superclasses for static initializers.
-                    method = klass.lookupDeclaredMethod(methodName, methodSignature);
-                } else {
-                    method = klass.lookupMethod(methodName, methodSignature);
-                }
+                method = klass.lookupMethod(methodName, methodSignature, klass);
             }
         }
         if (method == null || !method.isStatic()) {
@@ -1850,7 +1845,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         Substitutions.EspressoRootNodeFactory factory = new Substitutions.EspressoRootNodeFactory() {
             @Override
             public EspressoRootNode spawnNode(Method method) {
-                return new EspressoRootNode(method, new NativeRootNode(boundNative, method, true));
+                return EspressoRootNode.create(null, new NativeRootNode(boundNative, method, true));
             }
         };
         Symbol<Type> classType = clazz.getMirrorKlass().getType();
@@ -2256,11 +2251,11 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
      * a reference to the object.
      *
      * The clazz argument must not refer to an array class.
-     * 
+     *
      * @param clazz a Java class object.
-     * 
+     *
      *            Returns a Java object, or NULL if the object cannot be constructed.
-     * 
+     *
      *            Throws InstantiationException if the class is an interface or an abstract class.
      * @throws OutOfMemoryError if the system runs out of memory.
      */

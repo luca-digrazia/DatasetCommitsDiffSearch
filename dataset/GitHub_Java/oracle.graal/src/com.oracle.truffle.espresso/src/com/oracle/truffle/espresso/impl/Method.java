@@ -57,7 +57,6 @@ import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.classfile.ExceptionsAttribute;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.SourceFileAttribute;
-import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -763,13 +762,5 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
     @SuppressWarnings("unused")
     void printBytecodes() {
         new BytecodeStream(getCode()).printBytecode(declaringKlass);
-    }
-
-    public LineNumberTable getLineNumberTable() {
-        CodeAttribute codeAttribute = getCodeAttribute();
-        if (codeAttribute != null) {
-            return codeAttribute.getLineNumberTableAttribute();
-        }
-        return LineNumberTable.EMPTY;
     }
 }

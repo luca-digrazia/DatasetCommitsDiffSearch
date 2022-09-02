@@ -34,10 +34,6 @@ import com.oracle.svm.core.code.FrameInfoQueryResult;
 import com.oracle.svm.core.stack.JavaStackFrameVisitor;
 import com.oracle.svm.core.stack.JavaStackWalker;
 
-import jdk.vm.ci.meta.MetaAccessProvider;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
-
 public class StackTraceUtils {
 
     private static final Class<?>[] NO_CLASSES = new Class<?>[0];
@@ -65,20 +61,15 @@ public class StackTraceUtils {
      * Implements the shared semantic of Reflection.getCallerClass and StackWalker.getCallerClass.
      */
     public static Class<?> getCallerClass(Pointer startSP) {
-        return getCallerClass(startSP, 0, true);
+        return getCallerClass(startSP, 0);
     }
 
-    public static Class<?> getCallerClass(Pointer startSP, int depth, boolean ignoreFirst) {
-        GetCallerClassVisitor visitor = new GetCallerClassVisitor(depth, ignoreFirst);
+    public static Class<?> getCallerClass(Pointer startSP, int depth) {
+        GetCallerClassVisitor visitor = new GetCallerClassVisitor(depth);
         JavaStackWalker.walkCurrentThread(startSP, visitor);
         return visitor.result;
     }
 
-    /*
-     * Note that this method is duplicated below to work on compiler metadata. Make sure to always
-     * keep both versions in sync, otherwise intrinsifications by the compiler will return different
-     * results than stack walking at run time.
-     */
     public static boolean shouldShowFrame(FrameInfoQueryResult frameInfo, boolean showReflectFrames, boolean showHiddenFrames) {
         if (showHiddenFrames) {
             /* No filtering, all frames including internal frames are shown. */
@@ -107,29 +98,6 @@ public class StackTraceUtils {
              * cannot be annotated with @InternalFrame because 1) they are JDK classes and 2) only
              * one method of each class is affected.
              */
-            return false;
-        }
-
-        return true;
-    }
-
-    /*
-     * Note that this method is duplicated (and commented) above for stack walking at run time. Make
-     * sure to always keep both versions in sync.
-     */
-    public static boolean shouldShowFrame(MetaAccessProvider metaAccess, ResolvedJavaMethod method, boolean showReflectFrames, boolean showHiddenFrames) {
-        if (showHiddenFrames) {
-            return true;
-        }
-
-        ResolvedJavaType clazz = method.getDeclaringClass();
-        if (DirectAnnotationAccess.isAnnotationPresent(clazz, InternalVMMethod.class)) {
-            return false;
-        }
-
-        if (!showReflectFrames && ((clazz.equals(metaAccess.lookupJavaType(java.lang.reflect.Method.class)) && "invoke".equals(method.getName())) ||
-                        (clazz.equals(metaAccess.lookupJavaType(java.lang.reflect.Constructor.class)) && "newInstance".equals(method.getName())) ||
-                        (clazz.equals(metaAccess.lookupJavaType(java.lang.Class.class)) && "newInstance".equals(method.getName())))) {
             return false;
         }
 
@@ -168,17 +136,16 @@ class BuildStackTraceVisitor extends JavaStackFrameVisitor {
 
 class GetCallerClassVisitor extends JavaStackFrameVisitor {
     private int depth;
-    private boolean ignoreNext;
+    private boolean foundCallee;
     Class<?> result;
 
-    GetCallerClassVisitor(int depth, boolean ignoreFirst) {
-        this.ignoreNext = ignoreFirst;
+    GetCallerClassVisitor(final int depth) {
         this.depth = depth;
     }
 
     @Override
     public boolean visitFrame(FrameInfoQueryResult frameInfo) {
-        if (ignoreNext) {
+        if (!foundCallee) {
             /*
              * Skip the frame that contained the invocation of getCallerFrame() and continue the
              * stack walk. Note that this could be a frame related to reflection, but we still must
@@ -188,7 +155,7 @@ class GetCallerClassVisitor extends JavaStackFrameVisitor {
              * does not count as as frame (handled by the shouldShowFrame check below because this
              * path was already taken for the constructor frame).
              */
-            ignoreNext = false;
+            foundCallee = true;
             return true;
 
         } else if (!StackTraceUtils.shouldShowFrame(frameInfo, false, false)) {
@@ -202,14 +169,12 @@ class GetCallerClassVisitor extends JavaStackFrameVisitor {
             /* Skip the number of frames specified by "depth". */
             depth--;
             return true;
-        }
 
-        if (depth == 0) {
-            /* Found the caller frame. */
+        } else {
+            /* Found the caller frame, remember it and end the stack walk. */
             result = frameInfo.getSourceClass();
+            return false;
         }
-        /* We found the caller or the depth is invalid, stop. */
-        return false;
     }
 }
 
