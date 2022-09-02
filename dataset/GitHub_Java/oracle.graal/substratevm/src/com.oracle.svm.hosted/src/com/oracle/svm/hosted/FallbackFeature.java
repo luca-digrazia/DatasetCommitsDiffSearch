@@ -24,9 +24,6 @@
  */
 package com.oracle.svm.hosted;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.graalvm.compiler.options.Option;
 import org.graalvm.nativeimage.Feature;
 
@@ -46,34 +43,14 @@ public class FallbackFeature implements Feature {
     private static final int NoFallback = 0;
 
     static FallbackImageRequest reportFallback(String message) {
-        return reportFallback(message, null);
-    }
-
-    static FallbackImageRequest reportFallback(String message, Throwable cause) {
-        FallbackImageRequest request;
-        if (cause instanceof UserError.UserException) {
-            List<String> messages = new ArrayList<>();
-            if (message != null) {
-                messages.add(message);
-            }
-            ((UserError.UserException) cause).getMessages().forEach(messages::add);
-            request = new FallbackImageRequest(messages);
-            request.initCause(cause.getCause());
-        } else {
-            if (message == null && cause != null) {
-                message = cause.getMessage();
-            }
-            request = new FallbackImageRequest(message);
-            request.initCause(cause);
-        }
-        throw request;
+        throw new FallbackImageRequest(message);
     }
 
     static UserError.UserException reportAsFallback(RuntimeException original) {
         if (Options.FallbackThreshold.getValue() == NoFallback) {
             throw UserError.abort(original.getMessage(), original);
         }
-        throw reportFallback("Abort stand-alone image build. " + original.getMessage(), original);
+        throw reportFallback("Abort stand-alone image build. " + original.getMessage());
     }
 
     public static class Options {
@@ -87,10 +64,6 @@ public class FallbackFeature implements Feature {
     public static final class FallbackImageRequest extends UserError.UserException {
         private FallbackImageRequest(String message) {
             super(message);
-        }
-
-        private FallbackImageRequest(Iterable<String> messages) {
-            super(messages);
         }
     }
 
