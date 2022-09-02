@@ -57,9 +57,7 @@ public final class JDKCacheRedefinitionPlugin extends InternalRedefinitionPlugin
             }
             for (WeakReference<StaticObject> ref : threadGroupContexts) {
                 StaticObject context = ref.get();
-                if (context != null) {
-                    removeBeanInfoMethod.invokeDirect(context, changedKlass.mirror());
-                }
+                removeBeanInfoMethod.invokeDirect(context, changedKlass.mirror());
             }
         }
     }

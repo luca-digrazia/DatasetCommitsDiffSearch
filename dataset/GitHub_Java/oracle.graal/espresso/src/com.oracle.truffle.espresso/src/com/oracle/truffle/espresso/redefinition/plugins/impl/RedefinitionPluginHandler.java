@@ -23,6 +23,7 @@
 package com.oracle.truffle.espresso.redefinition.plugins.impl;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -35,20 +36,17 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.jdwp.api.RedefineInfo;
-import com.oracle.truffle.espresso.redefinition.DefineKlassListener;
+import com.oracle.truffle.espresso.redefinition.ClassLoadListener;
 import com.oracle.truffle.espresso.redefinition.plugins.api.ClassLoadAction;
 import com.oracle.truffle.espresso.redefinition.plugins.api.InternalRedefinitionPlugin;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-public final class RedefinitionPluginHandler implements RedefineListener, DefineKlassListener {
+public final class RedefinitionPluginHandler implements RedefineListener, ClassLoadListener {
 
     private final EspressoContext context;
-
-    // internal plugins are immediately activated during context
-    // initialization, so no need for synchronization on this set
-    private final Set<InternalRedefinitionPlugin> internalPlugins = new HashSet<>(1);
-    private final Map<Symbol<Symbol.Type>, List<ClassLoadAction>> classLoadActions = new HashMap<>();
+    private final Set<InternalRedefinitionPlugin> internalPlugins = Collections.synchronizedSet(new HashSet<>(1));
+    private final Map<Symbol<Symbol.Type>, List<ClassLoadAction>> classLoadActions = Collections.synchronizedMap(new HashMap<>());
 
     // The guest language HotSwap plugin handler passed
     // onto us if guest plugins are present at runtime.
@@ -60,15 +58,13 @@ public final class RedefinitionPluginHandler implements RedefineListener, Define
 
     @TruffleBoundary
     public void registerClassLoadAction(String className, ClassLoadAction action) {
-        synchronized (classLoadActions) {
-            Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(className);
-            List<ClassLoadAction> list = classLoadActions.get(type);
-            if (list == null) {
-                list = new ArrayList<>();
-                classLoadActions.put(type, list);
-            }
-            list.add(action);
+        Symbol<Symbol.Type> type = context.getTypes().fromClassGetName(className);
+        List<ClassLoadAction> list = classLoadActions.get(type);
+        if (list == null) {
+            list = Collections.synchronizedList(new ArrayList<>());
+            classLoadActions.put(type, list);
         }
+        list.add(action);
     }
 
     public void registerExternalHotSwapHandler(StaticObject handler) {
@@ -99,23 +95,23 @@ public final class RedefinitionPluginHandler implements RedefineListener, Define
 
     @TruffleBoundary
     @Override
-    public void onKlassDefined(ObjectKlass klass) {
-        synchronized (classLoadActions) {
-            Symbol<Symbol.Type> type = klass.getType();
-            List<ClassLoadAction> loadActions = classLoadActions.get(type);
-            if (loadActions != null) {
-                // fire all registered load actions
-                Iterator<ClassLoadAction> it = loadActions.iterator();
-                while (it.hasNext()) {
-                    ClassLoadAction loadAction = it.next();
-                    loadAction.fire(klass);
-                }
-                // free up memory after firing all actions
-                classLoadActions.remove(type);
-            }
+    public void onClassLoad(ObjectKlass klass) {
+        // internal plugins
+        Symbol<Symbol.Type> type = klass.getType();
+        // fire registered load actions
+        List<ClassLoadAction> loadActions = classLoadActions.getOrDefault(type, Collections.emptyList());
+        Iterator<ClassLoadAction> it = loadActions.iterator();
+        while (it.hasNext()) {
+            ClassLoadAction loadAction = it.next();
+            loadAction.fire(klass);
+            it.remove();
+        }
+        if (loadActions.isEmpty()) {
+            classLoadActions.remove(type);
         }
     }
 
+    // listener methods
     @Override
     public boolean rerunClinit(ObjectKlass klass, boolean changed) {
         boolean rerun = false;
