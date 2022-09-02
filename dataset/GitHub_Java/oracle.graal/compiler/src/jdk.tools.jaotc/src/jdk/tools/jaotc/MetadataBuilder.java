@@ -32,7 +32,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.graalvm.compiler.code.CompilationResult;
-import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
 import org.graalvm.compiler.hotspot.HotSpotGraalServices;
 
@@ -82,7 +81,6 @@ final class MetadataBuilder {
     private void createMethodMetadata(AOTCompiledClass compiledClass) {
         HotSpotGraalRuntimeProvider runtime = dataBuilder.getBackend().getRuntime();
         ByteContainer methodMetadataContainer = binaryContainer.getMethodMetadataContainer();
-        GraalHotSpotVMConfig graalHotSpotVMConfig = runtime.getVMConfig();
 
         // For each of the compiled java methods, create records holding information about them.
         for (CompiledMethodInfo methodInfo : compiledClass.getCompiledMethods()) {
@@ -139,7 +137,7 @@ final class MetadataBuilder {
                                putInt(exceptionHandler).
                                putInt(deoptHandler);
                 // If the JDK does not support DEOPT_MH_HANDLER_ENTRY, then do not output the new field.
-                if (graalHotSpotVMConfig.supportsMethodHandleDeoptimizationEntry()) {
+                if (deoptMHHandler != -2) {
                     metadataStream.putInt(deoptMHHandler);
                 }
                 metadataStream.putInt(stubsOffset).
