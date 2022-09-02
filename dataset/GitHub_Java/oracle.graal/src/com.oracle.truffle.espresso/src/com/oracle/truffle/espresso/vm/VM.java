@@ -307,9 +307,19 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    public static void JVM_ArrayCopy(@SuppressWarnings("unused") @Host(Class/* <System> */.class) StaticObject ignored,
+    public void JVM_ArrayCopy(@SuppressWarnings("unused") @Host(Class/* <System> */.class) StaticObject ignored,
                     @Host(Object.class) StaticObject src, int srcPos, @Host(Object.class) StaticObject dest, int destPos, int length) {
-        Target_java_lang_System.arraycopy(src, srcPos, dest, destPos, length);
+        try {
+            if (src.isArray() && dest.isArray()) {
+                System.arraycopy((src).unwrap(), srcPos, dest.unwrap(), destPos, length);
+            } else {
+                assert src.getClass().isArray();
+                assert dest.getClass().isArray();
+                System.arraycopy(src, srcPos, dest, destPos, length);
+            }
+        } catch (Exception e) {
+            throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
+        }
     }
 
     @VmImpl

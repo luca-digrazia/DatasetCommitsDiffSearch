@@ -53,7 +53,6 @@ import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
@@ -175,7 +174,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw getMeta().throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
+            throw getMeta().throwExWithMessage(ClassFormatError.class, e.getMessage());
         }
 
         this.codeAttribute = method.codeAttribute;
@@ -203,7 +202,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw getMeta().throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
+            throw getMeta().throwExWithMessage(ClassFormatError.class, e.getMessage());
         }
 
         this.codeAttribute = split;
@@ -235,7 +234,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw getMeta().throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
+            throw getMeta().throwExWithMessage(ClassFormatError.class, e.getMessage());
         }
 
         this.codeAttribute = (CodeAttribute) getAttribute(CodeAttribute.NAME);
@@ -368,9 +367,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     public CallTarget getCallTarget() {
         if (callTarget == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            Meta meta = getMeta();
             if (poisonPill) {
-                throw meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "Conflicting default methods: " + this.getName());
+                getMeta().throwExWithMessage(IncompatibleClassChangeError.class, "Conflicting default methods: " + this.getName());
             }
             // Initializing a class costs a lock, do it outside of this method's lock to avoid
             // congestion.
@@ -395,6 +393,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                 } else {
                     if (this.isNative()) {
                         // Bind native method.
+                        // System.err.println("Linking native method: " +
+                        // meta(this).getDeclaringClass().getName() + "#" + getName() + " " +
+                        // getSignature());
+
                         // If the loader is null we have a system class, so we attempt a lookup in
                         // the native Java library.
                         if (StaticObject.isNull(getDeclaringKlass().getDefiningClassLoader())) {
@@ -412,7 +414,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                             }
                         }
 
-                        Method findNative = meta.java_lang_ClassLoader_findNative;
+                        Method findNative = getMeta().java_lang_ClassLoader_findNative;
 
                         // Lookup the short name first, otherwise lookup the long name (with
                         // signature).
@@ -425,7 +427,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                         // (print_jni_name_suffix_on ...)
 
                         if (callTarget == null) {
-                            if (getDeclaringKlass() == meta.java_lang_invoke_MethodHandle && (Name.invokeExact.equals(getName()) || Name.invoke.equals(getName()))) {
+                            if (getDeclaringKlass() == getMeta().java_lang_invoke_MethodHandle && (getName() == Name.invokeExact || getName() == Name.invoke)) {
                                 /*
                                  * Happens only when trying to obtain call target of
                                  * MethodHandle.invoke(Object... args), or
@@ -439,14 +441,13 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                                  */
                                 this.callTarget = declaringKlass.lookupPolysigMethod(getName(), getRawSignature()).getCallTarget();
                             } else {
-                                EspressoLanguage.EspressoLogger.warning(String.format("Failed to link native method: %s", this.toString()));
-                                throw meta.throwException(meta.java_lang_UnsatisfiedLinkError);
+                                System.err.println("Failed to link native method: " + getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
+                                throw getMeta().throwEx(UnsatisfiedLinkError.class);
                             }
                         }
                     } else {
                         if (codeAttribute == null) {
-                            throw meta.throwExceptionWithMessage(meta.java_lang_AbstractMethodError,
-                                            "Calling abstract method: " + getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
+                            throw getMeta().throwExWithMessage(AbstractMethodError.class, "Calling abstract method: " + getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
                         }
 
                         FrameDescriptor frameDescriptor = initFrameDescriptor(getMaxLocals() + getMaxStackSize());
@@ -960,7 +961,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     @Override
     public Object invokeMethod(Object callee, Object[] args) {
         if (isConstructor()) {
-            Object theCallee = InterpreterToVM.newObject(getDeclaringKlass(), false);
+            Object theCallee = InterpreterToVM.newObject(getDeclaringKlass());
             invokeWithConversions(theCallee, args);
             return theCallee;
         }

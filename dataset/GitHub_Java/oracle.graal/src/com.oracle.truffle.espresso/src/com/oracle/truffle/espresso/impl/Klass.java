@@ -682,7 +682,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     public abstract int getClassModifiers();
 
     public final StaticObject allocateInstance() {
-        return InterpreterToVM.newObject(this, false);
+        return InterpreterToVM.newObject(this);
     }
 
     // TODO(garcia) Symbolify package ?

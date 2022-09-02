@@ -55,22 +55,6 @@ public final class Validation {
         return true;
     }
 
-    public static boolean validUnqualifiedName(CharSequence chars) {
-        if (chars.length() == 0) {
-            return false;
-        }
-        if (chars.charAt(0) == '(') { // maybe a signature
-            return false;
-        }
-        for (int i = 0; i < chars.length(); ++i) {
-            char ch = chars.charAt(i);
-            if (ch == '.' || ch == ';' || ch == '[' || ch == '/') {
-                return false;
-            }
-        }
-        return true;
-    }
-
     /**
      * Method names are further constrained so that, with the exception of the special method names
      * <init> and <clinit> (&sect;2.9), they must not contain the ASCII characters < or > (that is,
@@ -121,29 +105,7 @@ public final class Validation {
             prev = i + 1;
             ++i;
         }
-        return prev != bytes.length();
-    }
-
-    public static boolean validBinaryName(CharSequence chars) {
-        if (chars.length() == 0) {
-            return false;
-        }
-        if (chars.charAt(0) == '/') {
-            return false;
-        }
-        int prev = 0;
-        int i = 0;
-        while (i < chars.length()) {
-            while (i < chars.length() && chars.charAt(i) != '/') {
-                ++i;
-            }
-            if (!validUnqualifiedName(chars.subSequence(prev, i))) {
-                return false;
-            }
-            prev = i + 1;
-            ++i;
-        }
-        return prev != chars.length();
+        return true;
     }
 
     /**
@@ -218,10 +180,6 @@ public final class Validation {
         return false;
     }
 
-    public static boolean validSignatureDescriptor(ByteSequence bytes) {
-        return validSignatureDescriptor(bytes, false);
-    }
-
     /**
      * A method descriptor contains zero or more parameter descriptors, representing the types of
      * parameters that the method takes, and a return descriptor, representing the type of the value
@@ -231,7 +189,7 @@ public final class Validation {
      *     SignatureDescriptor: ( {FieldDescriptor} ) TypeDescriptor
      * </pre>
      */
-    public static boolean validSignatureDescriptor(ByteSequence bytes, boolean isInit) {
+    public static boolean validSignatureDescriptor(ByteSequence bytes) {
         if (bytes.length() < 3) { // shortest descriptor e.g. ()V
             return false;
         }
@@ -286,11 +244,7 @@ public final class Validation {
         }
         assert bytes.byteAt(index) == ')';
         // Validate return type.
-        if (isInit) {
-            return bytes.subSequence(index + 1, bytes.length() - index - 1).contentEquals(Symbol.Type._void);
-        } else {
-            return validTypeDescriptor(bytes.subSequence(index + 1, bytes.length() - index - 1), true);
-        }
+        return validTypeDescriptor(bytes.subSequence(index + 1, bytes.length() - index - 1), true);
     }
 
     public static boolean validModifiedUTF8(ByteSequence bytes) {

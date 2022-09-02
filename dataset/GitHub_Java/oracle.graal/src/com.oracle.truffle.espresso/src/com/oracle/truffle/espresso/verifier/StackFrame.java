@@ -256,23 +256,16 @@ final class OperandStack {
 
     void dup() {
         procSize(1);
-        Operand v = stack[top - 1];
-        if (isType2(v)) {
+        if (isType2(stack[top - 1])) {
             throw new VerifyError("type 2 operand for dup.");
         }
-        if (v.isTopOperand()) {
-            throw new VerifyError("dup of Top type.");
-        }
-        stack[top] = v;
+        stack[top] = stack[top - 1];
         top++;
     }
 
     void pop() {
         procSize(-1);
         Operand v1 = stack[top - 1];
-        if (v1.isTopOperand()) {
-            throw new VerifyError("dup2x2 of Top type.");
-        }
         if (isType2(v1)) {
             throw new VerifyError("type 2 operand for pop.");
         }
@@ -282,17 +275,11 @@ final class OperandStack {
     void pop2() {
         procSize(-2);
         Operand v1 = stack[top - 1];
-        if (v1.isTopOperand()) {
-            throw new VerifyError("dup2x2 of Top type.");
-        }
         if (isType2(v1)) {
             top--;
             return;
         }
         Operand v2 = stack[top - 2];
-        if (v2.isTopOperand()) {
-            throw new VerifyError("dup2x2 of Top type.");
-        }
         if (isType2(v2)) {
             throw new VerifyError("type 2 second operand for pop2.");
         }
@@ -302,12 +289,8 @@ final class OperandStack {
     void dupx1() {
         procSize(1);
         Operand v1 = stack[top - 1];
-        Operand v2 = stack[top - 2];
-        if (isType2(v1) || isType2(v2)) {
+        if (isType2(v1) || isType2(stack[top - 2])) {
             throw new VerifyError("type 2 operand for dupx1.");
-        }
-        if (v1.isTopOperand() || v2.isTopOperand()) {
-            throw new VerifyError("dupx1 of Top type.");
         }
         System.arraycopy(stack, top - 2, stack, top - 1, 2);
         top++;
@@ -321,20 +304,13 @@ final class OperandStack {
             throw new VerifyError("type 2 first operand for dupx2.");
         }
         Operand v2 = stack[top - 2];
-        if (v1.isTopOperand() || v2.isTopOperand()) {
-            throw new VerifyError("dupx2 of Top type.");
-        }
         if (isType2(v2)) {
             System.arraycopy(stack, top - 2, stack, top - 1, 2);
             top++;
             stack[top - 3] = v1;
         } else {
-            Operand v3 = stack[top - 3];
-            if (isType2(v3)) {
+            if (isType2(stack[top - 3])) {
                 throw new VerifyError("type 2 third operand for dupx2.");
-            }
-            if (v3.isTopOperand()) {
-                throw new VerifyError("dupx2 of Top type.");
             }
             System.arraycopy(stack, top - 3, stack, top - 2, 3);
             top++;
@@ -349,12 +325,8 @@ final class OperandStack {
             stack[top] = v1;
             top++;
         } else {
-            Operand v2 = stack[top - 2];
-            if (isType2(v2)) {
+            if (isType2(stack[top - 2])) {
                 throw new VerifyError("type 2 second operand for dup2.");
-            }
-            if (v1.isTopOperand() || v2.isTopOperand()) {
-                throw new VerifyError("dup2 of Top type.");
             }
             System.arraycopy(stack, top - 2, stack, top, 2);
             top = top + 2;
@@ -368,21 +340,14 @@ final class OperandStack {
         if (isType2(v2)) {
             throw new VerifyError("type 2 second operand for dup2x1");
         }
-        if (v2.isTopOperand() || v1.isTopOperand()) {
-            throw new VerifyError("dup2x1 of Top type.");
-        }
         if (isType2(v1)) {
             System.arraycopy(stack, top - 2, stack, top - 1, 2);
             top++;
             stack[top - 3] = v1;
             return;
         }
-        Operand v3 = stack[top - 3];
-        if (isType2(v3)) {
+        if (isType2(stack[top - 3])) {
             throw new VerifyError("type 2 third operand for dup2x1.");
-        }
-        if (v3.isTopOperand()) {
-            throw new VerifyError("dup2x1 of Top type.");
         }
         System.arraycopy(stack, top - 3, stack, top - 1, 3);
         top = top + 2;
@@ -397,10 +362,6 @@ final class OperandStack {
         boolean b1 = isType2(v1);
         boolean b2 = isType2(v2);
 
-        if (v1.isTopOperand() || v2.isTopOperand()) {
-            throw new VerifyError("dup2x2 of Top type.");
-        }
-
         if (b1 && b2) {
             System.arraycopy(stack, top - 2, stack, top - 1, 2);
             stack[top - 2] = v1;
@@ -409,9 +370,6 @@ final class OperandStack {
         }
         Operand v3 = stack[top - 3];
         boolean b3 = isType2(v3);
-        if (v3.isTopOperand()) {
-            throw new VerifyError("dup2x2 of Top type.");
-        }
         if (!b1 && !b2 && b3) {
             System.arraycopy(stack, top - 3, stack, top - 1, 3);
             stack[top - 3] = v2;
@@ -426,9 +384,6 @@ final class OperandStack {
             return;
         }
         Operand v4 = stack[top - 4];
-        if (v4.isTopOperand()) {
-            throw new VerifyError("dup2x2 of Top type.");
-        }
         boolean b4 = isType2(v4);
         if (!b1 && !b2 && !b3 && !b4) {
             System.arraycopy(stack, top - 4, stack, top - 2, 4);
@@ -446,9 +401,6 @@ final class OperandStack {
         Operand v2 = stack[top - 2];
         boolean b1 = isType2(v1);
         boolean b2 = isType2(v2);
-        if (v1.isTopOperand() || v2.isTopOperand()) {
-            throw new VerifyError("swap of Top type.");
-        }
         if (!b1 && !b2) {
             stack[top - 1] = v2;
             stack[top - 2] = v1;
@@ -468,8 +420,8 @@ final class OperandStack {
             if (!op1.compliesWithInMerge(op2)) {
                 return index;
             }
-            if (isType2(op1) && op2.isTopOperand()) {
-                if (!stackFrame.stack[secondIndex++].isTopOperand()) {
+            if (isType2(op1) && op2 == Invalid) {
+                if (stackFrame.stack[secondIndex++] != Invalid) {
                     throw new VerifyError("Inconsistent stack Map: " + op1 + " vs. " + op2 + " and " + stackFrame.stack[secondIndex - 1]);
                 }
             }
@@ -540,7 +492,7 @@ final class Locals {
             throw new VerifyError("Incompatible register type. Expected: " + expected + ", found: " + op);
         }
         if (isType2(expected)) {
-            if (!registers[index + 1].isTopOperand()) {
+            if (registers[index + 1] != Invalid) {
                 throw new VerifyError("Loading corrupted long primitive from locals!");
             }
         }
