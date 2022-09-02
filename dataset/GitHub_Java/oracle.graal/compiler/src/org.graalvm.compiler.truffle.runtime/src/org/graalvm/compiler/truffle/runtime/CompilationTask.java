@@ -64,11 +64,11 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
         }
     };
 
-    static CompilationTask createInitializationTask(WeakReference<OptimizedCallTarget> targetRef, Consumer<CompilationTask> action) {
+    static CompilationTask initializationTask(WeakReference<OptimizedCallTarget> targetRef, Consumer<CompilationTask> action) {
         return new CompilationTask(BackgroundCompileQueue.Priority.INITIALIZATION, targetRef, action, 0);
     }
 
-    static CompilationTask createCompilationTask(BackgroundCompileQueue.Priority priority, WeakReference<OptimizedCallTarget> targetRef, long id) {
+    static CompilationTask compilationTask(BackgroundCompileQueue.Priority priority, WeakReference<OptimizedCallTarget> targetRef, long id) {
         return new CompilationTask(priority, targetRef, compilationAction, id);
     }
 
@@ -146,7 +146,7 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
 
     @Override
     public String toString() {
-        return "CompilationTask[" + future + "]";
+        return "CompileTask[" + future + "]";
     }
 
     /**
@@ -199,7 +199,7 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
 
         @Override
         public String toString() {
-            return "ExecutorServiceWrapper(" + compileTask + ")";
+            return "Future(" + compileTask + ")";
         }
     }
 }
