@@ -28,11 +28,11 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.oracle.truffle.api.nodes.RootNode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
 import org.graalvm.compiler.core.CompilationWrapper;
 import org.graalvm.compiler.core.GraalCompilerOptions;
 import org.graalvm.compiler.test.SubprocessUtil;
@@ -41,14 +41,12 @@ import org.graalvm.compiler.truffle.common.TruffleCompilation;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
 import org.graalvm.compiler.truffle.common.TruffleDebugContext;
-import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
+import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.test.TestWithPolyglotOptions;
 import org.junit.Test;
-
-import com.oracle.truffle.api.nodes.RootNode;
 
 public class JNIExceptionWrapperTest extends TestWithPolyglotOptions {
 
@@ -92,7 +90,7 @@ public class JNIExceptionWrapperTest extends TestWithPolyglotOptions {
         TruffleCompiler compiler = runtime.getTruffleCompiler(compilable);
         try (TruffleCompilation compilation = compiler.openCompilation(compilable)) {
             try (TruffleDebugContext debug = compiler.openDebugContext(GraalTruffleRuntime.getOptionsForCompiler(compilable), compilation)) {
-                TruffleMetaAccessProvider inliningPlan = runtime.createInliningPlan(compilable, null);
+                TruffleInliningPlan inliningPlan = runtime.createInliningPlan(compilable, null);
                 TestListener listener = new TestListener();
                 compiler.doCompile(debug, compilation, GraalTruffleRuntime.getOptionsForCompiler(compilable), inliningPlan, null, listener);
             }
@@ -123,7 +121,7 @@ public class JNIExceptionWrapperTest extends TestWithPolyglotOptions {
     private static final class TestListener implements TruffleCompilerListener {
 
         @Override
-        public void onTruffleTierFinished(CompilableTruffleAST compilable, TruffleMetaAccessProvider inliningPlan, GraphInfo graph) {
+        public void onTruffleTierFinished(CompilableTruffleAST compilable, TruffleInliningPlan inliningPlan, GraphInfo graph) {
             throw new RuntimeException("Expected exception");
         }
 
@@ -132,7 +130,7 @@ public class JNIExceptionWrapperTest extends TestWithPolyglotOptions {
         }
 
         @Override
-        public void onSuccess(CompilableTruffleAST compilable, TruffleMetaAccessProvider inliningPlan, GraphInfo graphInfo, CompilationResultInfo compilationResultInfo) {
+        public void onSuccess(CompilableTruffleAST compilable, TruffleInliningPlan inliningPlan, GraphInfo graphInfo, CompilationResultInfo compilationResultInfo) {
         }
 
         @Override
