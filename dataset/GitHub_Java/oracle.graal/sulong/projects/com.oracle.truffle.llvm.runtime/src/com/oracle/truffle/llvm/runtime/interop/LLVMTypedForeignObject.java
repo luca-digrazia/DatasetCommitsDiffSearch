@@ -842,12 +842,12 @@ public final class LLVMTypedForeignObject extends LLVMInternalTruffleObject {
 
     @ExportMessage
     @SuppressWarnings("static-method")
-    public boolean isForeign() {
+    boolean isForeign() {
         return true;
     }
 
     @ExportMessage
-    public Object asForeign() {
+    Object asForeign() {
         return foreign;
     }
 

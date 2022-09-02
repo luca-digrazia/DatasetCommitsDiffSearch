@@ -33,11 +33,9 @@ import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.LibraryFactory;
-import com.oracle.truffle.llvm.runtime.except.LLVMException;
 
 @GenerateLibrary
-@DefaultExport(LLVMAsForeignLibraryDefaults.ArrayAsForeignLibrary.class)
-@DefaultExport(LLVMAsForeignLibraryDefaults.DefaultAsForeignLibrary.class)
+@DefaultExport(LLVMAsForeignLibraryDefaults.class)
 public abstract class LLVMAsForeignLibrary extends Library {
 
     static final LibraryFactory<LLVMAsForeignLibrary> FACTORY = LibraryFactory.resolve(LLVMAsForeignLibrary.class);
@@ -46,20 +44,8 @@ public abstract class LLVMAsForeignLibrary extends Library {
         return FACTORY;
     }
 
-    public boolean isForeign(@SuppressWarnings("unused") Object receiver) {
-        return false;
-    }
+    public abstract boolean isForeign(Object receiver);
 
-    public Object asForeign(@SuppressWarnings("unused") Object receiver) {
-        throw new NotForeignObjectException();
-    }
-
-    public class NotForeignObjectException extends LLVMException {
-        private static final long serialVersionUID = 3841115158039517295L;
-
-        public NotForeignObjectException() {
-            super(null);
-        }
-    }
+    public abstract Object asForeign(Object receiver);
 
 }

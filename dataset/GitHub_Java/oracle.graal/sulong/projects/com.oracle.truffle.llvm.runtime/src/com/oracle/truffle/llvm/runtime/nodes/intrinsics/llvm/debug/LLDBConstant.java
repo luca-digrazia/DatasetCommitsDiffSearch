@@ -41,7 +41,6 @@ import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugTypeConstants;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -366,8 +365,9 @@ abstract class LLDBConstant implements LLVMDebugValue {
                     foreign = LLVMManagedPointer.cast(pointer).getObject();
                 }
 
-                if (LLVMAsForeignLibrary.getFactory().getUncached().isForeign(foreign)) {
-                    return LLVMAsForeignLibrary.getFactory().getUncached().asForeign(foreign);
+                // XYZ
+                if (foreign instanceof LLVMTypedForeignObject) {
+                    return ((LLVMTypedForeignObject) foreign).getForeign();
                 }
             }
             return super.asInteropValue();
@@ -409,7 +409,7 @@ abstract class LLDBConstant implements LLVMDebugValue {
                     return false;
 
                 } else {
-                    // Not sure how to replace this LLVMTypedForeignObject occurrence
+                    // XYZ
                     return !(target instanceof LLVMTypedForeignObject);
                 }
             } else {
@@ -691,8 +691,9 @@ abstract class LLDBConstant implements LLVMDebugValue {
 
         @Override
         public Object asInteropValue() {
-            if (LLVMAsForeignLibrary.getFactory().getUncached().isForeign(value)) {
-                return LLVMAsForeignLibrary.getFactory().getUncached().asForeign(value);
+            // XYZ
+            if (value instanceof LLVMTypedForeignObject) {
+                return ((LLVMTypedForeignObject) value).getForeign();
             }
             return value;
         }

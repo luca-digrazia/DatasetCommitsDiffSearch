@@ -49,7 +49,7 @@ import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourcePointerType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceStaticMemberType;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 
 /**
@@ -647,7 +647,8 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
         private boolean isPointerToForeign() {
             if (value.isManagedPointer()) {
                 Object base = value.getManagedPointerBase();
-                return LLVMAsForeignLibrary.getFactory().getUncached().isForeign(base);
+                // XYZ
+                return base instanceof LLVMTypedForeignObject;
             } else {
                 return false;
             }
@@ -668,8 +669,9 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
         public Object getMemberSafe(String identifier) {
             if (FOREIGN_KEYS[0].equals(identifier)) {
                 Object base = value.getManagedPointerBase();
-                if (LLVMAsForeignLibrary.getFactory().getUncached().isForeign(base)) {
-                    return LLVMAsForeignLibrary.getFactory().getUncached().asForeign(base);
+                // XYZ
+                if (base instanceof LLVMTypedForeignObject) {
+                    return ((LLVMTypedForeignObject) base).getForeign();
                 } else {
                     return "Cannot get foreign base pointer!";
                 }
@@ -792,9 +794,9 @@ public abstract class LLVMDebugObject extends LLVMDebuggerValue {
             }
 
             Object obj = value.asInteropValue();
-
-            if (LLVMAsForeignLibrary.getFactory().getUncached().isForeign(obj)) {
-                obj = LLVMAsForeignLibrary.getFactory().getUncached().asForeign(obj);
+            // XYZ
+            if (obj instanceof LLVMTypedForeignObject) {
+                obj = ((LLVMTypedForeignObject) obj).getForeign();
             }
             return obj;
         }
