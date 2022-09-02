@@ -24,16 +24,19 @@
  */
 package org.graalvm.component.installer;
 
+import java.io.Console;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import org.graalvm.component.installer.model.ComponentRegistry;
 import java.io.PrintStream;
+import java.net.URL;
 import java.nio.file.Path;
 import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.function.Supplier;
@@ -41,7 +44,7 @@ import java.util.function.Supplier;
 /**
  * Implementation of feedback and input for commands.
  */
-public final class Environment implements Feedback, CommandInput {
+public class Environment implements Feedback, CommandInput, Config {
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle(
                     "org.graalvm.component.installer.Bundle");
 
@@ -50,17 +53,21 @@ public final class Environment implements Feedback, CommandInput {
     private final Map<String, String> options;
     private final boolean verbose;
     private final ResourceBundle bundle;
+    private int parameterPos;
     private InputStream in = System.in;
     private PrintStream err = System.err;
     private PrintStream out = System.out;
-    private Supplier<ComponentRegistry> registrySupplier;
     private ComponentRegistry localRegistry;
     private boolean stacktraces;
-    private Iterable<ComponentParam> fileIterable;
-    private Map<Path, String> fileMap = new HashMap<>();
+    private ComponentIterable fileIterable;
+    private Map<URL, Path> fileMap = new HashMap<>();
     private boolean allOutputToErr;
-
+    private boolean autoYesEnabled;
+    private boolean nonInteractive;
     private Path graalHome;
+    private FileOperations fileOperations;
+    private CatalogFactory catalogFactory;
+    private ComponentCatalog componentCatalog;
 
     Environment(String commandName, List<String> parameters, Map<String, String> options) {
         this(commandName, (String) null, parameters, options);
@@ -68,6 +75,10 @@ public final class Environment implements Feedback, CommandInput {
 
     Environment(String commandName, InstallerCommand cmdInstance, List<String> parameters, Map<String, String> options) {
         this(commandName, makeBundle(cmdInstance), parameters, options);
+    }
+
+    public void setIn(InputStream input) {
+        this.in = input;
     }
 
     private static String makeBundle(InstallerCommand cmdInstance) {
@@ -94,10 +105,37 @@ public final class Environment implements Feedback, CommandInput {
         this.fileIterable = new FileIterable(this, this);
     }
 
+    @Override
+    public Environment enableStacktraces() {
+        this.stacktraces = true;
+        return this;
+    }
+
+    @Override
+    public boolean isAutoYesEnabled() {
+        return autoYesEnabled;
+    }
+
+    @Override
+    public void setAutoYesEnabled(boolean autoYesEnabled) {
+        this.autoYesEnabled = autoYesEnabled;
+    }
+
+    @Override
+    public boolean isNonInteractive() {
+        return nonInteractive;
+    }
+
+    @Override
+    public void setNonInteractive(boolean nonInteractive) {
+        this.nonInteractive = nonInteractive;
+    }
+
     public boolean isAllOutputToErr() {
         return allOutputToErr;
     }
 
+    @Override
     public void setAllOutputToErr(boolean allOutputToErr) {
         this.allOutputToErr = allOutputToErr;
         if (allOutputToErr) {
@@ -107,13 +145,22 @@ public final class Environment implements Feedback, CommandInput {
         }
     }
 
-    public void setFileIterable(Iterable<ComponentParam> fileIterable) {
+    @Override
+    public void setFileIterable(ComponentIterable fileIterable) {
         this.fileIterable = fileIterable;
     }
 
     @Override
-    public ComponentRegistry getRegistry() {
-        return registrySupplier.get();
+    public void setCatalogFactory(CatalogFactory catalogFactory) {
+        this.catalogFactory = catalogFactory;
+    }
+
+    @Override
+    public ComponentCatalog getRegistry() {
+        if (componentCatalog == null) {
+            componentCatalog = catalogFactory.createComponentCatalog(this);
+        }
+        return componentCatalog;
     }
 
     @Override
@@ -123,17 +170,10 @@ public final class Environment implements Feedback, CommandInput {
 
     public void setLocalRegistry(ComponentRegistry r) {
         this.localRegistry = r;
-        if (this.registrySupplier == null) {
-            this.registrySupplier = () -> r;
-        }
-    }
-
-    public void setComponentRegistry(Supplier<ComponentRegistry> registrySupplier) {
-        this.registrySupplier = registrySupplier;
     }
 
     public void setGraalHome(Path f) {
-        this.graalHome = f;
+        this.graalHome = f.normalize();
 
     }
 
@@ -211,6 +251,12 @@ public final class Environment implements Feedback, CommandInput {
     @Override
     public boolean verbatimPart(String msg, boolean beVerbose) {
         print(beVerbose, false, null, out, msg);
+        return beVerbose;
+    }
+
+    @Override
+    public boolean verbatimPart(String msg, boolean error, boolean beVerbose) {
+        print(beVerbose, false, null, error ? err : out, msg);
         return beVerbose;
     }
 
@@ -301,18 +347,14 @@ public final class Environment implements Feedback, CommandInput {
             }
 
             @Override
+            public boolean verbatimPart(String msg, boolean error, boolean verboseOutput) {
+                print(verboseOutput, false, null, error ? err : out, msg);
+                return verbose;
+            }
+
+            @Override
             public boolean backspace(int chars, boolean beVerbose) {
                 return Environment.this.backspace(chars, beVerbose);
-            }
-
-            @Override
-            public String translateFilename(Path f) {
-                return Environment.this.translateFilename(f);
-            }
-
-            @Override
-            public void bindFilename(Path file, String label) {
-                Environment.this.bindFilename(file, label);
             }
 
             @Override
@@ -321,8 +363,23 @@ public final class Environment implements Feedback, CommandInput {
             }
 
             @Override
-            public String acceptPassword() {
+            public char[] acceptPassword() {
                 return Environment.this.acceptPassword();
+            }
+
+            @Override
+            public void addLocalFileCache(URL location, Path local) {
+                Environment.this.addLocalFileCache(location, local);
+            }
+
+            @Override
+            public Path getLocalCache(URL location) {
+                return Environment.this.getLocalCache(location);
+            }
+
+            @Override
+            public boolean isNonInteractive() {
+                return Environment.this.isNonInteractive();
             }
         };
     }
@@ -343,6 +400,9 @@ public final class Environment implements Feedback, CommandInput {
                     args[i] = v;
                 }
             }
+        }
+        if (bundleKey == null) {
+            return String.valueOf(args[0]);
         }
         return MessageFormat.format(
                         bundle.getString(bundleKey),
@@ -376,12 +436,23 @@ public final class Environment implements Feedback, CommandInput {
 
     @Override
     public String nextParameter() {
-        return parameters.poll();
+        if (parameterPos >= parameters.size()) {
+            return null;
+        }
+        return parameters.get(parameterPos++);
+    }
+
+    @Override
+    public String peekParameter() {
+        if (parameterPos >= parameters.size()) {
+            return null;
+        }
+        return parameters.get(parameterPos);
     }
 
     @Override
     public String requiredParameter() {
-        if (parameters.isEmpty()) {
+        if (!hasParameter()) {
             throw new FailedOperationException(
                             MessageFormat.format(BUNDLE.getString("ERROR_MissingParameter"), commandName));
         }
@@ -390,31 +461,17 @@ public final class Environment implements Feedback, CommandInput {
 
     @Override
     public boolean hasParameter() {
-        return !parameters.isEmpty();
+        return parameters.size() > parameterPos;
     }
 
     @Override
-    public Iterable<ComponentParam> existingFiles() {
+    public ComponentIterable existingFiles() {
         return fileIterable;
     }
 
     @Override
     public String optValue(String optName) {
         return options.get(optName);
-    }
-
-    public boolean hasOption(String optName) {
-        return optValue(optName) != null;
-    }
-
-    @Override
-    public String translateFilename(Path f) {
-        return fileMap.getOrDefault(f, f.toString());
-    }
-
-    @Override
-    public void bindFilename(Path file, String label) {
-        fileMap.put(file, label);
     }
 
     public char acceptCharacter() {
@@ -427,12 +484,18 @@ public final class Environment implements Feedback, CommandInput {
         } catch (EOFException ex) {
             throw new UserAbortException(ex);
         } catch (IOException ex) {
-            throw failure("ERROR_UserInput", ex, ex.getMessage());
+            throw withBundle(Environment.class).failure("ERROR_UserInput", ex, ex.getMessage());
         }
     }
 
     @Override
     public String acceptLine(boolean autoYes) {
+        if (autoYes && isAutoYesEnabled()) {
+            return AUTO_YES;
+        }
+        if (isNonInteractive()) {
+            throw new NonInteractiveException(withBundle(Environment.class).l10n("ERROR_NoninteractiveInput"));
+        }
         StringBuilder sb = new StringBuilder();
         char c;
         while ((c = acceptCharacter()) != '\n') {
@@ -442,12 +505,88 @@ public final class Environment implements Feedback, CommandInput {
                 sb.append(c);
             }
         }
+        if (sb.length() > 0 && sb.charAt(sb.length() - 1) == '\r') {
+            sb.delete(sb.length() - 1, sb.length());
+        }
         return sb.toString();
     }
 
     @Override
-    public String acceptPassword() {
-        System.console().flush();
-        return String.copyValueOf(System.console().readPassword());
+    public char[] acceptPassword() {
+        if (isNonInteractive()) {
+            throw new NonInteractiveException(withBundle(Environment.class).l10n("ERROR_NoninteractiveInput"));
+        }
+        Console console = System.console();
+        if (console != null) {
+            console.flush();
+            return console.readPassword();
+        } else {
+            return acceptLine(false).toCharArray();
+        }
     }
+
+    @Override
+    public void addLocalFileCache(URL location, Path local) {
+        fileMap.put(location, local);
+    }
+
+    @Override
+    public Path getLocalCache(URL location) {
+        return fileMap.get(location);
+    }
+
+    @Override
+    public FileOperations getFileOperations() {
+        return fileOperations;
+    }
+
+    public void setFileOperations(FileOperations fileOperations) {
+        this.fileOperations = fileOperations;
+    }
+
+    public boolean close() throws IOException {
+        if (out != null) {
+            out.flush();
+        }
+        if (err != null) {
+            err.flush();
+        }
+        if (fileOperations != null) {
+            return fileOperations.flush();
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public CatalogFactory getCatalogFactory() {
+        return catalogFactory;
+    }
+
+    public void resetParameters() {
+        parameterPos = 0;
+    }
+
+    @Override
+    public String getParameter(String key, boolean cmdLine) {
+        if (cmdLine) {
+            return System.getProperty(key);
+        } else {
+            return System.getenv(key.toUpperCase(Locale.ENGLISH));
+        }
+    }
+
+    @Override
+    public Map<String, String> parameters(boolean cmdLine) {
+        if (cmdLine) {
+            Map<String, String> res = new HashMap<>();
+            for (String s : System.getProperties().stringPropertyNames()) {
+                res.put(s, System.getProperty(s));
+            }
+            return res;
+        } else {
+            return System.getenv();
+        }
+    }
+
 }
