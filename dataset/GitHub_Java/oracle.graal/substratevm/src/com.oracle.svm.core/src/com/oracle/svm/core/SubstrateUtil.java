@@ -28,11 +28,14 @@ package com.oracle.svm.core;
 
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -79,10 +82,10 @@ import com.oracle.svm.core.thread.VMOperationControl;
 import com.oracle.svm.core.thread.VMThreads;
 import com.oracle.svm.core.threadlocal.VMThreadLocalInfos;
 import com.oracle.svm.core.util.Counter;
+import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.services.Services;
-import org.graalvm.compiler.java.LambdaUtils;
 
 public class SubstrateUtil {
 
@@ -634,12 +637,25 @@ public class SubstrateUtil {
         return list.toArray(new String[list.size()]);
     }
 
+    private static final char[] HEX = "0123456789abcdef".toCharArray();
+
     public static String toHex(byte[] data) {
-        return LambdaUtils.toHex(data);
+        StringBuilder r = new StringBuilder(data.length * 2);
+        for (byte b : data) {
+            r.append(HEX[(b >> 4) & 0xf]);
+            r.append(HEX[b & 0xf]);
+        }
+        return r.toString();
     }
 
     public static String digest(String value) {
-        return LambdaUtils.digest(value);
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-1");
+            md.update(value.getBytes("UTF-8"));
+            return toHex(md.digest());
+        } catch (NoSuchAlgorithmException | UnsupportedEncodingException ex) {
+            throw VMError.shouldNotReachHere(ex);
+        }
     }
 
     /**
@@ -749,7 +765,7 @@ public class SubstrateUtil {
             String[] neverInline = SubstrateOptions.NeverInline.getValue();
 
             return GuardedAnnotationAccess.isAnnotationPresent(method, com.oracle.svm.core.annotate.NeverInline.class) ||
-                            (neverInline != null && Arrays.stream(neverInline).anyMatch(re -> MethodFilter.parse(re).matches(method)));
+                            (neverInline != null && Arrays.stream(neverInline).anyMatch(re -> MethodFilter.matches(MethodFilter.parse(re), method)));
         }
     }
 }
