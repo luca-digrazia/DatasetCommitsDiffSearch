@@ -40,6 +40,8 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @SuppressWarnings("unused")
 @ExportLibrary(InteropLibrary.class)
@@ -109,21 +111,22 @@ final class EventContextObject extends AbstractContextObject {
         }
         VariablesObject vars = (VariablesObject) args[0];
         Truffle.getRuntime().iterateFrames((frameInstance) -> {
-            final Node n = frameInstance.getCallNode();
-            if (n == null) {
+            if (frameInstance.getCallNode() == null) {
                 // skip top most record about the instrument
                 return null;
             }
             final Frame frame = frameInstance.getFrame(FrameInstance.FrameAccess.READ_ONLY);
             NodeLibrary lib = NodeLibrary.getUncached();
             InteropLibrary iop = InteropLibrary.getUncached();
-            if (lib.hasScope(n, frame)) {
+            final Node n = frameInstance.getCallNode() == null ? obj.getInstrumentedNode() : frameInstance.getCallNode();
+            boolean scope = lib.hasScope(n, frame);
+            if (scope) {
                 try {
                     Object frameVars = lib.getScope(n, frame, false);
                     LocationObject location = new LocationObject(n);
                     iop.execute(args[1], location, frameVars);
                 } catch (UnsupportedMessageException | UnsupportedTypeException | ArityException ex) {
-                    throw InsightException.raise(ex);
+                    Logger.getLogger(EventContextObject.class.getName()).log(Level.SEVERE, null, ex);
                 }
             }
             return null;
