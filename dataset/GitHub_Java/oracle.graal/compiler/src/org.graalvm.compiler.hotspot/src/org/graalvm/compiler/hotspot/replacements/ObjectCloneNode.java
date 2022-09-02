@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,7 +45,6 @@ import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.replacements.nodes.BasicObjectCloneNode;
-import org.graalvm.compiler.replacements.nodes.MacroInvokable;
 
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.ResolvedJavaField;
@@ -75,7 +74,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode {
 
     @Override
     @SuppressWarnings("try")
-    public StructuredGraph getLoweredSnippetGraph(LoweringTool tool) {
+    protected StructuredGraph getLoweredSnippetGraph(LoweringTool tool) {
         ResolvedJavaType type = StampTool.typeOrNull(getObject());
 
         if (type != null) {
@@ -96,7 +95,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode {
 
                     assert snippetGraph != null : "ObjectCloneSnippets should be installed";
                     assert getConcreteType(stamp(NodeView.DEFAULT)) != null;
-                    return MacroInvokable.lowerReplacement(graph(), (StructuredGraph) snippetGraph.copy(getDebug()), tool);
+                    return lowerReplacement((StructuredGraph) snippetGraph.copy(getDebug()), tool);
                 }
                 assert false : "unhandled array type " + type.getComponentType().getJavaKind();
             } else {
@@ -116,7 +115,7 @@ public final class ObjectCloneNode extends BasicObjectCloneNode {
                         newGraph.addBeforeFixed(returnNode, newGraph.add(new StoreFieldNode(newInstance, field, load)));
                     }
                     assert getConcreteType(stamp(NodeView.DEFAULT)) != null;
-                    return MacroInvokable.lowerReplacement(graph(), newGraph, tool);
+                    return lowerReplacement(newGraph, tool);
                 }
             }
         }

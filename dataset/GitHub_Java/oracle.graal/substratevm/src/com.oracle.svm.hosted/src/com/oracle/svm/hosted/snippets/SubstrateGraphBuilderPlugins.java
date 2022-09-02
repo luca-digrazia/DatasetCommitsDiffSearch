@@ -98,7 +98,6 @@ import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.config.ConfigurationValues;
-import com.oracle.svm.core.graal.jdk.ObjectCloneWithExceptionNode;
 import com.oracle.svm.core.graal.jdk.SubstrateArraysCopyOfNode;
 import com.oracle.svm.core.graal.jdk.SubstrateObjectCloneNode;
 import com.oracle.svm.core.graal.nodes.DeoptEntryNode;
@@ -475,18 +474,14 @@ public class SubstrateGraphBuilderPlugins {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
                 ValueNode object = receiver.get();
-                b.addPush(JavaKind.Object, objectCloneNode(MacroParams.of(b, targetMethod, object), b.parsingIntrinsic()).asNode());
+                b.addPush(JavaKind.Object, objectCloneNode(MacroParams.of(b, targetMethod, object)).asNode());
                 return true;
             }
         });
     }
 
-    public static ObjectClone objectCloneNode(MacroParams macroParams, boolean parsingIntrinsic) {
-        if (parsingIntrinsic) {
-            return new SubstrateObjectCloneNode(macroParams);
-        } else {
-            return new ObjectCloneWithExceptionNode(macroParams);
-        }
+    public static ObjectClone objectCloneNode(MacroParams macroParams) {
+        return new SubstrateObjectCloneNode(macroParams);
     }
 
     private static void registerUnsafePlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins, SnippetReflectionProvider snippetReflection, boolean analysis) {
