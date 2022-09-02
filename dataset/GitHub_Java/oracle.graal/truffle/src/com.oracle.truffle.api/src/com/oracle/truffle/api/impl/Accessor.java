@@ -439,12 +439,6 @@ public abstract class Accessor {
         public abstract Object getLanguageView(LanguageInfo viewLanguage, Object value);
 
         public abstract Object getScopedView(LanguageInfo viewLanguage, Node location, Frame frame, Object value);
-
-        public abstract boolean initializeLanguage(Object polyglotLanguageContext, LanguageInfo targetLanguage);
-
-        public abstract RuntimeException engineToLanguageException(Throwable t);
-
-        public abstract RuntimeException engineToInstrumentException(Throwable t);
     }
 
     public abstract static class LanguageSupport {
@@ -747,9 +741,8 @@ public abstract class Accessor {
             case "com.oracle.truffle.api.io.IOAccessor":
             case "com.oracle.truffle.api.frame.FrameAccessor":
             case "com.oracle.truffle.polyglot.EngineAccessor":
-            case "com.oracle.truffle.api.utilities.JSONHelper.DumpAccessor":// OK, classes
-                                                                            // initializing
-                                                                            // accessors
+            case "com.oracle.truffle.api.utilities.JSONHelper.DumpAccessor":
+                // OK, classes initializing accessors
                 break;
             case "com.oracle.truffle.api.debug.Debugger$AccessorDebug":
             case "com.oracle.truffle.tck.instrumentation.VerifierInstrument$TruffleTCKAccessor":
@@ -758,8 +751,8 @@ public abstract class Accessor {
             case "com.oracle.truffle.api.impl.TVMCIAccessor":
             case "org.graalvm.compiler.truffle.runtime.CompilerRuntimeAccessor":
             case "org.graalvm.compiler.truffle.runtime.debug.CompilerDebugAccessor":
-            case "com.oracle.truffle.api.library.LibraryAccessor":// OK, classes allowed to use
-                                                                  // accessors
+            case "com.oracle.truffle.api.library.LibraryAccessor":
+                // OK, classes allowed to use accessors
                 break;
             default:
                 throw new IllegalStateException(this.getClass().getName());
