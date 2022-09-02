@@ -63,7 +63,7 @@ public final class PerformanceInformationHandler implements Closeable {
 
     private static final ThreadLocal<PerformanceInformationHandler> instance = new ThreadLocal<>();
     private final OptionValues options;
-    private final Set<PolyglotCompilerOptions.PerformanceWarningKind> warningKinds = EnumSet.noneOf(PolyglotCompilerOptions.PerformanceWarningKind.class);
+    private Set<PolyglotCompilerOptions.PerformanceWarningKind> warningKinds = EnumSet.noneOf(PolyglotCompilerOptions.PerformanceWarningKind.class);
 
     private PerformanceInformationHandler(OptionValues options) {
         this.options = options;
