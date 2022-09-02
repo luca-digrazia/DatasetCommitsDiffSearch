@@ -34,12 +34,9 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.io.PushbackInputStream;
 import java.io.UnsupportedEncodingException;
-import java.net.Inet4Address;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -78,6 +75,7 @@ import com.oracle.truffle.tools.utils.json.JSONObject;
 import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext;
 import com.oracle.truffle.tools.chromeinspector.instrument.KeyStoreOptions;
 import com.oracle.truffle.tools.chromeinspector.instrument.InspectorWSConnection;
+import sun.net.util.IPAddressUtil;
 
 /**
  * Server of the
@@ -232,18 +230,11 @@ public final class InspectorServer extends NanoWSD implements InspectorWSConnect
     }
 
     private static boolean isValidIp(String host) {
-        boolean ipv6 = host.startsWith("[") && host.endsWith("]");
-        String h = host;
-        if (ipv6) {
-            h = h.substring(1, h.length() - 1);
-        }
-        InetAddress address;
-        try {
-            address = InetAddress.getByName(h);
-        } catch (UnknownHostException ex) {
-            return false;
-        }
-        return address instanceof Inet4Address == !ipv6;
+        return IPAddressUtil.isIPv4LiteralAddress(host) || isValidIpv6(host);
+    }
+
+    private static boolean isValidIpv6(String host) {
+        return host.startsWith("[") && host.endsWith("]") && IPAddressUtil.isIPv6LiteralAddress(host.substring(1, host.length() - 1));
     }
 
     public String getWSAddress(Token token) {
@@ -517,11 +508,7 @@ public final class InspectorServer extends NanoWSD implements InspectorWSConnect
             if (sps != null) {
                 sps.activeWS = null;
             }
-            try {
-                iss.sendClose();
-            } catch (IOException e) {
-                iss.context.logException(e);
-            }
+            iss.sendClose();
         }
 
         @Override
@@ -537,11 +524,7 @@ public final class InspectorServer extends NanoWSD implements InspectorWSConnect
         public void onMessage(WebSocketFrame frame) {
             String message = frame.getTextPayload();
             iss.context.logMessage("CLIENT: ", message);
-            try {
-                iss.sendText(message);
-            } catch (IOException e) {
-                iss.context.logException(e);
-            }
+            iss.sendText(message);
         }
 
         @Override

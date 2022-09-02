@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,12 +26,9 @@ package com.oracle.truffle.tools.chromeinspector.client;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -43,15 +40,17 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManagerFactory;
 
+import com.oracle.truffle.tools.chromeinspector.instrument.Token;
 import org.graalvm.polyglot.io.MessageEndpoint;
 import com.oracle.truffle.api.TruffleOptions;
 
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
-import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext;
+import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext;
 import com.oracle.truffle.tools.chromeinspector.instrument.InspectorWSConnection;
 import com.oracle.truffle.tools.chromeinspector.instrument.KeyStoreOptions;
 import com.oracle.truffle.tools.chromeinspector.server.ConnectionWatcher;
@@ -64,10 +63,9 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
 
     private final String host;
     private final int port;
-    private final TruffleExecutionContext executionContext;
+    private final InspectorExecutionContext executionContext;
     private final boolean debugBreak;
     private final ConnectionWatcher connectionWatcher;
-    private final PrintStream traceLog;
     private InspectServerSession iss;
 
     private static URI getURI(InetSocketAddress isa, String wsspath) {
@@ -78,7 +76,7 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
         }
     }
 
-    public InspectWSClient(InetSocketAddress isa, String wsspath, TruffleExecutionContext executionContext, boolean debugBreak, boolean secure, KeyStoreOptions keyStoreOptions,
+    public InspectWSClient(InetSocketAddress isa, String wsspath, InspectorExecutionContext executionContext, boolean debugBreak, boolean secure, KeyStoreOptions keyStoreOptions,
                     ConnectionWatcher connectionWatcher, PrintWriter info) throws IOException {
         super(getURI(isa, wsspath));
         this.host = isa.getHostString();
@@ -86,27 +84,11 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
         this.executionContext = executionContext;
         this.debugBreak = debugBreak;
         this.connectionWatcher = connectionWatcher;
-        String traceLogFile = System.getProperty("chromeinspector.traceMessages");
-        if (traceLogFile != null) {
-            if (Boolean.parseBoolean(traceLogFile)) {
-                traceLog = System.err;
-            } else if (!"false".equalsIgnoreCase(traceLogFile)) {
-                if ("tmp".equalsIgnoreCase(traceLogFile)) {
-                    traceLog = new PrintStream(new FileOutputStream(File.createTempFile("ChromeInspectorProtocol", ".txt")));
-                } else {
-                    traceLog = new PrintStream(new FileOutputStream(traceLogFile));
-                }
-            } else {
-                traceLog = null;
-            }
-        } else {
-            traceLog = null;
-        }
         if (secure) {
             if (TruffleOptions.AOT) {
                 throw new IOException("Secure connection is not available in the native-image yet.");
             } else {
-                setSocket(createSecureSocket(keyStoreOptions));
+                setSocketFactory(createSecureSocketFactory(keyStoreOptions));
             }
         }
         try {
@@ -120,7 +102,7 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
         }
     }
 
-    private static Socket createSecureSocket(KeyStoreOptions keyStoreOptions) throws IOException {
+    private static SSLSocketFactory createSecureSocketFactory(KeyStoreOptions keyStoreOptions) throws IOException {
         String keyStoreFile = keyStoreOptions.getKeyStore();
         if (keyStoreFile != null) {
             try {
@@ -133,7 +115,9 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
                 }
                 KeyStore keystore = KeyStore.getInstance(keystoreType);
                 File keyFile = new File(keyStoreFile);
-                keystore.load(new FileInputStream(keyFile), filePassword);
+                try (FileInputStream keyIn = new FileInputStream(keyFile)) {
+                    keystore.load(keyIn, filePassword);
+                }
                 String keyRecoverPasswordProperty = keyStoreOptions.getKeyPassword();
                 char[] keyRecoverPassword = keyRecoverPasswordProperty == null ? filePassword : keyRecoverPasswordProperty.toCharArray();
                 final KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
@@ -143,7 +127,7 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
 
                 SSLContext sslContext = SSLContext.getInstance("TLS");
                 sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-                return sslContext.getSocketFactory().createSocket();
+                return sslContext.getSocketFactory();
             } catch (KeyStoreException | KeyManagementException | NoSuchAlgorithmException | CertificateException | UnrecoverableKeyException ex) {
                 throw new IOException(ex);
             }
@@ -159,19 +143,13 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
 
     @Override
     public void onOpen(ServerHandshake sh) {
-        if (traceLog != null) {
-            traceLog.println("CLIENT ws connection opened at " + getURI());
-            traceLog.flush();
-        }
+        executionContext.logMessage("CLIENT ws connection opened at ", getURI());
         iss = InspectServerSession.create(executionContext, debugBreak, connectionWatcher);
         connectionWatcher.notifyOpen();
-        iss.setMessageListener(new MessageEndpoint() {
+        iss.open(new MessageEndpoint() {
             @Override
             public void sendText(String message) {
-                if (traceLog != null) {
-                    traceLog.println("SERVER: " + message);
-                    traceLog.flush();
-                }
+                executionContext.logMessage("SERVER: ", message);
                 send(message);
             }
 
@@ -197,19 +175,13 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
 
     @Override
     public void onMessage(String message) {
-        if (traceLog != null) {
-            traceLog.println("CLIENT: " + message);
-            traceLog.flush();
-        }
+        executionContext.logMessage("CLIENT: ", message);
         iss.sendText(message);
     }
 
     @Override
     public void onClose(int code, String reason, boolean remote) {
-        if (traceLog != null) {
-            traceLog.println("SERVER closed " + reason);
-            traceLog.flush();
-        }
+        executionContext.logMessage("SERVER closed ", reason);
         connectionWatcher.notifyClosing();
         if (!executionContext.canRun()) {
             // The connection was not successfull, resume the execution
@@ -219,14 +191,16 @@ public class InspectWSClient extends WebSocketClient implements InspectorWSConne
 
     @Override
     public void onError(Exception excptn) {
-        if (traceLog != null) {
-            traceLog.println("SERVER error " + excptn);
-            traceLog.flush();
-        }
+        executionContext.logException("SERVER error ", excptn);
     }
 
     @Override
-    public void close(String wsspath) {
+    public void consoleAPICall(Token token, String type, Object text) {
+        iss.consoleAPICall(type, text);
+    }
+
+    @Override
+    public void close(Token token) {
         close();
     }
 

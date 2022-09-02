@@ -147,11 +147,7 @@ public final class InspectorTester {
     }
 
     public void sendMessage(String message) {
-        try {
-            exec.inspect.sendText(message);
-        } catch (IOException e) {
-            fail(e.getLocalizedMessage());
-        }
+        exec.inspect.sendText(message);
     }
 
     public String getMessages(boolean waitForSome) throws InterruptedException {
@@ -288,7 +284,7 @@ public final class InspectorTester {
         @Override
         public void run() {
             Engine engine = Engine.newBuilder().err(err).build();
-            gcCheck.addReference(engine);
+            gcCheck.addEngineReference(engine);
             Instrument testInstrument = engine.getInstruments().get(InspectorTestInstrument.ID);
             InspectSessionInfoProvider sessionInfoProvider = testInstrument.lookup(InspectSessionInfoProvider.class);
             InspectSessionInfo sessionInfo = sessionInfoProvider.getSessionInfo(suspend, inspectInternal, inspectInitialization, sourcePath);
@@ -330,11 +326,7 @@ public final class InspectorTester {
             } catch (Throwable t) {
                 error = t;
             } finally {
-                try {
-                    inspect.sendClose();
-                } catch (IOException e) {
-                    fail(e.getLocalizedMessage());
-                }
+                inspect.sendClose();
                 inspect = null;
                 inspectorContext = null;
                 evalValue = null;
