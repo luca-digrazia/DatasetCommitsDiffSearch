@@ -166,20 +166,8 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         successors.add(defaultNode);
     }
 
-    private boolean defaultSuccessorShared() {
-        for (int i = 0; i < keyCount(); i++) {
-            if (keySuccessorIndex(i) == defaultSuccessorIndex()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     @Override
-    public Node getNextSwitchFoldableBranch() {
-        if (defaultSuccessorShared()) {
-            return null;
-        }
+    public Node getNext() {
         return defaultSuccessor();
     }
 

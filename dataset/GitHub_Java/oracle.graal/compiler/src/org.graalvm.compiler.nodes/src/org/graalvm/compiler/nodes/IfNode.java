@@ -460,7 +460,7 @@ public final class IfNode extends ControlSplitNode implements Simplifiable, LIRL
     }
 
     @Override
-    public Node getNextSwitchFoldableBranch() {
+    public Node getNext() {
         return falseSuccessor();
     }
 
