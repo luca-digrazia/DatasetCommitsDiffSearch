@@ -135,9 +135,8 @@ import org.graalvm.compiler.serviceprovider.GraalServices;
 /**
  * Entry points in libgraal for {@link TruffleToLibGraal calls} from HotSpot.
  *
- * To trace Truffle calls between HotSpot and libgraal, set the {@code JNI_LIBGRAAL_TRACE_LEVEL}
- * system property to {@code 1}. For detailed tracing set the {@code JNI_LIBGRAAL_TRACE_LEVEL}
- * system property to {@code 3}.
+ * To trace Truffle calls between HotSpot and libgraal, set the environment variable
+ * {@code JNI_LIBGRAAL_TRACE_LEVEL} to {@code true}.
  */
 final class TruffleToLibGraalEntryPoints {
 
@@ -648,7 +647,7 @@ final class TruffleToLibGraalEntryPoints {
     public static long getDumpChannel(JNIEnv env, JClass hsClazz, @CEntryPoint.IsolateThreadContext long isolateThreadId, long debugContextHandle) {
         try (JNILibGraalScope<TruffleToLibGraal.Id> s = new JNILibGraalScope<>(GetDumpChannel, env)) {
             TruffleDebugContextImpl debugContext = LibGraalObjectHandles.resolve(debugContextHandle, TruffleDebugContextImpl.class);
-            GraphOutput<Void, ?> graphOutput = debugContext.buildOutput(GraphOutput.newBuilder(VoidGraphStructure.INSTANCE));
+            GraphOutput<Void, ?> graphOutput = debugContext.buildOutput(GraphOutput.newBuilder(VoidGraphStructure.INSTANCE).protocolVersion(6, 1));
             return LibGraalObjectHandles.create(graphOutput);
         } catch (Throwable t) {
             JNIExceptionWrapper.throwInHotSpot(env, t);
