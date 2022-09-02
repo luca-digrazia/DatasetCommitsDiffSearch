@@ -786,11 +786,8 @@ public class MethodTypeFlowBuilder {
                 /*
                  * Without precise type information the dynamic new array node has to generate a
                  * heap object for each instantiated array type.
-                 * 
-                 * The node can allocate subclasses of Object[] but also primitive arrays. So there
-                 * is no better type than java.lang.Object that we can use.
                  */
-                AnalysisType arrayType = bb.getObjectType();
+                AnalysisType arrayType = bb.getObjectArrayType();
 
                 Object key = uniqueKey(node);
                 BytecodeLocation allocationLabel = bb.analysisPolicy().createAllocationSite(bb, key, method);
