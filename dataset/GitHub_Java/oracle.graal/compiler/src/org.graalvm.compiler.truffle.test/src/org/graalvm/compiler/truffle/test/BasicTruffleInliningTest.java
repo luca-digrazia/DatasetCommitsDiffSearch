@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,7 @@ package org.graalvm.compiler.truffle.test;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
+import org.graalvm.polyglot.Context;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -219,14 +220,20 @@ public class BasicTruffleInliningTest extends TruffleInliningTest {
     @Test
     @SuppressWarnings("try")
     public void testTruffleFunctionInliningFlag() {
-        setupContext("engine.Inlining", "false");
-        // @formatter:off
-        TruffleInlining decisions = builder.
-                target("callee").
-                target("caller").
-                    calls("callee", 2).
-                buildDecisions();
-        // @formatter:on
-        Assert.assertTrue("Decisions where made!", decisions.getCallSites().isEmpty());
+        Context context = Context.newBuilder().allowExperimentalOptions(true).option("engine.Inlining", "false").build();
+        context.enter();
+        try {
+            // @formatter:off
+            TruffleInlining decisions = builder.
+                    target("callee").
+                    target("caller").
+                        calls("callee", 2).
+                    buildDecisions();
+            // @formatter:on
+            Assert.assertTrue("Decisions where made!", decisions.getCallSites().isEmpty());
+        } finally {
+            context.leave();
+            context.close();
+        }
     }
 }

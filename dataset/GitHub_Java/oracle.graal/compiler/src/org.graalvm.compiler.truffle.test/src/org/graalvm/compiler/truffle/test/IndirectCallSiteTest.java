@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -132,7 +132,7 @@ public class IndirectCallSiteTest extends TestWithSynchronousCompiling {
 
         DirectlyCallsTargetWithArguments(OptimizedCallTarget target, Object[] arguments) {
             super();
-            this.directCallNode = (OptimizedDirectCallNode) GraalTruffleRuntime.getRuntime().createDirectCallNode(target);
+            this.directCallNode = new OptimizedDirectCallNode(target);
             this.arguments = arguments;
         }
 
@@ -246,6 +246,7 @@ public class IndirectCallSiteTest extends TestWithSynchronousCompiling {
             // saveArgumentToGlobalState compilation is delayed by the invalidation
             assertNotCompiled(toInterpreterOnString);
             assertNotDeoptimized(toInterpreterOnString);
+            Assert.assertEquals("saveArgumentToGlobalState was not invalidated!", 1, toInterpreterOnString.getCompilationProfile().getInvalidationCount());
         } finally {
             context.leave();
             context.close();
