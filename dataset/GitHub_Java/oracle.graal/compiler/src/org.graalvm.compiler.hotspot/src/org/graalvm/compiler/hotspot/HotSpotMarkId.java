@@ -89,18 +89,10 @@ public enum HotSpotMarkId implements CompilationResult.MarkId {
         return null;
     }
 
-    private static boolean valuesSet = false;
-
     public static void setValues(boolean prerelease) {
         for (HotSpotMarkId m : values()) {
             m.value = m.getValue(prerelease);
         }
-        valuesSet = true;
-    }
-
-    static {
-        GraalHotSpotVMConfig.ensureHotSpotMarkIdValuesSet();
-        assert valuesSet;
     }
 
     private Integer value() {
