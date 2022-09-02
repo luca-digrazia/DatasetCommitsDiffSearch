@@ -50,7 +50,7 @@ public class ConditionalEliminationTest16 extends ConditionalEliminationTestBase
     }
 
     @Override
-    protected void checkHighTierGraph(StructuredGraph graph) {
+    protected boolean checkHighTierGraph(StructuredGraph graph) {
         for (ParameterNode param : graph.getNodes().filter(ParameterNode.class)) {
             if (param.index() == 0) {
                 ParameterNode newParam = new ParameterNode(0, StampPair.createSingle(StampFactory.object(TypeReference.createExactTrusted(getMetaAccess().lookupJavaType(Integer.class)))));
@@ -61,18 +61,18 @@ public class ConditionalEliminationTest16 extends ConditionalEliminationTestBase
             }
         }
         new CanonicalizerPhase().apply(graph, getDefaultHighTierContext());
-        super.checkHighTierGraph(graph);
+        return super.checkHighTierGraph(graph);
     }
 
     @Override
-    protected void checkMidTierGraph(StructuredGraph graph) {
+    protected boolean checkMidTierGraph(StructuredGraph graph) {
         int count = 0;
         for (PiNode node : graph.getNodes().filter(PiNode.class)) {
             assertTrue(node.getGuard() != null, "must have guarding node");
             count++;
         }
         assertTrue(count > 0, "expected at least one Pi");
-        super.checkMidTierGraph(graph);
+        return super.checkMidTierGraph(graph);
     }
 
     @Test
