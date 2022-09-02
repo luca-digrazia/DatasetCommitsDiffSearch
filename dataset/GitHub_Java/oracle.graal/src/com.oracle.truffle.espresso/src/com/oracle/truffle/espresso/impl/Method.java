@@ -84,8 +84,8 @@ public final class Method implements ModifiersProvider, ContextAccess {
     @CompilationFinal(dimensions = 1) //
     private final Symbol<Type>[] parsedSignature;
 
-    @CompilationFinal private int vtableIndex = -1;
-    @CompilationFinal private int itableIndex = -1;
+    @CompilationFinal int vtableIndex = -1;
+    @CompilationFinal int itableIndex = -1;
 
     private final ExceptionsAttribute exceptionsAttribute;
     private final CodeAttribute codeAttribute;
@@ -516,19 +516,19 @@ public final class Method implements ModifiersProvider, ContextAccess {
         return method;
     }
 
-    final void setVTableIndex(int i) {
+    void setVTableIndex(int i) {
         this.vtableIndex = i;
     }
 
-    final public int getVTableIndex() {
+    public int getVTableIndex() {
         return vtableIndex;
     }
 
-    final void setITableIndex(int i) {
+    void setITableIndex(int i) {
         this.itableIndex = i;
     }
 
-    final public int getITableIndex() {
+    public int getITableIndex() {
         return itableIndex;
     }
 }

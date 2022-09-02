@@ -56,7 +56,8 @@ public abstract class InvokeVirtualNode extends QuickNode {
     Object callVirtualIndirect(StaticObject receiver, Object[] arguments,
                     @Cached("create()") IndirectCallNode indirectCallNode) {
         // vtable lookup.
-        return indirectCallNode.call(methodLookup(receiver, vtableIndex).getCallTarget(), arguments);
+        Method targetMethod = methodLookup(receiver, vtableIndex);
+        return indirectCallNode.call(targetMethod.getCallTarget(), arguments);
     }
 
     InvokeVirtualNode(Method resolutionSeed) {
@@ -67,6 +68,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
 
     @TruffleBoundary
     static Method methodLookup(StaticObject receiver, int vtableIndex) {
+        // TODO(peterssen): Method lookup is uber-slow and non-spec-compliant.
         Klass clazz = receiver.getKlass();
         Method m = clazz.lookupMethod(vtableIndex);
         // Suprisingly, invokeVirtuals can try to invoke interface methods, even non-default
