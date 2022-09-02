@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime;
 
 import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -41,8 +42,12 @@ public final class LLVMBitcodeLibraryFunctions {
         @Child protected DirectCallNode callNode;
 
         protected LibraryFunctionNode(LLVMContext context, String name) {
-            LLVMFunctionDescriptor descriptor = context.getGlobalScope().getFunction(name);
-            callNode = DirectCallNode.create(descriptor.getLLVMIRFunction());
+            LLVMFunction function = context.getGlobalScope().getFunction(name);
+            if (function == null) {
+                throw new LLVMLinkerException("Function not found: " + name);
+            }
+            LLVMFunctionDescriptor descriptor = context.createFunctionDescriptor(function, new LLVMFunctionCode(function));
+            callNode = DirectCallNode.create(descriptor.getFunctionCode().getLLVMIRFunctionSlowPath());
         }
 
         protected Object execute(Object... args) {
@@ -53,10 +58,10 @@ public final class LLVMBitcodeLibraryFunctions {
     public static final class SulongCanCatchNode extends LibraryFunctionNode {
 
         public SulongCanCatchNode(LLVMContext context) {
-            super(context, "@sulong_eh_canCatch");
+            super(context, "sulong_eh_canCatch");
         }
 
-        public int canCatch(LLVMStack.StackPointer stack, Object unwindHeader, LLVMPointer catchType) {
+        public int canCatch(LLVMStack stack, Object unwindHeader, LLVMPointer catchType) {
             return (int) execute(stack, unwindHeader, catchType.copy());
         }
     }

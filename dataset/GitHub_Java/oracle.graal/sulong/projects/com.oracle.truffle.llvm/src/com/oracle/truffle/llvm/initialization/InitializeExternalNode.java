@@ -29,10 +29,7 @@
  */
 package com.oracle.truffle.llvm.initialization;
 
-import java.util.ArrayList;
-
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.initialization.AllocExternalSymbolNodeFactory.AllocExistingLocalSymbolsNodeGen.AllocExistingGlobalSymbolsNodeGen.AllocExternalFunctionNodeGen;
 import com.oracle.truffle.llvm.initialization.AllocExternalSymbolNodeFactory.AllocExistingLocalSymbolsNodeGen.AllocExistingGlobalSymbolsNodeGen.AllocExternalGlobalNodeGen;
@@ -46,13 +43,15 @@ import com.oracle.truffle.llvm.runtime.LLVMIntrinsicProvider;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMLocalScope;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
-import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMAccessSymbolNode;
+import com.oracle.truffle.llvm.runtime.nodes.others.LLVMWriteSymbolNode;
+import com.oracle.truffle.llvm.runtime.nodes.others.LLVMWriteSymbolNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+
+import java.util.ArrayList;
 
 /**
  *
@@ -81,15 +80,15 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
  * @see InitializeOverwriteNode
  */
 public final class InitializeExternalNode extends LLVMNode {
-    @Children private final AllocExternalSymbolNode[] allocExternalSymbols;
-    @CompilationFinal(dimensions = 1) private final LLVMSymbol[] symbols;
+    @Children AllocExternalSymbolNode[] allocExternalSymbols;
+    @Children final LLVMWriteSymbolNode[] writeSymbols;
 
     private final NodeFactory nodeFactory;
 
     public InitializeExternalNode(LLVMParserResult result) {
         this.nodeFactory = result.getRuntime().getNodeFactory();
         LLVMScope fileScope = result.getRuntime().getFileScope();
-        ArrayList<LLVMSymbol> symbolsList = new ArrayList<>();
+        ArrayList<LLVMWriteSymbolNode> writeSymbolsList = new ArrayList<>();
         ArrayList<AllocExternalSymbolNode> allocExternaSymbolsList = new ArrayList<>();
 
         // Bind all functions that are not defined/resolved as either a bitcode function
@@ -102,16 +101,16 @@ public final class InitializeExternalNode extends LLVMNode {
                 continue;
             }
             allocExternaSymbolsList.add(AllocExternalFunctionNodeGen.create(function, functionCode, nodeFactory));
-            symbolsList.add(function);
+            writeSymbolsList.add(LLVMWriteSymbolNodeGen.create(function));
         }
 
         for (GlobalSymbol symbol : result.getExternalGlobals()) {
             LLVMGlobal global = fileScope.getGlobalVariable(symbol.getName());
             allocExternaSymbolsList.add(AllocExternalGlobalNodeGen.create(global));
-            symbolsList.add(global);
+            writeSymbolsList.add(LLVMWriteSymbolNodeGen.create(global));
         }
 
-        this.symbols = symbolsList.toArray(LLVMSymbol.EMPTY);
+        this.writeSymbols = writeSymbolsList.toArray(LLVMWriteSymbolNode.EMPTY);
         this.allocExternalSymbols = allocExternaSymbolsList.toArray(AllocExternalSymbolNode.EMPTY);
     }
 
@@ -128,16 +127,16 @@ public final class InitializeExternalNode extends LLVMNode {
         // functions and globals
         for (int i = 0; i < allocExternalSymbols.length; i++) {
             AllocExternalSymbolNode function = allocExternalSymbols[i];
-            LLVMPointer pointer = function.execute(localScope, globalScope, intrinsicProvider, nfiContextExtension, context);
+            LLVMPointer pointer = function.execute(localScope, globalScope, intrinsicProvider, nfiContextExtension);
             // skip allocating fallbacks
             if (pointer == null) {
                 continue;
             }
-            LLVMAccessSymbolNode.writeSymbol(symbols[i], pointer, context, this);
+            writeSymbols[i].execute(pointer);
         }
     }
 
-    @TruffleBoundary
+    @CompilerDirectives.TruffleBoundary
     private static NFIContextExtension getNfiContextExtension(LLVMContext context) {
         return context.getContextExtensionOrNull(NFIContextExtension.class);
     }

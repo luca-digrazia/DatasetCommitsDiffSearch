@@ -73,7 +73,7 @@ public final class LLVMFunctionDescriptor extends LLVMInternalTruffleObject impl
         assert !LLVMNativeMemory.isDerefHandleMemory(SULONG_FUNCTION_POINTER_TAG);
     }
 
-    private final LLVMLanguage language;
+    private final LLVMContext context;
     private final LLVMFunction llvmFunction;
     private final LLVMFunctionCode functionCode;
 
@@ -89,8 +89,8 @@ public final class LLVMFunctionDescriptor extends LLVMInternalTruffleObject impl
         if (foreignFunctionCallTarget == null) {
             CompilerDirectives.transferToInterpreter();
             LLVMSourceFunctionType sourceType = functionCode.getFunction().getSourceType();
-            LLVMInteropType interopType = language.getInteropType(sourceType);
-            LLVMForeignCallNode foreignCall = LLVMForeignFunctionCallNode.create(language, this, interopType, sourceType);
+            LLVMInteropType interopType = context.getInteropType(sourceType);
+            LLVMForeignCallNode foreignCall = LLVMForeignFunctionCallNode.create(context.getLanguage(), this, interopType, sourceType);
             foreignFunctionCallTarget = Truffle.getRuntime().createCallTarget(foreignCall);
             assert foreignFunctionCallTarget != null;
         }
@@ -101,12 +101,12 @@ public final class LLVMFunctionDescriptor extends LLVMInternalTruffleObject impl
         if (foreignConstructorCallTarget == null) {
             CompilerDirectives.transferToInterpreter();
             LLVMSourceFunctionType sourceType = functionCode.getFunction().getSourceType();
-            LLVMInteropType interopType = language.getInteropType(sourceType);
+            LLVMInteropType interopType = context.getInteropType(sourceType);
             LLVMInteropType extractedType = ((Function) interopType).getParameter(0);
             if (extractedType instanceof Value) {
                 Structured structured = ((Value) extractedType).baseType;
                 LLVMForeignCallNode foreignCall = LLVMForeignConstructorCallNode.create(
-                                language, this, interopType, sourceType, structured);
+                                context.getLanguage(), this, interopType, sourceType, structured);
                 foreignConstructorCallTarget = Truffle.getRuntime().createCallTarget(foreignCall);
             }
             assert foreignConstructorCallTarget != null;
@@ -126,9 +126,9 @@ public final class LLVMFunctionDescriptor extends LLVMInternalTruffleObject impl
         return functionCode;
     }
 
-    public LLVMFunctionDescriptor(LLVMLanguage language, LLVMFunction llvmFunction, LLVMFunctionCode functionCode) {
+    public LLVMFunctionDescriptor(LLVMContext context, LLVMFunction llvmFunction, LLVMFunctionCode functionCode) {
         CompilerAsserts.neverPartOfCompilation();
-        this.language = language;
+        this.context = context;
         this.llvmFunction = llvmFunction;
         this.functionCode = functionCode;
     }
@@ -150,6 +150,10 @@ public final class LLVMFunctionDescriptor extends LLVMInternalTruffleObject impl
         }
 
         throw new IllegalStateException("Comparing functions from different bitcode files.");
+    }
+
+    public LLVMContext getContext() {
+        return context;
     }
 
     @ExportMessage
