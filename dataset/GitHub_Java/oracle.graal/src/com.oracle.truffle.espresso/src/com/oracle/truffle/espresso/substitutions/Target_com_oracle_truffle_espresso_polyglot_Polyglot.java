@@ -64,16 +64,14 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
                 return value;
             }
 
-            InteropLibrary interopLibrary = InteropLibrary.getUncached();
-
             try {
-                checkHasAllFieldsOrThrow(value.rawForeignObject(), targetKlass, interopLibrary);
+                checkHasAllFieldsOrThrow(value.rawForeignObject(), targetKlass, InteropLibrary.getUncached());
             } catch (NoSuchElementException e) {
                 throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException,
                                 String.format("Field %s not found", e.getMessage()));
             }
 
-            return StaticObject.createForeign(targetKlass, value.rawForeignObject(), interopLibrary);
+            return StaticObject.createForeign(targetKlass, value.rawForeignObject());
         } else {
             return InterpreterToVM.checkCast(value, targetKlass);
         }
@@ -158,7 +156,7 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
         if (evalResult instanceof StaticObject) {
             return (StaticObject) evalResult;
         }
-        return createForeignObject(evalResult, meta, InteropLibrary.getUncached());
+        return createForeignObject(evalResult, meta);
     }
 
     @Substitution
@@ -174,7 +172,7 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
         if (binding instanceof StaticObject) {
             return (StaticObject) binding;
         }
-        return createForeignObject(binding, meta, InteropLibrary.getUncached());
+        return createForeignObject(binding, meta);
     }
 
     @Substitution
@@ -191,7 +189,7 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
         }
     }
 
-    protected static StaticObject createForeignObject(Object object, Meta meta, InteropLibrary interopLibrary) {
-        return StaticObject.createForeign(meta.java_lang_Object, object, interopLibrary);
+    protected static StaticObject createForeignObject(Object object, Meta meta) {
+        return StaticObject.createForeign(meta.java_lang_Object, object);
     }
 }
