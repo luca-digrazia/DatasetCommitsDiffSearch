@@ -42,15 +42,19 @@ package com.oracle.truffle.api.test.host;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
+import org.graalvm.polyglot.TypeLiteral;
 import org.graalvm.polyglot.Value;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
@@ -60,6 +64,8 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
+import com.oracle.truffle.api.interop.StopIterationException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -67,58 +73,115 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 
-public class GR31558 {
+public class GR31558 extends AbstractPolyglotTest {
     Object[] actualArguments;
 
-    @Test
-    public void testApplyArray() {
-        HostAccess.Builder builder = HostAccess.newBuilder().//
+    @Before
+    public void before() {
+        HostAccess.Builder hostAccessBuilder = HostAccess.newBuilder().//
                         allowAccessAnnotatedBy(HostAccess.Export.class).//
                         allowPublicAccess(false).//
                         allowArrayAccess(true).//
                         allowIterableAccess(true).//
                         allowIteratorAccess(true).//
                         allowImplementationsAnnotatedBy(FunctionalInterface.class);
-        HostAccess accessConfig = builder.build();
         Context.Builder contextBuilder = Context.newBuilder();
-        contextBuilder.allowHostAccess(accessConfig);
-        try (Context c = contextBuilder.build()) {
-            ProxyLanguage.setDelegate(new ProxyLanguage() {
-                @Override
-                protected CallTarget parse(ParsingRequest request) throws Exception {
-                    String src = request.getSource().getCharacters().toString();
-                    RootCallTarget invokeTestApi;
-                    if ("testFunction".equals(src)) {
-                        invokeTestApi = Truffle.getRuntime().createCallTarget(new RootNode(ProxyLanguage.getCurrentLanguage()) {
-                            @Override
-                            public Object execute(VirtualFrame frame) {
-                                try {
-                                    InteropLibrary interop = InteropLibrary.getUncached();
-                                    Object test = frame.getArguments()[0];
-                                    return interop.invokeMember(test, "testFunction", "hi", new ArgumentsCollectorFunction());
-                                } catch (UnsupportedMessageException | UnknownIdentifierException | ArityException | UnsupportedTypeException e) {
-                                    CompilerDirectives.transferToInterpreter();
-                                    throw new AssertionError(e);
+        contextBuilder.allowHostAccess(hostAccessBuilder.build());
+
+        setupEnv(contextBuilder, new ProxyLanguage() {
+            @Override
+            protected CallTarget parse(ParsingRequest request) throws Exception {
+                String src = request.getSource().getCharacters().toString();
+                RootCallTarget invokeTestApi;
+                if ("testFunction".equals(src)) {
+                    invokeTestApi = Truffle.getRuntime().createCallTarget(new RootNode(ProxyLanguage.getCurrentLanguage()) {
+                        @Override
+                        public Object execute(VirtualFrame frame) {
+                            try {
+                                InteropLibrary interop = InteropLibrary.getUncached();
+                                Object test = frame.getArguments()[0];
+
+                                interop.invokeMember(test, "testFunction", "hi", new ArgumentsCollectorFunction());
+
+                                if (interop.isMemberExisting(test, "testMap")) {
+                                    interop.invokeMember(test, "testFunction", "hi", new ArgumentsCollectorFunction(false, false, false, true));
                                 }
+                                if (interop.isMemberExisting(test, "testMapEntry")) {
+                                    interop.invokeMember(test, "testMapEntry", "hi", new ArgumentsCollectorFunction(false, false, true, false));
+                                }
+                                if (interop.isMemberExisting(test, "testList")) {
+                                    interop.invokeMember(test, "testList", "hi", new ArgumentsCollectorFunction(false, false, true, false));
+                                }
+                                if (interop.isMemberExisting(test, "testIterator")) {
+                                    interop.invokeMember(test, "testIterator", "hi", new ArgumentsCollectorFunction(false, true, false, false));
+                                }
+                                if (interop.isMemberExisting(test, "testIterable")) {
+                                    interop.invokeMember(test, "testIterable", "hi", new ArgumentsCollectorFunction(true, false, false, false));
+                                }
+
+                                return "success";
+                            } catch (UnsupportedMessageException | UnknownIdentifierException | ArityException | UnsupportedTypeException e) {
+                                CompilerDirectives.transferToInterpreter();
+                                throw new AssertionError(e);
                             }
-                        });
-                    } else {
-                        throw new IllegalArgumentException(src);
-                    }
-                    return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(new HostExceptionTest.CatcherObject(invokeTestApi)));
+                        }
+                    });
+                } else {
+                    throw new IllegalArgumentException(src);
                 }
-            });
-            c.initialize(ProxyLanguage.ID);
-            c.eval(ProxyLanguage.ID, "testFunction").execute(new FunctionApplyTest1());
-            c.eval(ProxyLanguage.ID, "testFunction").execute(new FunctionApplyTest2());
-            c.eval(ProxyLanguage.ID, "testFunction").execute(new FunctionApplyTest3());
-        }
+                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(new HostExceptionTest.CatcherObject(invokeTestApi)));
+            }
+        });
     }
 
-    private void expectArrayArg(int elementCount, @SuppressWarnings("unused") Object ignored) {
+    @Test
+    public void testApplyArray() {
+        context.eval(ProxyLanguage.ID, "testFunction").execute(new FunctionApplyTestObj());
+        context.eval(ProxyLanguage.ID, "testFunction").execute(new FunctionApplyTestObjArray());
+        context.eval(ProxyLanguage.ID, "testFunction").execute(new FunctionApplyTestIntArray());
+        context.eval(ProxyLanguage.ID, "testFunction").execute(new FunctionApplyTestRaw());
+    }
+
+    @Test
+    public void testValueAsFunction() {
+        new FunctionApplyTestRaw().testFunction("hi", context.asValue(new ArgumentsCollectorFunction()).as(Function.class));
+        new FunctionApplyTestObj().testFunction("hi", context.asValue(new ArgumentsCollectorFunction()).as(new TypeLiteral<Function<Object, Object>>() {
+        }));
+        new FunctionApplyTestObjArray().testFunction("hi", context.asValue(new ArgumentsCollectorFunction()).as(new TypeLiteral<Function<Object[], Object>>() {
+        }));
+        new FunctionApplyTestIntArray().testFunction("hi", context.asValue(new ArgumentsCollectorFunction()).as(new TypeLiteral<Function<int[], Object>>() {
+        }));
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    @Test
+    public void testValueAsCustomFunction() {
+        new FunctionApplyTestObj().testFunction("hi", context.asValue(new ArgumentsCollectorFunction()).as(MyFunction.class));
+        new FunctionApplyTestObj().testFunction("hi", context.asValue(new ArgumentsCollectorFunction()).as(new TypeLiteral<MyFunction<Object, Object>>() {
+        }));
+
+        Function<Object[], Object> handler = context.asValue(new ArgumentsCollectorFunction()).as(new TypeLiteral<MyFunction<Object[], Object>>() {
+        });
+        expectArrayArg(1, handler.apply(new String[]{"hi"}));
+        expectArrayArg(2, handler.apply(new String[]{"hi", "wow"}));
+
+        Function<int[], Object> handlerInt = context.asValue(new ArgumentsCollectorFunction()).as(new TypeLiteral<MyFunction<int[], Object>>() {
+        });
+        expectArrayArg(1, handlerInt.apply(new int[]{42}));
+        expectArrayArg(2, handlerInt.apply(new int[]{42, 43}));
+    }
+
+    @FunctionalInterface
+    interface MyFunction<T, R> extends Function<T, R> {
+        R apply(T t);
+    }
+
+    private void expectArrayArg(int elementCount, Object result) {
         assertEquals(Arrays.toString(actualArguments), 1, actualArguments.length);
+        assertEquals("EXECUTE", result);
         Object arg0 = actualArguments[0];
         InteropLibrary interop = InteropLibrary.getUncached();
         try {
@@ -129,8 +192,9 @@ public class GR31558 {
         }
     }
 
-    private void expectArgs(int argCount, @SuppressWarnings("unused") Object ignored) {
+    private void expectArgs(int argCount, Object result) {
         assertEquals(Arrays.toString(actualArguments), argCount, actualArguments.length);
+        assertEquals("EXECUTE", result);
         if (argCount == 0) {
             return;
         }
@@ -143,10 +207,11 @@ public class GR31558 {
         }
     }
 
-    public class FunctionApplyTest1 {
+    @SuppressWarnings("unchecked")
+    public class FunctionApplyTestObj {
         @HostAccess.Export
         public void testFunction(String wow, Function<Object, Object> handler) {
-            assertNotNull(wow);
+            assertEquals("hi", wow);
             expectArrayArg(1, handler.apply(new String[]{"hi"}));
             expectArrayArg(2, handler.apply(new String[]{"hi", "wow"}));
             expectArrayArg(1, handler.apply(Value.asValue(new String[]{"hi as value"})));
@@ -156,30 +221,79 @@ public class GR31558 {
             expectArrayArg(1, handler.apply(new int[]{42}));
             expectArrayArg(2, handler.apply(new int[]{42, 43}));
         }
+
     }
 
-    public class FunctionApplyTest2 {
+    public class FunctionApplyTestObjArray {
         @HostAccess.Export
         public void testFunction(String wow, Function<Object[], Object> handler) {
-            assertNotNull(wow);
+            assertEquals("hi", wow);
             expectArgs(1, handler.apply(new String[]{"hi"}));
             expectArgs(2, handler.apply(new String[]{"hi", "wow"}));
         }
     }
 
-    public class FunctionApplyTest3 {
+    public class FunctionApplyTestIntArray {
         @HostAccess.Export
         public void testFunction(String wow, Function<int[], Object> handler) {
-            assertNotNull(wow);
+            assertEquals("hi", wow);
             expectArgs(1, handler.apply(new int[]{42}));
             expectArgs(2, handler.apply(new int[]{42, 43}));
+        }
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public class FunctionApplyTestRaw {
+        @HostAccess.Export
+        public void testFunction(String wow, Function handler) {
+            assertEquals("hi", wow);
+            expectArgs(1, handler.apply(new String[]{"hi"}));
+            expectArgs(2, handler.apply(new String[]{"hi", "wow"}));
+        }
+
+        @HostAccess.Export
+        public void testMap(String wow, Map<Object, Object> handler) {
+            testFunction(wow, (Function<Object, Object>) handler);
+        }
+
+        @HostAccess.Export
+        public void testMapEntry(String wow, Map.Entry<Object, Object> handler) {
+            testFunction(wow, (Function<Object, Object>) handler);
+        }
+
+        @HostAccess.Export
+        public void testList(String wow, List<Object> handler) {
+            testFunction(wow, (Function<Object, Object>) handler);
+        }
+
+        @HostAccess.Export
+        public void testIterator(String wow, Iterator<Object> handler) {
+            testFunction(wow, (Function<Object, Object>) handler);
+        }
+
+        @HostAccess.Export
+        public void testIterable(String wow, Iterable<Object> handler) {
+            testFunction(wow, (Function<Object, Object>) handler);
         }
     }
 
     @ExportLibrary(InteropLibrary.class)
     @SuppressWarnings({"unused", "static-method"})
     final class ArgumentsCollectorFunction implements TruffleObject {
+        final boolean hasIterator;
+        final boolean isIterator;
+        final boolean hasArrayElements;
+        final boolean hasHashEntries;
+
+        ArgumentsCollectorFunction(boolean isIterable, boolean isIterator, boolean isList, boolean isMap) {
+            this.hasIterator = isIterable;
+            this.isIterator = isIterator;
+            this.hasArrayElements = isList;
+            this.hasHashEntries = isMap;
+        }
+
         ArgumentsCollectorFunction() {
+            this(false, false, false, false);
         }
 
         @ExportMessage
@@ -191,6 +305,84 @@ public class GR31558 {
         Object execute(Object[] arguments) {
             actualArguments = arguments;
             return "EXECUTE";
+        }
+
+        @ExportMessage
+        boolean hasIterator() {
+            return hasIterator;
+        }
+
+        @ExportMessage
+        boolean isIterator() {
+            return isIterator;
+        }
+
+        @ExportMessage
+        boolean hasArrayElements() {
+            return hasArrayElements;
+        }
+
+        @ExportMessage
+        boolean hasHashEntries() {
+            return hasHashEntries;
+        }
+
+        @ExportMessage
+        long getHashSize() throws UnsupportedMessageException {
+            if (!hasHashEntries()) {
+                throw UnsupportedMessageException.create();
+            }
+            return 0L;
+        }
+
+        @ExportMessage
+        Object getHashEntriesIterator() throws UnsupportedMessageException {
+            throw UnsupportedMessageException.create();
+        }
+
+        @ExportMessage
+        Object readArrayElement(long index) throws UnsupportedMessageException, InvalidArrayIndexException {
+            if (!hasArrayElements()) {
+                throw UnsupportedMessageException.create();
+            }
+            throw InvalidArrayIndexException.create(index);
+        }
+
+        @ExportMessage
+        long getArraySize() throws UnsupportedMessageException {
+            if (!hasArrayElements()) {
+                throw UnsupportedMessageException.create();
+            }
+            return 0L;
+        }
+
+        @ExportMessage
+        boolean isArrayElementReadable(long index) {
+            return false;
+        }
+
+        @ExportMessage
+        Object getIterator() throws UnsupportedMessageException {
+            if (!hasIterator()) {
+                throw UnsupportedMessageException.create();
+            }
+            return null;
+        }
+
+        @ExportMessage
+        boolean hasIteratorNextElement() throws UnsupportedMessageException {
+            if (!isIterator()) {
+                throw UnsupportedMessageException.create();
+            }
+            return false;
+        }
+
+        @ExportMessage
+        Object getIteratorNextElement() throws UnsupportedMessageException, StopIterationException {
+            if (!isIterator()) {
+                throw UnsupportedMessageException.create();
+            }
+            throw StopIterationException.create();
         }
     }
 }
