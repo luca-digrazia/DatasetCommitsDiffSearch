@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -71,10 +71,11 @@ import com.oracle.truffle.api.TruffleFile.FileTypeDetector;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLanguage.ContextPolicy;
 import com.oracle.truffle.api.TruffleLanguage.Registration;
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.TruffleJDKServices;
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.instrumentation.ProvidedTags;
 import com.oracle.truffle.api.instrumentation.Tag;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Ahead-of-time initialization. If the JVM is started with {@link TruffleOptions#AOT}, it populates
@@ -83,7 +84,7 @@ import com.oracle.truffle.api.instrumentation.Tag;
 final class LanguageCache implements Comparable<LanguageCache> {
     private static final Map<String, LanguageCache> nativeImageCache = TruffleOptions.AOT ? new HashMap<>() : null;
     private static final Map<String, LanguageCache> nativeImageMimes = TruffleOptions.AOT ? new HashMap<>() : null;
-    private static final Map<Collection<ClassLoader>, Map<String, LanguageCache>> runtimeCaches = new WeakHashMap<>();
+    private static final Map<ClassLoader, Map<String, LanguageCache>> runtimeCaches = new WeakHashMap<>();
     private static volatile Map<String, LanguageCache> runtimeMimes;
     private final String className;
     private final Set<String> mimeTypes;
@@ -168,7 +169,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
     private static Map<String, LanguageCache> createMimes() {
         Map<String, LanguageCache> mimes = new LinkedHashMap<>();
-        for (LanguageCache cache : languages().values()) {
+        for (LanguageCache cache : languages(null).values()) {
             for (String mime : cache.getMimeTypes()) {
                 mimes.put(mime, cache);
             }
@@ -176,28 +177,27 @@ final class LanguageCache implements Comparable<LanguageCache> {
         return mimes;
     }
 
-    static Map<String, LanguageCache> languages() {
-        return loadLanguages(EngineAccessor.locatorOrDefaultLoaders());
-    }
-
-    private static Map<String, LanguageCache> loadLanguages(List<ClassLoader> classLoaders) {
+    static Map<String, LanguageCache> languages(ClassLoader additionalLoader) {
         if (TruffleOptions.AOT) {
             return nativeImageCache;
         }
         synchronized (LanguageCache.class) {
-            Map<String, LanguageCache> cache = runtimeCaches.get(classLoaders);
+            Map<String, LanguageCache> cache = runtimeCaches.get(additionalLoader);
             if (cache == null) {
-                cache = createLanguages(classLoaders);
-                runtimeCaches.put(classLoaders, cache);
+                cache = createLanguages(additionalLoader);
+                runtimeCaches.put(additionalLoader, cache);
             }
             return cache;
         }
     }
 
-    private static Map<String, LanguageCache> createLanguages(List<ClassLoader> loaders) {
+    private static Map<String, LanguageCache> createLanguages(ClassLoader additionalLoader) {
         List<LanguageCache> caches = new ArrayList<>();
-        for (ClassLoader loader : loaders) {
+        for (ClassLoader loader : EngineAccessor.allLoaders()) {
             Loader.load(loader, caches);
+        }
+        if (additionalLoader != null) {
+            Loader.load(additionalLoader, caches);
         }
         Map<String, LanguageCache> cacheToId = new HashMap<>();
         for (LanguageCache languageCache : caches) {
@@ -312,19 +312,12 @@ final class LanguageCache implements Comparable<LanguageCache> {
     }
 
     static void resetNativeImageCacheLanguageHomes() {
-        synchronized (LanguageCache.class) {
-            if (nativeImageCache != null) {
-                resetNativeImageCacheLanguageHomes(nativeImageCache);
-            }
-            for (Map<String, LanguageCache> caches : runtimeCaches.values()) {
-                resetNativeImageCacheLanguageHomes(caches);
-            }
+        for (LanguageCache languageCache : languages(null).values()) {
+            languageCache.languageHome = null;
         }
-    }
-
-    private static void resetNativeImageCacheLanguageHomes(Map<String, LanguageCache> caches) {
-        for (LanguageCache cache : caches.values()) {
-            cache.languageHome = null;
+        final ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        for (LanguageCache languageCache : languages(loader).values()) {
+            languageCache.languageHome = null;
         }
     }
 
@@ -338,7 +331,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
     @SuppressWarnings("unused")
     private static void initializeNativeImageState(ClassLoader imageClassLoader) {
         assert TruffleOptions.AOT : "Only supported during image generation";
-        nativeImageCache.putAll(createLanguages(Arrays.asList(imageClassLoader)));
+        nativeImageCache.putAll(createLanguages(imageClassLoader));
         nativeImageMimes.putAll(createMimes());
     }
 
@@ -407,6 +400,17 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
         abstract URL getCodeSource();
 
+        static void exportTruffle(ClassLoader loader) {
+            if (!TruffleOptions.AOT) {
+                /*
+                 * In JDK 9+, the Truffle API packages must be dynamically exported to a Truffle
+                 * language since the Truffle API module descriptor only exports the packages to
+                 * modules known at build time (such as the Graal module).
+                 */
+                TruffleJDKServices.exportTo(loader, null);
+            }
+        }
+
         static LanguageReflection forLanguageInstance(TruffleLanguage<?> language, ContextPolicy contextPolycy, FileTypeDetector... fileTypeDetectors) {
             return new LanguageInstanceReflection(language, contextPolycy, fileTypeDetectors);
         }
@@ -469,6 +473,11 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
     private abstract static class Loader {
 
+        private static final Loader[] LOADERS = {
+                        new LegacyLoader(),
+                        new ServicesLoader()
+        };
+
         static void load(ClassLoader loader, Collection<? super LanguageCache> into) {
             if (loader == null) {
                 return;
@@ -481,18 +490,8 @@ final class LanguageCache implements Comparable<LanguageCache> {
             } catch (ClassNotFoundException ex) {
                 return;
             }
-            LegacyLoader.INSTANCE.loadImpl(loader, into);
-            ServicesLoader.INSTANCE.loadImpl(loader, into);
-        }
-
-        static void exportTruffle(ClassLoader loader) {
-            if (!TruffleOptions.AOT) {
-                /*
-                 * In JDK 9+, the Truffle API packages must be dynamically exported to a Truffle
-                 * language since the Truffle API module descriptor only exports the packages to
-                 * modules known at build time (such as the Graal module).
-                 */
-                TruffleJDKServices.exportTo(loader, null);
+            for (Loader loaderImpl : LOADERS) {
+                loaderImpl.loadImpl(loader, into);
             }
         }
 
@@ -550,9 +549,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
         private static final class LegacyLoader extends Loader {
 
-            static final Loader INSTANCE = new LegacyLoader();
-
-            private LegacyLoader() {
+            LegacyLoader() {
             }
 
             @Override
@@ -793,14 +790,11 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
         private static final class ServicesLoader extends Loader {
 
-            static final Loader INSTANCE = new ServicesLoader();
-
-            private ServicesLoader() {
+            ServicesLoader() {
             }
 
             @Override
             public void loadImpl(ClassLoader loader, Collection<? super LanguageCache> into) {
-                exportTruffle(loader);
                 for (TruffleLanguage.Provider provider : ServiceLoader.load(TruffleLanguage.Provider.class, loader)) {
                     Registration reg = provider.getClass().getAnnotation(Registration.class);
                     if (reg == null) {
@@ -808,12 +802,13 @@ final class LanguageCache implements Comparable<LanguageCache> {
                         out.println("Provider " + provider.getClass() + " is missing @Registration annotation.");
                         continue;
                     }
-                    String className = provider.getLanguageClassName();
+
                     String name = reg.name();
                     String id = reg.id();
-                    if (id == null || id.isEmpty()) {
-                        id = defaultId(name, className);
+                    if (id == null) {
+                        id = defaultId(name, provider.getLanguageClassName());
                     }
+                    String className = provider.getLanguageClassName();
                     String languageHome = System.getProperty(id + ".home");
                     if (languageHome == null) {
                         URL url = provider.getClass().getClassLoader().getResource(className.replace('.', '/') + ".class");
@@ -842,8 +837,8 @@ final class LanguageCache implements Comparable<LanguageCache> {
                     boolean interactive = reg.interactive();
                     boolean internal = reg.internal();
                     Set<String> servicesClassNames = new TreeSet<>();
-                    for (String service : provider.getServicesClassNames()) {
-                        servicesClassNames.add(service);
+                    for (Class<?> service : reg.services()) {
+                        servicesClassNames.add(service.getCanonicalName());
                     }
                     LanguageReflection reflection = new ServiceLoaderLanguageReflection(provider, reg.contextPolicy());
                     into.add(new LanguageCache(id, name, implementationName, version, className, languageHome,
@@ -861,6 +856,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
                 private final TruffleLanguage.Provider provider;
                 private final ContextPolicy contextPolicy;
+                private final AtomicBoolean exported = new AtomicBoolean();
                 private volatile Set<Class<? extends Tag>> providedTags;
                 private volatile List<FileTypeDetector> fileTypeDetectors;
 
@@ -873,6 +869,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
                 @Override
                 TruffleLanguage<?> newInstance() {
+                    exportTruffleIfNeeded();
                     return provider.create();
                 }
 
@@ -880,6 +877,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
                 List<? extends FileTypeDetector> getFileTypeDetectors() {
                     List<FileTypeDetector> result = fileTypeDetectors;
                     if (result == null) {
+                        exportTruffleIfNeeded();
                         result = provider.createFileTypeDetectors();
                         fileTypeDetectors = result;
                     }
@@ -926,6 +924,12 @@ final class LanguageCache implements Comparable<LanguageCache> {
                 URL getCodeSource() {
                     CodeSource source = provider.getClass().getProtectionDomain().getCodeSource();
                     return source != null ? source.getLocation() : null;
+                }
+
+                private void exportTruffleIfNeeded() {
+                    if (exported.compareAndSet(false, true)) {
+                        exportTruffle(provider.getClass().getClassLoader());
+                    }
                 }
             }
         }

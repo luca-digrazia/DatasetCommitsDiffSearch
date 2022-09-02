@@ -89,18 +89,18 @@ final class InstrumentAccessor extends Accessor {
     static final class InstrumentImpl extends InstrumentSupport {
 
         @Override
-        public Object createInstrumentationHandler(Object polyglotEngine, DispatchOutputStream out, DispatchOutputStream err, InputStream in, MessageTransport messageInterceptor) {
-            return new InstrumentationHandler(polyglotEngine, out, err, in, messageInterceptor);
+        public Object createInstrumentationHandler(Object vm, DispatchOutputStream out, DispatchOutputStream err, InputStream in, MessageTransport messageInterceptor) {
+            return new InstrumentationHandler(vm, out, err, in, messageInterceptor);
         }
 
         @Override
-        public void initializeInstrument(Object instrumentationHandler, Object polyglotInstrument, String instrumentClassName, Supplier<? extends Object> instrumentSupplier) {
-            ((InstrumentationHandler) instrumentationHandler).initializeInstrument(polyglotInstrument, instrumentClassName, instrumentSupplier);
+        public void initializeInstrument(Object instrumentationHandler, Object key, String instrumentClassName, Supplier<? extends Object> instrumentSupplier) {
+            ((InstrumentationHandler) instrumentationHandler).initializeInstrument(key, instrumentClassName, instrumentSupplier);
         }
 
         @Override
-        public void createInstrument(Object instrumentationHandler, Object polyglotInstrument, String[] expectedServices, OptionValues options) {
-            ((InstrumentationHandler) instrumentationHandler).createInstrument(polyglotInstrument, expectedServices, options);
+        public void createInstrument(Object instrumentationHandler, Object key, String[] expectedServices, OptionValues options) {
+            ((InstrumentationHandler) instrumentationHandler).createInstrument(key, expectedServices, options);
         }
 
         @Override
@@ -135,18 +135,18 @@ final class InstrumentAccessor extends Accessor {
         }
 
         @Override
-        public void finalizeInstrument(Object instrumentationHandler, Object polyglotInstrument) {
-            ((InstrumentationHandler) instrumentationHandler).finalizeInstrumenter(polyglotInstrument);
+        public void finalizeInstrument(Object instrumentationHandler, Object key) {
+            ((InstrumentationHandler) instrumentationHandler).finalizeInstrumenter(key);
         }
 
         @Override
-        public void disposeInstrument(Object instrumentationHandler, Object polyglotInstrument, boolean cleanupRequired) {
-            ((InstrumentationHandler) instrumentationHandler).disposeInstrumenter(polyglotInstrument, cleanupRequired);
+        public void disposeInstrument(Object instrumentationHandler, Object key, boolean cleanupRequired) {
+            ((InstrumentationHandler) instrumentationHandler).disposeInstrumenter(key, cleanupRequired);
         }
 
         @Override
-        public void collectEnvServices(Set<Object> collectTo, Object polyglotLanguage, TruffleLanguage<?> language) {
-            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(polyglotLanguage);
+        public void collectEnvServices(Set<Object> collectTo, Object languageShared, TruffleLanguage<?> language) {
+            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(languageShared);
             Instrumenter instrumenter = instrumentationHandler.forLanguage(language);
             collectTo.add(instrumenter);
             AllocationReporter allocationReporter = instrumentationHandler.getAllocationReporter(InstrumentAccessor.langAccess().getLanguageInfo(language));
@@ -154,8 +154,9 @@ final class InstrumentAccessor extends Accessor {
         }
 
         @Override
-        public <T> T getInstrumentationHandlerService(Object instrumentationHandler, Object key, Class<T> type) {
-            return ((InstrumentationHandler) instrumentationHandler).lookup(key, type);
+        public <T> T getInstrumentationHandlerService(Object vm, Object key, Class<T> type) {
+            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) vm;
+            return instrumentationHandler.lookup(key, type);
         }
 
         @Override
@@ -177,12 +178,6 @@ final class InstrumentAccessor extends Accessor {
         @Override
         public Iterable<Scope> findTopScopes(TruffleLanguage.Env env) {
             return TruffleInstrument.Env.findTopScopes(env);
-        }
-
-        @Override
-        public boolean hasContextBindings(Object engine) {
-            InstrumentationHandler instrumentationHandler = (InstrumentationHandler) engineAccess().getInstrumentationHandler(engine);
-            return instrumentationHandler.hasContextBindings();
         }
 
         @Override
@@ -240,12 +235,13 @@ final class InstrumentAccessor extends Accessor {
         @Override
         public org.graalvm.polyglot.SourceSection createSourceSection(Object instrumentEnv, org.graalvm.polyglot.Source source, com.oracle.truffle.api.source.SourceSection ss) {
             TruffleInstrument.Env env = (TruffleInstrument.Env) instrumentEnv;
-            return engineAccess().createSourceSection(env.getPolyglotInstrument(), source, ss);
+            return engineAccess().createSourceSection(env.getVMObject(), source, ss);
         }
 
         @Override
-        public void patchInstrumentationHandler(Object instrumentationHandler, DispatchOutputStream out, DispatchOutputStream err, InputStream in) {
-            ((InstrumentationHandler) instrumentationHandler).patch(out, err, in);
+        public void patchInstrumentationHandler(Object vm, DispatchOutputStream out, DispatchOutputStream err, InputStream in) {
+            final InstrumentationHandler instrumentationHandler = (InstrumentationHandler) vm;
+            instrumentationHandler.patch(out, err, in);
         }
 
         @Override
@@ -258,11 +254,11 @@ final class InstrumentAccessor extends Accessor {
             if (info == null) {
                 return null;
             }
-            Object polyglotLanguage = nodesAccess().getPolyglotLanguage(info);
-            if (polyglotLanguage == null) {
+            Object languageShared = nodesAccess().getEngineObject(info);
+            if (languageShared == null) {
                 return null;
             }
-            return (InstrumentationHandler) engineAccess().getInstrumentationHandler(polyglotLanguage);
+            return (InstrumentationHandler) engineAccess().getInstrumentationHandler(languageShared);
         }
 
     }

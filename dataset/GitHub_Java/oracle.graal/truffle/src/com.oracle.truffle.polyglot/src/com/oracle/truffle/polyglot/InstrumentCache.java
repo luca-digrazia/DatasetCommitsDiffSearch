@@ -60,10 +60,7 @@ import java.util.WeakHashMap;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.TruffleJDKServices;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import java.util.Objects;
-import java.util.ServiceLoader;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 //TODO (chumer): maybe this class should share some code with LanguageCache?
 final class InstrumentCache {
@@ -106,7 +103,16 @@ final class InstrumentCache {
 
     private InstrumentCache(String id, String name, String version, String className, boolean internal, Set<String> services, InstrumentReflection instrumentReflection) {
         this.instrumentReflection = instrumentReflection;
-        this.id = id;
+        if (id.equals("")) {
+            /* use class name default id */
+            int lastIndex = className.lastIndexOf('$');
+            if (lastIndex == -1) {
+                lastIndex = className.lastIndexOf('.');
+            }
+            this.id = className.substring(lastIndex + 1, className.length());
+        } else {
+            this.id = id;
+        }
         this.name = name;
         this.version = version;
         this.className = className;
@@ -149,11 +155,11 @@ final class InstrumentCache {
             Loader.load(ModuleResourceLocator.createLoader(), list, classNamesUsed);
         }
         Collections.sort(list, new Comparator<InstrumentCache>() {
-            @Override
-            public int compare(InstrumentCache o1, InstrumentCache o2) {
-                return o1.getId().compareTo(o2.getId());
-            }
-        });
+                @Override
+                public int compare(InstrumentCache o1, InstrumentCache o2) {
+                    return o1.getId().compareTo(o2.getId());
+                }
+            });
         return list;
     }
 
@@ -202,23 +208,15 @@ final class InstrumentCache {
         }
     }
 
-    private abstract static class Loader {
+    private static abstract class Loader {
 
-        private static final Loader[] INSTANCES = new Loader[]{
-                        new LegacyLoader(),
-                        new ServicesLoader()
+        private static final Loader[] INSTANCES = new Loader[] {
+            new LegacyLoader(),
+            new ServicesLoader()
         };
 
-        static void load(ClassLoader loader, List<? super InstrumentCache> list, Set<? super String> classNamesUsed) {
+        static void load (ClassLoader loader, List<? super InstrumentCache> list, Set<? super String> classNamesUsed) {
             if (loader == null) {
-                return;
-            }
-            try {
-                Class<?> truffleInstrumentClassAsSeenByLoader = Class.forName(TruffleInstrument.class.getName(), true, loader);
-                if (truffleInstrumentClassAsSeenByLoader != TruffleInstrument.class) {
-                    return;
-                }
-            } catch (ClassNotFoundException ex) {
                 return;
             }
             for (Loader instance : INSTANCES) {
@@ -227,15 +225,6 @@ final class InstrumentCache {
         }
 
         abstract void loadImpl(ClassLoader loader, List<? super InstrumentCache> list, Set<? super String> classNamesUsed);
-
-        static String defaultId(String className) {
-            /* use class name default id */
-            int lastIndex = className.lastIndexOf('$');
-            if (lastIndex == -1) {
-                lastIndex = className.lastIndexOf('.');
-            }
-            return className.substring(lastIndex + 1, className.length());
-        }
     }
 
     private static final class LegacyLoader extends Loader {
@@ -283,9 +272,6 @@ final class InstrumentCache {
             String version = info.getProperty(prefix + "version");
             boolean internal = Boolean.valueOf(info.getProperty(prefix + "internal"));
             String id = info.getProperty(prefix + "id");
-            if (id == null || id.isEmpty()) {
-                id = defaultId(className);
-            }
             int servicesCounter = 0;
             Set<String> services = new TreeSet<>();
             for (;;) {
@@ -327,10 +313,7 @@ final class InstrumentCache {
 
             @Override
             Class<? extends TruffleInstrument> aotInitializeAtBuildTime() {
-                throw new UnsupportedOperationException("Not supported yet."); // To change body of
-                                                                               // generated methods,
-                                                                               // choose Tools |
-                                                                               // Templates.
+                throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
             }
 
             private Class<? extends TruffleInstrument> getInstrumentationClass() {
@@ -358,62 +341,8 @@ final class InstrumentCache {
     }
 
     private static final class ServicesLoader extends Loader {
-
-        ServicesLoader() {
-        }
-
         @Override
         void loadImpl(ClassLoader loader, List<? super InstrumentCache> list, Set<? super String> classNamesUsed) {
-            for (TruffleInstrument.Provider provider : ServiceLoader.load(TruffleInstrument.Provider.class, loader)) {
-                Registration reg = provider.getClass().getAnnotation(Registration.class);
-                if (reg == null) {
-                    PrintStream out = System.err;
-                    out.println("Provider " + provider.getClass() + " is missing @Registration annotation.");
-                    continue;
-                }
-                String className = provider.getInstrumentClassName();
-                String name = reg.name();
-                String id = reg.id();
-                if (id == null || id.isEmpty()) {
-                    id = defaultId(className);
-                }
-                String version = reg.version();
-                boolean internal = reg.internal();
-                Set<String> servicesClassNames = new TreeSet<>();
-                for (Class<?> service : reg.services()) {
-                    servicesClassNames.add(service.getCanonicalName());
-                }
-                // we don't want multiple instruments with the same class name
-                if (!classNamesUsed.contains(className)) {
-                    classNamesUsed.add(className);
-                    InstrumentReflection reflection = new ServiceLoaderInstrumentReflection(provider);
-                    list.add(new InstrumentCache(id, name, version, className, internal, servicesClassNames, reflection));
-                }
-            }
-        }
-
-        private static final class ServiceLoaderInstrumentReflection extends InstrumentReflection {
-
-            private final TruffleInstrument.Provider provider;
-            private final AtomicBoolean exported = new AtomicBoolean();
-
-            ServiceLoaderInstrumentReflection(TruffleInstrument.Provider provider) {
-                assert provider != null;
-                this.provider = provider;
-            }
-
-            @Override
-            TruffleInstrument newInstance() {
-                if (exported.compareAndSet(false, true)) {
-                    exportTruffle(provider.getClass().getClassLoader());
-                }
-                return provider.create();
-            }
-
-            @Override
-            Class<? extends TruffleInstrument> aotInitializeAtBuildTime() {
-                return null;
-            }
         }
     }
 

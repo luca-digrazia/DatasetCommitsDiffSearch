@@ -121,7 +121,7 @@ final class InstrumentationHandler {
     private volatile boolean hasSourceExecutedBindings;
     private volatile boolean collectingSourcesExecuted;
 
-    final Collection<RootNode> loadedRoots = new WeakAsyncList<>(256);
+    private final Collection<RootNode> loadedRoots = new WeakAsyncList<>(256);
     private final Collection<RootNode> executedRoots = new WeakAsyncList<>(64);
     private final Collection<AllocationReporter> allocationReporters = new WeakAsyncList<>(16);
 
@@ -1062,10 +1062,6 @@ final class InstrumentationHandler {
     private <T extends ThreadsListener> EventBinding<T> attachThreadsListener(AbstractInstrumenter instrumenter, T listener, boolean includeStartedThreads) {
         assert listener != null;
         return addThreadsBinding(new EventBinding<>(instrumenter, listener), includeStartedThreads);
-    }
-
-    boolean hasContextBindings() {
-        return !contextsBindings.isEmpty();
     }
 
     void notifyContextCreated(TruffleContext context) {

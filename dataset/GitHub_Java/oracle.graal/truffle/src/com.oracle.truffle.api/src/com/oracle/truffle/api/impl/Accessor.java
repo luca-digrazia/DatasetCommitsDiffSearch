@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -107,6 +107,11 @@ import com.oracle.truffle.api.source.SourceSection;
 @SuppressWarnings({"deprecation", "static-method"})
 public abstract class Accessor {
 
+    @SuppressWarnings("all")
+    protected final Collection<ClassLoader> loaders() {
+        return TruffleLocator.loaders();
+    }
+
     protected void initializeNativeImageTruffleLocator() {
         TruffleLocator.initializeNativeImageTruffleLocator();
     }
@@ -121,10 +126,6 @@ public abstract class Accessor {
 
     protected <T extends Node> BlockNode<T> createBlockNode(T[] elements, ElementExecutor<T> executor) {
         return SUPPORT.createBlockNode(elements, executor);
-    }
-
-    protected void reloadEngineOptions(Object runtimeData, OptionValues optionValues) {
-        SUPPORT.reloadEngineOptions(runtimeData, optionValues);
     }
 
     public abstract static class NodeSupport {
@@ -556,8 +557,6 @@ public abstract class Accessor {
         public abstract Object getEngineInstrumenter(Object instrumentationHandler);
 
         public abstract void onNodeInserted(RootNode rootNode, Node tree);
-
-        public abstract boolean hasContextBindings(Object engine);
 
         public abstract void notifyContextCreated(Object engine, TruffleContext context);
 
