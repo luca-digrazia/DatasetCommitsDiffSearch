@@ -547,7 +547,7 @@ public class ExportMethodTest extends AbstractLibraryTest {
         }
 
         @ExportMessage
-        static class IntArg {
+        static class IntArgNode extends Node {
 
             @Specialization
             static int intArg(ExportsTestObjectError17 receiver, int arg,
@@ -563,16 +563,6 @@ public class ExportMethodTest extends AbstractLibraryTest {
 
         @ExportMessage
         default int intArg(int arg) {
-            return 42;
-        }
-
-    }
-
-    @ExportLibrary(ExportsTestLibrary4.class)
-    abstract static class ExportsTestObjectError19 {
-
-        @ExportMessage
-        public int intArg(int arg) {
             return 42;
         }
 
