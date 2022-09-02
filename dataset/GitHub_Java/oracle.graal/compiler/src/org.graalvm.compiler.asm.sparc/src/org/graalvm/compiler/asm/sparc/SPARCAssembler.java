@@ -547,7 +547,6 @@ public abstract class SPARCAssembler extends Assembler {
     public enum Annul {
         ANNUL(1),
         NOT_ANNUL(0);
-
         public final int flag;
 
         Annul(int flag) {
@@ -558,7 +557,6 @@ public abstract class SPARCAssembler extends Assembler {
     public enum BranchPredict {
         PREDICT_TAKEN(1),
         PREDICT_NOT_TAKEN(0);
-
         public final int flag;
 
         BranchPredict(int flag) {
