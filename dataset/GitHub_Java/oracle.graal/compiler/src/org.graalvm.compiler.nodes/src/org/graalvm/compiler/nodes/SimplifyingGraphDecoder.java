@@ -178,7 +178,7 @@ public class SimplifyingGraphDecoder extends GraphDecoder {
     @SuppressWarnings({"unused", "try"})
     @Override
     protected void handleFixedNode(MethodScope methodScope, LoopScope loopScope, int nodeOrderId, FixedNode node) {
-        try (DebugCloseable a = CanonicalizeFixedNode.start(debug)) {
+        try (DebugCloseable a = CanonicalizeFixedNode.start(node.getDebug())) {
             Node canonical = canonicalizeFixedNode(methodScope, node);
             if (canonical != node) {
                 handleCanonicalization(loopScope, nodeOrderId, node, canonical);
