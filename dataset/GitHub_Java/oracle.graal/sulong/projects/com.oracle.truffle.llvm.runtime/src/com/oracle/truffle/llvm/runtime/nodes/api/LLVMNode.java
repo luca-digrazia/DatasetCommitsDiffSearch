@@ -48,6 +48,7 @@ import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
+import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 @TypeSystemReference(LLVMTypes.class)
 public abstract class LLVMNode extends Node {
@@ -85,12 +86,12 @@ public abstract class LLVMNode extends Node {
 
     protected static PrintStream nativeCallStatisticsStream(ContextReference<LLVMContext> context) {
         CompilerAsserts.neverPartOfCompilation();
-        return context.get().nativeCallStatsStream();
+        return SulongEngineOption.getStream(context.get().getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
     }
 
     protected static boolean nativeCallStatisticsEnabled(ContextReference<LLVMContext> context) {
         CompilerAsserts.neverPartOfCompilation();
-        return nativeCallStatisticsStream(context) != null;
+        return SulongEngineOption.isTrue(context.get().getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
     }
 
     protected static boolean isFunctionDescriptor(Object object) {
