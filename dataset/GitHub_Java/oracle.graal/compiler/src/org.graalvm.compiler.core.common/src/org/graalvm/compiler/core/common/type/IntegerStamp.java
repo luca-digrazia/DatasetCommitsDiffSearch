@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -167,15 +167,8 @@ public final class IntegerStamp extends PrimitiveStamp {
     @Override
     public Stamp constant(Constant c, MetaAccessProvider meta) {
         if (c instanceof PrimitiveConstant) {
-            PrimitiveConstant primitiveConstant = (PrimitiveConstant) c;
-            long value = primitiveConstant.asLong();
-            if (primitiveConstant.getJavaKind() == JavaKind.Boolean && value == 1) {
-                // Need to special case booleans as integer stamps are always signed values.
-                value = -1;
-            }
-            Stamp returnedStamp = StampFactory.forInteger(getBits(), value, value);
-            assert returnedStamp.hasValues();
-            return returnedStamp;
+            long value = ((PrimitiveConstant) c).asLong();
+            return StampFactory.forInteger(getBits(), value, value);
         }
         return this;
     }
@@ -650,7 +643,7 @@ public final class IntegerStamp extends PrimitiveStamp {
                             IntegerStamp b = (IntegerStamp) stamp2;
 
                             int bits = a.getBits();
-                            assert bits == b.getBits() : String.format("stamp1.bits=%d, stamp2.bits=%d", bits, b.getBits());
+                            assert bits == b.getBits();
 
                             if (a.lowerBound == a.upperBound && b.lowerBound == b.upperBound) {
                                 long value = CodeUtil.convert(a.lowerBound() + b.lowerBound(), a.getBits(), false);
@@ -1612,10 +1605,7 @@ public final class IntegerStamp extends PrimitiveStamp {
                             long newUpMask = stamp.upMask() & defaultMask;
                             long newLowerBound = CodeUtil.signExtend((lowerBound | newDownMask) & newUpMask, resultBits);
                             long newUpperBound = CodeUtil.signExtend((upperBound | newDownMask) & newUpMask, resultBits);
-
-                            IntegerStamp result = new IntegerStamp(resultBits, newLowerBound, newUpperBound, newDownMask, newUpMask);
-                            assert result.hasValues();
-                            return result;
+                            return new IntegerStamp(resultBits, newLowerBound, newUpperBound, newDownMask, newUpMask);
                         }
                     },
 
