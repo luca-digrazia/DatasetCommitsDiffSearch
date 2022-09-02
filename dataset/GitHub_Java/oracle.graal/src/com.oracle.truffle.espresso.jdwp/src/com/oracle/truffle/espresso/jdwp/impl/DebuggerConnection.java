@@ -89,7 +89,7 @@ public final class DebuggerConnection implements Commands {
     }
 
     // the suspended event instance is only valid while suspended, so
-    // to avoid a race, we have to block until we're sure that the debugger
+    // to avoid a race, we have to block until we're sure that the debubgger
     // command was prepared on the suspended event instance
     private void addBlocking(DebuggerCommand command) {
         queue.add(command);
@@ -310,9 +310,6 @@ public final class DebuggerConnection implements Commands {
                                 case JDWP.VirtualMachine.CAPABILITIES_NEW.ID:
                                     result = JDWP.VirtualMachine.CAPABILITIES_NEW.createReply(packet);
                                     break;
-                                case JDWP.VirtualMachine.REDEFINE_CLASSES.ID:
-                                    result = JDWP.VirtualMachine.REDEFINE_CLASSES.createReply(packet, context);
-                                    break;
                                 case JDWP.VirtualMachine.SET_DEFAULT_STRATUM.ID:
                                     result = JDWP.VirtualMachine.SET_DEFAULT_STRATUM.createReply(packet);
                                     break;
@@ -431,7 +428,7 @@ public final class DebuggerConnection implements Commands {
                                     result = JDWP.Methods.BYTECODES.createReply(packet, context);
                                     break;
                                 case JDWP.Methods.IS_OBSOLETE.ID:
-                                    result = JDWP.Methods.IS_OBSOLETE.createReply(packet, context);
+                                    result = JDWP.Methods.IS_OBSOLETE.createReply(packet);
                                     break;
                                 case JDWP.Methods.VARIABLE_TABLE_WITH_GENERIC.ID:
                                     result = JDWP.Methods.VARIABLE_TABLE_WITH_GENERIC.createReply(packet, context);
