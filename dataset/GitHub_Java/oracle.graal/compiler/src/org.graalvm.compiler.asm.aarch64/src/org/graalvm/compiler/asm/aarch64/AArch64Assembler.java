@@ -1282,8 +1282,8 @@ public abstract class AArch64Assembler extends Assembler {
     /**
      * Insert ldp/stp at the specified position.
      */
-    protected void insertLdpStp(int position, int size, Instruction instr, boolean isFP, Register rt, Register rt2, AArch64Address address) {
-        int instructionEncoding = generateLoadStorePairInstructionEncoding(instr, rt, rt2, address, isFP, getLog2TransferSize(size));
+    protected void insertLdpStp(int position, int size, Instruction instr, Register rt, Register rt2, AArch64Address address) {
+        int instructionEncoding = generateLoadStorePairInstructionEncoding(instr, rt, rt2, address, false, getLog2TransferSize(size));
         emitInt(instructionEncoding, position);
     }
 
@@ -1396,7 +1396,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param rt general purpose register. May not be null or stackpointer.
      * @param rn general purpose register.
      */
-    protected void ldaxr(int size, Register rt, Register rn) {
+    public void ldaxr(int size, Register rt, Register rn) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
         exclusiveLoadInstruction(LDAXR, rt, rn, getLog2TransferSize(size));
     }
@@ -1411,7 +1411,7 @@ public abstract class AArch64Assembler extends Assembler {
      * @param rt general purpose register. May not be null or stackpointer.
      * @param rn general purpose register.
      */
-    protected void stlxr(int size, Register rs, Register rt, Register rn) {
+    public void stlxr(int size, Register rs, Register rt, Register rn) {
         assert size == 8 || size == 16 || size == 32 || size == 64;
         exclusiveStoreInstruction(STLXR, rs, rt, rn, getLog2TransferSize(size));
     }
@@ -3009,13 +3009,15 @@ public abstract class AArch64Assembler extends Assembler {
     }
 
     /**
-     * Barrier definitions for AArch64.
+     * Possible barrier definitions for Aarch64. LOAD_LOAD and LOAD_STORE map to the same underlying
+     * barrier.
      *
      * We only need synchronization across the inner shareable domain (see B2-90 in the Reference
      * documentation).
      */
     public enum BarrierKind {
-        LOAD_ANY(0x9, "ISHLD"),
+        LOAD_LOAD(0x9, "ISHLD"),
+        LOAD_STORE(0x9, "ISHLD"),
         STORE_STORE(0xA, "ISHST"),
         ANY_ANY(0xB, "ISH"),
         SYSTEM(0xF, "SYS");
