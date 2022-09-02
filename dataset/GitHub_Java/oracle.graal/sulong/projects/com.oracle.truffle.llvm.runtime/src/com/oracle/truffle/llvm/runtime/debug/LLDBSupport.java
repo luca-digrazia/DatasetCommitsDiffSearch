@@ -40,6 +40,7 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.DynamicObject;
 import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess;
@@ -84,6 +85,10 @@ public final class LLDBSupport {
             loadFunctionCache.put(loadType, ret);
         }
         return ret;
+    }
+
+    private NodeFactory getNodeFactory() {
+        return language.getNodeFactory();
     }
 
     public static boolean pointsToObjectAccess(LLVMPointer pointer) {
