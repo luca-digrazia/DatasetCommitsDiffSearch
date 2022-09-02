@@ -554,15 +554,11 @@ public final class InspectorDebugger extends DebuggerDomain {
                     }
                     CallFrame cf = suspendedInfo.getCallFrames()[frameId];
                     JSONObject json = new JSONObject();
-                    DebugValue value;
-                    try {
-                        value = cf.getFrame().eval(expression);
-                    } catch (IllegalStateException ex) {
+                    LanguageInfo languageInfo = cf.getFrame().getLanguage();
+                    DebugValue value = null;
+                    if (languageInfo == null || !languageInfo.isInteractive()) {
                         value = getVarValue(expression, cf);
-                    }
-                    if (value == null) {
-                        LanguageInfo languageInfo = cf.getFrame().getLanguage();
-                        if (languageInfo == null || !languageInfo.isInteractive()) {
+                        if (value == null) {
                             String errorMessage = getEvalNonInteractiveMessage();
                             ExceptionDetails exceptionDetails = new ExceptionDetails(errorMessage);
                             json.put("exceptionDetails", exceptionDetails.createJSON(context, generatePreview));
@@ -571,6 +567,8 @@ public final class InspectorDebugger extends DebuggerDomain {
                             err.putOpt("type", "string");
                             json.put("result", err);
                         }
+                    } else {
+                        value = cf.getFrame().eval(expression);
                     }
                     if (value != null) {
                         RemoteObject ro = new RemoteObject(value, generatePreview, context);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,7 +43,6 @@ package com.oracle.truffle.tck;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -56,24 +55,23 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.PolyglotException;
-import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.Value;
 import org.junit.Assert;
 
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.Debugger;
 import com.oracle.truffle.api.debug.DebuggerSession;
-import com.oracle.truffle.api.debug.SourceElement;
 import com.oracle.truffle.api.debug.SuspendedCallback;
 import com.oracle.truffle.api.debug.SuspendedEvent;
+import com.oracle.truffle.api.debug.SourceElement;
 import com.oracle.truffle.api.source.SourceSection;
+
+import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
+import org.graalvm.polyglot.PolyglotException;
+import org.graalvm.polyglot.Source;
 
 /**
  * Test utility class that makes it easier to test and debug debugger functionality for guest
@@ -242,18 +240,10 @@ public final class DebuggerTester implements AutoCloseable {
      * @since 0.27
      */
     public void startEval(Source s) {
-        startExecute(new Function<Context, Value>() {
-            public Value apply(Context c) {
-                return c.eval(s);
-            }
-        });
-    }
-
-    public void startExecute(Function<Context, Value> script) {
         if (this.executingSource != null) {
-            throw new IllegalStateException("Already executing other source ");
+            throw new IllegalStateException("Already executing other source " + s);
         }
-        this.executingSource = new ExecutingSource(script);
+        this.executingSource = new ExecutingSource(s);
     }
 
     /**
@@ -872,12 +862,12 @@ public final class DebuggerTester implements AutoCloseable {
 
     private static final class ExecutingSource {
 
-        private final Function<Context, Value> function;
+        private final Source source;
         private Throwable error;
         private String returnValue;
 
-        ExecutingSource(Function<Context, Value> function) {
-            this.function = function;
+        ExecutingSource(Source source) {
+            this.source = source;
         }
 
     }
@@ -937,7 +927,7 @@ public final class DebuggerTester implements AutoCloseable {
                     ExecutingSource s = executingSource;
                     try {
                         trace("Start executing " + this);
-                        s.returnValue = s.function.apply(context).toString();
+                        s.returnValue = context.eval(s.source).toString();
                         trace("Done executing " + this);
                     } catch (Throwable e) {
                         s.error = e;
