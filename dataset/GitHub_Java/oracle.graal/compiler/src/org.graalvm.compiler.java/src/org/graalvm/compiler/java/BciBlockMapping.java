@@ -405,7 +405,6 @@ public class BciBlockMapping implements JavaMethodContext {
                     block.jsrData = block.jsrData.copy();
                 }
                 block.successors = new ArrayList<>(successors);
-                block.loops = (BitSet) block.loops.clone();
                 return block;
             } catch (CloneNotSupportedException e) {
                 throw new RuntimeException(e);
@@ -662,11 +661,13 @@ public class BciBlockMapping implements JavaMethodContext {
         private final TraversalStep pred;
         private final BciBlock block;
         private int currentSuccessorIndex;
+        private long loops;
 
         TraversalStep(TraversalStep pred, BciBlock block) {
             this.pred = pred;
             this.block = block;
             this.currentSuccessorIndex = 0;
+            this.loops = 0;
         }
 
         TraversalStep(BciBlock block) {
@@ -678,12 +679,14 @@ public class BciBlockMapping implements JavaMethodContext {
             if (pred == null) {
                 return "TraversalStep{block=" + block +
                                 ", currentSuccessorIndex=" + currentSuccessorIndex +
+                                ", loops=" + Long.toBinaryString(loops) +
                                 '}';
             }
             return "TraversalStep{" +
                             "pred=" + pred +
                             ", block=" + block +
                             ", currentSuccessorIndex=" + currentSuccessorIndex +
+                            ", loops=" + Long.toBinaryString(loops) +
                             '}';
         }
     }
@@ -1433,14 +1436,6 @@ public class BciBlockMapping implements JavaMethodContext {
      */
     private int nextLoop;
 
-    /**
-     * Returns the smallest power of 2, strictly greater than value.
-     */
-    private static int nextPowerOfTwo(int value) {
-        assert value >= 0;
-        return 1 << (32 - Integer.numberOfLeadingZeros(value));
-    }
-
     private void makeLoopHeader(BciBlock block) {
         assert !block.isLoopHeader;
         block.isLoopHeader = true;
@@ -1452,16 +1447,18 @@ public class BciBlockMapping implements JavaMethodContext {
             throw new PermanentBailoutException("Loop formed by an exception handler");
         }
         if (nextLoop >= LOOP_HEADER_MAX_CAPACITY) {
-            // This is an artificial restriction, a sanity check to avoid feeding the compiler an
-            // unreasonable number of loops.
+            // This restriction can be removed by using a fall-back to a BitSet in case we have
+            // more than 64 loops
+            // Don't compile such methods for now, until we see a concrete case that allows
+            // checking for correctness.
             throw new PermanentBailoutException("Too many loops in method");
         }
         block.loops.set(nextLoop);
-        debug.log("makeLoopHeader(%s) -> %s", block, block.loops);
+        debug.log("makeLoopHeader(%s) -> %x", block, block.loops);
         if (loopHeaders == null) {
             loopHeaders = new BciBlock[LOOP_HEADER_INITIAL_CAPACITY];
         } else if (nextLoop >= loopHeaders.length) {
-            int newLength = nextPowerOfTwo(nextLoop);
+            int newLength = 1 << (32 - Integer.numberOfLeadingZeros(nextLoop));
             loopHeaders = Arrays.copyOf(loopHeaders, newLength);
         }
         loopHeaders[nextLoop] = block;
@@ -1472,14 +1469,12 @@ public class BciBlockMapping implements JavaMethodContext {
     private void propagateLoopBits(TraversalStep step, BitSet loopBits) {
         TraversalStep s = step;
         while (s != null) {
-            // Original condition: if (s.block.loops & loopBits == loopBits) break;
-            // Rewritten in a more efficient way: if (loopBits & ~s.block.loops == 0) break;
-            BitSet missingLoops = (BitSet) loopBits.clone();
-            missingLoops.andNot(s.block.loops);
-            if (missingLoops.isEmpty()) {
-                break;
+            BitSet tmp = (BitSet) s.block.loops.clone();
+            tmp.and(loopBits);
+            if (tmp.equals(loopBits)) {
+                break ;
             }
-            s.block.loops.or(missingLoops);
+            s.block.loops.or(loopBits);
             if (s.block.loopIdChain != null) {
                 for (TraversalStep chain : s.block.loopIdChain) {
                     propagateLoopBits(chain, loopBits);
@@ -1626,7 +1621,7 @@ public class BciBlockMapping implements JavaMethodContext {
                     blocks = newBlocks;
                 }
                 blocks[blocksNotYetAssignedId] = block;
-                debug.log("computeBlockOrder(%s) -> %s", block, block.loops);
+                debug.log("computeBlockOrder(%s) -> %x", block, block.loops);
                 debug.dump(DebugContext.DETAILED_LEVEL, this, "After adding %s", block);
                 workStack.pop();
             }
