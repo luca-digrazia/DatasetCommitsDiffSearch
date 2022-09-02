@@ -24,11 +24,13 @@
  */
 package org.graalvm.compiler.core.test.inlining;
 
+import static org.graalvm.compiler.debug.DebugOptions.DumpOnError;
 import static org.graalvm.compiler.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.core.common.GraalOptions;
+import org.graalvm.compiler.core.common.RetryableBailoutException;
 import org.graalvm.compiler.core.test.GraalCompilerTest;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.TTY;
@@ -39,6 +41,7 @@ import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
+import org.graalvm.compiler.nodes.virtual.CommitAllocationNode;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
@@ -83,6 +86,96 @@ public class NestedLoopEffectsPhaseComplexityTest2 extends GraalCompilerTest {
         }
     }
 
+    public static int method20LevelNoNewAllocationsEnsureVirtualizedWronglyMaterialized(int a) {
+        if (a == 0) {
+            return 0;
+        }
+        int res = 0;
+        for (int i = 0; i < a; i++) {
+            C c = new C(i);
+            GraalDirectives.ensureVirtualized(c);
+            res += new A(method20LevelNoNewAllocations1EnsureVirtualizedWronglyMaterialized(20, c)).x;
+        }
+        return res;
+    }
+
+    public static int method20LevelNoNewAllocations1EnsureVirtualizedWronglyMaterialized(int a, Object o) {
+        if (GraalDirectives.injectBranchProbability(0.01D, a == 0)) {
+            // materialize the escaped object
+            OSideEffect = o;
+            return 0;
+        }
+        int res = 0;
+        for (int i = 0; i < IntSideEffect; i++) {
+            res += new A(method20LevelNoNewAllocations1EnsureVirtualizedWronglyMaterialized(a - 1, o)).x;
+        }
+        return res;
+    }
+
+    /**
+     * Test that the depth cutoff of partial escape analysis triggers after the correct loop depth
+     * and that no new virtualizations are performed once we reach a certain depth.
+     */
+    @Test
+    public void testNoNewAllocationsEnsureVirtualizedWronglyMaterialized() {
+        method20LevelNoNewAllocationsEnsureVirtualizedWronglyMaterialized(0);
+        method20LevelNoNewAllocationsEnsureVirtualizedWronglyMaterialized(1);
+        method20LevelNoNewAllocationsEnsureVirtualizedWronglyMaterialized(0);
+        method20LevelNoNewAllocationsEnsureVirtualizedWronglyMaterialized(1);
+        method20LevelNoNewAllocationsEnsureVirtualizedWronglyMaterialized(3);
+        try {
+            testAndTimeFixedDepth("method20LevelNoNewAllocationsEnsureVirtualizedWronglyMaterialized", 1);
+            Assert.fail("PEA should run into a bailout");
+        } catch (RetryableBailoutException e) {
+            Assert.assertTrue(e.getMessage().contains("ensureVirtualized"));
+        }
+    }
+
+    /**
+     * Very deep loop nests, once {@linkplain GraalOptions#EscapeAnalysisLoopCutoff} is reached, no
+     * new virtualizations are performed except the one that has ensure virtualized set/used.
+     */
+    public static int method20LevelNoNewAllocationsEnsureVirtualized(int a) {
+        if (a == 0) {
+            return 0;
+        }
+        int res = 0;
+        for (int i = 0; i < a; i++) {
+            res += new A(method20LevelNoNewAllocations1EnsureVirtualized(20)).x;
+        }
+        return res;
+    }
+
+    public static int method20LevelNoNewAllocations1EnsureVirtualized(int a) {
+        if (GraalDirectives.injectBranchProbability(0.01D, a == 0)) {
+            B b = new B(a);
+            GraalDirectives.ensureVirtualized(b);
+            return b.x;
+        }
+        int res = 0;
+        for (int i = 0; i < IntSideEffect; i++) {
+            res += new A(method20LevelNoNewAllocations1EnsureVirtualized(a - 1)).x;
+        }
+        return res;
+    }
+
+    /**
+     * Test that the depth cutoff of partial escape analysis triggers after the correct loop depth
+     * and that no new virtualizations are performed once we reach a certain depth.
+     */
+    @Test
+    public void testNoNewAllocationsEnsureVirtualized() {
+        method20LevelNoNewAllocations(0);
+        method20LevelNoNewAllocations(1);
+        method20LevelNoNewAllocations1(0);
+        method20LevelNoNewAllocations1(1);
+        /*
+         * 2 remaining allocations = 1 times the >= depth level allocation of a and one allocations
+         * of b inside
+         */
+        testAndTimeFixedDepth("method20LevelNoNewAllocationsEnsureVirtualized", 2);
+    }
+
     /**
      * Very deep loop nests, once {@linkplain GraalOptions#EscapeAnalysisLoopCutoff} is reached, no
      * new virtualizations are performed. We check this by ensuring that the allocations of B >
@@ -121,7 +214,7 @@ public class NestedLoopEffectsPhaseComplexityTest2 extends GraalCompilerTest {
         method20LevelNoNewAllocations1(0);
         method20LevelNoNewAllocations1(1);
         /*
-         * 3 remaining allocations = 1 times the >= depth level allocation of a and all allocations
+         * 2 remaining allocations = 1 times the >= depth level allocation of a and one allocations
          * of b inside
          */
         testAndTimeFixedDepth("method20LevelNoNewAllocations", 2);
@@ -192,6 +285,79 @@ public class NestedLoopEffectsPhaseComplexityTest2 extends GraalCompilerTest {
         return res;
     }
 
+    public static int recursiveLoopMethodFieldLoadWithPrevAlloc(int a) {
+        if (IntSideEffect == 0) {
+            return 1;
+        }
+        C c = new C(0);
+        C d = new C(0);
+        for (int i = 0; i < a; i++) {
+            IntSideEffect = c.x;
+            c = new C(recursiveLoopMethodFieldLoadWithPrevAlloc(i));
+            OSideEffect = d;
+        }
+        OSideEffect = c;
+        return c.x;
+    }
+
+    @Test
+    public void testIterative() {
+        OptionValues op = new OptionValues(getInitialOptions(), GraalOptions.EscapeAnalysisLoopCutoff, 1);
+        prepareGraph("recursiveLoopMethodFieldLoadWithPrevAlloc", 30, true, op);
+    }
+
+    public static class AB {
+        A x;
+
+        AB(A x) {
+            this.x = x;
+        }
+    }
+
+    static AB BSideEffect;
+
+    public static int recursiveMethod1(int a, @SuppressWarnings("unused") A oe) {
+        if (GraalDirectives.injectBranchProbability(0.01D, a <= 0)) {
+            return 0;
+        }
+        int res = 0;
+        A aO = new A(12);
+        for (int i = 0; GraalDirectives.injectIterationCount(100000000, i < a); i++) {
+            res += new A(recursiveMethod2(a - 1, new A(i))).x;
+            AB o;
+            if (IntSideEffect > 0) {
+                o = BSideEffect;
+            } else {
+                o = new AB(aO);
+            }
+            res += o.x.x;
+        }
+        return res;
+    }
+
+    public static int recursiveMethod2(int a, A o) {
+        if (GraalDirectives.injectBranchProbability(0.01D, a <= 0)) {
+            return 0;
+        }
+        int res = o.x;
+        for (int i = 0; GraalDirectives.injectIterationCount(100000000, i < a); i++) {
+            res += new A(recursiveMethod1(a - 1, o)).x + o.x;
+        }
+        OSideEffect = o;
+        return res;
+    }
+
+    @Test
+    @SuppressWarnings("try")
+    public void testIterative2() {
+        try (AutoCloseable c = new TTY.Filter()) {
+            OptionValues options = new OptionValues(getInitialOptions(), DumpOnError, false, GraalOptions.EscapeAnalysisLoopCutoff, 2);
+            prepareGraph("recursiveMethod1", 30, true, options);
+        } catch (Throwable t) {
+            throw new AssertionError(t);
+        }
+    }
+
     private static final boolean LOG_PHASE_TIMINGS = false;
     private static int InliningCountLowerBound = 1;
     private static int InliningCountUpperBound = 128;
@@ -204,7 +370,16 @@ public class NestedLoopEffectsPhaseComplexityTest2 extends GraalCompilerTest {
         if (LOG_PHASE_TIMINGS) {
             TTY.printf("Needed %dms to run early partial escape analysis on a graph with fixed level of loops", elapsedPEA);
         }
-        Assert.assertEquals(remainingNewInstanceOffs, g1.getNodes().filter(NewInstanceNode.class).count());
+        int allocations = 0;
+        for (Node n : g1.getNodes()) {
+            if (n instanceof NewInstanceNode) {
+                allocations++;
+            } else if (n instanceof CommitAllocationNode) {
+                CommitAllocationNode com = (CommitAllocationNode) n;
+                allocations += com.getVirtualObjects().size();
+            }
+        }
+        Assert.assertEquals(remainingNewInstanceOffs, allocations);
     }
 
     @Test
@@ -235,14 +410,22 @@ public class NestedLoopEffectsPhaseComplexityTest2 extends GraalCompilerTest {
     }
 
     private StructuredGraph prepareGraph(String snippet, int inliningCount) {
+        return prepareGraph(snippet, inliningCount, false, getInitialOptions());
+    }
+
+    private StructuredGraph prepareGraph(String snippet, int inliningCount, boolean peaDuring, OptionValues options) {
         ResolvedJavaMethod callerMethod = getResolvedJavaMethod(snippet);
-        StructuredGraph callerGraph = parseEager(callerMethod, AllowAssumptions.NO);
+        StructuredGraph callerGraph = parseEager(callerMethod, AllowAssumptions.NO, options);
         PhaseSuite<HighTierContext> graphBuilderSuite = getDefaultGraphBuilderSuite();
         HighTierContext context = new HighTierContext(getProviders(), graphBuilderSuite, OptimisticOptimizations.NONE);
         CanonicalizerPhase canonicalizer = createCanonicalizerPhase();
         Invoke next = callerGraph.getNodes(MethodCallTargetNode.TYPE).first().invoke();
         StructuredGraph calleeGraph = parseBytecodes(next.callTarget().targetMethod(), context, canonicalizer);
         ResolvedJavaMethod calleeMethod = next.callTarget().targetMethod();
+        if (peaDuring) {
+            new PartialEscapePhase(false, createCanonicalizerPhase(),
+                            callerGraph.getOptions()).apply(callerGraph, getDefaultHighTierContext());
+        }
         for (int i = 0; i < inliningCount; i++) {
             if (callerGraph.getNodes(MethodCallTargetNode.TYPE).isEmpty()) {
                 break;
@@ -252,6 +435,12 @@ public class NestedLoopEffectsPhaseComplexityTest2 extends GraalCompilerTest {
                             "Called explicitly from a unit test.", "Test case");
             canonicalizer.applyIncremental(callerGraph, context, canonicalizeNodes);
             callerGraph.getDebug().dump(DebugContext.DETAILED_LEVEL, callerGraph, "After inlining %s into %s iteration %d", calleeMethod, callerMethod, i);
+            assert calleeGraph.verify();
+            if (peaDuring) {
+                new PartialEscapePhase(false, createCanonicalizerPhase(),
+                                callerGraph.getOptions()).apply(callerGraph, getDefaultHighTierContext());
+            }
+            assert calleeGraph.verify();
         }
 
         return callerGraph;
