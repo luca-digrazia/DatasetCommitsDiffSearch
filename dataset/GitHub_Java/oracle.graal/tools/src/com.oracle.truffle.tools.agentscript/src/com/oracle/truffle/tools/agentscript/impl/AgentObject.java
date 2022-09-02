@@ -41,6 +41,7 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.source.Source;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,15 +49,15 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-@SuppressWarnings("unused")
 @ExportLibrary(InteropLibrary.class)
 final class AgentObject implements TruffleObject {
     private final TruffleInstrument.Env env;
+    private final LanguageInfo language;
     private final AtomicBoolean initializationFinished;
-    private Object closeFn;
 
-    AgentObject(TruffleInstrument.Env env) {
+    AgentObject(TruffleInstrument.Env env, Source script, LanguageInfo language) {
         this.env = env;
+        this.language = language;
         this.initializationFinished = new AtomicBoolean(false);
     }
 
@@ -154,10 +155,6 @@ final class AgentObject implements TruffleObject {
                         instrumenter.attachExecutionEventFactory(filter, AgentExecutionNode.factory(obj.env, args[1]));
                         break;
                     }
-                    case CLOSE: {
-                        obj.registerOnClose(args[1]);
-                        break;
-                    }
 
                     default:
                         throw new IllegalStateException();
@@ -176,25 +173,6 @@ final class AgentObject implements TruffleObject {
 
     void initializationFinished() {
         this.initializationFinished.set(true);
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    void onClosed() {
-        if (closeFn == null) {
-            return;
-        }
-        final InteropLibrary iop = InteropLibrary.getFactory().getUncached();
-        try {
-            iop.execute(closeFn);
-        } catch (InteropException ex) {
-            throw raise(RuntimeException.class, ex);
-        } finally {
-            closeFn = null;
-        }
-    }
-
-    void registerOnClose(Object fn) {
-        closeFn = fn;
     }
 
     private static boolean isSet(InteropLibrary iop, Object obj, String property) {

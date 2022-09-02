@@ -29,20 +29,26 @@ import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
 final class RootNameFilter implements Predicate<String> {
     private final Object fn;
+    private final AtomicBoolean initializationFinished;
     private final ThreadLocal<Boolean> querying;
 
-    RootNameFilter(Object fn) {
+    RootNameFilter(Object fn, AtomicBoolean initializationFinished) {
         this.fn = fn;
+        this.initializationFinished = initializationFinished;
         this.querying = new ThreadLocal<>();
     }
 
     @CompilerDirectives.TruffleBoundary
     @Override
     public boolean test(String rootName) {
+        if (!initializationFinished.get()) {
+            return false;
+        }
         if (rootName == null) {
             return false;
         }
