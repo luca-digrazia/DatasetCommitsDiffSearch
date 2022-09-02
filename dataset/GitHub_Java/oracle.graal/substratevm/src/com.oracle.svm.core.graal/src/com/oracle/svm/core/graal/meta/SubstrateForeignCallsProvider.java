@@ -82,12 +82,12 @@ public class SubstrateForeignCallsProvider implements ArrayCopyForeignCalls {
 
     @Override
     public boolean canDeoptimize(ForeignCallDescriptor descriptor) {
-        return lookupForeignCall(descriptor).getDescriptor().needsDebugInfo();
+        return true;
     }
 
     @Override
     public boolean isGuaranteedSafepoint(ForeignCallDescriptor descriptor) {
-        return lookupForeignCall(descriptor).getDescriptor().isGuaranteedSafepoint();
+        return true;
     }
 
     @Override
