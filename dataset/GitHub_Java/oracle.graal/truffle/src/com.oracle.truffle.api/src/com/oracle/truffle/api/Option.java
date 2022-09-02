@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -50,6 +50,7 @@ import org.graalvm.options.OptionCategory;
 import org.graalvm.options.OptionDescriptor;
 import org.graalvm.options.OptionDescriptors;
 import org.graalvm.options.OptionKey;
+import org.graalvm.options.OptionStability;
 
 /**
  * Describes the attributes of an option whose {@link OptionKey value} is in a static field
@@ -102,7 +103,7 @@ public @interface Option {
     /**
      * Returns a help message for the option. New lines can be embedded in the message with
      * {@code "%n"}. The generated an option descriptor returns this value as result of
-     * {@link OptionDescriptor#getHelp()()}.
+     * {@link OptionDescriptor#getHelp()}.
      *
      * @since 0.27
      */
@@ -117,12 +118,28 @@ public @interface Option {
     boolean deprecated() default false;
 
     /**
+     * Returns the deprecation reason and the recommended fix. The generated option descriptor
+     * returns this value as result of {@link OptionDescriptor#getDeprecationMessage()}.
+     *
+     * @since 20.1.0
+     */
+    String deprecationMessage() default "";
+
+    /**
      * Specifies the category of the option. The generated option descriptor returns this value as
-     * result of {@link OptionDescriptor#getCategory()()}.
+     * result of {@link OptionDescriptor#getCategory()}.
      *
      * @since 0.27
      */
     OptionCategory category();
+
+    /**
+     * Defines the stability of this option. The default value is
+     * {@link OptionStability#EXPERIMENTAL}.
+     *
+     * @since 19.0
+     */
+    OptionStability stability() default OptionStability.EXPERIMENTAL;
 
     /**
      * Must be applied on classes containing {@link Option option} fields to specify a name prefix
@@ -141,7 +158,7 @@ public @interface Option {
 
         /**
          * A set of group names that are used as prefix for all options of the annotated class. If
-         * multiple group anmes are specified then descriptors for each combination of group and
+         * multiple group names are specified then descriptors for each combination of group and
          * option name is generated.
          * <p>
          * The {@link OptionDescriptor#getName() option descriptor name} is generated from the
@@ -165,15 +182,19 @@ class OptionSnippets {
     // @formatter:off
 
     // BEGIN: OptionSnippets.MyLanguage
-    @TruffleLanguage.Registration(id = "mylang", name = "My Language", version = "1.0")
+    @TruffleLanguage.Registration(id = "mylang", name = "My Language",
+                                  version = "1.0")
     abstract static class MyLanguage extends TruffleLanguage<Context> {
 
         // the descriptor name for MyOption1 is 'mylang.MyOption1'
-        @Option(help = "Help Text.", category = OptionCategory.USER)
-        static final OptionKey<String>  MyOption1 = new OptionKey<>("");
+        @Option(help = "Help Text.", category = OptionCategory.USER,
+                stability = OptionStability.STABLE)
+        static final OptionKey<String> MyOption1 = new OptionKey<>("");
 
         // the descriptor name for SecondOption is 'mylang.secondOption'
-        @Option(help = "Help Text.", name = "secondOption", category = OptionCategory.EXPERT)
+        @Option(help = "Help Text.", name = "secondOption",
+                category = OptionCategory.EXPERT,
+                stability = OptionStability.EXPERIMENTAL)
         static final OptionKey<Boolean> SecondOption = new OptionKey<>(false);
 
         @Override

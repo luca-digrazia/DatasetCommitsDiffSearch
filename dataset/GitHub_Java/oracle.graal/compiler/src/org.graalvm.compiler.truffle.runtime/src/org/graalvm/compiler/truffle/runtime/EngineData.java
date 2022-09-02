@@ -38,7 +38,6 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Compi
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompileOnly;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.FirstTierCompilationThreshold;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.FirstTierMinInvokeThreshold;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Inlining;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MinInvokeThreshold;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Mode;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MultiTier;
@@ -55,8 +54,6 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Split
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingTraceEvents;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceCompilation;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceCompilationDetails;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceFailedSplits;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceSplitting;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceSplittingSummary;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceTransferToInterpreter;
 import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.getPolyglotOptionValue;
@@ -104,14 +101,10 @@ public final class EngineData {
     @CompilationFinal public boolean splittingDumpDecisions;
     @CompilationFinal public boolean splittingTraceEvents;
     @CompilationFinal public boolean traceSplittingSummary;
-    @CompilationFinal public boolean traceSplits;
     @CompilationFinal public int splittingMaxCalleeSize;
     @CompilationFinal public int splittingMaxPropagationDepth;
     @CompilationFinal public double splittingGrowthLimit;
     @CompilationFinal public int splittingMaxNumberOfSplitNodes;
-
-    // inlining options
-    @CompilationFinal public boolean inlining;
 
     // compilation options
     @CompilationFinal public boolean compilation;
@@ -136,6 +129,7 @@ public final class EngineData {
 
     EngineData(OptionValues options) {
         this.id = engineCounter.incrementAndGet();
+        // splitting options
         loadOptions(options);
 
         // the reporter requires options to be initialized
@@ -144,8 +138,6 @@ public final class EngineData {
 
     void loadOptions(OptionValues options) {
         this.engineOptions = options;
-
-        // splitting options
         this.splitting = getPolyglotOptionValue(options, Splitting) &&
                         getPolyglotOptionValue(options, Mode) != EngineModeEnum.LATENCY;
         this.splittingAllowForcedSplits = getPolyglotOptionValue(options, SplittingAllowForcedSplits);
@@ -154,13 +146,8 @@ public final class EngineData {
         this.splittingMaxPropagationDepth = getPolyglotOptionValue(options, SplittingMaxPropagationDepth);
         this.splittingTraceEvents = getPolyglotOptionValue(options, SplittingTraceEvents);
         this.traceSplittingSummary = getPolyglotOptionValue(options, TraceSplittingSummary);
-        this.traceSplits = getPolyglotOptionValue(options, TraceSplitting);
         this.splittingGrowthLimit = getPolyglotOptionValue(options, SplittingGrowthLimit);
         this.splittingMaxNumberOfSplitNodes = getPolyglotOptionValue(options, SplittingMaxNumberOfSplitNodes);
-
-        // inlining options
-        this.inlining = getPolyglotOptionValue(options, Inlining) &&
-                        getPolyglotOptionValue(options, Mode) != EngineModeEnum.LATENCY;
 
         // compilation options
         this.compilation = getPolyglotOptionValue(options, Compilation);
