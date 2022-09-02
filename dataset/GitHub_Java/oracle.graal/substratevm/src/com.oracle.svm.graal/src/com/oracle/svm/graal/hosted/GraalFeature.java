@@ -69,7 +69,6 @@ import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
-import org.graalvm.compiler.phases.common.IterativeConditionalEliminationPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.util.Providers;
@@ -657,9 +656,6 @@ public final class GraalFeature implements Feature {
 
         StrengthenStampsPhase strengthenStamps = new RuntimeStrengthenStampsPhase(config.getUniverse(), objectReplacer);
         CanonicalizerPhase canonicalizer = CanonicalizerPhase.create();
-        IterativeConditionalEliminationPhase conditionalElimination = new IterativeConditionalEliminationPhase(canonicalizer, true);
-        ConvertDeoptimizeToGuardPhase convertDeoptimizeToGuard = new ConvertDeoptimizeToGuardPhase();
-
         for (CallTreeNode node : methods.values()) {
             StructuredGraph graph = node.graph;
             if (graph != null) {
@@ -668,15 +664,8 @@ public final class GraalFeature implements Feature {
                     removeUnreachableInvokes(node);
                     strengthenStamps.apply(graph);
                     canonicalizer.apply(graph, hostedProviders);
-
-                    conditionalElimination.apply(graph, hostedProviders);
-
-                    /*
-                     * ConvertDeoptimizeToGuardPhase was already executed after parsing, but
-                     * optimizations applied in between can provide new potential.
-                     */
-                    convertDeoptimizeToGuard.apply(graph, hostedProviders);
-
+                    GraalConfiguration.instance().runAdditionalCompilerPhases(graph, this);
+                    canonicalizer.apply(graph, hostedProviders);
                     graphEncoder.prepare(graph);
                 } catch (Throwable ex) {
                     debug.handle(ex);
