@@ -40,6 +40,7 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 public abstract class InvokeVirtualNode extends QuickNode {
 
     final Method resolutionSeed;
+    final int vtableIndex;
 
     static final int INLINE_CACHE_SIZE_LIMIT = 5;
 
@@ -49,7 +50,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
     @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "receiver.getKlass() == cachedKlass", assumptions = "resolvedMethod.getAssumption()")
     Object callVirtualDirect(StaticObject receiver, Object[] args,
                     @Cached("receiver.getKlass()") Klass cachedKlass,
-                    @Cached("methodLookup(receiver, resolutionSeed)") MethodVersion resolvedMethod,
+                    @Cached("methodLookup(receiver, vtableIndex)") MethodVersion resolvedMethod,
                     @Cached("create(resolvedMethod.getCallTarget())") DirectCallNode directCallNode) {
         return directCallNode.call(args);
     }
@@ -58,7 +59,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
     Object callVirtualIndirect(StaticObject receiver, Object[] arguments,
                     @Cached("create()") IndirectCallNode indirectCallNode) {
         // vtable lookup.
-        MethodVersion target = methodLookup(receiver, resolutionSeed);
+        MethodVersion target = methodLookup(receiver, vtableIndex);
         if (!target.getMethod().hasCode()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             Meta meta = receiver.getKlass().getMeta();
@@ -71,17 +72,14 @@ public abstract class InvokeVirtualNode extends QuickNode {
         super(top, curBCI, opcode);
         assert !resolutionSeed.isStatic();
         this.resolutionSeed = resolutionSeed;
+        this.vtableIndex = resolutionSeed.getVTableIndex();
     }
 
-    static MethodVersion methodLookup(StaticObject receiver, Method resolutionSeed) {
+    static MethodVersion methodLookup(StaticObject receiver, int vtableIndex) {
         // Suprisingly, invokeVirtuals can try to invoke interface methods, even non-default
         // ones.
         // Good thing is, miranda methods are taken care of at vtable creation !
         Klass receiverKlass = receiver.getKlass();
-        int vtableIndex = resolutionSeed.getVTableIndex();
-        if (resolutionSeed.getNameAsString().equals("test")) {
-            System.out.println("method lookup for test method with vtable index: " + vtableIndex);
-        }
         if (receiverKlass.isArray()) {
             return receiverKlass.getSuperKlass().vtableLookup(vtableIndex).getMethodVersion();
         }

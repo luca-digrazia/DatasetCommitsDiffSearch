@@ -44,7 +44,7 @@ public final class InvokeStaticNode extends QuickNode {
     @Child private DirectCallNode directCallNode;
 
     public InvokeStaticNode(Method method, int top, int curBCI) {
-        super(top, curBCI);
+        super(top, curBCI, Bytecodes.INVOKESTATIC);
         assert method.isStatic();
         this.method = method.getMethodVersion();
         this.callsDoPrivileged = method.getMeta().java_security_AccessController.equals(method.getDeclaringKlass()) &&
@@ -96,10 +96,5 @@ public final class InvokeStaticNode extends QuickNode {
     @Override
     public boolean removedByRedefintion() {
         return method.getMethod().isRemovedByRedefition();
-    }
-
-    @Override
-    public int getOpcode() {
-        return Bytecodes.INVOKESTATIC;
     }
 }

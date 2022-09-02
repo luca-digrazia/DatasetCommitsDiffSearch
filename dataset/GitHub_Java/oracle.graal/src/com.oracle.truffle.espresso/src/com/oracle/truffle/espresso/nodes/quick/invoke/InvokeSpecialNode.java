@@ -31,14 +31,13 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
-import com.oracle.truffle.espresso.runtime.StaticObject;
 
 public final class InvokeSpecialNode extends QuickNode {
     @CompilationFinal protected MethodVersion method;
     @Child private DirectCallNode directCallNode;
 
-    public InvokeSpecialNode(Method method, int top, int callerBCI) {
-        super(top, callerBCI);
+    public InvokeSpecialNode(Method method, int top, int callerBCI, int opcode) {
+        super(top, callerBCI, opcode);
         this.method = method.getMethodVersion();
         this.directCallNode = DirectCallNode.create(method.getCallTarget());
     }
@@ -54,8 +53,9 @@ public final class InvokeSpecialNode extends QuickNode {
             adoptChildren();
         }
         // TODO(peterssen): IsNull Node?
+        Object receiver = nullCheck(root.peekReceiver(frame, top, method.getMethod()));
         Object[] args = root.peekAndReleaseArguments(frame, top, true, method.getMethod().getParsedSignature());
-        nullCheck((StaticObject) args[0]); // nullcheck receiver
+        assert receiver == args[0] : "receiver must be the first argument";
         Object result = directCallNode.call(args);
         return (getResultAt() - top) + root.putKind(frame, getResultAt(), result, method.getMethod().getReturnKind());
     }
@@ -67,5 +67,10 @@ public final class InvokeSpecialNode extends QuickNode {
 
     private int getResultAt() {
         return top - Signatures.slotsForParameters(method.getMethod().getParsedSignature()) - 1; // -receiver
+    }
+
+    @Override
+    public boolean removedByRedefintion() {
+        return method.getMethod().isRemovedByRedefition();
     }
 }
