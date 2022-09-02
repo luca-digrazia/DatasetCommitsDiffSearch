@@ -440,7 +440,7 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
 
         void notifyLanguageFreed() {
             if (singleContext.isValid()) {
-                singleContext.invalidate();
+                // do not invalidate assumptions if engine is disposed anyway
                 cachedSingleContext = UNSET_CONTEXT;
                 cachedSingleLanguageContext = UNSET_CONTEXT;
             }
