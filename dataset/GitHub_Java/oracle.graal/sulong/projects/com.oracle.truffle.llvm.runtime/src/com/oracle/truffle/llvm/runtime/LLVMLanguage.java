@@ -146,7 +146,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     @CompilationFinal private LLVMFunctionCode sulongInitContextCode;
     @CompilationFinal private LLVMFunction sulongDisposeContext;
-    @CompilationFinal private LLVMFunctionCode startFunctionCode;
 
     {
         /*
@@ -418,15 +417,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
 
     public void setSulongDisposeContext(LLVMFunction function) {
         this.sulongDisposeContext = function;
-    }
-
-    public void setStartFunctionCode(LLVMFunctionCode startFunctionCode) {
-        this.startFunctionCode = startFunctionCode;
-    }
-
-    public LLVMFunctionCode getStartFunctionCode() {
-        assert startFunctionCode != null;
-        return startFunctionCode;
     }
 
     private CallTarget freeGlobalBlocks;
