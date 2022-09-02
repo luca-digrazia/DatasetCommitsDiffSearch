@@ -73,6 +73,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -91,7 +92,6 @@ import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.Source;
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractHostService;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
 import org.graalvm.polyglot.io.ProcessHandler;
@@ -107,6 +107,7 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleLogger;
+import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.SpecializationStatistics;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
@@ -171,6 +172,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
 
     @CompilationFinal OptionValuesImpl engineOptionValues;
 
+    ClassLoader contextClassLoader;     // effectively final
     // true if engine is implicitly bound to a context and therefore closed with the context
     boolean boundEngine;    // effectively final
 
@@ -185,10 +187,12 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
     final ReferenceQueue<PolyglotContextImpl> contextsReferenceQueue = new ReferenceQueue<>();
     private final AtomicReference<PolyglotContextImpl> preInitializedContext = new AtomicReference<>();
 
+    PolyglotLanguage hostLanguage;
     @CompilationFinal Assumption singleContext = Truffle.getRuntime().createAssumption("Single context per engine.");
     final Assumption singleThreadPerContext = Truffle.getRuntime().createAssumption("Single thread per context of an engine.");
     final Assumption noInnerContexts = Truffle.getRuntime().createAssumption("No inner contexts.");
     final Assumption customHostClassLoader = Truffle.getRuntime().createAssumption("No custom host class loader needed.");
+    final Assumption neverInterrupted = Truffle.getRuntime().createAssumption("No context interrupted.");
 
     volatile OptionDescriptors allOptions;
     volatile boolean closed;
@@ -196,6 +200,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
     // field used by the TruffleRuntime implementation to persist state per Engine
     final Object runtimeData;
     Map<String, Level> logLevels;    // effectively final
+    HostClassCache hostClassCache; // effectively final
     private volatile Object engineLoggers;
     private volatile Supplier<Map<String, Collection<? extends TruffleFile.FileTypeDetector>>> fileTypeDetectorsSupplier;
 
@@ -204,6 +209,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
     final boolean conservativeContextReferences;
     private final MessageTransport messageInterceptor;
     private volatile int asynchronousStackDepth = 0;
+    @CompilationFinal private HostToGuestCodeCache hostToGuestCodeCache;
 
     final SpecializationStatistics specializationStatistics;
     Function<String, TruffleLogger> engineLoggerSupplier;   // effectively final
@@ -218,28 +224,21 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
      */
     @CompilationFinal private volatile Node noLocation;
 
-    final PolyglotLanguageInstance hostLanguageInstance;
-    @CompilationFinal AbstractHostService host; // effectively final
-    final boolean hostLanguageOnly;
-
-    @SuppressWarnings("unchecked")
     PolyglotEngineImpl(PolyglotImpl impl, DispatchOutputStream out, DispatchOutputStream err, InputStream in, OptionValuesImpl engineOptions,
                     Map<String, Level> logLevels,
                     EngineLoggerProvider engineLogger, Map<String, String> options,
-                    boolean allowExperimentalOptions, boolean boundEngine, boolean preInitialization,
-                    MessageTransport messageInterceptor, Handler logHandler,
-                    TruffleLanguage<Object> hostImpl, boolean hostLanguageOnly) {
+                    boolean allowExperimentalOptions, ClassLoader contextClassLoader, boolean boundEngine, boolean preInitialization,
+                    MessageTransport messageInterceptor, Handler logHandler) {
         this.messageInterceptor = messageInterceptor;
         this.impl = impl;
         this.out = out;
         this.err = err;
         this.in = in;
+        this.contextClassLoader = contextClassLoader;
         this.logHandler = logHandler;
         this.logLevels = logLevels;
         this.boundEngine = boundEngine;
         this.storeEngine = RUNTIME.isStoreEnabled(engineOptions);
-        this.hostLanguageOnly = hostLanguageOnly;
-        this.hostLanguageInstance = createHostLanguageInstance(hostImpl);
 
         Map<String, LanguageInfo> languageInfos = new LinkedHashMap<>();
         this.idToLanguage = Collections.unmodifiableMap(initializeLanguages(languageInfos));
@@ -316,9 +315,13 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         }
     }
 
-    private PolyglotLanguageInstance createHostLanguageInstance(TruffleLanguage<Object> hostImpl) {
-        PolyglotLanguage language = createLanguage(LanguageCache.createHostLanguageCache(hostImpl), HOST_LANGUAGE_INDEX, null);
-        return language.allocateInstance(new OptionValuesImpl(this, language.getOptionsInternal(), false));
+    HostToGuestCodeCache getHostToGuestCodeCache() {
+        HostToGuestCodeCache cache = this.hostToGuestCodeCache;
+        if (cache == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            hostToGuestCodeCache = cache = new HostToGuestCodeCache();
+        }
+        return cache;
     }
 
     Node getUncachedLocation() {
@@ -347,15 +350,13 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         this.out = prototype.out;
         this.err = prototype.err;
         this.in = prototype.in;
-        this.host = prototype.host;
+        this.contextClassLoader = prototype.contextClassLoader;
         this.boundEngine = prototype.boundEngine;
         this.logHandler = prototype.logHandler;
         this.runtimeData = RUNTIME.createRuntimeData(prototype.engineOptionValues, prototype.engineLoggerSupplier);
         this.engineLoggerSupplier = prototype.engineLoggerSupplier;
 
         Map<String, LanguageInfo> languageInfos = new LinkedHashMap<>();
-        this.hostLanguageOnly = prototype.hostLanguageOnly;
-        this.hostLanguageInstance = createHostLanguageInstance(prototype.hostLanguageInstance.spi);
         this.idToLanguage = Collections.unmodifiableMap(initializeLanguages(languageInfos));
         this.idToInternalLanguageInfo = Collections.unmodifiableMap(languageInfos);
         this.contextLength = idToLanguage.size() + 1 /* +1 for host language */;
@@ -470,11 +471,12 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                     EngineLoggerProvider logSupplier,
                     Map<String, String> newOptions,
                     boolean newAllowExperimentalOptions,
-                    boolean newBoundEngine, Handler newLogHandler) {
+                    ClassLoader newContextClassLoader, boolean newBoundEngine, Handler newLogHandler) {
         CompilerAsserts.neverPartOfCompilation();
         this.out = newOut;
         this.err = newErr;
         this.in = newIn;
+        this.contextClassLoader = newContextClassLoader;
         boolean wasBound = this.boundEngine;
         this.boundEngine = newBoundEngine;
         this.logHandler = newLogHandler;
@@ -733,9 +735,6 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
     }
 
     private Map<String, PolyglotInstrument> initializeInstruments(Map<String, InstrumentInfo> infos) {
-        if (hostLanguageOnly) {
-            return Collections.emptyMap();
-        }
         Map<String, PolyglotInstrument> instruments = new LinkedHashMap<>();
         List<InstrumentCache> cachedInstruments = InstrumentCache.load();
         for (InstrumentCache instrumentCache : cachedInstruments) {
@@ -756,9 +755,6 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
     }
 
     private Map<String, PolyglotLanguage> initializeLanguages(Map<String, LanguageInfo> infos) {
-        if (hostLanguageOnly) {
-            return Collections.emptyMap();
-        }
         Map<String, PolyglotLanguage> polyglotLanguages = new LinkedHashMap<>();
         Map<String, LanguageCache> cachedLanguages = new HashMap<>();
         List<LanguageCache> sortedLanguages = new ArrayList<>();
@@ -792,6 +788,8 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                 visitLanguage(initErrors, cachedLanguages, serializedLanguages, language);
             }
         }
+
+        this.hostLanguage = createLanguage(LanguageCache.createHostLanguageCache(), HOST_LANGUAGE_INDEX, null);
 
         int index = 1;
         for (LanguageCache cache : serializedLanguages) {
@@ -1013,8 +1011,8 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
     <T extends TruffleLanguage<?>> PolyglotLanguage getLanguage(Class<T> languageClass, boolean fail) {
         PolyglotLanguage foundLanguage = classToLanguage.get(languageClass.getName());
         if (foundLanguage == null) {
-            if (languageClass == hostLanguageInstance.spi.getClass()) {
-                return hostLanguageInstance.language;
+            if (languageClass == HostLanguage.class) {
+                return hostLanguage;
             }
             if (fail) {
                 Set<String> languageNames = classToLanguage.keySet();
@@ -1036,7 +1034,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         return null;
     }
 
-    void ensureClosed(boolean force, boolean inShutdownHook) {
+    void ensureClosed(boolean cancelIfExecuting, boolean inShutdownHook) {
         synchronized (this.lock) {
             if (!closed) {
                 workContextReferenceQueue();
@@ -1046,11 +1044,11 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                  * contexts.
                  */
                 if (!inShutdownHook) {
-                    if (!force) {
+                    if (!cancelIfExecuting) {
                         for (PolyglotContextImpl context : localContexts) {
                             assert !Thread.holdsLock(context);
                             synchronized (context) {
-                                if (context.hasActiveOtherThread(false) && !context.state.isClosing()) {
+                                if (context.hasActiveOtherThread(false) && context.closingThread == null) {
                                     throw PolyglotEngineException.illegalState(String.format("One of the context instances is currently executing. " +
                                                     "Set cancelIfExecuting to true to stop the execution on this thread."));
                                 }
@@ -1059,17 +1057,15 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                     }
                     for (PolyglotContextImpl context : localContexts) {
                         assert !Thread.holdsLock(context);
-                        if (force) {
-                            context.cancel(false, null);
-                        } else {
-                            boolean closeCompleted = context.closeImpl(true);
-                            if (!closeCompleted) {
-                                throw PolyglotEngineException.illegalState(String.format("One of the context instances is currently executing. " +
-                                                "Set cancelIfExecuting to true to stop the execution on this thread."));
-                            }
-                            context.finishCleanup();
-                            context.checkSubProcessFinished();
+                        boolean closeCompleted = context.closeImpl(cancelIfExecuting, cancelIfExecuting, true);
+                        if (!closeCompleted && !cancelIfExecuting) {
+                            throw PolyglotEngineException.illegalState(String.format("One of the context instances is currently executing. " +
+                                            "Set cancelIfExecuting to true to stop the execution on this thread."));
                         }
+                        context.checkSubProcessFinished();
+                    }
+                    if (cancelIfExecuting) {
+                        cancel(localContexts);
                     }
                 }
 
@@ -1285,6 +1281,30 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         ENGINES.clear();
     }
 
+    void initializeHostAccess(HostAccess policy) {
+        assert Thread.holdsLock(this.lock);
+        assert policy != null;
+        HostClassCache cache = HostClassCache.findOrInitialize(getAPIAccess(), policy, contextClassLoader);
+        if (this.hostClassCache != null) {
+            if (this.hostClassCache.hostAccess.equals(cache.hostAccess)) {
+                /*
+                 * The cache can be effectively be reused if the same host access configuration
+                 * applies.
+                 */
+            } else {
+                throw PolyglotEngineException.illegalState("Found different host access configuration for a context with a shared engine. " +
+                                "The host access configuration must be the same for all contexts of an engine. " +
+                                "Provide the same host access configuration using the Context.Builder.allowHostAccess method when constructing the context.");
+            }
+        } else {
+            this.hostClassCache = cache;
+        }
+    }
+
+    HostClassCache getHostClassCache() {
+        return hostClassCache;
+    }
+
     @TruffleBoundary
     int getAsynchronousStackDepth() {
         return asynchronousStackDepth;
@@ -1337,60 +1357,75 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         }
     }
 
-    static void cancel(PolyglotContextImpl context, List<Future<Void>> cancelationFutures) {
-        cancelOrInterrupt(context, cancelationFutures, 0, null);
+    void cancel(List<PolyglotContextImpl> localContexts) {
+        cancelOrInterrupt(localContexts, 0, null);
     }
 
-    @SuppressWarnings("SynchronizationOnLocalVariableOrMethodParameter")
-    static boolean cancelOrInterrupt(PolyglotContextImpl context, List<Future<Void>> futures, long startMillis, Duration timeout) {
-        try {
-            synchronized (context) {
-                assert context.singleThreaded.isValid() || !context.isActive(Thread.currentThread()) : "Cancel while entered is only allowed for single-threaded contexts!";
-                context.sendInterrupt();
+    boolean cancelOrInterrupt(List<PolyglotContextImpl> localContexts, long startMillis, Duration timeout) {
+        boolean cancelling = false;
+        for (PolyglotContextImpl context : localContexts) {
+            if (context.cancelling || context.interrupting) {
+                cancelling = true;
+                break;
             }
-            if (timeout == null) {
-                boolean closeCompleted = context.closeImpl(true);
-                assert closeCompleted : "Close was not completed!";
-            } else {
-                return waitForThreads(context, startMillis, timeout);
-            }
-        } finally {
-            for (Future<Void> future : futures) {
-                boolean timedOut = false;
-                try {
-                    if (timeout != null) {
-                        long timeElapsed = System.currentTimeMillis() - startMillis;
-                        long timeoutMillis = timeout.toMillis();
-                        if (timeElapsed < timeoutMillis) {
-                            try {
-                                future.get(timeoutMillis - timeElapsed, TimeUnit.MILLISECONDS);
-                            } catch (TimeoutException te) {
-                                timedOut = true;
-                            }
-                        } else {
-                            timedOut = true;
-                        }
-                    } else {
-                        future.get();
-                    }
-                } catch (ExecutionException | InterruptedException e) {
-                    throw CompilerDirectives.shouldNotReachHere(e);
+        }
+        if (cancelling) {
+            List<Future<Void>> futures = new ArrayList<>();
+            try {
+                for (PolyglotContextImpl context : localContexts) {
+                    futures.addAll(context.submitCancellationThreadLocals());
                 }
-                if (timedOut) {
-                    return false;
+                for (PolyglotContextImpl context : localContexts) {
+                    context.sendInterrupt();
+                }
+                if (timeout == null) {
+                    for (PolyglotContextImpl context : localContexts) {
+                        context.waitForClose();
+                    }
+                } else {
+                    long cancelTimeoutMillis = timeout != Duration.ZERO ? timeout.toMillis() : 0;
+                    boolean success = true;
+                    for (PolyglotContextImpl context : localContexts) {
+                        if (!context.waitForThreads(startMillis, cancelTimeoutMillis)) {
+                            success = false;
+                        }
+                    }
+                    return success;
+                }
+            } finally {
+                for (Future<Void> future : futures) {
+                    AtomicBoolean timedOut = new AtomicBoolean();
+                    TruffleSafepoint.setBlockedThreadInterruptible(getUncachedLocation(), new TruffleSafepoint.Interruptible<Future<Void>>() {
+                        @Override
+                        public void apply(Future<Void> cancelationFuture) throws InterruptedException {
+                            try {
+                                if (timeout != null) {
+                                    long timeElapsed = System.currentTimeMillis() - startMillis;
+                                    long timeoutMillis = timeout.toMillis();
+                                    if (timeElapsed < timeoutMillis) {
+                                        try {
+                                            cancelationFuture.get(timeoutMillis - timeElapsed, TimeUnit.MILLISECONDS);
+                                        } catch (TimeoutException te) {
+                                            timedOut.set(true);
+                                        }
+                                    } else {
+                                        timedOut.set(true);
+                                    }
+                                } else {
+                                    cancelationFuture.get();
+                                }
+                            } catch (ExecutionException e) {
+                                throw CompilerDirectives.shouldNotReachHere(e);
+                            }
+                        }
+                    }, future);
+                    if (timedOut.get()) {
+                        return false;
+                    }
                 }
             }
         }
         return true;
-    }
-
-    private static boolean waitForThreads(PolyglotContextImpl context, long startMillis, Duration timeout) {
-        long cancelTimeoutMillis = timeout != Duration.ZERO ? timeout.toMillis() : 0;
-        boolean success = true;
-        if (!context.waitForThreads(startMillis, cancelTimeoutMillis)) {
-            success = false;
-        }
-        return success;
     }
 
     @SuppressWarnings("serial")
@@ -1495,6 +1530,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                     throw PolyglotEngineException.illegalArgument("Automatically created engines cannot be used to create more than one context. " +
                                     "Use Engine.newBuilder().build() to construct a new engine and pass it using Context.newBuilder().engine(engine).build().");
                 }
+                initializeHostAccess(hostAccess);
             }
             EconomicSet<String> allowedLanguages = EconomicSet.create();
             if (onlyLanguages.length == 0) {
@@ -1559,8 +1595,8 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
             PolyglotContextConfig config = new PolyglotContextConfig(this, useOut, useErr, useIn,
                             allowHostLookup, polyglotAccess, allowNativeAccess, allowCreateThread, allowHostClassLoading,
                             allowExperimentalOptions, classFilter, arguments, allowedLanguages, options, fs, internalFs, useHandler, allowCreateProcess, useProcessHandler,
-                            environmentAccess, environment, zone, polyglotLimits, hostClassLoader, hostAccess);
-            context = loadPreinitializedContext(config);
+                            environmentAccess, environment, zone, polyglotLimits, hostClassLoader);
+            context = loadPreinitializedContext(config, hostAccess);
             replayEvents = false;
             contextAddedToEngine = false;
             if (context == null) {
@@ -1610,7 +1646,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
             // events must be replayed without engine lock.
             final PolyglotContextImpl prev;
             try {
-                prev = enter(context, true, getUncachedLocation(), true, false);
+                prev = enter(context, getUncachedLocation(), true);
             } catch (Throwable t) {
                 throw PolyglotImpl.guestToHostException(context.getHostContext(), t, false);
             }
@@ -1620,7 +1656,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                 throw PolyglotImpl.guestToHostException(context.getHostContext(), t, true);
             } finally {
                 try {
-                    leave(prev, context, true);
+                    leave(prev, context);
                 } catch (Throwable t) {
                     throw PolyglotImpl.guestToHostException(context.getHostContext(), t, false);
                 }
@@ -1630,7 +1666,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         return context;
     }
 
-    private PolyglotContextImpl loadPreinitializedContext(PolyglotContextConfig config) {
+    private PolyglotContextImpl loadPreinitializedContext(PolyglotContextConfig config, HostAccess hostAccess) {
         PolyglotContextImpl context = preInitializedContext.getAndSet(null);
         if (!getEngineOptionValues().get(PolyglotEngineOptions.UsePreInitializedContext)) {
             context = null;
@@ -1656,7 +1692,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                 synchronized (this.lock) {
                     removeContext(context);
                 }
-                if (patchResult && arePreInitializedLanguagesCompatible(context, config)) {
+                if (patchResult) {
                     Collection<PolyglotInstrument> toCreate = null;
                     for (PolyglotInstrument instrument : idToInstrument.values()) {
                         if (instrument.getOptionValuesIfExists() != null) {
@@ -1673,13 +1709,14 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                         addContext(context);
                     }
                 } else {
-                    context.closeImpl(false);
+                    context.closeImpl(false, false, false);
                     PolyglotContextImpl.disposeStaticContext(null);
                     config.fileSystem = oldFileSystem;
                     config.internalFileSystem = oldInternalFileSystem;
                     PolyglotEngineImpl engine = new PolyglotEngineImpl(this);
                     ensureClosed(true, false);
                     synchronized (engine.lock) {
+                        engine.initializeHostAccess(hostAccess);
                         context = new PolyglotContextImpl(engine, config);
                         engine.addContext(context);
                     }
@@ -1687,22 +1724,6 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
             }
         }
         return context;
-    }
-
-    private static boolean arePreInitializedLanguagesCompatible(PolyglotContextImpl context, PolyglotContextConfig config) {
-        Map<String, PolyglotLanguageContext> preInitializedLanguages = new HashMap<>();
-        for (PolyglotLanguageContext languageContext : context.contexts) {
-            if (languageContext.isInitialized() && !languageContext.language.isHost()) {
-                preInitializedLanguages.put(languageContext.language.getId(), languageContext);
-            }
-        }
-        for (String allowedLanguage : config.allowedPublicLanguages) {
-            PolyglotLanguageContext languageContext = preInitializedLanguages.remove(allowedLanguage);
-            if (languageContext != null) {
-                preInitializedLanguages.keySet().removeAll(languageContext.getAccessibleLanguages(true).keySet());
-            }
-        }
-        return preInitializedLanguages.isEmpty();
     }
 
     private void checkTruffleRuntime() {
@@ -1776,7 +1797,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
 
     Object enterIfNeeded(PolyglotContextImpl context, boolean pollSafepoint) {
         if (needsEnter(context)) {
-            return enter(context, true, getUncachedLocation(), pollSafepoint, false);
+            return enter(context, getUncachedLocation(), pollSafepoint);
         }
         assert PolyglotContextImpl.currentNotEntered() != null;
         return NO_ENTER;
@@ -1784,11 +1805,11 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
 
     void leaveIfNeeded(Object prev, PolyglotContextImpl context) {
         if (prev != NO_ENTER) {
-            leave((PolyglotContextImpl) prev, context, true);
+            leave((PolyglotContextImpl) prev, context);
         }
     }
 
-    PolyglotContextImpl enter(PolyglotContextImpl context, boolean notifyEnter, Node safepointLocation, boolean pollSafepoint, boolean deactivateSafepoints) {
+    PolyglotContextImpl enter(PolyglotContextImpl context, Node safepointLocation, boolean pollSafepoint) {
         PolyglotContextImpl prev;
         PolyglotThreadInfo info = context.cachedThreadInfo;
         boolean enterReverted = false;
@@ -1804,13 +1825,11 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                  * submitted cached thread info will be null and we will enter slow path, where the
                  * safepoint is polled.
                  */
-                if (notifyEnter) {
-                    try {
-                        info.notifyEnter(this, context);
-                    } catch (Throwable e) {
-                        info.leaveInternal(prev);
-                        throw e;
-                    }
+                try {
+                    info.notifyEnter(this, context);
+                } catch (Throwable e) {
+                    info.leaveInternal(prev);
+                    throw e;
                 }
                 return prev;
             } else {
@@ -1828,27 +1847,24 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
          * thread. The slow path acquires context lock to ensure ordering for context operations
          * like close.
          */
-        prev = context.enterThreadChanged(notifyEnter, safepointLocation, enterReverted, pollSafepoint, deactivateSafepoints);
+        prev = context.enterThreadChanged(safepointLocation, enterReverted, pollSafepoint);
         assert verifyContext(context);
         return prev;
     }
 
     private static boolean verifyContext(PolyglotContextImpl context) {
-        PolyglotContextImpl.State localState = context.state;
-        return context == PolyglotContextImpl.currentNotEntered() || localState.isInvalidOrClosed();
+        return context == PolyglotContextImpl.currentNotEntered() || context.closed || context.invalid;
     }
 
-    void leave(PolyglotContextImpl prev, PolyglotContextImpl context, boolean notifyLeft) {
-        assert context.state.isClosed() ||
+    void leave(PolyglotContextImpl prev, PolyglotContextImpl context) {
+        assert context.closed || context.closingThread == Thread.currentThread() ||
                         PolyglotContextImpl.currentNotEntered() == context : "Cannot leave context that is currently not entered. Forgot to enter or leave a context?";
 
         boolean entered = true;
         PolyglotThreadInfo info = context.cachedThreadInfo;
         if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, info.getThread() == Thread.currentThread())) {
             try {
-                if (notifyLeft) {
-                    info.notifyLeave(this, context);
-                }
+                info.notifyLeave(this, context);
             } finally {
                 info.leaveInternal(prev);
                 entered = false;
@@ -1858,7 +1874,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                 return;
             }
         }
-        context.leaveThreadChanged(prev, notifyLeft, entered);
+        context.leaveThreadChanged(prev, entered);
     }
 
     static final class LogConfig {
