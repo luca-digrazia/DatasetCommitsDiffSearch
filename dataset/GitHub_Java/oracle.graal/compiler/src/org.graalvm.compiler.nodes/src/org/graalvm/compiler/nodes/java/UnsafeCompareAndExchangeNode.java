@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,77 +24,39 @@
  */
 package org.graalvm.compiler.nodes.java;
 
-import jdk.vm.ci.meta.JavaKind;
-import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.core.common.memory.MemoryOrderMode;
+import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
+import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.memory.AbstractMemoryCheckpoint;
-import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
-import org.graalvm.compiler.nodes.spi.Lowerable;
-import org.graalvm.compiler.nodes.spi.LoweringTool;
+import org.graalvm.compiler.nodes.spi.VirtualizerTool;
 import org.graalvm.word.LocationIdentity;
 
-import static org.graalvm.compiler.nodeinfo.InputType.Memory;
-import static org.graalvm.compiler.nodeinfo.InputType.Value;
-import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_8;
-import static org.graalvm.compiler.nodeinfo.NodeSize.SIZE_8;
+import jdk.vm.ci.meta.JavaKind;
 
 /**
- * Represents an atomic compare-and-swap operation.
- * The result is the current value of the memory location that was compared.
+ * Represents an atomic compare-and-swap operation. The result is the current value of the memory
+ * location that was compared.
  */
-@NodeInfo(allowedUsageTypes = {Value, Memory}, cycles = CYCLES_8, size = SIZE_8)
-public final class UnsafeCompareAndExchangeNode extends AbstractMemoryCheckpoint implements Lowerable, MemoryCheckpoint.Single {
+@NodeInfo
+public final class UnsafeCompareAndExchangeNode extends AbstractUnsafeCompareAndSwapNode {
 
     public static final NodeClass<UnsafeCompareAndExchangeNode> TYPE = NodeClass.create(UnsafeCompareAndExchangeNode.class);
-    @Input ValueNode object;
-    @Input ValueNode offset;
-    @Input ValueNode expected;
-    @Input ValueNode newValue;
 
-    private final JavaKind valueKind;
-    private final LocationIdentity locationIdentity;
-
-    public UnsafeCompareAndExchangeNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, JavaKind valueKind, LocationIdentity locationIdentity) {
-        super(TYPE, expected.stamp(NodeView.DEFAULT).meet(newValue.stamp(NodeView.DEFAULT)));
-        assert expected.stamp(NodeView.DEFAULT).isCompatible(newValue.stamp(NodeView.DEFAULT));
-        this.object = object;
-        this.offset = offset;
-        this.expected = expected;
-        this.newValue = newValue;
-        this.valueKind = valueKind;
-        this.locationIdentity = locationIdentity;
+    public UnsafeCompareAndExchangeNode(ValueNode object, ValueNode offset, ValueNode expected, ValueNode newValue, JavaKind valueKind, LocationIdentity locationIdentity,
+                    MemoryOrderMode memoryOrder) {
+        super(TYPE, meetInputs(expected.stamp(NodeView.DEFAULT), newValue.stamp(NodeView.DEFAULT)), object, offset, expected, newValue, valueKind, locationIdentity, memoryOrder);
     }
 
-    public ValueNode object() {
-        return object;
-    }
-
-    public ValueNode offset() {
-        return offset;
-    }
-
-    public ValueNode expected() {
-        return expected;
-    }
-
-    public ValueNode newValue() {
-        return newValue;
-    }
-
-    public JavaKind getValueKind() {
-        return valueKind;
+    private static Stamp meetInputs(Stamp expected, Stamp newValue) {
+        assert expected.isCompatible(newValue);
+        return expected.unrestricted().meet(newValue.unrestricted());
     }
 
     @Override
-    public LocationIdentity getLocationIdentity() {
-        return locationIdentity;
-    }
-
-    @Override
-    public void lower(LoweringTool tool) {
-        tool.getLowerer().lower(this, tool);
+    protected void finishVirtualize(VirtualizerTool tool, LogicNode equalsNode, ValueNode currentValue) {
+        tool.replaceWith(currentValue);
     }
 }
