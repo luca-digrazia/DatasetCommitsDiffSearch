@@ -66,6 +66,13 @@ public abstract class LayoutStrategy {
     protected LayoutStrategy() {
     }
 
+    /** @since 0.18 */
+    protected final LocationFactory getDefaultLocationFactory() {
+        return getDefaultLocationFactory(0);
+    }
+
+    protected abstract LocationFactory getDefaultLocationFactory(long putFlags);
+
     protected abstract int getLocationOrdinal(Location location);
 
     /** @since 0.17 or earlier */
