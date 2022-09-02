@@ -189,12 +189,12 @@ public abstract class ThreadLocalHandshake {
                     phaser.arriveAndDeregister();
                     phaser.awaitAdvance(1);
 
-                    assert phaser.isTerminated();
+                    assert phaser.getUnarrivedParties() == 0;
                     onDone.accept(action);
                 } else {
                     phaser.arriveAndDeregister();
 
-                    if (phaser.isTerminated()) {
+                    if (phaser.getUnarrivedParties() == 0) {
                         onDone.accept(action);
                     }
                 }
@@ -213,7 +213,7 @@ public abstract class ThreadLocalHandshake {
 
         void deactivateThread() {
             phaser.arriveAndDeregister();
-            if (phaser.isTerminated()) {
+            if (phaser.getUnarrivedParties() == 0) {
                 onDone.accept(action);
             }
         }
@@ -242,7 +242,7 @@ public abstract class ThreadLocalHandshake {
         }
 
         public boolean isDone() {
-            return cancelled || phaser.isTerminated();
+            return cancelled || phaser.getUnarrivedParties() == 0;
         }
 
         public boolean cancel(boolean mayInterruptIfRunning) {
