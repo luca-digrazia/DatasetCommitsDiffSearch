@@ -33,9 +33,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.wasm.binary.exception.WasmTrap;
-import org.graalvm.polyglot.PolyglotException;
-import org.graalvm.polyglot.Value;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -107,13 +104,6 @@ public abstract class WasmTest {
                     test("(module (func (result i32) i64.const 0xdedababa i64.const 0xdedababa i64.ge_u))", expected(1)),
                     test("(module (func (result i32) i64.const 0xcafebabe i64.const 0xdedababa i64.ge_u))", expected(0)),
                     test("(module (func (result i32) f32.const 0.5 f32.const 0.5 f32.eq))", expected(1)),
-                    test("(module (func (result i32) f32.const 0.5 f32.const 0.1 f32.eq))", expected(0)),
-                    test("(module (func (result i32) f32.const -0.0 f32.const 0.0 f32.eq))", expected(1)),
-                    test("(module (func (result i32) f32.const nan f32.const nan f32.eq))", expected(0)),
-                    test("(module (func (result i32) f32.const 0.5 f32.const 0.5 f32.ne))", expected(0)),
-                    test("(module (func (result i32) f32.const 0.5 f32.const 0.1 f32.ne))", expected(1)),
-                    test("(module (func (result i32) f32.const -0.0 f32.const 0.0 f32.ne))", expected(0)),
-                    test("(module (func (result i32) f32.const nan f32.const nan f32.ne))", expected(1)),
                     test("(module (func (result i32) i32.const 0x12345678 i32.clz))", expected(3)),
                     test("(module (func (result i32) i32.const 0x1234567C i32.ctz))", expected(2)),
                     test("(module (func (result i32) i32.const 0x12345670 i32.ctz))", expected(4)),
@@ -157,8 +147,6 @@ public abstract class WasmTest {
                                     expected(42)),
                     test("(module (func (result i32) (local $l0 i32) i32.const 42 local.set $l0 local.get $l0))",
                                     expected(42)),
-                    test("(module (func (result i32) (local $l0 i32) i32.const 42 local.set $l0 local.get $l0 unreachable))",
-                                    expectedThrows("unreachable")),
     };
 
     private static TestElement test(String program, TestData data) {
@@ -175,28 +163,6 @@ public abstract class WasmTest {
 
     private static TestData expected(double expectedValue, double e) {
         return new TestData((result) -> Assert.assertEquals(expectedValue, result.as(Double.class), e));
-    }
-
-    private static TestData expectedThrows(String expectedErrorMessage) {
-        return new TestData(expectedErrorMessage);
-    }
-
-    protected void validateResult(TestData data, Value value) {
-        if (data.validator != null) {
-            data.validator.accept(value);
-        } else {
-            Assert.fail("Test was not supposed to return a value.");
-        }
-    }
-
-    protected void validateThrown(TestData data, PolyglotException e) throws PolyglotException {
-        if (data.expectedErrorMessage != null) {
-            if (!data.expectedErrorMessage.equals(e.getMessage())) {
-                throw e;
-            }
-        } else {
-            throw e;
-        }
     }
 
     @Test
@@ -229,7 +195,7 @@ public abstract class WasmTest {
         Thread.sleep(10000);
     }
 
-    protected abstract void runTest(TestElement element) throws Throwable;
+    protected abstract void runTest(TestElement element);
 
     protected static class TestElement {
         public String name;

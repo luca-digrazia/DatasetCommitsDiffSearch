@@ -36,7 +36,6 @@ import static com.oracle.truffle.wasm.binary.Instructions.END;
 import static com.oracle.truffle.wasm.binary.Instructions.F32_ADD;
 import static com.oracle.truffle.wasm.binary.Instructions.F32_CONST;
 import static com.oracle.truffle.wasm.binary.Instructions.F32_EQ;
-import static com.oracle.truffle.wasm.binary.Instructions.F32_NE;
 import static com.oracle.truffle.wasm.binary.Instructions.F64_CONST;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_ADD;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_AND;
@@ -84,7 +83,6 @@ import static com.oracle.truffle.wasm.binary.Instructions.I64_LT_S;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_LT_U;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_NE;
 import static com.oracle.truffle.wasm.binary.Instructions.NOP;
-import static com.oracle.truffle.wasm.binary.Instructions.UNREACHABLE;
 import static com.oracle.truffle.wasm.binary.Sections.CODE;
 import static com.oracle.truffle.wasm.binary.Sections.CUSTOM;
 import static com.oracle.truffle.wasm.binary.Sections.DATA;
@@ -293,7 +291,6 @@ public class BinaryReader extends BinaryStreamReader {
         do {
             opcode = read1() & 0xFF;
             switch (opcode) {
-                case UNREACHABLE:
                 case NOP:
                     break;
                 case BLOCK:
@@ -392,7 +389,6 @@ public class BinaryReader extends BinaryStreamReader {
                     state.push();
                     break;
                 case F32_EQ:
-                case F32_NE:
                     state.pop();
                     state.pop();
                     state.push();
