@@ -133,31 +133,29 @@ public abstract class LibraryFactory<T extends Library> {
      * Resets the state for native image generation.
      *
      * NOTE: this method is called reflectively by downstream projects.
-     *
-     * @param imageClassLoader class loader passed by the image builder.
      */
     @SuppressWarnings("unused")
-    private static void resetNativeImageState(ClassLoader imageClassLoader) {
+    private static void resetNativeImageState() {
         assert TruffleOptions.AOT : "Only supported during image generation";
         for (Map.Entry<Class<?>, LibraryFactory<?>> entry : LIBRARIES.entrySet()) {
             LibraryFactory<?> libraryFactory = entry.getValue();
-            removeClassesLoadedDuringImageBuild(libraryFactory.exportCache, imageClassLoader);
-            removeClassesLoadedDuringImageBuild(libraryFactory.uncachedCache, imageClassLoader);
-            removeClassesLoadedDuringImageBuild(libraryFactory.cachedCache, imageClassLoader);
+            clearNonTruffleClasses(libraryFactory.exportCache);
+            clearNonTruffleClasses(libraryFactory.uncachedCache);
+            clearNonTruffleClasses(libraryFactory.cachedCache);
             /* Reset the default exports. */
             LibraryFactory.externalDefaultProviders = null;
             libraryFactory.afterBuiltinDefaultExports = null;
             libraryFactory.beforeBuiltinDefaultExports = null;
         }
-        removeClassesLoadedDuringImageBuild(LIBRARIES, imageClassLoader);
-        removeClassesLoadedDuringImageBuild(ResolvedDispatch.CACHE, imageClassLoader);
-        removeClassesLoadedDuringImageBuild(ResolvedDispatch.REGISTRY, imageClassLoader);
+        clearNonTruffleClasses(LIBRARIES);
+        clearNonTruffleClasses(ResolvedDispatch.CACHE);
+        clearNonTruffleClasses(ResolvedDispatch.REGISTRY);
     }
 
-    private static void removeClassesLoadedDuringImageBuild(Map<Class<?>, ?> map, ClassLoader imageClassLoader) {
+    private static void clearNonTruffleClasses(Map<Class<?>, ?> map) {
         Class<?>[] classes = map.keySet().toArray(new Class<?>[0]);
         for (Class<?> clazz : classes) {
-            if (clazz.getClassLoader() == imageClassLoader) {
+            if (LibraryAccessor.jdkServicesAccessor().isNonTruffleClass(clazz)) {
                 map.remove(clazz);
             }
         }
