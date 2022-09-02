@@ -25,7 +25,6 @@ package com.oracle.truffle.espresso.jdwp.api;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
 
 import java.lang.ref.WeakReference;
-import java.util.Arrays;
 
 /**
  * Class that keeps an ID representation of all entities when
@@ -42,6 +41,7 @@ public final class Ids<T> {
      * The array will be expanded whenever an ID for a new entity
      * is requested.
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private WeakReference<T>[] objects;
 
     /**
@@ -50,7 +50,6 @@ public final class Ids<T> {
      */
     private final T nullObject;
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
     public Ids(T nullObject) {
         this.nullObject = nullObject;
         objects = new WeakReference[]{new WeakReference<>(nullObject)};
@@ -104,11 +103,12 @@ public final class Ids<T> {
     Generate a unique ID for a given object. Expand the underlying array and
     insert the object at the last index in the new array.
      */
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private synchronized long generateUniqueId(T object) {
         long id = uniqueID++;
         assert objects.length == id - 1;
-        
-        WeakReference<T>[] expandedArray = Arrays.copyOf(objects, objects.length + 1);
+
+        WeakReference<T>[] expandedArray = new WeakReference[objects.length + 1];
         System.arraycopy(objects, 1, expandedArray, 1, objects.length - 1);
         expandedArray[objects.length] = new WeakReference<>(object);
         objects = expandedArray;
