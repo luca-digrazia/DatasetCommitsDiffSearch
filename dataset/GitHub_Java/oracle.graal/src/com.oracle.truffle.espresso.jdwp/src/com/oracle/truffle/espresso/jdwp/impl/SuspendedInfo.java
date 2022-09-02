@@ -73,8 +73,4 @@ public class SuspendedInfo {
     public Frame getCallerFrame() {
         return stackFrames.length > 1 ? stackFrames[1].getFrame() : null;
     }
-
-    public void clearStepping() {
-        stepKind = null;
-    }
 }
