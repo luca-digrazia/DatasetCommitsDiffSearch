@@ -47,11 +47,11 @@ import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMLocalScope;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.NativeContextExtension;
+import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpen;
+import com.oracle.truffle.llvm.runtime.nodes.others.LLVMAccessSymbolNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 /**
@@ -121,24 +121,24 @@ public final class InitializeExternalNode extends LLVMNode {
      * functions/globals.
      */
     @ExplodeLoop
-    public void execute(LLVMContext context, LLVMLocalScope localScope, LLVMDLOpen.RTLDFlags rtldFlags) {
+    public void execute(LLVMContext context, LLVMLocalScope localScope) {
         LLVMScope globalScope = context.getGlobalScope();
         LLVMIntrinsicProvider intrinsicProvider = LLVMLanguage.getLanguage().getCapability(LLVMIntrinsicProvider.class);
-        NativeContextExtension nativeContextExtension = getNativeContextExtension(context);
+        NFIContextExtension nfiContextExtension = getNfiContextExtension(context);
         // functions and globals
         for (int i = 0; i < allocExternalSymbols.length; i++) {
             AllocExternalSymbolNode function = allocExternalSymbols[i];
-            LLVMPointer pointer = function.execute(localScope, globalScope, intrinsicProvider, nativeContextExtension, context, rtldFlags);
+            LLVMPointer pointer = function.execute(localScope, globalScope, intrinsicProvider, nfiContextExtension, context);
             // skip allocating fallbacks
             if (pointer == null) {
                 continue;
             }
-            context.initializeSymbol(symbols[i], pointer);
+            LLVMAccessSymbolNode.writeSymbol(symbols[i], pointer, context, this);
         }
     }
 
     @TruffleBoundary
-    private static NativeContextExtension getNativeContextExtension(LLVMContext context) {
-        return context.getContextExtensionOrNull(NativeContextExtension.class);
+    private static NFIContextExtension getNfiContextExtension(LLVMContext context) {
+        return context.getContextExtensionOrNull(NFIContextExtension.class);
     }
 }

@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
@@ -111,7 +112,7 @@ public final class InitializeModuleNode extends LLVMNode implements LLVMHasDatal
             FrameDescriptor frameDescriptor = new FrameDescriptor();
             LLVMStatementRootNode root = new LLVMStatementRootNode(language, StaticInitsNodeGen.create(destructors, "fini", moduleName), frameDescriptor,
                             parserResult.getRuntime().getNodeFactory().createStackAccess(frameDescriptor));
-            return LLVMLanguage.createCallTarget(root);
+            return Truffle.getRuntime().createCallTarget(root);
         } else {
             return null;
         }

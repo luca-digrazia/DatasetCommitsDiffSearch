@@ -35,6 +35,7 @@ import java.util.List;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.utilities.AssumedValue;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionSymbol;
 import com.oracle.truffle.llvm.parser.model.symbols.globals.GlobalVariable;
@@ -53,6 +54,7 @@ import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalContainer;
 import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.others.LLVMAccessSymbolNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.PointerType;
@@ -79,8 +81,8 @@ public final class InitializeSymbolsNode extends LLVMNode {
     @Child private LLVMAllocateNode allocRwSection;
 
     /**
-     * Contains the offsets of the {@link #globals} to be allocated. -1 represents a pointer type (
-     * {@link LLVMGlobalContainer}).
+     * Contains the offsets of the {@link #globals} to be allocated. -1 represents a pointer type
+     * ({@link LLVMGlobalContainer}).
      */
     @CompilationFinal(dimensions = 1) private final int[] globalOffsets;
     @CompilationFinal(dimensions = 1) private final boolean[] globalIsReadOnly;
@@ -164,8 +166,9 @@ public final class InitializeSymbolsNode extends LLVMNode {
         this.allocRwSection = rwSection.getAllocateNode(nodeFactory, "rwglobals_struct", false);
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void initializeSymbolTable(LLVMContext context) {
-        context.initializeSymbolTable(bitcodeID, globalLength);
+        context.registerSymbolTable(bitcodeID, new AssumedValue[globalLength]);
         context.registerScope(fileScope);
     }
 
@@ -196,7 +199,7 @@ public final class InitializeSymbolsNode extends LLVMNode {
                 CompilerDirectives.transferToInterpreter();
                 throw new IllegalStateException(String.format("Global variable %s not found", allocGlobal.getName()));
             }
-            if (!context.checkSymbol(allocGlobal)) {
+            if (!LLVMAccessSymbolNode.checkSymbol(allocGlobal, context, this)) {
                 // because of our symbol overriding support, it can happen that the global was
                 // already bound before to a different target location
                 LLVMPointer ref;
@@ -206,7 +209,7 @@ public final class InitializeSymbolsNode extends LLVMNode {
                     LLVMPointer base = globalIsReadOnly[i] ? roBase : rwBase;
                     ref = base.increment(globalOffsets[i]);
                 }
-                context.initializeSymbol(globals[i], ref);
+                LLVMAccessSymbolNode.writeSymbol(globals[i], ref, context, this);
                 List<LLVMSymbol> list = new ArrayList<>(1);
                 list.add(descriptor);
                 context.registerSymbolReverseMap(list, ref);
@@ -218,7 +221,7 @@ public final class InitializeSymbolsNode extends LLVMNode {
         for (int i = 0; i < allocFuncs.length; i++) {
             AllocSymbolNode allocSymbol = allocFuncs[i];
             LLVMPointer pointer = allocSymbol.allocate(context);
-            context.initializeSymbol(functions[i], pointer);
+            LLVMAccessSymbolNode.writeSymbol(functions[i], pointer, context, this);
             List<LLVMSymbol> list = new ArrayList<>(1);
             list.add(allocSymbol.symbol);
             context.registerSymbolReverseMap(list, pointer);

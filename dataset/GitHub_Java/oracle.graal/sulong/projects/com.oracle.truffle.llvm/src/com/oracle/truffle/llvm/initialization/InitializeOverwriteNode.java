@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.initialization;
 
+import java.util.ArrayList;
+
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.llvm.initialization.AllocExternalSymbolNodeFactory.AllocExistingLocalSymbolsNodeGen;
 import com.oracle.truffle.llvm.initialization.AllocExternalSymbolNodeFactory.AllocExistingLocalSymbolsNodeGen.AllocExistingGlobalSymbolsNodeGen.AllocExternalGlobalNodeGen;
@@ -42,10 +44,8 @@ import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpen.RTLDFlags;
+import com.oracle.truffle.llvm.runtime.nodes.others.LLVMAccessSymbolNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
-
-import java.util.ArrayList;
 
 /**
  *
@@ -102,16 +102,16 @@ public final class InitializeOverwriteNode extends LLVMNode {
         this.allocExternalSymbols = allocExternaSymbolsList.toArray(AllocExternalSymbolNode.EMPTY);
     }
 
-    public void execute(LLVMContext context, LLVMLocalScope localScope, RTLDFlags rtldFlags) {
+    public void execute(LLVMContext context, LLVMLocalScope localScope) {
         LLVMScope globalScope = context.getGlobalScope();
         for (int i = 0; i < allocExternalSymbols.length; i++) {
             AllocExternalSymbolNode allocSymbol = allocExternalSymbols[i];
-            LLVMPointer pointer = allocSymbol.execute(localScope, globalScope, null, null, context, rtldFlags);
+            LLVMPointer pointer = allocSymbol.execute(localScope, globalScope, null, null, context);
             // skip allocating fallbacks
             if (pointer == null) {
                 continue;
             }
-            context.initializeSymbol(symbols[i], pointer);
+            LLVMAccessSymbolNode.writeSymbol(symbols[i], pointer, context, this);
         }
     }
 }
