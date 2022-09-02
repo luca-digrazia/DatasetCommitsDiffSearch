@@ -460,12 +460,6 @@ public final class LLVMContext {
                 // nothing needs to be done as the behavior is not defined
             }
         }
-
-        if (language.getFreeGlobalBlocks() != null) {
-            // free the space allocated for non-pointer globals
-            language.getFreeGlobalBlocks().call();
-        }
-
     }
 
     public Object getFreeReadOnlyGlobalsBlockFunction() {
@@ -500,6 +494,11 @@ public final class LLVMContext {
 
         if (isInitialized()) {
             threadingStack.freeMainStack(memory);
+        }
+
+        if (language.getFreeGlobalBlocks() != null) {
+            // free the space allocated for non-pointer globals
+            language.getFreeGlobalBlocks().call();
         }
 
         // free the space which might have been when putting pointer-type globals into native memory
