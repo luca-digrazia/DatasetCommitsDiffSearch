@@ -24,18 +24,20 @@
  */
 package com.oracle.svm.jfr;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.jfr.traceid.JfrTraceId;
 import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
 import com.oracle.svm.jfr.traceid.JfrTraceIdLoadBarrier;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
+
+import com.oracle.svm.core.thread.VMOperation;
 
 public class JfrTypeRepository implements JfrRepository {
     static class PackageInfo {
@@ -138,7 +140,9 @@ public class JfrTypeRepository implements JfrRepository {
     }
 
     @Override
-    public int write(JfrChunkWriter writer) {
+    public int write(JfrChunkWriter writer) throws IOException {
+        assert VMOperation.isInProgressAtSafepoint();
+
         // Visit all used classes, and collect their packages, modules, classloaders and possibly referenced
         // classes.
         TypeInfo typeInfo = new TypeInfo();
@@ -178,7 +182,7 @@ public class JfrTypeRepository implements JfrRepository {
         }
     }
 
-    public int writeClasses(JfrChunkWriter writer, TypeInfo typeInfo) {
+    public int writeClasses(JfrChunkWriter writer, TypeInfo typeInfo) throws IOException {
         if (typeInfo.getClasses().isEmpty()) {
             return 0;
         }
@@ -191,7 +195,7 @@ public class JfrTypeRepository implements JfrRepository {
         return 1;
     }
 
-    private void writeClass(JfrChunkWriter writer, TypeInfo typeInfo, Class<?> clazz) {
+    private void writeClass(JfrChunkWriter writer, TypeInfo typeInfo, Class<?> clazz) throws IOException {
         JfrSymbolRepository symbolRepo = SubstrateJVM.getSymbolRepository();
         writer.writeCompressedLong(JfrTraceId.getTraceId(clazz));  // key
         writer.writeCompressedLong(typeInfo.getClassLoaderId(clazz.getClassLoader()));
@@ -200,7 +204,7 @@ public class JfrTypeRepository implements JfrRepository {
         writer.writeCompressedLong(clazz.getModifiers());
     }
 
-    private int writePackages(JfrChunkWriter writer, TypeInfo typeInfo) {
+    private int writePackages(JfrChunkWriter writer, TypeInfo typeInfo) throws IOException {
         Map<String, PackageInfo> packages = typeInfo.getPackages();
         if (packages.isEmpty()) {
             return 0;
@@ -214,7 +218,7 @@ public class JfrTypeRepository implements JfrRepository {
         return 1;
     }
 
-    private void writePackage(JfrChunkWriter writer, TypeInfo typeInfo, String pkgName, PackageInfo pkgInfo) {
+    private void writePackage(JfrChunkWriter writer, TypeInfo typeInfo, String pkgName, PackageInfo pkgInfo) throws IOException {
         JfrSymbolRepository symbolRepo = SubstrateJVM.getSymbolRepository();
         writer.writeCompressedLong(pkgInfo.id);  // id
         writer.writeCompressedLong(symbolRepo.getSymbolId(pkgName, true, true));
@@ -222,7 +226,8 @@ public class JfrTypeRepository implements JfrRepository {
         writer.writeBoolean(false); // TODO: 'exported' field: what's this?
     }
 
-    private int writeModules(JfrChunkWriter writer, TypeInfo typeInfo) {
+    private int writeModules(JfrChunkWriter writer, TypeInfo typeInfo) throws IOException {
+        assert VMOperation.isInProgressAtSafepoint();
         Map<Module, Long> modules = typeInfo.getModules();
         if (modules.isEmpty()) {
             return 0;
@@ -236,7 +241,7 @@ public class JfrTypeRepository implements JfrRepository {
         return 1;
     }
 
-    private void writeModule(JfrChunkWriter writer, TypeInfo typeInfo, Module module, long id) {
+    private void writeModule(JfrChunkWriter writer, TypeInfo typeInfo, Module module, long id) throws IOException {
         JfrSymbolRepository symbolRepo = SubstrateJVM.getSymbolRepository();
         writer.writeCompressedLong(id);
         writer.writeCompressedLong(symbolRepo.getSymbolId(module.getName(), true));
@@ -245,7 +250,8 @@ public class JfrTypeRepository implements JfrRepository {
         writer.writeCompressedLong(typeInfo.getClassLoaderId(module.getClassLoader()));
     }
 
-    private int writeClassLoaders(JfrChunkWriter writer, TypeInfo typeInfo) {
+    private int writeClassLoaders(JfrChunkWriter writer, TypeInfo typeInfo) throws IOException {
+        assert VMOperation.isInProgressAtSafepoint();
         Map<ClassLoader, Long> classLoaders = typeInfo.getClassLoaders();
         if (classLoaders.isEmpty()) {
             return 0;
@@ -259,7 +265,7 @@ public class JfrTypeRepository implements JfrRepository {
         return 1;
     }
 
-    private void writeClassLoader(JfrChunkWriter writer, ClassLoader cl, long id) {
+    private void writeClassLoader(JfrChunkWriter writer, ClassLoader cl, long id) throws IOException {
         JfrSymbolRepository symbolRepo = SubstrateJVM.getSymbolRepository();
         writer.writeCompressedLong(id);
         if (cl == null) {
