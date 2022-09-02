@@ -279,11 +279,11 @@ public abstract class ObjectFile {
         AARCH64_R_AARCH64_ADD_ABS_LO12_NC,
         AARCH64_R_LD_PREL_LO19,
         AARCH64_R_GOT_LD_PREL19,
-        AARCH64_R_AARCH64_LDST128_ABS_LO12_NC,
         AARCH64_R_AARCH64_LDST64_ABS_LO12_NC,
         AARCH64_R_AARCH64_LDST32_ABS_LO12_NC,
         AARCH64_R_AARCH64_LDST16_ABS_LO12_NC,
-        AARCH64_R_AARCH64_LDST8_ABS_LO12_NC;
+        AARCH64_R_AARCH64_LDST8_ABS_LO12_NC,
+        AARCH64_R_AARCH64_LDST128_ABS_LO12_NC;
 
         public static RelocationKind getDirect(int relocationSize) {
             switch (relocationSize) {
@@ -408,8 +408,9 @@ public abstract class ObjectFile {
          *            bytes
          * @param useImplicitAddend whether the current bytes are to be used as an addend
          * @param explicitAddend a full-width addend, or null if useImplicitAddend is true
+         * @return the relocation record created (or found, if it exists already)
          */
-        void markRelocationSite(int offset, ByteBuffer bb, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend);
+        RelocationRecord markRelocationSite(int offset, ByteBuffer bb, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend);
 
         /**
          * Force the creation of a relocation section/element for this section, and return it. This
@@ -440,7 +441,7 @@ public abstract class ObjectFile {
          * passed a buffer. It uses the byte array accessed by {@link #getContent} and
          * {@link #setContent}.
          */
-        void markRelocationSite(int offset, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend);
+        RelocationRecord markRelocationSite(int offset, RelocationKind k, String symbolName, boolean useImplicitAddend, Long explicitAddend);
     }
 
     public interface NobitsSectionImpl extends ElementImpl {
@@ -1280,12 +1281,8 @@ public abstract class ObjectFile {
         // sun.misc, so we need to call it reflectively to ensure binary compatibility between JDKs
         Object cleaner;
         try {
-            Class<? extends ByteBuffer> bufferClass = buffer.getClass();
-            ModuleAccess.openModuleByClass(bufferClass, ObjectFile.class);
-            cleaner = getMethodAndSetAccessible(bufferClass, "cleaner").invoke(buffer);
-            Class<?> cleanerClass = cleaner.getClass();
-            ModuleAccess.openModuleByClass(cleanerClass, ObjectFile.class);
-            getMethodAndSetAccessible(cleanerClass, "clean").invoke(cleaner);
+            cleaner = getMethodAndSetAccessible(buffer.getClass(), "cleaner").invoke(buffer);
+            getMethodAndSetAccessible(cleaner.getClass(), "clean").invoke(cleaner);
         } catch (ReflectiveOperationException e) {
             throw new IOException("Could not clean mapped ByteBuffer", e);
         }
