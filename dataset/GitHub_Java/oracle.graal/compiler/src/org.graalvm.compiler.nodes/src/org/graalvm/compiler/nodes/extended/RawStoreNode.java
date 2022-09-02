@@ -35,7 +35,7 @@ import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.java.StoreFieldNode;
-import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
+import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.Virtualizable;
@@ -52,34 +52,27 @@ import jdk.vm.ci.meta.ResolvedJavaField;
  * performed before the store.
  */
 @NodeInfo(cycles = CYCLES_2, size = SIZE_1)
-public final class RawStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, SingleMemoryKill {
+public final class RawStoreNode extends UnsafeAccessNode implements StateSplit, Lowerable, Virtualizable, MemoryCheckpoint.Single {
 
     public static final NodeClass<RawStoreNode> TYPE = NodeClass.create(RawStoreNode.class);
     @Input ValueNode value;
     @OptionalInput(State) FrameState stateAfter;
     private final boolean needsBarrier;
-    private boolean isVolatile;
 
     public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity) {
-        this(object, offset, value, accessKind, locationIdentity, true, false, null, false);
+        this(object, offset, value, accessKind, locationIdentity, true);
     }
 
-    public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean isVolatile) {
-        this(object, offset, value, accessKind, locationIdentity, true, isVolatile, null, false);
+    public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier) {
+        this(object, offset, value, accessKind, locationIdentity, needsBarrier, null, false);
     }
 
     public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier, FrameState stateAfter,
-                    boolean forceAnyLocation) {
-        this(object, offset, value, accessKind, locationIdentity, needsBarrier, false, stateAfter, forceAnyLocation);
-    }
-
-    public RawStoreNode(ValueNode object, ValueNode offset, ValueNode value, JavaKind accessKind, LocationIdentity locationIdentity, boolean needsBarrier, boolean isVolatile, FrameState stateAfter,
                     boolean forceAnyLocation) {
         super(TYPE, StampFactory.forVoid(), object, offset, accessKind, locationIdentity, forceAnyLocation);
         this.value = value;
         this.needsBarrier = needsBarrier;
         this.stateAfter = stateAfter;
-        this.isVolatile = isVolatile;
         assert accessKind != JavaKind.Void && accessKind != JavaKind.Illegal;
     }
 
@@ -140,29 +133,16 @@ public final class RawStoreNode extends UnsafeAccessNode implements StateSplit, 
     }
 
     @Override
-    public boolean isVolatile() {
-        return isVolatile;
-    }
-
-    @Override
     protected ValueNode cloneAsFieldAccess(Assumptions assumptions, ResolvedJavaField field, boolean volatileAccess) {
         return new StoreFieldNode(field.isStatic() ? null : object(), field, value(), stateAfter(), volatileAccess);
     }
 
     @Override
-    protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity, boolean volatileAccess) {
-        return new RawStoreNode(object(), location, value, accessKind(), identity, needsBarrier, volatileAccess, stateAfter(), isAnyLocationForced());
+    protected ValueNode cloneAsArrayAccess(ValueNode location, LocationIdentity identity) {
+        return new RawStoreNode(object(), location, value, accessKind(), identity, needsBarrier, stateAfter(), isAnyLocationForced());
     }
 
     public FrameState getState() {
         return stateAfter;
-    }
-
-    @Override
-    public LocationIdentity getKilledLocationIdentity() {
-        if (isVolatile()) {
-            return LocationIdentity.any();
-        }
-        return getLocationIdentity();
     }
 }
