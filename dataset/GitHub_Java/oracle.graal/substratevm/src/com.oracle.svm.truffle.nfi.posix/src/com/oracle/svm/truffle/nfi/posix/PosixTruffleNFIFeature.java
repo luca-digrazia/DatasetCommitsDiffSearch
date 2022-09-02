@@ -25,6 +25,7 @@
 package com.oracle.svm.truffle.nfi.posix;
 
 import static com.oracle.svm.core.posix.headers.Dlfcn.GNUExtensions.LM_ID_NEWLM;
+import static com.oracle.svm.truffle.nfi.posix.Target_com_oracle_truffle_nfi_impl_NFIContextLinux.ISOLATED_NAMESPACE_FLAG;
 
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
@@ -61,9 +62,6 @@ public final class PosixTruffleNFIFeature implements Feature {
 }
 
 final class PosixTruffleNFISupport extends TruffleNFISupport {
-
-    static final int ISOLATED_NAMESPACE_FLAG = 0x10000;
-
     static void initialize() {
         ImageSingletons.add(TruffleNFISupport.class, new PosixTruffleNFISupport());
     }
@@ -100,12 +98,11 @@ final class PosixTruffleNFISupport extends TruffleNFISupport {
     private static PointerBase loadLibraryInNamespace(long nativeContext, String name, int mode) {
         assert (mode & ISOLATED_NAMESPACE_FLAG) == 0;
         Target_com_oracle_truffle_nfi_impl_NFIContextLinux context = //
-                        Target_com_oracle_truffle_nfi_impl_NFIContextLinux.class.cast(getContext(nativeContext));
+                        Target_com_oracle_truffle_nfi_impl_NFIContextLinux.class.cast(getNFIContext(nativeContext));
 
         // Double-checked locking on the NFI context instance.
         long namespaceId = context.isolatedNamespaceId;
         if (namespaceId == 0) {
-            // Checkstyle: allow synchronization
             synchronized (context) {
                 namespaceId = context.isolatedNamespaceId;
                 if (namespaceId == 0) {
