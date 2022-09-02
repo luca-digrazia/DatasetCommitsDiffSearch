@@ -304,7 +304,7 @@ public class ReachabilityTest {
 
     }
 
-    abstract static class ReachabilityUncached extends Node {
+    static abstract class ReachabilityUncached extends Node {
         abstract int execute();
 
         int foo() {
@@ -313,7 +313,7 @@ public class ReachabilityTest {
     }
 
     @GenerateUncached
-    abstract static class ReachabilityUncached1 extends ReachabilityUncached {
+    static abstract class ReachabilityUncached1 extends ReachabilityUncached {
         @Specialization
         int doCached(@Cached("foo()") int cached) {
             return cached;
@@ -326,7 +326,7 @@ public class ReachabilityTest {
     }
 
     @GenerateUncached
-    abstract static class ReachabilityUncached2 extends ReachabilityUncached {
+    static abstract class ReachabilityUncached2 extends ReachabilityUncached {
         @Specialization
         int doCached(@Cached("foo()") int cached) {
             return cached;
@@ -345,7 +345,7 @@ public class ReachabilityTest {
     }
 
     @GenerateUncached
-    abstract static class ReachabilityUncached3 extends ReachabilityUncached {
+    static abstract class ReachabilityUncached3 extends ReachabilityUncached {
         @Specialization
         int doCached1(@Cached("foo()") int cached) {
             return cached;
