@@ -226,40 +226,35 @@ public class LLVMIRBuilder {
      */
     @SuppressWarnings("unused")
     public LLVMValueRef createJNIWrapper(LLVMValueRef callee, long statepointId, int numArgs, int anchorIPOffset, LLVMBasicBlockRef currentBlock) {
-        LLVMTypeRef calleeType = LLVMIRBuilder.getElementType(typeOf(callee));
-        String wrapperName = LLVMUtils.JNI_WRAPPER_PREFIX + intrinsicType(calleeType);
+        LLVM.LLVMTypeRef calleeType = LLVMIRBuilder.getElementType(typeOf(callee));
+        LLVM.LLVMTypeRef wrapperType = prependArguments(calleeType, rawPointerType(), typeOf(callee));
+        LLVMValueRef transitionWrapper = addFunction(LLVMUtils.JNI_WRAPPER_PREFIX + intrinsicType(calleeType), wrapperType);
+        LLVM.LLVMSetLinkage(transitionWrapper, LLVM.LLVMLinkOnceAnyLinkage);
+        setAttribute(transitionWrapper, LLVM.LLVMAttributeFunctionIndex, "noinline");
 
-        LLVMValueRef transitionWrapper = LLVM.LLVMGetNamedFunction(module, wrapperName);
-        if (transitionWrapper == null) {
-            LLVMTypeRef wrapperType = prependArguments(calleeType, rawPointerType(), typeOf(callee));
-            transitionWrapper = addFunction(wrapperName, wrapperType);
-            LLVM.LLVMSetLinkage(transitionWrapper, LLVM.LLVMLinkOnceAnyLinkage);
-            setAttribute(transitionWrapper, LLVM.LLVMAttributeFunctionIndex, "noinline");
+        LLVM.LLVMBasicBlockRef block = appendBasicBlock("main", transitionWrapper);
+        positionAtEnd(block);
 
-            LLVM.LLVMBasicBlockRef block = appendBasicBlock("main", transitionWrapper);
-            positionAtEnd(block);
+        LLVMValueRef anchor = getParam(transitionWrapper, 0);
+        LLVMValueRef lastIPAddr = buildGEP(anchor, constantInt(anchorIPOffset));
+        LLVMValueRef callIP = buildReturnAddress(constantInt(0));
+        buildStore(callIP, lastIPAddr);
 
-            LLVMValueRef anchor = getParam(transitionWrapper, 0);
-            LLVMValueRef lastIPAddr = buildGEP(anchor, constantInt(anchorIPOffset));
-            LLVMValueRef callIP = buildReturnAddress(constantInt(0));
-            buildStore(callIP, lastIPAddr);
-
-            LLVMValueRef[] args = new LLVMValueRef[numArgs];
-            for (int i = 0; i < numArgs; ++i) {
-                args[i] = getParam(transitionWrapper, i + 2);
-            }
-            LLVMValueRef target = getParam(transitionWrapper, 1);
-            LLVMValueRef ret = buildCall(target, args);
-            setCallSiteAttribute(ret, LLVM.LLVMAttributeFunctionIndex, LLVMUtils.GC_LEAF_FUNCTION_NAME);
-
-            if (isVoidType(getReturnType(calleeType))) {
-                buildRetVoid();
-            } else {
-                buildRet(ret);
-            }
-
-            positionAtEnd(currentBlock);
+        LLVMValueRef[] args = new LLVMValueRef[numArgs];
+        for (int i = 0; i < numArgs; ++i) {
+            args[i] = getParam(transitionWrapper, i + 2);
         }
+        LLVMValueRef target = getParam(transitionWrapper, 1);
+        LLVMValueRef ret = buildCall(target, args);
+        setCallSiteAttribute(ret, LLVM.LLVMAttributeFunctionIndex, LLVMUtils.GC_LEAF_FUNCTION_NAME);
+
+        if (isVoidType(getReturnType(calleeType))) {
+            buildRetVoid();
+        } else {
+            buildRet(ret);
+        }
+
+        positionAtEnd(currentBlock);
         return transitionWrapper;
     }
 
