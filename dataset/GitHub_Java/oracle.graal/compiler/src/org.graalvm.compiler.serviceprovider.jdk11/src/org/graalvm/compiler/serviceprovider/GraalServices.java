@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,20 +25,12 @@
 package org.graalvm.compiler.serviceprovider;
 
 import static java.lang.Thread.currentThread;
-import static jdk.vm.ci.services.Services.IS_BUILDING_NATIVE_IMAGE;
-import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicLong;
@@ -51,26 +43,9 @@ import jdk.vm.ci.services.JVMCIPermission;
 import jdk.vm.ci.services.Services;
 
 /**
- * LabsJDK 11 version of {@link GraalServices}.
+ * JDK 9+ version of {@link GraalServices}.
  */
 public final class GraalServices {
-
-    private static final Map<Class<?>, List<?>> servicesCache = IS_BUILDING_NATIVE_IMAGE ? new HashMap<>() : null;
-
-    private static final Constructor<? extends SpeculationReason> encodedSpeculationReasonConstructor;
-
-    static {
-        Constructor<? extends SpeculationReason> constructor = null;
-        try {
-            @SuppressWarnings("unchecked")
-            Class<? extends SpeculationReason> theClass = (Class<? extends SpeculationReason>) Class.forName("jdk.vm.ci.meta.EncodedSpeculationReason");
-            constructor = theClass.getDeclaredConstructor(Integer.TYPE, String.class, Object[].class);
-        } catch (ClassNotFoundException e) {
-        } catch (NoSuchMethodException e) {
-            throw new InternalError("EncodedSpeculationReason exists but constructor is missing", e);
-        }
-        encodedSpeculationReasonConstructor = constructor;
-    }
 
     private GraalServices() {
     }
@@ -82,14 +57,7 @@ public final class GraalServices {
      *             {@link JVMCIPermission}
      */
     public static <S> Iterable<S> load(Class<S> service) {
-        Module module = GraalServices.class.getModule();
-        // Graal cannot know all the services used by another module
-        // (e.g. enterprise) so dynamically register the service use now.
-        if (!module.canUse(service)) {
-            module.addUses(service);
-        }
-        ModuleLayer layer = module.getLayer();
-        Iterable<S> iterable = ServiceLoader.load(layer, service);
+        Iterable<S> iterable = ServiceLoader.load(service);
         return new Iterable<>() {
             @Override
             public Iterator<S> iterator() {
@@ -124,10 +92,6 @@ public final class GraalServices {
      * @param other all JVMCI packages will be opened to the module defining this class
      */
     static void openJVMCITo(Class<?> other) {
-        if (IS_IN_NATIVE_IMAGE) {
-            return;
-        }
-
         Module jvmciModule = JVMCI_MODULE;
         Module otherModule = other.getModule();
         if (jvmciModule != otherModule) {
@@ -136,7 +100,7 @@ public final class GraalServices {
                     // JVMCI initialization opens all JVMCI packages
                     // to Graal which is a prerequisite for Graal to
                     // open JVMCI packages to other modules.
-                    JVMCI.getRuntime();
+                    JVMCI.initialize();
 
                     jvmciModule.addOpens(pkg, otherModule);
                 }
@@ -210,21 +174,42 @@ public final class GraalServices {
         return false;
     }
 
-    static SpeculationReason createSpeculationReason(int groupId, String groupName, Object... context) {
-        if (encodedSpeculationReasonConstructor != null) {
-            SpeculationEncodingAdapter adapter = new SpeculationEncodingAdapter();
-            try {
-                Object[] flattened = adapter.flatten(context);
-                return encodedSpeculationReasonConstructor.newInstance(groupId, groupName, flattened);
-            } catch (InstantiationException e) {
-                e.printStackTrace();
-            } catch (IllegalAccessException e) {
-                e.printStackTrace();
-            } catch (InvocationTargetException e) {
-                e.printStackTrace();
-            }
+    /**
+     * An implementation of {@link SpeculationReason} based on direct, unencoded values.
+     */
+    static final class DirectSpeculationReason implements SpeculationReason {
+        final int groupId;
+        final String groupName;
+        final Object[] context;
+
+        DirectSpeculationReason(int groupId, String groupName, Object[] context) {
+            this.groupId = groupId;
+            this.groupName = groupName;
+            this.context = context;
         }
-        return new UnencodedSpeculationReason(groupId, groupName, context);
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj instanceof DirectSpeculationReason) {
+                DirectSpeculationReason that = (DirectSpeculationReason) obj;
+                return this.groupId == that.groupId && Arrays.equals(this.context, that.context);
+            }
+            return false;
+        }
+
+        @Override
+        public int hashCode() {
+            return groupId + Arrays.hashCode(this.context);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s@%d%s", groupName, groupId, Arrays.toString(context));
+        }
+    }
+
+    static SpeculationReason createSpeculationReason(int groupId, String groupName, Object... context) {
+        return new DirectSpeculationReason(groupId, groupName, context);
     }
 
     /**
@@ -372,26 +357,8 @@ public final class GraalServices {
         return Math.fma(a, b, c);
     }
 
-    static final MethodHandle virtualObjectGetMethod;
-
-    static {
-        MethodHandle virtualObjectGet = null;
-        try {
-            virtualObjectGet = MethodHandles.lookup().unreflect(VirtualObject.class.getDeclaredMethod("get", ResolvedJavaType.class, Integer.TYPE, Boolean.TYPE));
-        } catch (Exception e) {
-            // VirtualObject.get that understands autobox isn't available
-        }
-        virtualObjectGetMethod = virtualObjectGet;
-    }
-
+    @SuppressWarnings("unused")
     public static VirtualObject createVirtualObject(ResolvedJavaType type, int id, boolean isAutoBox) {
-        if (virtualObjectGetMethod != null) {
-            try {
-                return (VirtualObject) virtualObjectGetMethod.invoke(type, id, isAutoBox);
-            } catch (Throwable throwable) {
-                throw new InternalError();
-            }
-        }
         return VirtualObject.get(type, id);
     }
 }
