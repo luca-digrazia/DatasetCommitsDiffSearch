@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -21,16 +21,6 @@
  * questions.
  */
 package com.oracle.truffle.espresso.jdwp.impl;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.regex.Pattern;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -60,7 +50,15 @@ import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
-import com.oracle.truffle.espresso.jdwp.api.MonitorStackInfo;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.regex.Pattern;
 
 public final class DebuggerController implements ContextsListener {
 
@@ -294,7 +292,7 @@ public final class DebuggerController implements ContextsListener {
         SuspendedInfo susp = suspendedInfos.get(guestThread);
         if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
             // Truffle unwind will take us to exactly the right location in the caller method
-            susp.getEvent().prepareUnwindFrame(frameToPop.getDebugStackFrame(), frameToPop.asDebugValue(returnValue));
+            susp.getEvent().prepareUnwindFrame(frameToPop.getDebugStackFrame(), returnValue);
             susp.setForceEarlyReturnInProgress();
             return true;
         }
@@ -690,13 +688,14 @@ public final class DebuggerController implements ContextsListener {
         }
     }
 
-    public void postJobForThread(ThreadJob<?> job) {
+    public ThreadJob<?> postJobForThread(ThreadJob<?> job) {
+        threadJobs.put(job.getThread(), job);
         SimpleLock lock = getSuspendLock(job.getThread());
         synchronized (lock) {
-            threadJobs.put(job.getThread(), job);
             lock.release();
             lock.notifyAll();
         }
+        return job;
     }
 
     public CallFrame[] captureCallFramesBeforeBlocking(Object guestThread) {
@@ -740,22 +739,12 @@ public final class DebuggerController implements ContextsListener {
                 if (codeIndex > lastLineBCI) {
                     codeIndex = lastLineBCI;
                 }
-                callFrames.add(new CallFrame(context.getIds().getIdAsLong(guestThread), typeTag, klassId, method, methodId, codeIndex, frame, root, instrument.getEnv(), null,
-                                context.getLanguageClass()));
+                callFrames.add(new CallFrame(context.getIds().getIdAsLong(guestThread), typeTag, klassId, method, methodId, codeIndex, frame, root, instrument.getEnv(), null));
                 return null;
             }
         });
         CallFrame[] result = callFrames.toArray(new CallFrame[callFrames.size()]);
-
-        // collect monitor info
-        MonitorStackInfo[] ownedMonitorInfos = context.getOwnedMonitors(result);
-        HashMap<Object, Integer> entryCounts = new HashMap<>(ownedMonitorInfos.length);
-        for (MonitorStackInfo ownedMonitorInfo : ownedMonitorInfos) {
-            Object monitor = ownedMonitorInfo.getMonitor();
-            entryCounts.put(monitor, context.getMonitorEntryCount(monitor));
-        }
-
-        suspendedInfos.put(guestThread, new SuspendedInfo(context, result, guestThread, entryCounts));
+        suspendedInfos.put(guestThread, new SuspendedInfo(result, guestThread));
         return result;
     }
 
@@ -804,7 +793,7 @@ public final class DebuggerController implements ContextsListener {
             CallFrame[] callFrames = createCallFrames(ids.getIdAsLong(currentThread), event.getStackFrames(), -1, steppingInfo);
             RootNode callerRootNode = callFrames.length > 1 ? callFrames[1].getRootNode() : null;
 
-            SuspendedInfo suspendedInfo = new SuspendedInfo(DebuggerController.this, event, callFrames, currentThread, callerRootNode);
+            SuspendedInfo suspendedInfo = new SuspendedInfo(event, callFrames, currentThread, callerRootNode);
             suspendedInfos.put(currentThread, suspendedInfo);
 
             byte suspendPolicy = SuspendStrategy.EVENT_THREAD;
@@ -813,11 +802,7 @@ public final class DebuggerController implements ContextsListener {
             List<Callable<Void>> jobs = new ArrayList<>();
 
             boolean hit = false;
-            HashSet<Breakpoint> handled = new HashSet<>(event.getBreakpoints().size());
             for (Breakpoint bp : event.getBreakpoints()) {
-                if (handled.contains(bp)) {
-                    continue;
-                }
                 BreakpointInfo info = breakpointInfos.get(bp);
                 suspendPolicy = info.getSuspendPolicy();
 
@@ -886,7 +871,6 @@ public final class DebuggerController implements ContextsListener {
                         return;
                     }
                 }
-                handled.add(bp);
             }
 
             // check if suspended for a field breakpoint
@@ -1047,7 +1031,7 @@ public final class DebuggerController implements ContextsListener {
                     }
                 }
 
-                list.addLast(new CallFrame(threadId, typeTag, klassId, method, methodId, codeIndex, rawFrame, root, instrument.getEnv(), frame, context.getLanguageClass()));
+                list.addLast(new CallFrame(threadId, typeTag, klassId, method, methodId, codeIndex, rawFrame, root, instrument.getEnv(), frame));
                 frameCount++;
                 if (frameLimit != -1 && frameCount >= frameLimit) {
                     return list.toArray(new CallFrame[list.size()]);

@@ -22,30 +22,29 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-import static com.oracle.truffle.espresso.jdwp.api.TagConstants.BOOLEAN;
-import static com.oracle.truffle.espresso.jdwp.api.TagConstants.VOID;
+import com.oracle.truffle.api.interop.InteropException;
+import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
+import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
+import com.oracle.truffle.espresso.jdwp.api.JDWPConstantPool;
+import com.oracle.truffle.espresso.jdwp.api.FieldRef;
+import com.oracle.truffle.espresso.jdwp.api.CallFrame;
+import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
+import com.oracle.truffle.espresso.jdwp.api.LineNumberTableRef;
+import com.oracle.truffle.espresso.jdwp.api.LocalRef;
+import com.oracle.truffle.espresso.jdwp.api.MethodRef;
+import com.oracle.truffle.espresso.jdwp.api.KlassRef;
+import com.oracle.truffle.espresso.jdwp.api.MonitorStackInfo;
+import com.oracle.truffle.espresso.jdwp.api.RedefineInfo;
+import com.oracle.truffle.espresso.jdwp.api.TagConstants;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.Callable;
 
-import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.espresso.jdwp.api.CallFrame;
-import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
-import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
-import com.oracle.truffle.espresso.jdwp.api.FieldRef;
-import com.oracle.truffle.espresso.jdwp.api.JDWPConstantPool;
-import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
-import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.LineNumberTableRef;
-import com.oracle.truffle.espresso.jdwp.api.LocalRef;
-import com.oracle.truffle.espresso.jdwp.api.MethodRef;
-import com.oracle.truffle.espresso.jdwp.api.MonitorStackInfo;
-import com.oracle.truffle.espresso.jdwp.api.RedefineInfo;
-import com.oracle.truffle.espresso.jdwp.api.TagConstants;
+import static com.oracle.truffle.espresso.jdwp.api.TagConstants.BOOLEAN;
+import static com.oracle.truffle.espresso.jdwp.api.TagConstants.VOID;
 
 final class JDWP {
 
@@ -2115,10 +2114,13 @@ final class JDWP {
                     }
                 }
 
-                Set<Object> ownedMonitors = context.getOwnedMonitors(thread);
-                reply.writeInt(ownedMonitors.size());
+                CallFrame[] callFrames = info.getStackFrames();
 
-                for (Object monitor : ownedMonitors) {
+                MonitorStackInfo[] ownedMonitors = context.getOwnedMonitors(callFrames);
+                reply.writeInt(ownedMonitors.length);
+
+                for (MonitorStackInfo monitorStackInfo : ownedMonitors) {
+                    Object monitor = monitorStackInfo.getMonitor();
                     reply.writeByte(context.getTag(monitor));
                     reply.writeLong(context.getIds().getIdAsLong(monitor));
                 }
@@ -2290,17 +2292,6 @@ final class JDWP {
                 if (!controller.forceEarlyReturn(thread, topFrame, returnValue)) {
                     reply.errorCode(ErrorCodes.OPAQUE_FRAME);
                 }
-
-                // make sure owned monitors taken in frame are exited
-                ThreadJob<Void> job = new ThreadJob<>(thread, new Callable<Void>() {
-                    @Override
-                    public Void call() {
-                        controller.getContext().clearFrameMonitors(topFrame);
-                        return null;
-                    }
-                });
-                controller.postJobForThread(job);
-
                 return new CommandResult(reply);
             }
         }
