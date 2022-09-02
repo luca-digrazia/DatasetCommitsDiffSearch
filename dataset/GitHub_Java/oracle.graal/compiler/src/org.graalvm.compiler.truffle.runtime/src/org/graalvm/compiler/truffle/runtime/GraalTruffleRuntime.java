@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -120,7 +120,6 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog;
-import jdk.vm.ci.services.Services;
 
 /**
  * Implementation of the Truffle runtime when running on top of Graal.
@@ -322,6 +321,12 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         ExplodeLoop explodeLoop = getAnnotation(ExplodeLoop.class, method);
         if (explodeLoop == null) {
             return LoopExplosionKind.NONE;
+        }
+
+        // Support for the deprecated Truffle property until it is removed in a future Truffle
+        // release.
+        if (explodeLoop.merge()) {
+            return LoopExplosionKind.MERGE_EXPLODE;
         }
 
         switch (explodeLoop.kind()) {
@@ -650,6 +655,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
         CompilerAsserts.neverPartOfCompilation();
 
         OptimizedCallTarget target = createOptimizedCallTarget(source, rootNode);
+        rootNode.setCallTarget(target);
         tvmci.onLoad(target.getRootNode());
         return target;
     }
@@ -871,7 +877,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     protected static LayoutFactory selectObjectLayoutFactory(Iterable<Iterable<LayoutFactory>> availableLayoutFactories) {
-        String layoutFactoryImplName = Services.getSavedProperties().get("truffle.object.LayoutFactory");
+        String layoutFactoryImplName = System.getProperty("truffle.object.LayoutFactory");
         LayoutFactory bestLayoutFactory = null;
         for (Iterable<LayoutFactory> currentLayoutFactories : availableLayoutFactories) {
             for (LayoutFactory currentLayoutFactory : currentLayoutFactories) {
@@ -899,7 +905,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     private static int getJavaSpecificationVersion() {
-        String value = Services.getSavedProperties().get("java.specification.version");
+        String value = System.getProperty("java.specification.version");
         if (value.startsWith("1.")) {
             value = value.substring(2);
         }
@@ -996,7 +1002,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
                 // by the partial evaluator, we want to prevent inlining across the boundary during
                 // partial evaluation,
                 // even if the TruffleBoundary allows inlining after partial evaluation.
-                if (truffleBoundary.transferToInterpreterOnException()) {
+                if (!truffleBoundary.throwsControlFlowException() && truffleBoundary.transferToInterpreterOnException()) {
                     return InlineKind.DO_NOT_INLINE_DEOPTIMIZE_ON_EXCEPTION;
                 } else {
                     return InlineKind.DO_NOT_INLINE_WITH_EXCEPTION;
