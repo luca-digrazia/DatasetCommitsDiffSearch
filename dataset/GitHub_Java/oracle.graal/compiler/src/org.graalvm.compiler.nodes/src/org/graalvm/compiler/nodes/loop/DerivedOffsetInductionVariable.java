@@ -198,10 +198,6 @@ public class DerivedOffsetInductionVariable extends DerivedInductionVariable {
 
     @Override
     public InductionVariable copy(InductionVariable newBase, ValueNode newValue) {
-        if (newValue instanceof BinaryArithmeticNode<?>) {
-            return new DerivedOffsetInductionVariable(loop, newBase, offset, (BinaryArithmeticNode<?>) newValue);
-        } else {
-            return new DerivedConvertedInductionVariable(loop, newBase, newValue.stamp(NodeView.DEFAULT), newValue);
-        }
+        return new DerivedOffsetInductionVariable(loop, newBase, offset, (BinaryArithmeticNode<?>) newValue);
     }
 }

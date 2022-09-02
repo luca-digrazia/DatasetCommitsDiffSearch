@@ -104,7 +104,7 @@ public class DerivedConvertedInductionVariable extends DerivedInductionVariable 
     public void deleteUnusedNodes() {
     }
 
-    public ValueNode op(ValueNode v) {
+    private ValueNode op(ValueNode v) {
         return IntegerConvertNode.convert(v, stamp, graph(), NodeView.DEFAULT);
     }
 
