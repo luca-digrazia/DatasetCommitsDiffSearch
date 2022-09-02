@@ -62,17 +62,23 @@ import com.oracle.truffle.polyglot.HostMethodDesc.OverloadedMethod;
 import com.oracle.truffle.polyglot.HostMethodDesc.SingleMethod;
 
 final class HostClassDesc {
+    private static final ClassValue<HostClassDesc> CACHED_DESCS = new ClassValue<HostClassDesc>() {
+        @Override
+        protected HostClassDesc computeValue(Class<?> type) {
+            return new HostClassDesc(type);
+        }
+    };
+
     @TruffleBoundary
-    static HostClassDesc forClass(PolyglotEngineImpl impl, Class<?> clazz) {
-        return impl.conf.forClass(clazz);
+    static HostClassDesc forClass(Class<?> clazz) {
+        return CACHED_DESCS.get(clazz);
     }
 
     private final Class<?> type;
-    private volatile Object members;
+    private volatile Members members;
     private volatile JNIMembers jniMembers;
 
-    HostClassDesc(HostClassCache cache, Class<?> type) {
-        this.members = cache;
+    HostClassDesc(Class<?> type) {
         this.type = type;
     }
 
@@ -95,7 +101,7 @@ final class HostClassDesc {
             }
         };
 
-        Members(HostClassCache hostAccess, Class<?> type) {
+        Members(Class<?> type) {
             Map<String, HostMethodDesc> methodMap = new LinkedHashMap<>();
             Map<String, HostMethodDesc> staticMethodMap = new LinkedHashMap<>();
             Map<String, HostFieldDesc> fieldMap = new LinkedHashMap<>();
@@ -103,7 +109,7 @@ final class HostClassDesc {
             HostMethodDesc ctor = null;
             HostMethodDesc functionalInterfaceMethod = null;
 
-            collectPublicMethods(hostAccess, type, methodMap, staticMethodMap);
+            collectPublicMethods(type, methodMap, staticMethodMap);
 
             if (Modifier.isPublic(type.getModifiers())) {
                 boolean inheritedPublicInstanceFields = false;
@@ -112,9 +118,7 @@ final class HostClassDesc {
                     if (!Modifier.isStatic(f.getModifiers())) {
                         if (f.getDeclaringClass() == type) {
                             assert !fieldMap.containsKey(f.getName());
-                            if (hostAccess.allowsAccess(f)) {
-                                fieldMap.put(f.getName(), HostFieldDesc.unreflect(f));
-                            }
+                            fieldMap.put(f.getName(), HostFieldDesc.unreflect(f));
                         } else {
                             if (Modifier.isPublic(f.getDeclaringClass().getModifiers())) {
                                 inheritedPublicInstanceFields = true;
@@ -130,11 +134,11 @@ final class HostClassDesc {
                     }
                 }
                 if (inheritedPublicInstanceFields) {
-                    collectPublicInstanceFields(hostAccess, type, fieldMap, inheritedPublicInaccessibleFields);
+                    collectPublicInstanceFields(type, fieldMap, inheritedPublicInaccessibleFields);
                 }
             } else {
                 if (!Modifier.isInterface(type.getModifiers())) {
-                    collectPublicInstanceFields(hostAccess, type, fieldMap, true);
+                    collectPublicInstanceFields(type, fieldMap, true);
                 }
             }
 
@@ -161,11 +165,11 @@ final class HostClassDesc {
             this.functionalMethod = functionalInterfaceMethod;
         }
 
-        private static void collectPublicMethods(HostClassCache hostAccess, Class<?> type, Map<String, HostMethodDesc> methodMap, Map<String, HostMethodDesc> staticMethodMap) {
-            collectPublicMethods(hostAccess, type, methodMap, staticMethodMap, new HashSet<>(), type);
+        private static void collectPublicMethods(Class<?> type, Map<String, HostMethodDesc> methodMap, Map<String, HostMethodDesc> staticMethodMap) {
+            collectPublicMethods(type, methodMap, staticMethodMap, new HashSet<>(), type);
         }
 
-        private static void collectPublicMethods(HostClassCache hostAccess, Class<?> type, Map<String, HostMethodDesc> methodMap, Map<String, HostMethodDesc> staticMethodMap, Set<Object> visited, Class<?> startType) {
+        private static void collectPublicMethods(Class<?> type, Map<String, HostMethodDesc> methodMap, Map<String, HostMethodDesc> staticMethodMap, Set<Object> visited, Class<?> startType) {
             boolean isPublicType = Modifier.isPublic(type.getModifiers()) && !Proxy.isProxyClass(type);
             boolean allMethodsPublic = true;
             List<Method> bridgeMethods = null;
@@ -203,7 +207,7 @@ final class HostClassDesc {
                     }
 
                     if (visited.add(methodInfo(m))) {
-                        putMethod(hostAccess, m, methodMap, staticMethodMap);
+                        putMethod(m, methodMap, staticMethodMap);
                     }
                 }
             }
@@ -213,11 +217,11 @@ final class HostClassDesc {
              */
             if (!isPublicType || !allMethodsPublic) {
                 if (type.getSuperclass() != null) {
-                    collectPublicMethods(hostAccess, type.getSuperclass(), methodMap, staticMethodMap, visited, startType);
+                    collectPublicMethods(type.getSuperclass(), methodMap, staticMethodMap, visited, startType);
                 }
                 for (Class<?> intf : type.getInterfaces()) {
                     if (visited.add(intf)) {
-                        collectPublicMethods(hostAccess, intf, methodMap, staticMethodMap, visited, startType);
+                        collectPublicMethods(intf, methodMap, staticMethodMap, visited, startType);
                     }
                 }
             }
@@ -225,7 +229,7 @@ final class HostClassDesc {
             if (bridgeMethods != null && !bridgeMethods.isEmpty()) {
                 for (Method m : bridgeMethods) {
                     if (visited.add(methodInfo(m))) {
-                        putMethod(hostAccess, m, methodMap, staticMethodMap);
+                        putMethod(m, methodMap, staticMethodMap);
                     }
                 }
             }
@@ -253,10 +257,7 @@ final class HostClassDesc {
             return new MethodInfo();
         }
 
-        private static void putMethod(HostClassCache hostAccess, Method m, Map<String, HostMethodDesc> methodMap, Map<String, HostMethodDesc> staticMethodMap) {
-            if (!hostAccess.allowsAccess(m)) {
-                return;
-            }
+        private static void putMethod(Method m, Map<String, HostMethodDesc> methodMap, Map<String, HostMethodDesc> staticMethodMap) {
             SingleMethod method = SingleMethod.unreflect(m);
             Map<String, HostMethodDesc> map = Modifier.isStatic(m.getModifiers()) ? staticMethodMap : methodMap;
             map.merge(m.getName(), method, MERGE);
@@ -274,7 +275,7 @@ final class HostClassDesc {
             }
         }
 
-        private static void collectPublicInstanceFields(HostClassCache hostAccess, Class<?> type, Map<String, HostFieldDesc> fieldMap, boolean mayHaveInaccessibleFields) {
+        private static void collectPublicInstanceFields(Class<?> type, Map<String, HostFieldDesc> fieldMap, boolean mayHaveInaccessibleFields) {
             Set<String> fieldNames = new HashSet<>();
             for (Class<?> superclass = type; superclass != null && superclass != Object.class; superclass = superclass.getSuperclass()) {
                 boolean inheritedPublicInstanceFields = false;
@@ -293,9 +294,7 @@ final class HostClassDesc {
                         continue;
                     }
                     if (Modifier.isPublic(f.getDeclaringClass().getModifiers())) {
-                        if (hostAccess.allowsAccess(f)) {
-                            fieldMap.putIfAbsent(f.getName(), HostFieldDesc.unreflect(f));
-                        }
+                        fieldMap.putIfAbsent(f.getName(), HostFieldDesc.unreflect(f));
                     } else {
                         assert mayHaveInaccessibleFields;
                     }
@@ -355,17 +354,17 @@ final class HostClassDesc {
     }
 
     private Members getMembers() {
-        Object m = members;
-        if (!(m instanceof Members)) {
+        Members m = members;
+        if (m == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             synchronized (this) {
                 m = members;
-                if (!(m instanceof Members)) {
-                    members = m = new Members((HostClassCache) m, type);
+                if (m == null) {
+                    members = m = new Members(type);
                 }
             }
         }
-        return (Members) m;
+        return m;
     }
 
     private JNIMembers getJNIMembers() {
