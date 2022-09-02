@@ -44,6 +44,8 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
 public final class LLVMNativePointerSupport extends LLVMNode {
 
+    private static LLVMNativePointerSupport UNCACHED = new LLVMNativePointerSupport(true);
+
     @Child private InternalLibrary delegate;
 
     private LLVMNativePointerSupport(boolean uncached) {
@@ -55,7 +57,7 @@ public final class LLVMNativePointerSupport extends LLVMNode {
     }
 
     public static LLVMNativePointerSupport getUncached() {
-        return new LLVMNativePointerSupport(true);
+        return UNCACHED;
     }
 
     public LLVMNativeLibrary getLibrary() {
@@ -131,12 +133,12 @@ public final class LLVMNativePointerSupport extends LLVMNode {
     }
 
     @GenerateUncached
-    public static abstract class IsPointerNode extends LLVMNode {
+    public abstract static class IsPointerNode extends LLVMNode {
 
         public abstract boolean execute(Object receiver);
 
         @Specialization
-        boolean doNativePointer(LLVMNativePointer receiver) {
+        boolean doNativePointer(@SuppressWarnings("unused") LLVMNativePointer receiver) {
             return true;
         }
 
@@ -153,7 +155,7 @@ public final class LLVMNativePointerSupport extends LLVMNode {
     }
 
     @GenerateUncached
-    public static abstract class AsPointerNode extends LLVMNode {
+    public abstract static class AsPointerNode extends LLVMNode {
 
         public abstract long execute(Object receiver) throws UnsupportedMessageException;
 
@@ -175,7 +177,7 @@ public final class LLVMNativePointerSupport extends LLVMNode {
     }
 
     @GenerateUncached
-    public static abstract class ToNativePointerNode extends LLVMNode {
+    public abstract static class ToNativePointerNode extends LLVMNode {
 
         public abstract LLVMNativePointer execute(Object receiver);
 
