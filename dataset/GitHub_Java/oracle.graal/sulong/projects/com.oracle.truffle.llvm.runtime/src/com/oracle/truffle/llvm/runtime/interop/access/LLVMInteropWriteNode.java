@@ -211,15 +211,10 @@ public abstract class LLVMInteropWriteNode extends LLVMNode {
             }
         }
 
-        /**
-         * @param value
-         * @param outgoingType
-         * @param type
-         * @see #execute(Object, LLVMInteropType.Value, ForeignToLLVMType)
-         */
         @Specialization(limit = "3", guards = {"typeMismatch(outgoingType, cachedType)", "cachedType == type"})
+        @SuppressWarnings("unused")
         Object doUnknownType(Object value, LLVMInteropType.Value outgoingType, ForeignToLLVMType type,
-                        @Cached("type") @SuppressWarnings("unused") ForeignToLLVMType cachedType,
+                        @Cached("type") ForeignToLLVMType cachedType,
                         @Cached(parameters = "type") LLVMDataEscapeNode dataEscape) {
             return dataEscape.executeWithTarget(value);
         }
