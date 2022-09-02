@@ -29,9 +29,12 @@
  */
 package com.oracle.truffle.wasm.binary;
 
+import com.oracle.truffle.api.nodes.ExplodeLoop;
+
 public abstract class BinaryStreamReader {
     protected byte[] data;
     protected int offset;
+
     private byte[] bytesConsumed;
 
     public BinaryStreamReader(byte[] data) {
@@ -43,13 +46,6 @@ public abstract class BinaryStreamReader {
     public int readSignedInt32() {
         int value = readSignedInt32(data, offset, bytesConsumed);
         offset += bytesConsumed[0];
-        return value;
-    }
-
-    public int readSignedInt32(byte[] bytesConsumedOut) {
-        byte[] out = bytesConsumedOut != null ? bytesConsumedOut : bytesConsumed;
-        int value = readSignedInt32(data, offset, out);
-        offset += out[0];
         return value;
     }
 
