@@ -170,12 +170,6 @@ public final class JavaUtilZipSubstitutions {
             }
         }
 
-        @Substitute //
-        @TargetElement(onlyWith = JDK11OrLater.class) //
-        private static void initIDs() {
-            // nothing
-        }
-
         // (JDK 11)src/java.base/share/native/libzip/Deflater.c
         // @formatter:off
         // Java_java_util_zip_Deflater_setDictionary(JNIEnv *env, jclass cls, jlong addr,
