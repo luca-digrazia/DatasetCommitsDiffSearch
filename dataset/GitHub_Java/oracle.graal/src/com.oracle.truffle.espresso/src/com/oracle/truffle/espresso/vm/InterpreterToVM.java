@@ -345,7 +345,17 @@ public final class InterpreterToVM implements ContextAccess {
     @TruffleBoundary
     public StaticObject newMultiArray(Klass component, int... dimensions) {
         Meta meta = getMeta();
+
+        // TODO(peterssen):
+
         if (component == meta._void) {
+            throw meta.throwEx(meta.IllegalArgumentException);
+        }
+        int finalDimensions = dimensions == null ? 0 : dimensions.length;
+        if (component.isArray()) {
+            finalDimensions += Types.getArrayDimensions(component.getType());
+        }
+        if (finalDimensions > 255) {
             throw meta.throwEx(meta.IllegalArgumentException);
         }
         for (int d : dimensions) {
@@ -372,10 +382,10 @@ public final class InterpreterToVM implements ContextAccess {
             }
         }
         int[] newDimensions = Arrays.copyOfRange(dimensions, 1, dimensions.length);
-        return component.allocateArray(dimensions[0], new IntFunction<StaticObject>() {
+        return component.getArrayClass(dimensions.length - 1).allocateArray(dimensions[0], new IntFunction<StaticObject>() {
             @Override
             public StaticObject apply(int i) {
-                return newMultiArrayWithoutChecks(component.getComponentType(), newDimensions);
+                return newMultiArrayWithoutChecks(component, newDimensions);
             }
         });
     }
