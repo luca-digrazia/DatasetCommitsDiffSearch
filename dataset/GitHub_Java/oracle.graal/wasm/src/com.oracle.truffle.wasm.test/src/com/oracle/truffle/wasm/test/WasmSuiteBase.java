@@ -29,17 +29,17 @@
  */
 package com.oracle.truffle.wasm.test;
 
-import java.io.File;
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -51,49 +51,213 @@ import org.graalvm.polyglot.io.ByteSequence;
 import org.junit.Assert;
 
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.wasm.predefined.testutil.TestutilModule;
 import com.oracle.truffle.wasm.test.options.WasmTestOptions;
+import com.oracle.truffle.wasm.utils.cases.WasmCase;
 
 public abstract class WasmSuiteBase extends WasmTestBase {
-    enum WasmTestStatus {
-        OK, SKIPPED;
+
+    private static final String MOVE_LEFT = "\u001b[1D";
+    private static final String TEST_PASSED_ICON = "\uD83D\uDE0D";
+    private static final String TEST_FAILED_ICON = "\uD83D\uDE21";
+    private static final String TEST_IN_PROGRESS_ICON = "\u003F";
+    private static final String PHASE_PARSE_ICON = "\uD83D\uDCD6";
+    private static final String PHASE_SYNC_NO_INLINE_ICON = "\uD83D\uDD39";
+    private static final String PHASE_SYNC_INLINE_ICON = "\uD83D\uDD37";
+    private static final String PHASE_ASYNC_ICON = "\uD83D\uDD36";
+    private static final String PHASE_INTERPRETER_ICON = "\uD83E\uDD16";
+    private static final int STATUS_ICON_WIDTH = 2;
+    private static final int STATUS_LABEL_WIDTH = 11;
+    private static final int DEFAULT_INTERPRETER_ITERATIONS = 1;
+    private static final int DEFAULT_SYNC_NOINLINE_ITERATIONS = 3;
+    private static final int DEFAULT_SYNC_INLINE_ITERATIONS = 3;
+    private static final int DEFAULT_ASYNC_ITERATIONS = 100000;
+    private static final int INITIAL_STATE_CHECK_ITERATIONS = 10;
+    private static final int STATE_CHECK_PERIODICITY = 2000;
+
+    private static Context getInterpretedNoInline(Context.Builder contextBuilder) {
+        contextBuilder.option("engine.Compilation", "false");
+        contextBuilder.option("engine.Inlining", "false");
+        return contextBuilder.build();
     }
 
-    private static WasmTestStatus runTestCase(WasmTestCase testCase) {
-        if (!filterTestName().test(testCase.name)) {
-            return WasmTestStatus.SKIPPED;
-        }
-        try {
-            byte[] binary = testCase.selfCompile();
-            Context context = Context.create();
-            Source source = Source.newBuilder("wasm", ByteSequence.create(binary), "test").build();
-            context.eval(source);
-            Value function = context.getBindings("wasm").getMember("0");
-            if (WasmTestOptions.TRIGGER_GRAAL) {
-                for (int i = 0; i !=  1_000_000; ++i) {
-                    function.execute();
+    private static Context getSyncCompiledNoInline(Context.Builder contextBuilder) {
+        contextBuilder.option("engine.Compilation", "true");
+        contextBuilder.option("engine.BackgroundCompilation", "false");
+        contextBuilder.option("engine.CompileImmediately", "true");
+        contextBuilder.option("engine.Inlining", "false");
+        return contextBuilder.build();
+    }
+
+    private static Context getSyncCompiledWithInline(Context.Builder contextBuilder) {
+        contextBuilder.option("engine.Compilation", "true");
+        contextBuilder.option("engine.BackgroundCompilation", "false");
+        contextBuilder.option("engine.CompileImmediately", "true");
+        contextBuilder.option("engine.Inlining", "true");
+        return contextBuilder.build();
+    }
+
+    private static Context getAsyncCompiled(Context.Builder contextBuilder) {
+        contextBuilder.option("engine.Compilation", "true");
+        contextBuilder.option("engine.BackgroundCompilation", "true");
+        contextBuilder.option("engine.CompileImmediately", "false");
+        contextBuilder.option("engine.Inlining", "true");
+        return contextBuilder.build();
+    }
+
+    private static Value runInContext(WasmCase testCase, Context context, Source source, int iterations, String phaseIcon, String phaseLabel) {
+        boolean requiresZeroMemory = Boolean.parseBoolean(testCase.options().getProperty("zero-memory", "false"));
+
+        final PrintStream oldOut = System.out;
+        resetStatus(oldOut, PHASE_PARSE_ICON, "parsing");
+        context.eval(source);
+
+        // The sequence of WebAssembly functions to execute.
+        // Run custom initialization.
+        // Execute the main function (exported as "_main").
+        // Then, optionally save memory and globals, and compare them.
+        // Execute a special function, which resets memory and globals to their default values.
+        Value mainFunction = context.getBindings("wasm").getMember("_main");
+        Value resetContext = context.getBindings("wasm").getMember(TestutilModule.Names.RESET_CONTEXT);
+        Value customInitialize = context.getBindings("wasm").getMember(TestutilModule.Names.RUN_CUSTOM_INITIALIZATION);
+        Value saveContext = context.getBindings("wasm").getMember(TestutilModule.Names.SAVE_CONTEXT);
+        Value compareContexts = context.getBindings("wasm").getMember(TestutilModule.Names.COMPARE_CONTEXTS);
+
+        Value result = null;
+        resetStatus(oldOut, phaseIcon, phaseLabel);
+        ByteArrayOutputStream capturedStdout = null;
+        Object firstIterationContextState = null;
+
+        for (int i = 0; i != iterations; ++i) {
+            try {
+                capturedStdout = new ByteArrayOutputStream();
+                System.setOut(new PrintStream(capturedStdout));
+
+                // Run custom initialization.
+                if (testCase.initialization() != null) {
+                    customInitialize.execute(testCase.initialization());
                 }
+
+                // Execute benchmark.
+                result = mainFunction.execute();
+
+                // Save context state, and check that it's consistent with the previous one.
+                if (iterationNeedsStateCheck(i)) {
+                    Object contextState = saveContext.execute();
+                    if (firstIterationContextState == null) {
+                        firstIterationContextState = contextState;
+                    } else {
+                        compareContexts.execute(firstIterationContextState, contextState);
+                    }
+                }
+
+                // Reset context state.
+                boolean zeroMemory = iterationNeedsStateCheck(i + 1) || requiresZeroMemory;
+                resetContext.execute(zeroMemory);
+
+                validateResult(testCase.data().resultValidator(), result, capturedStdout);
+            } catch (PolyglotException e) {
+                // We cannot label the tests with polyglot errors, because they might be return
+                // values.
+                throw e;
+            } catch (Throwable t) {
+                final RuntimeException e = new RuntimeException("Error during test phase '" + phaseLabel + "'", t);
+                e.setStackTrace(new StackTraceElement[0]);
+                throw e;
+            } finally {
+                System.setOut(oldOut);
             }
-            validateResult(testCase.data.resultValidator, function.execute());
+        }
+
+        return result;
+    }
+
+    private static boolean iterationNeedsStateCheck(int i) {
+        return i < INITIAL_STATE_CHECK_ITERATIONS || i % STATE_CHECK_PERIODICITY == 0;
+    }
+
+    private static void resetStatus(PrintStream oldOut, String icon, String label) {
+        String formattedLabel = label;
+        if (formattedLabel.length() > STATUS_LABEL_WIDTH) {
+            formattedLabel = formattedLabel.substring(0, STATUS_LABEL_WIDTH);
+        }
+        for (int i = formattedLabel.length(); i < STATUS_LABEL_WIDTH; i++) {
+            formattedLabel += " ";
+        }
+        eraseStatus(oldOut);
+        oldOut.print(icon);
+        oldOut.print(formattedLabel);
+        oldOut.flush();
+    }
+
+    private static void eraseStatus(PrintStream oldOut) {
+        for (int i = 0; i < STATUS_ICON_WIDTH + STATUS_LABEL_WIDTH; i++) {
+            oldOut.print(MOVE_LEFT);
+        }
+    }
+
+    private WasmTestStatus runTestCase(WasmCase testCase) {
+        try {
+            byte[] binary = testCase.createBinary();
+            Context.Builder contextBuilder = Context.newBuilder("wasm");
+            Source.Builder sourceBuilder = Source.newBuilder("wasm", ByteSequence.create(binary), "test");
+
+            if (WasmTestOptions.LOG_LEVEL != null && !WasmTestOptions.LOG_LEVEL.equals("")) {
+                contextBuilder.option("log.wasm.level", WasmTestOptions.LOG_LEVEL);
+            }
+
+            contextBuilder.allowExperimentalOptions(true);
+            contextBuilder.option("wasm.PredefinedModules", includedExternalModules());
+            Source source = sourceBuilder.build();
+            Context context;
+
+            // Run in interpreted mode, with inlining turned off, to ensure profiles are populated.
+            int interpreterIterations = Integer.parseInt(testCase.options().getProperty("interpreter-iterations", String.valueOf(DEFAULT_INTERPRETER_ITERATIONS)));
+            context = getInterpretedNoInline(contextBuilder);
+            runInContext(testCase, context, source, interpreterIterations, PHASE_INTERPRETER_ICON, "interpreter");
+
+            // Run in synchronous compiled mode, with inlining turned off.
+            // We need to run the test at least twice like this, since the first run will lead to
+            // de-opts due to empty profiles.
+            int syncNoinlineIterations = Integer.parseInt(testCase.options().getProperty("sync-noinline-iterations", String.valueOf(DEFAULT_SYNC_NOINLINE_ITERATIONS)));
+            context = getSyncCompiledNoInline(contextBuilder);
+            runInContext(testCase, context, source, syncNoinlineIterations, PHASE_SYNC_NO_INLINE_ICON, "sync,no-inl");
+
+            // Run in synchronous compiled mode, with inlining turned on.
+            // We need to run the test at least twice like this, since the first run will lead to
+            // de-opts due to empty profiles.
+            int syncInlineIterations = Integer.parseInt(testCase.options().getProperty("sync-inline-iterations", String.valueOf(DEFAULT_SYNC_INLINE_ITERATIONS)));
+            context = getSyncCompiledWithInline(contextBuilder);
+            runInContext(testCase, context, source, syncInlineIterations, PHASE_SYNC_INLINE_ICON, "sync,inl");
+
+            // Run with normal, asynchronous compilation.
+            // Run 1000 + 1 times - the last time run with a surrogate stream, to collect output.
+            int asyncIterations = Integer.parseInt(testCase.options().getProperty("async-iterations", String.valueOf(DEFAULT_ASYNC_ITERATIONS)));
+            context = getAsyncCompiled(contextBuilder);
+            runInContext(testCase, context, source, asyncIterations, PHASE_ASYNC_ICON, "async,multi");
         } catch (InterruptedException | IOException e) {
-            Assert.fail(String.format("Test %s failed.", testCase.name));
-            e.printStackTrace();
+            Assert.fail(String.format("Test %s failed: %s", testCase.name(), e.getMessage()));
         } catch (PolyglotException e) {
-            validateThrown(testCase.data.expectedErrorMessage, e);
+            validateThrown(testCase.data().expectedErrorMessage(), e);
         }
         return WasmTestStatus.OK;
     }
 
-    private static void validateResult(Consumer<Value> validator, Value result) {
+    protected String includedExternalModules() {
+        return "testutil:testutil";
+    }
+
+    private static void validateResult(BiConsumer<Value, String> validator, Value result, OutputStream capturedStdout) {
         if (validator != null) {
-            validator.accept(result);
+            validator.accept(result, capturedStdout.toString());
         } else {
             Assert.fail("Test was not expected to return a value.");
         }
     }
 
-    private static void validateThrown(String expectedErrorMessage, PolyglotException e) throws PolyglotException{
+    private static void validateThrown(String expectedErrorMessage, PolyglotException e) throws PolyglotException {
         if (expectedErrorMessage != null) {
-            if (!expectedErrorMessage.equals(e.getMessage())){
+            if (!expectedErrorMessage.equals(e.getMessage())) {
                 throw e;
             }
         } else {
@@ -103,156 +267,106 @@ public abstract class WasmSuiteBase extends WasmTestBase {
 
     @Override
     public void test() throws IOException {
-        Collection<? extends WasmTestCase> testCases = collectTestCases();
-        Map<WasmTestCase, Throwable> errors = new LinkedHashMap<>();
-        System.out.println("");
+        Collection<? extends WasmCase> allTestCases = collectTestCases();
+        Collection<? extends WasmCase> qualifyingTestCases = filterTestCases(allTestCases);
+        Map<WasmCase, Throwable> errors = new LinkedHashMap<>();
+        System.out.println();
         System.out.println("--------------------------------------------------------------------------------");
-        System.out.println(String.format("Running: %s (%d %s)", suiteName(), testCases.size(), testCases.size() == 1 ? "test" : "tests"));
+        System.out.print(String.format("Running: %s ", suiteName()));
+        if (allTestCases.size() != qualifyingTestCases.size()) {
+            System.out.println(String.format("(%d/%d tests - you have enabled filters)", qualifyingTestCases.size(), allTestCases.size()));
+        } else {
+            System.out.println(String.format("(%d tests)", qualifyingTestCases.size()));
+        }
         System.out.println("--------------------------------------------------------------------------------");
         System.out.println("Using runtime: " + Truffle.getRuntime().toString());
-        for (WasmTestCase testCase : testCases) {
-            try {
-                WasmTestStatus status = runTestCase(testCase);
-                if (status == WasmTestStatus.SKIPPED) {
-                    continue;
-                }
-                System.out.print("\uD83D\uDE0D");
-                System.out.flush();
-            } catch (Throwable e) {
-                System.out.print("\uD83D\uDE21");
-                System.out.flush();
-                errors.put(testCase, e);
+        int width = retrieveTerminalWidth();
+        int position = 0;
+        for (WasmCase testCase : qualifyingTestCases) {
+            int extraWidth = 1 + STATUS_ICON_WIDTH + STATUS_LABEL_WIDTH;
+            int requiredWidth = testCase.name().length() + extraWidth;
+            if (position + requiredWidth >= width) {
+                System.out.println();
+                position = 0;
             }
+            String statusIcon = TEST_IN_PROGRESS_ICON;
+            try {
+                // We print each test name behind the line of test status icons,
+                // so that we know which test failed in case the VM exits suddenly.
+                // If the test fails normally or succeeds, then we move the cursor to the left,
+                // and erase the test name.
+                System.out.print(" ");
+                System.out.print(testCase.name());
+                for (int i = 1; i < extraWidth; i++) {
+                    System.out.print(" ");
+                }
+                System.out.flush();
+                runTestCase(testCase);
+                statusIcon = TEST_PASSED_ICON;
+            } catch (Throwable e) {
+                statusIcon = TEST_FAILED_ICON;
+                errors.put(testCase, e);
+            } finally {
+                for (int i = 0; i < requiredWidth; i++) {
+                    System.out.print(MOVE_LEFT);
+                    System.out.print(" ");
+                    System.out.print(MOVE_LEFT);
+                }
+                System.out.print(statusIcon);
+                System.out.flush();
+            }
+            position++;
         }
-        System.out.println("");
+        System.out.println();
         System.out.println("Finished running: " + suiteName());
         if (!errors.isEmpty()) {
-            for (Map.Entry<WasmTestCase, Throwable> entry : errors.entrySet()) {
-                System.err.println(String.format("Failure in: %s.%s", suiteName(), entry.getKey().name));
+            for (Map.Entry<WasmCase, Throwable> entry : errors.entrySet()) {
+                System.err.println(String.format("Failure in: %s.%s", suiteName(), entry.getKey().name()));
                 System.err.println(entry.getValue().getClass().getSimpleName() + ": " + entry.getValue().getMessage());
                 entry.getValue().printStackTrace();
             }
-            System.err.println(String.format("\uD83D\uDCA5\u001B[31m %d/%d Wasm tests passed.\u001B[0m", testCases.size() - errors.size(), testCases.size()));
+            System.err.println(String.format("\uD83D\uDCA5\u001B[31m %d/%d Wasm tests passed.\u001B[0m", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size()));
         } else {
-            System.out.println(String.format("\uD83C\uDF40\u001B[32m %d/%d Wasm tests passed.\u001B[0m", testCases.size() - errors.size(), testCases.size()));
+            System.out.println(String.format("\uD83C\uDF40\u001B[32m %d/%d Wasm tests passed.\u001B[0m", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size()));
         }
-        System.out.println("");
+        System.out.println();
     }
 
-    protected Path testDirectory() {
+    private static int retrieveTerminalWidth() {
+        try {
+            final ProcessBuilder builder = new ProcessBuilder("/bin/sh", "-c", "stty size </dev/tty");
+            final Process process = builder.start();
+            final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            final String output = reader.readLine();
+            if (process.waitFor() != 0) {
+                return -1;
+            }
+            final int width = Integer.parseInt(output.split(" ")[1]);
+            return width;
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    protected String testResource() {
         return null;
     }
 
-    protected Collection<? extends WasmTestCase> collectTestCases() throws IOException {
-        return Stream.concat(collectStringTestCases().stream(), collectFileTestCases(testDirectory()).stream()).collect(Collectors.toList());
+    protected Collection<? extends WasmCase> collectTestCases() throws IOException {
+        return Stream.concat(collectStringTestCases().stream(), WasmCase.collectFileCases("test", testResource()).stream()).collect(Collectors.toList());
     }
 
-    protected Collection<? extends WasmTestCase> collectStringTestCases() {
+    protected Collection<? extends WasmCase> collectStringTestCases() {
         return new ArrayList<>();
     }
 
-    protected Collection<WasmTestCase> collectFileTestCases(Path path) throws IOException {
-        Collection<WasmTestCase> collectedCases = new ArrayList<>();
-        if (path == null) {
-            return collectedCases;
-        }
-        try (Stream<Path> walk = Files.list(path)) {
-            List<Path> testFiles = walk.filter(isWatFile).collect(Collectors.toList());
-            for (Path f : testFiles) {
-                String baseFileName = f.toAbsolutePath().toString().split("\\.(?=[^.]+$)")[0];
-                String testName = Paths.get(baseFileName).getFileName().toString().toUpperCase();
-                Path resultPath = Paths.get(baseFileName + ".result");
-                String resultSpec = Files.lines(resultPath).limit(1).collect(Collectors.joining());
-                String[] resultTypeValue = resultSpec.split("\\s+");
-                String resultType = resultTypeValue[0];
-                String resultValue = resultTypeValue[1];
-                switch (resultType) {
-                    case "int":
-                        collectedCases.add(testCase(testName, expected(Integer.parseInt(resultValue)), f.toFile()));
-                        break;
-                    case "long":
-                        collectedCases.add(testCase(testName, expected(Long.parseLong(resultValue)), f.toFile()));
-                        break;
-                    case "float":
-                        collectedCases.add(testCase(testName, expected(Float.parseFloat(resultValue), 0.0001f), f.toFile()));
-                        break;
-                    case "double":
-                        collectedCases.add(testCase(testName, expected(Double.parseDouble(resultValue), 0.0001f), f.toFile()));
-                        break;
-                    default:
-                        collectedCases.add(testCase(testName, expectedThrows(resultValue), f.toFile()));
-                        break;
-                }
-            }
-        }
-        return collectedCases;
+    protected Collection<? extends WasmCase> filterTestCases(Collection<? extends WasmCase> testCases) {
+        return testCases.stream().filter((WasmCase x) -> filterTestName().test(x.name())).collect(Collectors.toList());
     }
 
     protected String suiteName() {
         return getClass().getSimpleName();
-    }
-
-    protected static WasmStringTestCase testCase(String name, WasmTestCaseData data, String program) {
-        return new WasmStringTestCase(name, data, program);
-    }
-
-    protected static WasmFileTestCase testCase(String name, WasmTestCaseData data, File program) {
-        return new WasmFileTestCase(name, data, program);
-    }
-
-    protected static WasmTestCaseData expected(Object expectedValue) {
-        return new WasmTestCaseData((Value result) -> Assert.assertEquals("Failure", expectedValue, result.as(Object.class)));
-    }
-
-    protected static WasmTestCaseData expected(float expectedValue, float delta) {
-        return new WasmTestCaseData((Value result) -> Assert.assertEquals("Failure", expectedValue, result.as(Float.class), delta));
-    }
-
-    protected static WasmTestCaseData expected(double expectedValue, float delta) {
-        return new WasmTestCaseData((Value result) -> Assert.assertEquals("Failure", expectedValue, result.as(Double.class), delta));
-    }
-
-    protected static WasmTestCaseData expectedThrows(String expectedErrorMessage) {
-        return new WasmTestCaseData(expectedErrorMessage);
-    }
-
-    protected static abstract class WasmTestCase {
-        private String name;
-        private WasmTestCaseData data;
-
-        WasmTestCase(String name, WasmTestCaseData data) {
-            this.name = name;
-            this.data = data;
-        }
-
-        public abstract byte[] selfCompile() throws IOException, InterruptedException;
-    }
-
-    protected static class WasmStringTestCase extends WasmTestCase {
-        private String program;
-
-        WasmStringTestCase(String name, WasmTestCaseData data, String program) {
-            super(name, data);
-            this.program = program;
-        }
-
-        @Override
-        public byte[] selfCompile() throws IOException, InterruptedException {
-            return WasmTestToolkit.compileWatString(program);
-        }
-    }
-
-    protected static class WasmFileTestCase extends WasmTestCase {
-        private File program;
-
-        public WasmFileTestCase(String name, WasmTestCaseData data, File program) {
-            super(name, data);
-            this.program = program;
-        }
-
-        @Override
-        public byte[] selfCompile() throws IOException, InterruptedException {
-            return WasmTestToolkit.compileWatFile(program);
-        }
     }
 }
