@@ -29,6 +29,7 @@ import static org.graalvm.compiler.truffle.runtime.TruffleDebugOptions.PrintGrap
 import static org.graalvm.compiler.truffle.runtime.TruffleDebugOptions.PrintGraphTarget.Disable;
 
 import java.io.CharArrayWriter;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.lang.annotation.Annotation;
 import java.lang.invoke.MethodHandle;
@@ -86,7 +87,6 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.TruffleRuntime;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameInstanceVisitor;
@@ -925,22 +925,29 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     public JavaKind getJavaKindForFrameSlotKind(int frameSlotKindTag) {
         if (frameSlotKindTag == FrameSlotKind.Boolean.tag) {
             return JavaKind.Boolean;
-        } else if (frameSlotKindTag == FrameSlotKind.Byte.tag) {
+        }
+        if (frameSlotKindTag == FrameSlotKind.Byte.tag) {
             return JavaKind.Byte;
-        } else if (frameSlotKindTag == FrameSlotKind.Int.tag) {
+        }
+        if (frameSlotKindTag == FrameSlotKind.Int.tag) {
             return JavaKind.Int;
-        } else if (frameSlotKindTag == FrameSlotKind.Float.tag) {
+        }
+        if (frameSlotKindTag == FrameSlotKind.Float.tag) {
             return JavaKind.Float;
-        } else if (frameSlotKindTag == FrameSlotKind.Long.tag) {
+        }
+        if (frameSlotKindTag == FrameSlotKind.Long.tag) {
             return JavaKind.Long;
-        } else if (frameSlotKindTag == FrameSlotKind.Double.tag) {
+        }
+        if (frameSlotKindTag == FrameSlotKind.Double.tag) {
             return JavaKind.Double;
-        } else if (frameSlotKindTag == FrameSlotKind.Object.tag) {
+        }
+        if (frameSlotKindTag == FrameSlotKind.Object.tag) {
             return JavaKind.Object;
-        } else if (frameSlotKindTag == FrameSlotKind.Illegal.tag) {
+        }
+        if (frameSlotKindTag == FrameSlotKind.Illegal.tag) {
             return JavaKind.Illegal;
         }
-        return JavaKind.Illegal;
+        throw new IllegalArgumentException("Unknown FrameSlotKind tag: " + frameSlotKindTag);
     }
 
     @Override
@@ -963,7 +970,7 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
             case Illegal:
                 return FrameSlotKind.Illegal.tag;
         }
-        return FrameSlotKind.Illegal.tag;
+        throw new IllegalArgumentException("No FrameSlotKind for Java kind " + kind);
     }
 
     @Override
@@ -1001,14 +1008,11 @@ public abstract class GraalTruffleRuntime implements TruffleRuntime, TruffleComp
     }
 
     @Override
-    public boolean isSpecializationMethod(ResolvedJavaMethod method) {
-        return getAnnotation(Specialization.class, method) != null;
+    public void log(CompilableTruffleAST compilable, String message) {
+        ((OptimizedCallTarget) compilable).engine.getLogger().log(Level.INFO, message);
     }
 
-    @Override
-    public void log(String loggerId, CompilableTruffleAST compilable, String message) {
-        ((OptimizedCallTarget) compilable).engine.getLogger(loggerId).log(Level.INFO, message);
-    }
+    protected abstract OutputStream getDefaultLogStream();
 
     // https://bugs.openjdk.java.net/browse/JDK-8209535
 
