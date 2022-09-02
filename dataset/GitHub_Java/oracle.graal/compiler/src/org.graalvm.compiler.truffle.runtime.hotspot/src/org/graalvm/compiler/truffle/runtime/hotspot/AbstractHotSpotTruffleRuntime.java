@@ -118,6 +118,11 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
 
     private Boolean traceTransferToInterpreter;
 
+    public AbstractHotSpotTruffleRuntime() {
+        super(Arrays.asList(HotSpotOptimizedCallTarget.class));
+        setDontInlineCallBoundaryMethod();
+    }
+
     private volatile Lazy lazy;
     private volatile String lazyConfigurationName;
 
@@ -134,12 +139,6 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
 
     private List<ResolvedJavaMethod> truffleCallBoundaryMethods;
     private volatile CancellableCompileTask initializationTask;
-    private volatile boolean truffleCompilerInitialized;
-
-    public AbstractHotSpotTruffleRuntime() {
-        super(Arrays.asList(HotSpotOptimizedCallTarget.class));
-        setDontInlineCallBoundaryMethod();
-    }
 
     @Override
     public synchronized Iterable<ResolvedJavaMethod> getTruffleCallBoundaryMethods() {
@@ -185,7 +184,7 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
      * that case and we would use the HotSpot interpreter indefinitely.
      */
     private void ensureInitialized(OptimizedCallTarget firstCallTarget) {
-        if (truffleCompilerInitialized) {
+        if (truffleCompiler != null) {
             return;
         }
         CancellableCompileTask localTask = initializationTask;
@@ -193,13 +192,12 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
             final Object lock = this;
             synchronized (lock) {
                 localTask = initializationTask;
-                if (localTask == null && !truffleCompilerInitialized) {
+                if (localTask == null && truffleCompiler == null) {
                     initializationTask = localTask = getCompileQueue().submitTask(Priority.INITIALIZATION, firstCallTarget, new BackgroundCompileQueue.Request() {
                         @Override
                         protected void execute(TruffleCompilationTask task, WeakReference<OptimizedCallTarget> targetRef) {
                             synchronized (lock) {
                                 initializeTruffleCompiler();
-                                assert truffleCompilerInitialized;
                                 assert initializationTask != null;
                                 initializationTask = null;
                             }
@@ -211,20 +209,23 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
         if (localTask != null) {
             firstCallTarget.maybeWaitForTask(localTask);
         } else {
-            assert truffleCompilerInitialized;
+            assert truffleCompiler != null;
         }
     }
 
+    protected boolean reportedTruffleCompilerInitializationFailure;
+
     private synchronized void initializeTruffleCompiler() {
         // might occur for multiple compiler threads at the same time.
-        if (!truffleCompilerInitialized) {
+        if (truffleCompiler == null) {
             try {
                 truffleCompiler = newTruffleCompiler();
             } catch (Throwable e) {
-                // This should never happen so report it (once)
-                log(printStackTraceToString(e));
-            } finally {
-                truffleCompilerInitialized = true;
+                if (!reportedTruffleCompilerInitializationFailure) {
+                    // This should never happen so report it (once)
+                    reportedTruffleCompilerInitializationFailure = true;
+                    log(printStackTraceToString(e));
+                }
             }
         }
     }
@@ -264,11 +265,11 @@ public abstract class AbstractHotSpotTruffleRuntime extends GraalTruffleRuntime 
 
     /**
      * Prevents C1 or C2 from inlining a call to and compiling a method annotated by
-     * {@link TruffleCallBoundary} (i.e., <code>OptimizedCallTarget.callBoundary(Object[])</code>)
-     * so that we never miss the chance to jump from the Truffle interpreter to compiled code.
+     * {@link TruffleCallBoundary} (i.e., {@link OptimizedCallTarget#callBoundary(Object[])}) so
+     * that we never miss the chance to jump from the Truffle interpreter to compiled code.
      *
      * This is quite slow as it forces every call to
-     * <code>OptimizedCallTarget.callBoundary(Object[])</code> to run in the HotSpot interpreter, so
+     * {@link OptimizedCallTarget#callBoundary(Object[])} to run in the HotSpot interpreter, so
      * later on we manually compile {@code callBoundary()} with Graal. This then lets a
      * C1/C2-compiled caller jump to Graal-compiled {@code callBoundary()}, instead of having to go
      * back to the HotSpot interpreter for every execution of {@code callBoundary()}.
