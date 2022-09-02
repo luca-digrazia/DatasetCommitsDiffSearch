@@ -25,7 +25,6 @@
 package org.graalvm.libgraal;
 
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotSpeculationLog;
 import jdk.vm.ci.services.Services;
 
 /**
@@ -35,10 +34,6 @@ public class LibGraal {
 
     public static boolean isAvailable() {
         return inLibGraal() || isolate != 0L;
-    }
-
-    public static boolean isSupported() {
-        return true;
     }
 
     public static boolean inLibGraal() {
@@ -96,17 +91,13 @@ public class LibGraal {
         return runtime.isCurrentThreadAttached();
     }
 
-    public static boolean attachCurrentThread(HotSpotJVMCIRuntime runtime, boolean isDaemon) {
-        return runtime.attachCurrentThread(isDaemon);
+    static boolean attachCurrentThread(HotSpotJVMCIRuntime runtime) {
+        return runtime.attachCurrentThread(false);
     }
 
-    public static void detachCurrentThread(HotSpotJVMCIRuntime runtime) {
+    static void detachCurrentThread(HotSpotJVMCIRuntime runtime) {
         runtime.detachCurrentThread();
     }
 
     static native long getCurrentIsolateThread(long iso);
-
-    public static long getFailedSpeculationsAddress(HotSpotSpeculationLog log) {
-        return log.getFailedSpeculationsAddress();
-    }
 }
