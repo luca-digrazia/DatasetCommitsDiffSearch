@@ -86,10 +86,6 @@ public abstract class AbstractNativeImageClassLoaderSupport {
         return Stream.concat(buildcp.stream(), imagecp.stream()).collect(Collectors.toList());
     }
 
-    List<Path> applicationClassPath() {
-        return imagecp;
-    }
-
     Class<?> loadClassFromModule(Object module, String className) throws ClassNotFoundException {
         if (module != null) {
             throw new ClassNotFoundException(className,
@@ -103,8 +99,6 @@ public abstract class AbstractNativeImageClassLoaderSupport {
     }
 
     abstract List<Path> modulepath();
-
-    abstract List<Path> applicationModulePath();
 
     abstract Optional<Object> findModule(String moduleName);
 
