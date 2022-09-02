@@ -32,12 +32,16 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
 /**
  * Encapsulates a handle to a {@link GraphInfo} object in the SVM heap.
  */
-final class SVMGraphInfo implements TruffleCompilerListener.GraphInfo {
+final class SVMGraphInfo extends SVMObject implements TruffleCompilerListener.GraphInfo {
 
-    private volatile long handle;
+    /**
+     * Not volatile used for fast failure. When inconsistent exception is thrown by JNI on SVM side.
+     */
+    private boolean valid;
 
     SVMGraphInfo(long handle) {
-        this.handle = handle;
+        super(handle, false);
+        valid = true;
     }
 
     @Override
@@ -53,12 +57,12 @@ final class SVMGraphInfo implements TruffleCompilerListener.GraphInfo {
     }
 
     private void checkValid() {
-        if (handle == 0) {
+        if (!valid) {
             throw new IllegalStateException("Using GraphInfo outside of the TruffleCompilerListener method.");
         }
     }
 
     void invalidate() {
-        handle = 0;
+        valid = false;
     }
 }
