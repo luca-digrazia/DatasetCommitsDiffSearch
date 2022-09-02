@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,6 +24,9 @@ package com.oracle.truffle.espresso.descriptors;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 /**
  * A copy is created (almost) only if the symbol doesn't exist. This allows copy-less
@@ -42,6 +45,7 @@ public final class Symbols {
     }
 
     @SuppressWarnings("unchecked")
+    @TruffleBoundary
     <T> Symbol<T> lookup(ByteSequence sequence) {
         return (Symbol<T>) symbols.get(new SymbolKey(sequence));
     }
@@ -51,28 +55,30 @@ public final class Symbols {
     }
 
     @SuppressWarnings("unchecked")
+    @TruffleBoundary
     <T> Symbol<T> symbolify(final ByteSequence sequence) {
         final SymbolKey key = new SymbolKey(sequence);
-        return (Symbol<T>) symbols.computeIfAbsent(key, __ -> {
-            // Create Symbol<?>
-            final byte[] bytes = Arrays.copyOfRange(sequence.getUnderlyingBytes(),
-                            sequence.offset(),
-                            sequence.offset() + sequence.length());
-            Symbol<?> computed = new Symbol<>(bytes, sequence.hashCode());
-            // Swap the byte sequence, which could be holding a large underlying byte array, by
-            // a fresh symbol.
-            //
-            // ConcurrentHashMap provides no guarantees about how many times the mapping function
-            // could be called. In the worst case it's possible to end up with a key.seq != computed
-            // e.g. two different copies of the symbol.
-            // This wastes space but remains correct since key.seq never leaks out of the
-            // symbol map and it's byte-equals to the computed value.
-            // It doesn't keep the underlying byte array (which can be large e.g. .class file
-            // contents) from being collected.
-            if (key.seq == null) {
+        return (Symbol<T>) symbols.computeIfAbsent(key, new Function<SymbolKey, Symbol<?>>() {
+            @Override
+            public Symbol<?> apply(SymbolKey unused) {
+                // Create Symbol<?>
+                final byte[] bytes = Arrays.copyOfRange(sequence.getUnderlyingBytes(),
+                                sequence.offset(),
+                                sequence.offset() + sequence.length());
+                Symbol<?> computed = new Symbol<>(bytes, sequence.hashCode());
+                // Swap the byte sequence, which could be holding a large underlying byte array, by
+                // a fresh symbol.
+                //
+                // ConcurrentHashMap provides no guarantees about how many times the mapping
+                // function can be potentially called. In the worst case it's possible to end up
+                // with a key.seq != computed e.g. two different copies of the symbol.
+                // This wastes space but remains correct since key.seq never leaks out of the
+                // symbol map and it's byte-equals to the computed value.
+                // It doesn't keep the underlying byte array (which can be large e.g. .class file
+                // contents) from being collected.
                 key.seq = computed;
+                return computed;
             }
-            return computed;
         });
     }
 }
