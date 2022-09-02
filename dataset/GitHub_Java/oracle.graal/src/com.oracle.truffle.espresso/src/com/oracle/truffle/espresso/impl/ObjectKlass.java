@@ -266,11 +266,13 @@ public final class ObjectKlass extends Klass {
                     throw Meta.throwExceptionWithMessage(getMeta().java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
                 }
                 try {
-                    /*
-                     * Spec fragment: Then, initialize each final static field of C with the
-                     * constant value in its ConstantValue attribute (&sect;4.7.2), in the order the
-                     * fields appear in the ClassFile structure.
-                     */
+                    // Spec fragment: Then, initialize each final static field of C with the
+                    // constant value in its ConstantValue attribute (&sect;4.7.2), in the order the
+                    // fields appear in the ClassFile structure.
+                    //
+                    // ...
+                    //
+                    // Next, execute the class or interface initialization method of C.
                     prepare();
 
                     initState = PREPARED;
@@ -280,24 +282,14 @@ public final class ObjectKlass extends Klass {
                             getContext().getJDWPListener().classPrepared(this, prepareThread);
                         }
                     }
-                    if (!isInterface()) {
-                        /*
-                         * Next, if C is a class rather than an interface, then let SC be its
-                         * superclass and let SI1, ..., SIn be all superinterfaces of C [...] For
-                         * each S in the list [ SC, SI1, ..., SIn ], if S has not yet been
-                         * initialized, then recursively perform this entire procedure for S. If
-                         * necessary, verify and prepare S first.
-                         */
-                        if (getSuperKlass() != null) {
-                            getSuperKlass().initialize();
-                        }
-                        for (ObjectKlass interf : getSuperInterfaces()) {
-                            // Initialize all super interfaces, direct and indirect, with default
-                            // methods.
-                            interf.recursiveInitialize();
-                        }
+                    if (getSuperKlass() != null) {
+                        getSuperKlass().initialize();
                     }
-                    // Next, execute the class or interface initialization method of C.
+                    for (ObjectKlass interf : getSuperInterfaces()) {
+                        // Initialize all super interfaces, direct and indirect, with default
+                        // methods.
+                        interf.recursiveInitialize();
+                    }
                     Method clinit = getClassInitializer();
                     if (clinit != null) {
                         clinit.getCallTarget().call();
@@ -396,13 +388,14 @@ public final class ObjectKlass extends Klass {
 
     private void recursiveInitialize() {
         if (!isInitialized()) { // Skip synchronization and locks if already init.
-            for (ObjectKlass interf : getSuperInterfaces()) {
-                interf.recursiveInitialize();
-            }
             if (hasDeclaredDefaultMethods()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 verify();
-                actualInit(); // Does not recursively initialize interfaces
+                actualInit();
+            } else {
+                for (ObjectKlass interf : getSuperInterfaces()) {
+                    interf.recursiveInitialize();
+                }
             }
         }
     }
@@ -535,21 +528,6 @@ public final class ObjectKlass extends Klass {
             }
         }
         return false;
-    }
-
-    @Override
-    public Klass[] getNestMembers() {
-        NestMembersAttribute nestMembers = (NestMembersAttribute) getAttribute(NestMembersAttribute.NAME);
-        if (nestMembers == null || nestMembers.getClasses().length == 0) {
-            return EMPTY_ARRAY;
-        }
-        RuntimeConstantPool pool = getConstantPool();
-        Klass[] result = new Klass[nestMembers.getClasses().length];
-        for (int i = 0; i < result.length; i++) {
-            int index = nestMembers.getClasses()[i];
-            result[i] = pool.resolvedKlassAt(this, index);
-        }
-        return result;
     }
 
     Field lookupFieldTableImpl(int slot) {
@@ -709,9 +687,7 @@ public final class ObjectKlass extends Klass {
             // Implicit interface methods.
             method = lookupMirandas(methodName, signature);
         }
-        if (method == null &&
-                        (getType() == Type.java_lang_invoke_MethodHandle ||
-                                        getType() == Type.java_lang_invoke_VarHandle)) {
+        if (method == null && getType() == Type.java_lang_invoke_MethodHandle) {
             method = lookupPolysigMethod(methodName, signature);
         }
         if (method == null && getSuperKlass() != null) {
