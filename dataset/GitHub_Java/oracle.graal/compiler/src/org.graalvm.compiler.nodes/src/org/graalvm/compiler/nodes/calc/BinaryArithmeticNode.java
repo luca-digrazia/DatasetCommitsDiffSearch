@@ -362,12 +362,6 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
         } else if (node instanceof XorNode) {
             // Re-association from "x ^ (y ^ C)" to "(x ^ y) ^ C"
             return XorNode.create(matchValue, XorNode.create(otherValue1, otherValue2, view), view);
-        } else if (node instanceof MinNode) {
-            // Re-association from "Math.min(x, Math.min(y, C))" to "Math.min(Math.min(x, y), C)"
-            return MinNode.create(matchValue, MinNode.create(otherValue1, otherValue2, view), view);
-        } else if (node instanceof MaxNode) {
-            // Re-association from "Math.max(x, Math.max(y, C))" to "Math.max(Math.max(x, y), C)"
-            return MaxNode.create(matchValue, MaxNode.create(otherValue1, otherValue2, view), view);
         } else {
             throw GraalError.shouldNotReachHere();
         }
@@ -394,7 +388,7 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
      * criterion: {@code (a + 2) + 1 => a + (1 + 2)}
      * <p>
      * This method accepts only {@linkplain BinaryOp#isAssociative() associative} operations such as
-     * +, -, *, &amp;, |, ^, min, max
+     * +, -, *, &amp;, | and ^
      *
      * @param forY
      * @param forX
@@ -472,10 +466,6 @@ public abstract class BinaryArithmeticNode<OP> extends BinaryNode implements Ari
             return OrNode.create(a, OrNode.create(m1, m2, view), view);
         } else if (node instanceof XorNode) {
             return XorNode.create(a, XorNode.create(m1, m2, view), view);
-        } else if (node instanceof MaxNode) {
-            return MaxNode.create(a, MaxNode.create(m1, m2, view), view);
-        } else if (node instanceof MinNode) {
-            return MinNode.create(a, MinNode.create(m1, m2, view), view);
         } else {
             throw GraalError.shouldNotReachHere();
         }
