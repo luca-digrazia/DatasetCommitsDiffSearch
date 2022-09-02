@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -51,7 +52,7 @@ import com.oracle.truffle.api.instrumentation.StandardTags.RootTag;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
 import com.oracle.truffle.api.nodes.LanguageInfo;
-import com.oracle.truffle.tools.profiler.SafepointStackSampler.StackSample;
+import com.oracle.truffle.tools.profiler.SafepointStack.StackSample;
 import com.oracle.truffle.tools.profiler.impl.CPUSamplerInstrument;
 import com.oracle.truffle.tools.profiler.impl.ProfilerToolFactory;
 
@@ -115,6 +116,7 @@ public final class CPUSampler implements Closeable {
 
     private final Env env;
     private final Map<TruffleContext, Map<Thread, ProfilerNode<Payload>>> activeContexts = Collections.synchronizedMap(new HashMap<>());
+    private final ConcurrentHashMap<TruffleContext, List<StackSample>> syntheticFrames = new ConcurrentHashMap<>();
     private volatile boolean closed;
     private volatile boolean collecting;
     private long period = 10;
@@ -124,8 +126,9 @@ public final class CPUSampler implements Closeable {
     private Map<TruffleContext, AtomicLong> samplesTaken = new HashMap<>(0);
     private Timer samplerThread;
     private SamplingTimerTask samplerTask;
-    private volatile SafepointStackSampler safepointStackSampler = new SafepointStackSampler(stackLimit, filter);
+    private volatile SafepointStack safepointStack;
     private boolean gatherSelfHitTimes = false;
+    private boolean sampleLanguageInit = false;
 
     CPUSampler(Env env) {
         this.env = env;
@@ -141,29 +144,29 @@ public final class CPUSampler implements Closeable {
             }
 
             public void onLanguageContextCreate(TruffleContext context, LanguageInfo language) {
-                safepointStackSampler.pushSyntheticFrame(context, language, "CreateContext");
+                pushSyntheticFrame(context, language, "CreateContext");
             }
 
             @Override
             public void onLanguageContextCreated(TruffleContext context, LanguageInfo language) {
-                safepointStackSampler.popSyntheticFrame();
+                popSyntheticFrame(context, language);
             }
 
             public void onLanguageContextCreateFailed(TruffleContext context, LanguageInfo language) {
-                safepointStackSampler.popSyntheticFrame();
+                popSyntheticFrame(context, language);
             }
 
             public void onLanguageContextInitialize(TruffleContext context, LanguageInfo language) {
-                safepointStackSampler.pushSyntheticFrame(context, language, "InitializeContext");
+                pushSyntheticFrame(context, language, "InitializeContext");
             }
 
             @Override
             public void onLanguageContextInitialized(TruffleContext context, LanguageInfo language) {
-                safepointStackSampler.popSyntheticFrame();
+                popSyntheticFrame(context, language);
             }
 
             public void onLanguageContextInitializeFailed(TruffleContext context, LanguageInfo language) {
-                safepointStackSampler.popSyntheticFrame();
+                popSyntheticFrame(context, language);
             }
 
             @Override
@@ -190,12 +193,49 @@ public final class CPUSampler implements Closeable {
         return CPUSamplerInstrument.getSampler(engine);
     }
 
+    @SuppressWarnings("unused")
+    private void pushSyntheticFrame(TruffleContext context, LanguageInfo info, String message) {
+        if (sampleLanguageInit) {
+            List<StackTraceEntry> stack = new ArrayList<>(1);
+            stack.add(new StackTraceEntry(info.getName() + ":" + message));
+            List<StackSample> sample = new ArrayList<>(1);
+            sample.add(new StackSample(Thread.currentThread(), stack, 0, 0, false));
+            syntheticFrames.put(context, sample);
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private void popSyntheticFrame(TruffleContext context, LanguageInfo info) {
+        if (sampleLanguageInit) {
+            syntheticFrames.remove(context);
+        }
+    }
+
     /**
      * @return whether or not the sampler is currently collecting data.
      * @since 0.30
      */
     public synchronized boolean isCollecting() {
         return collecting;
+    }
+
+    /**
+     *
+     * @return Does the profile include the samples taken during language context initialization.
+     * @since 21.3.0
+     */
+    public synchronized boolean isSampleLanguageInit() {
+        return sampleLanguageInit;
+    }
+
+    /**
+     * Should the profile include the samples taken during language context initialization.
+     *
+     * @since 21.3.0
+     */
+    public synchronized void setSampleLanguageInit(boolean sampleContextInit) {
+        enterChangeConfig();
+        this.sampleLanguageInit = sampleContextInit;
     }
 
     /**
@@ -335,7 +375,7 @@ public final class CPUSampler implements Closeable {
      * @since 0.30
      */
     public boolean hasStackOverflowed() {
-        return safepointStackSampler.hasOverflowed();
+        return safepointStack.hasOverflowed();
     }
 
     /**
@@ -487,19 +527,27 @@ public final class CPUSampler implements Closeable {
      * @since 19.0
      */
     public Map<Thread, List<StackTraceEntry>> takeSample() {
-        if (safepointStackSampler == null) {
-            this.safepointStackSampler = new SafepointStackSampler(stackLimit, filter);
+        if (safepointStack == null) {
+            this.safepointStack = new SafepointStack(stackLimit, filter);
         }
         if (activeContexts.isEmpty()) {
             return Collections.emptyMap();
         }
         Map<Thread, List<StackTraceEntry>> stacks = new HashMap<>();
         TruffleContext context = activeContexts.keySet().iterator().next();
-        List<StackSample> sample = safepointStackSampler.sample(env, context);
+        List<StackSample> sample = takeStackSample(context);
         for (StackSample stackSample : sample) {
             stacks.put(stackSample.thread, stackSample.stack);
         }
         return Collections.unmodifiableMap(stacks);
+    }
+
+    private List<StackSample> takeStackSample(TruffleContext context) {
+        List<StackSample> syntheticSample = syntheticFrames.get(context);
+        if (syntheticSample != null) {
+            return syntheticSample;
+        }
+        return safepointStack.sample(env, context);
     }
 
     private void resetSampling() {
@@ -512,7 +560,7 @@ public final class CPUSampler implements Closeable {
         if (samplerThread == null) {
             samplerThread = new Timer("Sampling thread", true);
         }
-        this.safepointStackSampler = new SafepointStackSampler(stackLimit, filter);
+        this.safepointStack = new SafepointStack(stackLimit, filter);
         this.samplerTask = new SamplingTimerTask();
         this.samplerThread.schedule(samplerTask, delay, period);
     }
@@ -669,7 +717,7 @@ public final class CPUSampler implements Closeable {
                 if (context.isClosed()) {
                     continue;
                 }
-                List<StackSample> samples = safepointStackSampler.sample(env, context);
+                List<StackSample> samples = takeStackSample(context);
                 synchronized (CPUSampler.this) {
                     if (context.isClosed()) {
                         continue;
