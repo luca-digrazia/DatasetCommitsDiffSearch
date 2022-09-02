@@ -441,10 +441,7 @@ public class HotSpotGraphBuilderPlugins {
             }
         });
 
-        if (config.osThreadInterruptedOffset != Integer.MAX_VALUE) {
-            r.registerMethodSubstitution(ThreadSubstitutions.class, "isInterrupted", Receiver.class, boolean.class);
-        }
-
+        r.registerMethodSubstitution(ThreadSubstitutions.class, "isInterrupted", Receiver.class, boolean.class);
     }
 
     public static final String reflectionClass;
@@ -490,7 +487,7 @@ public class HotSpotGraphBuilderPlugins {
         }
         return false;
     }
-
+    
     private static void registerAESPlugins(InvocationPlugins plugins, GraalHotSpotVMConfig config, Replacements replacements) {
         if (config.useAESIntrinsics) {
             assert config.aescryptEncryptBlockStub != 0L;
