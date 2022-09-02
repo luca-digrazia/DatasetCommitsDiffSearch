@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,7 +26,6 @@ package com.oracle.truffle.espresso.impl;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
@@ -78,13 +77,11 @@ public final class BootClassRegistry extends ClassRegistry {
         return result;
     }
 
-    @TruffleBoundary
     public String getPackagePath(String pkgName) {
         String result = packageMap.get(pkgName);
         return result;
     }
 
-    @TruffleBoundary
     public String[] getPackages() {
         return packageMap.keySet().toArray(new String[0]);
     }

@@ -98,7 +98,6 @@ public final class Target_java_lang_Class {
     }
 
     // TODO(peterssen): Remove substitution, use JVM_FindClassFromCaller.
-    @TruffleBoundary
     @Substitution
     public static @Host(Class.class) StaticObject forName0(
                     @Host(String.class) StaticObject name,
@@ -113,30 +112,8 @@ public final class Target_java_lang_Class {
             throw meta.throwExWithMessage(meta.NullPointerException, name);
         }
 
-        String hostName = Meta.toHostString(name);
-        if (hostName.indexOf('/') >= 0) {
-            throw meta.throwExWithMessage(meta.ClassNotFoundException, name);
-        }
-
-        hostName = hostName.replace('.', '/');
-        if (!hostName.startsWith("[")) {
-            // Possible ambiguity, force "L" type: "void" -> Lvoid; "B" -> LB;
-            hostName = "L" + hostName + ";";
-        }
-
-        if (!Validation.validTypeDescriptor(ByteSequence.create(hostName), false)) {
-            throw meta.throwExWithMessage(meta.ClassNotFoundException, name);
-        }
-
-        Symbol<Type> type = meta.getTypes().fromClassGetName(hostName);
-
         try {
-            Klass klass = null;
-            if (Types.isArray(type)) {
-                klass = meta.resolveSymbol(type, loader);
-            } else {
-                klass = meta.loadKlass(type, loader);
-            }
+            Klass klass = context.getRegistries().loadKlass(context.getTypes().fromClassGetName(Meta.toHostString(name)), loader);
 
             if (klass == null) {
                 throw meta.throwExWithMessage(meta.ClassNotFoundException, name);
