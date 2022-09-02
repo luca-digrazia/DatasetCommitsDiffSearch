@@ -511,7 +511,7 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
             ResolvedJavaType handler = providers.getMetaAccess().lookupJavaType(entryPointData.getExceptionHandler());
             ResolvedJavaMethod[] handlerMethods = handler.getDeclaredMethods();
             UserError.guarantee(handlerMethods.length == 1 && handlerMethods[0].isStatic(),
-                            "Exception handler class must declare exactly one static method: %s -> %s", targetMethod, handler);
+                            "Exception handler class must declare exactly one static method: % -> %s", targetMethod, handler);
             JavaType[] handlerParameterTypes = handlerMethods[0].toParameterTypes();
             UserError.guarantee(handlerParameterTypes.length == 1 &&
                             ((ResolvedJavaType) handlerParameterTypes[0]).isAssignableFrom(throwable),
@@ -557,7 +557,7 @@ public final class CEntryPointCallStubMethod implements ResolvedJavaMethod, Grap
         ElementInfo typeInfo = nativeLibraries.findElementInfo((ResolvedJavaType) returnType);
         if (typeInfo instanceof EnumInfo) {
             IsNullNode isNull = kit.unique(new IsNullNode(returnValue));
-            kit.startIf(isNull, BranchProbabilityNode.VERY_SLOW_PATH_PROFILE);
+            kit.startIf(isNull, BranchProbabilityNode.VERY_SLOW_PATH_PROBABILITY);
             kit.thenPart();
             ResolvedJavaType enumExceptionType = metaAccess.lookupJavaType(RuntimeException.class);
             NewInstanceNode enumException = kit.append(new NewInstanceNode(enumExceptionType, true));
