@@ -59,6 +59,26 @@ import java.util.regex.Pattern;
 
 public class JDWPDebuggerController {
 
+    private static final Debug debugLevel = Debug.PACKET;
+
+    public enum Debug {
+        NONE,
+        THREAD,
+        PACKET,
+        ALL
+    }
+
+    public static boolean isDebug(Debug debug) {
+        switch (debug) {
+            case NONE: return false;
+            case THREAD: return debugLevel == Debug.THREAD || debugLevel == Debug.ALL;
+            case PACKET: return debugLevel == Debug.PACKET || debugLevel == Debug.ALL;
+            case ALL: return debugLevel == Debug.ALL || debugLevel == Debug.THREAD || debugLevel == Debug.PACKET;
+            default: return false;
+        }
+    }
+
+
     private static final StepConfig STEP_CONFIG = StepConfig.newBuilder().suspendAnchors(SourceElement.ROOT, SuspendAnchor.AFTER).build();
 
     private JDWPOptions options;
@@ -151,8 +171,7 @@ public class JDWPDebuggerController {
             }
             mapBrekpoint(bp, command.getBreakpointInfo());
             debuggerSession.install(bp);
-            JDWPLogger.log("Breakpoint submitted at " + bp.getLocationDescription(), JDWPLogger.LogLevel.STEPPING);
-
+            //System.out.println("Breakpoint submitted at " + bp.getLocationDescription());
         } catch (NoSuchSourceLineException ex) {
             // perhaps the debugger's view on the source is out of sync, in which case
             // the bytecode and source does not match.
@@ -168,7 +187,6 @@ public class JDWPDebuggerController {
         }
         mapBrekpoint(bp, command.getBreakpointInfo());
         debuggerSession.install(bp);
-        JDWPLogger.log("exception breakpoint submitted", JDWPLogger.LogLevel.STEPPING);
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -178,8 +196,6 @@ public class JDWPDebuggerController {
     }
 
     public void stepOver(Object thread) {
-        JDWPLogger.log("STEP_OVER for thread: " + getThreadName(thread), JDWPLogger.LogLevel.STEPPING);;
-
         SuspendedInfo susp = suspendedInfos.get(thread);
         if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
             // check if we're at the last line in a method
@@ -193,38 +209,29 @@ public class JDWPDebuggerController {
                 susp.getEvent().prepareStepOver(STEP_CONFIG);
             }
             susp.recordStep(DebuggerCommand.Kind.STEP_OVER);
-        } else {
-            JDWPLogger.log("NOT STEPPING OVER for thread: " + getThreadName(thread), JDWPLogger.LogLevel.STEPPING);
         }
     }
 
     public void stepInto(Object thread) {
-        JDWPLogger.log("STEP_INTO for thread: " + getThreadName(thread), JDWPLogger.LogLevel.STEPPING);;
-
         SuspendedInfo susp = suspendedInfos.get(thread);
         if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
             susp.getEvent().prepareStepInto(STEP_CONFIG);
             susp.recordStep(DebuggerCommand.Kind.STEP_INTO);
-        } else {
-            JDWPLogger.log("not STEPPING INTO for thread: " + getThreadName(thread), JDWPLogger.LogLevel.STEPPING);;
         }
     }
 
     public void stepOut(Object thread) {
-        JDWPLogger.log("STEP_OUT for thread: " + getThreadName(thread), JDWPLogger.LogLevel.STEPPING);;
-
         SuspendedInfo susp = suspendedInfos.get(thread);
         if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
             susp.getEvent().prepareStepOut(STEP_CONFIG);
             susp.recordStep(DebuggerCommand.Kind.STEP_OUT);
-        } else {
-            JDWPLogger.log("not STEPPING OUT for thread: " + getThreadName(thread), JDWPLogger.LogLevel.STEPPING);;
         }
     }
 
     public void resume(Object thread, boolean sessionClosed) {
-        JDWPLogger.log("Called resume thread: " + getThreadName(thread) + " with suspension count: " + ThreadSuspension.getSuspensionCount(thread), JDWPLogger.LogLevel.THREAD);
-
+        if (isDebug(Debug.THREAD)) {
+            System.out.println("Called resume thread: " + getThreadName(thread) + " with suspension count: " + ThreadSuspension.getSuspensionCount(thread));
+        }
         if (ThreadSuspension.getSuspensionCount(thread) == 0) {
             // already running, so nothing to do
             return;
@@ -240,8 +247,9 @@ public class JDWPDebuggerController {
                 if (!sessionClosed) {
                     // TODO(Gregersen) - call method directly when it becomes available
                     try {
-                        JDWPLogger.log("calling underlying resume method for thread: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
-
+                        if (isDebug(Debug.THREAD)) {
+                            System.out.println("calling underlying resume method for thread: " + getThreadName(thread));
+                        }
                         resumeMethod.invoke(debuggerSession, getContext().getGuest2HostThread(thread));
                     } catch (Exception e) {
                         throw new RuntimeException("Failed to resume thread: " + getThreadName(thread), e);
@@ -249,20 +257,24 @@ public class JDWPDebuggerController {
                 }
 
                 // OK, this is a pure resume call, so clear suspended info
-                JDWPLogger.log("pure resume call, clearing suspended info on: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
-
+                if (isDebug(Debug.THREAD)) {
+                    System.out.println("pure resume call, clearing suspended info on: " + getThreadName(thread));
+                }
                 suspendedInfos.put(thread, null);
             }
 
             Object lock = getSuspendLock(thread);
             synchronized (lock) {
-                JDWPLogger.log("Waiking up thread: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
-
+                if (isDebug(Debug.THREAD)) {
+                    System.out.println("Waiking up thread: " + getThreadName(thread));
+                }
                 lock.notifyAll();
                 ThreadSuspension.removeHardSuspendedThread(thread);
             }
         } else {
-            JDWPLogger.log("Not resuming thread: " + getThreadName(thread) + " with suspension count: " + ThreadSuspension.getSuspensionCount(thread), JDWPLogger.LogLevel.THREAD);
+            if (isDebug(Debug.THREAD)) {
+                System.out.println("Not resuming thread: " + getThreadName(thread) + " with suspension count: " + ThreadSuspension.getSuspensionCount(thread));
+            }
         }
     }
 
@@ -275,7 +287,9 @@ public class JDWPDebuggerController {
     }
 
     public void resumeAll(boolean sessionClosed) {
-        JDWPLogger.log("Called resumeAll:", JDWPLogger.LogLevel.THREAD);
+        if (isDebug(Debug.THREAD)) {
+            System.out.println("Called resumeAll:");
+        }
 
         for (Object thread : getContext().getAllGuestThreads()) {
             resume(thread, sessionClosed);
@@ -283,23 +297,28 @@ public class JDWPDebuggerController {
     }
 
     public void suspend(Object thread) {
-        JDWPLogger.log("suspend called for thread: " + getThreadName(thread) + " with suspension count " + ThreadSuspension.getSuspensionCount(thread), JDWPLogger.LogLevel.THREAD);
-
+        if (isDebug(Debug.THREAD)) {
+            System.out.println("suspend called for thread: " + getThreadName(thread) + " with suspension count " + ThreadSuspension.getSuspensionCount(thread));
+        }
         if (ThreadSuspension.getSuspensionCount(thread) > 0) {
             // already suspended
             return;
         }
 
         try {
-            JDWPLogger.log("calling underlying suspend method for thread: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
-            Thread.State threadState = getContext().getGuest2HostThread(thread).getState();
-            JDWPLogger.log("State: " + threadState, JDWPLogger.LogLevel.THREAD);
+            if (isDebug(Debug.THREAD)) {
+                System.out.println("calling underlying suspend method for thread: " + getThreadName(thread));
+                Thread.State threadState = getContext().getGuest2HostThread(thread).getState();
+                System.out.println("State: " + threadState);
+            }
 
             // TODO(Gregersen) - call method directly when it becomes available
             suspendMethod.invoke(debuggerSession, getContext().getGuest2HostThread(thread));
 
-            boolean suspended = ThreadSuspension.getSuspensionCount(thread) != 0;
-            JDWPLogger.log("suspend success: " + suspended, JDWPLogger.LogLevel.THREAD);
+            if (isDebug(Debug.THREAD)) {
+                boolean suspended = ThreadSuspension.getSuspensionCount(thread) != 0;
+                System.out.println("suspend success: " + suspended);
+            }
 
             // quite often the Debug API will not call back the onSuspend method in time,
             // even if the thread is executing. If the thread is blocked or waiting we still need
@@ -312,8 +331,9 @@ public class JDWPDebuggerController {
     }
 
     public void suspendAll() {
-        JDWPLogger.log("Called suspendAll", JDWPLogger.LogLevel.THREAD);
-
+        if (isDebug(Debug.THREAD)) {
+            System.out.println("Called suspendAll");
+        }
         for (Object thread : getContext().getAllGuestThreads()) {
             suspend(thread);
         }
@@ -367,11 +387,15 @@ public class JDWPDebuggerController {
             }
 
             Object currentThread = getContext().getHost2GuestThread(Thread.currentThread());
-            JDWPLogger.log("Suspended at: " + event.getSourceSection().toString() + " in thread: " + getThreadName(currentThread), JDWPLogger.LogLevel.THREAD);
+            if (isDebug(Debug.THREAD)) {
+                System.out.println("Suspended at: " + event.getSourceSection().toString() + " in thread: " + getThreadName(currentThread));
+            }
 
             if (commandRequestIds.get(currentThread) != null) {
                 if (checkExclusionFilters(event, currentThread)) {
-                    JDWPLogger.log("not suspending here: " + event.getSourceSection(), JDWPLogger.LogLevel.THREAD);
+                    if (isDebug(Debug.THREAD)) {
+                        System.out.println("not suspending here: " + event.getSourceSection());
+                    }
                     return;
                 }
             }
@@ -428,8 +452,9 @@ public class JDWPDebuggerController {
                         }
                     }
                     if (hit) {
-                        JDWPLogger.log("Breakpoint hit in thread: " + getThreadName(currentThread), JDWPLogger.LogLevel.THREAD);
-
+                        if (isDebug(Debug.THREAD)) {
+                            System.out.println("Breakpoint hit in thread: " + getThreadName(currentThread));
+                        }
                         jobs.add(new Callable<Void>() {
                             @Override
                             public Void call() throws Exception {
@@ -618,30 +643,34 @@ public class JDWPDebuggerController {
         }
 
         private void suspend(JDWPCallFrame currentFrame, Object thread, byte suspendPolicy, List<Callable<Void>> jobs) {
-            JDWPLogger.log("suspending from callback in thread: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
-
+            if (isDebug(Debug.THREAD)) {
+                System.out.println("suspending from callback in thread: " + getThreadName(thread));
+            }
             switch(suspendPolicy) {
                 case SuspendStrategy.NONE:
                     runJobs(jobs);
                     break;
                 case SuspendStrategy.EVENT_THREAD:
-                    JDWPLogger.log("Suspend EVENT_THREAD", JDWPLogger.LogLevel.THREAD);
-
+                    if (isDebug(Debug.THREAD)) {
+                        System.out.println("Suspend EVENT_THREAD");
+                    }
                     ThreadSuspension.suspendThread(thread);
                     runJobs(jobs);
                     suspendEventThread(currentFrame, thread);
                     break;
                 case SuspendStrategy.ALL:
-                    JDWPLogger.log("Suspend ALL", JDWPLogger.LogLevel.THREAD);
-
+                    if (isDebug(Debug.THREAD)) {
+                        System.out.println("Suspend ALL");
+                    }
                     Thread suspendThread = new Thread(new Runnable() {
                         @Override
                         public void run() {
                             // suspend other threads
                             for (Object activeThread : getContext().getAllGuestThreads()) {
                                 if (activeThread != thread) {
-                                    JDWPLogger.log("Request thread suspend for other thread: " + getThreadName(activeThread), JDWPLogger.LogLevel.THREAD);
-
+                                    if (isDebug(Debug.THREAD)) {
+                                        System.out.println("Request thread suspend for other thread: " + getThreadName(activeThread));
+                                    }
                                     JDWPDebuggerController.this.suspend(activeThread);
                                 }
                             }
@@ -669,8 +698,9 @@ public class JDWPDebuggerController {
 
         private void suspendEventThread(JDWPCallFrame currentFrame, Object thread) {
 
-            JDWPLogger.log("Suspending event thread: " + getThreadName(thread) + " with new suspension count: " + ThreadSuspension.getSuspensionCount(thread), JDWPLogger.LogLevel.THREAD);
-
+            if (isDebug(Debug.THREAD)) {
+                System.out.println("Suspending event thread: " + getThreadName(thread) + " with new suspension count: " + ThreadSuspension.getSuspensionCount(thread));
+            }
             // if during stepping, send a step completed event back to the debugger
             Integer id = commandRequestIds.get(thread);
             if (id != null) {
@@ -680,15 +710,19 @@ public class JDWPDebuggerController {
             commandRequestIds.put(thread, null);
 
 
-            JDWPLogger.log("lock.wait() for thread: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
-
+            if (isDebug(Debug.THREAD)) {
+                System.out.println("lock.wait() for thread: " + getThreadName(thread));
+            }
             // no reason to hold a hard suspension status, since now
             // we have the actual suspension status and suspended information
             ThreadSuspension.removeHardSuspendedThread(thread);
 
             lockThread(thread);
 
-            JDWPLogger.log("lock wakeup for thread: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
+            if (isDebug(Debug.THREAD)) {
+                System.out.println("lock wakeup for thread: " + getThreadName(thread));
+            }
+
         }
     }
 
@@ -707,7 +741,9 @@ public class JDWPDebuggerController {
 
         checkThreadJobsAndRun(thread);
 
-        JDWPLogger.log("lock wakeup for thread: " + getThreadName(thread), JDWPLogger.LogLevel.THREAD);
+        if (isDebug(Debug.THREAD)) {
+            System.out.println("lock wakeup for thread: " + getThreadName(thread));
+        }
     }
 
     private void checkThreadJobsAndRun(Object thread) {

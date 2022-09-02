@@ -87,7 +87,9 @@ public class JDWPInstrument extends TruffleInstrument implements Runnable {
 
         if (prepareForReconnect) {
             // replace the controller instance
-            controller.reInitialize();
+            JDWPOptions options = controller.getOptions();
+            controller = new JDWPController(this);
+            controller.reInitialize(options, context);
 
             // prepare to accept a new debugger connection
             try {
