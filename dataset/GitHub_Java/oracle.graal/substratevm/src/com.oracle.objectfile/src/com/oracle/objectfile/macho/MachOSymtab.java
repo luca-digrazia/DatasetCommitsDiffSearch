@@ -24,13 +24,14 @@
  */
 package com.oracle.objectfile.macho;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.function.Predicate;
 
 import com.oracle.objectfile.BuildDependency;
@@ -50,7 +51,7 @@ import com.oracle.objectfile.macho.MachOObjectFile.LinkEditSegment64Command;
 import com.oracle.objectfile.macho.MachOObjectFile.MachOSection;
 import com.oracle.objectfile.macho.MachOObjectFile.Segment64Command;
 
-public class MachOSymtab extends MachOObjectFile.LinkEditElement implements SymbolTable {
+public final class MachOSymtab extends MachOObjectFile.LinkEditElement implements SymbolTable {
 
     /*
      * Mach-O symbol tables are not sections! They are opaque data inside some segment (__LINKEDIT
@@ -60,9 +61,10 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
      * (The same goes for strtabs!)
      */
 
-    MachOStrtab strtab;
+    final MachOStrtab strtab;
 
-    SortedSet<Entry> entries = new TreeSet<>(MachOSymtab::compareEntries);
+    private boolean isSorted = false;
+    private final ArrayList<Entry> entries = new ArrayList<>();
 
     private static int compareEntries(Entry a, Entry b) {
         /*
@@ -82,20 +84,27 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
         return cmp;
     }
 
-    private HashMap<String, Entry> entriesByName = new HashMap<>();
+    private final HashMap<String, Entry> entriesByName = new HashMap<>();
 
     public MachOSymtab(String name, MachOObjectFile objectFile, Segment64Command containingSegment, MachOStrtab strtab) {
         objectFile.super(name, containingSegment, objectFile.getWordSizeInBytes());
-        setStrtab(strtab);
+        this.strtab = strtab;
+        strtab.setContentProvider(() -> getSortedEntries().stream().map(Entry::getNameInObject).iterator());
     }
 
-    public SortedSet<Entry> getEntries() {
+    public List<Entry> getSortedEntries() {
+        if (!isSorted) {
+            entries.sort(MachOSymtab::compareEntries);
+            isSorted = true;
+        }
         return entries;
     }
 
-    public void setStrtab(MachOStrtab strtab) {
-        this.strtab = strtab;
-        strtab.setContentProvider(entries.stream().map(Entry::getNameInObject)::iterator);
+    private List<Entry> getModifiableEntries() {
+        if (isSorted) {
+            throw new RuntimeException("unexpected access to unsorted symtab entries");
+        }
+        return entries;
     }
 
     enum ReferenceType {
@@ -153,7 +162,7 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
         }
     }
 
-    static final class Entry implements Symbol {
+    public static final class Entry implements Symbol {
         /*
          * In Mach-O-speak, this class is modelling an 'nlist64', but I couldn't bring myself to
          * call it that.
@@ -208,10 +217,6 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
             this.isCode = isCode;
         }
 
-        boolean isPrivateExtern() {
-            return privateExtern;
-        }
-
         boolean isExternal() {
             return privateExtern || extern;
         }
@@ -234,19 +239,8 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
         }
 
         public String getNameInObject() {
-            /*
-             * Mach-O symtabs are weird: exported symbols get prefixed by "_". We don't represent
-             * this in the 'name', because clients want to be oblivious to these format-specific
-             * peculiarities, i.e. to put in a symbol named "foo" and be able to retrieve it using
-             * "foo" later. Note also that the "_" is stripped away by Mac OS's dlsym(), so we can
-             * dlsym() "foo" just fine. It's only in the encoded object file that the underscore
-             * exists, so we hide it here.
-             */
-            if (isExternal()) {
-                return "_" + name;
-            } else {
-                return name;
-            }
+            /* On Mach-O symbols are prefixed with underscore */
+            return "_" + name;
         }
 
         @Override
@@ -279,8 +273,9 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
             return !extern && !privateExtern;
         }
 
+        @Override
         public boolean isGlobal() {
-            return !isLocal();
+            return extern;
         }
 
         @Override
@@ -355,7 +350,7 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
     }
 
     private int getWrittenSize() {
-        return entries.size() * EntryStruct.getWrittenSize();
+        return getEntryCount() * EntryStruct.getWrittenSize();
     }
 
     @Override
@@ -365,7 +360,7 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
 
     private int firstIndexMatching(Predicate<Entry> p) {
         int i = 0;
-        for (Entry e : entries) {
+        for (Entry e : getSortedEntries()) {
             if (p.test(e)) {
                 return i;
             }
@@ -381,7 +376,7 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
 
     private int nContiguousMatching(Predicate<Entry> p) {
         int n = 0;
-        for (Entry e : entries) {
+        for (Entry e : getSortedEntries()) {
             if (p.test(e)) {
                 n++;
             } else if (n != 0) {
@@ -436,7 +431,7 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
         StringTable t = new StringTable(strtabContent);
         EntryStruct s = new EntryStruct();
 
-        for (Entry e : entries) {
+        for (Entry e : getSortedEntries()) {
             s.strx = t.indexFor(e.getNameInObject());
             assert s.strx != -1;
             s.type = (byte) (e.type.value() | (e.privateExtern ? EntryStruct.N_PEXT : 0) | (e.extern ? EntryStruct.N_EXT : 0));
@@ -479,7 +474,7 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
     }
 
     private Entry addEntry(Entry entry) {
-        entries.add(entry);
+        getModifiableEntries().add(entry);
         entriesByName.put(entry.getName(), entry);
         return entry;
     }
@@ -504,17 +499,17 @@ public class MachOSymtab extends MachOObjectFile.LinkEditElement implements Symb
     }
 
     public int indexOf(Symbol sym) {
-        SortedSet<Entry> headSet = entries.headSet((Entry) sym);
-        int before = headSet.size();
-        if (before == 0) { // empty headSet means either the symbol is first, or that it is unknown
-            return entries.contains(sym) ? 0 : -1;
-        }
-        return before;
+        int offset = Collections.binarySearch(getSortedEntries(), (Entry) sym, MachOSymtab::compareEntries);
+        return offset < 0 ? -1 : offset;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
     public Iterator<Symbol> iterator() {
-        return (Iterator) entries.iterator();
+        return (Iterator) getSortedEntries().iterator();
+    }
+
+    public int getEntryCount() {
+        return entries.size();
     }
 }
