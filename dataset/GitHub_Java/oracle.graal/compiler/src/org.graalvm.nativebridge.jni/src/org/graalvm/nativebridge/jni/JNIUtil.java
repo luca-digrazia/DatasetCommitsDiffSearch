@@ -24,31 +24,47 @@
  */
 package org.graalvm.nativebridge.jni;
 
+import org.graalvm.compiler.serviceprovider.IsolateUtil;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.nativebridge.jni.JNI.JArray;
+import org.graalvm.nativebridge.jni.JNI.JavaVM;
+import org.graalvm.nativebridge.jni.JNI.JavaVMAttachArgs;
+import org.graalvm.nativebridge.jni.JNI.JavaVMPointer;
 import org.graalvm.nativebridge.jni.JNI.JByteArray;
 import org.graalvm.nativebridge.jni.JNI.JClass;
+import org.graalvm.nativebridge.jni.JNI.JFieldID;
+import org.graalvm.nativebridge.jni.JNI.JIntArray;
 import org.graalvm.nativebridge.jni.JNI.JLongArray;
 import org.graalvm.nativebridge.jni.JNI.JMethodID;
 import org.graalvm.nativebridge.jni.JNI.JNIEnv;
+import org.graalvm.nativebridge.jni.JNI.JNIEnvPointer;
 import org.graalvm.nativebridge.jni.JNI.JObject;
 import org.graalvm.nativebridge.jni.JNI.JObjectArray;
 import org.graalvm.nativebridge.jni.JNI.JString;
 import org.graalvm.nativebridge.jni.JNI.JThrowable;
 import org.graalvm.nativebridge.jni.JNI.JValue;
+import org.graalvm.nativebridge.jni.JNIExceptionWrapper.ExceptionHandler;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CCharPointer;
+import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.c.type.CShortPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
-import static org.graalvm.nativeimage.c.type.CTypeConversion.toCString;
+import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.c.type.VoidPointer;
 import org.graalvm.word.WordFactory;
+
+import java.io.PrintWriter;
+import java.io.StringWriter;
+
+import static org.graalvm.nativebridge.jni.JNI.JNI_OK;
+import static org.graalvm.nativebridge.jni.JNI.JNI_VERSION_1_8;
+import static org.graalvm.nativeimage.c.type.CTypeConversion.toCString;
 import static org.graalvm.word.WordFactory.nullPointer;
 
 /**
- * Helpers for calling org.graalvm.nativebridge.jni.JNI functions.
+ * Helpers for calling JNI functions.
  */
 
 public final class JNIUtil {
@@ -113,9 +129,24 @@ public final class JNIUtil {
         return env.getFunctions().getGetMethodID().call(env, clazz, name, sig);
     }
 
-    public static JNI.JFieldID GetStaticFieldID(JNIEnv env, JClass clazz, CCharPointer name, CCharPointer sig) {
+    public static JFieldID GetStaticFieldID(JNIEnv env, JClass clazz, CCharPointer name, CCharPointer sig) {
         traceJNI("GetStaticFieldID");
         return env.getFunctions().getGetStaticFieldID().call(env, clazz, name, sig);
+    }
+
+    public static JFieldID GetFieldID(JNIEnv env, JClass clazz, CCharPointer name, CCharPointer signature) {
+        traceJNI("GetFieldID");
+        return env.getFunctions().getGetFieldID().call(env, clazz, name, signature);
+    }
+
+    public static JObject GetStaticObjectField(JNIEnv env, JClass clazz, JFieldID fieldID) {
+        traceJNI("GetFieldID");
+        return env.getFunctions().getGetStaticObjectField().call(env, clazz, fieldID);
+    }
+
+    public static int GetIntField(JNIEnv env, JObject object, JFieldID fieldID) {
+        traceJNI("GetIntField");
+        return env.getFunctions().getGetIntField().call(env, object, fieldID);
     }
 
     public static JObjectArray NewObjectArray(JNIEnv env, int len, JClass componentClass, JObject initialElement) {
@@ -126,6 +157,11 @@ public final class JNIUtil {
     public static JByteArray NewByteArray(JNIEnv env, int len) {
         traceJNI("NewByteArray");
         return env.getFunctions().getNewByteArray().call(env, len);
+    }
+
+    public static JIntArray NewIntArray(JNIEnv env, int len) {
+        traceJNI("NewIntArray");
+        return env.getFunctions().getNewIntArray().call(env, len);
     }
 
     public static JLongArray NewLongArray(JNIEnv env, int len) {
@@ -148,9 +184,19 @@ public final class JNIUtil {
         return env.getFunctions().getGetObjectArrayElement().call(env, array, index);
     }
 
+    public static CIntPointer GetIntArrayElements(JNIEnv env, JIntArray array, JValue isCopy) {
+        traceJNI("GetIntArrayElements");
+        return env.getFunctions().getGetIntArrayElements().call(env, array, isCopy);
+    }
+
     public static CLongPointer GetLongArrayElements(JNIEnv env, JLongArray array, JValue isCopy) {
         traceJNI("GetLongArrayElements");
         return env.getFunctions().getGetLongArrayElements().call(env, array, isCopy);
+    }
+
+    public static void ReleaseIntArrayElements(JNIEnv env, JIntArray array, CIntPointer elems, int mode) {
+        traceJNI("ReleaseIntArrayElements");
+        env.getFunctions().getReleaseIntArrayElements().call(env, array, elems, mode);
     }
 
     public static void ReleaseLongArrayElements(JNIEnv env, JLongArray array, CLongPointer elems, int mode) {
@@ -166,6 +212,51 @@ public final class JNIUtil {
     public static void ReleaseByteArrayElements(JNIEnv env, JByteArray array, CCharPointer elems, int mode) {
         traceJNI("ReleaseByteArrayElements");
         env.getFunctions().getReleaseByteArrayElements().call(env, array, elems, mode);
+    }
+
+    public static JavaVM GetJavaVM(JNIEnv env) {
+        traceJNI("GetJavaVM");
+        JavaVMPointer javaVMPointer = StackValue.get(JavaVMPointer.class);
+        if (env.getFunctions().getGetJavaVM().call(env, javaVMPointer) == JNI_OK) {
+            return javaVMPointer.readJavaVM();
+        } else {
+            return WordFactory.nullPointer();
+        }
+    }
+
+    public static JNIEnv GetEnv(JavaVM vm) {
+        traceJNI("GetEnv");
+        JNIEnvPointer envPointer = StackValue.get(JNIEnvPointer.class);
+        if (vm.getFunctions().getGetEnv().call(vm, envPointer, JNI_VERSION_1_8) == JNI_OK) {
+            return envPointer.readJNIEnv();
+        } else {
+            return WordFactory.nullPointer();
+        }
+    }
+
+    public static JNIEnv AttachCurrentThread(JavaVM vm, JavaVMAttachArgs args) {
+        traceJNI("AttachCurrentThread");
+        JNIEnvPointer envPointer = StackValue.get(JNIEnvPointer.class);
+        if (vm.getFunctions().getAttachCurrentThread().call(vm, envPointer, args) == JNI_OK) {
+            return envPointer.readJNIEnv();
+        } else {
+            return WordFactory.nullPointer();
+        }
+    }
+
+    public static JNIEnv AttachCurrentThreadAsDaemon(JavaVM vm, JavaVMAttachArgs args) {
+        traceJNI("AttachCurrentThreadAsDaemon");
+        JNIEnvPointer envPointer = StackValue.get(JNIEnvPointer.class);
+        if (vm.getFunctions().getAttachCurrentThreadAsDaemon().call(vm, envPointer, args) == JNI_OK) {
+            return envPointer.readJNIEnv();
+        } else {
+            return WordFactory.nullPointer();
+        }
+    }
+
+    public static boolean DetachCurrentThread(JavaVM vm) {
+        traceJNI("DetachCurrentThread");
+        return vm.getFunctions().getDetachCurrentThread().call(vm) == JNI_OK;
     }
 
     public static void Throw(JNIEnv env, JThrowable throwable) {
@@ -197,9 +288,9 @@ public final class JNIUtil {
      * Creates a new global reference.
      *
      * @param env the JNIEnv
-     * @param ref JObject to create org.graalvm.nativebridge.jni.JNI global reference for
+     * @param ref JObject to create JNI global reference for
      * @param type type of the object, used only for tracing to distinguish global references
-     * @return org.graalvm.nativebridge.jni.JNI global reference for given {@link JObject}
+     * @return JNI global reference for given {@link JObject}
      */
     @SuppressWarnings("unchecked")
     public static <T extends JObject> T NewGlobalRef(JNIEnv env, T ref, String type) {
@@ -224,10 +315,15 @@ public final class JNIUtil {
         return env.getFunctions().getGetDirectBufferAddress().call(env, buf);
     }
 
+    public static boolean IsInstanceOf(JNIEnv env, JObject obj, JClass clazz) {
+        traceJNI("IsInstanceOf");
+        return env.getFunctions().getIsInstanceOf().call(env, obj, clazz);
+    }
+
     // Checkstyle: resume
 
     private static void traceJNI(String function) {
-        trace(2, "LIBGRAAL->org.graalvm.nativebridge.jni.JNI: %s", function);
+        trace(2, "%s->JNI: %s", getFeatureName(), function);
     }
 
     private JNIUtil() {
@@ -335,7 +431,8 @@ public final class JNIUtil {
      * Returns a {@link JClass} for given binary name.
      */
     public static JClass findClass(JNIEnv env, String binaryName) {
-        try (CTypeConversion.CCharPointerHolder name = CTypeConversion.toCString(binaryName)) {
+        trace(1, "%s->HS: findClass %s", getFeatureName(), binaryName);
+        try (CCharPointerHolder name = CTypeConversion.toCString(binaryName)) {
             return JNIUtil.FindClass(env, name.get());
         }
     }
@@ -346,19 +443,19 @@ public final class JNIUtil {
      * @param env the {@code JNIEnv}
      * @param binaryName the class binary name
      */
-    public static JNI.JClass findClass(JNI.JNIEnv env, JNI.JObject classLoader, String binaryName) {
+    public static JClass findClass(JNIEnv env, JObject classLoader, String binaryName) {
         if (classLoader.isNull()) {
             throw new IllegalArgumentException("ClassLoader must be non null.");
         }
-        trace(1, "LIBGRAAL->HS: findClass");
-        JNI.JMethodID findClassId = findMethod(env, JNIUtil.GetObjectClass(env, classLoader), false, false, METHOD_LOAD_CLASS[0], METHOD_LOAD_CLASS[1]);
-        JNI.JValue params = StackValue.get(1, JNI.JValue.class);
+        trace(1, "%s->HS: findClass %s", getFeatureName(), binaryName);
+        JMethodID findClassId = findMethod(env, JNIUtil.GetObjectClass(env, classLoader), false, false, METHOD_LOAD_CLASS[0], METHOD_LOAD_CLASS[1]);
+        JValue params = StackValue.get(1, JValue.class);
         params.addressOf(0).setJObject(JNIUtil.createHSString(env, binaryName.replace('/', '.')));
-        return (JNI.JClass) env.getFunctions().getCallObjectMethodA().call(env, classLoader, findClassId, params);
+        return (JClass) env.getFunctions().getCallObjectMethodA().call(env, classLoader, findClassId, params);
     }
 
     /**
-     * Finds a class in HotSpot heap using org.graalvm.nativebridge.jni.JNI.
+     * Finds a class in HotSpot heap using JNI.
      *
      * @param env the {@code JNIEnv}
      * @param classLoader the class loader to find class in or {@link WordFactory#nullPointer() NULL
@@ -368,7 +465,7 @@ public final class JNIUtil {
      *            not found. If {@code false} the {@code NULL pointer} is returned when the class is
      *            not found.
      */
-    public static JNI.JClass findClass(JNI.JNIEnv env, JNI.JObject classLoader, String binaryName, boolean required) {
+    public static JClass findClass(JNIEnv env, JObject classLoader, String binaryName, boolean required) {
         Class<? extends Throwable> allowedException = null;
         try {
             if (classLoader.isNonNull()) {
@@ -379,40 +476,36 @@ public final class JNIUtil {
                 return findClass(env, binaryName);
             }
         } finally {
-            if (allowedException != null) {
-                JNIExceptionWrapper.wrapAndThrowPendingJNIException(env, allowedException);
-            } else {
-                JNIExceptionWrapper.wrapAndThrowPendingJNIException(env);
-            }
+            JNIExceptionWrapper.wrapAndThrowPendingJNIException(env, allowedException == null ? ExceptionHandler.DEFAULT : ExceptionHandler.allowExceptions(allowedException));
         }
     }
 
     /**
      * Returns a ClassLoader used to load the compiler classes.
      */
-    public static JNI.JObject getJVMCIClassLoader(JNI.JNIEnv env) {
+    public static JObject getJVMCIClassLoader(JNIEnv env) {
         if (JavaVersionUtil.JAVA_SPEC <= 8) {
-            JNI.JClass clazz;
-            try (CTypeConversion.CCharPointerHolder className = CTypeConversion.toCString(CLASS_SERVICES)) {
+            JClass clazz;
+            try (CCharPointerHolder className = CTypeConversion.toCString(CLASS_SERVICES)) {
                 clazz = JNIUtil.FindClass(env, className.get());
             }
             if (clazz.isNull()) {
                 throw new InternalError("No such class " + CLASS_SERVICES);
             }
-            JNI.JMethodID getClassLoaderId = findMethod(env, clazz, true, true, METHOD_GET_JVMCI_CLASS_LOADER[0], METHOD_GET_JVMCI_CLASS_LOADER[1]);
+            JMethodID getClassLoaderId = findMethod(env, clazz, true, true, METHOD_GET_JVMCI_CLASS_LOADER[0], METHOD_GET_JVMCI_CLASS_LOADER[1]);
             if (getClassLoaderId.isNull()) {
                 throw new InternalError(String.format("Cannot find method %s in class %s.", METHOD_GET_JVMCI_CLASS_LOADER[0], CLASS_SERVICES));
             }
             return env.getFunctions().getCallStaticObjectMethodA().call(env, clazz, getClassLoaderId, nullPointer());
         } else {
-            JNI.JClass clazz;
-            try (CTypeConversion.CCharPointerHolder className = CTypeConversion.toCString(JNIUtil.getBinaryName(ClassLoader.class.getName()))) {
+            JClass clazz;
+            try (CCharPointerHolder className = CTypeConversion.toCString(JNIUtil.getBinaryName(ClassLoader.class.getName()))) {
                 clazz = JNIUtil.FindClass(env, className.get());
             }
             if (clazz.isNull()) {
                 throw new InternalError("No such class " + ClassLoader.class.getName());
             }
-            JNI.JMethodID getClassLoaderId = findMethod(env, clazz, true, true, METHOD_GET_PLATFORM_CLASS_LOADER[0], METHOD_GET_PLATFORM_CLASS_LOADER[1]);
+            JMethodID getClassLoaderId = findMethod(env, clazz, true, true, METHOD_GET_PLATFORM_CLASS_LOADER[0], METHOD_GET_PLATFORM_CLASS_LOADER[1]);
             if (getClassLoaderId.isNull()) {
                 throw new InternalError(String.format("Cannot find method %s in class %s.", METHOD_GET_PLATFORM_CLASS_LOADER[0], ClassLoader.class.getName()));
             }
@@ -420,28 +513,52 @@ public final class JNIUtil {
         }
     }
 
-    public static JNI.JMethodID findMethod(JNI.JNIEnv env, JNI.JClass clazz, boolean staticMethod, String methodName, String methodSignature) {
+    public static JMethodID findMethod(JNIEnv env, JClass clazz, boolean staticMethod, String methodName, String methodSignature) {
         return findMethod(env, clazz, staticMethod, false, methodName, methodSignature);
     }
 
-    private static JNI.JMethodID findMethod(JNI.JNIEnv env, JNI.JClass clazz, boolean staticMethod, boolean optional,
+    static JMethodID findMethod(JNIEnv env, JClass clazz, boolean staticMethod, boolean required,
                     String methodName, String methodSignature) {
-        JNI.JMethodID result;
-        try (CTypeConversion.CCharPointerHolder name = toCString(methodName); CTypeConversion.CCharPointerHolder sig = toCString(methodSignature)) {
+        JMethodID result;
+        try (CCharPointerHolder name = toCString(methodName); CCharPointerHolder sig = toCString(methodSignature)) {
             result = staticMethod ? GetStaticMethodID(env, clazz, name.get(), sig.get()) : GetMethodID(env, clazz, name.get(), sig.get());
-            if (optional) {
-                JNIExceptionWrapper.wrapAndThrowPendingJNIException(env, NoSuchMethodError.class);
-            } else {
-                JNIExceptionWrapper.wrapAndThrowPendingJNIException(env);
-            }
+            JNIExceptionWrapper.wrapAndThrowPendingJNIException(env, required ? ExceptionHandler.DEFAULT : ExceptionHandler.allowExceptions(NoSuchMethodError.class));
             return result;
+        }
+    }
+
+    public static JFieldID findField(JNIEnv env, JClass clazz, boolean staticField, String fieldName, String fieldSignature) {
+        JFieldID result;
+        try (CCharPointerHolder name = toCString(fieldName); CCharPointerHolder sig = toCString(fieldSignature)) {
+            result = staticField ? GetStaticFieldID(env, clazz, name.get(), sig.get()) : GetFieldID(env, clazz, name.get(), sig.get());
+            JNIExceptionWrapper.wrapAndThrowPendingJNIException(env);
+            return result;
+        }
+    }
+
+    /**
+     * Attaches the current C thread to a Java Thread.
+     *
+     * @param vm the {@link JavaVM} pointer.
+     * @param daemon if true attaches the thread as a daemon thread.
+     * @param name the name of the Java tread or {@code null}.
+     * @param threadGroup the thread group to add the thread into or C {@code NULL} pointer.
+     * @return the current thread {@link JNIEnv} or C {@code NULL} pointer in case of error.
+     */
+    public static JNIEnv attachCurrentThread(JavaVM vm, boolean daemon, String name, JObject threadGroup) {
+        try (CCharPointerHolder cname = CTypeConversion.toCString(name)) {
+            JavaVMAttachArgs args = StackValue.get(JavaVMAttachArgs.class);
+            args.setVersion(JNI_VERSION_1_8);
+            args.setGroup(threadGroup);
+            args.setName(cname.get());
+            return daemon ? AttachCurrentThreadAsDaemon(vm, args) : AttachCurrentThread(vm, args);
         }
     }
 
     /*----------------- TRACING ------------------*/
 
     public static boolean tracingAt(int level) {
-        return TraceHandler.getInstance().isTracingEnabled(level);
+        return NativeBridgeSupport.getInstance().isTracingEnabled(level);
     }
 
     /**
@@ -449,10 +566,28 @@ public final class JNIUtil {
      * or greater than {@code level}.
      */
     public static void trace(int level, String format, Object... args) {
-        TraceHandler.getInstance().trace(level, format, args);
+        if (tracingAt(level)) {
+            StringBuilder sb = new StringBuilder();
+            sb.append('[').append(IsolateUtil.getIsolateID()).append(':').append(Thread.currentThread().getName()).append(']');
+            JNIMethodScope scope = JNIMethodScope.scopeOrNull();
+            if (scope != null) {
+                sb.append(new String(new char[2 + (scope.depth() * 2)]).replace('\0', ' '));
+            }
+            NativeBridgeSupport.getInstance().trace(sb.append(String.format(format, args)).toString());
+        }
     }
 
     public static void trace(int level, Throwable throwable) {
-        TraceHandler.getInstance().trace(level, throwable);
+        if (tracingAt(level)) {
+            StringWriter stringWriter = new StringWriter();
+            try (PrintWriter out = new PrintWriter(stringWriter)) {
+                throwable.printStackTrace(out);
+            }
+            trace(level, stringWriter.toString());
+        }
+    }
+
+    static String getFeatureName() {
+        return NativeBridgeSupport.getInstance().getFeatureName();
     }
 }
