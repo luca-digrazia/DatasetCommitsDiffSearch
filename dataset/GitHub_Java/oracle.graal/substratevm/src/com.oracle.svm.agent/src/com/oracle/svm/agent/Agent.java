@@ -136,7 +136,6 @@ public final class Agent {
         boolean builtinCallerFilter = true;
         boolean builtinHeuristicFilter = true;
         List<String> callerFilterFiles = new ArrayList<>();
-        boolean experimentalClassLoaderSupport = false;
         boolean build = false;
         if (options.isNonNull()) {
             String[] optionTokens = fromCString(options).split(",");
@@ -183,8 +182,6 @@ public final class Agent {
                     builtinHeuristicFilter = builtinCallerFilter;
                 } else if (token.startsWith("caller-filter-file=")) {
                     callerFilterFiles.add(getTokenValue(token));
-                } else if (token.equals("experimental-class-loader-support")) {
-                    experimentalClassLoaderSupport = true;
                 } else if (token.equals("build")) {
                     build = true;
                 } else if (token.startsWith("build=")) {
@@ -297,7 +294,7 @@ public final class Agent {
             if (!restrictConfigs.getResourceConfigPaths().isEmpty()) {
                 resourceVerifier = new ResourceAccessVerifier(restrictConfigs.loadResourceConfig(ConfigurationSet.FAIL_ON_EXCEPTION), accessAdvisor);
             }
-            BreakpointInterceptor.onLoad(jvmti, callbacks, traceWriter, verifier, proxyVerifier, resourceVerifier, experimentalClassLoaderSupport);
+            BreakpointInterceptor.onLoad(jvmti, callbacks, traceWriter, verifier, proxyVerifier, resourceVerifier);
         } catch (Throwable t) {
             System.err.println(MESSAGE_PREFIX + t);
             return 3;
@@ -550,7 +547,7 @@ public final class Agent {
         }
         JNIEnvironment env = jniPtr.read();
         JniCallInterceptor.onUnload();
-        BreakpointInterceptor.onUnload();
+        BreakpointInterceptor.onUnload(env);
         Support.destroy(env);
 
         // Don't allow more threads to attach
