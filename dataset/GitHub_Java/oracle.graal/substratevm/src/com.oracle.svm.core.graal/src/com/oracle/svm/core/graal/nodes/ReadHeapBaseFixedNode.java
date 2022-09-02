@@ -28,28 +28,22 @@ import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.NodeCycles;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.NodeSize;
-import org.graalvm.compiler.nodes.spi.LIRLowerable;
 
 import com.oracle.svm.core.graal.meta.SubstrateRegisterConfig;
 
 import jdk.vm.ci.code.Register;
 
-/**
- * Reads the value of a specific register.
- *
- * This is a floating node that uses the register directly as the result. It is more efficient than
- * using a {@link ReadRegisterFixedNode}, but limits usages.
- */
 @NodeInfo(cycles = NodeCycles.CYCLES_1, size = NodeSize.SIZE_1)
-public final class ReadIsolateThreadFloatingNode extends ReadRegisterFloatingNode implements LIRLowerable {
-    public static final NodeClass<ReadIsolateThreadFloatingNode> TYPE = NodeClass.create(ReadIsolateThreadFloatingNode.class);
+public final class ReadHeapBaseFixedNode extends ReadRegisterFixedNode {
+    public static final NodeClass<ReadHeapBaseFixedNode> TYPE = NodeClass.create(ReadHeapBaseFixedNode.class);
 
-    public ReadIsolateThreadFloatingNode() {
+    public ReadHeapBaseFixedNode() {
         super(TYPE);
     }
 
     @Override
     protected Register getReadRegister(SubstrateRegisterConfig registerConfig) {
-        return registerConfig.getThreadRegister();
+        return registerConfig.getHeapBaseRegister();
     }
+
 }
