@@ -140,7 +140,8 @@ public abstract class AbstractBootImage {
 
     // factory method
     public static AbstractBootImage create(NativeImageKind k, HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap,
-                    NativeImageCodeCache codeCache, List<HostedMethod> entryPoints, ClassLoader classLoader) {
+                    NativeImageCodeCache codeCache,
+                    List<HostedMethod> entryPoints, ClassLoader classLoader) {
         switch (k) {
             case SHARED_LIBRARY:
                 return new SharedLibraryViaCCBootImage(universe, metaAccess, nativeLibs, heap, codeCache, entryPoints, classLoader);
