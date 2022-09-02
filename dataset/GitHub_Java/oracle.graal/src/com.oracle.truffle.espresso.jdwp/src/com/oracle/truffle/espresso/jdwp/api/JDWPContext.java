@@ -24,9 +24,6 @@ package com.oracle.truffle.espresso.jdwp.api;
 
 import com.oracle.truffle.api.nodes.RootNode;
 
-import java.nio.file.Path;
-import java.util.List;
-
 /**
  * Interface that defines required methods for a guest language when implementing JDWP.
  */
@@ -363,38 +360,4 @@ public interface JDWPContext {
      */
     void exit(int exitCode);
 
-    /**
-     * This method is called when the VM should hold JDWP events.
-     */
-    void holdEvents();
-
-    /**
-     * This method is called when the VM should release all held JDWP events.
-     */
-    void releaseEvents();
-
-    /**
-     * Returns the classpath.
-     *
-     * @return a list representation of each classpath entry
-     */
-    List<Path> getClassPath();
-
-    /**
-     * Returns the bootclasspath.
-     *
-     * @return a list representation of each bootclasspath entry
-     */
-    List<Path> getBootClassPath();
-
-    /**
-     * Determines if the exception is caught by the method within the block containing the bci. If
-     * it does it returns the exception handler bci.
-     * 
-     * @param method the method
-     * @param guestException the exception object
-     * @param bci the code index within the method
-     * @return the handler bci or -1 if exception is not caught by method
-     */
-    int getCatchLocation(MethodRef method, Object guestException, int bci);
 }
