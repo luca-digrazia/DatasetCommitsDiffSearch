@@ -53,7 +53,6 @@ public @interface HotSpotToSVM {
         CloseDebugContextScope,
         CreateSpeculationLog,
         DoCompile,
-        DumpChannelClose,
         DumpChannelWrite,
         GetCompilerConfigurationFactoryName,
         GetCompilerConfigurationName,

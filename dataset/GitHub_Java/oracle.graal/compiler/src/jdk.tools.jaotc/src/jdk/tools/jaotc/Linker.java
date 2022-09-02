@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -83,6 +83,15 @@ final class Linker {
                 linkerCmd = linkerPath + " -shared -z noexecstack -o " + libraryFileName + " " + objectFileName;
                 linkerCheck = linkerPath + " -v";
                 break;
+            case "SunOS":
+                if (name.endsWith(".so")) {
+                    objectFileName = name.substring(0, name.length() - ".so".length());
+                }
+                objectFileName = objectFileName + ".o";
+                linkerPath = (options.linkerpath != null) ? options.linkerpath : "ld";
+                linkerCmd = linkerPath + " -shared -o " + libraryFileName + " " + objectFileName;
+                linkerCheck = linkerPath + " -V";
+                break;
             case "Mac OS X":
                 if (name.endsWith(".dylib")) {
                     objectFileName = name.substring(0, name.length() - ".dylib".length());
@@ -98,7 +107,7 @@ final class Linker {
                         objectFileName = name.substring(0, name.length() - ".dll".length());
                     }
                     objectFileName = objectFileName + ".obj";
-                    linkerPath = (options.linkerpath != null) ? options.linkerpath : getWindowsLinkPath(main);
+                    linkerPath = (options.linkerpath != null) ? options.linkerpath : getWindowsLinkPath();
                     if (linkerPath == null) {
                         throw new InternalError("Can't locate Microsoft Visual Studio amd64 link.exe");
                     }
@@ -118,8 +127,6 @@ final class Linker {
                 throw new InternalError(getString(p.getErrorStream()));
             }
         }
-
-        main.printer.printlnVerbose("Found linker: " + linkerPath);
     }
 
     void link() throws Exception {
@@ -152,17 +159,14 @@ final class Linker {
     /**
      * Search for Visual Studio link.exe Search Order is: VS2017+, VS2013, VS2015, VS2012.
      */
-    private static String getWindowsLinkPath(Main main) throws Exception {
+    private static String getWindowsLinkPath() throws Exception {
         try {
             Path vc141NewerLinker = getVC141AndNewerLinker();
             if (vc141NewerLinker != null) {
                 return vc141NewerLinker.toString();
             }
         } catch (Exception e) {
-            main.printer.printlnVerbose("Could not find VC14 or newer version of linker: " + e.getMessage());
-            if (main.options.debug) {
-                e.printStackTrace();
-            }
+            e.printStackTrace();
         }
 
         String link = "\\VC\\bin\\amd64\\link.exe";
@@ -198,12 +202,11 @@ final class Linker {
     private static Path getVC141AndNewerLinker() throws Exception {
         String programFilesX86 = System.getenv("ProgramFiles(x86)");
         if (programFilesX86 == null) {
-            throw new IllegalStateException("Could not read the ProgramFiles(x86) environment variable");
+            throw new InternalError("Could not read the ProgramFiles(x86) environment variable");
         }
-        String vswherePath = programFilesX86 + "\\Microsoft Visual Studio\\Installer\\vswhere.exe";
-        Path vswhere = Paths.get(vswherePath);
+        Path vswhere = Paths.get(programFilesX86 + "\\Microsoft Visual Studio\\Installer\\vswhere.exe");
         if (!Files.exists(vswhere)) {
-            throw new IllegalStateException("Could not find " + vswherePath);
+            return null;
         }
 
         ProcessBuilder processBuilder = new ProcessBuilder(vswhere.toString(), "-requires",
@@ -217,19 +220,19 @@ final class Linker {
             if (errorMessage.isEmpty()) {
                 errorMessage = getString(process.getInputStream());
             }
-            throw new IllegalStateException("vswhere error: " + errorMessage);
+            throw new InternalError(errorMessage);
         }
 
-        String installationPath = getLines(process.getInputStream()).findFirst().orElseThrow(() -> new IllegalStateException("Unexpected empty output from vswhere"));
+        String installationPath = getLines(process.getInputStream()).findFirst().orElseThrow(() -> new InternalError("Unexpected empty output from vswhere"));
         Path vcToolsVersionFilePath = Paths.get(installationPath, "VC\\Auxiliary\\Build\\Microsoft.VCToolsVersion.default.txt");
         List<String> vcToolsVersionFileLines = Files.readAllLines(vcToolsVersionFilePath);
         if (vcToolsVersionFileLines.isEmpty()) {
-            throw new IllegalStateException(vcToolsVersionFilePath.toString() + " is empty");
+            throw new InternalError(vcToolsVersionFilePath.toString() + " is empty");
         }
         String vcToolsVersion = vcToolsVersionFileLines.get(0);
         Path linkPath = Paths.get(installationPath, "VC\\Tools\\MSVC", vcToolsVersion, "bin\\Hostx64\\x64\\link.exe");
         if (!Files.exists(linkPath)) {
-            throw new IllegalStateException("Linker at path " + linkPath.toString() + " does not exist");
+            throw new InternalError("Linker at path " + linkPath.toString() + " does not exist");
         }
 
         return linkPath;
