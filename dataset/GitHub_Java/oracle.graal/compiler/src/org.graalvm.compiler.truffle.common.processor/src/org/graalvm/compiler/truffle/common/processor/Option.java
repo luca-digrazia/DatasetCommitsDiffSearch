@@ -130,8 +130,7 @@ public class Option {
             .type("Boolean")
             .category("INTERNAL")
             .def("true")
-            .help("Enable on stack replacement for Truffle loops.")
-            .deprecatedBy("OSR"),
+            .help("Enable on stack replacement for Truffle loops."),
 
         option("TruffleOSRCompilationThreshold")
             .type("Integer")

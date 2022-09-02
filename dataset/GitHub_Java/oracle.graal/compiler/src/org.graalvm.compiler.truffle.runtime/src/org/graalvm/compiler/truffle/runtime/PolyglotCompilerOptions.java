@@ -218,6 +218,10 @@ public final class PolyglotCompilerOptions {
         POLYGLOT_TO_TRUFFLE.put(CompileImmediately, SharedTruffleRuntimeOptions.TruffleCompileImmediately);
     }
 
+    static OptionValues getPolyglotValues(RootNode root) {
+        return OptimizedCallTarget.runtime().getTvmci().getCompilerOptionValues(root);
+    }
+
     @SuppressWarnings("unchecked")
     static <T> T getValue(OptionValues polyglotValues, OptionKey<T> key) {
         if (polyglotValues != null && polyglotValues.hasBeenSet(key)) {
@@ -229,6 +233,11 @@ public final class PolyglotCompilerOptions {
             }
         }
         return key.getDefaultValue();
+    }
+
+    static <T> T getValue(RootNode rootNode, OptionKey<T> key) {
+        OptionValues polyglotValues = getPolyglotValues(rootNode);
+        return getValue(polyglotValues, key);
     }
 
     static OptionDescriptors getDescriptors() {
