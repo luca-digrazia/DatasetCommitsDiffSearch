@@ -36,7 +36,7 @@ import com.oracle.svm.core.OS;
 
 public class JNIHeaderDirectives implements CContext.Directives {
 
-    private final Path jdkIncludeDir = JavaVersionUtil.JAVA_SPEC <= 8
+    private final Path jdkIncludeDir = JavaVersionUtil.Java8OrEarlier
                     ? Paths.get(System.getProperty("java.home")).getParent().resolve("include")
                     : Paths.get(System.getProperty("java.home")).resolve("include");
 

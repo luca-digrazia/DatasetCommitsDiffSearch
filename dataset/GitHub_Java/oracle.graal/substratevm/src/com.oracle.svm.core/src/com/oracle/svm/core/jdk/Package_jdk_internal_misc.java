@@ -37,7 +37,7 @@ public class Package_jdk_internal_misc implements Function<TargetClass, String> 
 
     @Override
     public String apply(TargetClass annotation) {
-        if (JavaVersionUtil.JAVA_SPEC <= 8) {
+        if (JavaVersionUtil.Java8OrEarlier) {
             return "sun.misc." + annotation.className();
         } else {
             return "jdk.internal.misc." + annotation.className();

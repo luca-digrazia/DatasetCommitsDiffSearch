@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -59,26 +59,16 @@ import sun.misc.Unsafe;
 
 public class AArch64GraphBuilderPlugins {
 
-    public static void register(Plugins plugins, BytecodeProvider bytecodeProvider, boolean explicitUnsafeNullChecks,
-                                boolean registerMathPlugins) {
-        register(plugins, bytecodeProvider,explicitUnsafeNullChecks,true);
-    }
-
-    public static void register(Plugins plugins, BytecodeProvider bytecodeProvider, boolean explicitUnsafeNullChecks,
-                                boolean registerMathPlugins, boolean emitJDK9StringSubstitutions) {
+    public static void register(Plugins plugins, BytecodeProvider bytecodeProvider, boolean explicitUnsafeNullChecks) {
         InvocationPlugins invocationPlugins = plugins.getInvocationPlugins();
         invocationPlugins.defer(new Runnable() {
             @Override
             public void run() {
-                registerIntegerLongPlugins(invocationPlugins, JavaKind.Int, bytecodeProvider);
-                registerIntegerLongPlugins(invocationPlugins, JavaKind.Long, bytecodeProvider);
-                if (registerMathPlugins) {
-                    registerMathPlugins(invocationPlugins);
-                }
-                if (emitJDK9StringSubstitutions) {
-                     registerStringLatin1Plugins(invocationPlugins, bytecodeProvider);
-                     registerStringUTF16Plugins(invocationPlugins, bytecodeProvider);
-                }
+                registerIntegerLongPlugins(invocationPlugins, AArch64IntegerSubstitutions.class, JavaKind.Int, bytecodeProvider);
+                registerIntegerLongPlugins(invocationPlugins, AArch64LongSubstitutions.class, JavaKind.Long, bytecodeProvider);
+                registerMathPlugins(invocationPlugins);
+                registerStringLatin1Plugins(invocationPlugins, bytecodeProvider);
+                registerStringUTF16Plugins(invocationPlugins, bytecodeProvider);
                 registerUnsafePlugins(invocationPlugins, bytecodeProvider);
                 // This is temporarily disabled until we implement correct emitting of the CAS
                 // instructions of the proper width.
@@ -88,7 +78,7 @@ public class AArch64GraphBuilderPlugins {
         });
     }
 
-    private static void registerIntegerLongPlugins(InvocationPlugins plugins, JavaKind kind, BytecodeProvider bytecodeProvider) {
+    private static void registerIntegerLongPlugins(InvocationPlugins plugins, Class<?> substituteDeclaringClass, JavaKind kind, BytecodeProvider bytecodeProvider) {
         Class<?> declaringClass = kind.toBoxedJavaClass();
         Class<?> type = kind.toJavaClass();
         Registration r = new Registration(plugins, declaringClass, bytecodeProvider);
@@ -116,13 +106,7 @@ public class AArch64GraphBuilderPlugins {
                 return true;
             }
         });
-        r.register1("bitCount", type, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value) {
-                b.push(JavaKind.Int, b.append(new AArch64BitCountNode(value).canonical(null)));
-                return true;
-            }
-        });
+        r.registerMethodSubstitution(substituteDeclaringClass, "bitCount", type);
     }
 
     private static void registerMathPlugins(InvocationPlugins plugins) {

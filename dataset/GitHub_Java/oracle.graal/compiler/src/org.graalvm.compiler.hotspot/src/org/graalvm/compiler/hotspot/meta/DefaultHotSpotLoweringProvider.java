@@ -59,17 +59,17 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.NodeInputList;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotGraalRuntimeProvider;
-import org.graalvm.compiler.hotspot.gc.g1.G1ArrayRangePostWriteBarrier;
-import org.graalvm.compiler.hotspot.gc.g1.G1ArrayRangePreWriteBarrier;
-import org.graalvm.compiler.hotspot.gc.g1.G1PostWriteBarrier;
-import org.graalvm.compiler.hotspot.gc.g1.G1PreWriteBarrier;
-import org.graalvm.compiler.hotspot.gc.g1.G1ReferentFieldReadBarrier;
-import org.graalvm.compiler.hotspot.gc.shared.SerialArrayRangeWriteBarrier;
-import org.graalvm.compiler.hotspot.gc.shared.SerialWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.BeginLockScopeNode;
+import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePostWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.G1ArrayRangePreWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.G1PostWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.G1PreWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.G1ReferentFieldReadBarrier;
 import org.graalvm.compiler.hotspot.nodes.HotSpotCompressionNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotDirectCallTargetNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotIndirectCallTargetNode;
+import org.graalvm.compiler.hotspot.nodes.SerialArrayRangeWriteBarrier;
+import org.graalvm.compiler.hotspot.nodes.SerialWriteBarrier;
 import org.graalvm.compiler.hotspot.nodes.aot.InitializeKlassNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveConstantNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveDynamicConstantNode;
@@ -468,15 +468,11 @@ public class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider 
         if (invoke.callTarget() instanceof MethodCallTargetNode) {
             MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
             NodeInputList<ValueNode> parameters = callTarget.arguments();
-            ValueNode receiver = parameters.isEmpty() ? null : parameters.get(0);
-
-            if (!callTarget.isStatic()) {
-                assert receiver != null : "non-static call must have a receiver";
-                if (receiver.stamp(NodeView.DEFAULT) instanceof ObjectStamp && !StampTool.isPointerNonNull(receiver)) {
-                    ValueNode nonNullReceiver = createNullCheckedValue(receiver, invoke.asNode(), tool);
-                    parameters.set(0, nonNullReceiver);
-                    receiver = nonNullReceiver;
-                }
+            ValueNode receiver = parameters.size() <= 0 ? null : parameters.get(0);
+            if (!callTarget.isStatic() && receiver.stamp(NodeView.DEFAULT) instanceof ObjectStamp && !StampTool.isPointerNonNull(receiver)) {
+                ValueNode nonNullReceiver = createNullCheckedValue(receiver, invoke.asNode(), tool);
+                parameters.set(0, nonNullReceiver);
+                receiver = nonNullReceiver;
             }
             JavaType[] signature = callTarget.targetMethod().getSignature().toParameterTypes(callTarget.isStatic() ? null : callTarget.targetMethod().getDeclaringClass());
 

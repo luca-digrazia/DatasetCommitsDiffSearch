@@ -51,15 +51,14 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
-import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.SubstrateUtil;
+import com.oracle.svm.core.UnsafeAccess;
 import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Delete;
@@ -70,12 +69,12 @@ import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.config.ObjectLayout;
+import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
-import sun.misc.Unsafe;
 
 /*
  * This file contains JDK fields that need to be intercepted because their value in the hosted environment is not
@@ -175,7 +174,7 @@ final class Target_java_util_concurrent_atomic_AtomicReferenceFieldUpdater_Atomi
         this.cclass = tclass;
         this.tclass = tclass;
         this.vclass = vclass;
-        this.offset = GraalUnsafeAccess.getUnsafe().objectFieldOffset(field);
+        this.offset = UnsafeAccess.UNSAFE.objectFieldOffset(field);
     }
 }
 
@@ -212,7 +211,7 @@ final class Target_java_util_concurrent_atomic_AtomicIntegerFieldUpdater_AtomicI
         // access checks are disabled
         this.cclass = tclass;
         this.tclass = tclass;
-        this.offset = GraalUnsafeAccess.getUnsafe().objectFieldOffset(field);
+        this.offset = UnsafeAccess.UNSAFE.objectFieldOffset(field);
     }
 }
 
@@ -249,7 +248,7 @@ final class Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_CASUpdater
         // access checks are disabled
         this.cclass = tclass;
         this.tclass = tclass;
-        this.offset = GraalUnsafeAccess.getUnsafe().objectFieldOffset(field);
+        this.offset = UnsafeAccess.UNSAFE.objectFieldOffset(field);
     }
 
 }
@@ -287,7 +286,7 @@ final class Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_LockedUpda
         // access checks are disabled
         this.cclass = tclass;
         this.tclass = tclass;
-        this.offset = GraalUnsafeAccess.getUnsafe().objectFieldOffset(field);
+        this.offset = UnsafeAccess.UNSAFE.objectFieldOffset(field);
     }
 }
 
@@ -299,7 +298,6 @@ final class Target_java_util_concurrent_atomic_AtomicLongFieldUpdater_LockedUpda
 @AutomaticFeature
 class AtomicFieldUpdaterFeature implements Feature {
 
-    private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
     private final ConcurrentMap<Object, Boolean> processedUpdaters = new ConcurrentHashMap<>();
     private Consumer<Field> markAsUnsafeAccessed;
 
@@ -348,7 +346,7 @@ class AtomicFieldUpdaterFeature implements Feature {
             // search the declared fields for a field with a matching offset
             for (Field f : tclass.getDeclaredFields()) {
                 if (!Modifier.isStatic(f.getModifiers())) {
-                    long fieldOffset = UNSAFE.objectFieldOffset(f);
+                    long fieldOffset = UnsafeAccess.UNSAFE.objectFieldOffset(f);
                     if (fieldOffset == searchOffset) {
                         markAsUnsafeAccessed.accept(f);
                         return;
@@ -429,7 +427,7 @@ final class Target_java_util_concurrent_ForkJoinPool {
         /** The get access method for ForkJoinPool.common. */
         public static ForkJoinPool getCommon() {
             ensureCommonPoolIsInitialized();
-            return SubstrateUtil.cast(injectedCommon.get(), ForkJoinPool.class);
+            return Util_java_util_concurrent_ForkJoinPool.as_ForkJoinPool(injectedCommon.get());
         }
 
         /** Ensure that the common pool variables are initialized. */
@@ -464,7 +462,7 @@ final class Target_java_util_concurrent_ForkJoinPool {
                             "ForkJoinPool.commonPool-worker-");
             /* The assignment to "injectedCommon" is atomic to prevent races. */
             injectedCommon.compareAndSet(null, proposedPool);
-            final ForkJoinPool actualPool = SubstrateUtil.cast(injectedCommon.get(), ForkJoinPool.class);
+            final ForkJoinPool actualPool = Util_java_util_concurrent_ForkJoinPool.as_ForkJoinPool(injectedCommon.get());
             /*
              * The assignment to "commonParallelism" can race because multiple assignments are
              * idempotent once "injectedCommon" is set. This code is a copy of the relevant part of
@@ -483,6 +481,17 @@ final class Target_java_util_concurrent_ForkJoinPool {
              * `parallelism` argument now throws an `IllegalArgumentException` if passed a `0`.
              */
             throw VMError.unsupportedFeature("Target_java_util_concurrent_ForkJoinPool.CommonInjector.initializeCommonPool_JDK9OrLater()");
+        }
+    }
+
+    protected static class Util_java_util_concurrent_ForkJoinPool {
+
+        static ForkJoinPool as_ForkJoinPool(Target_java_util_concurrent_ForkJoinPool tjucfjp) {
+            return KnownIntrinsics.unsafeCast(tjucfjp, ForkJoinPool.class);
+        }
+
+        static Target_java_util_concurrent_ForkJoinPool as_Target_java_util_concurrent_ForkJoinPool(ForkJoinPool forkJoinPool) {
+            return KnownIntrinsics.unsafeCast(forkJoinPool, Target_java_util_concurrent_ForkJoinPool.class);
         }
     }
 }

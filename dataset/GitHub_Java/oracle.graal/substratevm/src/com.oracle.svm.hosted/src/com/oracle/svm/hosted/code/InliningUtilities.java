@@ -39,6 +39,7 @@ import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.hosted.nodes.AssertValueNode;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -71,7 +72,8 @@ public class InliningUtilities {
         int numInvokes = 0;
         int numOthers = 0;
         for (Node n : graph.getNodes()) {
-            if (n instanceof StartNode || n instanceof ParameterNode || n instanceof FullInfopointNode || n instanceof ValueProxy) {
+            if (n instanceof StartNode || n instanceof ParameterNode || n instanceof FullInfopointNode ||
+                            n instanceof ValueProxy || n instanceof AssertValueNode) {
                 continue;
             }
             if (n instanceof MethodCallTargetNode) {
