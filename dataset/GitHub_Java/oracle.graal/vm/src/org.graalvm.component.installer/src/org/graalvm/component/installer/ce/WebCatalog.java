@@ -38,8 +38,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
-import java.util.regex.Pattern;
-import java.util.stream.Stream;
 import org.graalvm.component.installer.BundleConstants;
 import org.graalvm.component.installer.CommandInput;
 import org.graalvm.component.installer.CommonConstants;
@@ -51,75 +49,22 @@ import org.graalvm.component.installer.remote.FileDownloader;
 import org.graalvm.component.installer.remote.RemotePropertiesStorage;
 import org.graalvm.component.installer.SoftwareChannel;
 import org.graalvm.component.installer.SoftwareChannelSource;
-import org.graalvm.component.installer.SystemUtils;
-import org.graalvm.component.installer.Version;
 import org.graalvm.component.installer.model.ComponentInfo;
-import org.graalvm.component.installer.model.RemoteInfoProcessor;
 
 public class WebCatalog implements SoftwareChannel {
     private final String urlString;
     private final SoftwareChannelSource source;
 
     private URL catalogURL;
+    private CommandInput input;
     private Feedback feedback;
     private ComponentRegistry local;
     private ComponentStorage storage;
     private RuntimeException savedException;
-    private RemoteInfoProcessor remoteProcessor = RemoteInfoProcessor.NONE;
-
-    /**
-     * The accepted version - only exact match is supported at the moment.
-     */
-    private Version.Match matchVersion;
-
-    /**
-     * If true, enables loading different versions from V1 catalogs.
-     */
-    private boolean enableV1Versions;
 
     public WebCatalog(String u, SoftwareChannelSource source) {
         this.urlString = u;
         this.source = source;
-    }
-
-    public RemoteInfoProcessor getRemoteProcessor() {
-        return remoteProcessor;
-    }
-
-    public void setRemoteProcessor(RemoteInfoProcessor remoteProcessor) {
-        this.remoteProcessor = remoteProcessor;
-    }
-
-    public Version.Match getMatchVersion() {
-        return matchVersion;
-    }
-
-    public boolean isEnableV1Versions() {
-        return enableV1Versions;
-    }
-
-    /**
-     * Enables version processing in V1 catalogs. Note that not complete version string semantics is
-     * possible with v1 format, as version may contain underscores (_), which are delimiters in v1
-     * catalogs.
-     * <p/>
-     * The default setting is false.
-     * 
-     * @param enableV1Versions true, if should be enabled.
-     */
-    public void setEnableV1Versions(boolean enableV1Versions) {
-        this.enableV1Versions = enableV1Versions;
-    }
-
-    /**
-     * Overrides versions loaded by this catalog. By default own version only is accepted. If
-     * matchVersion is set, the catalog will load matching version(s). At this moment <b>only exact
-     * match is supported</b>.
-     * 
-     * @param aMatchVersion
-     */
-    public void setMatchVersion(Version.Match aMatchVersion) {
-        this.matchVersion = aMatchVersion;
     }
 
     protected static boolean acceptURLScheme(String scheme, String urlSpec) {
@@ -143,12 +88,11 @@ public class WebCatalog implements SoftwareChannel {
     }
 
     public void init(CommandInput in, Feedback out) {
-        init(in.getLocalRegistry(), out);
-    }
+        assert this.input == null;
 
-    public void init(ComponentRegistry aLocal, Feedback out) {
+        this.input = in;
         this.feedback = out.withBundle(WebCatalog.class);
-        this.local = aLocal;
+        this.local = in.getLocalRegistry();
     }
 
     @Override
@@ -160,9 +104,9 @@ public class WebCatalog implements SoftwareChannel {
         Map<String, String> graalCaps = local.getGraalCapabilities();
 
         StringBuilder sb = new StringBuilder();
-        sb.append(SystemUtils.patternOsName(graalCaps.get(CommonConstants.CAP_OS_NAME)).toLowerCase());
+        sb.append(graalCaps.get(CommonConstants.CAP_OS_NAME).toLowerCase());
         sb.append("_");
-        sb.append(SystemUtils.patternOsArch(graalCaps.get(CommonConstants.CAP_OS_ARCH).toLowerCase()));
+        sb.append(graalCaps.get(CommonConstants.CAP_OS_ARCH).toLowerCase());
 
         try {
             catalogURL = new URL(urlString);
@@ -173,10 +117,8 @@ public class WebCatalog implements SoftwareChannel {
         Properties props = new Properties();
         // create the storage. If the init fails, but process will not terminate, the storage will
         // serve no components on the next call.
-        RemotePropertiesStorage newStorage = createPropertiesStorage(feedback, local, props, sb.toString(), catalogURL);
-        if (remoteProcessor != null) {
-            newStorage.setRemoteProcessor(remoteProcessor);
-        }
+        RemotePropertiesStorage newStorage = new RemotePropertiesStorage(feedback, local, props, sb.toString(), null, catalogURL);
+
         Properties loadProps = new Properties();
         FileDownloader dn;
         try {
@@ -191,10 +133,7 @@ public class WebCatalog implements SoftwareChannel {
         } catch (NoRouteToHostException | ConnectException ex) {
             throw savedException = feedback.failure("REMOTE_ErrorDownloadCatalogProxy", ex, catalogURL, ex.getLocalizedMessage());
         } catch (FileNotFoundException ex) {
-            // treat missing resources as non-fatal errors, print warning
-            feedback.error("REMOTE_WarningErrorDownloadCatalogNotFoundSkip", ex, catalogURL);
-            this.storage = newStorage;
-            return storage;
+            throw savedException = feedback.failure("REMOTE_ErrorDownloadCatalogNotFound", ex, catalogURL);
         } catch (IOException ex) {
             throw savedException = feedback.failure("REMOTE_ErrorDownloadCatalog", ex, catalogURL, ex.getLocalizedMessage());
         }
@@ -202,28 +141,19 @@ public class WebCatalog implements SoftwareChannel {
         // empty catalog.
         this.storage = newStorage;
 
-        StringBuilder oldGraalPref = new StringBuilder("^" + BundleConstants.GRAAL_COMPONENT_ID);
+        StringBuilder oldGraalPref = new StringBuilder(BundleConstants.GRAAL_COMPONENT_ID);
         oldGraalPref.append('.');
 
-        String graalVersionString;
-        String normalizedVersion;
-
-        if (matchVersion != null) {
-            graalVersionString = matchVersion.getVersion().displayString();
-            normalizedVersion = matchVersion.getVersion().toString();
-        } else {
-            // read from the release file
-            graalVersionString = graalCaps.get(CommonConstants.CAP_GRAALVM_VERSION).toLowerCase();
-            normalizedVersion = local.getGraalVersion().toString();
-        }
+        String graalVersionString = graalCaps.get(CommonConstants.CAP_GRAALVM_VERSION).toLowerCase();
+        String normalizedVersion = input.getLocalRegistry().getGraalVersion().toString();
 
         StringBuilder graalPref = new StringBuilder(oldGraalPref);
 
-        oldGraalPref.append(Pattern.quote(graalVersionString));
+        oldGraalPref.append(graalVersionString);
 
         oldGraalPref.append('_').append(sb);
         graalPref.append(sb).append('/');
-        graalPref.append(Pattern.quote(normalizedVersion));
+        graalPref.append(normalizedVersion);
 
         try (FileInputStream fis = new FileInputStream(dn.getLocalFile())) {
             loadProps.load(fis);
@@ -231,12 +161,8 @@ public class WebCatalog implements SoftwareChannel {
             throw feedback.failure("REMOTE_CorruptedCatalogFile", ex, catalogURL);
         }
 
-        Pattern oldPrefixPattern = Pattern.compile(oldGraalPref.toString(), Pattern.CASE_INSENSITIVE);
-        Pattern newPrefixPattern = Pattern.compile(graalPref.toString(), Pattern.CASE_INSENSITIVE);
-        Stream<String> propNames = loadProps.stringPropertyNames().stream();
-        boolean foundPrefix = propNames.anyMatch(p -> oldPrefixPattern.matcher(p).matches() ||
-                        newPrefixPattern.matcher(p).find());
-        if (!foundPrefix) {
+        if (loadProps.getProperty(oldGraalPref.toString()) == null &&
+                        loadProps.getProperty(graalPref.toString()) == null) {
             boolean graalPrefixFound = false;
             boolean componentFound = false;
             for (String s : loadProps.stringPropertyNames()) {
@@ -247,12 +173,7 @@ public class WebCatalog implements SoftwareChannel {
                     componentFound = true;
                 }
             }
-            if (!componentFound) {
-                // no graal prefix, no components
-                feedback.verboseOutput("REMOTE_CatalogDoesNotContainComponents", catalogURL);
-                return newStorage;
-            } else if (!graalPrefixFound) {
-                // strange thing, no graal declaration, but components are there ?
+            if (!(graalPrefixFound && componentFound)) {
                 throw feedback.failure("REMOTE_CorruptedCatalogFile", null, catalogURL);
             } else {
                 throw new IncompatibleException(
@@ -265,12 +186,6 @@ public class WebCatalog implements SoftwareChannel {
         }
         props.putAll(loadProps);
         return newStorage;
-    }
-
-    protected RemotePropertiesStorage createPropertiesStorage(Feedback aFeedback,
-                    ComponentRegistry aLocal, Properties props, String selector, URL baseURL) {
-        return new RemotePropertiesStorage(
-                        aFeedback, aLocal, props, selector, null, baseURL);
     }
 
     @Override
