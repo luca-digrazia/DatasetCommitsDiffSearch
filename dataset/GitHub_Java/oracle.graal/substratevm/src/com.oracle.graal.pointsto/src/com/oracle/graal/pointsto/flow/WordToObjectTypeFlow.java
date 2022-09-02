@@ -42,11 +42,6 @@ public class WordToObjectTypeFlow extends ProxyTypeFlow {
     }
 
     @Override
-    public boolean canSaturate() {
-        return false;
-    }
-
-    @Override
     public String toString() {
         return "WordToObjectFlow<" + input + ">";
     }
