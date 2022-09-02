@@ -214,6 +214,8 @@ public final class LLVMContext {
 
         symbolStorage = new AssumedValue[10][];
         libraryLoaded = new boolean[10];
+        Arrays.fill(libraryLoaded, Boolean.FALSE);
+
     }
 
     boolean patchContext(Env newEnv) {
@@ -289,6 +291,10 @@ public final class LLVMContext {
             ext.initialize();
         }
         String languageHome = language.getLLVMLanguageHome();
+
+        /*
+         *
+         */
         if (languageHome != null) {
             PlatformCapability<?> sysContextExt = language.getCapability(PlatformCapability.class);
             internalLibraryPath = Paths.get(languageHome).resolve(sysContextExt.getSulongLibrariesPath());

@@ -373,8 +373,10 @@ final class ParserDriver {
             library.makeBitcodeLibrary();
             context.ensureExternalLibraryAdded(library);
             context.addLibraryPaths(binaryParserResult.getLibraryPaths());
-            processDependencies(library, binaryParserResult, sourceDependencies);
+            ArrayList<ExternalLibrary> dependencies = new ArrayList<>();
+            processDependencies(library, binaryParserResult, sourceDependencies, dependencies);
             LLVMParserResult parserResult = parseBinary(binaryParserResult, library);
+            parserResult.setDependencies(dependencies);
             return parserResult;
         } else if (!library.isNative()) {
             throw new LLVMParserException("The file '" + source.getName() + "' is not a bitcode file nor an ELF or Mach-O object file with an embedded bitcode section.");
@@ -389,13 +391,13 @@ final class ParserDriver {
      * {@link BinaryParserResult} into {@link ExternalLibrary}s and add them to the if not already
      * in there.
      */
-    private void processDependencies(ExternalLibrary library, BinaryParserResult binaryParserResult, ArrayList<Object> dependenciesSource) {
+    private void processDependencies(ExternalLibrary library, BinaryParserResult binaryParserResult, ArrayList<Object> dependenciesSource, ArrayList<ExternalLibrary> dependencies) {
         for (String lib : context.preprocessDependencies(library, binaryParserResult.getLibraries())) {
             // don't add the library itself as one of it's own dependency.
             if (!library.getName().equalsIgnoreCase(lib)) {
-                // TODO(PLi): Remove external library. The path should be retrieved from the Path.
                 ExternalLibrary dependency = context.findExternalLibrary(lib, library, binaryParserResult.getLocator());
-                if (dependency != null) {
+                if (dependency != null && !dependencies.contains(dependency)) {
+                    dependencies.add(dependency);
                     CallTarget calls = language.getCachedLibrary(dependency.getPath().toString());
                     // only create a source if the library has not already been parsed.
                     if (calls == null) {
@@ -410,7 +412,8 @@ final class ParserDriver {
                     }
                 } else {
                     dependency = context.addExternalLibrary(lib, library, binaryParserResult.getLocator());
-                    if (dependency != null) {
+                    if (dependency != null && !dependencies.contains(dependency)) {
+                        dependencies.add(dependency);
                         CallTarget calls = language.getCachedLibrary(dependency.getPath().toString());
                         // only create a source if the library has not already been parsed.
                         if (calls == null) {
