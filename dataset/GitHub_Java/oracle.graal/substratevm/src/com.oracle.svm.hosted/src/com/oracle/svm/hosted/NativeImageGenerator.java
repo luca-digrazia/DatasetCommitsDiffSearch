@@ -576,7 +576,7 @@ public class NativeImageGenerator {
 
                 bigbang.getUnsupportedFeatures().report(bigbang);
             } catch (UnsupportedFeatureException ufe) {
-                throw FallbackFeature.reportAsFallback(ufe);
+                throw UserError.abort(ufe.getMessage());
             }
 
             recordMethodsWithStackValues();
@@ -731,7 +731,7 @@ public class NativeImageGenerator {
                 bigbang.getUnsupportedFeatures().report(bigbang);
                 bigbang.checkUserLimitations();
             } catch (UnsupportedFeatureException ufe) {
-                throw FallbackFeature.reportAsFallback(ufe);
+                throw UserError.abort(ufe.getMessage(), ufe);
             }
         } catch (InterruptedException ie) {
             throw new InterruptImageBuilding();

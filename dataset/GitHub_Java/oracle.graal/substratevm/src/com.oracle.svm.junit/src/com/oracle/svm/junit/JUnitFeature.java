@@ -28,9 +28,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.hosted.ClassInitialization;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.RuntimeClassInitialization;
 
 import com.oracle.svm.reflect.hosted.ReflectionFeature;
 
@@ -50,7 +50,7 @@ public final class JUnitFeature implements Feature {
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-        ClassInitialization.eager(SVMJUnitRunner.class);
+        RuntimeClassInitialization.eagerClassInitialization(SVMJUnitRunner.class);
         SVMJUnitRunner svmRunner = new SVMJUnitRunner(access);
         ImageSingletons.add(SVMJUnitRunner.class, svmRunner);
     }
