@@ -24,7 +24,9 @@ package com.oracle.truffle.espresso.runtime;
 
 import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.Klass;
+import com.oracle.truffle.espresso.impl.Method;
 
 public abstract class StaticObject implements TruffleObject {
     // Context-less objects.
@@ -53,6 +55,12 @@ public abstract class StaticObject implements TruffleObject {
     public final boolean isStaticStorage() {
         return this == getKlass().getStatics();
     }
+
+    public abstract boolean isCallSite();// {return false;}
+
+    public Method lookupMethod(Symbol<Symbol.Name> methodName, Symbol<Symbol.Signature> signature) {
+        return klass.lookupMethod(methodName, signature);
+    }
 }
 
 final class Void extends StaticObject {
@@ -69,6 +77,11 @@ final class Void extends StaticObject {
     public String toString() {
         return "void";
     }
+
+    @Override
+    public boolean isCallSite() {
+        return false;
+    }
 }
 
 final class Null extends StaticObject {
@@ -84,5 +97,10 @@ final class Null extends StaticObject {
     @Override
     public String toString() {
         return "null";
+    }
+
+    @Override
+    public boolean isCallSite() {
+        return false;
     }
 }
