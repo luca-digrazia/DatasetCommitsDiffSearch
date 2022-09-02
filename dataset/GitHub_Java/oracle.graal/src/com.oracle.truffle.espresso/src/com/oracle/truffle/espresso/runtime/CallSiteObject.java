@@ -18,7 +18,6 @@ public final class CallSiteObject extends StaticObject {
     private final RefKind kind;
     private final Boolean hasReceiver;
     private final int stackEffect;
-    private final int endModif;
 
     public CallSiteObject(Klass klass, Method target, Symbol<Type>[] signature, Object[] args, MethodHandleConstant mh) {
         super(klass);
@@ -27,23 +26,21 @@ public final class CallSiteObject extends StaticObject {
         this.args = args;
         this.callNode = DirectCallNode.create(target.getCallTarget());
         this.kind = mh.getRefKind();
-        this.hasReceiver = !(kind == RefKind.INVOKESTATIC);
+        this.hasReceiver = !(kind == RefKind.INVOKESTATIC || kind == RefKind.NEWINVOKESPECIAL);
         int kindEffect;
-        int endEffect;
         switch (kind) {
             case INVOKESPECIAL      :
                 kindEffect = 1;
-                endEffect = 0;
+                break;
+            case INVOKESTATIC       :
+                kindEffect = 0;
                 break;
             case NEWINVOKESPECIAL   :
                 kindEffect = 0;
-                endEffect = 1;
                 break;
             default:
                 kindEffect = 0;
-                endEffect = 0;
         }
-        this.endModif = endEffect;
         this.stackEffect = args.length - kindEffect - 1; // Always pop CSO
     }
 
@@ -80,9 +77,5 @@ public final class CallSiteObject extends StaticObject {
 
     public int getStackEffect() {
         return this.stackEffect;
-    }
-
-    public int getEndModif() {
-        return this.endModif;
     }
 }
