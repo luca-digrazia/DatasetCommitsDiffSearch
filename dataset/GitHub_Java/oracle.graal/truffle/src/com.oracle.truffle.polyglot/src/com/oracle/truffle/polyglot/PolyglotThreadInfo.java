@@ -128,7 +128,7 @@ final class PolyglotThreadInfo {
             throw t;
         }
         if (engine.specializationStatistics != null) {
-            enterStatistics(engine.specializationStatistics);
+            engine.specializationStatistics.enter();
         }
     }
 
