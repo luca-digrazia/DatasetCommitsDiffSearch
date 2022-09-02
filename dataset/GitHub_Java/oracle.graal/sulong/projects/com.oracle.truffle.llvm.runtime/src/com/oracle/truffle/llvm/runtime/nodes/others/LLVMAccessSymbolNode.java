@@ -38,7 +38,6 @@ import com.oracle.truffle.llvm.runtime.LLVMAlias;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
-import com.oracle.truffle.llvm.runtime.except.LLVMIllegalSymbolIndexException;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.LLVMStackAccess;
@@ -88,12 +87,12 @@ public abstract class LLVMAccessSymbolNode extends LLVMExpressionNode {
      */
     @Specialization(assumptions = "singleContextAssumption()")
     public LLVMPointer accessSingleContext(
-                    @CachedContext(LLVMLanguage.class) LLVMContext context) throws LLVMIllegalSymbolIndexException {
+                    @CachedContext(LLVMLanguage.class) LLVMContext context) {
         return checkNull(context.getSymbol(symbol));
     }
 
     @Specialization
-    public LLVMPointer accessMultiContext(VirtualFrame frame) throws LLVMIllegalSymbolIndexException {
+    public LLVMPointer accessMultiContext(VirtualFrame frame) {
         if (stackAccess == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             stackAccess = ((LLVMRootNode) getRootNode()).getStackAccess();
