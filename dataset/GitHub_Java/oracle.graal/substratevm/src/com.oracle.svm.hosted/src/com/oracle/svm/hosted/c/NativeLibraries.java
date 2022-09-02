@@ -102,16 +102,13 @@ public final class NativeLibraries {
 
     private final CAnnotationProcessorCache cache;
 
-    public final Path tempDirectory;
-
     public NativeLibraries(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, TargetDescription target,
-                    ClassInitializationSupport classInitializationSupport, Path tempDirectory) {
+                    ClassInitializationSupport classInitializationSupport) {
         this.metaAccess = metaAccess;
         this.constantReflection = constantReflection;
         this.snippetReflection = snippetReflection;
         this.target = target;
         this.classInitializationSupport = classInitializationSupport;
-        this.tempDirectory = tempDirectory;
 
         elementToInfo = new HashMap<>();
         errors = new ArrayList<>();
@@ -348,7 +345,7 @@ public final class NativeLibraries {
         }
     }
 
-    public void finish() {
+    public void finish(Path tempDirectory) {
         libraryPaths.addAll(OptionUtils.flatten(",", SubstrateOptions.CLibraryPath.getValue()));
         for (NativeCodeContext context : compilationUnitToContext.values()) {
             if (context.isInConfiguration()) {
