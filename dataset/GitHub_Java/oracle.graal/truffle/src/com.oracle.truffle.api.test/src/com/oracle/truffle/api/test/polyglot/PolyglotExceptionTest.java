@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -402,7 +402,6 @@ public class PolyglotExceptionTest extends AbstractPolyglotTest {
             assertTrue(e.isGuestException());
             assertFalse(e.isHostException());
             assertFalse(e.isCancelled());
-            assertEquals(e.getMessage(), "Resources exhausted");
             Iterator<StackFrame> iterator = e.getPolyglotStackTrace().iterator();
             boolean foundFrame = false;
             while (iterator.hasNext()) {
