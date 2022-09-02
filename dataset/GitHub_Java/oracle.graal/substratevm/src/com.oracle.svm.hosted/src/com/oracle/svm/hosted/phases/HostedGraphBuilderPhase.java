@@ -53,13 +53,12 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
 import org.graalvm.compiler.word.WordTypes;
 
-import com.oracle.graal.pointsto.results.StaticAnalysisResults;
 import com.oracle.svm.core.code.FrameInfoEncoder;
 import com.oracle.svm.core.graal.nodes.DeoptEntryNode;
 import com.oracle.svm.core.graal.nodes.DeoptProxyAnchorNode;
-import com.oracle.svm.core.nodes.SubstrateMethodCallTargetNode;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.nodes.DeoptProxyNode;
+import com.oracle.svm.hosted.nodes.SubstrateMethodCallTargetNode;
 import com.oracle.svm.hosted.phases.SubstrateGraphBuilderPhase.SubstrateBytecodeParser;
 
 import jdk.vm.ci.meta.JavaTypeProfile;
@@ -103,14 +102,14 @@ class HostedBytecodeParser extends SubstrateBytecodeParser {
 
     @Override
     protected BciBlockMapping generateBlockMap() {
-        if (isDeoptimizationEnabled() && isMethodDeoptTarget()) {
+        if (isMethodDeoptTarget()) {
             /*
              * Need to add blocks representing where deoptimization entrypoint nodes will be
              * inserted.
              */
-            return HostedBciBlockMapping.create(stream, code, options, graph.getDebug(), false);
+            return HostedBciBlockMapping.create(stream, code, options, graph.getDebug());
         } else {
-            return BciBlockMapping.create(stream, code, options, graph.getDebug(), asyncExceptionLiveness());
+            return BciBlockMapping.create(stream, code, options, graph.getDebug());
         }
     }
 
@@ -135,8 +134,7 @@ class HostedBytecodeParser extends SubstrateBytecodeParser {
 
     @Override
     public MethodCallTargetNode createMethodCallTarget(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, ValueNode[] args, StampPair returnStamp, JavaTypeProfile profile) {
-        StaticAnalysisResults staticAnalysisResults = getMethod().getProfilingInfo();
-        return new SubstrateMethodCallTargetNode(invokeKind, targetMethod, args, returnStamp, staticAnalysisResults.getTypeProfile(bci()), staticAnalysisResults.getMethodProfile(bci()));
+        return new SubstrateMethodCallTargetNode(invokeKind, targetMethod, args, returnStamp, getMethod().getProfilingInfo(), bci());
     }
 
     @Override
@@ -397,14 +395,14 @@ final class HostedBciBlockMapping extends BciBlockMapping {
      * Creates a BciBlockMapping with blocks explicitly representing where DeoptEntryNodes and
      * DeoptProxyAnchorNodes are to be inserted.
      */
-    public static BciBlockMapping create(BytecodeStream stream, Bytecode code, OptionValues options, DebugContext debug, boolean hasAsyncExceptions) {
+    public static BciBlockMapping create(BytecodeStream stream, Bytecode code, OptionValues options, DebugContext debug) {
         BciBlockMapping map = new HostedBciBlockMapping(code, debug);
-        buildMap(stream, code, options, debug, map, hasAsyncExceptions);
+        buildMap(stream, code, options, debug, map);
         return map;
     }
 
     @Override
-    protected BciBlock getInstructionBlock(int bci) {
+    protected BciBlock getInstructionBlock(BciBlock[] blockMap, int bci) {
         /*
          * DeoptBciBlocks are not instruction blocks; they only represent places where
          * DeoptEntryNodes and DeoptProxyAnchorNodes are to be inserted. For a given bci, if a
@@ -429,7 +427,7 @@ final class HostedBciBlockMapping extends BciBlockMapping {
 
     /* A new block must be created for all places where a DeoptEntryNode will be inserted. */
     @Override
-    protected boolean isStartOfNewBlock(BciBlock current, int bci) {
+    protected boolean isStartOfNewBlock(BciBlock[] blockMap, BciBlock current, int bci) {
         /*
          * Checking whether a DeoptEntryPoint will be created for this spot.
          */
@@ -437,7 +435,7 @@ final class HostedBciBlockMapping extends BciBlockMapping {
             return true;
         }
 
-        return super.isStartOfNewBlock(current, bci);
+        return super.isStartOfNewBlock(blockMap, current, bci);
     }
 
     private void recordInsertedBlock(DeoptEntryInsertionPoint block) {
@@ -450,7 +448,7 @@ final class HostedBciBlockMapping extends BciBlockMapping {
      * deoptimization entrypoint.
      */
     @Override
-    protected void addInvokeNormalSuccessor(int invokeBci, BciBlock sux) {
+    protected void addInvokeNormalSuccessor(BciBlock[] blockMap, int invokeBci, BciBlock sux) {
         if (sux.isExceptionEntry()) {
             throw new PermanentBailoutException("Exception handler can be reached by both normal and exceptional control flow");
         }
@@ -466,20 +464,20 @@ final class HostedBciBlockMapping extends BciBlockMapping {
             if (!(sux instanceof DeoptBciBlock)) {
                 DeoptBciBlock proxyBlock = DeoptBciBlock.createDeoptProxy(sux.getStartBci(), invokeBci);
                 recordInsertedBlock(proxyBlock);
-                getInstructionBlock(invokeBci).addSuccessor(proxyBlock);
+                getInstructionBlock(blockMap, invokeBci).addSuccessor(proxyBlock);
                 proxyBlock.addSuccessor(sux);
                 return;
             }
 
         }
-        super.addInvokeNormalSuccessor(invokeBci, sux);
+        super.addInvokeNormalSuccessor(blockMap, invokeBci, sux);
     }
 
     /**
      * Adding new {@link DeoptBciBlock} for a bci which needs an explicit DeoptEntryNode.
      */
     @Override
-    protected BciBlock processNewBciBlock(int bci, BciBlock newBlock) {
+    protected BciBlock processNewBciBlock(BciBlock[] blockMap, int bci, BciBlock newBlock) {
         if (needsDeoptEntryBlock(bci, false, false)) {
             DeoptBciBlock deoptBciBlock = DeoptBciBlock.createDeoptEntry(bci);
             recordInsertedBlock(deoptBciBlock);

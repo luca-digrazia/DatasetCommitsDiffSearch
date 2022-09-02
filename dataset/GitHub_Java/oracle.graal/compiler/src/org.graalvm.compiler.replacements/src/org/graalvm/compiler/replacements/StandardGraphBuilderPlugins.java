@@ -42,7 +42,6 @@ import org.graalvm.compiler.core.common.calc.Condition.CanonicalizedCondition;
 import org.graalvm.compiler.core.common.calc.UnsignedMath;
 import org.graalvm.compiler.core.common.memory.MemoryOrderMode;
 import org.graalvm.compiler.core.common.type.AbstractObjectStamp;
-import org.graalvm.compiler.core.common.type.FloatStamp;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
@@ -1098,7 +1097,6 @@ public class StandardGraphBuilderPlugins {
             } else {
                 b.add(node);
             }
-            b.processInstruction(node);
         }
 
         protected final void createUnsafeAccess(ValueNode value, GraphBuilderContext b, UnsafeNodeConstructor nodeConstructor) {
@@ -1158,7 +1156,6 @@ public class StandardGraphBuilderPlugins {
                     b.push(unsafeAccessKind, graph.addOrUnique(phi));
                 }
                 b.setStateAfter(merge);
-                b.processInstruction(merge);
             }
         }
     }
@@ -1490,34 +1487,6 @@ public class StandardGraphBuilderPlugins {
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode probability, ValueNode condition) {
                 b.addPush(JavaKind.Boolean, new BranchProbabilityNode(probability, condition));
                 return true;
-            }
-        });
-        r.register2("injectIterationCount", double.class, boolean.class, new InvocationPlugin() {
-            @Override
-            public boolean inlineOnly() {
-                return true;
-            }
-
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode iterations, ValueNode condition) {
-                // This directive has an actual definition that only works well if the bytecode
-                // parser inlines it, so also provide this plugin equivalent to its definition:
-                // injectBranchProbability(1. - 1. / iterations, condition)
-                if (iterations.isJavaConstant()) {
-                    double iterationsConstant;
-                    if (iterations.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
-                        iterationsConstant = iterations.asJavaConstant().asLong();
-                    } else if (iterations.stamp(NodeView.DEFAULT) instanceof FloatStamp) {
-                        iterationsConstant = iterations.asJavaConstant().asDouble();
-                    } else {
-                        return false;
-                    }
-                    double probability = 1. - 1. / iterationsConstant;
-                    ValueNode probabilityNode = b.add(ConstantNode.forDouble(probability));
-                    b.addPush(JavaKind.Boolean, new BranchProbabilityNode(probabilityNode, condition));
-                    return true;
-                }
-                return false;
             }
         });
 
