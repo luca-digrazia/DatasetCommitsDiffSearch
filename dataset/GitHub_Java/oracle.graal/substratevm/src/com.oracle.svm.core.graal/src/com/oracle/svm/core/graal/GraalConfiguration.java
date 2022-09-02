@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -27,32 +29,42 @@ import java.util.List;
 import java.util.ListIterator;
 
 import org.graalvm.collections.EconomicMap;
+import org.graalvm.compiler.core.aarch64.AArch64NodeMatchRules;
 import org.graalvm.compiler.core.amd64.AMD64NodeMatchRules;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.gen.NodeMatchRules;
 import org.graalvm.compiler.core.match.MatchRuleRegistry;
 import org.graalvm.compiler.core.match.MatchStatement;
-import org.graalvm.compiler.core.phases.CommunityCompilerConfiguration;
-import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.hotspot.CommunityCompilerConfigurationFactory;
+import org.graalvm.compiler.lir.phases.LIRSuites;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
+import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.BasePhase;
 import org.graalvm.compiler.phases.PhaseSuite;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 import org.graalvm.compiler.phases.tiers.Suites;
 import org.graalvm.compiler.phases.util.Providers;
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.config.ConfigurationValues;
-import com.oracle.svm.core.graal.code.amd64.SubstrateAMD64Backend;
-import com.oracle.svm.core.graal.meta.SubstrateBasicLoweringProvider;
+import com.oracle.svm.core.graal.code.SubstrateBackend;
+import com.oracle.svm.core.graal.code.SubstrateBackendFactory;
+import com.oracle.svm.core.graal.code.SubstrateLoweringProviderFactory;
+import com.oracle.svm.core.graal.code.SubstrateSuitesCreatorProvider;
+import com.oracle.svm.core.util.VMError;
 
+import jdk.vm.ci.aarch64.AArch64;
+import jdk.vm.ci.amd64.AMD64;
+import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.MetaAccessProvider;
 
 public class GraalConfiguration {
+
+    private static final String COMPILER_CONFIGURATION_NAME = CommunityCompilerConfigurationFactory.NAME;
 
     public static GraalConfiguration instance() {
         return ImageSingletons.lookup(GraalConfiguration.class);
@@ -64,20 +76,46 @@ public class GraalConfiguration {
         }
     }
 
-    public LoweringProvider createLoweringProvider(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls) {
-        return new SubstrateBasicLoweringProvider(metaAccess, foreignCalls, ConfigurationValues.getTarget());
+    public LoweringProvider createLoweringProvider(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, PlatformConfigurationProvider platformConfig) {
+        return ImageSingletons.lookup(SubstrateLoweringProviderFactory.class).newLoweringProvider(metaAccess, foreignCalls, platformConfig, ConfigurationValues.getTarget());
     }
 
     public Suites createSuites(OptionValues options, @SuppressWarnings("unused") boolean hosted) {
-        return Suites.createSuites(new CommunityCompilerConfiguration(), options);
+        return ImageSingletons.lookup(SubstrateSuitesCreatorProvider.class).getSuitesCreator().createSuites(options);
+    }
+
+    public Suites createFirstTierSuites(OptionValues options, @SuppressWarnings("unused") boolean hosted) {
+        return ImageSingletons.lookup(SubstrateSuitesCreatorProvider.class).getFirstTierSuitesCreator().createSuites(options);
+    }
+
+    public LIRSuites createLIRSuites(OptionValues options) {
+        return ImageSingletons.lookup(SubstrateSuitesCreatorProvider.class).getSuitesCreator().createLIRSuites(options);
+    }
+
+    public LIRSuites createFirstTierLIRSuites(OptionValues options) {
+        return ImageSingletons.lookup(SubstrateSuitesCreatorProvider.class).getFirstTierSuitesCreator().createLIRSuites(options);
+    }
+
+    public String getCompilerConfigurationName() {
+        return COMPILER_CONFIGURATION_NAME;
     }
 
     public void populateMatchRuleRegistry(HashMap<Class<? extends NodeMatchRules>, EconomicMap<Class<? extends Node>, List<MatchStatement>>> matchRuleRegistry) {
-        matchRuleRegistry.put(AMD64NodeMatchRules.class, MatchRuleRegistry.createRules(AMD64NodeMatchRules.class));
+        Class<? extends NodeMatchRules> matchRuleClass;
+        final Architecture hostedArchitecture = ConfigurationValues.getTarget().arch;
+        if (hostedArchitecture instanceof AMD64) {
+            matchRuleClass = AMD64NodeMatchRules.class;
+        } else if (hostedArchitecture instanceof AArch64) {
+            matchRuleClass = AArch64NodeMatchRules.class;
+        } else {
+            throw VMError.shouldNotReachHere("Can not instantiate NodeMatchRules for architecture " + hostedArchitecture.getName());
+        }
+
+        matchRuleRegistry.put(matchRuleClass, MatchRuleRegistry.createRules(matchRuleClass));
     }
 
-    public Backend createBackend(Providers newProviders) {
-        return new SubstrateAMD64Backend(newProviders);
+    public SubstrateBackend createBackend(Providers newProviders) {
+        return SubstrateBackendFactory.get().newBackend(newProviders);
     }
 
     public void runAdditionalCompilerPhases(@SuppressWarnings("unused") StructuredGraph graph, @SuppressWarnings("unused") Feature graalFeature) {

@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,7 +28,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
-import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.type.AbstractObjectStamp;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
@@ -44,15 +45,17 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.calc.AndNode;
-import org.graalvm.compiler.nodes.calc.RemNode;
+import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
 import org.graalvm.compiler.nodes.memory.FloatingReadNode;
-import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
+import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
+import org.graalvm.compiler.nodes.type.NarrowOopStamp;
 import org.graalvm.compiler.nodes.virtual.VirtualArrayNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.compiler.options.OptionValues;
@@ -60,13 +63,10 @@ import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
 import org.graalvm.compiler.replacements.SnippetCounter.Group;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.StaticFieldsSupport;
-import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.amd64.FrameAccess;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.graal.nodes.FloatingWordCastNode;
@@ -78,39 +78,35 @@ import com.oracle.svm.core.graal.nodes.SubstrateNewInstanceNode;
 import com.oracle.svm.core.graal.nodes.SubstrateVirtualArrayNode;
 import com.oracle.svm.core.graal.nodes.SubstrateVirtualInstanceNode;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
-import com.oracle.svm.core.heap.ObjectHeader;
+import com.oracle.svm.core.heap.Heap;
+import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.meta.SharedField;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 
+import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaField;
 
-public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider implements SubstrateLoweringProvider {
+public abstract class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider implements SubstrateLoweringProvider {
 
     private final Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings;
 
     private RuntimeConfiguration runtimeConfig;
-    private final CompressEncoding compressEncoding;
-    private final AbstractObjectStamp objectStamp;
-
-    private static boolean useHeapBaseRegister() {
-        return SubstrateOptions.UseHeapBaseRegister.getValue();
-    }
+    private final AbstractObjectStamp hubStamp;
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public SubstrateBasicLoweringProvider(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, TargetDescription target) {
-        super(metaAccess, foreignCalls, target, useHeapBaseRegister());
+    public SubstrateBasicLoweringProvider(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, PlatformConfigurationProvider platformConfig, TargetDescription target) {
+        super(metaAccess, foreignCalls, platformConfig, target, ReferenceAccess.singleton().haveCompressedReferences());
         lowerings = new HashMap<>();
-        compressEncoding = ImageSingletons.lookup(CompressEncoding.class);
 
-        AbstractObjectStamp hubStamp = StampFactory.objectNonNull(TypeReference.createExactTrusted(metaAccess.lookupJavaType(DynamicHub.class)));
-        if (useHeapBaseRegister()) {
-            hubStamp = SubstrateNarrowOopStamp.compressed(hubStamp, compressEncoding);
+        AbstractObjectStamp hubRefStamp = StampFactory.objectNonNull(TypeReference.createExactTrusted(metaAccess.lookupJavaType(DynamicHub.class)));
+        if (ReferenceAccess.singleton().haveCompressedReferences()) {
+            hubRefStamp = SubstrateNarrowOopStamp.compressed(hubRefStamp, ReferenceAccess.singleton().getCompressEncoding());
         }
-        objectStamp = hubStamp;
+        hubStamp = hubRefStamp;
     }
 
     @Override
@@ -133,16 +129,9 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
         return lowerings;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void lower(Node n, LoweringTool tool) {
-        @SuppressWarnings("rawtypes")
-        NodeLoweringProvider lowering = lowerings.get(n.getClass());
-        if (lowering != null) {
-            lowering.lower(n, tool);
-        } else if (n instanceof RemNode) {
-            /* No lowering necessary. */
-        } else if (n instanceof AssertionNode) {
+        if (n instanceof AssertionNode) {
             lowerAssertionNode((AssertionNode) n);
         } else {
             super.lower(n, tool);
@@ -162,10 +151,20 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
         return ConstantNode.forConstant(SubstrateObjectConstant.forObject(fields), getProviders().getMetaAccess(), graph);
     }
 
+    private static ValueNode maybeUncompress(ValueNode node) {
+        Stamp stamp = node.stamp(NodeView.DEFAULT);
+        if (stamp instanceof NarrowOopStamp) {
+            return SubstrateCompressionNode.uncompress(node, ((NarrowOopStamp) stamp).getEncoding());
+        }
+        return node;
+    }
+
     @Override
     protected ValueNode createReadArrayComponentHub(StructuredGraph graph, ValueNode arrayHub, FixedNode anchor) {
-        AddressNode address = graph.unique(new OffsetAddressNode(arrayHub, ConstantNode.forIntegerKind(FrameAccess.getWordKind(), runtimeConfig.getComponentHubOffset(), graph)));
-        return graph.unique(new FloatingReadNode(address, NamedLocationIdentity.FINAL_LOCATION, null, arrayHub.stamp(NodeView.DEFAULT), null, BarrierType.NONE));
+        ConstantNode componentHubOffset = ConstantNode.forIntegerKind(target.wordJavaKind, runtimeConfig.getComponentHubOffset(), graph);
+        AddressNode componentHubAddress = graph.unique(new OffsetAddressNode(arrayHub, componentHubOffset));
+        FloatingReadNode componentHubRef = graph.unique(new FloatingReadNode(componentHubAddress, NamedLocationIdentity.FINAL_LOCATION, null, hubStamp, null, BarrierType.NONE));
+        return maybeUncompress(componentHubRef);
     }
 
     @Override
@@ -176,15 +175,31 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
 
         assert !object.isConstant() || object.asJavaConstant().isNull();
 
-        AddressNode address = graph.unique(new OffsetAddressNode(object, ConstantNode.forIntegerKind(FrameAccess.getWordKind(), getObjectLayout().getHubOffset(), graph)));
-        ValueNode memoryRead = graph.unique(new FloatingReadNode(address, NamedLocationIdentity.FINAL_LOCATION, null, FrameAccess.getWordStamp(), null, BarrierType.NONE));
-        ValueNode masked = graph.unique(new AndNode(memoryRead, ConstantNode.forIntegerKind(FrameAccess.getWordKind(), ObjectHeader.BITS_CLEAR.rawValue(), graph)));
-
-        ValueNode casted = graph.unique(new FloatingWordCastNode(objectStamp, masked));
-        if (useHeapBaseRegister()) {
-            casted = SubstrateCompressionNode.uncompress(casted, compressEncoding);
+        ObjectLayout objectLayout = getObjectLayout();
+        Stamp headerBitsStamp = StampFactory.forUnsignedInteger(8 * objectLayout.getReferenceSize());
+        ConstantNode headerOffset = ConstantNode.forIntegerKind(target.wordJavaKind, objectLayout.getHubOffset(), graph);
+        AddressNode headerAddress = graph.unique(new OffsetAddressNode(object, headerOffset));
+        ValueNode headerBits = graph.unique(new FloatingReadNode(headerAddress, NamedLocationIdentity.FINAL_LOCATION, null, headerBitsStamp, null, BarrierType.NONE));
+        ValueNode hubBits;
+        int reservedBitsMask = Heap.getHeap().getObjectHeader().getReservedBitsMask();
+        if (reservedBitsMask != 0) {
+            // get rid of the reserved header bits and extract the actual pointer to the hub
+            int encodingShift = ReferenceAccess.singleton().getCompressEncoding().getShift();
+            if ((reservedBitsMask >>> encodingShift) == 0) {
+                hubBits = graph.unique(new UnsignedRightShiftNode(headerBits, ConstantNode.forInt(encodingShift, graph)));
+            } else if (reservedBitsMask < objectLayout.getAlignment()) {
+                hubBits = graph.unique(new AndNode(headerBits, ConstantNode.forIntegerStamp(headerBitsStamp, ~reservedBitsMask, graph)));
+            } else {
+                assert encodingShift > 0 : "shift below results in a compressed value";
+                assert CodeUtil.isPowerOf2(reservedBitsMask + 1) : "only the lowest bits may be set";
+                int numReservedBits = CodeUtil.log2(reservedBitsMask + 1);
+                hubBits = graph.unique(new UnsignedRightShiftNode(headerBits, ConstantNode.forInt(numReservedBits, graph)));
+            }
+        } else {
+            hubBits = headerBits;
         }
-        return casted;
+        FloatingWordCastNode hubRef = graph.unique(new FloatingWordCastNode(hubStamp, hubBits));
+        return maybeUncompress(hubRef);
     }
 
     @Override
@@ -196,11 +211,6 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
     public int fieldOffset(ResolvedJavaField f) {
         SharedField field = (SharedField) f;
         return field.isAccessed() ? field.getLocation() : -1;
-    }
-
-    @Override
-    public int arrayBaseOffset(JavaKind kind) {
-        return getObjectLayout().getArrayBaseOffset(kind);
     }
 
     @Override
@@ -226,16 +236,16 @@ public class SubstrateBasicLoweringProvider extends DefaultJavaLoweringProvider 
 
     @Override
     protected Stamp loadCompressedStamp(ObjectStamp stamp) {
-        return SubstrateNarrowOopStamp.compressed(stamp, compressEncoding);
+        return SubstrateNarrowOopStamp.compressed(stamp, ReferenceAccess.singleton().getCompressEncoding());
     }
 
     @Override
     protected ValueNode newCompressionNode(CompressionOp op, ValueNode value) {
-        return new SubstrateCompressionNode(op, value, compressEncoding);
+        return new SubstrateCompressionNode(op, value, ReferenceAccess.singleton().getCompressEncoding());
     }
 
     @Override
-    protected final JavaKind getStorageKind(ResolvedJavaField field) {
+    public final JavaKind getStorageKind(ResolvedJavaField field) {
         return ((SharedField) field).getStorageKind();
     }
 }

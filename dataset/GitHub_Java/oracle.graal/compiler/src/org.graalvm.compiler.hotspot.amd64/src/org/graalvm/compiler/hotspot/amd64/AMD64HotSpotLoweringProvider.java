@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.hotspot.amd64;
 
-import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
 import static org.graalvm.compiler.hotspot.HotSpotBackend.Options.GraalArithmeticStubs;
 
 import org.graalvm.compiler.api.replacements.Snippet;
@@ -102,8 +101,7 @@ public class AMD64HotSpotLoweringProvider extends DefaultHotSpotLoweringProvider
         StructuredGraph graph = math.graph();
         ResolvedJavaMethod method = graph.method();
         if (method != null) {
-            assert !IS_IN_NATIVE_IMAGE || (getReplacements().isSnippet(method) == (method.getAnnotation(Snippet.class) != null));
-            if (getReplacements().isSnippet(method)) {
+            if (method.getAnnotation(Snippet.class) != null) {
                 // In the context of SnippetStub, i.e., Graal-generated stubs, use the LIR
                 // lowering to emit the stub assembly code instead of the Node lowering.
                 return;

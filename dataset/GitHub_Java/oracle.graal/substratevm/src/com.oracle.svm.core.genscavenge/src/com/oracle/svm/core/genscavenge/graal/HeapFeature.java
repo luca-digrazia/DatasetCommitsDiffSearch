@@ -24,7 +24,7 @@
  */
 package com.oracle.svm.core.genscavenge.graal;
 
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +40,7 @@ import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.genscavenge.HeapImpl;
 import com.oracle.svm.core.genscavenge.ImageHeapInfo;
-import com.oracle.svm.core.genscavenge.LinearImageHeapLayouter;
+import com.oracle.svm.core.genscavenge.hosted.LinearImageHeapLayouter;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
@@ -51,7 +51,7 @@ import com.oracle.svm.core.jdk.RuntimeFeature;
 import com.oracle.svm.core.snippets.SnippetRuntime.SubstrateForeignCallDescriptor;
 
 @AutomaticFeature
-class HeapFeature implements GraalFeature {
+public class HeapFeature implements GraalFeature {
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
@@ -60,13 +60,13 @@ class HeapFeature implements GraalFeature {
 
     @Override
     public List<Class<? extends Feature>> getRequiredFeatures() {
-        return Collections.singletonList(RuntimeFeature.class);
+        return Arrays.asList(RuntimeFeature.class);
     }
 
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
         ImageSingletons.add(Heap.class, new HeapImpl(access));
-        ImageSingletons.add(ImageHeapLayouter.class, new LinearImageHeapLayouter(HeapImpl.getImageHeapInfo(), true));
+        ImageSingletons.add(ImageHeapLayouter.class, new LinearImageHeapLayouter());
     }
 
     @Override
@@ -74,7 +74,7 @@ class HeapFeature implements GraalFeature {
                     SnippetReflectionProvider snippetReflection, Map<Class<? extends Node>, NodeLoweringProvider<?>> lowerings, boolean hosted) {
         // Even though I don't hold on to this instance, it is preserved because it becomes the
         // enclosing instance for the lowerings registered within it.
-        final BarrierSnippets barrierSnippets = new BarrierSnippets(options, factories, providers, snippetReflection);
+        final BarrierSnippets barrierSnippets = BarrierSnippets.factory(options, factories, providers, snippetReflection);
         barrierSnippets.registerLowerings(lowerings);
 
         GenScavengeAllocationSnippets.registerLowering(options, factories, providers, snippetReflection, lowerings);

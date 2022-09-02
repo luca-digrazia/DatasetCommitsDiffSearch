@@ -25,7 +25,6 @@
 package com.oracle.svm.core.graal.aarch64;
 
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
-import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
 import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
@@ -36,7 +35,6 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 
-import com.oracle.svm.core.ReservedRegisters;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.code.SubstrateBackend;
@@ -60,13 +58,11 @@ class SubstrateAArch64Feature implements Feature {
         ImageSingletons.add(SubstrateRegisterConfigFactory.class, new SubstrateRegisterConfigFactory() {
             @Override
             public RegisterConfig newRegisterFactory(ConfigKind config, MetaAccessProvider metaAccess, TargetDescription target, Boolean preserveFramePointer) {
-                return new SubstrateAArch64RegisterConfig(config, metaAccess, target, preserveFramePointer);
+                return new SubstrateAArch64RegisterConfig(config, metaAccess, target);
             }
         });
 
-        ImageSingletons.add(ReservedRegisters.class, new AArch64ReservedRegisters());
-
-        if (!SubstrateOptions.useLLVMBackend()) {
+        if (SubstrateOptions.CompilerBackend.getValue().equals("lir")) {
             ImageSingletons.add(SubstrateBackendFactory.class, new SubstrateBackendFactory() {
                 @Override
                 public SubstrateBackend newBackend(Providers newProviders) {
@@ -77,8 +73,8 @@ class SubstrateAArch64Feature implements Feature {
             ImageSingletons.add(SubstrateLoweringProviderFactory.class, new SubstrateLoweringProviderFactory() {
                 @Override
                 public DefaultJavaLoweringProvider newLoweringProvider(MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, PlatformConfigurationProvider platformConfig,
-                                MetaAccessExtensionProvider metaAccessExtensionProvider, TargetDescription target) {
-                    return new SubstrateAArch64LoweringProvider(metaAccess, foreignCalls, platformConfig, metaAccessExtensionProvider, target);
+                                TargetDescription target) {
+                    return new SubstrateAArch64LoweringProvider(metaAccess, foreignCalls, platformConfig, target);
                 }
             });
 
