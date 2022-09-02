@@ -33,21 +33,12 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.interop.ExceptionType;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.Node;
 
 public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest {
-
     public static Object constant42() {
         return 42;
-    }
-
-    public static Object constant0() {
-        return 0;
     }
 
     @Test
@@ -57,20 +48,6 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
         assertPartialEvalEquals("constant42", createCallerChain(3, 0, nodeFactory));
         assertPartialEvalEquals("constant42", createCallerChain(0, 3, nodeFactory));
         assertPartialEvalEquals("constant42", createCallerChain(4, 4, nodeFactory));
-    }
-
-    @Test
-    public void testIsException() {
-        FrameDescriptor fd = new FrameDescriptor();
-        Object receiver = new TestTruffleException(TestTruffleException.UNLIMITED_STACK_TRACE, null, true);
-        RootTestNode rootNode = new RootTestNode(fd, "isException", new IsExceptionNode(receiver, ExceptionType.RUNTIME_ERROR));
-        assertPartialEvalEquals("constant42", rootNode);
-
-        fd = new FrameDescriptor();
-        receiver = new TruffleObject() {
-        };
-        rootNode = new RootTestNode(fd, "isException", new IsExceptionNode(receiver, ExceptionType.RUNTIME_ERROR));
-        assertPartialEvalEquals("constant0", rootNode);
     }
 
     static RootTestNode createCallerChain(int framesAbove, int framesBelow, NodeFactory factory) {
@@ -105,7 +82,6 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
 
     interface NodeFactory {
         AbstractTestNode createThrowNode(int stackTraceElementLimit, boolean property);
-
         AbstractTestNode createCatchNode(AbstractTestNode child);
     }
 
@@ -126,7 +102,7 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
 
         @Child private AbstractTestNode child;
 
-        CatchTruffleExceptionTestNode(AbstractTestNode child) {
+        public CatchTruffleExceptionTestNode(AbstractTestNode child) {
             this.child = child;
         }
 
@@ -148,7 +124,7 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
         private final int limit;
         private final boolean property;
 
-        ThrowTruffleExceptionTestNode(int limit, boolean property) {
+        public ThrowTruffleExceptionTestNode(int limit, boolean property) {
             this.limit = limit;
             this.property = property;
         }
@@ -162,7 +138,7 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
     private static class CallTestNode extends AbstractTestNode {
         @Child private DirectCallNode callNode;
 
-        CallTestNode(CallTarget callTarget) {
+        public CallTestNode(CallTarget callTarget) {
             this.callNode = Truffle.getRuntime().createDirectCallNode(callTarget);
             this.callNode.forceInlining();
         }
@@ -170,31 +146,6 @@ public class TruffleExceptionPartialEvaluationTest extends PartialEvaluationTest
         @Override
         public int execute(VirtualFrame frame) {
             return (int) callNode.call(new Object[0]);
-        }
-    }
-
-    public static class IsExceptionNode extends AbstractTestNode {
-
-        private final Object receiver;
-        private final ExceptionType exceptionType;
-        private final InteropLibrary exceptions;
-
-        IsExceptionNode(Object receiver, ExceptionType exceptionType) {
-            this.receiver = receiver;
-            this.exceptionType = exceptionType;
-            this.exceptions = InteropLibrary.getFactory().createDispatched(3);
-        }
-
-        @Override
-        public int execute(VirtualFrame frame) {
-            try {
-                if (exceptions.isException(receiver) && exceptionType == exceptions.getExceptionType(receiver)) {
-                    return 42;
-                }
-            } catch (UnsupportedMessageException e) {
-                // pass
-            }
-            return 0;
         }
     }
 }
