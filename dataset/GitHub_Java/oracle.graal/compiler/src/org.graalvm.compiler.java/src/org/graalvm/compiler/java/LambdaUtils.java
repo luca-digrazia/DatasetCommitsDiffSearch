@@ -54,10 +54,11 @@ import org.graalvm.compiler.phases.util.Providers;
 public final class LambdaUtils {
     private static final Pattern LAMBDA_PATTERN = Pattern.compile("\\$\\$Lambda\\$\\d+/\\d+");
     private static final char[] HEX = "0123456789abcdef".toCharArray();
+    private static final GraphBuilderPhase LAMBDA_PARSER_PHASE = new GraphBuilderPhase(buildLambdaParserConfig());
 
-    private static GraphBuilderConfiguration buildLambdaParserConfig(ClassInitializationPlugin cip) {
+    private static GraphBuilderConfiguration buildLambdaParserConfig() {
         GraphBuilderConfiguration.Plugins plugins = new GraphBuilderConfiguration.Plugins(new InvocationPlugins());
-        plugins.setClassInitializationPlugin(cip);
+        plugins.setClassInitializationPlugin(new NoClassInitializationPlugin());
         return GraphBuilderConfiguration.getDefault(plugins).withEagerResolving(true);
     }
 
@@ -65,26 +66,19 @@ public final class LambdaUtils {
     }
 
     @SuppressWarnings("try")
-    public static String findStableLambdaName(ClassInitializationPlugin cip, Providers providers, ResolvedJavaType key, OptionValues options, DebugContext debug, Object ctx) throws RuntimeException {
+    public static String findStableLambdaName(Providers providers, ResolvedJavaType key, OptionValues options, DebugContext debug, Object ctx) throws RuntimeException {
         ResolvedJavaMethod[] lambdaProxyMethods = Arrays.stream(key.getDeclaredMethods()).filter(m -> !m.isBridge() && m.isPublic()).toArray(ResolvedJavaMethod[]::new);
         assert lambdaProxyMethods.length == 1 : "There must be only one method calling the target.";
         StructuredGraph graph = new StructuredGraph.Builder(options, debug).method(lambdaProxyMethods[0]).build();
         try (DebugContext.Scope ignored = debug.scope("Lambda target method analysis", graph, key, ctx)) {
-            GraphBuilderPhase lambdaParserPhase = new GraphBuilderPhase(buildLambdaParserConfig(cip));
             HighTierContext context = new HighTierContext(providers, null, OptimisticOptimizations.NONE);
-            lambdaParserPhase.apply(graph, context);
+            LAMBDA_PARSER_PHASE.apply(graph, context);
         } catch (Throwable e) {
             throw debug.handle(e);
         }
         Optional<Invoke> lambdaTargetInvokeOption = StreamSupport.stream(graph.getInvokes().spliterator(), false).findFirst();
         if (!lambdaTargetInvokeOption.isPresent()) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("Lambda without a target invoke: ").append(key.toClassName());
-            graph.getDebug().forceDump(graph, sb.toString());
-            for (ResolvedJavaMethod m : key.getDeclaredMethods()) {
-                sb.append("\n  Method: ").append(m);
-            }
-            throw new JVMCIError(sb.toString());
+            throw new JVMCIError("Lambda without a target invoke.");
         }
         String lambdaTargetName = LambdaUtils.createStableLambdaName(key, lambdaTargetInvokeOption.get().getTargetMethod());
         return lambdaTargetName;
@@ -128,4 +122,22 @@ public final class LambdaUtils {
             throw new JVMCIError(ex);
         }
     }
+
+    private static class NoClassInitializationPlugin implements ClassInitializationPlugin {
+
+        @Override
+        public boolean supportsLazyInitialization(ConstantPool cp) {
+            return true;
+        }
+
+        @Override
+        public void loadReferencedType(GraphBuilderContext builder, ConstantPool cp, int cpi, int bytecode) {
+        }
+
+        @Override
+        public boolean apply(GraphBuilderContext builder, ResolvedJavaType type, Supplier<FrameState> frameState, ValueNode[] classInit) {
+            return false;
+        }
+    }
+
 }
