@@ -55,8 +55,6 @@ final class SourceAccessor extends Accessor {
 
     static final SourceAccessor ACCESSOR = new SourceAccessor();
 
-    static final LanguageSupport LANGUAGE = ACCESSOR.languageSupport();
-
     private SourceAccessor() {
     }
 
@@ -81,6 +79,15 @@ final class SourceAccessor extends Accessor {
 
     static boolean hasAllAccess(Object fileSystemContext) {
         return ACCESSOR.languageSupport().hasAllAccess(fileSystemContext);
+    }
+
+    static boolean isPreInitialization() {
+        Object polyglotContext = ACCESSOR.engineSupport().getCurrentOuterContext();
+        return polyglotContext == null ? false : ACCESSOR.engineSupport().inContextPreInitialization(polyglotContext);
+    }
+
+    static String getRelativePathInLanguageHome(TruffleFile truffleFile) {
+        return ACCESSOR.engineSupport().getRelativePathInLanguageHome(truffleFile);
     }
 
     static void onSourceCreated(Source source) {
@@ -128,8 +135,13 @@ final class SourceAccessor extends Accessor {
         }
 
         @Override
+        public boolean isLegacySource(Source source) {
+            return source.isLegacy();
+        }
+
+        @Override
         public void setFileSystemContext(SourceBuilder builder, Object fileSystemContext) {
-            builder.fileSystemContext(fileSystemContext);
+            builder.embedderFileSystemContext(fileSystemContext);
         }
 
         @Override

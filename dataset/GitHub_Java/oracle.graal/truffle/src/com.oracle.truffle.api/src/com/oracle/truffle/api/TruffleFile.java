@@ -266,10 +266,6 @@ public final class TruffleFile {
         return normalizedPath;
     }
 
-    FileSystemContext getFileSystemContext() {
-        return fileSystemContext;
-    }
-
     FileSystem getSPIFileSystem() {
         return fileSystemContext.fileSystem;
     }
@@ -1602,9 +1598,6 @@ public final class TruffleFile {
     @TruffleBoundary
     String detectMimeType(Set<String> validMimeTypes) {
         try {
-            if (validMimeTypes != null && validMimeTypes.isEmpty()) {
-                return null;
-            }
             checkFileOperationPreconditions();
             String result = fileSystemContext.fileSystem.getMimeType(normalizedPath);
             if (result != null && (validMimeTypes == null || validMimeTypes.contains(result))) {
