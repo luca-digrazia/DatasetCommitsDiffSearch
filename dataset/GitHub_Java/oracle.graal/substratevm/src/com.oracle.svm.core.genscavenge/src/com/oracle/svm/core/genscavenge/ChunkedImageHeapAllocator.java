@@ -33,8 +33,6 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.config.ConfigurationValues;
-import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.image.ImageHeap;
 import com.oracle.svm.core.image.ImageHeapObject;
 import com.oracle.svm.core.image.ImageHeapPartition;
@@ -171,9 +169,6 @@ class ChunkedImageHeapAllocator {
     private AlignedChunk currentAlignedChunk;
 
     ChunkedImageHeapAllocator(ImageHeap imageHeap, long position) {
-        ObjectLayout layout = ConfigurationValues.getObjectLayout();
-        assert layout.getMinimumObjectSize() == layout.getAlignment() : "Must be able to fill any gap";
-
         this.imageHeap = imageHeap;
         this.alignedChunkSize = UnsignedUtils.safeToInt(HeapPolicy.getAlignedHeapChunkSize());
         this.alignedChunkAlignment = UnsignedUtils.safeToInt(HeapPolicy.getAlignedHeapChunkAlignment());

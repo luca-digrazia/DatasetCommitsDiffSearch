@@ -74,10 +74,11 @@ public class ChunkedImageHeapLayouter extends AbstractImageHeapLayouter<ChunkedI
         for (ChunkedImageHeapPartition partition : getPartitions()) {
             partition.layout(allocator);
         }
-        return populateInfoObjects();
+        initializeHeapInfo();
+        return createLayoutInfo();
     }
 
-    private ImageHeapLayoutInfo populateInfoObjects() {
+    private ImageHeapLayoutInfo createLayoutInfo() {
         // Determine writable start boundary from chunks: a chunk that contains writable objects
         // must also have a writable card table
         long writableBegin = getWritablePrimitive().getStartOffset();
@@ -88,23 +89,21 @@ public class ChunkedImageHeapLayouter extends AbstractImageHeapLayouter<ChunkedI
                 break; // (chunks are in ascending memory order)
             }
         }
-        long firstWritableUnalignedChunk = -1;
-        for (UnalignedChunk chunk : allocator.getUnalignedChunks()) {
-            if (chunk.isWritable()) {
-                firstWritableUnalignedChunk = chunk.getBegin();
-            }
-            break;
-        }
-
-        heapInfo.initialize(getReadOnlyPrimitive().firstObject, getReadOnlyPrimitive().lastObject, getReadOnlyReference().firstObject, getReadOnlyReference().lastObject,
-                        getReadOnlyRelocatable().firstObject, getReadOnlyRelocatable().lastObject, getWritablePrimitive().firstObject, getWritablePrimitive().lastObject,
-                        getWritableReference().firstObject, getWritableReference().lastObject, getWritableHuge().firstObject, getWritableHuge().lastObject,
-                        getReadOnlyHuge().firstObject, getReadOnlyHuge().lastObject, writableBegin, firstWritableUnalignedChunk);
-
         long writableEnd = getWritableHuge().getStartOffset() + getWritableHuge().getSize();
         long writableSize = writableEnd - writableBegin;
         long imageHeapSize = getReadOnlyHuge().getStartOffset() + getReadOnlyHuge().getSize();
         return new ImageHeapLayoutInfo(writableBegin, writableSize, getReadOnlyRelocatable().getStartOffset(), getReadOnlyRelocatable().getSize(), imageHeapSize);
+    }
+
+    /**
+     * Store which objects are at the boundaries of the image heap partitions. Here, we also merge
+     * the read-only reference partition with the read-only relocatable partition.
+     */
+    private void initializeHeapInfo() {
+        heapInfo.initialize(getReadOnlyPrimitive().firstObject, getReadOnlyPrimitive().lastObject, getReadOnlyReference().firstObject, getReadOnlyReference().lastObject,
+                        getReadOnlyRelocatable().firstObject, getReadOnlyRelocatable().lastObject, getWritablePrimitive().firstObject, getWritablePrimitive().lastObject,
+                        getWritableReference().firstObject, getWritableReference().lastObject, getWritableHuge().firstObject, getWritableHuge().lastObject,
+                        getReadOnlyHuge().firstObject, getReadOnlyHuge().lastObject);
     }
 
     @Override
