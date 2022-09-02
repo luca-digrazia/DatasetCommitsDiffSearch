@@ -68,7 +68,7 @@ public final class CallNode extends Node {
      * populated once the node is partially evaluated;
      */
     private StructuredGraph ir;
-    private Invoke invoke;
+    private EconomicMap<CallNode, Invoke> childInvokes;
 
     // Needs to be protected because of the @NodeInfo annotation
     protected CallNode(TruffleCallNode truffleCallNode, CompilableTruffleAST truffleAST, StructuredGraph ir, double rootRelativeFrequency, int depth) {
@@ -80,6 +80,7 @@ public final class CallNode extends Node {
         this.truffleAST = truffleAST;
         this.truffleCallees = truffleAST == null ? null : truffleAST.getCallNodes();
         this.ir = ir;
+        this.childInvokes = EconomicMap.create();
         this.children = new NodeSuccessorList<>(this, 0);
         this.depth = depth;
     }
@@ -202,7 +203,7 @@ public final class CallNode extends Node {
             child.state = State.Removed;
             getPolicy().removedNode(this, child);
         } else {
-            child.invoke = invoke;
+            childInvokes.put(child, invoke);
         }
     }
 
@@ -267,15 +268,16 @@ public final class CallNode extends Node {
     public void inline() {
         assert state == State.Expanded : "Cannot inline node that is not expanded: " + state;
         assert ir != null && getParent() != null;
+        final Invoke invoke = getInvoke();
         if (!invoke.isAlive()) {
             state = State.Removed;
             return;
         }
         handleInlineDecisionNode(invoke);
         final UnmodifiableEconomicMap<Node, Node> replacements = getCallTree().getGraphManager().doInline(invoke, ir, truffleAST);
-        for (CallNode child : children) {
+        for (CallNode child : childInvokes.getKeys()) {
             if (child.state != State.Removed) {
-                final Node childInvoke = (Node) child.invoke;
+                final Node childInvoke = (Node) childInvokes.get(child);
                 if (!childInvoke.isAlive()) {
                     child.state = State.Removed;
                     getPolicy().removedNode(this, child);
@@ -304,13 +306,17 @@ public final class CallNode extends Node {
         return truffleCaller.isInliningForced();
     }
 
+    private Invoke getChildInvoke(CallNode child) {
+        return this.childInvokes.get(child);
+    }
 
     public CallNode getParent() {
         return (CallNode) predecessor();
     }
 
     public Invoke getInvoke() {
-        return invoke;
+        CallNode parent = getParent();
+        return parent != null ? parent.getChildInvoke(this) : null;
     }
 
     public State getState() {
