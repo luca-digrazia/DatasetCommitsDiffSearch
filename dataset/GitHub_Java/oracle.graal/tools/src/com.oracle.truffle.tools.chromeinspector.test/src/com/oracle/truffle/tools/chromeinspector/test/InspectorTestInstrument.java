@@ -25,14 +25,13 @@
 package com.oracle.truffle.tools.chromeinspector.test;
 
 import java.io.PrintWriter;
-import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
 import com.oracle.truffle.api.test.ReflectionUtils;
 
-import com.oracle.truffle.tools.chromeinspector.TruffleExecutionContext;
+import com.oracle.truffle.tools.chromeinspector.InspectorExecutionContext;
 import com.oracle.truffle.tools.chromeinspector.server.ConnectionWatcher;
 import com.oracle.truffle.tools.chromeinspector.server.InspectServerSession;
 
@@ -53,12 +52,7 @@ public final class InspectorTestInstrument extends TruffleInstrument {
                     private long id;
 
                     InspectSessionInfo init() {
-                        TruffleExecutionContext context;
-                        try {
-                            context = new TruffleExecutionContext("test", inspectInternal, inspectInitialization, env, sourcePath, new PrintWriter(env.err()));
-                        } catch (IOException ex) {
-                            throw new AssertionError(ex);
-                        }
+                        InspectorExecutionContext context = new InspectorExecutionContext("test", inspectInternal, inspectInitialization, env, sourcePath, new PrintWriter(env.err(), true));
                         this.connectionWatcher = new ConnectionWatcher();
                         this.iss = InspectServerSession.create(context, suspend, connectionWatcher);
                         this.id = context.getId();
