@@ -67,7 +67,7 @@ public interface KlassRef {
      * 
      * @return array of MethodRef
      */
-    MethodRef[] getDeclaredMethodRefs();
+    MethodRef[] getDeclaredMethods();
 
     /**
      * Returns a guest-language representation of the classloader for which loaded the class.

@@ -159,6 +159,8 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> exit = StaticSymbols.putName("exit");
         // Object and arrays
         public static final Symbol<Name> clone = StaticSymbols.putName("clone");
+        // variable 'this' name
+        public static final Symbol<Name> thiz = StaticSymbols.putName("this");
 
         // finding main
         public static final Symbol<Name> checkAndLoadMain = StaticSymbols.putName("checkAndLoadMain");
@@ -203,7 +205,7 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> fillInStackTrace = StaticSymbols.putName("fillInStackTrace");
         public static final Symbol<Name> fillInStackTrace0 = StaticSymbols.putName("fillInStackTrace0");
         public static final Symbol<Name> getMessage = StaticSymbols.putName("getMessage");
-        public static final Symbol<Name> message = StaticSymbols.putName("message");
+        public static final Symbol<Name> detailMessage = StaticSymbols.putName("detailMessage");
         public static final Symbol<Name> printStackTrace = StaticSymbols.putName("printStackTrace");
 
         // j.l.Thread
@@ -238,6 +240,7 @@ public final class Symbol<T> extends ByteSequence {
         // java.nio.Buffer
         public static final Symbol<Name> address = StaticSymbols.putName("address");
         public static final Symbol<Name> capacity = StaticSymbols.putName("capacity");
+        public static final Symbol<Name> wait = StaticSymbols.putName("wait");
 
         // java.lang.invoke.*
         // CallSite
@@ -327,6 +330,7 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> RuntimeVisibleParameterAnnotations = StaticSymbols.putName("RuntimeVisibleParameterAnnotations");
         public static final Symbol<Name> Signature = StaticSymbols.putName("Signature");
         public static final Symbol<Name> SourceFile = StaticSymbols.putName("SourceFile");
+        public static final Symbol<Name> SourceDebugExtension = StaticSymbols.putName("SourceDebugExtension");
         public static final Symbol<Name> StackMapTable = StaticSymbols.putName("StackMapTable");
         public static final Symbol<Name> Synthetic = StaticSymbols.putName("Synthetic");
 
@@ -452,9 +456,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Type> java_lang_AssertionError = StaticSymbols.putType(AssertionError.class);
 
         public static final Symbol<Type> java_lang_NullPointerException = StaticSymbols.putType(NullPointerException.class);
-        public static final Symbol<Type> java_lang_ArrayIndexOutOfBoundsException = StaticSymbols.putType(ArrayIndexOutOfBoundsException.class);
-        public static final Symbol<Type> java_lang_StringIndexOutOfBoundsException = StaticSymbols.putType(StringIndexOutOfBoundsException.class);
-        public static final Symbol<Type> java_lang_IndexOutOfBoundsException = StaticSymbols.putType(IndexOutOfBoundsException.class);
         public static final Symbol<Type> java_lang_ClassCastException = StaticSymbols.putType(ClassCastException.class);
         public static final Symbol<Type> java_lang_ArrayStoreException = StaticSymbols.putType(ArrayStoreException.class);
         public static final Symbol<Type> java_lang_ArithmeticException = StaticSymbols.putType(ArithmeticException.class);
@@ -625,6 +626,7 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Signature> _void_Exception = StaticSymbols.putSignature(Type._void, Type.java_lang_Exception);
         public static final Symbol<Signature> _void_String_String_String_int = StaticSymbols.putSignature(Type._void, Type.java_lang_String, Type.java_lang_String, Type.java_lang_String, Type._int);
         public static final Symbol<Signature> _void_int = StaticSymbols.putSignature(Type._void, Type._int);
+        public static final Symbol<Signature> _void_long = StaticSymbols.putSignature(Type._void, Type._long);
         public static final Symbol<Signature> _void_long_int = StaticSymbols.putSignature(Type._void, Type._long, Type._int);
 
         public static final Symbol<Signature> Boolean_boolean = StaticSymbols.putSignature(Type.java_lang_Boolean, Type._boolean);

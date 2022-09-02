@@ -471,7 +471,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
             StaticObject cause = e.getExceptionObject();
             Meta meta = getMeta();
             if (!InterpreterToVM.instanceOf(cause, meta.java_lang_Error)) {
-                throw meta.throwExceptionWithCause(meta.java_lang_ExceptionInInitializerError, cause);
+                throw Meta.throwExceptionWithCause(meta.java_lang_ExceptionInInitializerError, cause);
             } else {
                 throw e;
             }
@@ -860,6 +860,11 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     public JDWPConstantPool getJDWPConstantPool() {
         ConstantPool pool = getConstantPool();
         return new JDWPConstantPool(pool.length(), pool.getRawBytes());
+    }
+
+    @Override
+    public String getSourceDebugExtension() {
+        return null;
     }
 
     // endregion jdwp-specific
