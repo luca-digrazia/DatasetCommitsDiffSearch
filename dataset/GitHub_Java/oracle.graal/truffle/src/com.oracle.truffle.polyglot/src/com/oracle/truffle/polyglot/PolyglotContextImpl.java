@@ -103,6 +103,9 @@ import com.oracle.truffle.polyglot.PolyglotEngineImpl.CancelExecution;
 import com.oracle.truffle.polyglot.PolyglotEngineImpl.StableLocalLocations;
 import com.oracle.truffle.polyglot.PolyglotLanguageContext.ValueMigrationException;
 import com.oracle.truffle.polyglot.PolyglotLocals.LocalLocation;
+import com.oracle.truffle.polyglot.host.HostContext;
+import com.oracle.truffle.polyglot.host.HostObject;
+import com.oracle.truffle.polyglot.host.HostProxy;
 
 final class PolyglotContextImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
@@ -949,10 +952,10 @@ final class PolyglotContextImpl implements com.oracle.truffle.polyglot.PolyglotI
         if (PolyglotImpl.isGuestPrimitive(value)) {
             // allowed to be passed freely
             return value;
-        } else if (engine.host.isHostObject(value)) {
-            return engine.host.migrateHostObject(getHostContextObject(), value);
-        } else if (engine.host.isHostProxy(value)) {
-            return engine.host.migrateHostProxy(getHostContextObject(), value);
+        } else if (HostObject.isInstance(value)) {
+            return HostObject.withContext(value, getHostContextImpl());
+        } else if (HostProxy.isProxyGuestObject(value)) {
+            return value;
         } else if (valueContext == null) {
             /*
              * The only way this can happen is with Value.asValue(TruffleObject). If it happens
@@ -984,6 +987,10 @@ final class PolyglotContextImpl implements com.oracle.truffle.polyglot.PolyglotI
 
     PolyglotLanguageContext getHostContext() {
         return contexts[PolyglotEngineImpl.HOST_LANGUAGE_INDEX];
+    }
+
+    HostContext getHostContextImpl() {
+        return (HostContext) contextImpls[PolyglotEngineImpl.HOST_LANGUAGE_INDEX];
     }
 
     Object getHostContextObject() {

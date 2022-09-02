@@ -146,6 +146,8 @@ import com.oracle.truffle.polyglot.PolyglotValueDispatchFactory.InteropValueFact
 import com.oracle.truffle.polyglot.PolyglotValueDispatchFactory.InteropValueFactory.WriteBufferIntNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueDispatchFactory.InteropValueFactory.WriteBufferLongNodeGen;
 import com.oracle.truffle.polyglot.PolyglotValueDispatchFactory.InteropValueFactory.WriteBufferShortNodeGen;
+import com.oracle.truffle.polyglot.host.HostObject;
+import com.oracle.truffle.polyglot.host.HostProxy;
 
 abstract class PolyglotValueDispatch extends AbstractValueDispatch {
 
@@ -1693,17 +1695,9 @@ abstract class PolyglotValueDispatch extends AbstractValueDispatch {
         public <T> T as(Object languageContext, Object receiver, Class<T> targetType) {
             Object prev = hostEnter(languageContext);
             try {
-                if (languageContext != null) {
-                    PolyglotContextImpl context = ((PolyglotLanguageContext) languageContext).context;
-                    return language.engine.host.toHostType(null, context.getHostContextObject(), receiver, targetType, targetType);
-                } else {
-                    // disconnected primitive value
-                    T result = (T) EngineAccessor.HOST.convertPrimitiveLossy(receiver, targetType);
-                    if (result == null) {
-                        throw PolyglotInteropErrors.cannotConvertPrimitive(null, receiver, targetType);
-                    }
-                    return result;
-                }
+                PolyglotContextImpl context = ((PolyglotLanguageContext) languageContext).context;
+                Object hostContext = context.getHostContextObject();
+                return context.engine.host.toHostType(null, hostContext, receiver, targetType, targetType);
             } catch (Throwable e) {
                 throw guestToHostException((languageContext), e, true);
             } finally {
@@ -1820,22 +1814,22 @@ abstract class PolyglotValueDispatch extends AbstractValueDispatch {
 
         @Override
         public boolean isHostObject(Object context, Object receiver) {
-            return EngineAccessor.HOST.isDisconnectedHostObject(receiver);
+            return HostObject.isInstance(receiver);
         }
 
         @Override
         public Object asHostObject(Object context, Object receiver) {
-            return EngineAccessor.HOST.unboxDisconnectedHostObject(receiver);
+            return HostObject.valueOf(receiver);
         }
 
         @Override
         public boolean isProxyObject(Object context, Object receiver) {
-            return EngineAccessor.HOST.isDisconnectedHostProxy(receiver);
+            return HostProxy.isProxyGuestObject(receiver);
         }
 
         @Override
         public Object asProxyObject(Object context, Object receiver) {
-            return EngineAccessor.HOST.unboxDisconnectedHostProxy(receiver);
+            return HostProxy.toProxyHostObject((TruffleObject) receiver);
         }
 
         @Override
@@ -1945,8 +1939,8 @@ abstract class PolyglotValueDispatch extends AbstractValueDispatch {
 
         InteropValue(AbstractPolyglotImpl polyglot, PolyglotLanguageInstance languageInstance, Object receiverObject, Class<?> receiverType) {
             super(polyglot, languageInstance.getEngine());
-            this.isProxy = engine.host.isHostProxy(receiverObject);
-            this.isHost = engine.host.isHostObject(receiverObject);
+            this.isProxy = HostProxy.isProxyGuestObject(receiverObject);
+            this.isHost = HostObject.isInstance(receiverObject);
             this.receiverType = receiverType;
             this.asClassLiteral = createTarget(new AsClassLiteralNode(this));
             this.asTypeLiteral = createTarget(new AsTypeLiteralNode(this));
@@ -2241,7 +2235,7 @@ abstract class PolyglotValueDispatch extends AbstractValueDispatch {
         @Override
         public Object asProxyObject(Object context, Object receiver) {
             if (this.isProxy) {
-                return engine.host.unboxProxyObject(receiver);
+                return HostProxy.toProxyHostObject((TruffleObject) receiver);
             } else {
                 return super.asProxyObject(context, receiver);
             }
@@ -2250,7 +2244,7 @@ abstract class PolyglotValueDispatch extends AbstractValueDispatch {
         @Override
         public Object asHostObject(Object context, Object receiver) {
             if (this.isHost) {
-                return engine.host.unboxHostObject(receiver);
+                return HostObject.valueOf(receiver);
             } else {
                 return super.asHostObject(context, receiver);
             }
