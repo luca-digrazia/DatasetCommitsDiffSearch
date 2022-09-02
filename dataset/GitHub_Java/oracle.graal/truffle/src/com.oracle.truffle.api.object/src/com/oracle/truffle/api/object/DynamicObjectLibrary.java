@@ -357,7 +357,12 @@ public abstract class DynamicObjectLibrary extends Library {
      *
      * Type objects are always compared by object identity, never {@code equals}.
      *
-     * @param type a non-null type identifier defined by the guest language.
+     * <p>
+     * Note: For compatibility reasons, the type needs to be an instance of
+     * {@link com.oracle.truffle.api.object.ObjectType ObjectType}. This restriction will be lifted
+     * in a future version.
+     *
+     * @param type an instance of {@link com.oracle.truffle.api.object.ObjectType}.
      * @return {@code true} if the type (and the object's shape) changed
      * @since 20.2.0
      * @see #getDynamicType(DynamicObject)
