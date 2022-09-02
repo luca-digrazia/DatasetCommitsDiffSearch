@@ -1005,9 +1005,11 @@ public final class ClassfileParser {
             final int outerClassIndex = innerClassInfo.outerClassIndex;
             innerClassInfos[i] = innerClassInfo;
 
-            if (context.getJavaVersion().java9OrLater() && majorVersion >= JAVA_7_VERSION) {
-                if (innerClassInfo.innerNameIndex == 0 && outerClassIndex != 0) {
-                    throw ConstantPool.classFormatError("InnerClassesAttribute: the value of the outer_class_info_index item must be zero if the value of the inner_name_index item is zero.");
+            if (context.getJavaVersion().java9OrLater()) {
+                if (majorVersion >= JAVA_7_VERSION) {
+                    if (innerClassInfo.innerNameIndex == 0 && outerClassIndex != 0) {
+                        throw ConstantPool.classFormatError("InnerClassesAttribute: the value of the outer_class_info_index item must be zero if the value of the inner_name_index item is zero.");
+                    }
                 }
             }
 
@@ -1049,7 +1051,6 @@ public final class ClassfileParser {
             }
         }
         return new InnerClassesAttribute(name, innerClassInfos);
-
     }
 
     private NestHostAttribute parseNestHostAttribute(Symbol<Name> attributeName) {
