@@ -53,6 +53,7 @@ import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.ConstantNode;
 import org.graalvm.compiler.nodes.DynamicPiNode;
 import org.graalvm.compiler.nodes.FixedNode;
+import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.FullInfopointNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.NodeView;
@@ -271,7 +272,7 @@ public class SubstrateGraphBuilderPlugins {
     }
 
     private static void registerProxyPlugins(SnippetReflectionProvider snippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions, InvocationPlugins plugins, ParsingReason reason) {
-        if (SubstrateOptions.parseOnce() || reason == ParsingReason.PointsToAnalysis) {
+        if (reason == ParsingReason.PointsToAnalysis) {
             Registration proxyRegistration = new Registration(plugins, Proxy.class);
             proxyRegistration.register2("getProxyClass", ClassLoader.class, Class[].class, new InvocationPlugin() {
                 @Override
@@ -415,17 +416,13 @@ public class SubstrateGraphBuilderPlugins {
 
     /**
      * Unwrap FullInfopointNode and DeoptEntryNode since they are not important for the Class[]
-     * elements analysis.
+     * elements analysis and they can obscure the control flow.
      */
     private static FixedNode unwrapNode(FixedNode node) {
         FixedNode successor = node;
         while (successor instanceof FullInfopointNode || successor instanceof DeoptEntryNode) {
             assert !(successor instanceof DeoptEntryNode) || ((HostedMethod) successor.graph().method()).isDeoptTarget();
-            if (successor instanceof FullInfopointNode) {
-                successor = ((FullInfopointNode) successor).next();
-            } else {
-                successor = ((DeoptEntryNode) successor).next();
-            }
+            successor = ((FixedWithNextNode) successor).next();
         }
         return successor;
     }
@@ -467,7 +464,7 @@ public class SubstrateGraphBuilderPlugins {
      * them for reflection/unsafe access.
      */
     private static void interceptUpdaterInvoke(MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, ParsingReason reason, ValueNode tclassNode, ValueNode fieldNameNode) {
-        if (SubstrateOptions.parseOnce() || reason == ParsingReason.PointsToAnalysis) {
+        if (reason == ParsingReason.PointsToAnalysis) {
             if (tclassNode.isConstant() && fieldNameNode.isConstant()) {
                 Class<?> tclass = snippetReflection.asObject(Class.class, tclassNode.asJavaConstant());
                 String fieldName = snippetReflection.asObject(String.class, fieldNameNode.asJavaConstant());
@@ -624,7 +621,7 @@ public class SubstrateGraphBuilderPlugins {
             return false;
         }
 
-        if (SubstrateOptions.parseOnce() || reason == ParsingReason.PointsToAnalysis) {
+        if (reason == ParsingReason.PointsToAnalysis) {
             /* Register the field for unsafe access. */
             registerAsUnsafeAccessed(metaAccess, targetField);
 
@@ -703,7 +700,7 @@ public class SubstrateGraphBuilderPlugins {
         r.register2("newInstance", Class.class, int[].class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode clazzNode, ValueNode dimensionsNode) {
-                if (SubstrateOptions.parseOnce() || reason == ParsingReason.PointsToAnalysis) {
+                if (reason == ParsingReason.PointsToAnalysis) {
                     /*
                      * There is no Graal node for dynamic multi array allocation, and it is also not
                      * necessary for performance reasons. But when the arguments are constant, we
@@ -839,10 +836,6 @@ public class SubstrateGraphBuilderPlugins {
         r.register0("isDeoptimizationTarget", new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                if (SubstrateOptions.parseOnce()) {
-                    throw VMError.unimplemented("Intrinsification of isDeoptimizationTarget not done yet");
-                }
-
                 if (b.getGraph().method() instanceof SharedMethod) {
                     SharedMethod method = (SharedMethod) b.getGraph().method();
                     if (method.isDeoptTarget()) {

@@ -30,23 +30,20 @@ import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.nodeinfo.InputType;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
-import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.DeoptimizingNode.DeoptBefore;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
+import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
-import org.graalvm.compiler.nodes.virtual.VirtualInstanceNode;
 import org.graalvm.compiler.replacements.nodes.BasicObjectCloneNode;
+import org.graalvm.compiler.replacements.nodes.MacroNode;
 
-import com.oracle.svm.core.graal.nodes.SubstrateVirtualInstanceNode;
 import com.oracle.svm.core.meta.SharedType;
 
 import jdk.vm.ci.meta.Assumptions;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 @NodeInfo(allowedUsageTypes = {InputType.Memory})
 public final class SubstrateObjectCloneNode extends BasicObjectCloneNode implements DeoptBefore {
@@ -54,17 +51,12 @@ public final class SubstrateObjectCloneNode extends BasicObjectCloneNode impleme
 
     @OptionalInput(InputType.State) protected FrameState stateBefore;
 
-    public SubstrateObjectCloneNode(InvokeKind invokeKind, ResolvedJavaMethod targetMethod, int bci, StampPair returnStamp, ValueNode receiver) {
-        super(TYPE, invokeKind, targetMethod, bci, returnStamp, receiver);
+    protected SubstrateObjectCloneNode(MacroParams p) {
+        super(TYPE, p);
     }
 
     @Override
-    protected VirtualInstanceNode createVirtualInstanceNode(ResolvedJavaType type, boolean hasIdentity) {
-        return new SubstrateVirtualInstanceNode(type, hasIdentity);
-    }
-
-    @Override
-    protected LoadFieldNode genLoadFieldNode(Assumptions assumptions, ValueNode originalAlias, ResolvedJavaField field) {
+    public LoadFieldNode genLoadFieldNode(Assumptions assumptions, ValueNode originalAlias, ResolvedJavaField field) {
         if (field.getJavaKind() == JavaKind.Object && field.getType() instanceof SharedType) {
             /*
              * We have the static analysis to check interface types, e.g.., if a parameter of field
@@ -79,6 +71,10 @@ public final class SubstrateObjectCloneNode extends BasicObjectCloneNode impleme
         }
     }
 
+    /**
+     * Even though this implementation is the same as {@link Lowerable#lower}, it is required
+     * because we would actually inherit {@link MacroNode#lower} which we do not want.
+     */
     @Override
     public void lower(LoweringTool tool) {
         tool.getLowerer().lower(this, tool);
