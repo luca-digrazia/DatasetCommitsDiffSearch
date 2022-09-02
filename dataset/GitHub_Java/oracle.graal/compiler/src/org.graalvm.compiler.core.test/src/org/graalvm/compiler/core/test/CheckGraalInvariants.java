@@ -78,7 +78,7 @@ import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.runtime.RuntimeProvider;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.test.AddExports;
-import org.graalvm.compiler.api.test.ModuleSupport;
+import org.graalvm.compiler.test.ModuleSupport;
 import org.graalvm.word.LocationIdentity;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -189,13 +189,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
 
         public boolean shouldVerifyFoldableMethods() {
             return true;
-        }
-
-        /**
-         * Makes edits to the list of verifiers to be run.
-         */
-        @SuppressWarnings("unused")
-        protected void updateVerifiers(List<VerifyPhase<CoreProviders>> verifiers) {
         }
     }
 
@@ -310,8 +303,6 @@ public class CheckGraalInvariants extends GraalCompilerTest {
         if (tool.shouldVerifyFoldableMethods()) {
             verifiers.add(foldableMethodsVerifier);
         }
-
-        tool.updateVerifiers(verifiers);
 
         for (Method m : BadUsageWithEquals.class.getDeclaredMethods()) {
             ResolvedJavaMethod method = metaAccess.lookupJavaMethod(m);
