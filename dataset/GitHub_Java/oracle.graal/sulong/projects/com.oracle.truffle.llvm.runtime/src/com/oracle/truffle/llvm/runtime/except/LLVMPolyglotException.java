@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2018, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,40 +29,22 @@
  */
 package com.oracle.truffle.llvm.runtime.except;
 
-import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.Node;
 
 /**
- * Common base class for all LLVM exceptions.
+ * Exception resulting from invalid use of polyglot builtins.
  */
-public abstract class LLVMException extends RuntimeException implements TruffleException {
+public final class LLVMPolyglotException extends LLVMException {
 
     private static final long serialVersionUID = 1L;
 
-    private final Node location;
-
-    protected LLVMException(Node location, String message, Throwable cause) {
-        super(message, cause);
-        this.location = location;
+    public LLVMPolyglotException(Node location, String message) {
+        super(location, message);
     }
 
-    protected LLVMException(Node location, String message) {
-        super(message);
-        this.location = location;
-    }
-
-    protected LLVMException(Node location) {
-        this.location = location;
-    }
-
-    @Override
-    public Node getLocation() {
-        return location;
-    }
-
-    @SuppressWarnings("sync-override")
-    @Override
-    public final Throwable fillInStackTrace() {
-        return this;
+    @TruffleBoundary
+    public LLVMPolyglotException(Node location, String format, Object... args) {
+        this(location, String.format(format, args));
     }
 }

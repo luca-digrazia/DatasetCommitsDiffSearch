@@ -35,7 +35,6 @@ import java.util.HashMap;
 import java.util.Map.Entry;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -45,8 +44,7 @@ import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.profiles.BranchProfile;
-import com.oracle.truffle.llvm.runtime.except.LLVMIllegalSymbolIndexException;
-import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
+import com.oracle.truffle.api.utilities.AssumedValue;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -207,26 +205,6 @@ public class LLVMScope implements TruffleObject {
     }
 
     @ExportMessage
-    final boolean hasLanguage() {
-        return true;
-    }
-
-    @ExportMessage
-    final Class<? extends TruffleLanguage<?>> getLanguage() {
-        return LLVMLanguage.class;
-    }
-
-    @ExportMessage
-    final boolean isScope() {
-        return true;
-    }
-
-    @ExportMessage
-    public Object toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
-        return "llvm-global";
-    }
-
-    @ExportMessage
     boolean hasMembers() {
         return true;
     }
@@ -249,13 +227,16 @@ public class LLVMScope implements TruffleObject {
         if (contains(globalName)) {
             LLVMSymbol symbol = get(globalName);
             if (symbol != null && symbol.isFunction()) {
-                try {
-                    LLVMPointer value = context.getSymbol(symbol);
-                    if (value != null) {
-                        return LLVMManagedPointer.cast(value).getObject();
+                if (symbol.hasValidIndexAndID()) {
+                    int index = symbol.getSymbolIndex(false);
+                    int bitcodeID = symbol.getBitcodeID(false);
+                    if (context.symbolTableExists(bitcodeID)) {
+                        AssumedValue<LLVMPointer>[] symbolTable = context.findSymbolTable(bitcodeID);
+                        if (index < symbolTable.length) {
+                            LLVMPointer pointer = symbolTable[index].get();
+                            return LLVMManagedPointer.cast(pointer).getObject();
+                        }
                     }
-                } catch (LLVMLinkerException | LLVMIllegalSymbolIndexException e) {
-                    // fallthrough
                 }
                 exception.enter();
                 throw UnknownIdentifierException.create(globalName);
