@@ -321,12 +321,6 @@ public abstract class TruffleInstrument {
             services.add(service);
         }
 
-        @SuppressWarnings("unchecked")
-        @TruffleBoundary
-        static <T extends RuntimeException> RuntimeException engineToInstrumentException(Throwable t) {
-            return InstrumentAccessor.engineAccess().engineToInstrumentException(t);
-        }
-
         /**
          * Queries a {@link TruffleLanguage language implementation} for a special service. The
          * services can be provided by the language by directly implementing them when subclassing
@@ -340,11 +334,7 @@ public abstract class TruffleInstrument {
          * @since 0.26
          */
         public <S> S lookup(LanguageInfo language, Class<S> type) {
-            try {
-                return InstrumentAccessor.engineAccess().lookup(language, type);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            return InstrumentAccessor.engineAccess().lookup(language, type);
         }
 
         /**
@@ -361,15 +351,11 @@ public abstract class TruffleInstrument {
          * @since 0.26
          */
         public <S> S lookup(InstrumentInfo instrument, Class<S> type) {
-            try {
-                Object vm = InstrumentAccessor.langAccess().getPolyglotInstrument(instrument);
-                if (vm == this.polyglotInstrument) {
-                    throw new IllegalArgumentException("Not allowed to lookup services from the currrent instrument.");
-                }
-                return InstrumentAccessor.engineAccess().lookup(instrument, type);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
+            Object vm = InstrumentAccessor.langAccess().getPolyglotInstrument(instrument);
+            if (vm == this.polyglotInstrument) {
+                throw new IllegalArgumentException("Not allowed to lookup services from the currrent instrument.");
             }
+            return InstrumentAccessor.engineAccess().lookup(instrument, type);
         }
 
         /**
@@ -379,11 +365,7 @@ public abstract class TruffleInstrument {
          * @since 0.26
          */
         public Map<String, LanguageInfo> getLanguages() {
-            try {
-                return InstrumentAccessor.engineAccess().getInternalLanguages(polyglotInstrument);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            return InstrumentAccessor.engineAccess().getInternalLanguages(polyglotInstrument);
         }
 
         /**
@@ -393,11 +375,7 @@ public abstract class TruffleInstrument {
          * @since 0.26
          */
         public Map<String, InstrumentInfo> getInstruments() {
-            try {
-                return InstrumentAccessor.engineAccess().getInstruments(polyglotInstrument);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            return InstrumentAccessor.engineAccess().getInstruments(polyglotInstrument);
         }
 
         Object[] onCreate(TruffleInstrument instrument) {
@@ -433,16 +411,11 @@ public abstract class TruffleInstrument {
          *            that can be referenced from the source
          * @return the call target representing the parsed result
          * @throws IOException if the parsing or evaluation fails for some reason
-         * @throws SecurityException
          * @since 0.12
          */
         public CallTarget parse(Source source, String... argumentNames) throws IOException {
-            try {
-                TruffleLanguage.Env env = InstrumentAccessor.engineAccess().getEnvForInstrument(source.getLanguage(), source.getMimeType());
-                return InstrumentAccessor.langAccess().parse(env, source, null, argumentNames);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            TruffleLanguage.Env env = InstrumentAccessor.engineAccess().getEnvForInstrument(source.getLanguage(), source.getMimeType());
+            return InstrumentAccessor.langAccess().parse(env, source, null, argumentNames);
         }
 
         /**
@@ -459,22 +432,18 @@ public abstract class TruffleInstrument {
          * @since 0.31
          */
         public ExecutableNode parseInline(Source source, Node node, MaterializedFrame frame) {
-            try {
-                if (node == null) {
-                    throw new IllegalArgumentException("Node must not be null.");
-                }
-                TruffleLanguage.Env env = InstrumentAccessor.engineAccess().getEnvForInstrument(source.getLanguage(), source.getMimeType());
-                // Assert that the languages match:
-                assert InstrumentAccessor.langAccess().getLanguageInfo(env) == node.getRootNode().getLanguageInfo();
-                ExecutableNode fragment = InstrumentAccessor.langAccess().parseInline(env, source, node, frame);
-                if (fragment != null) {
-                    TruffleLanguage<?> languageSPI = InstrumentAccessor.langAccess().getSPI(env);
-                    fragment = new GuardedExecutableNode(languageSPI, fragment, frame);
-                }
-                return fragment;
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
+            if (node == null) {
+                throw new IllegalArgumentException("Node must not be null.");
             }
+            TruffleLanguage.Env env = InstrumentAccessor.engineAccess().getEnvForInstrument(source.getLanguage(), source.getMimeType());
+            // Assert that the languages match:
+            assert InstrumentAccessor.langAccess().getLanguageInfo(env) == node.getRootNode().getLanguageInfo();
+            ExecutableNode fragment = InstrumentAccessor.langAccess().parseInline(env, source, node, frame);
+            if (fragment != null) {
+                TruffleLanguage<?> languageSPI = InstrumentAccessor.langAccess().getSPI(env);
+                fragment = new GuardedExecutableNode(languageSPI, fragment, frame);
+            }
+            return fragment;
         }
 
         /**
@@ -486,11 +455,7 @@ public abstract class TruffleInstrument {
          * @since 19.0
          */
         public TruffleFile getTruffleFile(String path) {
-            try {
-                return InstrumentAccessor.engineAccess().getTruffleFile(path);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            return InstrumentAccessor.engineAccess().getTruffleFile(path);
         }
 
         /**
@@ -502,11 +467,7 @@ public abstract class TruffleInstrument {
          * @since 19.0
          */
         public TruffleFile getTruffleFile(URI uri) {
-            try {
-                return InstrumentAccessor.engineAccess().getTruffleFile(uri);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            return InstrumentAccessor.engineAccess().getTruffleFile(uri);
         }
 
         private static class GuardedExecutableNode extends ExecutableNode {
@@ -558,11 +519,7 @@ public abstract class TruffleInstrument {
          * @since 0.17
          */
         public boolean isEngineRoot(RootNode root) {
-            try {
-                return InstrumentAccessor.engineAccess().isEvalRoot(root);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            return InstrumentAccessor.engineAccess().isEvalRoot(root);
         }
 
         /**
@@ -581,12 +538,8 @@ public abstract class TruffleInstrument {
          */
         @TruffleBoundary
         public LanguageInfo getLanguageInfo(Class<? extends TruffleLanguage<?>> languageClass) {
-            try {
-                Objects.requireNonNull(languageClass);
-                return InstrumentAccessor.engineAccess().getLanguageInfo(polyglotInstrument, languageClass);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            Objects.requireNonNull(languageClass);
+            return InstrumentAccessor.engineAccess().getLanguageInfo(polyglotInstrument, languageClass);
         }
 
         /**
@@ -614,12 +567,8 @@ public abstract class TruffleInstrument {
          */
         @TruffleBoundary
         public Object getLanguageView(LanguageInfo language, Object value) {
-            try {
-                Objects.requireNonNull(language);
-                return InstrumentAccessor.engineAccess().getLanguageView(language, value);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            Objects.requireNonNull(language);
+            return InstrumentAccessor.engineAccess().getLanguageView(language, value);
         }
 
         /**
@@ -656,12 +605,8 @@ public abstract class TruffleInstrument {
          */
         @TruffleBoundary
         public Object getScopedView(LanguageInfo language, Node location, Frame frame, Object value) {
-            try {
-                Objects.requireNonNull(language);
-                return InstrumentAccessor.engineAccess().getScopedView(language, location, frame, value);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            Objects.requireNonNull(language);
+            return InstrumentAccessor.engineAccess().getScopedView(language, location, frame, value);
         }
 
         /**
@@ -680,15 +625,11 @@ public abstract class TruffleInstrument {
         @Deprecated
         @TruffleBoundary
         public String toString(LanguageInfo language, Object value) {
+            Object displayString = INTEROP.toDisplayString(getLanguageView(language, value));
             try {
-                Object displayString = INTEROP.toDisplayString(getLanguageView(language, value));
-                try {
-                    return INTEROP.asString(displayString);
-                } catch (UnsupportedMessageException e) {
-                    throw new AssertionError("Message toDisplayResult does not return a value string.");
-                }
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
+                return INTEROP.asString(displayString);
+            } catch (UnsupportedMessageException e) {
+                throw new AssertionError("Message toDisplayResult does not return a value string.");
             }
         }
 
@@ -711,15 +652,11 @@ public abstract class TruffleInstrument {
          */
         @Deprecated
         public Object findMetaObject(LanguageInfo language, Object value) {
+            InstrumentAccessor.interopAccess().checkInteropType(value);
             try {
-                InstrumentAccessor.interopAccess().checkInteropType(value);
-                try {
-                    return INTEROP.getMetaObject(getLanguageView(language, value));
-                } catch (UnsupportedMessageException e) {
-                    return null;
-                }
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
+                return INTEROP.getMetaObject(getLanguageView(language, value));
+            } catch (UnsupportedMessageException e) {
+                return null;
             }
         }
 
@@ -740,17 +677,13 @@ public abstract class TruffleInstrument {
         @Deprecated
         public SourceSection findSourceLocation(LanguageInfo language, Object value) {
             try {
-                try {
-                    Object view = getLanguageView(language, value);
-                    if (INTEROP.hasSourceLocation(view)) {
-                        return INTEROP.getSourceLocation(view);
-                    }
-                } catch (UnsupportedMessageException e) {
+                Object view = getLanguageView(language, value);
+                if (INTEROP.hasSourceLocation(view)) {
+                    return INTEROP.getSourceLocation(view);
                 }
-                return null;
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
+            } catch (UnsupportedMessageException e) {
             }
+            return null;
         }
 
         /**
@@ -767,20 +700,16 @@ public abstract class TruffleInstrument {
          */
         @Deprecated
         public LanguageInfo findLanguage(Object value) {
-            try {
-                LanguageInfo language = null;
-                if (INTEROP.hasLanguage(value)) {
-                    try {
-                        language = getLanguageInfo(INTEROP.getLanguage(value));
-                    } catch (UnsupportedMessageException e) {
-                        CompilerDirectives.transferToInterpreter();
-                        throw new AssertionError(e);
-                    }
+            LanguageInfo language = null;
+            if (INTEROP.hasLanguage(value)) {
+                try {
+                    language = getLanguageInfo(INTEROP.getLanguage(value));
+                } catch (UnsupportedMessageException e) {
+                    CompilerDirectives.transferToInterpreter();
+                    throw new AssertionError(e);
                 }
-                return language;
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
             }
+            return language;
         }
 
         /**
@@ -792,11 +721,7 @@ public abstract class TruffleInstrument {
          */
         @Deprecated
         public Map<String, ? extends Object> getExportedSymbols() {
-            try {
-                return InstrumentAccessor.engineAccess().getExportedSymbols();
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            return InstrumentAccessor.engineAccess().getExportedSymbols();
         }
 
         /**
@@ -807,11 +732,7 @@ public abstract class TruffleInstrument {
          * @since 20.1
          */
         public Object getPolyglotBindings() {
-            try {
-                return InstrumentAccessor.engineAccess().getPolyglotBindingsObject();
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            return InstrumentAccessor.engineAccess().getPolyglotBindingsObject();
         }
 
         /**
@@ -836,22 +757,18 @@ public abstract class TruffleInstrument {
          * @since 0.30
          */
         public Iterable<Scope> findLocalScopes(Node node, Frame frame) {
-            try {
-                RootNode rootNode = node.getRootNode();
-                if (rootNode == null) {
-                    throw new IllegalArgumentException("The node " + node + " does not have a RootNode.");
-                }
-                LanguageInfo languageInfo = rootNode.getLanguageInfo();
-                if (languageInfo == null) {
-                    throw new IllegalArgumentException("The root node " + rootNode + " does not have a language associated.");
-                }
-                final TruffleLanguage.Env env = InstrumentAccessor.engineAccess().getEnvForInstrument(languageInfo);
-                Iterable<Scope> langScopes = InstrumentAccessor.langAccess().findLocalScopes(env, node, frame);
-                assert langScopes != null : languageInfo.getId();
-                return langScopes;
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
+            RootNode rootNode = node.getRootNode();
+            if (rootNode == null) {
+                throw new IllegalArgumentException("The node " + node + " does not have a RootNode.");
             }
+            LanguageInfo languageInfo = rootNode.getLanguageInfo();
+            if (languageInfo == null) {
+                throw new IllegalArgumentException("The root node " + rootNode + " does not have a language associated.");
+            }
+            final TruffleLanguage.Env env = InstrumentAccessor.engineAccess().getEnvForInstrument(languageInfo);
+            Iterable<Scope> langScopes = InstrumentAccessor.langAccess().findLocalScopes(env, node, frame);
+            assert langScopes != null : languageInfo.getId();
+            return langScopes;
         }
 
         /**
@@ -865,16 +782,12 @@ public abstract class TruffleInstrument {
          * @since 0.30
          */
         public Iterable<Scope> findTopScopes(String languageId) {
-            try {
-                LanguageInfo languageInfo = getLanguages().get(languageId);
-                if (languageInfo == null) {
-                    throw new IllegalArgumentException("Unknown language: " + languageId + ". Known languages are: " + getLanguages().keySet());
-                }
-                final TruffleLanguage.Env env = InstrumentAccessor.engineAccess().getEnvForInstrument(languageInfo);
-                return findTopScopes(env);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
+            LanguageInfo languageInfo = getLanguages().get(languageId);
+            if (languageInfo == null) {
+                throw new IllegalArgumentException("Unknown language: " + languageId + ". Known languages are: " + getLanguages().keySet());
             }
+            final TruffleLanguage.Env env = InstrumentAccessor.engineAccess().getEnvForInstrument(languageInfo);
+            return findTopScopes(env);
         }
 
         /**
@@ -900,11 +813,7 @@ public abstract class TruffleInstrument {
          * @since 19.0
          */
         public TruffleLogger getLogger(String loggerName) {
-            try {
-                return InstrumentAccessor.engineAccess().getLogger(polyglotInstrument, loggerName);
-            } catch (Throwable t) {
-                throw engineToInstrumentException(t);
-            }
+            return InstrumentAccessor.engineAccess().getLogger(polyglotInstrument, loggerName);
         }
 
         /**

@@ -170,11 +170,12 @@ public final class Value {
     }
 
     /**
-     * Returns <code>true</code> if the value represents a metaobject. Metaobjects may be values
-     * that naturally occur in a language or they may be returned by {@link #getMetaObject()}. A
-     * metaobject represents a description of the object, reveals its kind and its features. Some
-     * information that a metaobject might define includes the base object's type, interface, class,
-     * methods, attributes, etc. Returns <code>false</code> by default.
+     * Returns <code>true</code> if the receiver value represents a metaobject. Metaobjects may be
+     * values that naturally occur in a language or they may be returned by
+     * {@link #getMetaObject()}. A metaobject represents a description of the object, reveals its
+     * kind and its features. Some information that a metaobject might define includes the base
+     * object's type, interface, class, methods, attributes, etc. Returns <code>false</code> by
+     * default.
      * <p>
      * <b>Sample interpretations:</b> In Java an instance of the type {@link Class} is a metaobject.
      * In JavaScript any function instance is a metaobject. For example, the metaobject of a
@@ -227,7 +228,7 @@ public final class Value {
     }
 
     /**
-     * Returns <code>true</code> if the given instance is an instance of this value, else
+     * Returns <code>true</code> if the given instance is of the provided receiver metaobject, else
      * <code>false</code>.
      * <p>
      * <b>Sample interpretations:</b> A Java object is an instance of its returned
@@ -1087,10 +1088,10 @@ public final class Value {
     }
 
     /**
-     * Converts this value to a human readable string. Each language may have special formating
+     * Converts the receiver to a human readable string. Each language may have special formating
      * conventions - even primitive values may not follow the traditional Java formating rules. The
      * format of the returned string is intended to be interpreted by humans not machines and should
-     * therefore not be relied upon by machines. By default this value class name and its
+     * therefore not be relied upon by machines. By default the receiver class name and its
      * {@link System#identityHashCode(Object) identity hash code} is used as string representation.
      *
      * @since 19.0
@@ -1111,8 +1112,9 @@ public final class Value {
     }
 
     /**
-     * Returns <code>true</code> if this object represents a date, else <code>false</code>. If this
-     * value is also a {@link #isTimeZone() timezone} then the date is aware, otherwise it is naive.
+     * Returns <code>true</code> if this object represents a date, else <code>false</code>. If the
+     * receiver is also a {@link #isTimeZone() timezone} then the date is aware, otherwise it is
+     * naive.
      *
      * @throws ClassCastException if polyglot value could not be mapped to the target type.
      * @throws NullPointerException if the target type is null.
@@ -1126,8 +1128,9 @@ public final class Value {
     }
 
     /**
-     * Returns this value as date if this object represents a {@link #isDate() date}. The returned
-     * date is either aware if the value has a {@link #isTimeZone() timezone} otherwise it is naive.
+     * Returns the receiver as date if this object represents a {@link #isDate() date}. The returned
+     * date is either aware if the receiver has a {@link #isTimeZone() timezone} otherwise it is
+     * naive.
      *
      * @throws ClassCastException if polyglot value could not be mapped to the target type.
      * @throws NullPointerException if the target type is null.
@@ -1142,7 +1145,8 @@ public final class Value {
 
     /**
      * Returns <code>true</code> if this object represents a time, else <code>false</code>. If the
-     * value is also a {@link #isTimeZone() timezone} then the time is aware, otherwise it is naive.
+     * receiver is also a {@link #isTimeZone() timezone} then the time is aware, otherwise it is
+     * naive.
      *
      * @throws IllegalStateException if the underlying context is already closed.
      * @see #asTime()
@@ -1153,8 +1157,9 @@ public final class Value {
     }
 
     /**
-     * Returns this value as time if this object represents a {@link #isTime() time}. The returned
-     * time is either aware if the value has a {@link #isTimeZone() timezone} otherwise it is naive.
+     * Returns the receiver as time if this object represents a {@link #isTime() time}. The returned
+     * time is either aware if the receiver has a {@link #isTimeZone() timezone} otherwise it is
+     * naive.
      *
      * @throws ClassCastException if polyglot value could not be mapped to the target type.
      * @throws NullPointerException if the target type is null.
@@ -1168,8 +1173,8 @@ public final class Value {
     }
 
     /**
-     * Returns <code>true</code> if this value represents an instant. If a value is an instant then
-     * it is also a {@link #isDate() date}, {@link #isTime() time} and {@link #isTimeZone()
+     * Returns <code>true</code> if the receiver represents an instant. If a value is an instant
+     * then it is also a {@link #isDate() date}, {@link #isTime() time} and {@link #isTimeZone()
      * timezone}.
      *
      * This method is short-hand for:
@@ -1190,8 +1195,8 @@ public final class Value {
     }
 
     /**
-     * Returns this value as instant if this object represents an {@link #isInstant() instant}. If a
-     * value is an instant then it is also a {@link #isDate() date}, {@link #isTime() time} and
+     * Returns the receiver as instant if this object represents an {@link #isInstant() instant}. If
+     * a value is an instant then it is also a {@link #isDate() date}, {@link #isTime() time} and
      * {@link #isTimeZone() timezone}. Using this method may be more efficient than reconstructing
      * the timestamp from the date, time and timezone data.
      * <p>
@@ -1243,7 +1248,7 @@ public final class Value {
     }
 
     /**
-     * Returns this value as timestamp if this object represents a {@link #isTimeZone() timezone}.
+     * Returns the receiver as timestamp if this object represents a {@link #isTimeZone() timezone}.
      *
      * @throws ClassCastException if polyglot value could not be mapped to the target type.
      * @throws PolyglotException if the conversion triggered a guest language error.
@@ -1269,7 +1274,7 @@ public final class Value {
     }
 
     /**
-     * Returns this value as duration if this object represents a {@link #isDuration() duration}.
+     * Returns the receiver as duration if this object represents a {@link #isDuration() duration}.
      *
      * @throws ClassCastException if polyglot value could not be mapped to the target type.
      * @throws PolyglotException if the conversion triggered a guest language error.
@@ -1294,7 +1299,7 @@ public final class Value {
     }
 
     /**
-     * Throws this value if this object represents an {@link #isException() exception}.
+     * Throws the receiver if this object represents an {@link #isException() exception}.
      *
      * @throws UnsupportedOperationException if the value is not an exception.
      * @throws IllegalStateException if the underlying context is already closed.
