@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.ImportStatic;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -42,6 +43,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode;
 import com.oracle.truffle.llvm.runtime.LLVMGetStackFromThreadNode;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
@@ -57,7 +59,7 @@ import com.oracle.truffle.llvm.runtime.types.FunctionType;
 @SuppressWarnings("static-method")
 public final class LLVMNativeWrapper implements TruffleObject {
 
-    final LLVMFunctionCode code;
+    private final LLVMFunctionCode code;
 
     public LLVMNativeWrapper(LLVMFunctionCode code) {
         assert code.isLLVMIRFunction() || code.isIntrinsicFunctionSlowPath();
@@ -75,55 +77,48 @@ public final class LLVMNativeWrapper implements TruffleObject {
     }
 
     @ExportMessage
-    static final class Execute {
-
-        @Specialization(limit = "1", guards = "wrapper == callbackHelper.wrapper")
-        static Object doExecute(LLVMNativeWrapper wrapper, Object[] args,
-                        @Cached("create(wrapper)") CallbackHelperNode callbackHelper) {
-            assert wrapper == callbackHelper.wrapper;
-            return callbackHelper.execute(args);
-        }
-
-        /**
-         * This should never happen. This code is only called from the NFI, and we explicitly
-         * instruct the NFI to create a separate CallTarget for every distinct LLVMNativeWrapper
-         * object, so we should never see uncached calls or multiple instances at one call site.
-         *
-         * @param wrapper
-         * @param args
-         */
-        @Specialization(replaces = "doExecute")
-        static Object doError(LLVMNativeWrapper wrapper, Object[] args) {
-            throw CompilerDirectives.shouldNotReachHere("unexpected generic case in LLVMNativeWrapper");
-        }
+    Object execute(Object[] args,
+                    @Cached CallbackHelperNode callbackHelper) {
+        return callbackHelper.execute(code, args);
     }
 
+    @GenerateUncached
     @ImportStatic(LLVMLanguage.class)
     abstract static class CallbackHelperNode extends LLVMNode {
 
-        final LLVMNativeWrapper wrapper;
+        abstract Object execute(LLVMFunctionCode code, Object[] args);
 
-        CallbackHelperNode(LLVMNativeWrapper wrapper) {
-            this.wrapper = wrapper;
-        }
-
-        abstract Object execute(Object[] args);
-
-        @Specialization
-        Object doCached(Object[] args,
+        @Specialization(guards = "code == cachedCode")
+        Object doCached(@SuppressWarnings("unused") LLVMFunctionCode code, Object[] args,
+                        @Cached("code") @SuppressWarnings("unused") LLVMFunctionCode cachedCode,
                         @Cached LLVMGetStackFromThreadNode getStack,
                         @CachedContext(LLVMLanguage.class) LLVMContext ctx,
-                        @Cached("createCallNode()") DirectCallNode call,
-                        @Cached("createFromNativeNodes()") LLVMNativeConvertNode[] convertArgs,
-                        @Cached("createToNative(wrapper.code.getLLVMFunction().getType().getReturnType())") LLVMNativeConvertNode convertRet) {
+                        @Cached("createCallNode(cachedCode)") DirectCallNode call,
+                        @Cached("createFromNativeNodes(cachedCode.getLLVMFunction().getType())") LLVMNativeConvertNode[] convertArgs,
+                        @Cached("createToNative(cachedCode.getLLVMFunction().getType().getReturnType())") LLVMNativeConvertNode convertRet) {
             LLVMStack stack = getStack.executeWithTarget(ctx.getThreadingStack(), Thread.currentThread());
             Object[] preparedArgs = prepareCallbackArguments(stack, args, convertArgs);
             Object ret = call.call(preparedArgs);
             return convertRet.executeConvert(ret);
         }
 
-        DirectCallNode createCallNode() {
-            LLVMFunctionCode functionCode = wrapper.code;
+        /**
+         * @param code
+         * @param args
+         * @see #execute(LLVMFunction, LLVMFunctionCode, Object[])
+         */
+        @Specialization(replaces = "doCached")
+        Object doGeneric(LLVMFunctionCode code, Object[] args) {
+            /*
+             * This should never happen. This node is only called from the NFI, and the NFI creates
+             * a separate CallTarget for every distinct callback object, so we should never see more
+             * than one distinct LLVMFunctionDescriptor.
+             */
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalStateException("unexpected generic case in LLVMNativeCallback");
+        }
+
+        DirectCallNode createCallNode(LLVMFunctionCode functionCode) {
             CallTarget callTarget;
             if (functionCode.isLLVMIRFunction()) {
                 callTarget = functionCode.getLLVMIRFunctionSlowPath();
@@ -135,8 +130,7 @@ public final class LLVMNativeWrapper implements TruffleObject {
             return DirectCallNode.create(callTarget);
         }
 
-        protected LLVMNativeConvertNode[] createFromNativeNodes() {
-            FunctionType type = wrapper.code.getLLVMFunction().getType();
+        protected static LLVMNativeConvertNode[] createFromNativeNodes(FunctionType type) {
             LLVMNativeConvertNode[] ret = new LLVMNativeConvertNode[type.getNumberOfArguments()];
             for (int i = 0; i < type.getNumberOfArguments(); i++) {
                 ret[i] = LLVMNativeConvertNode.createFromNative(type.getArgumentType(i));
