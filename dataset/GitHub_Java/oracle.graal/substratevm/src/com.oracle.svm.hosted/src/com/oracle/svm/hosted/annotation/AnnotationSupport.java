@@ -392,8 +392,7 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
                 ValueNode otherAttribute = kit.createInvokeWithExceptionAndUnwind(otherMethod, InvokeKind.Interface, state, bci++, other);
 
                 /* Access our value. We know that it is in a field. */
-                ValueNode receiverNonNull = kit.maybeCreateExplicitNullCheck(receiver);
-                ValueNode ourAttribute = kit.append(LoadFieldNode.create(null, receiverNonNull, ourField));
+                ValueNode ourAttribute = kit.append(LoadFieldNode.create(null, receiver, ourField));
 
                 if (attributeType.isPrimitive()) {
                     /*
@@ -423,8 +422,7 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
                 } else {
                     /* Just call Object.equals(). Primitive values are already boxed. */
                     ResolvedJavaMethod m = kit.findMethod(Object.class, "equals", false);
-                    ValueNode ourAttributeNonNull = kit.maybeCreateExplicitNullCheck(ourAttribute);
-                    attributeEqual = kit.createInvokeWithExceptionAndUnwind(m, InvokeKind.Virtual, state, bci++, ourAttributeNonNull, otherAttribute);
+                    attributeEqual = kit.createInvokeWithExceptionAndUnwind(m, InvokeKind.Virtual, state, bci++, ourAttribute, otherAttribute);
                 }
 
                 kit.startIf(graph.unique(new IntegerEqualsNode(attributeEqual, trueValue)), BranchProbabilityNode.LIKELY_PROBABILITY);
