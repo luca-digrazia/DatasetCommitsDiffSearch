@@ -216,7 +216,7 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
             if (probability(FREQUENT_PROBABILITY, writtenValue.notEqual(0))) {
                 // Calculate the address of the card to be enqueued to the
                 // thread local card queue.
-                Word cardAddress = cardTableAddress(oop);
+                Word cardAddress = cardTableAddress().add(oop.unsignedShiftRight(cardTableShift()));
 
                 byte cardByte = cardAddress.readByte(0, GC_CARD_LOCATION);
                 counters.g1EffectiveAfterNullPostWriteBarrierCounter.inc();
@@ -296,8 +296,10 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
         Word indexAddress = thread.add(cardQueueIndexOffset());
         long indexValue = thread.readWord(cardQueueIndexOffset(), CARD_QUEUE_INDEX_LOCATION).rawValue();
 
-        Word start = cardTableAddress(getPointerToFirstArrayElement(address, length, elementStride));
-        Word end = cardTableAddress(getPointerToLastArrayElement(address, length, elementStride));
+        int cardShift = cardTableShift();
+        Word cardStart = cardTableAddress();
+        Word start = cardStart.add(getPointerToFirstArrayElement(address, length, elementStride).unsignedShiftRight(cardShift));
+        Word end = cardStart.add(getPointerToLastArrayElement(address, length, elementStride).unsignedShiftRight(cardShift));
 
         Word cur = start;
         do {
@@ -346,7 +348,9 @@ public abstract class G1WriteBarrierSnippets extends WriteBarrierSnippets implem
 
     protected abstract byte youngCardValue();
 
-    protected abstract Word cardTableAddress(Pointer oop);
+    protected abstract Word cardTableAddress();
+
+    protected abstract int cardTableShift();
 
     protected abstract int logOfHeapRegionGrainBytes();
 

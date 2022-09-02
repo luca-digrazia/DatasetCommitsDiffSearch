@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.runtime.GraalJVMCICompiler;
 import org.graalvm.compiler.bytecode.Bytecode;
@@ -144,6 +145,7 @@ import com.oracle.graal.pointsto.typestate.TypeState;
 import jdk.vm.ci.code.BytecodePosition;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.Constant;
+import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.runtime.JVMCI;
 
@@ -228,13 +230,16 @@ public class MethodTypeFlowBuilder {
                 }
 
                 // Register used types and fields before canonicalization can optimize them.
-                registerUsedElements(false);
+                registerUsedElements(null);
 
                 CanonicalizerPhase.create().apply(graph, bb.getProviders());
 
                 // Do it again after canonicalization changed type checks and field accesses.
-                registerUsedElements(true);
-
+                EconomicMap<JavaConstant, BytecodePosition> objectConstants = EconomicMap.create();
+                registerUsedElements(objectConstants);
+                if (!objectConstants.isEmpty()) {
+                    methodFlow.objectConstants = objectConstants;
+                }
             } catch (Throwable e) {
                 throw debug.handle(e);
             }
@@ -242,7 +247,7 @@ public class MethodTypeFlowBuilder {
         return true;
     }
 
-    public void registerUsedElements(boolean registerEmbeddedRoots) {
+    public void registerUsedElements(EconomicMap<JavaConstant, BytecodePosition> objectConstants) {
         for (Node n : graph.getNodes()) {
             if (n instanceof InstanceOfNode) {
                 InstanceOfNode node = (InstanceOfNode) n;
@@ -296,8 +301,8 @@ public class MethodTypeFlowBuilder {
                     assert StampTool.isExactType(cn);
                     AnalysisType type = (AnalysisType) StampTool.typeOrNull(cn);
                     type.registerAsInHeap();
-                    if (registerEmbeddedRoots) {
-                        registerEmbeddedRoot(cn);
+                    if (objectConstants != null) {
+                        objectConstants.put(cn.asJavaConstant(), cn.getNodeSourcePosition());
                     }
                 }
 
@@ -311,16 +316,6 @@ public class MethodTypeFlowBuilder {
                 BinaryMathIntrinsicNode node = (BinaryMathIntrinsicNode) n;
                 registerForeignCall(bb, node.getOperation().foreignCallDescriptor);
             }
-        }
-    }
-
-    private void registerEmbeddedRoot(ConstantNode cn) {
-        if (bb.scanningPolicy().trackConstant(bb, cn.asJavaConstant())) {
-            BytecodePosition position = cn.getNodeSourcePosition();
-            if (position == null) {
-                position = new BytecodePosition(null, method, 0);
-            }
-            bb.getUniverse().registerEmbeddedRoot(cn.asJavaConstant(), position);
         }
     }
 
@@ -1439,7 +1434,7 @@ public class MethodTypeFlowBuilder {
 
         /**
          * Model an unsafe-read-and-write operation.
-         * 
+         *
          * In the analysis this is used to model both {@link AtomicReadAndWriteNode}, i.e., an
          * atomic read-and-write operation like
          * {@link sun.misc.Unsafe#getAndSetObject(Object, long, Object)}, and a
