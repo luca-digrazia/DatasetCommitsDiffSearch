@@ -35,14 +35,12 @@ public final class LLVMSourceMethodType extends LLVMSourceFunctionType {
     private final String name;
     private final String linkageName;
     private final LLVMSourceClassLikeType clazz;
-    private final long virtualIndex;
 
-    public LLVMSourceMethodType(List<LLVMSourceType> types, String name, String linkageName, LLVMSourceClassLikeType clazz, long virtualIndex) {
+    public LLVMSourceMethodType(List<LLVMSourceType> types, String name, String linkageName, LLVMSourceClassLikeType clazz) {
         super(types);
         this.name = name;
         this.linkageName = linkageName;
         this.clazz = clazz;
-        this.virtualIndex = virtualIndex;
     }
 
     @Override
@@ -56,10 +54,6 @@ public final class LLVMSourceMethodType extends LLVMSourceFunctionType {
 
     public LLVMSourceClassLikeType getClazz() {
         return clazz;
-    }
-
-    public long getVirtualIndex() {
-        return virtualIndex;
     }
 
 }

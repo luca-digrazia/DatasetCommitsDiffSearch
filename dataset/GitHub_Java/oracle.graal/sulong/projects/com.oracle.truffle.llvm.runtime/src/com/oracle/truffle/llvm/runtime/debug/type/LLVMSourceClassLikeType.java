@@ -53,9 +53,10 @@ public final class LLVMSourceClassLikeType extends LLVMSourceStructLikeType {
         this.methods = methods;
     }
 
-    public void addMethod(String name, String linkageName, LLVMSourceFunctionType function, long virtualIndex) {
+    @TruffleBoundary
+    public void addMethod(String name, String linkageName, LLVMSourceFunctionType function) {
         CompilerAsserts.neverPartOfCompilation();
-        final LLVMSourceMethodType method = new LLVMSourceMethodType(function.getParameterTypes(), name, linkageName, this, virtualIndex);
+        final LLVMSourceMethodType method = new LLVMSourceMethodType(function.getParameterTypes(), name, linkageName, this);
         methods.add(method);
     }
 
@@ -73,7 +74,7 @@ public final class LLVMSourceClassLikeType extends LLVMSourceStructLikeType {
         return methods.size();
     }
 
-    public LLVMSourceMethodType getMethod(int i) {
+    public LLVMSourceFunctionType getMethod(int i) {
         return methods.get(i);
     }
 
@@ -88,79 +89,118 @@ public final class LLVMSourceClassLikeType extends LLVMSourceStructLikeType {
     @Override
     @TruffleBoundary
     public int getElementCount() {
-        return super.getElementCount() + methods.size();
+        int elementCount = dynamicMembers.size() + methods.size();
+        if (staticMembers.getElementCount() != 0) {
+            elementCount++;
+        }
+        return elementCount;
     }
 
     @Override
     @TruffleBoundary
     public String getElementName(long i) {
-        String elementName = super.getElementName(i);
-        if (elementName == null) {
-            int index = (int) (i - super.getElementCount());
-            if (0 <= index && index < methods.size()) {
-                return methods.get(index).getName();
+        int index = (int) i;
+        if (staticMembers.getElementCount() != 0) {
+            if (index == 0) {
+                return LLVMSourceStaticMemberType.CollectionType.MEMBERNAME;
+            } else {
+                index--;
             }
         }
-        return elementName;
+        if (0 <= index && index < dynamicMembers.size()) {
+            return dynamicMembers.get(index).getName();
+        } else {
+            index -= dynamicMembers.size();
+        }
+        if (0 <= index && index < methods.size()) {
+            return methods.get(index).getName();
+        }
+        return null;
     }
 
     @Override
     @TruffleBoundary
     public String getElementNameByOffset(long offset) {
-        String elementName = super.getElementNameByOffset(offset);
-        if (elementName == null) {
-            for (LLVMSourceFunctionType method : methods) {
-                if (method.getOffset() == offset) {
-                    return method.getName();
-                }
+        for (LLVMSourceMemberType member : dynamicMembers) {
+            if (member.getOffset() == offset) {
+                return member.getName();
             }
         }
-        return elementName;
+        for (LLVMSourceFunctionType method : methods) {
+            if (method.getOffset() == offset) {
+                return method.getName();
+            }
+        }
+        return null;
     }
 
     @Override
     @TruffleBoundary
     public LLVMSourceType getElementType(long i) {
-        LLVMSourceType llvmSourceType = super.getElementType(i);
-        if (llvmSourceType == null) {
-            int index = (int) (i - super.getElementCount());
-            if (0 <= index && index < methods.size()) {
-                return methods.get(index).getReturnType();
+        int index = (int) i;
+        if (staticMembers.getElementCount() != 0) {
+            if (index == 0) {
+                return staticMembers;
+            } else {
+                index--;
             }
         }
-        return llvmSourceType;
+        if (0 <= index && index < dynamicMembers.size()) {
+            return dynamicMembers.get(index).getOffsetElementType();
+        } else {
+            index -= dynamicMembers.size();
+        }
+        if (0 <= index && index < methods.size()) {
+            return methods.get(index).getReturnType();
+        }
+        return null;
     }
 
     @Override
     @TruffleBoundary
     public LLVMSourceType getElementType(String name) {
-        LLVMSourceType llvmSourceType = super.getElementType(name);
-        if (llvmSourceType == null) {
-            int idx = getMethodIndexByName(name);
-            if (idx >= 0) {
-                return methods.get(idx).getReturnType();
+        if (name == null) {
+            return null;
+        }
+        for (final LLVMSourceMemberType member : dynamicMembers) {
+            if (name.equals(member.getName())) {
+                return member.getOffsetElementType();
             }
         }
-        return llvmSourceType;
+        int idx = getMethodIndexByName(name);
+        if (idx >= 0) {
+            return methods.get(idx).getReturnType();
+        }
+        if (LLVMSourceStaticMemberType.CollectionType.MEMBERNAME.equals(name)) {
+            return staticMembers;
+        }
+
+        return null;
     }
 
     @Override
     @TruffleBoundary
     public LLVMSourceLocation getElementDeclaration(long i) {
-        LLVMSourceLocation llvmSourceLocation = super.getElementDeclaration(i);
-        if (llvmSourceLocation == null) {
-            int index = (int) (i - super.getElementCount());
-            if (0 <= index && index < methods.size()) {
-                return methods.get(index).getLocation();
+        int index = (int) i;
+        if (staticMembers.getElementCount() != 0) {
+            if (index == 0) {
+                return staticMembers.getLocation();
+            } else {
+                index--;
             }
         }
-        return llvmSourceLocation;
+        if (0 <= index && index < dynamicMembers.size()) {
+            return dynamicMembers.get(index).getLocation();
+        } else {
+            index -= dynamicMembers.size();
+        }
+        if (0 <= index && index < methods.size()) {
+            return methods.get(index).getLocation();
+        }
+        return null;
     }
 
     private int getMethodIndexByName(String name) {
-        if (name == null) {
-            return -1;
-        }
         for (int i = 0; i < methods.size(); i++) {
             LLVMSourceMethodType method = methods.get(i);
             if (name.contentEquals(method.getLinkageName()) || name.contentEquals(method.getName())) {
@@ -173,13 +213,21 @@ public final class LLVMSourceClassLikeType extends LLVMSourceStructLikeType {
     @Override
     @TruffleBoundary
     public LLVMSourceLocation getElementDeclaration(String name) {
-        LLVMSourceLocation llvmSourceLocation = super.getElementDeclaration(name);
-        if (llvmSourceLocation == null) {
-            int idx = getMethodIndexByName(name);
-            if (idx >= 0) {
-                return methods.get(idx).getLocation();
+        if (name == null) {
+            return null;
+        }
+        for (final LLVMSourceMemberType member : dynamicMembers) {
+            if (name.equals(member.getName())) {
+                return member.getLocation();
             }
         }
-        return llvmSourceLocation;
+        int idx = getMethodIndexByName(name);
+        if (idx >= 0) {
+            return methods.get(idx).getLocation();
+        }
+        if (LLVMSourceStaticMemberType.CollectionType.MEMBERNAME.equals(name)) {
+            return staticMembers.getLocation();
+        }
+        return null;
     }
 }
