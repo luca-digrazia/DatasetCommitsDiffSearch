@@ -156,7 +156,7 @@ public class LibrarySplittingStrategyTest extends AbstractSplittingStrategyTest 
         @ReportPolymorphism
         abstract static class ReadMember {
 
-            static final String CACHED_NAME = "cached";
+            static String CACHED_NAME = "cached";
 
             @Specialization(guards = "name == CACHED_NAME")
             @ReportPolymorphism.Exclude
@@ -175,7 +175,7 @@ public class LibrarySplittingStrategyTest extends AbstractSplittingStrategyTest 
 
     @NodeChild("receiverNode")
     @NodeChild("nameNode")
-    abstract static class SplitReadPropertyNode extends SplittingTestNode {
+    static abstract class SplitReadPropertyNode extends SplittingTestNode {
 
         static final int LIBRARY_LIMIT = 3;
 
