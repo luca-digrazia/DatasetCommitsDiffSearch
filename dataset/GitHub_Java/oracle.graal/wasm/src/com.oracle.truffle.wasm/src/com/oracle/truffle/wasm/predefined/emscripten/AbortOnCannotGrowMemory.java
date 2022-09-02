@@ -32,11 +32,10 @@ package com.oracle.truffle.wasm.predefined.emscripten;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.wasm.binary.WasmCodeEntry;
 import com.oracle.truffle.wasm.binary.WasmLanguage;
-import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 
 public class AbortOnCannotGrowMemory extends AbortNode {
-    public AbortOnCannotGrowMemory(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
-        super(language, codeEntry, memory);
+    public AbortOnCannotGrowMemory(WasmLanguage language, WasmCodeEntry codeEntry) {
+        super(language, codeEntry);
     }
 
     @Override
