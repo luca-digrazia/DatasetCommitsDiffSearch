@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -56,12 +55,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
     Object callVirtualIndirect(StaticObject receiver, Object[] arguments,
                     @Cached("create()") IndirectCallNode indirectCallNode) {
         // vtable lookup.
-        Method target = methodLookup(receiver, vtableIndex);
-        if (!target.hasCode()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw receiver.getKlass().getMeta().throwEx(AbstractMethodError.class);
-        }
-        return indirectCallNode.call(target.getCallTarget(), arguments);
+        return indirectCallNode.call(methodLookup(receiver, vtableIndex).getCallTarget(), arguments);
     }
 
     InvokeVirtualNode(Method resolutionSeed) {

@@ -65,7 +65,6 @@ import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.BootstrapMethodsAttribute;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
-import com.oracle.truffle.espresso.runtime.MemoryErrorDelegate;
 import com.oracle.truffle.espresso.runtime.ReturnAddress;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
@@ -296,7 +295,6 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.WIDE;
 public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
     public static final boolean DEBUG_GENERAL = false;
-    public static final boolean DEBUG_THROWN = false;
     public static final boolean DEBUG_CATCH = false;
 
     public static final DebugCounter bcCount = DebugCounter.create("Bytecodes executed");
@@ -844,7 +842,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
                         case ATHROW:
                             CompilerDirectives.transferToInterpreter();
-                            if (DEBUG_THROWN) {
+                            if (DEBUG_GENERAL) {
                                 reportThrow(curBCI, getMethod(), nullCheck(peekObject(frame, top - 1)));
                             }
                             throw new EspressoException(nullCheck(peekObject(frame, top - 1)));
@@ -876,12 +874,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                     // Checkstyle: resume
                 } catch (EspressoException | EspressoExitException e) {
                     throw e;
-                } catch (OutOfMemoryError | StackOverflowError e) {
-                    // Free some memory
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    e.setStackTrace(MemoryErrorDelegate.EMPTY_STACK);
-                    // Delegate to free some stack
-                    throw getContext().getDelegate().delegate(e instanceof StackOverflowError);
                 } catch (RuntimeException e) {
                     CompilerDirectives.transferToInterpreter();
                     if (DEBUG_GENERAL) {
@@ -903,18 +895,6 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                     continue loop; // skip bs.next()
                 } else {
                     throw e;
-                }
-            } catch (MemoryErrorDelegate e) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                if (e.check()) {
-                    EspressoException exception = e.act(getContext(), getMeta());
-                    if (DEBUG_GENERAL) {
-                        reportThrow(curBCI, getMethod(), exception.getException());
-                    }
-                    throw exception;
-                } else {
-                    // Give us some room on the stack
-                    throw e.deStack();
                 }
             } catch (VirtualMachineError e) {
                 // TODO(peterssen): Host should not throw invalid VME (not in the boot classpath).
@@ -1242,12 +1222,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
             if (bs.currentBC(curBCI) == QUICK) {
                 quick = nodes[bs.readCPI(curBCI)];
             } else {
-                Klass typeToCheck;
-                try {
-                    typeToCheck = resolveType(opCode, bs.readCPI(curBCI));
-                } catch (EspressoException e) {
-                    throw getMeta().throwEx(NoClassDefFoundError.class);
-                }
+                Klass typeToCheck = resolveType(opCode, bs.readCPI(curBCI));
                 quick = injectQuick(curBCI, CheckCastNodeGen.create(typeToCheck));
             }
         }
@@ -1262,21 +1237,11 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
             if (bs.currentBC(curBCI) == QUICK) {
                 quick = nodes[bs.readCPI(curBCI)];
             } else {
-                Klass typeToCheck;
-                try {
-                    typeToCheck = resolveType(opCode, bs.readCPI(curBCI));
-                } catch (EspressoException e) {
-                    throw getMeta().throwEx(NoClassDefFoundError.class);
-                }
+                Klass typeToCheck = resolveType(opCode, bs.readCPI(curBCI));
                 quick = injectQuick(curBCI, InstanceOfNodeGen.create(typeToCheck));
             }
         }
         return quick.invoke(frame, top) - Bytecodes.stackEffectOf(opCode);
-    }
-
-    @SuppressWarnings("unused")
-    private static boolean isReturn(int opCode) {
-        return opCode >= IRETURN && opCode <= RETURN;
     }
 
     private int quickenInvoke(final VirtualFrame frame, int top, int curBCI, int opCode) {
@@ -1317,6 +1282,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         assert (Bytecodes.INVOKEDYNAMIC == opCode);
         RuntimeConstantPool pool;
         InvokeDynamicConstant inDy;
+        // TODO(garcia) Do something more elegant than code copy-paste for all quickenings.
         synchronized (this) {
             if (bs.currentBC(curBCI) == QUICK) {
                 return nodes[bs.readCPI(curBCI)].invoke(frame, top) - Bytecodes.stackEffectOf(opCode);

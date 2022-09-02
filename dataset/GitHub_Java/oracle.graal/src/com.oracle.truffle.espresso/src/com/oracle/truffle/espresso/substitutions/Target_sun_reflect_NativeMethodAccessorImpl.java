@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.substitutions;
 
-import java.lang.reflect.InvocationTargetException;
-
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -225,6 +223,7 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
     @Substitution
     public static @Host(Object.class) StaticObject invoke0(@Host(java.lang.reflect.Method.class) StaticObject guestMethod, @Host(Object.class) StaticObject receiver,
                     @Host(Object[].class) StaticObject args) {
+
         Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         StaticObject curMethod = guestMethod;
 
@@ -237,11 +236,6 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
         }
 
         Klass klass = ((StaticObject) meta.Method_clazz.get(guestMethod)).getMirrorKlass();
-
-        if (klass == meta.MethodHandle && (reflectedMethod.getName() == Name.invoke || reflectedMethod.getName() == Name.invokeExact)) {
-            throw meta.throwExWithCause(InvocationTargetException.class, meta.initExWithMessage(UnsupportedOperationException.class, "Cannot reflecively invoke MethodHandle.{invoke,invokeExact}"));
-        }
-
         StaticObject parameterTypes = (StaticObject) meta.Method_parameterTypes.get(guestMethod);
         // System.err.println(EspressoOptions.INCEPTION_NAME + " Reflective method for " +
         // reflectedMethod.getName());
@@ -252,7 +246,7 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
     }
 
     public static @Host(Object.class) StaticObject callMethodReflectively(Meta meta, @Host(Object.class) StaticObject receiver, @Host(Object[].class) StaticObject args, Method reflectedMethod,
-                    Klass klass, @Host(Class[].class) StaticObject parameterTypes) {
+                    Klass klass, StaticObject parameterTypes) {
         klass.safeInitialize();
 
         Method method;      // actual method to invoke
@@ -263,6 +257,7 @@ public final class Target_sun_reflect_NativeMethodAccessorImpl {
             method = reflectedMethod;
             targetKlass = klass;
         } else {
+
             if (StaticObject.isNull(receiver)) {
                 throw meta.throwEx(meta.NullPointerException);
             }

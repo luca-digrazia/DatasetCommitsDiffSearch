@@ -86,7 +86,7 @@ public final class StaticObject implements TruffleObject {
     }
 
     // Constructor for object copy
-    StaticObject(ObjectKlass klass, Object[] fields, byte[] primitiveFields) {
+    public StaticObject(ObjectKlass klass, Object[] fields, byte[] primitiveFields) {
         this.klass = klass;
         this.fields = fields;
         this.primitiveFields = primitiveFields;
@@ -142,6 +142,8 @@ public final class StaticObject implements TruffleObject {
         assert array.getClass().isArray();
         this.fields = array;
         this.primitiveFields = null;
+        // this.primitiveFields = new byte[JavaKind.Int.getByteCount()];
+        // U.putInt(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET, Array.getLength(array));
     }
 
     private final Klass klass;
@@ -170,12 +172,10 @@ public final class StaticObject implements TruffleObject {
 
     // Shallow copy.
     public StaticObject copy() {
-        if (isNull(this)) {
-            return NULL;
-        }
         if (getKlass().isArray()) {
             return new StaticObject((ArrayKlass) getKlass(), cloneWrapped());
         } else {
+            CompilerAsserts.neverPartOfCompilation();
             return new StaticObject((ObjectKlass) getKlass(), fields == null ? null : ((Object[]) fields).clone(), primitiveFields == null ? null : primitiveFields.clone());
         }
     }
@@ -214,14 +214,12 @@ public final class StaticObject implements TruffleObject {
 
     // Start non primitive field handling.
     @TruffleBoundary
-    public final StaticObject getFieldVolatile(Field field) {
+    public final Object getFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return (StaticObject) U.getObjectVolatile(fields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex());
+        return U.getObjectVolatile(fields, Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * field.getFieldIndex());
     }
 
-
-    // Not to be used to access hidden fields !
-    public final StaticObject getField(Field field) {
+    public final Object getField(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert !field.getKind().isSubWord();
         Object result;
@@ -231,10 +229,10 @@ public final class StaticObject implements TruffleObject {
             result = getUnsafeField(field.getFieldIndex());
         }
         assert result != null;
-        return (StaticObject) result;
+        return result;
     }
 
-    // Use with caution. Can be used with hidden fields
+    // Use with caution.
     public final Object getUnsafeField(int fieldIndex) {
         return U.getObject(fields, (long) Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * fieldIndex);
     }
@@ -330,7 +328,7 @@ public final class StaticObject implements TruffleObject {
 
     public final int getIntField(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        assert field.getKind() == JavaKind.Int;
+        assert field.getKind() == JavaKind.Int || field.getKind() == JavaKind.Float;
         if (field.isVolatile()) {
             return getIntFieldVolatile(field);
         } else {
@@ -344,142 +342,55 @@ public final class StaticObject implements TruffleObject {
         return U.getIntVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex());
     }
 
-    public float getFloatField(Field field) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        assert field.getKind() == JavaKind.Float;
-        if (field.isVolatile()) {
-            return getFloatFieldVolatile(field);
-        } else {
-            return U.getFloat(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex());
-        }
-    }
-
-    @TruffleBoundary
-    public float getFloatFieldVolatile(Field field) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return U.getFloatVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex());
-    }
-
-    public double getDoubleField(Field field) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        assert field.getKind() == JavaKind.Double;
-        if (field.isVolatile()) {
-            return getDoubleFieldVolatile(field);
-        } else {
-            return U.getDouble(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex());
-        }
-    }
-
-    @TruffleBoundary
-    public double getDoubleFieldVolatile(Field field) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return U.getDoubleVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex());
-    }
-
-    // Field setters
-
     public final void setBooleanField(Field field, boolean value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Boolean;
         if (field.isVolatile()) {
-            setBooleanFieldVolatile(field, value);
+            U.putByteVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), (byte) (value ? 1 : 0));
         } else {
             U.putByte(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), (byte) (value ? 1 : 0));
         }
-    }
-
-    public void setBooleanFieldVolatile(Field field, boolean value) {
-        setByteFieldVolatile(field, (byte) (value ? 1 : 0));
     }
 
     public final void setByteField(Field field, byte value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Byte;
         if (field.isVolatile()) {
-            setByteFieldVolatile(field, value);
+            U.putByteVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
         } else {
             U.putByte(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
         }
-    }
-
-    public void setByteFieldVolatile(Field field, byte value) {
-        U.putByteVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
     }
 
     public final void setCharField(Field field, char value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Char;
         if (field.isVolatile()) {
-            setCharFieldVolatile(field, value);
+            U.putCharVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
         } else {
             U.putChar(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
         }
-    }
-
-    public void setCharFieldVolatile(Field field, char value) {
-        U.putCharVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
     }
 
     public final void setShortField(Field field, short value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Short;
         if (field.isVolatile()) {
-            setShortFieldVolatile(field, value);
+            U.putShortVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
         } else {
             U.putShort(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
         }
-    }
-
-    public void setShortFieldVolatile(Field field, short value) {
-        U.putShortVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
     }
 
     public final void setIntField(Field field, int value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Int || field.getKind() == JavaKind.Float;
         if (field.isVolatile()) {
-            setIntFieldVolatile(field, value);
+            U.putIntVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
         } else {
             U.putInt(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
         }
     }
-
-    public void setIntFieldVolatile(Field field, int value) {
-        U.putIntVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
-    }
-
-    public void setFloatField(Field field, float value) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        assert field.getKind() == JavaKind.Float;
-        if (field.isVolatile()) {
-            setFloatFieldVolatile(field, value);
-        } else {
-            U.putFloat(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
-        }
-    }
-
-    @TruffleBoundary
-    public void setDoubleFieldVolatile(Field field, double value) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        U.putDoubleVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
-    }
-
-    public void setDoubleField(Field field, double value) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        assert field.getKind() == JavaKind.Double;
-        if (field.isVolatile()) {
-            setDoubleFieldVolatile(field, value);
-        } else {
-            U.putDouble(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
-        }
-    }
-
-    @TruffleBoundary
-    public void setFloatFieldVolatile(Field field, float value) {
-        assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        U.putFloatVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
-    }
-
 
     public boolean compareAndSwapIntField(Field field, int before, int after) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
@@ -503,17 +414,17 @@ public final class StaticObject implements TruffleObject {
         switch (field.getKind()) {
             case Boolean:
             case Byte:
-                setByteFieldVolatile(field, (byte) value);
+                U.putByteVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), (byte) value);
                 break;
             case Char:
-                setCharFieldVolatile(field, (char) value);
+                U.putCharVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), (char) value);
                 break;
             case Short:
-                setShortFieldVolatile(field, (short) value);
+                U.putShortVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), (short) value);
                 break;
             case Int:
             case Float:
-                setIntFieldVolatile(field, value);
+                U.putIntVolatile(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + Unsafe.ARRAY_BYTE_INDEX_SCALE * field.getFieldIndex(), value);
                 break;
             default:
                 throw EspressoError.shouldNotReachHere();
@@ -662,6 +573,7 @@ public final class StaticObject implements TruffleObject {
     public int length() {
         assert isArray();
         return Array.getLength(fields);
+        // return U.getInt(primitiveFields, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET);
     }
 
     private Object cloneWrapped() {

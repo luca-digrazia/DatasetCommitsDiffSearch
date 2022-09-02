@@ -212,10 +212,6 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
         return codeAttribute.getCode();
     }
 
-    public CodeAttribute getCodeAttribute() {
-        return codeAttribute;
-    }
-
     public int getCodeSize() {
         return getCode() != null ? getCode().length : 0;
     }
@@ -260,26 +256,13 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
         return NativeLibrary.bind(symbol, signature);
     }
 
-    /**
-     * Ensure any callTarget is called immediately before a BCI is advanced, or it could violate the
-     * specs on class init.
-     */
     @TruffleBoundary
     public CallTarget getCallTarget() {
+        // TODO(peterssen): Make lazy call target thread-safe.
         if (callTarget == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             if (poisonPill) {
                 getMeta().throwExWithMessage(IncompatibleClassChangeError.class, "Conflicting default methods: " + this.getName());
             }
-            // Initializing a class costs a lock, do it outside of this method's lock to avoid
-            // congestion.
-            // Note that requesting a call target is immediately followed by a call to the method,
-            // before advancing BCI.
-            // This ensures that we are respecting the specs, saying that a class must be
-            // initialized before a method is called, while saving a call to safeInitialize after a
-            // method lookup.
-            declaringKlass.safeInitialize();
-
             synchronized (this) {
                 if (callTarget != null) {
                     return callTarget;
@@ -288,6 +271,8 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
                     this.callTarget = proxy.getCallTarget();
                     return callTarget;
                 }
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+
                 EspressoRootNode redirectedMethod = getSubstitutions().get(this);
                 if (redirectedMethod != null) {
                     callTarget = Truffle.getRuntime().createCallTarget(redirectedMethod);
@@ -377,7 +362,6 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
 
     public ObjectKlass[] getCheckedExceptions() {
         if (checkedExceptions == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             createCheckedExceptions();
         }
         return checkedExceptions;
@@ -385,6 +369,7 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
 
     private synchronized void createCheckedExceptions() {
         if (checkedExceptions == null) {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
             if (exceptionsAttribute == null) {
                 checkedExceptions = ObjectKlass.EMPTY_ARRAY;
                 return;
@@ -443,10 +428,10 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
         getContext().getJNI().clearPendingException();
         assert args.length == Signatures.parameterCount(getParsedSignature(), false);
         // assert !isStatic() || ((StaticObject) self).isStatic();
+        getDeclaringKlass().safeInitialize();
 
         final Object[] filteredArgs;
         if (isStatic()) {
-            // getDeclaringKlass().safeInitialize();
             filteredArgs = new Object[args.length];
             for (int i = 0; i < filteredArgs.length; ++i) {
                 filteredArgs[i] = getMeta().toGuestBoxed(args[i]);
@@ -472,7 +457,7 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
         getContext().getJNI().clearPendingException();
         if (isStatic()) {
             assert args.length == Signatures.parameterCount(getParsedSignature(), false);
-            // getDeclaringKlass().safeInitialize();
+            getDeclaringKlass().safeInitialize();
             return getCallTarget().call(args);
         } else {
             assert args.length + 1 /* self */ == Signatures.parameterCount(getParsedSignature(), !isStatic());

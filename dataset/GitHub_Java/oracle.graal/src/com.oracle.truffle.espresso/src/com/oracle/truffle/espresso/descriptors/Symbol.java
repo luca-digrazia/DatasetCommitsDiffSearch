@@ -28,7 +28,6 @@ import java.util.Arrays;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.jni.Utf8;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import sun.misc.VM;
 
 /**
  * Modified-UTF8 byte string (symbol) for internal use in Espresso.
@@ -163,9 +162,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> maxPriority = StaticSymbols.putName("maxPriority");
         public static final Symbol<Name> interrupt = StaticSymbols.putName("interrupt");
         public static final Symbol<Name> daemon = StaticSymbols.putName("daemon");
-        public static final Symbol<Name> threadStatus = StaticSymbols.putName("threadStatus");
-        public static final Symbol<Name> remove = StaticSymbols.putName("remove");
-        public static final Symbol<Name> toThreadState = StaticSymbols.putName("toThreadState");
         public static final Symbol<Name> form = StaticSymbols.putName("form");
         public static final Symbol<Name> vmentry = StaticSymbols.putName("vmentry");
         public static final Symbol<Name> target = StaticSymbols.putName("target");
@@ -223,7 +219,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Name> HIDDEN_HOST_THREAD = StaticSymbols.putName("0HIDDEN_HOST_THREAD");
         public static final Symbol<Name> HIDDEN_MIRROR_KLASS = StaticSymbols.putName("0HIDDEN_MIRROR_KLASS");
         public static final Symbol<Name> HIDDEN_SIGNERS = StaticSymbols.putName("0HIDDEN_SIGNERS");
-        public static final Symbol<Name> HIDDEN_IS_ALIVE = StaticSymbols.putName("0HIDDEN_IS_ALIVE");
     }
 
     public static final class Type extends Descriptor {
@@ -291,15 +286,11 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Type> IllegalMonitorStateException = StaticSymbols.putType(IllegalMonitorStateException.class);
         public static final Symbol<Type> IllegalArgumentException = StaticSymbols.putType(IllegalArgumentException.class);
         public static final Symbol<Type> ClassNotFoundException = StaticSymbols.putType(ClassNotFoundException.class);
-        public static final Symbol<Type> InterruptedException = StaticSymbols.putType(InterruptedException.class);
         public static final Symbol<Type> NegativeArraySizeException = StaticSymbols.putType(NegativeArraySizeException.class);
         public static final Symbol<Type> InvocationTargetException = StaticSymbols.putType(java.lang.reflect.InvocationTargetException.class);
 
         public static final Symbol<Type> Thread = StaticSymbols.putType(Thread.class);
         public static final Symbol<Type> ThreadGroup = StaticSymbols.putType(ThreadGroup.class);
-
-        public static final Symbol<Type> sun_misc_VM = StaticSymbols.putType(VM.class);
-        public static final Symbol<Type> ThreadStateEnum = StaticSymbols.putType(Thread.State.class);
 
         // Guest reflection.
         public static final Symbol<Type> Field = StaticSymbols.putType(java.lang.reflect.Field.class);
@@ -366,7 +357,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Signature> Class_boolean_int_String = StaticSymbols.putSignature(Type.Class, Type._boolean, Type._int, Type.String);
 
         public static final Symbol<Signature> _void_Throwable = StaticSymbols.putSignature(Type._void, Type.Throwable);
-        public static final Symbol<Signature> _void_String_Throwable = StaticSymbols.putSignature(Type._void, Type.String, Type.Throwable);
         public static final Symbol<Signature> _void_String = StaticSymbols.putSignature(Type._void, Type.String);
         public static final Symbol<Signature> Class_String = StaticSymbols.putSignature(Type.Class, Type.String);
         public static final Symbol<Signature> ByteBuffer_byte_array = StaticSymbols.putSignature(Type.ByteBuffer, Type._byte_array);
@@ -395,9 +385,6 @@ public final class Symbol<T> extends ByteSequence {
         public static final Symbol<Signature> linkMethodHandleConstant_signature = StaticSymbols.putSignature(Type.MethodHandle, Type.Class, Type._int, Type.Class, Type.String, Type.Object);
         public static final Symbol<Signature> linkCallSite_signature = StaticSymbols.putSignature(Type.MemberName, Type.Object, Type.Object, Type.Object, Type.Object, Type.Object, Type.Object_array);
         public static final Symbol<Signature> lookup_signature = StaticSymbols.putSignature(Type.Lookup);
-
-        public static final Symbol<Signature> toThreadState = StaticSymbols.putSignature(Type.ThreadStateEnum, Type._int);
-        public static final Symbol<Signature> ThreadGroup_remove = StaticSymbols.putSignature(Type._void, Type.Thread);
 
     }
 }

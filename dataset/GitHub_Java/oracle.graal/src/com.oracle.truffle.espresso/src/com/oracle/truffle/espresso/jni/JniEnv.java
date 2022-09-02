@@ -251,7 +251,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     private class VarArgsImpl implements VarArgs {
 
         @Child Node execute = Message.EXECUTE.createNode();
-        @Child Node isNull = Message.IS_NULL.createNode();
 
         private final long nativePointer;
 
@@ -338,15 +337,10 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                 if (result instanceof StaticObject) {
                     return result;
                 } else {
-                    if (ForeignAccess.sendIsNull(isNull, result)) {
-                        // TODO(garcia) understand the weird stuff happening here.
-                        // DaCapo batik gives us a NativePointer to 0 here. This is a workaround
-                        // until I
-                        // figure out just what is happening here.
-                        return StaticObject.NULL;
-                    } else {
-                        throw EspressoError.unimplemented("non null native pointer in JniEnv");
-                    }
+                    // TODO(garcia) understand the weird stuff happening here.
+                    // DaCapo batik gives us a NativePointer to 0 here. This is a workaround until I
+                    // figure out just what is happening here.
+                    return StaticObject.NULL;
                 }
             } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
                 throw EspressoError.shouldNotReachHere(e);
@@ -923,9 +917,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         assert !resolutionSeed.isStatic();
         Object[] args = popVarArgs(varargsPtr, resolutionSeed.getParsedSignature());
         // System.err.println("callVirtualMethod " + resolutionSeed + " " + Arrays.toString(args));
-        Method m = receiver.getKlass().vtableLookup(resolutionSeed.getVTableIndex());
-        // Method m = receiver.getKlass().lookupMethod(resolutionSeed.getName(),
-        // resolutionSeed.getRawSignature());
+        Method m = receiver.getKlass().lookupMethod(resolutionSeed.getName(), resolutionSeed.getRawSignature());
         assert m != null;
         return m.invokeDirect(receiver, args);
     }
@@ -1427,11 +1419,6 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public static StaticObject GetObjectClass(StaticObject self) {
         return self.getKlass().mirror();
-    }
-
-    @JniImpl
-    public static StaticObject GetSuperclass(StaticObject self) {
-        return self.getKlass().getSuperKlass().mirror();
     }
 
     @JniImpl

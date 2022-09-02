@@ -28,7 +28,6 @@ import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 @EspressoSubstitutions
@@ -37,7 +36,7 @@ public final class Target_java_lang_Thread {
     // TODO(peterssen): Remove single thread shim, support real threads.
     @Substitution
     public static @Host(Thread.class) StaticObject currentThread() {
-        return EspressoLanguage.getCurrentContext().getHost2Guest(Thread.currentThread());
+        return EspressoLanguage.getCurrentContext().host2guest.get(Thread.currentThread());
     }
 
     @Substitution
@@ -75,8 +74,6 @@ public final class Target_java_lang_Thread {
     @Substitution(hasReceiver = true)
     public static void start0(@Host(Thread.class) StaticObject self) {
         if (EspressoOptions.ENABLE_THREADS) {
-            EspressoContext context = self.getKlass().getContext();
-            Meta meta = context.getMeta();
             Thread hostThread = EspressoLanguage.getCurrentContext().getEnv().createThread(new Runnable() {
                 @Override
                 public void run() {
@@ -85,11 +82,10 @@ public final class Target_java_lang_Thread {
             });
 
             self.setHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD, hostThread);
-            context.putHost2Guest(hostThread, self);
-            context.registerThread(hostThread);
+            EspressoLanguage.getCurrentContext().host2guest.put(hostThread, self);
 
             System.err.println("Starting thread: " + self.getKlass());
-            hostThread.setDaemon((boolean) meta.Thread_daemon.get(self));
+            hostThread.setDaemon((boolean) self.getKlass().getMeta().Thread_daemon.get(self));
             hostThread.start();
         } else {
             System.err.println(
@@ -112,7 +108,7 @@ public final class Target_java_lang_Thread {
         return Thread.holdsLock(object);
     }
 
-    @Substitution
+    @Substitution(hasReceiver = true)
     public static void sleep(long millis) {
         try {
             Thread.sleep(millis);
@@ -129,15 +125,5 @@ public final class Target_java_lang_Thread {
             return;
         }
         hostThread.interrupt();
-    }
-
-    @Substitution(hasReceiver = true)
-    public static void join(@Host(Thread.class) StaticObject self, long millis)
-                    throws InterruptedException {
-        Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        if (hostThread == null) {
-            return;
-        }
-        hostThread.join(millis);
     }
 }
