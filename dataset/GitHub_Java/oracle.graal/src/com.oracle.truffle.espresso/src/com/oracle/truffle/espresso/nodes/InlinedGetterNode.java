@@ -3,35 +3,34 @@ package com.oracle.truffle.espresso.nodes;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.impl.Field;
+import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.object.DebugCounter;
 
 public class InlinedGetterNode extends QuickNode {
 
-    private static final DebugCounter getterNodes = DebugCounter.create("getters: ");
-    private static final DebugCounter leafGetterNodes = DebugCounter.create("leaf get: ");
-
-    private static final int INSTANCE_GETTER_BCI = 1;
-    private static final int STATIC_GETTER_BCI = 0;
-
     protected final Field field;
+    protected final JavaKind kind;
     protected final Method inlinedMethod;
+    protected final Klass methodKlass;
+    protected final int opCode;
+    protected final int curBCI;
 
-    @Child ChildGetFieldNode getFieldNode;
-
-    protected InlinedGetterNode(Method inlinedMethod) {
+    protected InlinedGetterNode(Method inlinedMethod, int opCode, int curBCI) {
         this.inlinedMethod = inlinedMethod;
+        this.opCode = opCode;
         this.field = getInlinedField(inlinedMethod);
-        getFieldNode = ChildGetFieldNode.create(this.field);
+        this.kind = field.getKind();
+        this.methodKlass = inlinedMethod.getDeclaringKlass();
+        this.curBCI = curBCI;
     }
 
     public static InlinedGetterNode create(Method inlinedMethod, int opCode, int curBCI) {
-        getterNodes.inc();
         if (inlinedMethod.isFinalFlagSet() || inlinedMethod.getDeclaringKlass().isFinalFlagSet()) {
-            return new InlinedGetterNode(inlinedMethod);
+            return new InlinedGetterNode(inlinedMethod, opCode, curBCI);
         } else {
-            leafGetterNodes.inc();
             return new LeafAssumptionGetterNode(inlinedMethod, opCode, curBCI);
         }
     }
@@ -44,15 +43,34 @@ public class InlinedGetterNode extends QuickNode {
                         ? field.getDeclaringKlass().tryInitializeAndGetStatics()
                         : nullCheck(root.peekObject(frame, top - 1));
         int resultAt = inlinedMethod.isStatic() ? top : (top - 1);
-        return (resultAt - top) + getFieldNode.getField(frame, root, receiver, resultAt);
+        Object result = getField(receiver, this.field, kind);
+        return (resultAt - top) + root.putKind(frame, resultAt, result, kind);
+    }
+
+    protected static Object getField(StaticObject receiver, Field f, JavaKind k) {
+        // @formatter:off
+        switch (k) {
+            case Boolean: return receiver.getBooleanField(f);
+            case Byte:    return receiver.getByteField(f);
+            case Short:   return receiver.getShortField(f);
+            case Char:    return receiver.getCharField(f);
+            case Int:     return receiver.getIntField(f);
+            case Float:   return receiver.getFloatField(f);
+            case Long:    return receiver.getLongField(f);
+            case Double:  return receiver.getDoubleField(f);
+            case Object:  return receiver.getField(f);
+            default:
+                throw EspressoError.shouldNotReachHere();
+        }
+        // @formatter:on
     }
 
     private static Field getInlinedField(Method inlinedMethod) {
         BytecodeStream code = new BytecodeStream(inlinedMethod.getCode());
         if (inlinedMethod.isStatic()) {
-            return inlinedMethod.getRuntimeConstantPool().resolvedFieldAt(inlinedMethod.getDeclaringKlass(), code.readCPI(STATIC_GETTER_BCI));
+            return inlinedMethod.getRuntimeConstantPool().resolvedFieldAt(inlinedMethod.getDeclaringKlass(), code.readCPI(0));
         } else {
-            return inlinedMethod.getRuntimeConstantPool().resolvedFieldAt(inlinedMethod.getDeclaringKlass(), code.readCPI(INSTANCE_GETTER_BCI));
+            return inlinedMethod.getRuntimeConstantPool().resolvedFieldAt(inlinedMethod.getDeclaringKlass(), code.readCPI(1));
         }
     }
 }

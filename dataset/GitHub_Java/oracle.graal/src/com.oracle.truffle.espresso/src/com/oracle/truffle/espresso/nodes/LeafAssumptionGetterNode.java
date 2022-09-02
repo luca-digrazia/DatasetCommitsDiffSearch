@@ -14,7 +14,7 @@ public class LeafAssumptionGetterNode extends InlinedGetterNode {
     public int invoke(VirtualFrame frame, int top) {
         BytecodeNode root = (BytecodeNode) getParent();
         assert field.isStatic() == inlinedMethod.isStatic();
-        if (inlinedMethod.leafAssumption()) {
+        if (methodKlass.leafAssumption()) {
             StaticObject receiver = field.isStatic()
                             ? field.getDeclaringKlass().tryInitializeAndGetStatics()
                             : nullCheck(root.peekObject(frame, top - 1));

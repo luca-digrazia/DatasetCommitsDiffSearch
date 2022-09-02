@@ -308,8 +308,6 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
     public static final DebugCounter resolveKlassCount = DebugCounter.create("resolveKlassCount");
     public static final DebugCounter resolveMethodCount = DebugCounter.create("resolveMethodCount");
 
-    public static final DebugCounter invokeNodes = DebugCounter.create("total invoke nodes");
-
     @Children private QuickNode[] nodes = QuickNode.EMPTY_ARRAY;
 
     @CompilationFinal(dimensions = 1) //
@@ -423,7 +421,7 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
         frame.setObject(stackSlots[slot], ReturnAddress.create(targetBCI));
     }
 
-    void putObject(VirtualFrame frame, int slot, StaticObject value) {
+    private void putObject(VirtualFrame frame, int slot, StaticObject value) {
         frame.setObject(stackSlots[slot], value);
     }
 
@@ -432,20 +430,20 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
         frame.setObject(stackSlots[slot], value);
     }
 
-    void putInt(VirtualFrame frame, int slot, int value) {
+    private void putInt(VirtualFrame frame, int slot, int value) {
         frame.setLong(stackSlots[slot], value);
     }
 
-    void putFloat(VirtualFrame frame, int slot, float value) {
+    private void putFloat(VirtualFrame frame, int slot, float value) {
         frame.setLong(stackSlots[slot], Float.floatToRawIntBits(value));
     }
 
-    void putLong(VirtualFrame frame, int slot, long value) {
+    private void putLong(VirtualFrame frame, int slot, long value) {
         // frame.setObject(stackSlots[slot], StaticObject.NULL);
         frame.setLong(stackSlots[slot + 1], value);
     }
 
-    void putDouble(VirtualFrame frame, int slot, double value) {
+    private void putDouble(VirtualFrame frame, int slot, double value) {
         // frame.setObject(stackSlots[slot], StaticObject.NULL);
         frame.setLong(stackSlots[slot + 1], Double.doubleToRawLongBits(value));
     }
@@ -1378,7 +1376,6 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
     }
 
     private int quickenInvoke(final VirtualFrame frame, int top, int curBCI, int opCode) {
-        invokeNodes.inc();
         CompilerDirectives.transferToInterpreterAndInvalidate();
         assert Bytecodes.isInvoke(opCode);
         QuickNode quick;

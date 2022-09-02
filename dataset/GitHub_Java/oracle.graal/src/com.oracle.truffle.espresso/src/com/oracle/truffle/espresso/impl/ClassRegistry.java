@@ -107,16 +107,7 @@ public abstract class ClassRegistry implements ContextAccess {
             strType = typeOrNull.toString();
         }
 
-        ParserKlass parserKlass = null;
-        try {
-            parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), strType, null, context);
-        } catch (NoClassDefFoundError ncdfe) {
-            throw getMeta().throwExWithMessage(NoClassDefFoundError.class, ncdfe.getMessage());
-        }
-
-        if (StaticObject.notNull(getClassLoader()) && parserKlass.getName().toString().startsWith("java/")) {
-            throw getMeta().throwExWithMessage(SecurityException.class, "Define class in prohibited package name: " + parserKlass.getName());
-        }
+        ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), strType, null, context);
 
         Symbol<Type> type = typeOrNull;
         if (type == null) {
@@ -134,6 +125,10 @@ public abstract class ClassRegistry implements ContextAccess {
                         // Should only be an ObjectKlass, not primitives nor arrays.
                         ? (ObjectKlass) loadKlass(superKlassType, (instigator == null) ? type : instigator)
                         : null;
+
+        if (superKlass != null && superKlass.isFinalFlagSet()) {
+            throw getMeta().throwEx(VerifyError.class);
+        }
 
         assert superKlass == null || !superKlass.isInterface();
 
