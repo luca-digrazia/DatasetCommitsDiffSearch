@@ -128,19 +128,9 @@ final class CoverageCLI {
 
     private void printLinesOfSource(Source source, LineCoverage lineCoverage) {
         for (int i = 1; i <= source.getLineCount(); i++) {
-            CharSequence characters = source.getCharacters(i);
-            char covered = onlyWhiteSpace(characters) ? ' ' : lineCoverage.getStatementCoverageCharacter(i);
-            out.println(String.format("%s %s", covered, characters));
+            char covered = lineCoverage.getStatementCoverageCharacter(i);
+            out.println(String.format("%s %s", covered, source.getCharacters(i)));
         }
-    }
-
-    private static boolean onlyWhiteSpace(CharSequence characters) {
-        for (int i = 0; i < characters.length(); i++) {
-            if (!Character.isWhitespace(characters.charAt(i))) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private void printLinesLegend() {
