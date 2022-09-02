@@ -34,6 +34,7 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.core.common.RetryableBailoutException;
 import org.graalvm.compiler.core.common.calc.CanonicalCondition;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Graph.Mark;
 import org.graalvm.compiler.graph.Graph.NodeEventScope;
 import org.graalvm.compiler.graph.Node;
@@ -58,10 +59,13 @@ import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.FrameState;
+import org.graalvm.compiler.nodes.GuardPhiNode;
+import org.graalvm.compiler.nodes.GuardProxyNode;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoopBeginNode;
 import org.graalvm.compiler.nodes.LoopExitNode;
+import org.graalvm.compiler.nodes.MemoryProxyNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.ProxyNode;
@@ -69,12 +73,17 @@ import org.graalvm.compiler.nodes.SafepointNode;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.ValuePhiNode;
+import org.graalvm.compiler.nodes.ValueProxyNode;
 import org.graalvm.compiler.nodes.VirtualState.NodePositionClosure;
 import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
+import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.extended.OpaqueNode;
 import org.graalvm.compiler.nodes.extended.SwitchNode;
+import org.graalvm.compiler.nodes.memory.MemoryKill;
+import org.graalvm.compiler.nodes.memory.MemoryPhiNode;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.util.IntegerHelper;
@@ -445,7 +454,7 @@ public abstract class LoopTransformations {
             public void apply(Node from, Position p) {
                 ValueNode usage = (ValueNode) p.get(from);
                 if (begin.isPhiAtMerge(usage)) {
-                    Node replacement = LoopFragmentInside.patchProxyAtPhi((PhiNode) usage, begin.loopExits().first(), usage);
+                    Node replacement = proxy(begin.graph(), usage, begin.loopExits().first());
                     p.set(from, replacement);
                 }
             }
@@ -480,7 +489,7 @@ public abstract class LoopTransformations {
             }
             if (set == null) {
                 // no proxy yet for this value
-                set = LoopFragmentInside.patchProxyAtPhi(currentPhi, exitToProxy, currentPhi);
+                set = proxy(currentPhi.graph(), currentPhi, exitToProxy);
             }
             assert set != null;
             outGoingPhi.setValueAt(0, set);
@@ -524,6 +533,18 @@ public abstract class LoopTransformations {
                     }
                 }
             }
+        }
+    }
+
+    private static ValueNode proxy(StructuredGraph graph, ValueNode toProxy, LoopExitNode lex) {
+        if (toProxy instanceof ValuePhiNode) {
+            return graph.addOrUnique(new ValueProxyNode(toProxy, lex));
+        } else if (toProxy instanceof GuardPhiNode) {
+            return graph.addOrUnique(new GuardProxyNode((GuardingNode) toProxy, lex));
+        } else if (toProxy instanceof MemoryPhiNode) {
+            return graph.addOrUnique(new MemoryProxyNode((MemoryKill) toProxy, lex, ((MemoryPhiNode) toProxy).getKilledLocationIdentity()));
+        } else {
+            throw GraalError.shouldNotReachHere("Unkown phi type " + toProxy);
         }
     }
 
