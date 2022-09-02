@@ -152,9 +152,7 @@ public final class LLVMContext {
     protected boolean cleanupNecessary;
     private boolean initializeContextCalled;
     private DataLayout libsulongDatalayout;
-    private boolean datalayoutInitialised;
-    private String libsulongTargetTriple;
-    private boolean targetTripleInitialised;
+    private Boolean datalayoutInitialised;
     private final LLVMLanguage language;
 
     private LLVMTracerInstrument tracer;    // effectively final after initialization
@@ -428,26 +426,12 @@ public final class LLVMContext {
             this.libsulongDatalayout = datalayout;
             datalayoutInitialised = true;
         } else {
-            throw new NullPointerException("The default datalayout cannot be overwritten");
+            throw new NullPointerException("The default datalayout cannot be overrwitten");
         }
     }
 
     public DataLayout getLibsulongDataLayout() {
         return libsulongDatalayout;
-    }
-
-    public void addLibsulongTargetTriple(String targetTriple) {
-        // Libsulong targettriple can only be set once.
-        if (!targetTripleInitialised) {
-            this.libsulongTargetTriple = targetTriple;
-            targetTripleInitialised = true;
-        } else {
-            throw new NullPointerException("The default targetTriple cannot be overwritten");
-        }
-    }
-
-    public String getLibsulongTargetTriple() {
-        return libsulongTargetTriple;
     }
 
     void finalizeContext(LLVMFunction sulongDisposeContext) {
