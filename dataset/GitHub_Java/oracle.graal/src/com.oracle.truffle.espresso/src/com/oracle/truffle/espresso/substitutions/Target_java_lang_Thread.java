@@ -215,28 +215,24 @@ public final class Target_java_lang_Thread {
         hostThread.interrupt();
     }
 
-    // @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation")
     @Substitution(hasReceiver = true)
     public static void resume0(@Host(Object.class) StaticObject self) {
-        /* nop */
-        // Thread hostThread = (Thread)
-        // self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        // if (hostThread == null) {
-        // return;
-        // }
-        // hostThread.resume();
+        Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
+        if (hostThread == null) {
+            return;
+        }
+        hostThread.resume();
     }
 
-    // @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation")
     @Substitution(hasReceiver = true)
     public static void suspend0(@Host(Object.class) StaticObject self) {
-        /* nop */
-        // Thread hostThread = (Thread)
-        // self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        // if (hostThread == null) {
-        // return;
-        // }
-        // hostThread.suspend();
+        Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
+        if (hostThread == null) {
+            return;
+        }
+        hostThread.suspend();
     }
 
     @SuppressWarnings({"deprecation", "unused"})
