@@ -343,10 +343,7 @@ public final class ObjectHeaderImpl extends ObjectHeader {
     }
 
     static Object getForwardedObject(Pointer ptr) {
-        return getForwardedObject(ptr, readHeaderFromPointer(ptr));
-    }
-
-    static Object getForwardedObject(Pointer ptr, UnsignedWord header) {
+        UnsignedWord header = readHeaderFromPointer(ptr);
         assert isForwardedHeader(header);
         if (ReferenceAccess.singleton().haveCompressedReferences()) {
             if (ReferenceAccess.singleton().getCompressEncoding().hasShift()) {
