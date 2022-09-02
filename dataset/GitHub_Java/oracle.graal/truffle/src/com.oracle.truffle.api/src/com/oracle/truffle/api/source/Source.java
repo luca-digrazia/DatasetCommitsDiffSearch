@@ -1837,7 +1837,7 @@ public abstract class Source {
 
         /**
          * @since 0.15
-         * @deprecated see {@link SourceBuilder#uri(URI)}
+         * @deprecated see {@link SourceBuilder#content(CharSequence)}
          */
         @Deprecated
         public Builder<E1, E2, E3> uri(URI ownUri) {
