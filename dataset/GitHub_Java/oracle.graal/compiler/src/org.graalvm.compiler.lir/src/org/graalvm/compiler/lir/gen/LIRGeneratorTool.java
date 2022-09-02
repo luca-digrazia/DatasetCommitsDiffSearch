@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -26,21 +28,22 @@ import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
+import org.graalvm.compiler.core.common.memory.MemoryOrderMode;
 import org.graalvm.compiler.core.common.spi.CodeGenProviders;
 import org.graalvm.compiler.core.common.spi.ForeignCallLinkage;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.GraalError;
-import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.LabelRef;
-import org.graalvm.compiler.lir.SwitchStrategy;
 import org.graalvm.compiler.lir.Variable;
+import org.graalvm.compiler.lir.VirtualStackSlot;
 
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.Register;
-import jdk.vm.ci.code.RegisterAttributes;
+import jdk.vm.ci.code.RegisterConfig;
+import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.code.ValueKindFactory;
 import jdk.vm.ci.meta.AllocatableValue;
@@ -57,17 +60,25 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
     /**
      * Factory for creating moves.
      */
-    public interface MoveFactory {
+    interface MoveFactory {
+
+        /**
+         * Checks whether the loading of the supplied constant can be deferred until usage.
+         */
+        @SuppressWarnings("unused")
+        default boolean mayEmbedConstantLoad(Constant constant) {
+            return false;
+        }
 
         /**
          * Checks whether the supplied constant can be used without loading it into a register for
          * most operations, i.e., for commonly used arithmetic, logical, and comparison operations.
          *
-         * @param c The constant to check.
+         * @param constant The constant to check.
          * @return True if the constant can be used directly, false if the constant needs to be in a
          *         register.
          */
-        boolean canInlineConstant(Constant c);
+        boolean canInlineConstant(Constant constant);
 
         /**
          * @param constant The constant that might be moved to a stack slot.
@@ -80,6 +91,8 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
         LIRInstruction createStackMove(AllocatableValue result, AllocatableValue input);
 
         LIRInstruction createLoad(AllocatableValue result, Constant input);
+
+        LIRInstruction createStackLoad(AllocatableValue result, Constant input);
     }
 
     abstract class BlockScope implements AutoCloseable {
@@ -107,7 +120,7 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
 
     LIRGenerationResult getResult();
 
-    boolean hasBlockEnd(AbstractBlockBase<?> block);
+    RegisterConfig getRegisterConfig();
 
     MoveFactory getMoveFactory();
 
@@ -119,7 +132,9 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
      */
     MoveFactory getSpillMoveFactory();
 
-    BlockScope getBlockScope(AbstractBlockBase<?> block);
+    boolean canInlineConstant(Constant constant);
+
+    boolean mayEmbedConstantLoad(Constant constant);
 
     Value emitConstant(LIRKind kind, Constant constant);
 
@@ -137,17 +152,18 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
 
     void emitNullCheck(Value address, LIRFrameState state);
 
-    Variable emitLogicCompareAndSwap(Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue);
+    Variable emitLogicCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue, MemoryOrderMode memoryOrder);
 
-    Value emitValueCompareAndSwap(Value address, Value expectedValue, Value newValue);
+    Value emitValueCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, MemoryOrderMode memoryOrder);
 
     /**
      * Emit an atomic read-and-add instruction.
      *
      * @param address address of the value to be read and written
+     * @param valueKind the access kind for the value to be written
      * @param delta the value to be added
      */
-    default Value emitAtomicReadAndAdd(Value address, Value delta) {
+    default Value emitAtomicReadAndAdd(Value address, ValueKind<?> valueKind, Value delta) {
         throw GraalError.unimplemented();
     }
 
@@ -155,17 +171,16 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
      * Emit an atomic read-and-write instruction.
      *
      * @param address address of the value to be read and written
+     * @param valueKind the access kind for the value to be written
      * @param newValue the new value to be written
      */
-    default Value emitAtomicReadAndWrite(Value address, Value newValue) {
+    default Value emitAtomicReadAndWrite(Value address, ValueKind<?> valueKind, Value newValue) {
         throw GraalError.unimplemented();
     }
 
     void emitDeoptimize(Value actionAndReason, Value failedSpeculation, LIRFrameState state);
 
     Variable emitForeignCall(ForeignCallLinkage linkage, LIRFrameState state, Value... args);
-
-    RegisterAttributes attributes(Register register);
 
     /**
      * Create a new {@link Variable}.
@@ -181,6 +196,10 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
 
     void emitMove(AllocatableValue dst, Value src);
 
+    Variable emitReadRegister(Register register, ValueKind<?> kind);
+
+    void emitWriteRegister(Register dst, Value src, ValueKind<?> wordStamp);
+
     void emitMoveConstant(AllocatableValue dst, Constant src);
 
     Variable emitAddress(AllocatableValue stackslot);
@@ -188,14 +207,6 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
     void emitMembar(int barriers);
 
     void emitUnwind(Value operand);
-
-    /**
-     * Called just before register allocation is performed on the LIR owned by this generator.
-     * Overriding implementations of this method must call the overridden method.
-     */
-    void beforeRegisterAllocation();
-
-    void emitIncomingValues(Value[] params);
 
     /**
      * Emits a return instruction. Implementations need to insert a move if the input is not in the
@@ -207,51 +218,54 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
 
     Variable load(Value value);
 
-    Value loadNonConst(Value value);
-
-    /**
-     * Determines if only oop maps are required for the code generated from the LIR.
-     */
-    boolean needOnlyOopMaps();
-
-    /**
-     * Gets the ABI specific operand used to return a value of a given kind from a method.
-     *
-     * @param javaKind the {@link JavaKind} of value being returned
-     * @param valueKind the backend type of the value being returned
-     * @return the operand representing the ABI defined location used return a value of kind
-     *         {@code kind}
-     */
-    AllocatableValue resultOperandFor(JavaKind javaKind, ValueKind<?> valueKind);
-
     <I extends LIRInstruction> I append(I op);
 
-    void setSourcePosition(NodeSourcePosition position);
-
     void emitJump(LabelRef label);
-
-    void emitCompareBranch(PlatformKind cmpKind, Value left, Value right, Condition cond, boolean unorderedIsTrue, LabelRef trueDestination, LabelRef falseDestination,
-                    double trueDestinationProbability);
-
-    void emitOverflowCheckBranch(LabelRef overflow, LabelRef noOverflow, LIRKind cmpKind, double overflowProbability);
-
-    void emitIntegerTestBranch(Value left, Value right, LabelRef trueDestination, LabelRef falseDestination, double trueSuccessorProbability);
 
     Variable emitConditionalMove(PlatformKind cmpKind, Value leftVal, Value right, Condition cond, boolean unorderedIsTrue, Value trueValue, Value falseValue);
 
     Variable emitIntegerTestMove(Value leftVal, Value right, Value trueValue, Value falseValue);
 
-    void emitStrategySwitch(JavaConstant[] keyConstants, double[] keyProbabilities, LabelRef[] keyTargets, LabelRef defaultTarget, Variable value);
-
-    void emitStrategySwitch(SwitchStrategy strategy, Variable key, LabelRef[] keyTargets, LabelRef defaultTarget);
-
     Variable emitByteSwap(Value operand);
 
-    Variable emitArrayEquals(JavaKind kind, Value array1, Value array2, Value length);
+    @SuppressWarnings("unused")
+    default Variable emitArrayCompareTo(JavaKind kind1, JavaKind kind2, int array1BaseOffset, int array2BaseOffset, Value array1, Value array2, Value length1, Value length2) {
+        throw GraalError.unimplemented("String.compareTo substitution is not implemented on this architecture");
+    }
 
     @SuppressWarnings("unused")
-    default Variable emitStringIndexOf(Value sourcePointer, Value sourceCount, Value targetPointer, Value targetCount, int constantTargetCount) {
-        throw GraalError.unimplemented();
+    default Variable emitArrayEquals(JavaKind kind, int array1BaseOffset, int array2BaseOffset, Value array1, Value array2, Value length, boolean directPointers) {
+        throw GraalError.unimplemented("Array.equals substitution is not implemented on this architecture");
+    }
+
+    @SuppressWarnings("unused")
+    default Variable emitArrayEquals(JavaKind kind1, JavaKind kind2, int array1BaseOffset, int array2BaseOffset, Value array1, Value array2, Value length, boolean directPointers) {
+        throw GraalError.unimplemented("Array.equals with different types substitution is not implemented on this architecture");
+    }
+
+    @SuppressWarnings("unused")
+    default Variable emitArrayIndexOf(int arrayBaseOffset, JavaKind valueKind, boolean findTwoConsecutive, Value sourcePointer, Value sourceCount, Value fromIndex, Value... searchValues) {
+        throw GraalError.unimplemented("String.indexOf substitution is not implemented on this architecture");
+    }
+
+    /*
+     * The routines emitStringLatin1Inflate/3 and emitStringUTF16Compress/3 models a simplified
+     * version of
+     *
+     * emitStringLatin1Inflate(Value src, Value src_ndx, Value dst, Value dst_ndx, Value len) and
+     * emitStringUTF16Compress(Value src, Value src_ndx, Value dst, Value dst_ndx, Value len)
+     *
+     * respectively, where we have hoisted the offset address computations in a method replacement
+     * snippet.
+     */
+    @SuppressWarnings("unused")
+    default void emitStringLatin1Inflate(Value src, Value dst, Value len) {
+        throw GraalError.unimplemented("StringLatin1.inflate substitution is not implemented on this architecture");
+    }
+
+    @SuppressWarnings("unused")
+    default Variable emitStringUTF16Compress(Value src, Value dst, Value len) {
+        throw GraalError.unimplemented("StringUTF16.compress substitution is not implemented on this architecture");
     }
 
     void emitBlackhole(Value operand);
@@ -266,4 +280,54 @@ public interface LIRGeneratorTool extends DiagnosticLIRGeneratorTool, ValueKindF
 
     Value emitUncompress(Value pointer, CompressEncoding encoding, boolean nonNull);
 
+    default void emitConvertNullToZero(AllocatableValue result, Value input) {
+        emitMove(result, input);
+    }
+
+    default void emitConvertZeroToNull(AllocatableValue result, Value input) {
+        emitMove(result, input);
+    }
+
+    /**
+     * Emits an instruction that prevents speculative execution from proceeding: no instruction
+     * after this fence will execute until all previous instructions have retired.
+     */
+    void emitSpeculationFence();
+
+    default VirtualStackSlot allocateStackMemory(int sizeInBytes, int alignmentInBytes) {
+        return getResult().getFrameMapBuilder().allocateStackMemory(sizeInBytes, alignmentInBytes);
+    }
+
+    default Value emitTimeStampWithProcid() {
+        throw new GraalError("Emitting code to return the current value of the timestamp counter with procid is not currently supported on %s", target().arch);
+    }
+
+    default Value emitReadCallerStackPointer(Stamp wordStamp) {
+        /*
+         * We do not know the frame size yet. So we load the address of the first spill slot
+         * relative to the beginning of the frame, which is equivalent to the stack pointer of the
+         * caller.
+         */
+        return emitAddress(StackSlot.get(getLIRKind(wordStamp), 0, true));
+    }
+
+    default Value emitReadReturnAddress(Stamp wordStamp, int returnAddressSize) {
+        return emitMove(StackSlot.get(getLIRKind(wordStamp), -returnAddressSize, true));
+    }
+
+    @SuppressWarnings("unused")
+    default void emitZeroMemory(Value address, Value length, boolean isAligned) {
+        throw GraalError.unimplemented("Bulk zeroing is not implemented on this architecture");
+    }
+
+    /**
+     * Emits instruction(s) to flush an individual cache line that starts at {@code address}.
+     */
+    void emitCacheWriteback(Value address);
+
+    /**
+     * Emits instruction(s) to serialize cache writeback operations relative to preceding (if
+     * {@code isPreSync == true}) or following (if {@code isPreSync == false}) memory writes.
+     */
+    void emitCacheWritebackSync(boolean isPreSync);
 }

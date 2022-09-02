@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -62,12 +62,12 @@ public class SimpleStackSlotAllocator extends AllocationPhase {
         for (VirtualStackSlot virtualSlot : builder.getStackSlots()) {
             final StackSlot slot;
             if (virtualSlot instanceof SimpleVirtualStackSlot) {
-                slot = mapSimpleVirtualStackSlot(builder, (SimpleVirtualStackSlot) virtualSlot);
+                slot = builder.getFrameMap().allocateSpillSlot(virtualSlot.getValueKind());
                 virtualFramesize.add(debug, builder.getFrameMap().spillSlotSize(virtualSlot.getValueKind()));
             } else if (virtualSlot instanceof VirtualStackSlotRange) {
                 VirtualStackSlotRange slotRange = (VirtualStackSlotRange) virtualSlot;
-                slot = mapVirtualStackSlotRange(builder, slotRange);
-                virtualFramesize.add(debug, builder.getFrameMap().spillSlotRangeSize(slotRange.getSlots()));
+                slot = builder.getFrameMap().allocateStackMemory(slotRange.getSizeInBytes(), slotRange.getAlignmentInBytes());
+                virtualFramesize.add(debug, slotRange.getSizeInBytes());
             } else {
                 throw GraalError.shouldNotReachHere("Unknown VirtualStackSlot: " + virtualSlot);
             }
@@ -106,13 +106,5 @@ public class SimpleStackSlotAllocator extends AllocationPhase {
                 }
             }
         }
-    }
-
-    protected StackSlot mapSimpleVirtualStackSlot(FrameMapBuilderTool builder, SimpleVirtualStackSlot virtualStackSlot) {
-        return builder.getFrameMap().allocateSpillSlot(virtualStackSlot.getValueKind());
-    }
-
-    protected StackSlot mapVirtualStackSlotRange(FrameMapBuilderTool builder, VirtualStackSlotRange virtualStackSlot) {
-        return builder.getFrameMap().allocateStackSlots(virtualStackSlot.getSlots(), virtualStackSlot.getObjects());
     }
 }

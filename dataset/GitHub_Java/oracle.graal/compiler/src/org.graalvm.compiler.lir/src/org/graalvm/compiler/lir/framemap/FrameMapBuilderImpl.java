@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,7 +27,6 @@ package org.graalvm.compiler.lir.framemap;
 import static org.graalvm.compiler.lir.LIRValueUtil.isVirtualStackSlot;
 
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.EnumSet;
 import java.util.List;
 
@@ -45,8 +44,8 @@ import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
+import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.RegisterConfig;
-import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.Value;
 import jdk.vm.ci.meta.ValueKind;
 
@@ -80,14 +79,11 @@ public class FrameMapBuilderImpl extends FrameMapBuilderTool {
     }
 
     @Override
-    public VirtualStackSlot allocateStackSlots(int slots, BitSet objects, List<VirtualStackSlot> outObjectStackSlots) {
-        if (slots == 0) {
-            return null;
-        }
-        if (outObjectStackSlots != null) {
-            throw GraalError.unimplemented();
-        }
-        VirtualStackSlotRange slot = new VirtualStackSlotRange(numStackSlots++, slots, objects, LIRKind.fromJavaKind(frameMap.getTarget().arch, JavaKind.Object));
+    public VirtualStackSlot allocateStackMemory(int sizeInBytes, int alignmentInBytes) {
+        GraalError.guarantee(sizeInBytes > 0, "Invalid size");
+        GraalError.guarantee(alignmentInBytes > 0 && CodeUtil.isPowerOf2(alignmentInBytes), "Invalid alignment");
+
+        VirtualStackSlotRange slot = new VirtualStackSlotRange(numStackSlots++, sizeInBytes, alignmentInBytes, LIRKind.Illegal);
         stackSlots.add(slot);
         return slot;
     }
