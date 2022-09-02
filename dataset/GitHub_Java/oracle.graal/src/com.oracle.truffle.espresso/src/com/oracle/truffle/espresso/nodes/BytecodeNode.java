@@ -653,7 +653,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         return Double.longBitsToDouble(FrameUtil.getLongSafe(frame, locals[slot]));
     }
 
-    // endregion Local accessors
+    // region Local accessors
 
     @Override
     void initializeBody(VirtualFrame frame) {
@@ -987,18 +987,18 @@ public final class BytecodeNode extends EspressoMethodNode {
 
                     case TABLESWITCH: {
                         int index = popInt(frame, top - 1);
-                        BytecodeTableSwitch switchHelper = BytecodeTableSwitch.INSTANCE;
-                        int low = switchHelper.lowKey(bs, curBCI);
-                        int high = switchHelper.highKey(bs, curBCI);
+                        BytecodeTableSwitch switchHelper = bs.getBytecodeTableSwitch();
+                        int low = switchHelper.lowKey(curBCI);
+                        int high = switchHelper.highKey(curBCI);
                         assert low <= high;
 
                         // Interpreter uses direct lookup.
                         if (CompilerDirectives.inInterpreter()) {
                             int targetBCI;
                             if (low <= index && index <= high) {
-                                targetBCI = switchHelper.targetAt(bs, curBCI, index - low);
+                                targetBCI = switchHelper.targetAt(curBCI, index - low);
                             } else {
-                                targetBCI = switchHelper.defaultTarget(bs, curBCI);
+                                targetBCI = switchHelper.defaultTarget(curBCI);
                             }
                             CompilerAsserts.partialEvaluationConstant(targetBCI);
                             checkBackEdge(curBCI, targetBCI, top, curOpcode);
@@ -1015,7 +1015,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                         for (int i = low; i != high + 1; ++i) {
                             if (i == index) {
                                 // Key found.
-                                int targetBCI = switchHelper.targetAt(bs, curBCI, i - low);
+                                int targetBCI = switchHelper.targetAt(curBCI, i - low);
                                 CompilerAsserts.partialEvaluationConstant(targetBCI);
                                 checkBackEdge(curBCI, targetBCI, top, curOpcode);
                                 if (instrument != null) {
@@ -1028,7 +1028,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                         }
 
                         // Key not found.
-                        int targetBCI = switchHelper.defaultTarget(bs, curBCI);
+                        int targetBCI = switchHelper.defaultTarget(curBCI);
                         CompilerAsserts.partialEvaluationConstant(targetBCI);
                         checkBackEdge(curBCI, targetBCI, top, curOpcode);
                         if (instrument != null) {
@@ -1040,19 +1040,19 @@ public final class BytecodeNode extends EspressoMethodNode {
                     }
                     case LOOKUPSWITCH: {
                         int key = popInt(frame, top - 1);
-                        BytecodeLookupSwitch switchHelper = BytecodeLookupSwitch.INSTANCE;
+                        BytecodeLookupSwitch switchHelper = bs.getBytecodeLookupSwitch();
                         int low = 0;
-                        int high = switchHelper.numberOfCases(bs, curBCI) - 1;
+                        int high = switchHelper.numberOfCases(curBCI) - 1;
                         while (low <= high) {
                             int mid = (low + high) >>> 1;
-                            int midVal = switchHelper.keyAt(bs, curBCI, mid);
+                            int midVal = switchHelper.keyAt(curBCI, mid);
                             if (midVal < key) {
                                 low = mid + 1;
                             } else if (midVal > key) {
                                 high = mid - 1;
                             } else {
                                 // Key found.
-                                int targetBCI = curBCI + switchHelper.offsetAt(bs, curBCI, mid);
+                                int targetBCI = curBCI + switchHelper.offsetAt(curBCI, mid);
                                 CompilerAsserts.partialEvaluationConstant(targetBCI);
                                 checkBackEdge(curBCI, targetBCI, top, curOpcode);
                                 if (instrument != null) {
@@ -1065,7 +1065,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                         }
 
                         // Key not found.
-                        int targetBCI = switchHelper.defaultTarget(bs, curBCI);
+                        int targetBCI = switchHelper.defaultTarget(curBCI);
                         CompilerAsserts.partialEvaluationConstant(targetBCI);
                         checkBackEdge(curBCI, targetBCI, top, curOpcode);
                         if (instrument != null) {
@@ -1117,34 +1117,9 @@ public final class BytecodeNode extends EspressoMethodNode {
                         CompilerDirectives.transferToInterpreter();
                         throw EspressoError.unimplemented(Bytecodes.nameOf(curOpcode) + " not supported.");
 
-                    case INVOKEDYNAMIC: top += quickenInvokeDynamic(frame, top, curBCI, curOpcode); break;
-                    case QUICK: {
-                        QuickNode quickNode = nodes[bs.readCPI(curBCI)];
-                        if (quickNode.removedByRedefintion()) {
-                            CompilerDirectives.transferToInterpreterAndInvalidate();
-                            synchronized (this) {
-                                // re-check if node was already replaced by another thread
-                                if (quickNode != nodes[bs.readCPI(curBCI)]) {
-                                    // another thread beat us
-                                    quickNode = nodes[bs.readCPI(curBCI)];
-                                } else {
-                                    // other threads might still have beat us but if
-                                    // so, the resolution failed and so will we below
-                                    BytecodeStream original = new BytecodeStream(getMethodVersion().getCodeAttribute().getOriginalCode());
-                                    char cpi = original.readCPI(curBCI);
-                                    int nodeOpcode = original.currentBC(curBCI);
-                                    Method resolutionSeed = resolveMethodNoCache(nodeOpcode, cpi);
-                                    quickNode = insert(dispatchQuickened(top, curBCI, cpi, nodeOpcode, statementIndex, resolutionSeed, getContext().InlineFieldAccessors));
-                                    nodes[bs.readCPI(curBCI)] = quickNode;
-                                }
-                            }
-                            top += quickNode.execute(frame);
-                        } else {
-                            top += quickNode.execute(frame);
-                        }
-                        break;
-                    }
-                    case SLIM_QUICK: top += sparseNodes[curBCI].execute(frame); break;
+                    case INVOKEDYNAMIC : top += quickenInvokeDynamic(frame, top, curBCI, curOpcode); break;
+                    case QUICK         : top += nodes[bs.readCPI(curBCI)].execute(frame); break;
+                    case SLIM_QUICK    : top += sparseNodes[curBCI].execute(frame); break;
 
                     default:
                         CompilerDirectives.transferToInterpreter();
@@ -1205,7 +1180,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                         wrappedException = getContext().getOutOfMemory();
                     }
 
-                    ExceptionHandler[] handlers = getMethodVersion().getExceptionHandlers();
+                    ExceptionHandler[] handlers = getMethod().getExceptionHandlers();
                     ExceptionHandler handler = null;
                     for (ExceptionHandler toCheck : handlers) {
                         if (curBCI >= toCheck.getStartBCI() && curBCI < toCheck.getEndBCI()) {
@@ -1671,7 +1646,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         CompilerAsserts.neverPartOfCompilation();
         Objects.requireNonNull(node);
         if (sparseNodes == QuickNode.EMPTY_ARRAY) {
-            sparseNodes = new QuickNode[getMethodVersion().getCodeAttribute().getCode().length];
+            sparseNodes = new QuickNode[getMethod().getCode().length];
         }
         sparseNodes[curBCI] = insert(node);
     }
@@ -1756,9 +1731,8 @@ public final class BytecodeNode extends EspressoMethodNode {
             } else {
                 // During resolution of the symbolic reference to the method, any of the exceptions
                 // pertaining to method resolution (&sect;5.4.3.3) can be thrown.
-                char cpi = bs.readCPI(curBCI);
-                Method resolutionSeed = resolveMethod(opcode, cpi);
-                QuickNode invoke = dispatchQuickened(top, curBCI, cpi, opcode, statementIndex, resolutionSeed, getContext().InlineFieldAccessors);
+                Method resolutionSeed = resolveMethod(opcode, bs.readCPI(curBCI));
+                QuickNode invoke = dispatchQuickened(top, curBCI, opcode, statementIndex, resolutionSeed, getContext().InlineFieldAccessors);
                 quick = injectQuick(curBCI, invoke, QUICK);
             }
         }
@@ -1776,8 +1750,8 @@ public final class BytecodeNode extends EspressoMethodNode {
         QuickNode invoke = null;
         synchronized (this) {
             assert bs.currentBC(curBCI) == QUICK;
+            invoke = dispatchQuickened(top, curBCI, opcode, statementIndex, resolutionSeed, false);
             char cpi = bs.readCPI(curBCI);
-            invoke = dispatchQuickened(top, curBCI, cpi, opcode, statementIndex, resolutionSeed, false);
             nodes[cpi] = nodes[cpi].replace(invoke);
         }
         // Perform the call outside of the lock.
@@ -1891,7 +1865,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
     // endregion quickenForeign
 
-    private QuickNode dispatchQuickened(int top, int curBCI, char cpi, int opcode, int statementIndex, Method resolutionSeed, boolean allowFieldAccessInlining) {
+    private QuickNode dispatchQuickened(int top, int curBCI, int opcode, int statementIndex, Method resolutionSeed, boolean allowFieldAccessInlining) {
         assert !allowFieldAccessInlining || getContext().InlineFieldAccessors;
         QuickNode invoke;
         Method resolved = resolutionSeed;
@@ -1926,7 +1900,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                 // class in which it is declared is not the class symbolically referenced by the
                 // instruction, a NoSuchMethodError is thrown.
                 if (resolved.isConstructor()) {
-                    if (resolved.getDeclaringKlass().getName() != getConstantPool().methodAt(cpi).getHolderKlassName(getConstantPool())) {
+                    if (resolved.getDeclaringKlass().getName() != getConstantPool().methodAt(bs.readCPI(curBCI)).getHolderKlassName(getConstantPool())) {
                         CompilerDirectives.transferToInterpreter();
                         throw Meta.throwException(getMeta().java_lang_NoSuchMethodError);
                     }
@@ -1951,7 +1925,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                 // version of the class file.
                 if (!resolved.isConstructor()) {
                     Klass declaringKlass = getMethod().getDeclaringKlass();
-                    Klass symbolicRef = ((MethodRefConstant.Indexes) getConstantPool().methodAt(cpi)).getResolvedHolderKlass(declaringKlass, getConstantPool());
+                    Klass symbolicRef = ((MethodRefConstant.Indexes) getConstantPool().methodAt(bs.readCPI(curBCI))).getResolvedHolderKlass(declaringKlass, getConstantPool());
                     if (!symbolicRef.isInterface() && symbolicRef != declaringKlass && declaringKlass.getSuperKlass() != null && symbolicRef != declaringKlass.getSuperKlass() &&
                                     symbolicRef.isAssignableFrom(declaringKlass)) {
                         resolved = declaringKlass.getSuperKlass().lookupMethod(resolved.getName(), resolved.getRawSignature(), declaringKlass);
@@ -2041,15 +2015,9 @@ public final class BytecodeNode extends EspressoMethodNode {
         return getConstantPool().resolvedKlassAt(getMethod().getDeclaringKlass(), cpi);
     }
 
-    public Method resolveMethod(int opcode, char cpi) {
+    private Method resolveMethod(int opcode, char cpi) {
         assert Bytecodes.isInvoke(opcode);
         return getConstantPool().resolvedMethodAt(getMethod().getDeclaringKlass(), cpi);
-    }
-
-    private Method resolveMethodNoCache(int opcode, char cpi) {
-        CompilerAsserts.neverPartOfCompilation();
-        assert Bytecodes.isInvoke(opcode);
-        return getConstantPool().resolvedMethodAtNoCache(getMethod().getDeclaringKlass(), cpi);
     }
 
     private Field resolveField(int opcode, char cpi) {
