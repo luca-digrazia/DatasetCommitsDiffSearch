@@ -24,19 +24,13 @@
  */
 package com.oracle.svm.core.jdk.localization.substitutions.modes;
 
-import com.oracle.svm.core.jdk.localization.LocalizationSupport;
-import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
+import com.oracle.svm.core.jdk.localization.LocalizationFeature;
 
-import java.util.function.Predicate;
+import java.util.function.BooleanSupplier;
 
-@Platforms(Platform.HOSTED_ONLY.class)
-public class SubstituteLoadLookup implements Predicate<String> {
-
+public class SubstituteLoadLookup implements BooleanSupplier {
     @Override
-    public boolean test(String className) {
-        return ImageSingletons.lookup(LocalizationSupport.class).shouldSubstituteLoadLookup(className);
+    public boolean getAsBoolean() {
+        return LocalizationFeature.optimizedMode() || LocalizationFeature.Options.LocalizationSubstituteLoadLookup.getValue();
     }
-
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -37,6 +37,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.zip.GZIPInputStream;
@@ -47,25 +48,45 @@ import org.graalvm.compiler.debug.GraalError;
 
 import com.oracle.svm.core.jdk.localization.bundles.CompressedBundle;
 
-public class GzipBundleCompression implements BundleCompressionAlgorithm {
+/**
+ * Class responsible for serialization and compression of resource bundles. Only bundles whose
+ * values are strings or arrays of strings are supported. While in theory the bundles can contain
+ * any objects, in practise it is rarely the case.
+ *
+ * The serialization format is the following:
+ *
+ * LEN1 INDICES LEN2 TEXT
+ *
+ * where LEN1 and LEN2 are the lengths of byte arrays, TEXT is the actual serialized content of all
+ * keys and values merged into a single string and INDICES describe how to deserialize the content
+ * back into a map. The format of indices is the following:
+ *
+ * ( ARR_LEN KEY_LEN VALUE_LEN{ARR_LEN} )*
+ *
+ * It is a variable length list of entries. Each entry starts with ARR_LEN, which indicates the
+ * length of the value array or -1 for simple string values. KEY_LEN and VALUE_LEN should be
+ * self-explanatory.
+ *
+ */
+public class GzipBundleCompression {
 
-    @Override
+    public boolean canCompress(ResourceBundle bundle) {
+        return extractContent(bundle)
+                        .values()
+                        .stream()
+                        .allMatch(value -> value instanceof String || (value instanceof Object[] && Arrays.stream(((Object[]) value)).allMatch(elem -> elem instanceof String)));
+    }
+
     public CompressedBundle compress(ResourceBundle bundle) {
         final Map<String, Object> content = extractContent(bundle);
         Pair<String, int[]> input = serializeContent(content);
-        if (input == null) {
-            return null;
-        }
         try (ByteArrayOutputStream byteStream = new ByteArrayOutputStream(); GZIPOutputStream out = new GZIPOutputStream(byteStream)) {
             writeIndices(input.getRight(), out);
             writeText(input.getLeft(), out);
             out.finish();
             return new CompressedBundle(byteStream.toByteArray(), GzipBundleCompression::decompressBundle);
         } catch (IOException ex) {
-            // if the compression fails for some reason, the bundle can still be saved
-            // uncompressed
-            // todo log this as a warning?
-            return null;
+            throw GraalError.shouldNotReachHere(ex, "Compression of a bundle " + bundle.getClass() + " failed. This is an internal error. Please open an issue and submit a reproducer.");
         }
     }
 
@@ -73,7 +94,6 @@ public class GzipBundleCompression implements BundleCompressionAlgorithm {
         try (GZIPInputStream input = new GZIPInputStream(new ByteArrayInputStream(data))) {
             int[] indices = readIndices(input);
             String decompressed = readText(input);
-            assert input.available() == 0 : "Input not fully consumed";
             return deserializeContent(indices, decompressed);
         } catch (IOException e) {
             throw GraalError.shouldNotReachHere(e, "Decompressing a resource bundle failed.");

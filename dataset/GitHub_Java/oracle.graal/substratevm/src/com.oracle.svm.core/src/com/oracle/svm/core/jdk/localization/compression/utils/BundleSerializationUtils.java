@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,7 @@ package com.oracle.svm.core.jdk.localization.compression.utils;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.util.ReflectionUtil;
 import org.graalvm.collections.Pair;
+import org.graalvm.compiler.debug.GraalError;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -38,9 +39,9 @@ public class BundleSerializationUtils {
 
     /**
      * Extracts the content of the bundle by looking up the lookup field. All the jdk internal
-     * bundles can be resolved this way, except from the BreakIterators. In the future, it can be
-     * extended with a fallback to user defined bundles by using the handleKeySet and
-     * handleGetObject methods.
+     * bundles can be resolved this way, except from the {@link java.text.BreakIterator}. In the
+     * future, it can be extended with a fallback to user defined bundles by using the handleKeySet
+     * and handleGetObject methods.
      */
     @SuppressWarnings("unchecked")
     public static Map<String, Object> extractContent(ResourceBundle bundle) {
@@ -56,6 +57,9 @@ public class BundleSerializationUtils {
         throw VMError.shouldNotReachHere("Failed to extract content for " + bundle + " of type " + bundle.getClass());
     }
 
+    /**
+     * @param content content of the bundle to be serialized
+     */
     public static Pair<String, int[]> serializeContent(Map<String, Object> content) {
         List<Integer> indices = new ArrayList<>();
         StringBuilder builder = new StringBuilder();
@@ -73,14 +77,12 @@ public class BundleSerializationUtils {
                 indices.add(arr.length);
                 indices.add(key.length());
                 for (Object o : arr) {
-                    if (!(o instanceof String)) {
-                        return null;
-                    }
+                    GraalError.guarantee(o instanceof String, "Bundle content can't be serialized.");
                     builder.append(o);
                     indices.add(((String) o).length());
                 }
             } else {
-                return null;
+                GraalError.shouldNotReachHere("Bundle content can't be serialized.");
             }
         }
         int[] res = new int[indices.size()];
