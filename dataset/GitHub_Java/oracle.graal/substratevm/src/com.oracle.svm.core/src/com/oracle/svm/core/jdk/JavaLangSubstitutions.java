@@ -28,6 +28,7 @@ package com.oracle.svm.core.jdk;
 import static com.oracle.svm.core.annotate.RecomputeFieldValue.Kind.Reset;
 import static com.oracle.svm.core.snippets.KnownIntrinsics.readHub;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.FAST_PATH_PROBABILITY;
+import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.LUDICROUSLY_SLOW_PATH_PROBABILITY;
 import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.probability;
 
 import java.io.File;
@@ -71,6 +72,8 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue.CustomFieldValueComputer
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
+import com.oracle.svm.core.config.ConfigurationValues;
+import com.oracle.svm.core.config.ObjectLayout;
 import com.oracle.svm.core.hub.ClassForNameSupport;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.log.Log;
@@ -295,7 +298,20 @@ final class Target_java_lang_System {
             return 0;
         }
 
-        int hashCodeOffset = IdentityHashCodeSupport.getHashCodeOffset(obj);
+        // Try to fold the identity hashcode offset to a constant.
+        int hashCodeOffset;
+        ObjectLayout layout = ConfigurationValues.getObjectLayout();
+        if (layout.getInstanceIdentityHashCodeOffset() >= 0 && layout.getInstanceIdentityHashCodeOffset() == layout.getArrayIdentityHashcodeOffset()) {
+            hashCodeOffset = layout.getInstanceIdentityHashCodeOffset();
+        } else {
+            DynamicHub hub = KnownIntrinsics.readHub(obj);
+            hashCodeOffset = hub.getHashCodeOffset();
+        }
+
+        if (probability(LUDICROUSLY_SLOW_PATH_PROBABILITY, hashCodeOffset == 0)) {
+            throw VMError.shouldNotReachHere("identityHashCode called on illegal object");
+        }
+
         UnsignedWord hashCodeOffsetWord = WordFactory.unsigned(hashCodeOffset);
         int hashCode = ObjectAccess.readInt(obj, hashCodeOffsetWord, IdentityHashCodeSupport.IDENTITY_HASHCODE_LOCATION);
         if (probability(FAST_PATH_PROBABILITY, hashCode != 0)) {
@@ -569,8 +585,6 @@ final class Target_java_lang_ClassValue {
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = JavaLangSubstitutions.ClassValueInitializer.class)//
     private final ConcurrentMap<Class<?>, Object> values;
 
-    private static final Object NULL_MARKER = new Object();
-
     @Substitute
     private Target_java_lang_ClassValue() {
         values = new ConcurrentHashMap<>();
@@ -588,16 +602,8 @@ final class Target_java_lang_ClassValue {
         Object result = values.get(type);
         if (result == null) {
             Object newValue = computeValue(type);
-            if (newValue == null) {
-                /* values can't store null, replace with NULL_MARKER */
-                newValue = NULL_MARKER;
-            }
             Object oldValue = values.putIfAbsent(type, newValue);
             result = oldValue != null ? oldValue : newValue;
-        }
-        if (result == NULL_MARKER) {
-            /* replace NULL_MARKER back to real null */
-            result = null;
         }
         return result;
     }
