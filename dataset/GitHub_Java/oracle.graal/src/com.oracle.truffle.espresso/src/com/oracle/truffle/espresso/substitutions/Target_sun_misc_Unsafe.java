@@ -90,16 +90,7 @@ public final class Target_sun_misc_Unsafe {
         ClassfileStream cfs = new ClassfileStream(bytes, null);
         ParserKlass parserKlass = ClassfileParser.parse(cfs, null, hostKlass, context, patches);
         StaticObject classLoader = hostKlass.getDefiningClassLoader();
-
-        // Inherit host class's protection domain.
-        StaticObject clazz = defineAnonymousKlass(parserKlass, context, classLoader, hostKlass).mirror();
-        StaticObject pd = (StaticObject) hostClass.getHiddenField(meta.HIDDEN_PROTECTION_DOMAIN);
-        if (pd == null) {
-            pd = StaticObject.NULL;
-        }
-        clazz.setHiddenField(meta.HIDDEN_PROTECTION_DOMAIN, pd);
-
-        return clazz;
+        return defineAnonymousKlass(parserKlass, context, classLoader, hostKlass).mirror();
     }
 
     private static ObjectKlass defineAnonymousKlass(ParserKlass parserKlass, EspressoContext context, StaticObject classLoader, Klass hostKlass) {
