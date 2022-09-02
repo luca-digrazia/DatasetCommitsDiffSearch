@@ -229,7 +229,7 @@ public class GraphUtil {
         for (Node marked : markedNodes) {
             workStack.push(marked);
         }
-        ArrayList<MultiGuardNode> unmarkedMultiGuards = new ArrayList<>();
+        EconomicSet<MultiGuardNode> unmarkedMultiGuards = EconomicSet.create();
         while (!workStack.isEmpty()) {
             Node marked = workStack.pop();
             for (Node usage : marked.usages()) {
@@ -242,6 +242,7 @@ public class GraphUtil {
                         if (!markedNodes.contains(guard)) {
                             doMark = false;
                             unmarkedMultiGuards.add(multiGuard);
+                            break;
                         }
                     }
                 }
