@@ -36,8 +36,4 @@ final class CompilerRuntimeAccessor extends Accessor {
     static JDKSupport jdkServicesAccessor() {
         return ACCESSOR.jdkSupport();
     }
-
-    static EngineSupport engineAccessor() {
-        return ACCESSOR.engineSupport();
-    }
 }

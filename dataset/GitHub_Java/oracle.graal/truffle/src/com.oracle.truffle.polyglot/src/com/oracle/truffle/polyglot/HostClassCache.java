@@ -44,7 +44,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -139,11 +138,8 @@ final class HostClassCache {
             }
             list.add(map);
         }
-
         for (Entry<Class<?>, Object> object : localMappings.entrySet()) {
-            List<PolyglotTargetMapping> classMappings = ((List<PolyglotTargetMapping>) object.getValue());
-            Collections.sort(classMappings);
-            object.setValue(classMappings.toArray(EMPTY_MAPPINGS));
+            object.setValue(((List<?>) object.getValue()).toArray(EMPTY_MAPPINGS));
         }
         return localMappings;
     }
