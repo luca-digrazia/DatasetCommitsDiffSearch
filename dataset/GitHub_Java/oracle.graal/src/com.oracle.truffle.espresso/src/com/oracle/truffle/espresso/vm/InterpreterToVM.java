@@ -23,8 +23,8 @@
 
 package com.oracle.truffle.espresso.vm;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.function.IntFunction;
 
 import com.oracle.truffle.api.CallTarget;
@@ -423,12 +423,10 @@ public final class InterpreterToVM implements ContextAccess {
         return getStrings().intern(guestString);
     }
 
-    // Recursion depth = 4
-    @SuppressWarnings("unchecked")
-    public static StaticObject fillInStackTrace(StaticObject throwable, Meta meta) {
+    public static StaticObject fillInStackTrace(ArrayList<Method> frames, StaticObject throwable, Meta meta) {
         FrameCounter c = new FrameCounter();
         int size = EspressoContext.DEFAULT_STACK_SIZE;
-        List<VM.StackElement> frames = (List<VM.StackElement>) throwable.getHiddenField(meta.HIDDEN_FRAMES);
+        frames.clear();
         Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Object>() {
             @Override
             public Object visitFrame(FrameInstance frameInstance) {
@@ -439,7 +437,7 @@ public final class InterpreterToVM implements ContextAccess {
                         if (rootNode instanceof EspressoRootNode) {
                             if (!c.checkFillIn(((EspressoRootNode) rootNode).getMethod())) {
                                 if (!c.checkThrowableInit(((EspressoRootNode) rootNode).getMethod())) {
-                                    frames.add(new VM.StackElement(((EspressoRootNode) rootNode).getMethod(), -1));
+                                    frames.add(((EspressoRootNode) rootNode).getMethod());
                                     c.inc();
                                 }
                             }
@@ -449,8 +447,8 @@ public final class InterpreterToVM implements ContextAccess {
                 return null;
             }
         });
-        throwable.setHiddenField(meta.HIDDEN_FRAMES, frames);
-        throwable.setField(meta.Throwable_backtrace, throwable);
+        throwable.setHiddenField(meta.HIDDEN_FRAMES, frames.toArray(Method.EMPTY_ARRAY));
+        meta.Throwable_backtrace.set(throwable, throwable);
         return throwable;
     }
 
