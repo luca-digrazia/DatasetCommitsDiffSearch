@@ -40,12 +40,7 @@ import com.oracle.truffle.api.debug.SuspensionFilter;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.espresso.jdwp.api.CallFrame;
-import com.oracle.truffle.espresso.jdwp.api.Ids;
-import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
-import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
-import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.MethodRef;
+import com.oracle.truffle.espresso.jdwp.api.*;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -195,7 +190,7 @@ public final class DebuggerController implements ContextsListener {
             CallFrame currentFrame = susp.getStackFrames()[0];
             MethodRef method = (MethodRef) ids.fromId((int) currentFrame.getMethodId());
             if (method.isLastLine(currentFrame.getCodeIndex())) {
-                susp.getEvent().prepareStepOut(STEP_CONFIG); // .prepareStepOver(STEP_CONFIG);
+                susp.getEvent().prepareStepOut(STEP_CONFIG);// .prepareStepOver(STEP_CONFIG);
             } else {
                 susp.getEvent().prepareStepOver(STEP_CONFIG);
             }
@@ -397,123 +392,6 @@ public final class DebuggerController implements ContextsListener {
         truffleContext = con;
     }
 
-    public void suspend(CallFrame currentFrame, Object thread, byte suspendPolicy, List<Callable<Void>> jobs) {
-        JDWPLogger.log("suspending from callback in thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
-
-        // before sending any events to debugger, make sure to mark
-        // the thread lock as locked, in case a resume command happens
-        // shortly thereafter, with the risk of a race (lost notify)
-        getSuspendLock(thread).acquire();
-
-        switch (suspendPolicy) {
-            case SuspendStrategy.NONE:
-                runJobs(jobs);
-                break;
-            case SuspendStrategy.EVENT_THREAD:
-                JDWPLogger.log("Suspend EVENT_THREAD", JDWPLogger.LogLevel.THREAD);
-
-                threadSuspension.suspendThread(thread);
-                runJobs(jobs);
-                suspendEventThread(currentFrame, thread);
-                break;
-            case SuspendStrategy.ALL:
-                JDWPLogger.log("Suspend ALL", JDWPLogger.LogLevel.THREAD);
-
-                Thread suspendThread = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        // suspend other threads
-                        for (Object activeThread : getContext().getAllGuestThreads()) {
-                            if (activeThread != thread) {
-                                JDWPLogger.log("Request thread suspend for other thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(activeThread));
-
-                                DebuggerController.this.suspend(activeThread);
-                            }
-                        }
-                        // send any breakpoint events here, since now all threads that are
-                        // expected to be suspended
-                        // have increased suspension count
-                        runJobs(jobs);
-                    }
-                });
-                threadSuspension.suspendThread(thread);
-                suspendThread.start();
-                suspendEventThread(currentFrame, thread);
-                break;
-        }
-    }
-
-    private void runJobs(List<Callable<Void>> jobs) {
-        for (Callable<Void> job : jobs) {
-            try {
-                job.call();
-            } catch (Exception e) {
-                throw new RuntimeException("failed to send event to debugger", e);
-            }
-        }
-    }
-
-    private void suspendEventThread(CallFrame currentFrame, Object thread) {
-        JDWPLogger.log("Suspending event thread: %s with new suspension count: %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
-
-        // if during stepping, send a step completed event back to the debugger
-        Integer id = commandRequestIds.get(thread);
-        if (id != null) {
-            eventListener.stepCompleted(id, currentFrame);
-        }
-        // reset
-        commandRequestIds.put(thread, null);
-
-        JDWPLogger.log("lock.wait() for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
-
-        // no reason to hold a hard suspension status, since now
-        // we have the actual suspension status and suspended information
-        threadSuspension.removeHardSuspendedThread(thread);
-
-        lockThread(thread);
-
-        JDWPLogger.log("lock wakeup for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
-    }
-
-    private void lockThread(Object thread) {
-        SimpleLock lock = getSuspendLock(thread);
-
-        synchronized (lock) {
-            try {
-                // in case a thread job is already posted on this thread
-                checkThreadJobsAndRun(thread);
-                while (lock.isLocked()) {
-                    lock.wait();
-                }
-            } catch (InterruptedException e) {
-                throw new RuntimeException("not able to suspend thread: " + getThreadName(thread), e);
-            }
-        }
-
-        checkThreadJobsAndRun(thread);
-
-        JDWPLogger.log("lock wakeup for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
-    }
-
-    private void checkThreadJobsAndRun(Object thread) {
-        if (threadJobs.containsKey(thread)) {
-            // a thread job was posted on this thread
-            // only wake up to perform the job a go back to sleep
-            ThreadJob job = threadJobs.remove(thread);
-            job.runJob();
-            lockThread(thread);
-        }
-    }
-
-    public void postJobForThread(ThreadJob job) {
-        threadJobs.put(job.getThread(), job);
-        SimpleLock lock = getSuspendLock(job.getThread());
-        synchronized (lock) {
-            lock.release();
-            lock.notifyAll();
-        }
-    }
-
     private class SuspendedCallbackImpl implements SuspendedCallback {
 
         public static final String DEBUG_VALUE_GET = "get";
@@ -646,9 +524,8 @@ public final class DebuggerController implements ContextsListener {
 
             for (Pattern pattern : patterns) {
                 JDWPLogger.log("Matching klass: %s against pattern: %s", JDWPLogger.LogLevel.STEPPING, klass.getNameAsString(), pattern.pattern());
-                if (pattern.pattern().matches(klass.getNameAsString().replace('/', '.'))) {
+                if (pattern.pattern().matches(klass.getNameAsString().replace('/', '.')))
                     return true;
-                }
             }
             return false;
         }
@@ -802,6 +679,123 @@ public final class DebuggerController implements ContextsListener {
                 // null signals that we're unable to retrieve the raw exception instance
                 return null;
             }
+        }
+
+        private void suspend(CallFrame currentFrame, Object thread, byte suspendPolicy, List<Callable<Void>> jobs) {
+            JDWPLogger.log("suspending from callback in thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
+
+            // before sending any events to debugger, make sure to mark
+            // the thread lock as locked, in case a resume command happens
+            // shortly thereafter, with the risk of a race (lost notify)
+            getSuspendLock(thread).acquire();
+
+            switch (suspendPolicy) {
+                case SuspendStrategy.NONE:
+                    runJobs(jobs);
+                    break;
+                case SuspendStrategy.EVENT_THREAD:
+                    JDWPLogger.log("Suspend EVENT_THREAD", JDWPLogger.LogLevel.THREAD);
+
+                    threadSuspension.suspendThread(thread);
+                    runJobs(jobs);
+                    suspendEventThread(currentFrame, thread);
+                    break;
+                case SuspendStrategy.ALL:
+                    JDWPLogger.log("Suspend ALL", JDWPLogger.LogLevel.THREAD);
+
+                    Thread suspendThread = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            // suspend other threads
+                            for (Object activeThread : getContext().getAllGuestThreads()) {
+                                if (activeThread != thread) {
+                                    JDWPLogger.log("Request thread suspend for other thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(activeThread));
+
+                                    DebuggerController.this.suspend(activeThread);
+                                }
+                            }
+                            // send any breakpoint events here, since now all threads that are
+                            // expected to be suspended
+                            // have increased suspension count
+                            runJobs(jobs);
+                        }
+                    });
+                    threadSuspension.suspendThread(thread);
+                    suspendThread.start();
+                    suspendEventThread(currentFrame, thread);
+                    break;
+            }
+        }
+
+        private void runJobs(List<Callable<Void>> jobs) {
+            for (Callable<Void> job : jobs) {
+                try {
+                    job.call();
+                } catch (Exception e) {
+                    throw new RuntimeException("failed to send event to debugger", e);
+                }
+            }
+        }
+
+        private void suspendEventThread(CallFrame currentFrame, Object thread) {
+            JDWPLogger.log("Suspending event thread: %s with new suspension count: %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
+
+            // if during stepping, send a step completed event back to the debugger
+            Integer id = commandRequestIds.get(thread);
+            if (id != null) {
+                eventListener.stepCompleted(id, currentFrame);
+            }
+            // reset
+            commandRequestIds.put(thread, null);
+
+            JDWPLogger.log("lock.wait() for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
+
+            // no reason to hold a hard suspension status, since now
+            // we have the actual suspension status and suspended information
+            threadSuspension.removeHardSuspendedThread(thread);
+
+            lockThread(thread);
+
+            JDWPLogger.log("lock wakeup for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
+        }
+    }
+
+    private void lockThread(Object thread) {
+        SimpleLock lock = getSuspendLock(thread);
+
+        synchronized (lock) {
+            try {
+                // in case a thread job is already posted on this thread
+                checkThreadJobsAndRun(thread);
+                while (lock.isLocked()) {
+                    lock.wait();
+                }
+            } catch (InterruptedException e) {
+                throw new RuntimeException("not able to suspend thread: " + getThreadName(thread), e);
+            }
+        }
+
+        checkThreadJobsAndRun(thread);
+
+        JDWPLogger.log("lock wakeup for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
+    }
+
+    private void checkThreadJobsAndRun(Object thread) {
+        if (threadJobs.containsKey(thread)) {
+            // a thread job was posted on this thread
+            // only wake up to perform the job a go back to sleep
+            ThreadJob job = threadJobs.remove(thread);
+            job.runJob();
+            lockThread(thread);
+        }
+    }
+
+    public void postJobForThread(ThreadJob job) {
+        threadJobs.put(job.getThread(), job);
+        SimpleLock lock = getSuspendLock(job.getThread());
+        synchronized (lock) {
+            lock.release();
+            lock.notifyAll();
         }
     }
 
