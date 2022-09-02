@@ -23,6 +23,8 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.espresso.jdwp.api.BreakpointInfo;
+import com.oracle.truffle.espresso.jdwp.api.LineBreakpointInfo;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 
 import java.io.IOException;
@@ -31,7 +33,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 
-public final class DebuggerConnection implements JDWPCommands {
+public class DebuggerConnection implements JDWPCommands {
 
     private final JDWPDebuggerController controller;
     private final JDWPContext context;
@@ -227,7 +229,7 @@ public final class DebuggerConnection implements JDWPCommands {
                     case JDWP.VirtualMachine.ID: {
                         switch (packet.cmd) {
                             case JDWP.VirtualMachine.VERSION.ID:
-                                result = JDWP.VirtualMachine.VERSION.createReply(packet, controller.getVirtualMachine());
+                                result = JDWP.VirtualMachine.VERSION.createReply(packet, context.getVirtualMachine());
                                 break;
                             case JDWP.VirtualMachine.CLASSES_BY_SIGNATURE.ID:
                                 result = JDWP.VirtualMachine.CLASSES_BY_SIGNATURE.createReply(packet, context);
@@ -242,7 +244,7 @@ public final class DebuggerConnection implements JDWPCommands {
                                 result = JDWP.VirtualMachine.DISPOSE.createReply(packet, controller);
                                 break;
                             case JDWP.VirtualMachine.IDSIZES.ID:
-                                result = JDWP.VirtualMachine.IDSIZES.createReply(packet, controller.getVirtualMachine());
+                                result = JDWP.VirtualMachine.IDSIZES.createReply(packet, context.getVirtualMachine());
                                 break;
                             case JDWP.VirtualMachine.SUSPEND.ID:
                                 result = JDWP.VirtualMachine.SUSPEND.createReply(packet, controller);

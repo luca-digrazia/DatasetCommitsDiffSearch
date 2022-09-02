@@ -70,4 +70,14 @@ public class NullKlass implements KlassRef {
     public boolean isAssignable(KlassRef klass) {
         return false;
     }
+
+    @Override
+    public Object getKlassObject() {
+        return null;
+    }
+
+    @Override
+    public int getModifiers() {
+        return 0;
+    }
 }
