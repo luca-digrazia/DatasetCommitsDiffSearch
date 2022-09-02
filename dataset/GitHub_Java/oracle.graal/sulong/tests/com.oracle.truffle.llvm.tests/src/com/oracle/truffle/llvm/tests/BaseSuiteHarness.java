@@ -45,7 +45,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Engine;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
@@ -62,7 +61,6 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
 
     private static final List<Path> passingTests = new ArrayList<>();
     private static final List<Path> failingTests = new ArrayList<>();
-    private static Engine engine;
 
     /**
      * Maximum retries on timeout of the reference executable.
@@ -105,16 +103,6 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
         }
     }
 
-    @BeforeClass
-    public static void createEngine(){
-        engine = Engine.newBuilder().build();
-    }
-
-    @AfterClass
-    public static void disposeEngine(){
-        engine.close();
-    }
-
     private void runCandidate(Path referenceBinary, ProcessResult referenceResult, Path candidateBinary) {
         if (!filterFileName().test(candidateBinary.getFileName().toString())) {
             return;
@@ -126,7 +114,7 @@ public abstract class BaseSuiteHarness extends BaseTestHarness {
         String[] inputArgs = getInputArgs(candidateBinary);
         ProcessResult result;
         try {
-            result = ProcessUtil.executeSulongTestMainSameEngine(candidateBinary.toAbsolutePath().toFile(), inputArgs, getContextOptions(), getCaptureOutput(), engine);
+            result = ProcessUtil.executeSulongTestMain(candidateBinary.toAbsolutePath().toFile(), inputArgs, getContextOptions(), getCaptureOutput());
         } catch (Exception e) {
             throw fail(getTestName(), new Exception("Candidate binary that failed: " + candidateBinary, e));
         }
