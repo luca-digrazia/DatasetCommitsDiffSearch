@@ -135,17 +135,17 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
     @SVMToHotSpot(CreateStringSupplier)
     @SVMToHotSpot(OnCompilationFailed)
     @Override
-    public void onCompilationFailed(Supplier<String> serializedException, boolean bailout, boolean permanentBailout) {
-        long serializedExceptionHandle = SVMObjectHandles.create(serializedException);
+    public void onCompilationFailed(Supplier<String> reasonAndStackTrace, boolean bailout, boolean permanentBailout) {
+        long reasonAndStackTraceHandle = SVMObjectHandles.create(reasonAndStackTrace);
         boolean success = false;
         JNIEnv env = env();
         try {
-            JObject instance = callCreateStringSupplier(env, serializedExceptionHandle);
+            JObject instance = callCreateStringSupplier(env, reasonAndStackTraceHandle);
             callOnCompilationFailed(env, getHandle(), instance, bailout, permanentBailout);
             success = true;
         } finally {
             if (!success) {
-                SVMObjectHandles.remove(serializedExceptionHandle);
+                SVMObjectHandles.remove(reasonAndStackTraceHandle);
             }
         }
     }

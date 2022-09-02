@@ -564,8 +564,7 @@ final class Target_jdk_vm_ci_hotspot_SharedLibraryJVMCIReflection {
 final class Target_org_graalvm_compiler_hotspot_HotSpotGraalRuntime {
 
     // Checkstyle: stop
-    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = InjectedManagementComputer.class, isFinal = true)//
-    private static Supplier<HotSpotGraalManagementRegistration> AOT_INJECTED_MANAGEMENT;
+    @Alias @RecomputeFieldValue(kind = Kind.Custom, declClass = InjectedManagementComputer.class, isFinal = true) private static Supplier<HotSpotGraalManagementRegistration> AOT_INJECTED_MANAGEMENT;
     // Checkstyle: resume
 
     private static final class InjectedManagementComputer implements RecomputeFieldValue.CustomFieldValueComputer {
@@ -666,7 +665,7 @@ final class Target_org_graalvm_compiler_core_GraalServiceThread {
     @Substitute()
     void beforeRun() {
         GraalServiceThread thread = KnownIntrinsics.convertUnknownValue(this, GraalServiceThread.class);
-        if (!LibGraal.attachCurrentThread(thread.isDaemon(), null)) {
+        if (!LibGraal.attachCurrentThread(HotSpotJVMCIRuntime.runtime(), thread.isDaemon(), null)) {
             throw new InternalError("Couldn't attach to HotSpot runtime");
         }
     }
@@ -674,7 +673,7 @@ final class Target_org_graalvm_compiler_core_GraalServiceThread {
     @Substitute
     @SuppressWarnings("static-method")
     void afterRun() {
-        LibGraal.detachCurrentThread(false);
+        LibGraal.detachCurrentThread(HotSpotJVMCIRuntime.runtime(), false);
     }
 }
 
@@ -709,6 +708,16 @@ final class Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy {
     @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean$Factory")
     @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassDataComputer.class, isFinal = true)
     private static byte[] HS_BEAN_FACTORY_CLASS;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean$IsolateThreadScope")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassNameComputer.class, isFinal = true)
+    private static String HS_ISOLATE_THREAD_SCOPE_CLASS_NAME;
+
+    @Alias
+    @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean$IsolateThreadScope")
+    @RecomputeFieldValue(kind = Kind.Custom, declClass = Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy.ClassDataComputer.class, isFinal = true)
+    private static byte[] HS_ISOLATE_THREAD_SCOPE_CLASS;
 
     @Alias
     @ClassData("org.graalvm.compiler.hotspot.management.SVMMBean$PushBackIterator")
@@ -751,7 +760,7 @@ final class Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy {
             }
             URL url = Thread.currentThread().getContextClassLoader().getResource(classData.value().replace('.', '/') + ".class");
             if (url == null) {
-                throw UserError.abort("Cannot find %s class", classData.value());
+                throw UserError.abort("Cannot find SVMMBean class");
             }
             try (InputStream in = url.openStream(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
                 byte[] buffer = new byte[4096];
@@ -761,7 +770,7 @@ final class Target_org_graalvm_compiler_hotspot_management_libgraal_MBeanProxy {
                 }
                 return out.toByteArray();
             } catch (IOException ioe) {
-                throw UserError.abort("Cannot load %s class due to: %s", classData.value(), ioe.getMessage());
+                throw UserError.abort("Cannot load SVMMBean class due to: " + ioe.getMessage());
             }
         }
     }
