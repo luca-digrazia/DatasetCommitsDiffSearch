@@ -189,9 +189,6 @@ public class MethodTypeFlowBuilder {
                 if (plugin != null && !plugin.inlineOnly()) {
                     Bytecode code = new ResolvedJavaMethodBytecode(method);
                     graph = new SubstrateIntrinsicGraphBuilder(options, debug, bb.getProviders(), code).buildGraph(plugin);
-                    if (graph != null) {
-                        method.registerAsIntrinsicMethod();
-                    }
                 }
             }
             if (graph == null) {

@@ -69,7 +69,6 @@ import org.graalvm.compiler.nodes.extended.AnchoringNode;
 import org.graalvm.compiler.nodes.extended.GuardedNode;
 import org.graalvm.compiler.nodes.extended.GuardingNode;
 import org.graalvm.compiler.nodes.memory.MemoryCheckpoint;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.nodes.spi.Lowerable;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
@@ -146,11 +145,6 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
         }
 
         @Override
-        public CoreProviders getProviders() {
-            return context;
-        }
-
-        @Override
         public ConstantReflectionProvider getConstantReflection() {
             return context.getConstantReflection();
         }
@@ -175,6 +169,7 @@ public class LoweringPhase extends BasePhase<PhaseContext> {
             return context.getReplacements();
         }
 
+        @Override
         public ForeignCallsProvider getForeignCalls() {
             return context.getForeignCalls();
         }

@@ -28,8 +28,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
@@ -74,6 +76,6 @@ public class SubstrateIntrinsicGraphBuilder extends IntrinsicGraphBuilder {
 
     @Override
     public boolean canDeferPlugin(GeneratedInvocationPlugin plugin) {
-        return plugin.isGeneratedFromFoldOrNodeIntrinsic();
+        return plugin.getSource().equals(Fold.class) || plugin.getSource().equals(Node.NodeIntrinsic.class);
     }
 }

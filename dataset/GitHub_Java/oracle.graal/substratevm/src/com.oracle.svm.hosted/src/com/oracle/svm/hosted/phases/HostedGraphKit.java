@@ -95,7 +95,7 @@ public class HostedGraphKit extends SubstrateGraphKit {
     }
 
     public void emitEnsureInitializedCall(ResolvedJavaType type) {
-        if (SubstrateClassInitializationPlugin.needsRuntimeInitialization(graph.method().getDeclaringClass(), type)) {
+        if (SubstrateClassInitializationPlugin.needsRuntimeInitialization(type)) {
             ResolvedJavaMethod ensureInitialized = providers.getMetaAccess().lookupJavaMethod(dynamicHubEnsureInitialized);
 
             Constant dynamicHub = getConstantReflection().asJavaClass(type);
@@ -110,6 +110,8 @@ public class HostedGraphKit extends SubstrateGraphKit {
             throwInvocationTargetException();
 
             endInvokeWithException();
+
+            mergeUnwinds();
         }
     }
 
@@ -129,6 +131,7 @@ public class HostedGraphKit extends SubstrateGraphKit {
         createJavaCallWithExceptionAndUnwind(InvokeKind.Special, cons, ite, exception);
 
         append(new UnwindNode(ite));
+        mergeUnwinds();
     }
 
 }

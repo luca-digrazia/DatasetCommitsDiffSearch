@@ -95,7 +95,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.InvocationPluginReceiver;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.LoopExplosionPlugin.LoopExplosionKind;
-import org.graalvm.compiler.nodes.graphbuilderconf.MethodSubstitutionPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
@@ -301,7 +300,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
          */
         @Override
         public boolean canDeferPlugin(GeneratedInvocationPlugin plugin) {
-            return plugin.isGeneratedFromFoldOrNodeIntrinsic();
+            return plugin.getSource().equals(Fold.class) || plugin.getSource().equals(Node.NodeIntrinsic.class);
         }
 
         @Override
@@ -347,7 +346,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
         @Override
         public IntrinsicContext getIntrinsic() {
-            return PEGraphDecoder.this.getIntrinsic();
+            return null;
         }
 
         @Override
@@ -372,11 +371,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
         @Override
         public boolean intrinsify(BytecodeProvider bytecodeProvider, ResolvedJavaMethod targetMethod, ResolvedJavaMethod substitute, InvocationPlugin.Receiver receiver, ValueNode[] args) {
-            return false;
-        }
-
-        @Override
-        public boolean intrinsify(ResolvedJavaMethod targetMethod, StructuredGraph substituteGraph, InvocationPlugin.Receiver receiver, ValueNode[] argsIncludingReceiver) {
             return false;
         }
 
@@ -426,10 +420,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             }
             return fmt.toString();
         }
-    }
-
-    protected IntrinsicContext getIntrinsic() {
-        return null;
     }
 
     protected class PEAppendGraphBuilderContext extends PENonAppendGraphBuilderContext {
@@ -532,11 +522,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
             appendInvoke(methodScope.caller, methodScope.callerLoopScope, methodScope.invokeData, callTarget);
             updateLastInstruction(invoke.asNode());
-        }
-
-        @Override
-        public GraphBuilderContext getNonIntrinsicAncestor() {
-            return null;
         }
     }
 
@@ -844,10 +829,10 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         for (InlineInvokePlugin plugin : inlineInvokePlugins) {
             InlineInfo inlineInfo = plugin.shouldInlineInvoke(graphBuilderContext, targetMethod, arguments);
             if (inlineInfo != null) {
-                if (inlineInfo.allowsInlining()) {
-                    return doInline(methodScope, loopScope, invokeData, inlineInfo, arguments);
-                } else {
+                if (inlineInfo.getMethodToInline() == null) {
                     return null;
+                } else {
+                    return doInline(methodScope, loopScope, invokeData, inlineInfo, arguments);
                 }
             }
         }
@@ -859,7 +844,9 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             return null;
         }
         ResolvedJavaMethod inlineMethod = inlineInfo.getMethodToInline();
-        EncodedGraph graphToInline = lookupEncodedGraph(inlineMethod, inlineInfo.getPlugin(), inlineInfo.getIntrinsicBytecodeProvider(), inlineInfo.isSubstitution(), graph.trackNodeSourcePosition());
+        ResolvedJavaMethod originalMethod = inlineInfo.getOriginalMethod();
+        boolean isSubstitution = originalMethod != null && !originalMethod.equals(inlineMethod);
+        EncodedGraph graphToInline = lookupEncodedGraph(inlineMethod, originalMethod, inlineInfo.getIntrinsicBytecodeProvider(), isSubstitution, graph.trackNodeSourcePosition());
         if (graphToInline == null) {
             return null;
         }
@@ -1128,7 +1115,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         }
     }
 
-    protected abstract EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method, MethodSubstitutionPlugin plugin, BytecodeProvider intrinsicBytecodeProvider, boolean isSubstitution,
+    protected abstract EncodedGraph lookupEncodedGraph(ResolvedJavaMethod method, ResolvedJavaMethod originalMethod, BytecodeProvider intrinsicBytecodeProvider, boolean isSubstitution,
                     boolean trackNodeSourcePosition);
 
     @Override

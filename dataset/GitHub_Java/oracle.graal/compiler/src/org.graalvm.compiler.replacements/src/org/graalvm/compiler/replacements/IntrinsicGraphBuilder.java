@@ -127,9 +127,7 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
     private <T extends ValueNode> void updateLastInstruction(T v) {
         if (v instanceof FixedNode) {
             FixedNode fixedNode = (FixedNode) v;
-            if (lastInstr != null) {
-                lastInstr.setNext(fixedNode);
-            }
+            lastInstr.setNext(fixedNode);
             if (fixedNode instanceof FixedWithNextNode) {
                 FixedWithNextNode fixedWithNextNode = (FixedWithNextNode) fixedNode;
                 assert fixedWithNextNode.next() == null : "cannot append instruction to instruction which isn't end";

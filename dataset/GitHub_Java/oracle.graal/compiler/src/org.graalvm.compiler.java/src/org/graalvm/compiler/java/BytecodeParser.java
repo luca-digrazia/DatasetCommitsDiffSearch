@@ -777,7 +777,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
     @SuppressWarnings("try")
     protected void buildRootMethod() {
-        FrameStateBuilder startFrameState = new FrameStateBuilder(this, code, graph, graphBuilderConfig.retainLocalVariables());
+        FrameStateBuilder startFrameState = new FrameStateBuilder(this, code, graph);
         startFrameState.initializeForMethodStart(graph.getAssumptions(), graphBuilderConfig.eagerResolving() || intrinsicContext != null, graphBuilderConfig.getPlugins());
 
         try (IntrinsicScope s = intrinsicContext != null ? new IntrinsicScope(this) : null) {
@@ -2318,7 +2318,7 @@ public class BytecodeParser implements GraphBuilderContext {
                         }
                         return false;
                     }
-                    if (canInlinePartialIntrinsicExit()) {
+                    if (canInlinePartialIntrinsicExit() && InlinePartialIntrinsicExitDuringParsing.getValue(options) && !IS_BUILDING_NATIVE_IMAGE) {
                         // Otherwise inline the original method. Any frame state created
                         // during the inlining will exclude frame(s) in the
                         // intrinsic method (see FrameStateBuilder.create(int bci)).
@@ -2381,7 +2381,7 @@ public class BytecodeParser implements GraphBuilderContext {
      * intrinsic) can be inlined.
      */
     protected boolean canInlinePartialIntrinsicExit() {
-        return InlinePartialIntrinsicExitDuringParsing.getValue(options) && !IS_BUILDING_NATIVE_IMAGE && method.getAnnotation(Snippet.class) == null;
+        return true;
     }
 
     private void printInlining(ResolvedJavaMethod targetMethod, ResolvedJavaMethod inlinedMethod, boolean success, String msg) {
@@ -2443,7 +2443,7 @@ public class BytecodeParser implements GraphBuilderContext {
 
         try (IntrinsicScope s = calleeIntrinsicContext != null && !parsingIntrinsic() ? new IntrinsicScope(this, targetMethod.getSignature().toParameterKinds(!targetMethod.isStatic()), args) : null) {
             BytecodeParser parser = graphBuilderInstance.createBytecodeParser(graph, this, targetMethod, INVOCATION_ENTRY_BCI, calleeIntrinsicContext);
-            FrameStateBuilder startFrameState = new FrameStateBuilder(parser, parser.code, graph, graphBuilderConfig.retainLocalVariables());
+            FrameStateBuilder startFrameState = new FrameStateBuilder(parser, parser.code, graph);
             if (!targetMethod.isStatic()) {
                 args[0] = nullCheckedValue(args[0]);
             }
