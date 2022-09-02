@@ -40,6 +40,11 @@
  */
 package com.oracle.truffle.regex.tregex;
 
+import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_AUTOMATON_SIZES;
+import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_BAILOUT_MESSAGES;
+import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_PHASES;
+import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_TREGEX_COMPILATIONS;
+
 import java.util.logging.Level;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -77,7 +82,6 @@ import com.oracle.truffle.regex.tregex.parser.ast.visitors.ASTLaTexExportVisitor
 import com.oracle.truffle.regex.tregex.parser.ast.visitors.PreCalcResultVisitor;
 import com.oracle.truffle.regex.tregex.util.DFAExport;
 import com.oracle.truffle.regex.tregex.util.DebugUtil;
-import com.oracle.truffle.regex.tregex.util.Loggers;
 import com.oracle.truffle.regex.tregex.util.NFAExport;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 
@@ -101,12 +105,11 @@ public final class TRegexCompilationRequest {
     private TRegexDFAExecutorNode executorNodeForward = null;
     private TRegexDFAExecutorNode executorNodeBackward = null;
     private TRegexDFAExecutorNode executorNodeCaptureGroups = null;
-    private final CompilationBuffer compilationBuffer;
+    private final CompilationBuffer compilationBuffer = new CompilationBuffer();
 
     TRegexCompilationRequest(TRegexCompiler tRegexCompiler, RegexSource source) {
         this.tRegexCompiler = tRegexCompiler;
         this.source = source;
-        this.compilationBuffer = new CompilationBuffer(source.getEncoding());
     }
 
     TRegexCompilationRequest(TRegexCompiler tRegexCompiler, NFA nfa) {
@@ -114,7 +117,6 @@ public final class TRegexCompilationRequest {
         this.source = nfa.getAst().getSource();
         this.ast = nfa.getAst();
         this.nfa = nfa;
-        this.compilationBuffer = new CompilationBuffer(nfa.getAst().getEncoding());
     }
 
     public TRegexExecRootNode getRoot() {
@@ -137,7 +139,7 @@ public final class TRegexCompilationRequest {
 
     @TruffleBoundary
     private RegexExecRootNode compileInternal() {
-        Loggers.LOG_TREGEX_COMPILATIONS.finer(() -> String.format("TRegex compiling %s\n%s", DebugUtil.jsStringEscape(source.toString()), new RegexUnifier(source).getUnifiedPattern()));
+        LOG_TREGEX_COMPILATIONS.finer(() -> String.format("TRegex compiling %s\n%s", DebugUtil.jsStringEscape(source.toString()), new RegexUnifier(source).getUnifiedPattern()));
         RegexParser regexParser = createParser();
         phaseStart("Parser");
         try {
@@ -177,7 +179,7 @@ public final class TRegexCompilationRequest {
         for (int i = 0; i < pureNFA.getLookArounds().size(); i++) {
             PureNFA lookAround = pureNFA.getLookArounds().get(i);
             if (pureNFA.getASTSubtree(lookAround).asLookAroundAssertion().isLiteral()) {
-                lookAroundExecutors[i] = new TRegexLiteralLookAroundExecutorNode(pureNFA.getASTSubtree(lookAround).asLookAroundAssertion(), compilationBuffer);
+                lookAroundExecutors[i] = new TRegexLiteralLookAroundExecutorNode(pureNFA.getASTSubtree(lookAround).asLookAroundAssertion(), ast.getEncoding(), compilationBuffer);
             } else {
                 lookAroundExecutors[i] = new TRegexBacktrackingNFAExecutorNode(pureNFA, lookAround, lookAroundExecutors, compilationBuffer);
             }
@@ -204,7 +206,7 @@ public final class TRegexCompilationRequest {
                 debugTraceFinder();
             } catch (UnsupportedRegexException e) {
                 phaseEnd("TraceFinder NFA Bailout");
-                Loggers.LOG_BAILOUT_MESSAGES.fine(() -> "TraceFinder: " + e.getReason() + ": " + source);
+                LOG_BAILOUT_MESSAGES.fine(() -> "TraceFinder: " + e.getReason() + ": " + source);
                 // handle with capture group aware DFA, bailout will always happen before
                 // assigning preCalculatedResults
             }
@@ -352,24 +354,24 @@ public final class TRegexCompilationRequest {
     }
 
     private static boolean shouldLogPhases() {
-        return Loggers.LOG_PHASES.isLoggable(Level.FINER);
+        return LOG_PHASES.isLoggable(Level.FINER);
     }
 
     private void phaseStart(String phase) {
         if (shouldLogPhases()) {
-            Loggers.LOG_PHASES.finer(phase + " Start");
+            LOG_PHASES.finer(phase + " Start");
             timer.start();
         }
     }
 
     private void phaseEnd(String phase) {
         if (shouldLogPhases()) {
-            Loggers.LOG_PHASES.finer(phase + " End, elapsed: " + timer.elapsedToString());
+            LOG_PHASES.finer(phase + " End, elapsed: " + timer.elapsedToString());
         }
     }
 
     private void logAutomatonSizes(RegexExecRootNode result) {
-        Loggers.LOG_AUTOMATON_SIZES.finer(() -> Json.obj(
+        LOG_AUTOMATON_SIZES.finer(() -> Json.obj(
                         Json.prop("pattern", source.getPattern().length() > 200 ? source.getPattern().substring(0, 200) + "..." : source.getPattern()),
                         Json.prop("flags", source.getFlags()),
                         Json.prop("props", ast == null ? new RegexProperties() : ast.getProperties()),

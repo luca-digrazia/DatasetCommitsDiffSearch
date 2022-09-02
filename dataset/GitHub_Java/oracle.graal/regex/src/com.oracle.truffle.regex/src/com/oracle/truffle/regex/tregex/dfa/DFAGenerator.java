@@ -46,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,10 +56,11 @@ import org.graalvm.collections.EconomicMap;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.UnsupportedRegexException;
+import com.oracle.truffle.regex.charset.CharMatchers;
 import com.oracle.truffle.regex.charset.CodePointSet;
 import com.oracle.truffle.regex.charset.CodePointSetAccumulator;
-import com.oracle.truffle.regex.charset.CompressedCodePointSet;
 import com.oracle.truffle.regex.charset.Constants;
+import com.oracle.truffle.regex.charset.Range;
 import com.oracle.truffle.regex.result.PreCalculatedResultFactory;
 import com.oracle.truffle.regex.tregex.TRegexCompilationRequest;
 import com.oracle.truffle.regex.tregex.TRegexOptions;
@@ -69,6 +71,8 @@ import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
 import com.oracle.truffle.regex.tregex.buffer.IntArrayBuffer;
 import com.oracle.truffle.regex.tregex.buffer.ObjectArrayBuffer;
 import com.oracle.truffle.regex.tregex.buffer.ShortArrayBuffer;
+import com.oracle.truffle.regex.tregex.matchers.AnyMatcher;
+import com.oracle.truffle.regex.tregex.matchers.CharMatcher;
 import com.oracle.truffle.regex.tregex.nfa.NFA;
 import com.oracle.truffle.regex.tregex.nfa.NFAState;
 import com.oracle.truffle.regex.tregex.nfa.NFAStateTransition;
@@ -84,7 +88,6 @@ import com.oracle.truffle.regex.tregex.nodes.dfa.DFAInitialStateNode;
 import com.oracle.truffle.regex.tregex.nodes.dfa.DFASimpleCG;
 import com.oracle.truffle.regex.tregex.nodes.dfa.DFASimpleCGTransition;
 import com.oracle.truffle.regex.tregex.nodes.dfa.DFAStateNode;
-import com.oracle.truffle.regex.tregex.nodes.dfa.Matchers;
 import com.oracle.truffle.regex.tregex.nodes.dfa.TRegexDFAExecutorDebugRecorder;
 import com.oracle.truffle.regex.tregex.nodes.dfa.TRegexDFAExecutorNode;
 import com.oracle.truffle.regex.tregex.nodes.dfa.TRegexDFAExecutorProperties;
@@ -99,12 +102,10 @@ import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexASTNode;
 import com.oracle.truffle.regex.tregex.parser.ast.Sequence;
 import com.oracle.truffle.regex.tregex.parser.ast.visitors.AddToSetVisitor;
-import com.oracle.truffle.regex.tregex.string.Encodings.Encoding;
 import com.oracle.truffle.regex.tregex.util.MathUtil;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
-import com.oracle.truffle.regex.util.BitSets;
 import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 public final class DFAGenerator implements JsonConvertible {
@@ -143,8 +144,6 @@ public final class DFAGenerator implements JsonConvertible {
     private List<DFAStateTransitionBuilder[]> bfsTraversalNext;
     private EconomicMap<Integer, DFAAbstractStateNode> stateReplacements;
 
-    private final Matchers.Builder matchersBuilder;
-
     public DFAGenerator(TRegexCompilationRequest compilationReqest, NFA nfa, TRegexDFAExecutorProperties executorProps, CompilationBuffer compilationBuffer, RegexOptions engineOptions) {
         this.compilationReqest = compilationReqest;
         this.nfa = nfa;
@@ -164,7 +163,6 @@ public final class DFAGenerator implements JsonConvertible {
         }
         assert !nfa.isDead();
         this.canonicalizer = new DFATransitionCanonicalizer(this);
-        this.matchersBuilder = nfa.getAst().getEncoding().createMatchersBuilder();
     }
 
     public NFA getNfa() {
@@ -173,10 +171,6 @@ public final class DFAGenerator implements JsonConvertible {
 
     public DFAStateNodeBuilder[] getEntryStates() {
         return entryStates;
-    }
-
-    private DFAStateNodeBuilder getUnanchoredInitialState() {
-        return entryStates[nfa.getAnchoredEntry().length];
     }
 
     public Map<DFAStateNodeBuilder, DFAStateNodeBuilder> getStateMap() {
@@ -205,10 +199,6 @@ public final class DFAGenerator implements JsonConvertible {
 
     public RegexOptions getEngineOptions() {
         return engineOptions;
-    }
-
-    private Encoding getEncoding() {
-        return nfa.getAst().getEncoding();
     }
 
     private DFAStateNodeBuilder[] getStateIndexMap() {
@@ -418,7 +408,7 @@ public final class DFAGenerator implements JsonConvertible {
             }
         }
         DFAStateTransitionBuilder[] transitions = canonicalizer.run(compilationBuffer);
-        Arrays.sort(transitions, Comparator.comparing(TransitionBuilder::getCodePointSet));
+        Arrays.sort(transitions, Comparator.comparing(TransitionBuilder::getMatcherBuilder));
         for (DFAStateTransitionBuilder transition : transitions) {
             assert !transition.getTransitionSet().isEmpty();
             transition.setId(transitionIDCounter.inc());
@@ -616,7 +606,7 @@ public final class DFAGenerator implements JsonConvertible {
             // find the literal's beginning and end in the DFA
             DFAStateNodeBuilder literalFirstDFAState = null;
             DFAStateNodeBuilder literalLastDFAState = null;
-            DFAStateNodeBuilder unanchoredInitialState = getUnanchoredInitialState();
+            DFAStateNodeBuilder unanchoredInitialState = entryStates[nfa.getAnchoredEntry().length];
             CompilationFinalBitSet visited = new CompilationFinalBitSet(nextID);
             visited.set(unanchoredInitialState.getId());
             bfsTraversalCur.clear();
@@ -699,10 +689,10 @@ public final class DFAGenerator implements JsonConvertible {
                                 } else if (newTransitions == null) {
                                     newTransitions = compilationBuffer.getObjectBuffer1();
                                     newTransitions.addAll(s.getSuccessors(), 0, i);
-                                    acc.addSet(mergedTransition.getCodePointSet());
-                                    acc.addSet(t.getCodePointSet());
+                                    acc.addSet(mergedTransition.getMatcherBuilder());
+                                    acc.addSet(t.getMatcherBuilder());
                                 } else {
-                                    acc.addSet(t.getCodePointSet());
+                                    acc.addSet(t.getMatcherBuilder());
                                 }
                             } else if (newTransitions != null) {
                                 newTransitions.add(t);
@@ -713,7 +703,7 @@ public final class DFAGenerator implements JsonConvertible {
                         if (newTransitions != null && mergedTransition != null) {
                             mergedTransition.setMatcherBuilder(acc.toCodePointSet());
                             s.setSuccessors(newTransitions.toArray(new DFAStateTransitionBuilder[newTransitions.length()]));
-                            Arrays.sort(s.getSuccessors(), Comparator.comparing(TransitionBuilder::getCodePointSet));
+                            Arrays.sort(s.getSuccessors(), Comparator.comparing(TransitionBuilder::getMatcherBuilder));
                         }
                     }
                 }
@@ -790,10 +780,8 @@ public final class DFAGenerator implements JsonConvertible {
                 }
             }
         }
-        boolean utf16MustDecode = false;
         DFAAbstractStateNode[] ret = new DFAAbstractStateNode[stateMap.values().size() + 1];
         for (DFAStateNodeBuilder s : stateMap.values()) {
-            matchersBuilder.reset(s.getSuccessors().length);
             assert s.getId() <= Short.MAX_VALUE;
             short id = (short) s.getId();
             DFAAbstractStateNode replacement = getReplacement(id);
@@ -801,24 +789,23 @@ public final class DFAGenerator implements JsonConvertible {
                 ret[id] = replacement;
                 continue;
             }
-            DFASimpleCGTransition[] simpleCGTransitions = doSimpleCG ? new DFASimpleCGTransition[s.getSuccessors().length] : null;
+            CharMatcher[] matchers = (s.getSuccessors().length > 0) ? new CharMatcher[s.getSuccessors().length] : CharMatcher.EMPTY;
+            DFASimpleCGTransition[] simpleCGTransitions = doSimpleCG ? new DFASimpleCGTransition[matchers.length] : null;
             int nRanges = 0;
             int estimatedTransitionsCost = 0;
             boolean coversCharSpace = s.coversFullCharSpace(compilationBuffer);
-            for (int i = 0; i < s.getSuccessors().length; i++) {
+            for (int i = 0; i < matchers.length; i++) {
                 DFAStateTransitionBuilder t = s.getSuccessors()[i];
-                CodePointSet cps = t.getCodePointSet();
-                utf16MustDecode |= Constants.ASTRAL_SYMBOLS_AND_LONE_SURROGATES.intersects(cps);
-                if (i == s.getSuccessors().length - 1 && (coversCharSpace || (pruneUnambiguousPaths && !s.isFinalStateSuccessor()))) {
+                CodePointSet matcherBuilder = t.getMatcherBuilder();
+                if (i == matchers.length - 1 && (coversCharSpace || (pruneUnambiguousPaths && !s.isFinalStateSuccessor()))) {
                     // replace the last matcher with an AnyMatcher, since it must always cover the
                     // remaining input space
-                    matchersBuilder.setNoMatchSuccessor((short) i);
+                    matchers[i] = AnyMatcher.create();
                 } else {
-                    nRanges += cps.size();
-                    getEncoding().createMatcher(matchersBuilder, i, cps, compilationBuffer);
-
+                    nRanges += matcherBuilder.size();
+                    matchers[i] = CharMatchers.createMatcher(matcherBuilder, nfa.getAst().getEncoding(), compilationBuffer);
                 }
-                estimatedTransitionsCost += matchersBuilder.estimatedCost(i);
+                estimatedTransitionsCost += matchers[i].estimatedCost();
 
                 if (doSimpleCG) {
                     assert t.getTransitionSet().size() <= 2;
@@ -827,26 +814,22 @@ public final class DFAGenerator implements JsonConvertible {
                 }
             }
 
-            Matchers matchers = null;
             // Very conservative heuristic for whether we should use AllTransitionsInOneTreeMatcher.
             // TODO: Potential benefits of this should be further explored.
             AllTransitionsInOneTreeMatcher allTransitionsInOneTreeMatcher = null;
             boolean useTreeTransitionMatcher = nRanges > 1 && MathUtil.log2ceil(nRanges + 2) * 8 < estimatedTransitionsCost;
             if (useTreeTransitionMatcher) {
-                if (getOptions().isRegressionTestMode()) {
+                if (!getOptions().isRegressionTestMode()) {
                     // in regression test mode, we compare results of regular matchers and
                     // AllTransitionsInOneTreeMatcher
-                    matchers = getEncoding().toMatchers(matchersBuilder);
+                    matchers = null;
                 }
-                allTransitionsInOneTreeMatcher = createAllTransitionsInOneTreeMatcher(s, coversCharSpace);
-            } else {
-                matchers = getEncoding().toMatchers(matchersBuilder);
+                allTransitionsInOneTreeMatcher = createAllTransitionsInOneTreeMatcher(s);
             }
 
             short[] successors = s.getNumberOfSuccessors() > 0 ? new short[s.getNumberOfSuccessors()] : EMPTY_SHORT_ARRAY;
             short[] cgTransitions = null;
             short[] cgPrecedingTransitions = null;
-            DFAStateNode.LoopOptimizationNode loopOptimizationNode = null;
             if (isGenericCG()) {
                 cgTransitions = new short[s.getSuccessors().length];
                 DFAStateTransitionBuilder[] precedingTransitions = s.getPredecessors();
@@ -856,14 +839,22 @@ public final class DFAGenerator implements JsonConvertible {
                     cgPrecedingTransitions[i] = ((DFACaptureGroupTransitionBuilder) precedingTransitions[i]).toLazyTransition(compilationBuffer).getId();
                 }
             }
+            char[] indexOfChars = null;
             short loopToSelf = -1;
             for (int i = 0; i < successors.length - (s.hasBackwardPrefixState() ? 1 : 0); i++) {
                 successors[i] = (short) s.getSuccessors()[i].getTarget().getId();
                 if (successors[i] == id) {
                     loopToSelf = (short) i;
-                    CodePointSet loopMB = s.getSuccessors()[i].getCodePointSet();
-                    if (coversCharSpace && !loopMB.matchesEverything(getEncoding()) && loopMB.inverseValueCount(getEncoding()) <= 4) {
-                        loopOptimizationNode = getEncoding().extractLoopOptNode(loopMB);
+                    CodePointSet loopMB = s.getSuccessors()[i].getMatcherBuilder();
+                    // TODO: specialized for UTF-16. Generalize for other encodings!
+                    if (coversCharSpace && !loopMB.matchesEverything() && loopMB.inverseValueCount() <= 4 && loopMB.inverseGetMax() <= 0xffff) {
+                        indexOfChars = loopMB.inverseToCharArray();
+                        for (char c : indexOfChars) {
+                            if (Constants.SURROGATES.contains(c)) {
+                                indexOfChars = null;
+                                break;
+                            }
+                        }
                     }
                 }
                 assert successors[i] >= 0 && successors[i] < ret.length;
@@ -876,7 +867,11 @@ public final class DFAGenerator implements JsonConvertible {
             if (s.hasBackwardPrefixState()) {
                 successors[successors.length - 1] = s.getBackwardPrefixState();
             }
-            byte flags = DFAStateNode.buildFlags(s.isUnAnchoredFinalState(), s.isAnchoredFinalState(), s.hasBackwardPrefixState(), utf16MustDecode);
+            byte flags = DFAStateNode.buildFlags(s.isUnAnchoredFinalState(), s.isAnchoredFinalState(), s.hasBackwardPrefixState());
+            DFAStateNode.LoopOptimizationNode loopOptimizationNode = null;
+            if (loopToSelf != -1) {
+                loopOptimizationNode = DFAStateNode.buildLoopOptimizationNode(loopToSelf, indexOfChars);
+            }
             DFASimpleCG simpleCG = null;
             if (doSimpleCG) {
                 simpleCG = DFASimpleCG.create(simpleCGTransitions,
@@ -885,16 +880,16 @@ public final class DFAGenerator implements JsonConvertible {
             }
             DFAStateNode stateNode;
             if (isGenericCG()) {
-                stateNode = new CGTrackingDFAStateNode(id, flags, loopToSelf, loopOptimizationNode, successors, matchers, allTransitionsInOneTreeMatcher, cgTransitions, cgPrecedingTransitions,
+                stateNode = new CGTrackingDFAStateNode(id, flags, loopOptimizationNode, successors, matchers, allTransitionsInOneTreeMatcher, cgTransitions, cgPrecedingTransitions,
                                 createCGFinalTransition(s.getAnchoredFinalStateTransition()),
                                 createCGFinalTransition(s.getUnAnchoredFinalStateTransition()));
             } else if (nfa.isTraceFinderNFA()) {
-                stateNode = new TraceFinderDFAStateNode(id, flags, loopToSelf, loopOptimizationNode, successors, matchers,
+                stateNode = new TraceFinderDFAStateNode(id, flags, loopOptimizationNode, successors, matchers,
                                 allTransitionsInOneTreeMatcher, s.getPreCalculatedUnAnchoredResult(), s.getPreCalculatedAnchoredResult());
             } else if (isForward()) {
-                stateNode = new DFAStateNode(id, flags, loopToSelf, loopOptimizationNode, successors, matchers, simpleCG, allTransitionsInOneTreeMatcher);
+                stateNode = new DFAStateNode(id, flags, loopOptimizationNode, successors, matchers, simpleCG, allTransitionsInOneTreeMatcher);
             } else {
-                stateNode = new BackwardDFAStateNode(id, flags, loopToSelf, loopOptimizationNode, successors, matchers, simpleCG, allTransitionsInOneTreeMatcher);
+                stateNode = new BackwardDFAStateNode(id, flags, loopOptimizationNode, successors, matchers, simpleCG, allTransitionsInOneTreeMatcher);
             }
             ret[id] = stateNode;
         }
@@ -905,113 +900,49 @@ public final class DFAGenerator implements JsonConvertible {
         return DFASimpleCGTransition.create(nfaTransition, isForward() && nfaTransition != null && nfaTransition.getSource() == nfa.getInitialLoopBackTransition().getSource());
     }
 
-    /**
-     * Generate a new {@link AllTransitionsInOneTreeMatcher} from a given {@code state}.
-     */
-    private AllTransitionsInOneTreeMatcher createAllTransitionsInOneTreeMatcher(DFAStateNodeBuilder state, boolean coversCharSpace) {
+    private AllTransitionsInOneTreeMatcher createAllTransitionsInOneTreeMatcher(DFAStateNodeBuilder state) {
         DFAStateTransitionBuilder[] transitions = state.getSuccessors();
-        // convert all transition matchers to CompressedCodePointSets
-        CompressedCodePointSet[] ccpss = new CompressedCodePointSet[coversCharSpace ? transitions.length - 1 : transitions.length];
-        for (int i = 0; i < ccpss.length; i++) {
-            ccpss[i] = CompressedCodePointSet.create(transitions[i].getCodePointSet(), compilationBuffer);
+        IntArrayBuffer sortedRangesBuf = compilationBuffer.getIntRangesBuffer1();
+        ShortArrayBuffer rangeTreeSuccessorsBuf = compilationBuffer.getShortArrayBuffer();
+        @SuppressWarnings("unchecked")
+        Iterator<Range>[] iterators = new Iterator[transitions.length];
+        Range[] curRanges = new Range[transitions.length];
+        boolean rangesLeft = false;
+        for (int i = 0; i < transitions.length; i++) {
+            iterators[i] = transitions[i].getMatcherBuilder().iterator();
+            if (iterators[i].hasNext()) {
+                curRanges[i] = iterators[i].next();
+                rangesLeft = true;
+            }
         }
-        IntArrayBuffer ranges = compilationBuffer.getIntRangesBuffer1();
-        IntArrayBuffer iterators = compilationBuffer.getIntRangesBuffer2().asFixedSizeArray(ccpss.length, 0);
-        IntArrayBuffer byteRanges = compilationBuffer.getIntRangesBuffer3();
-        ShortArrayBuffer successors = compilationBuffer.getShortArrayBuffer1();
-        ShortArrayBuffer byteSuccessors = compilationBuffer.getShortArrayBuffer2();
-        ObjectArrayBuffer<long[]> byteBitSets = compilationBuffer.getObjectBuffer1();
-        ObjectArrayBuffer<AllTransitionsInOneTreeMatcher.AllTransitionsInOneTreeLeafMatcher> byteMatchers = compilationBuffer.getObjectBuffer2();
-        short noMatchSuccessor = (short) (coversCharSpace ? transitions.length - 1 : -1);
         int lastHi = 0;
-        // iterate all compressed code point sets in parallel, using the temporary "iterators" array
-        while (true) {
+        while (rangesLeft) {
             int minLo = Integer.MAX_VALUE;
-            int minCPS = -1;
-            // find the next lowest range of all code point sets
-            for (int i = 0; i < ccpss.length; i++) {
-                if (iterators.get(i) < ccpss[i].size() && ccpss[i].getLo(iterators.get(i)) < minLo) {
-                    minLo = ccpss[i].getLo(iterators.get(i));
-                    minCPS = i;
+            int minMb = -1;
+            for (int i = 0; i < transitions.length; i++) {
+                if (curRanges[i] != null && curRanges[i].lo < minLo) {
+                    minLo = curRanges[i].lo;
+                    minMb = i;
                 }
             }
-            if (minCPS == -1) {
-                // all code point sets are exhausted, finish
+            if (minMb == -1) {
                 break;
             }
             if (minLo != lastHi) {
-                // there is a gap between the last and current processed range, add a no-match
-                // successor
-                successors.add(noMatchSuccessor);
-                ranges.add(minLo);
+                rangeTreeSuccessorsBuf.add((short) -1);
+                sortedRangesBuf.add(minLo);
             }
-            lastHi = ccpss[minCPS].getHi(iterators.get(minCPS)) + 1;
-
-            if (ccpss[minCPS].hasBitSet(iterators.get(minCPS))) {
-                // the current range is subdivided into a bit set, generate a corresponding
-                // AllTransitionsInOneTreeLeafMatcher
-                byteRanges.clear();
-                byteSuccessors.clear();
-                byteBitSets.clear();
-                // find all bit-set ranges that intersect with the current range, and extend the
-                // current range to fit all of these interleaved bit sets.
-                for (int i = 0; i < ccpss.length; i++) {
-                    if (iterators.get(i) < ccpss[i].size() && ccpss[i].hasBitSet(iterators.get(i)) && BitSets.highByte(ccpss[i].getLo(iterators.get(i))) == BitSets.highByte(lastHi - 1)) {
-                        byteBitSets.add(ccpss[i].getBitSet(iterators.get(i)));
-                        lastHi = Math.max(lastHi, ccpss[i].getHi(iterators.get(i)) + 1);
-                        iterators.inc(i);
-                        byteSuccessors.add((short) i);
-                    }
-                }
-                int byteLastHi = minLo;
-                // find all regular ranges that are contained in the current bit-set range, and add
-                // them to the AllTransitionsInOneTreeLeafMatcher as well
-                while (true) {
-                    int byteMinLo = lastHi;
-                    int byteMinCPS = -1;
-                    for (int i = 0; i < ccpss.length; i++) {
-                        if (iterators.get(i) < ccpss[i].size() && ccpss[i].getLo(iterators.get(i)) < byteMinLo) {
-                            assert !ccpss[i].hasBitSet(iterators.get(i));
-                            assert ccpss[i].getHi(iterators.get(i)) < lastHi;
-                            byteMinLo = ccpss[i].getLo(iterators.get(i));
-                            byteMinCPS = i;
-                        }
-                    }
-                    if (byteMinCPS == -1) {
-                        break;
-                    }
-                    if (byteMinLo != byteLastHi) {
-                        // there is a gap between the last and current processed range, add a
-                        // no-match successor
-                        byteSuccessors.add(noMatchSuccessor);
-                        byteRanges.add(byteMinLo);
-                    }
-                    byteSuccessors.add((short) byteMinCPS);
-                    byteLastHi = ccpss[byteMinCPS].getHi(iterators.get(byteMinCPS)) + 1;
-                    if (byteLastHi < lastHi) {
-                        byteRanges.add(byteLastHi);
-                    }
-                    iterators.inc(byteMinCPS);
-                }
-                if (byteLastHi != lastHi) {
-                    byteSuccessors.add(noMatchSuccessor);
-                }
-                successors.add((short) ((byteMatchers.length() + 2) * -1));
-                byteMatchers.add(new AllTransitionsInOneTreeMatcher.AllTransitionsInOneTreeLeafMatcher(
-                                byteBitSets.toArray(new long[byteBitSets.length()][]), byteSuccessors.toArray(), byteRanges.toArray()));
-            } else {
-                successors.add((short) minCPS);
-                iterators.inc(minCPS);
+            rangeTreeSuccessorsBuf.add((short) minMb);
+            lastHi = curRanges[minMb].hi + 1;
+            if (lastHi <= Constants.MAX_CODE_POINT) {
+                sortedRangesBuf.add(lastHi);
             }
-            if (lastHi <= getEncoding().getMaxValue()) {
-                ranges.add(lastHi);
-            }
+            curRanges[minMb] = iterators[minMb].hasNext() ? iterators[minMb].next() : null;
         }
-        if (lastHi != getEncoding().getMaxValue() + 1) {
-            successors.add(noMatchSuccessor);
+        if (lastHi != Constants.MAX_CODE_POINT + 1) {
+            rangeTreeSuccessorsBuf.add((short) -1);
         }
-        return new AllTransitionsInOneTreeMatcher(ranges.toArray(), successors.toArray(),
-                        byteMatchers.toArray(new AllTransitionsInOneTreeMatcher.AllTransitionsInOneTreeLeafMatcher[byteMatchers.length()]));
+        return new AllTransitionsInOneTreeMatcher(sortedRangesBuf.toArray(), rangeTreeSuccessorsBuf.toArray());
     }
 
     private void registerCGTransition(DFACaptureGroupLazyTransition cgTransition) {

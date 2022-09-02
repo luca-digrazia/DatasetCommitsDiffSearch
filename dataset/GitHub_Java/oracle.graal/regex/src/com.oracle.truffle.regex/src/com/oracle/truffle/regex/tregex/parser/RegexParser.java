@@ -138,10 +138,10 @@ public final class RegexParser {
     @TruffleBoundary
     public RegexParser(RegexSource source, RegexOptions options, CompilationBuffer compilationBuffer) throws RegexSyntaxException {
         this.source = source;
-        this.flags = source.getFlags();
+        this.flags = RegexFlags.parseFlags(source.getFlags());
         this.options = options;
-        this.lexer = new RegexLexer(source, options);
-        this.ast = new RegexAST(source, flags, options);
+        this.lexer = new RegexLexer(source, flags, options);
+        this.ast = new RegexAST(source, flags, options, flags.isUnicode() && !options.isUTF16ExplodeAstralSymbols() ? Encodings.UTF_16 : Encodings.UTF_16_RAW);
         this.properties = ast.getProperties();
         this.groupCount = ast.getGroupCount();
         this.copyVisitor = new CopyVisitor(ast);
@@ -151,7 +151,7 @@ public final class RegexParser {
     }
 
     private static Group parseRootLess(String pattern) throws RegexSyntaxException {
-        return new RegexParser(new RegexSource(pattern, RegexFlags.DEFAULT, Encodings.UTF_16_RAW), RegexOptions.DEFAULT, new CompilationBuffer(Encodings.UTF_16_RAW)).parse(false);
+        return new RegexParser(new RegexSource(pattern), RegexOptions.DEFAULT, new CompilationBuffer()).parse(false);
     }
 
     @TruffleBoundary
@@ -347,7 +347,7 @@ public final class RegexParser {
             // surrogates
             assert !flags.isUnicode() || !options.isUTF16ExplodeAstralSymbols() || cc.getCharSet().matchesNothing() || cc.getCharSet().getMax() <= 0xffff;
             assert !group.hasEnclosedCaptureGroups();
-            cc.setCharSet(cc.getCharSet().createInverse(ast.getEncoding()));
+            cc.setCharSet(cc.getCharSet().createInverse());
             ast.updatePropsCC(cc);
             curSequence.removeLastTerm();
             Group wrapGroup = ast.createGroup();
@@ -402,12 +402,12 @@ public final class RegexParser {
         if (loneLeadSurrogateRanges.matchesSomething()) {
             Sequence loneLeadSurrogateAlternative = group.addSequence(ast);
             loneLeadSurrogateAlternative.add(createCharClass(loneLeadSurrogateRanges, token));
-            loneLeadSurrogateAlternative.add(NO_TRAIL_SURROGATE_AHEAD.copyRecursive(ast, compilationBuffer));
+            loneLeadSurrogateAlternative.add(NO_TRAIL_SURROGATE_AHEAD.copy(ast, true));
         }
 
         if (loneTrailSurrogateRanges.matchesSomething()) {
             Sequence loneTrailSurrogateAlternative = group.addSequence(ast);
-            loneTrailSurrogateAlternative.add(NO_LEAD_SURROGATE_BEHIND.copyRecursive(ast, compilationBuffer));
+            loneTrailSurrogateAlternative.add(NO_LEAD_SURROGATE_BEHIND.copy(ast, true));
             loneTrailSurrogateAlternative.add(createCharClass(loneTrailSurrogateRanges, token));
         }
 
@@ -654,7 +654,7 @@ public final class RegexParser {
     }
 
     private void substitute(Token token, Group substitution) {
-        Group copy = substitution.copyRecursive(ast, compilationBuffer);
+        Group copy = substitution.copy(ast, true);
         if (options.isDumpAutomata()) {
             setSourceSectionVisitor.run(copy, token);
         }

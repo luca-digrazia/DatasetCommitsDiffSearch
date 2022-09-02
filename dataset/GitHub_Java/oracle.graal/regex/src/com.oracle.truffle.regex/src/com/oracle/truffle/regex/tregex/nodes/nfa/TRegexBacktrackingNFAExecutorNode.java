@@ -65,7 +65,6 @@ import com.oracle.truffle.regex.tregex.parser.Token.Quantifier;
 import com.oracle.truffle.regex.tregex.parser.ast.InnerLiteral;
 import com.oracle.truffle.regex.tregex.parser.ast.LookBehindAssertion;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexASTSubtreeRootNode;
-import com.oracle.truffle.regex.tregex.util.Exceptions;
 
 /**
  * This regex executor uses a backtracking algorithm on the NFA. It is used for all expressions that
@@ -112,7 +111,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
         }
         if (loopbackInitialState && innerLiteral == null) {
             CodePointSet initialCharSet = nfaMap.getMergedInitialStateCharSet(compilationBuffer);
-            loopbackInitialStateMatcher = initialCharSet == null ? null : CharMatchers.createMatcher(initialCharSet, compilationBuffer);
+            loopbackInitialStateMatcher = initialCharSet == null ? null : CharMatchers.createMatcher(initialCharSet, nfaMap.getAst().getEncoding(), compilationBuffer);
         }
         nfa.materializeGroupBoundaries();
         matchers = new CharMatcher[nfa.getNumberOfStates()];
@@ -120,7 +119,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
         for (int i = 0; i < matchers.length; i++) {
             PureNFAState s = nfa.getState(i);
             if (s.isCharacterClass()) {
-                matchers[i] = insert(CharMatchers.createMatcher(s.getCharSet(), compilationBuffer));
+                matchers[i] = insert(CharMatchers.createMatcher(s.getCharSet(), nfaMap.getAst().getEncoding(), compilationBuffer));
             }
             maxTransitions = Math.max(maxTransitions, s.getSuccessors(forward).length);
             s.initIsDeterministic(forward, compilationBuffer);
@@ -540,7 +539,8 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
             case PureNFAState.KIND_EMPTY_MATCH:
                 return true;
             default:
-                throw Exceptions.shouldNotReachHere();
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw new IllegalStateException();
         }
     }
 
@@ -610,7 +610,8 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
             case PureNFAState.KIND_EMPTY_MATCH:
                 return index;
             default:
-                throw Exceptions.shouldNotReachHere();
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw new IllegalStateException();
         }
     }
 
@@ -690,7 +691,7 @@ public final class TRegexBacktrackingNFAExecutorNode extends TRegexExecutorNode 
             CompilerDirectives.transferToInterpreterAndInvalidate();
             indexOfNode = InputIndexOfStringNode.create();
         }
-        return indexOfNode.execute(locals.getInput(), locals.getIndex(), locals.getMaxIndex(), innerLiteral.getLiteral().content(), innerLiteral.getMaskContent());
+        return indexOfNode.execute(locals.getInput(), locals.getIndex(), locals.getMaxIndex(), innerLiteral.getLiteral(), innerLiteral.getMask());
     }
 
     private boolean inputBoundsCheck(int i, int min, int max) {

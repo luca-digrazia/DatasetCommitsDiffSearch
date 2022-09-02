@@ -44,11 +44,9 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.regex.tregex.string.Encodings;
 import com.oracle.truffle.regex.tregex.string.Encodings.Encoding;
 import com.oracle.truffle.regex.tregex.string.Encodings.Encoding.UTF16;
-import com.oracle.truffle.regex.tregex.util.Exceptions;
 
 public abstract class TRegexExecutorNode extends Node {
 
@@ -61,10 +59,6 @@ public abstract class TRegexExecutorNode extends Node {
     public Encoding getEncoding() {
         assert root != null;
         return root.getEncoding();
-    }
-
-    public ConditionProfile getInputProfile() {
-        return root.getInputProfile();
     }
 
     /**
@@ -140,7 +134,7 @@ public abstract class TRegexExecutorNode extends Node {
             }
             return c;
         } else {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
+            CompilerDirectives.transferToInterpreter();
             throw new UnsupportedOperationException();
         }
     }
@@ -153,7 +147,7 @@ public abstract class TRegexExecutorNode extends Node {
         return UTF16.isLowSurrogate(c, isForward());
     }
 
-    public int inputUTF16ToCodePoint(int highSurrogate, int lowSurrogate) {
+    protected int inputUTF16ToCodePoint(int highSurrogate, int lowSurrogate) {
         return isForward() ? Character.toCodePoint((char) highSurrogate, (char) lowSurrogate) : Character.toCodePoint((char) lowSurrogate, (char) highSurrogate);
     }
 
@@ -197,7 +191,8 @@ public abstract class TRegexExecutorNode extends Node {
                 inputIncRaw(locals, forward);
             }
         } else {
-            throw Exceptions.shouldNotReachHere();
+            CompilerDirectives.transferToInterpreter();
+            throw new UnsupportedOperationException();
         }
     }
 
@@ -241,7 +236,8 @@ public abstract class TRegexExecutorNode extends Node {
                         index++;
                     }
                 } else {
-                    throw Exceptions.shouldNotReachHere();
+                    CompilerDirectives.transferToInterpreter();
+                    throw new UnsupportedOperationException();
                 }
                 i++;
             }
@@ -265,7 +261,7 @@ public abstract class TRegexExecutorNode extends Node {
                         locals.setIndex(locals.getIndex() - 1);
                     }
                 } else {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    CompilerDirectives.transferToInterpreter();
                     throw new UnsupportedOperationException();
                 }
                 i++;

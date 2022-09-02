@@ -40,12 +40,15 @@
  */
 package com.oracle.truffle.regex.tregex.nodes;
 
+import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_BAILOUT_MESSAGES;
+import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_INTERNAL_ERRORS;
+import static com.oracle.truffle.regex.tregex.util.DebugUtil.LOG_SWITCH_TO_EAGER;
+
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.profiles.ConditionProfile;
 import com.oracle.truffle.regex.RegexExecRootNode;
 import com.oracle.truffle.regex.RegexFlags;
 import com.oracle.truffle.regex.RegexLanguage;
@@ -70,7 +73,6 @@ import com.oracle.truffle.regex.tregex.nodes.nfa.TRegexBacktrackingNFAExecutorNo
 import com.oracle.truffle.regex.tregex.nodes.nfa.TRegexNFAExecutorNode;
 import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.string.Encodings.Encoding;
-import com.oracle.truffle.regex.tregex.util.Loggers;
 
 public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfile.TracksRegexProfile {
 
@@ -88,7 +90,6 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
     private final int numberOfCaptureGroups;
     private final boolean regressionTestMode;
     private final boolean backtrackingMode;
-    private final ConditionProfile inputProfile = ConditionProfile.createBinaryProfile();
 
     @Child private RunRegexSearchNode runnerNode;
 
@@ -147,10 +148,6 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         return numberOfCaptureGroups;
     }
 
-    public ConditionProfile getInputProfile() {
-        return inputProfile;
-    }
-
     private boolean validResult(Object input, int fromIndex, RegexResult result) {
         if (result == NoMatchResult.getInstance()) {
             return true;
@@ -162,7 +159,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
             int start = result.getStart(i);
             int end = result.getEnd(i);
             if (start > end || (Math.min(start, end) < 0 && Math.max(start, end) >= 0)) {
-                Loggers.LOG_INTERNAL_ERRORS.severe(() -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nINVALID Result: %s", getSource(), input, fromIndex, result));
+                LOG_INTERNAL_ERRORS.severe(() -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nINVALID Result: %s", getSource(), input, fromIndex, result));
                 return false;
             }
         }
@@ -174,8 +171,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         if (resultsEqual(result, btResult, getNumberOfCaptureGroups())) {
             return true;
         }
-        Loggers.LOG_INTERNAL_ERRORS.severe(
-                        () -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nBacktracker Result: %s\nDFA Result:         %s", getSource().toStringEscaped(), input, fromIndex, btResult, result));
+        LOG_INTERNAL_ERRORS.severe(() -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nBacktracker Result: %s\nDFA Result:         %s", getSource(), input, fromIndex, btResult, result));
         return false;
     }
 
@@ -188,8 +184,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         if (resultsEqual(result, btResult, getNumberOfCaptureGroups())) {
             return true;
         }
-        Loggers.LOG_INTERNAL_ERRORS.severe(
-                        () -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nNFA executor Result: %s\nDFA Result:         %s", getSource().toStringEscaped(), input, fromIndex, btResult, result));
+        LOG_INTERNAL_ERRORS.severe(() -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nNFA executor Result: %s\nDFA Result:         %s", getSource(), input, fromIndex, btResult, result));
         return false;
     }
 
@@ -202,9 +197,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         if (resultsEqual(result, noSimpleCGResult, getNumberOfCaptureGroups())) {
             return true;
         }
-        Loggers.LOG_INTERNAL_ERRORS.severe(
-                        () -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nLazyDFA Result:    %s\nSimplCGDFA Result: %s", getSource().toStringEscaped(), input, fromIndex, noSimpleCGResult,
-                                        result));
+        LOG_INTERNAL_ERRORS.severe(() -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nLazyDFA Result:    %s\nSimplCGDFA Result: %s", getSource(), input, fromIndex, noSimpleCGResult, result));
         return false;
     }
 
@@ -223,7 +216,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         }
         boolean equal = resultsEqual(lazyResult, eagerResult, getNumberOfCaptureGroups());
         if (!equal) {
-            Loggers.LOG_INTERNAL_ERRORS.severe(() -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nLazy Result: %s\nEager Result: %s", getSource(), input, fromIndex, lazyResult, eagerResult));
+            LOG_INTERNAL_ERRORS.severe(() -> String.format("Regex: %s\nInput: %s\nfromIndex: %d\nLazy Result: %s\nEager Result: %s", getSource(), input, fromIndex, lazyResult, eagerResult));
         }
         return equal;
     }
@@ -282,7 +275,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
         try {
             return tRegexCompiler.compileLazyDFAExecutor(((TRegexNFAExecutorNode) nfaNode.getExecutor()).getNFA(), this, allowSimpleCG);
         } catch (UnsupportedRegexException e) {
-            Loggers.LOG_BAILOUT_MESSAGES.fine(() -> e.getReason() + ": " + source);
+            LOG_BAILOUT_MESSAGES.fine(() -> e.getReason() + ": " + source);
             return LAZY_DFA_BAILED_OUT;
         }
     }
@@ -294,7 +287,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
     private void switchToEagerDFA(RegexProfile profile) {
         compileEagerDFA();
         if (eagerDFANode != EAGER_DFA_BAILED_OUT) {
-            Loggers.LOG_SWITCH_TO_EAGER.fine(() -> "regex " + getSource() + ": switching to eager matching." + (profile == null ? "" : " profile: " + profile));
+            LOG_SWITCH_TO_EAGER.fine(() -> "regex " + getSource() + ": switching to eager matching." + (profile == null ? "" : " profile: " + profile));
             runnerNode = insert(eagerDFANode);
         }
     }
@@ -305,7 +298,7 @@ public class TRegexExecRootNode extends RegexExecRootNode implements RegexProfil
                 TRegexDFAExecutorNode executorNode = tRegexCompiler.compileEagerDFAExecutor(getSource());
                 eagerDFANode = new EagerCaptureGroupRegexSearchNode(createEntryNode(executorNode));
             } catch (UnsupportedRegexException e) {
-                Loggers.LOG_BAILOUT_MESSAGES.fine(() -> e.getReason() + ": " + source);
+                LOG_BAILOUT_MESSAGES.fine(() -> e.getReason() + ": " + source);
                 eagerDFANode = EAGER_DFA_BAILED_OUT;
             }
         }
