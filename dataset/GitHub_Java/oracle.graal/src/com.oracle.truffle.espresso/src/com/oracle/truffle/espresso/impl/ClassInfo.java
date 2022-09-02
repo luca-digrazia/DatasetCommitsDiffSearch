@@ -33,13 +33,11 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.regex.Matcher;
 
 public final class ClassInfo {
     private ObjectKlass thisKlass;
     private byte[] bytes;
-    private byte[] patchedBytes;
     private final StaticObject classLoader;
     private final String originalName;
     private String newName;
@@ -158,7 +156,7 @@ public final class ClassInfo {
     }
 
     public static ClassInfo copyFrom(ClassInfo info) {
-        return new ClassInfo(info.getKlass(), info.getOriginalName(), info.getClassLoader(), info.classFingerprint, info.methodFingerprint, info.fieldFingerprint, info.enclosingMethodFingerprint, new ArrayList<>(1), info.getBytes());
+        return new ClassInfo(info.getKlass(), info.getNewName(), info.getClassLoader(), info.classFingerprint, info.methodFingerprint, info.fieldFingerprint, info.enclosingMethodFingerprint, new ArrayList<>(1), info.getBytes());
     }
 
     public String getOriginalName() {
@@ -178,8 +176,8 @@ public final class ClassInfo {
     }
 
     void outerRenamed(String oldName, String newName) {
-        methodFingerprint = methodFingerprint != null ? methodFingerprint.replace(oldName, newName) : null;
-        fieldFingerprint = fieldFingerprint != null ? fieldFingerprint.replace(oldName, newName) : null;
+        methodFingerprint = methodFingerprint.replace(oldName, newName);
+        fieldFingerprint = fieldFingerprint.replace(oldName, newName);
     }
 
     public boolean isRenamed() {
@@ -242,34 +240,22 @@ public final class ClassInfo {
         return score;
     }
 
-    public String addHotClassMarker() {
+    public String generateNextUniqueInnerName() {
         return getNewName() + InnerClassRedefiner.HOT_CLASS_MARKER + nextNewClass++;
     }
 
     public void patchBytes(byte[] patchedBytes) {
-        this.patchedBytes = patchedBytes;
-    }
-
-    public boolean isPatched() {
-        return patchedBytes != null && !Arrays.equals(patchedBytes, bytes);
-    }
-
-    public byte[] getPatchedBytes() {
-        return patchedBytes;
+        this.bytes = patchedBytes;
     }
 
     public void removeInner(ClassInfo removed) {
         innerClasses.remove(removed);
     }
 
-    public void commit(ClassInfo info) {
-        this.bytes = info.getBytes();
+    public void update(ClassInfo info) {
         this.classFingerprint = info.classFingerprint;
         this.methodFingerprint = info.methodFingerprint;
         this.fieldFingerprint = info.fieldFingerprint;
         this.enclosingMethodFingerprint = info.enclosingMethodFingerprint;
-        this.newName = null;
-        this.patchedBytes = null;
-        this.thisKlass = null;
     }
 }
