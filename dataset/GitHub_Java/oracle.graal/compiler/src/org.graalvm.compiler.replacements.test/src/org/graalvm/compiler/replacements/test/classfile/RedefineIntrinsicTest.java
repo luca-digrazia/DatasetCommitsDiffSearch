@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,6 +24,9 @@
  */
 package org.graalvm.compiler.replacements.test.classfile;
 
+import static org.graalvm.compiler.test.SubprocessUtil.getVMCommandLine;
+import static org.graalvm.compiler.test.SubprocessUtil.java;
+import static org.graalvm.compiler.test.SubprocessUtil.withoutDebuggerArguments;
 import static org.junit.Assume.assumeTrue;
 
 import java.io.FileOutputStream;
@@ -35,6 +40,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.ProtectionDomain;
+import java.util.List;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -42,16 +48,17 @@ import java.util.jar.Manifest;
 
 import javax.tools.ToolProvider;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 import org.graalvm.compiler.api.replacements.ClassSubstitution;
 import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
-import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registration;
 import org.graalvm.compiler.replacements.test.ReplacementsTest;
+import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.compiler.test.SubprocessUtil;
+import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
+import org.junit.Assert;
+import org.junit.Test;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -78,12 +85,11 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
     }
 
     @Override
-    protected GraphBuilderConfiguration editGraphBuilderConfiguration(GraphBuilderConfiguration conf) {
-        InvocationPlugins invocationPlugins = conf.getPlugins().getInvocationPlugins();
+    protected void registerInvocationPlugins(InvocationPlugins invocationPlugins) {
         BytecodeProvider replacementBytecodeProvider = getSystemClassLoaderBytecodeProvider();
-        Registration r = new Registration(invocationPlugins, Original.class, replacementBytecodeProvider);
+        Registration r = new Registration(invocationPlugins, Original.class, getReplacements(), replacementBytecodeProvider);
         r.registerMethodSubstitution(Intrinsic.class, "getValue");
-        return super.editGraphBuilderConfiguration(conf);
+        super.registerInvocationPlugins(invocationPlugins);
     }
 
     public static String callOriginalGetValue() {
@@ -98,6 +104,30 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
 
     @Test
     public void test() throws Throwable {
+        assumeManagementLibraryIsLoadable();
+        try {
+            Class.forName("java.lang.instrument.Instrumentation");
+        } catch (ClassNotFoundException ex) {
+            // skip this test if java.instrument JDK9 module is missing
+            return;
+        }
+        String recursionPropName = getClass().getName() + ".recursion";
+        if (JavaVersionUtil.JAVA_SPEC <= 8 || Boolean.getBoolean(recursionPropName)) {
+            testHelper();
+        } else {
+            List<String> vmArgs = withoutDebuggerArguments(getVMCommandLine());
+            vmArgs.add("-D" + recursionPropName + "=true");
+            vmArgs.add(SubprocessUtil.PACKAGE_OPENING_OPTIONS);
+            vmArgs.add("-Djdk.attach.allowAttachSelf=true");
+            Subprocess proc = java(vmArgs, "com.oracle.mxtool.junit.MxJUnitWrapper", getClass().getName());
+            if (proc.exitCode != 0) {
+                Assert.fail(String.format("non-zero exit code %d for command:%n%s", proc.exitCode, proc));
+            }
+        }
+    }
+
+    public void testHelper() throws Throwable {
+
         Object receiver = null;
         Object[] args = {};
 
@@ -116,7 +146,10 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
         testAgainstExpected(callIntrinsicGetValue, new Result("intrinsic", null), receiver, args);
 
         // Apply redefinition of intrinsic bytecode
-        redefineIntrinsic();
+        if (!redefineIntrinsic()) {
+            // running on JDK9 without agent
+            return;
+        }
 
         // Expect redefinition to have no effect
         Assert.assertEquals("original", Original.getValue());
@@ -148,7 +181,7 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
         jar.closeEntry();
     }
 
-    static void redefineIntrinsic() throws Exception {
+    static boolean redefineIntrinsic() throws Exception {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
         Attributes mainAttrs = manifest.getMainAttributes();
@@ -163,24 +196,36 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
             add(jarStream, Redefiner.class);
             jarStream.close();
 
-            loadAgent(jar);
+            return loadAgent(jar);
         } finally {
             Files.deleteIfExists(jar);
         }
     }
 
-    public static void loadAgent(Path agent) throws Exception {
+    @SuppressWarnings({"deprecation", "unused"})
+    public static boolean loadAgent(Path agent) throws Exception {
         String vmName = ManagementFactory.getRuntimeMXBean().getName();
         int p = vmName.indexOf('@');
         assumeTrue("VM name not in <pid>@<host> format: " + vmName, p != -1);
         String pid = vmName.substring(0, p);
         Class<?> c;
-        if (Java8OrEarlier) {
+        if (JavaVersionUtil.JAVA_SPEC <= 8) {
             ClassLoader cl = ToolProvider.getSystemToolClassLoader();
             c = Class.forName("com.sun.tools.attach.VirtualMachine", true, cl);
         } else {
-            // I don't know what changed to make this necessary...
-            c = Class.forName("com.sun.tools.attach.VirtualMachine", true, RedefineIntrinsicTest.class.getClassLoader());
+            try {
+                // I don't know what changed to make this necessary...
+                c = Class.forName("com.sun.tools.attach.VirtualMachine", true, RedefineIntrinsicTest.class.getClassLoader());
+            } catch (ClassNotFoundException ex) {
+                try {
+                    Class.forName("javax.naming.Reference");
+                } catch (ClassNotFoundException coreNamingMissing) {
+                    // if core JDK classes aren't found, we are probably running in a
+                    // JDK9 java.base environment and then missing class is OK
+                    return false;
+                }
+                throw ex;
+            }
         }
         Method attach = c.getDeclaredMethod("attach", String.class);
         Method loadAgent = c.getDeclaredMethod("loadAgent", String.class, String.class);
@@ -188,6 +233,7 @@ public class RedefineIntrinsicTest extends ReplacementsTest {
         Object vm = attach.invoke(null, pid);
         loadAgent.invoke(vm, agent.toString(), "");
         detach.invoke(vm);
+        return true;
     }
 
     public static class RedefinerAgent {

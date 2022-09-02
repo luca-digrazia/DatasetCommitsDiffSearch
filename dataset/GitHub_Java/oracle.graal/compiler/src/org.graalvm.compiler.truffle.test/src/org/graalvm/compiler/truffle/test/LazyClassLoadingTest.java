@@ -26,7 +26,6 @@ package org.graalvm.compiler.truffle.test;
 
 import static org.graalvm.compiler.test.SubprocessUtil.getVMCommandLine;
 import static org.graalvm.compiler.test.SubprocessUtil.withoutDebuggerArguments;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.CompileImmediately;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,12 +50,11 @@ import org.graalvm.compiler.options.OptionsParser;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.compiler.test.SubprocessUtil;
 import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
-import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
+import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Test;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.nodes.RootNode;
 
 import jdk.vm.ci.runtime.JVMCICompilerFactory;
 import jdk.vm.ci.services.JVMCIServiceLocator;
@@ -65,7 +63,7 @@ import jdk.vm.ci.services.JVMCIServiceLocator;
  * Test lazy initialization of Graal in the context of Truffle. When simply executing Truffle code,
  * Graal should not be initialized unless there is an actual compilation request.
  */
-public class LazyClassLoadingTest extends TestWithPolyglotOptions {
+public class LazyClassLoadingTest {
 
     private final Class<?> hotSpotVMEventListener;
     private final Class<?> hotSpotGraalCompilerFactoryOptions;
@@ -89,9 +87,7 @@ public class LazyClassLoadingTest extends TestWithPolyglotOptions {
 
     @Test
     public void testClassLoading() throws IOException, InterruptedException {
-        setupContext();
-        OptimizedCallTarget target = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
-        Assume.assumeFalse(target.getOptionValue(CompileImmediately));
+        Assume.assumeFalse(TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleCompileImmediately));
         List<String> vmCommandLine = getVMCommandLine();
         Assume.assumeFalse("Explicitly enables JVMCI compiler", vmCommandLine.contains("-XX:+UseJVMCINativeLibrary") || vmCommandLine.contains("-XX:+UseJVMCICompiler"));
         runTest(LazyClassLoadingTargetNegativeTest.class, false);
