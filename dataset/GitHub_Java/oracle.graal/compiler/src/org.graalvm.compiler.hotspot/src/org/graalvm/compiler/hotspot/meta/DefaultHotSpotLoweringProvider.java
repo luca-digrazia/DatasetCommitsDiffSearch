@@ -43,9 +43,7 @@ import static org.graalvm.word.LocationIdentity.any;
 
 import java.util.Arrays;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.graalvm.compiler.api.directives.GraalDirectives;
 import org.graalvm.compiler.core.common.CompressEncoding;
@@ -181,7 +179,7 @@ import org.graalvm.compiler.replacements.arraycopy.ArrayCopyNode;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopySnippets;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopyWithDelayedLoweringNode;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
-import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.compiler.replacements.nodes.LogNode;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 import org.graalvm.word.LocationIdentity;
 
@@ -201,41 +199,6 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  * HotSpot implementation of {@link LoweringProvider}.
  */
 public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLoweringProvider implements HotSpotLoweringProvider {
-
-    /**
-     * Extension API for lowering a node outside the set of core HotSpot compiler nodes.
-     */
-    public interface Extension {
-        Class<? extends Node> getNodeType();
-
-        /**
-         * Lowers {@code n} whose type is guaranteed to be {@link #getNodeType()}.
-         */
-        void lower(Node n, LoweringTool tool);
-
-        /**
-         * Initializes this extension.
-         */
-        void initialize(HotSpotProviders providers,
-                        OptionValues options,
-                        GraalHotSpotVMConfig config,
-                        HotSpotHostForeignCallsProvider foreignCalls,
-                        Iterable<DebugHandlersFactory> factories);
-    }
-
-    /**
-     * Service provider interface for discovering {@link Extension}s.
-     */
-    public interface Extensions {
-        /**
-         * Gets the extensions provided by this object.
-         *
-         * In the context of service caching done when building a libgraal image, implementations of
-         * this method must return a new value each time to avoid sharing extensions between
-         * different {@link DefaultHotSpotLoweringProvider}s.
-         */
-        List<Extension> createExtensions();
-    }
 
     protected final HotSpotGraalRuntimeProvider runtime;
     protected final HotSpotRegistersProvider registers;
@@ -259,8 +222,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     protected ForeignCallSnippets.Templates foreignCallSnippets;
     protected RegisterFinalizerSnippets.Templates registerFinalizerSnippets;
 
-    protected final Map<Class<? extends Node>, Extension> extensions = new HashMap<>();
-
     public DefaultHotSpotLoweringProvider(HotSpotGraalRuntimeProvider runtime, MetaAccessProvider metaAccess, ForeignCallsProvider foreignCalls, HotSpotRegistersProvider registers,
                     HotSpotConstantReflectionProvider constantReflection, PlatformConfigurationProvider platformConfig, MetaAccessExtensionProvider metaAccessExtensionProvider,
                     TargetDescription target) {
@@ -268,18 +229,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         this.runtime = runtime;
         this.registers = registers;
         this.constantReflection = constantReflection;
-    }
-
-    public HotSpotGraalRuntimeProvider getRuntime() {
-        return runtime;
-    }
-
-    public HotSpotRegistersProvider getRegisters() {
-        return registers;
-    }
-
-    public HotSpotConstantReflectionProvider getConstantReflection() {
-        return constantReflection;
     }
 
     @Override
@@ -317,21 +266,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             // AOT only introduced in JDK 9
             profileSnippets = new ProfileSnippets.Templates(options, factories, providers, target);
         }
-
-        initializeExtensions(options, factories, providers, config);
-    }
-
-    private void initializeExtensions(OptionValues options, Iterable<DebugHandlersFactory> factories, HotSpotProviders providers, GraalHotSpotVMConfig config) throws GraalError {
-        for (Extensions ep : GraalServices.load(Extensions.class)) {
-            for (Extension ext : ep.createExtensions()) {
-                Class<? extends Node> nodeType = ext.getNodeType();
-                Extension old = extensions.put(nodeType, ext);
-                if (old != null) {
-                    throw new GraalError("Two lowering extensions conflict on the handling of %s: %s and %s", nodeType.getName(), old, ext);
-                }
-                ext.initialize(providers, options, config, (HotSpotHostForeignCallsProvider) foreignCalls, factories);
-            }
-        }
     }
 
     public HotSpotAllocationSnippets.Templates getAllocationSnippets() {
@@ -346,14 +280,12 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         return monitorSnippets;
     }
 
-    /**
-     * Handles the lowering of {@code n} without delegating to plugins or super.
-     *
-     * @return {@code true} if this method handles lowering of {@code n}
-     */
-    private boolean lowerWithoutDelegation(Node n, LoweringTool tool) {
+    @Override
+    @SuppressWarnings("try")
+    public void lower(Node n, LoweringTool tool) {
         StructuredGraph graph = (StructuredGraph) n.graph();
-                   if (n instanceof Invoke) {
+        try (DebugCloseable context = n.withNodeSourcePosition()) {
+            if (n instanceof Invoke) {
                 lowerInvoke((Invoke) n, tool, graph);
             } else if (n instanceof LoadMethodNode) {
                 lowerLoadMethodNode((LoadMethodNode) n);
@@ -526,31 +458,10 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             } else if (n instanceof RegisterFinalizerNode) {
                 lowerRegisterFinalizer((RegisterFinalizerNode) n, tool);
             } else {
-            return false;
-        }
-        return true;
-    }
-
-    @Override
-    @SuppressWarnings("try")
-    public void lower(Node n, LoweringTool tool) {
-        try (DebugCloseable context = n.withNodeSourcePosition()) {
-            Class<? extends Node> nodeType = n.getClass();
-            if (!lowerWithoutDelegation(n, tool)) {
-                Extension ext = extensions.get(nodeType);
-                if (ext != null) {
-                    ext.lower(ext.getNodeType().cast(n), tool);
-                } else {
-                    super.lower(n, tool);
-                }
-            } else {
-                Extension ext = extensions.get(nodeType);
-                if (ext != null) {
-                    // This prevents an extension silently being ignored
-                    throw new GraalError("Extension %s is redundant - %s directly handles lowering of %s nodes", ext, getClass().getName(), nodeType.getName());
-                }
+                super.lower(n, tool);
             }
         }
+
     }
 
     protected void loadHubForMonitorEnterNode(MonitorEnterNode monitor, LoweringTool tool, StructuredGraph graph) {
