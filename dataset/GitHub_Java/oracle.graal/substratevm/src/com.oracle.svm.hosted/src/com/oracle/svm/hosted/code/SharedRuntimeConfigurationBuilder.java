@@ -66,7 +66,6 @@ import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.c.info.AccessorInfo;
 import com.oracle.svm.hosted.c.info.StructFieldInfo;
-import com.oracle.svm.hosted.classinitialization.ClassInitializationSupport;
 import com.oracle.svm.hosted.config.HybridLayout;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.thread.VMThreadMTFeature;
@@ -86,16 +85,14 @@ public abstract class SharedRuntimeConfigurationBuilder {
     protected WordTypes wordTypes;
     protected final Function<Providers, SubstrateBackend> backendProvider;
     protected final NativeLibraries nativeLibraries;
-    protected final ClassInitializationSupport classInitializationSupport;
 
     public SharedRuntimeConfigurationBuilder(OptionValues options, SVMHost hostVM, MetaAccessProvider metaAccess, Function<Providers, SubstrateBackend> backendProvider,
-                    NativeLibraries nativeLibraries, ClassInitializationSupport classInitializationSupport) {
+                    NativeLibraries nativeLibraries) {
         this.options = options;
         this.hostVM = hostVM;
         this.metaAccess = metaAccess;
         this.backendProvider = backendProvider;
         this.nativeLibraries = nativeLibraries;
-        this.classInitializationSupport = classInitializationSupport;
     }
 
     public SharedRuntimeConfigurationBuilder build() {
@@ -176,7 +173,7 @@ public abstract class SharedRuntimeConfigurationBuilder {
         HybridLayout<DynamicHub> hubLayout = new HybridLayout<>(DynamicHub.class, ConfigurationValues.getObjectLayout(), hMetaAccess);
         int vtableBaseOffset = hubLayout.getArrayBaseOffset();
         int vtableEntrySize = ConfigurationValues.getObjectLayout().sizeInBytes(hubLayout.getArrayElementStorageKind());
-        int typeIDSlotsOffset = HybridLayout.getTypeIDSlotsFieldOffset(ConfigurationValues.getObjectLayout());
+        int instanceOfBitsOrTypeIDSlotsOffset = HybridLayout.getBitFieldOrTypeIDSlotsFieldOffset(ConfigurationValues.getObjectLayout());
 
         int componentHubOffset = hMetaAccess.lookupJavaField(ReflectionUtil.lookupField(DynamicHub.class, "componentHub")).getLocation();
 
@@ -190,7 +187,7 @@ public abstract class SharedRuntimeConfigurationBuilder {
 
         int imageCodeInfoCodeStartOffset = hMetaAccess.lookupJavaField(ReflectionUtil.lookupField(ImageCodeInfo.class, "codeStart")).getLocation();
 
-        runtimeConfig.setLazyState(vtableBaseOffset, vtableEntrySize, typeIDSlotsOffset, componentHubOffset,
+        runtimeConfig.setLazyState(vtableBaseOffset, vtableEntrySize, instanceOfBitsOrTypeIDSlotsOffset, componentHubOffset,
                         javaFrameAnchorLastSPOffset, javaFrameAnchorLastIPOffset, vmThreadStatusOffset, imageCodeInfoCodeStartOffset);
     }
 

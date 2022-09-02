@@ -304,9 +304,9 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
 
         @Override
         public void emitCode(CompilationResultBuilder crb) {
-            if (SubstrateUtil.assertionsEnabled()) {
-                ((AMD64Assembler) crb.asm).int3();
-            }
+            /*
+             * We could add some code in debug builds here checking that it is really unreachable.
+             */
         }
     }
 

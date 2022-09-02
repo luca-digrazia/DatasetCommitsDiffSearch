@@ -38,6 +38,7 @@ import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
+import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
 import com.oracle.svm.core.graal.snippets.CFunctionSnippets;
 import com.oracle.svm.core.nodes.CFunctionPrologueDataNode;
@@ -51,16 +52,27 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 public abstract class SubstrateBackend extends Backend {
 
     public enum SubstrateMarkId implements CompilationResult.MarkId {
-        PROLOGUE_DECD_RSP,
-        PROLOGUE_SAVED_REGS,
-        PROLOGUE_END,
-        EPILOGUE_START,
-        EPILOGUE_INCD_RSP,
-        EPILOGUE_END;
+        PROLOGUE_DECD_RSP(true),
+        PROLOGUE_SAVED_REGS(true),
+        PROLOGUE_END(true),
+        EPILOGUE_START(false),
+        EPILOGUE_INCD_RSP(true),
+        EPILOGUE_END(true);
+
+        final boolean isMarkAfter;
+
+        SubstrateMarkId(boolean isMarkAfter) {
+            this.isMarkAfter = isMarkAfter;
+        }
 
         @Override
         public String getName() {
-            return toString();
+            return name();
+        }
+
+        @Override
+        public boolean isMarkAfter() {
+            return isMarkAfter;
         }
     }
 
@@ -111,6 +123,11 @@ public abstract class SubstrateBackend extends Backend {
         ValueNode frameAnchor = getPrologueData(callTarget).frameAnchor();
         assert frameAnchor != null;
         return frameAnchor;
+    }
+
+    public static boolean shouldEmitOnlyIndirectCalls() {
+        // For runtime compilations, emit indirect foreign calls to avoid additional patching
+        return !SubstrateUtil.HOSTED;
     }
 
     /**
