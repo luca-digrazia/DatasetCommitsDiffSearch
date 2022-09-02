@@ -617,6 +617,12 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
                             frameState.safeDelete();
                         }
 
+                        /*
+                         * To enable any needed modifications for the exception object with its new
+                         * state, processInstruction must be called.
+                         */
+                        parser.processInstruction(exceptionNode, dispatchState);
+
                     } else if (frameState.bci == BytecodeFrame.UNWIND_BCI) {
                         if (graph.getGuardsStage().allowsFloatingGuards()) {
                             throw GraalError.shouldNotReachHere("Cannot handle this UNWIND_BCI");
@@ -885,7 +891,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
     protected final OptionValues options;
     protected final DebugContext debug;
 
-    protected BciBlockMapping blockMap;
+    private BciBlockMapping blockMap;
     private LocalLiveness liveness;
     protected final int entryBCI;
     private final BytecodeParser parent;
@@ -1011,10 +1017,6 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
         ComputeLoopFrequenciesClosure.compute(graph);
     }
 
-    protected BciBlockMapping generateBlockMap() {
-        return BciBlockMapping.create(stream, code, options, graph.getDebug());
-    }
-
     @SuppressWarnings("try")
     protected void build(FixedWithNextNode startInstruction, FrameStateBuilder startFrameState) {
         if (PrintProfilingInformation.getValue(options) && profilingInfo != null) {
@@ -1030,7 +1032,8 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
             }
 
             // compute the block map, setup exception handlers and get the entrypoint(s)
-            this.blockMap = generateBlockMap();
+            BciBlockMapping newMapping = BciBlockMapping.create(stream, code, options, graph.getDebug());
+            this.blockMap = newMapping;
             this.firstInstructionArray = new FixedWithNextNode[blockMap.getBlockCount()];
             this.entryStateArray = new FrameStateBuilder[blockMap.getBlockCount()];
             if (!method.isStatic()) {
@@ -1051,7 +1054,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
             }
 
             lastInstr = startInstruction;
-            frameState = startFrameState;
+            this.setCurrentFrameState(startFrameState);
             stream.setBCI(0);
 
             BciBlock startBlock = blockMap.getStartBlock();
@@ -1083,6 +1086,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
             try (DebugCloseable context = openNodeContext()) {
                 if (method.isSynchronized()) {
+                    finishPrepare(lastInstr, BytecodeFrame.BEFORE_BCI, frameState);
 
                     // add a monitor enter to the start block
                     methodSynchronizedObject = synchronizedObject(frameState, method);
@@ -1096,6 +1100,8 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
                     FrameState stateBefore = createCurrentFrameState();
                     profilingPlugin.profileInvoke(this, method, stateBefore);
                 }
+
+                finishPrepare(lastInstr, 0, frameState);
 
                 genInfoPointNode(InfopointReason.METHOD_START, null);
             }
@@ -1135,6 +1141,16 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
             }
         }
         return true;
+    }
+
+    /**
+     * Hook for subclasses to modify synthetic code (start nodes and unwind nodes).
+     *
+     * @param instruction the current last instruction
+     * @param bci the current bci
+     * @param state The current frame state.
+     */
+    protected void finishPrepare(FixedWithNextNode instruction, int bci, FrameStateBuilder state) {
     }
 
     protected void cleanupFinalGraph() {
@@ -1322,7 +1338,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
             dispatchState.setRethrowException(true);
         }
         this.controlFlowSplit = true;
-        FixedWithNextNode afterExceptionLoaded = dispatchBegin;
+        FixedWithNextNode afterExceptionLoaded = processInstruction(dispatchBegin, dispatchState);
 
         if (deoptimizeOnly) {
             DeoptimizeNode deoptimizeNode = graph.add(new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.TransferToInterpreter));
@@ -1347,7 +1363,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
          * at the endBci yet, there is no exception handler for this bci and we can unwind
          * immediately.
          */
-        if (bci != currentBlock.getEndBci() || dispatchBlock == null) {
+        if (bci != currentBlock.endBci || dispatchBlock == null) {
             dispatchBlock = blockMap.getUnwindBlock();
         }
 
@@ -2651,7 +2667,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
             }
             if (returnMergeNode != null) {
                 returnMergeNode.setStateAfter(createFrameState(stream.nextBCI(), returnMergeNode));
-                lastInstr = returnMergeNode;
+                lastInstr = processInstruction(returnMergeNode, frameState);
             }
             return calleeReturnValue;
         }
@@ -2670,7 +2686,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
     }
 
     protected InvokeWithExceptionNode createInvokeWithException(int invokeBci, CallTargetNode callTarget, JavaKind resultType, ExceptionEdgeAction exceptionEdgeAction) {
-        if (currentBlock != null && stream.nextBCI() > currentBlock.getEndBci()) {
+        if (currentBlock != null && stream.nextBCI() > currentBlock.endBci) {
             /*
              * Clear non-live locals early so that the exception handler entry gets the cleared
              * state.
@@ -2781,6 +2797,9 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
             append(new FinalFieldBarrierNode(entryBCI == INVOCATION_ENTRY_BCI ? originalReceiver : null));
         }
         synchronizedEpilogue(BytecodeFrame.AFTER_BCI, x, kind);
+        if (method.isSynchronized()) {
+            finishPrepare(lastInstr, BytecodeFrame.AFTER_BCI, frameState);
+        }
     }
 
     protected MonitorEnterNode createMonitorEnterNode(ValueNode x, MonitorIdNode monitorId) {
@@ -2940,22 +2959,27 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
     private Target checkLoopExit(Target target, BciBlock targetBlock) {
         if (currentBlock != null) {
-            BitSet exits = andNot(currentBlock.loops, targetBlock.loops);
-            if (!exits.isEmpty()) {
+            long exits = currentBlock.loops & ~targetBlock.loops;
+            if (exits != 0) {
                 LoopExitNode firstLoopExit = null;
                 LoopExitNode lastLoopExit = null;
 
-
-                ArrayList<BciBlock> exitLoops = new ArrayList<>(exits.cardinality());
-                for (int pos = -1; (pos = exits.nextSetBit(pos + 1)) >= 0;) {
-                    exitLoops.add(blockMap.getLoopHeader(pos));
-                }
+                int pos = 0;
+                ArrayList<BciBlock> exitLoops = new ArrayList<>(Long.bitCount(exits));
+                do {
+                    long lMask = 1L << pos;
+                    if ((exits & lMask) != 0) {
+                        exitLoops.add(blockMap.getLoopHeader(pos));
+                        exits &= ~lMask;
+                    }
+                    pos++;
+                } while (exits != 0);
 
                 Collections.sort(exitLoops, new Comparator<BciBlock>() {
 
                     @Override
                     public int compare(BciBlock o1, BciBlock o2) {
-                        return o2.loops.cardinality() - o1.loops.cardinality();
+                        return Long.bitCount(o2.loops) - Long.bitCount(o1.loops);
                     }
                 });
 
@@ -3080,7 +3104,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
                  * placeholder that later can be replaced with a MergeNode when we see this block
                  * again.
                  */
-                if (canReuseInstruction && (block.getPredecessorCount() == 1 || !controlFlowSplit) && !block.isLoopHeader() && andNot(currentBlock.loops, block.loops).isEmpty() &&
+                if (canReuseInstruction && (block.getPredecessorCount() == 1 || !controlFlowSplit) && !block.isLoopHeader() && (currentBlock.loops & ~block.loops) == 0 &&
                                 currentBlock.getJsrScope() == block.getJsrScope()) {
                     /*
                      * If we know that no BeginNode is necessary, then we can avoid allocating and
@@ -3199,6 +3223,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
             lastInstr = firstInstruction;
             frameState = getEntryState(block);
+            setCurrentFrameState(frameState);
             currentBlock = block;
 
             if (block != blockMap.getUnwindBlock() && !(block instanceof ExceptionDispatchBlock)) {
@@ -3210,20 +3235,21 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
             }
 
             if (block == blockMap.getUnwindBlock()) {
-                handleUnwindBlock();
+                handleUnwindBlock((ExceptionDispatchBlock) block);
             } else if (block instanceof ExceptionDispatchBlock) {
                 createExceptionDispatch((ExceptionDispatchBlock) block);
             } else {
-                handleBytecodeBlock(block);
+                iterateBytecodesForBlock(block);
             }
         }
     }
 
-    private void handleUnwindBlock() {
+    private void handleUnwindBlock(ExceptionDispatchBlock block) {
         if (frameState.lockDepth(false) != 0) {
             throw bailout("unbalanced monitors: too few exits exiting frame");
         }
         assert !frameState.rethrowException();
+        finishPrepare(lastInstr, block.deoptBci, frameState);
         if (parent == null) {
             createUnwind();
         } else {
@@ -3271,8 +3297,9 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
     }
 
     @SuppressWarnings("try")
-    protected void createExceptionDispatch(ExceptionDispatchBlock block) {
+    private void createExceptionDispatch(ExceptionDispatchBlock block) {
         try (DebugCloseable context = openNodeContext(frameState, BytecodeFrame.AFTER_EXCEPTION_BCI)) {
+            processInstruction(lastInstr);
 
             assert frameState.stackSize() == 1 : frameState;
             if (block.handler.isCatchAll()) {
@@ -3326,19 +3353,18 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
         }
     }
 
-    protected void appendGoto(BciBlock successor) {
+    private void appendGoto(BciBlock successor) {
         FixedNode targetInstr = createTarget(successor, frameState, true, true);
         if (lastInstr != null && lastInstr != targetInstr) {
             lastInstr.setNext(targetInstr);
         }
     }
 
-    protected void handleBytecodeBlock(BciBlock block) {
+    @SuppressWarnings("try")
+    protected void iterateBytecodesForBlock(BciBlock block) {
         if (block.isLoopHeader()) {
-            /*
-             * Create the loop header block, which later will merge the backward branches of the
-             * loop.
-             */
+            // Create the loop header block, which later will merge the backward branches of
+            // the loop.
             controlFlowSplit = true;
             LoopBeginNode loopBegin = appendLoopBegin(this.lastInstr, block.startBci);
             lastInstr = loopBegin;
@@ -3369,17 +3395,13 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
         assert lastInstr.next() == null : "instructions already appended at block " + block;
         debug.log("  frameState: %s", frameState);
 
-        iterateBytecodesForBlock(block);
-    }
+        processInstruction(lastInstr);
 
-    @SuppressWarnings("try")
-    protected void iterateBytecodesForBlock(BciBlock block) {
-        assert block.isInstructionBlock();
         int endBCI = stream.endBCI();
 
         stream.setBCI(block.startBci);
         int bci = block.startBci;
-        BytecodesParsed.add(debug, block.getEndBci() - bci);
+        BytecodesParsed.add(debug, block.endBci - bci);
 
         while (bci < endBCI) {
             try (DebugCloseable context = openNodeContext()) {
@@ -3426,8 +3448,9 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
             assert block == currentBlock;
             assert checkLastInstruction();
+            processInstruction(lastInstr);
             if (bci < endBCI) {
-                if (bci > block.getEndBci()) {
+                if (bci > block.endBci) {
                     assert !block.getSuccessor(0).isExceptionEntry();
                     assert block.numNormalSuccessors() == 1;
                     // we fell through to the next block, add a goto and break
@@ -3500,6 +3523,20 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
             loopBegin.addForwardEnd(preLoopEnd);
             return loopBegin;
         }
+    }
+
+    /**
+     * Like {@link GraphBuilderContext#processInstruction(FixedWithNextNode)}, a hook for subclasses
+     * to add other instructions after the provided instruction.
+     *
+     * @param instr The instruction used to determine which instructions must be added.
+     * @param state The current state under which the node is processed.
+     * @return Returns either the last instruction added (if changes performed) or the provided
+     *         instruction.
+     */
+    protected FixedWithNextNode processInstruction(FixedWithNextNode instr, FrameStateBuilder state) {
+        /* By default, no additional processing is needed. */
+        return instr;
     }
 
     private void genInfoPointNode(InfopointReason reason, ValueNode escapedReturnValue) {
@@ -3717,18 +3754,12 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
     public boolean isPotentialCountedLoopExit(LogicNode condition, BciBlock target) {
         if (currentBlock != null) {
-            BitSet exits = andNot(currentBlock.loops, target.loops);
-            if (!exits.isEmpty()) {
+            long exits = currentBlock.loops & ~target.loops;
+            if (exits != 0) {
                 return condition instanceof CompareNode;
             }
         }
         return false;
-    }
-
-    private static BitSet andNot(BitSet left, BitSet right) {
-        BitSet result = (BitSet) left.clone();
-        result.andNot(right);
-        return result;
     }
 
     /**
@@ -3827,7 +3858,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
         int currentBCI = stream.nextBCI();
         stream.setBCI(currentBCI);
         int currentBC = stream.currentBC();
-        return stream.currentBCI() > block.getEndBci() || currentBC == Bytecodes.GOTO || currentBC == Bytecodes.GOTO_W;
+        return stream.currentBCI() > block.endBci || currentBC == Bytecodes.GOTO || currentBC == Bytecodes.GOTO_W;
     }
 
     private boolean returnAfterConstant(BciBlock block) {
@@ -3894,7 +3925,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
     private FrameState createFrameState(int bci, StateSplit forStateSplit) {
         assert !(forStateSplit instanceof BytecodeExceptionNode);
-        if (currentBlock != null && bci > currentBlock.getEndBci()) {
+        if (currentBlock != null && bci > currentBlock.endBci) {
             frameState.clearNonLiveLocals(currentBlock, liveness, false);
         }
         return frameState.create(bci, forStateSplit);
@@ -3921,6 +3952,10 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
     protected NodeSourcePosition createBytecodePosition() {
         NodeSourcePosition bytecodePosition = frameState.createBytecodePosition(bci());
         return bytecodePosition;
+    }
+
+    public void setCurrentFrameState(FrameStateBuilder frameState) {
+        this.frameState = frameState;
     }
 
     protected final BytecodeStream getStream() {
@@ -3952,7 +3987,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
         int nextBCI = stream.nextBCI();
         int nextBC = stream.readUByte(nextBCI);
-        if (nextBCI <= currentBlock.getEndBci() && nextBC == Bytecodes.GETFIELD) {
+        if (nextBCI <= currentBlock.endBci && nextBC == Bytecodes.GETFIELD) {
             stream.next();
             try (DebugCloseable ignored = openNodeContext()) {
                 genGetField(stream.readCPI(), Bytecodes.GETFIELD, value);
@@ -4521,7 +4556,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
         int next = getStream().nextBCI();
         int value = getStream().readUByte(next);
-        if (next <= currentBlock.getEndBci() && (value == Bytecodes.IFEQ || value == Bytecodes.IFNE)) {
+        if (next <= currentBlock.endBci && (value == Bytecodes.IFEQ || value == Bytecodes.IFNE)) {
             getStream().next();
             try (DebugCloseable context = openNodeContext()) {
                 BciBlock firstSucc = currentBlock.getSuccessor(0);

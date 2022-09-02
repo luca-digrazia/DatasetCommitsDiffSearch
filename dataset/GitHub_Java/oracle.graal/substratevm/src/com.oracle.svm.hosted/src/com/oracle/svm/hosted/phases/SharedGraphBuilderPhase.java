@@ -24,10 +24,8 @@
  */
 package com.oracle.svm.hosted.phases;
 
-import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.type.StampPair;
-import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.java.BciBlockMapping;
 import org.graalvm.compiler.java.BytecodeParser;
 import org.graalvm.compiler.java.FrameStateBuilder;
@@ -35,23 +33,19 @@ import org.graalvm.compiler.java.GraphBuilderPhase;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.graphbuilderconf.GeneratedInvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
-import org.graalvm.compiler.replacements.SnippetTemplate;
 import org.graalvm.compiler.word.WordTypes;
 
 import com.oracle.graal.pointsto.constraints.TypeInstantiationException;
 import com.oracle.graal.pointsto.constraints.UnresolvedElementException;
 import com.oracle.svm.core.SubstrateUtil;
-import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.deopt.DeoptimizationSupport;
 import com.oracle.svm.core.meta.SharedMethod;
-import com.oracle.svm.core.nodes.SubstrateMethodCallTargetNode;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.UserError.UserException;
@@ -117,26 +111,6 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
 
         private boolean checkWordTypes() {
             return getWordTypes() != null;
-        }
-
-        @Override
-        protected boolean disableLoopSafepoint() {
-            return super.disableLoopSafepoint() || method.getAnnotation(Uninterruptible.class) != null;
-        }
-
-        /**
-         * {@link Fold} and {@link NodeIntrinsic} can be deferred during parsing/decoding. Only by
-         * the end of {@linkplain SnippetTemplate#instantiate Snippet instantiation} do they need to
-         * have been processed.
-         *
-         * This is how SVM handles snippets. They are parsed with plugins disabled and then encoded
-         * and stored in the image. When the snippet is needed at runtime the graph is decoded and
-         * the plugins are run during the decoding process. If they aren't handled at this point
-         * then they will never be handled.
-         */
-        @Override
-        public boolean canDeferPlugin(GeneratedInvocationPlugin plugin) {
-            return plugin.getSource().equals(Fold.class) || plugin.getSource().equals(NodeIntrinsic.class);
         }
 
         @Override
@@ -347,7 +321,7 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
                 checkWordType(args[i + (isStatic ? 0 : 1)], targetMethod.getSignature().getParameterType(i, null), "call argument");
             }
 
-            return new SubstrateMethodCallTargetNode(invokeKind, targetMethod, args, returnStamp, profile, null);
+            return super.createMethodCallTarget(invokeKind, targetMethod, args, returnStamp, profile);
         }
 
         @Override
@@ -390,20 +364,12 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
             return true;
         }
 
-        protected static boolean isDeoptimizationEnabled() {
+        private static boolean isDeoptimizationEnabled() {
             return DeoptimizationSupport.enabled() && !SubstrateUtil.isBuildingLibgraal();
         }
 
-        protected boolean isMethodDeoptTarget() {
+        private boolean isMethodDeoptTarget() {
             return method instanceof SharedMethod && ((SharedMethod) method).isDeoptTarget();
-        }
-
-        @Override
-        protected boolean asyncExceptionLiveness() {
-            /*
-             * Currently native-image does not support asynchronous exceptions.
-             */
-            return false;
         }
 
         @Override
