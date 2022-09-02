@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.impl;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
@@ -32,7 +30,7 @@ import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.staticobject.StaticProperty;
 
 final class LinkedField extends StaticProperty {
-    @CompilationFinal private ParserField parserField;
+    private final ParserField parserField;
     private final int slot;
 
     LinkedField(ParserField parserField, int slot, boolean storeAsFinal) {
@@ -51,8 +49,6 @@ final class LinkedField extends StaticProperty {
     }
 
     public Symbol<Name> getName() {
-        // no need to go through getParserField(), since name
-        // can't change on redefinition on a linked field
         return parserField.getName();
     }
 
@@ -64,21 +60,19 @@ final class LinkedField extends StaticProperty {
     }
 
     public Symbol<Type> getType() {
-        return getParserField().getType();
+        return parserField.getType();
     }
 
     public int getFlags() {
-        return getParserField().getFlags();
+        return parserField.getFlags();
     }
 
     public JavaKind getKind() {
-        // no need to go through getParserField(), since kind
-        // can't change on redefinition on a linked field
         return parserField.getKind();
     }
 
     public Attribute getAttribute(Symbol<Name> name) {
-        for (Attribute a : getParserField().getAttributes()) {
+        for (Attribute a : parserField.getAttributes()) {
             if (name.equals(a.getName())) {
                 return a;
             }
@@ -87,23 +81,10 @@ final class LinkedField extends StaticProperty {
     }
 
     public boolean isHidden() {
-        return getParserField().isHidden();
+        return parserField.isHidden();
     }
 
     ParserField getParserField() {
-        ParserField current = parserField;
-        if (!current.getRedefineAssumption().isValid()) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            do {
-                current = parserField;
-            } while (!current.getRedefineAssumption().isValid());
-        }
-        return current;
-    }
-
-    public void redefine(ParserField newParserField) {
-        ParserField old = parserField;
-        parserField = newParserField;
-        old.getRedefineAssumption().invalidate();
+        return parserField;
     }
 }
