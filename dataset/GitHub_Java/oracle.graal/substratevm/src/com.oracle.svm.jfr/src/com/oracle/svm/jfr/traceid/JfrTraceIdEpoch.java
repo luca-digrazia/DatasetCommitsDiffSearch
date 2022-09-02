@@ -26,8 +26,9 @@
 package com.oracle.svm.jfr.traceid;
 
 //Checkstyle: allow reflection
-import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.util.ReflectionUtil;
+
+import java.lang.reflect.Field;
+
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.word.Word;
@@ -36,28 +37,26 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
+
+import com.oracle.svm.core.annotate.Uninterruptible;
+import com.oracle.svm.core.thread.VMOperation;
+import com.oracle.svm.util.ReflectionUtil;
+
 import sun.misc.Unsafe;
 
-import java.lang.reflect.Field;
-
+/**
+ * Class holding the current JFR epoch. JFR uses an epoch system to safely separate constant pool
+ * entries between adjacent chunks. Used to get the current or previous epoch and switch from one
+ * epoch to another across an uninterruptible safepoint operation.
+ */
 public class JfrTraceIdEpoch {
     private static final Unsafe UNSAFE = GraalUnsafeAccess.getUnsafe();
     private static final Field EPOCH_FIELD = ReflectionUtil.lookupField(JfrTraceIdEpoch.class, "epoch");
 
-    public static final long BIT = 1;
-    public static final long METHOD_BIT = (BIT << 2);
-    public static final long EPOCH_0_SHIFT = 0;
-    public static final long EPOCH_1_SHIFT = 1;
-    public static final long EPOCH_0_BIT = (BIT << EPOCH_0_SHIFT);
-    public static final long EPOCH_1_BIT = (BIT << EPOCH_1_SHIFT);
-    public static final long EPOCH_0_METHOD_BIT = (METHOD_BIT << EPOCH_0_SHIFT);
-    public static final long EPOCH_1_METHOD_BIT = (METHOD_BIT << EPOCH_1_SHIFT);
-    public static final long METHOD_AND_CLASS_BITS = (METHOD_BIT | BIT);
-    public static final long EPOCH_0_METHOD_AND_CLASS_BITS = (METHOD_AND_CLASS_BITS << EPOCH_0_SHIFT);
-    public static final long EPOCH_1_METHOD_AND_CLASS_BITS = (METHOD_AND_CLASS_BITS << EPOCH_1_SHIFT);
+    private static final long EPOCH_0_BIT = 0b01;
+    private static final long EPOCH_1_BIT = 0b10;
 
     private boolean epoch;
-    private volatile boolean changedTag;
 
     @Fold
     public static JfrTraceIdEpoch getInstance() {
@@ -65,7 +64,8 @@ public class JfrTraceIdEpoch {
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public JfrTraceIdEpoch() { }
+    public JfrTraceIdEpoch() {
+    }
 
     public long getEpochAddress() {
         UnsignedWord epochFieldOffset = WordFactory.unsigned(UNSAFE.objectFieldOffset(EPOCH_FIELD));
@@ -74,34 +74,18 @@ public class JfrTraceIdEpoch {
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public void changeEpoch() {
+        assert VMOperation.isInProgressAtSafepoint();
         epoch = !epoch;
     }
 
-    public boolean isChangedTag() {
-        return changedTag;
-    }
-
-    public void setChangedTag(boolean changedTag) {
-        this.changedTag = changedTag;
-    }
-
-    public boolean hasChangedTag() {
-        if (isChangedTag()) {
-            setChangedTag(false);
-            return true;
-        }
-        return false;
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    long thisEpochBit() {
+        return epoch ? EPOCH_1_BIT : EPOCH_0_BIT;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
-    public void setChangedTag() {
-        if (!isChangedTag()) {
-            setChangedTag(true);
-        }
-    }
-
-    long thisEpochBit() {
-        return epoch ? EPOCH_1_BIT : EPOCH_0_BIT;
+    long previousEpochBit() {
+        return epoch ? EPOCH_0_BIT : EPOCH_1_BIT;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -109,6 +93,7 @@ public class JfrTraceIdEpoch {
         return epoch;
     }
 
+    @Uninterruptible(reason = "Called by uninterruptible code.", mayBeInlined = true)
     public boolean previousEpoch() {
         return !epoch;
     }

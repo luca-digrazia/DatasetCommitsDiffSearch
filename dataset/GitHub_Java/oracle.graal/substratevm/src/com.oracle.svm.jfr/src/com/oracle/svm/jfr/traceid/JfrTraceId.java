@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2020, Red Hat Inc. All rights reserved.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,202 +26,123 @@
 
 package com.oracle.svm.jfr.traceid;
 
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
-
-import com.oracle.svm.jfr.JfrRuntimeAccess;
-import jdk.jfr.Event;
-import jdk.jfr.internal.JVM;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
+import com.oracle.svm.core.annotate.Uninterruptible;
+
+import jdk.jfr.internal.Type;
+
+/**
+ * When a class is referenced in an event, the unique ID of that class is tagged as in-use for the
+ * current JFR epoch.
+ */
 public class JfrTraceId {
-
-    private static final long MaxJfrEventId = 403;
-
-    public static final long BIT = 1;
-    public static final long META_SHIFT = 8;
-    public static final long TRANSIENT_META_BIT = (BIT << 3);
-    public static final long TRANSIENT_BIT = (TRANSIENT_META_BIT << META_SHIFT);
-    public static final long SERIALIZED_META_BIT = (BIT << 4);
-    public static final long SERIALIZED_BIT = (SERIALIZED_META_BIT << META_SHIFT);
-
     private static final int TRACE_ID_SHIFT = 16;
 
-    // Epoch stuff
-    private static final long USED_BIT = 1;
-    private static final int EPOCH_1_SHIFT = 0;
-    private static final int EPOCH_2_SHIFT = 1;
-    private static final long USED_EPOCH_1_BIT = USED_BIT << EPOCH_1_SHIFT;
-    private static final long USED_EPOCH_2_BIT = USED_BIT << EPOCH_2_SHIFT;
+    private static final long JDK_JFR_EVENT_SUBCLASS = 16;
+    private static final long JDK_JFR_EVENT_CLASS = 32;
 
-    private static final long JDK_JFR_EVENT_SUBKLASS = 16;
-    private static final long JDK_JFR_EVENT_KLASS = 32;
-    private static final long EVENT_HOST_KLASS = 64;
-
-    private static final AtomicLong classLoaderCounter = new AtomicLong(1);
-    private static final AtomicLong packageCounter = new AtomicLong(1);
-    private static final AtomicLong moduleCounter = new AtomicLong(1);
-    private static final AtomicLong threadCounter = new AtomicLong(1);
-
-    private static JfrTraceIdMap getTraceIdMap() {
-        return ImageSingletons.lookup(JfrRuntimeAccess.class).getTraceIdMap();
+    @Uninterruptible(reason = "Epoch must not change.")
+    public static void setUsedThisEpoch(Class<?> clazz) {
+        tag(clazz, JfrTraceIdEpoch.getInstance().thisEpochBit());
     }
 
-    public static void tag(Object obj, long bits) {
-        JfrTraceIdMap map = getTraceIdMap();
-        long id = map.getId(obj);
-        assert id != -1;
-        map.setId(obj, (id & ~0xff) | (bits & 0xff));
+    @Uninterruptible(reason = "Epoch must not change.")
+    public static void clearUsedPreviousEpoch(Class<?> clazz) {
+        clear(clazz, JfrTraceIdEpoch.getInstance().previousEpochBit());
     }
 
-    public static boolean predicate(Object obj, long bits) {
-        JfrTraceIdMap map = getTraceIdMap();
-        long id = map.getId(obj);
-        assert id != -1;
+    @Uninterruptible(reason = "Epoch must not change.")
+    public static boolean isUsedPreviousEpoch(Class<?> clazz) {
+        long predicate = JfrTraceIdEpoch.getInstance().previousEpochBit();
+        return predicate(clazz, predicate);
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static long getTraceIdRaw(Class<?> clazz) {
+        return JfrTraceIdMap.singleton().getId(clazz);
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static long getTraceId(Class<?> clazz) {
+        long id = getTraceIdRaw(clazz);
+        return id >>> TRACE_ID_SHIFT;
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public static long load(Class<?> clazz) {
+        assert clazz != null;
+        JfrTraceId.setUsedThisEpoch(clazz);
+        return JfrTraceId.getTraceId(clazz);
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    private static void tag(Class<?> clazz, long bits) {
+        JfrTraceIdMap map = JfrTraceIdMap.singleton();
+        long id = map.getId(clazz);
+        map.setId(clazz, id | (bits & 0xff));
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    private static void clear(Class<?> clazz, long bits) {
+        JfrTraceIdMap map = JfrTraceIdMap.singleton();
+        long id = map.getId(clazz);
+        map.setId(clazz, id & ~bits);
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    private static boolean predicate(Class<?> clazz, long bits) {
+        JfrTraceIdMap map = JfrTraceIdMap.singleton();
+        long id = map.getId(clazz);
         return (id & bits) != 0;
     }
 
-    public static void setUsedThisEpoch(Object obj) {
-        tag(obj, JfrTraceIdEpoch.thisEpochBit());
-    }
-
-    public static boolean isUsedThisEpoch(Object obj) {
-        return predicate(obj, TRANSIENT_BIT | JfrTraceIdEpoch.thisEpochBit());
-    }
-
-    public static long getTraceIdRaw(Object key) {
-        JfrTraceIdMap map = getTraceIdMap();
-        if (map == null) {
-            throw new AssertionError();
-        };
-        return getTraceIdMap().getId(key);
-    }
-
-    public static long getTraceId(Object key) {
-        long traceid = getTraceIdRaw(key);
-        return traceid >> TRACE_ID_SHIFT;
-    }
-
-    public static long load(Class<?> clazz) {
-        return JfrTraceIdLoadBarrier.load(clazz);
-    }
-
-    private static void tagAsJdkJfrEvent(int index) {
-        JfrTraceIdMap map = getTraceIdMap();
+    @Platforms(Platform.HOSTED_ONLY.class)
+    private static void tag(int index, long value) {
+        JfrTraceIdMap map = JfrTraceIdMap.singleton();
         long id = map.getId(index);
-        assert id != -1;
-        map.setId(index, id | JDK_JFR_EVENT_KLASS);
-    }
-
-    private static void tagAsJdkJfrEventSub(int index) {
-        JfrTraceIdMap map = getTraceIdMap();
-        long id = map.getId(index);
-        assert id != -1;
-        map.setId(index, id | JDK_JFR_EVENT_SUBKLASS);
-    }
-
-    private static boolean isEventClass(int index) {
-        JfrTraceIdMap map = getTraceIdMap();
-        long id = map.getId(index);
-        assert id != -1;
-        return (id & (JDK_JFR_EVENT_KLASS | JDK_JFR_EVENT_SUBKLASS)) != 0;
-    }
-
-    private static boolean setSystemEventClass(Class<?> clazz, int index) {
-        String className = clazz.getCanonicalName();
-        if (className != null && className.equals("jdk.internal.event.Event")
-                && clazz.getClassLoader() == null || clazz.getClassLoader() == ClassLoader.getSystemClassLoader()) {
-            tagAsJdkJfrEvent(index);
-            return true;
-        }
-
-        if (className != null && className.equals("jdk.jfr.Event")
-                && clazz.getClassLoader() == null || clazz.getClassLoader() == ClassLoader.getSystemClassLoader()) {
-            tagAsJdkJfrEvent(index);
-            return true;
-        }
-        return false;
+        map.setId(index, id | value);
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public static void assign(Class<?> clazz, Map<Class<?>, Integer> classToIndex) {
+    public static void assign(Class<?> clazz, int index) {
         assert clazz != null;
-        int index = classToIndex.get(clazz);
-        if (getTraceIdMap().getId(index) != -1) return;
-        long typeId = JVM.getJVM().getTypeId(clazz);
-        getTraceIdMap().setId(index, typeId << TRACE_ID_SHIFT);
-        if (!setSystemEventClass(clazz, index)) {
-            Class<?> superClazz = clazz.getSuperclass();
-            if (superClazz != null) {
-                int superIndex = classToIndex.get(superClazz);
-                if (getTraceIdMap().getId(superIndex) != -1) {
-                    assign(superClazz, classToIndex);
-                }
-                if (isEventClass(superIndex)) {
-                    tagAsJdkJfrEventSub(index);
-                }
-            }
+        if (JfrTraceIdMap.singleton().getId(index) != -1) {
+            return;
+        }
+        long typeId = getTypeId(clazz);
+        JfrTraceIdMap.singleton().setId(index, typeId << TRACE_ID_SHIFT);
+
+        if ((jdk.internal.event.Event.class == clazz || jdk.jfr.Event.class == clazz) &&
+                        clazz.getClassLoader() == null || clazz.getClassLoader() == ClassLoader.getSystemClassLoader()) {
+            tag(index, JDK_JFR_EVENT_CLASS);
+        }
+        if ((jdk.internal.event.Event.class.isAssignableFrom(clazz) || jdk.jfr.Event.class.isAssignableFrom(clazz)) &&
+                        clazz.getClassLoader() == null || clazz.getClassLoader() == ClassLoader.getSystemClassLoader()) {
+            tag(index, JDK_JFR_EVENT_SUBCLASS);
         }
     }
 
-    public static void assign(ClassLoader classLoader, int index) {
-        assert classLoader != null;
-        long nextId = classLoaderCounter.getAndIncrement();
-        getTraceIdMap().setId(index, nextId << TRACE_ID_SHIFT);
-    }
-
-    public static void assign(Package pkg, int index) {
-        assert pkg != null;
-        long nextId = packageCounter.getAndIncrement();
-        getTraceIdMap().setId(index, nextId << TRACE_ID_SHIFT);
-    }
-
-    public static void assign(Module module, int index) {
-        assert module != null;
-        long nextId = moduleCounter.getAndIncrement();
-        getTraceIdMap().setId(index, nextId << TRACE_ID_SHIFT);
-    }
-
-    public static long load(ClassLoader classLoader) {
-        return JfrTraceIdLoadBarrier.load(classLoader);
-    }
-
-    public static long load(Package pkg) {
-        return JfrTraceIdLoadBarrier.load(pkg);
-    }
-
-    public static long load(Module module) {
-        return JfrTraceIdLoadBarrier.load(module);
-    }
-
-    public static void setTransient(ClassLoader classLoader) {
-        long id = getTraceIdMap().getId(classLoader);
-        getTraceIdMap().setId(classLoader, id | TRANSIENT_BIT);
-    }
-
-    public static void setTransient(Module m) {
-        long id = getTraceIdMap().getId(m);
-        getTraceIdMap().setId(m, id | TRANSIENT_BIT);
-    }
-
-    public static boolean isSerialized(Object obj) {
-        return predicate(obj, SERIALIZED_BIT);
-    }
-
-    public static void setSerialized(Object obj) {
-        long id = getTraceIdMap().getId(obj);
-        assert (id != -1);
-        getTraceIdMap().setId(obj, id | SERIALIZED_BIT);
-    }
-
-    public static void clearSerialized(Object obj) {
-        long id = getTraceIdMap().getId(obj);
-        assert (id != -1);
-        if (isSerialized(obj)) {
-            getTraceIdMap().setId(obj, id ^ SERIALIZED_BIT);
+    @Platforms(Platform.HOSTED_ONLY.class)
+    private static long getTypeId(Class<?> clazz) {
+        /*
+         * We are picking up the host trace-ID here. This is important because host JFR will build
+         * some datastructures that preserve the trace-IDs itself, and those end up in the image. We
+         * need to be in sync with that information, otherwise events may get dropped or other
+         * inconsistencies.
+         */
+        if (clazz == void.class) {
+            /*
+             * void doesn't seem to be one of the known types in Type.java, but it would crash when
+             * queried in Hotspot. Trouble is that some code appears to be calling JVM.getTypeId()
+             * or similar at run-time, at which point it's expected that we have an entry in the
+             * table. Let's map it to 0 which is also TYPE_NONE in Hotspot's JFR. Maybe it should be
+             * added to the known types in Hotspot's Type.java.
+             */
+            return 0;
+        } else {
+            return Type.getTypeId(clazz);
         }
-        assert (!isSerialized(obj));
     }
 }

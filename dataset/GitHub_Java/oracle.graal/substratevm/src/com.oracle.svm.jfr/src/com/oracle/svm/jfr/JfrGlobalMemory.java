@@ -31,7 +31,7 @@ import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.MemoryUtil;
+import com.oracle.svm.core.UnmanagedMemoryUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
 
 /**
@@ -55,7 +55,7 @@ public class JfrGlobalMemory {
         this.bufferSize = globalBufferSize;
 
         // Allocate all buffers eagerly.
-        buffers = UnmanagedMemory.calloc(SizeOf.unsigned(JfrBuffer.class).multiply(WordFactory.unsigned(bufferCount)));
+        buffers = UnmanagedMemory.calloc(SizeOf.unsigned(JfrBuffers.class).multiply(WordFactory.unsigned(bufferCount)));
         for (int i = 0; i < bufferCount; i++) {
             JfrBuffer buffer = JfrBufferAccess.allocate(WordFactory.unsigned(bufferSize));
             buffers.addressOf(i).write(buffer);
@@ -73,47 +73,40 @@ public class JfrGlobalMemory {
         }
     }
 
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public JfrBuffers getBuffers() {
         assert buffers.isNonNull();
         return buffers;
     }
 
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public long getBufferCount() {
         return bufferCount;
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
     public boolean write(JfrBuffer threadLocalBuffer, UnsignedWord unflushedSize) {
-        JfrBuffer promotionBuffer = acquirePromotionBuffer(unflushedSize);
+        JfrBuffer promotionBuffer = acquireBufferWithRetry(unflushedSize, PROMOTION_RETRY_COUNT);
         if (promotionBuffer.isNull()) {
             return false;
         }
-
-        // Copy all committed but not yet flushed memory to the promotion buffer.
+        boolean shouldSignal;
         JfrRecorderThread recorderThread = SubstrateJVM.getRecorderThread();
-        assert JfrBufferAccess.getAvailableSize(promotionBuffer).aboveOrEqual(unflushedSize);
-        MemoryUtil.copyConjointMemoryAtomic(JfrBufferAccess.getDataStart(threadLocalBuffer), promotionBuffer.getPos(), unflushedSize);
-        JfrBufferAccess.increasePos(promotionBuffer, unflushedSize);
-        boolean shouldSignal = recorderThread.shouldSignal(promotionBuffer);
-        releasePromotionBuffer(promotionBuffer);
-
+        try {
+            // Copy all committed but not yet flushed memory to the promotion buffer.
+            assert JfrBufferAccess.getAvailableSize(promotionBuffer).aboveOrEqual(unflushedSize);
+            UnmanagedMemoryUtil.copy(threadLocalBuffer.getTop(), promotionBuffer.getPos(), unflushedSize);
+            JfrBufferAccess.increasePos(promotionBuffer, unflushedSize);
+            shouldSignal = recorderThread.shouldSignal(promotionBuffer);
+        } finally {
+            releasePromotionBuffer(promotionBuffer);
+        }
+        JfrBufferAccess.increaseTop(threadLocalBuffer, unflushedSize);
         // Notify the thread that writes the global memory to disk.
         if (shouldSignal) {
             recorderThread.signal();
         }
         return true;
-    }
-
-    @Uninterruptible(reason = "Epoch must not change while in this method.")
-    private JfrBuffer acquirePromotionBuffer(UnsignedWord size) {
-        while (true) {
-            JfrBuffer buffer = acquireBufferWithRetry(size, PROMOTION_RETRY_COUNT);
-            if (buffer.isNull() && shouldDiscard()) {
-                discardOldest();
-                continue;
-            }
-            return buffer;
-        }
     }
 
     @Uninterruptible(reason = "Epoch must not change while in this method.")
@@ -138,16 +131,5 @@ public class JfrGlobalMemory {
     private static void releasePromotionBuffer(JfrBuffer buffer) {
         assert JfrBufferAccess.isAcquired(buffer);
         JfrBufferAccess.release(buffer);
-    }
-
-    @Uninterruptible(reason = "Epoch must not change while in this method.")
-    private static void discardOldest() {
-        // TODO: implement
-    }
-
-    @Uninterruptible(reason = "Epoch must not change while in this method.")
-    private static boolean shouldDiscard() {
-        // TODO: implement
-        return false;
     }
 }

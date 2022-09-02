@@ -44,7 +44,7 @@ public class JfrOptionSet {
 
     private static final long MAX_ADJUSTED_GLOBAL_BUFFER_SIZE = 1 * 1024 * 1024;
     private static final long MIN_ADJUSTED_GLOBAL_BUFFER_SIZE_CUTOFF = 512 * 1024;
-    private static final long MIN_GLOBAL_BUFFER_SIZE = 64 * 1024 * 1024;
+    private static final long MIN_GLOBAL_BUFFER_SIZE = 64 * 1024;
     private static final long MIN_GLOBAL_BUFFER_COUNT = 2;
     private static final long MIN_THREAD_BUFFER_SIZE = 4 * 1024;
     private static final long MIN_MEMORY_SIZE = 1 * 1024 * 1024;
@@ -315,7 +315,7 @@ public class JfrOptionSet {
         if (memorySize.isUserValue() && globalBufferSize.isUserValue() && globalBufferCount.isUserValue() && globalBufferSize.getValue() * globalBufferCount.getValue() != memorySize.getValue()) {
             throw new IllegalStateException(
                             "The values specified for the JFR options 'memorySize', 'globalbuffersize', and 'globalbuffercount' are causing an ambiguity when trying to determine how much memory to use. " +
-                                            "Try to remove one of the involved options or make sure they are unambigous.");
+                                            "Try to remove one of the involved options or make sure they are unambiguous.");
         }
     }
 
