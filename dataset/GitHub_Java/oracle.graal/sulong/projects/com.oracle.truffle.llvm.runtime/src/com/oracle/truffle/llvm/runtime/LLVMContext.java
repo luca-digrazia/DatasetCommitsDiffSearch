@@ -636,7 +636,6 @@ public final class LLVMContext {
         libraryLoaded[id] = true;
     }
 
-    @TruffleBoundary
     public void addSourceForCache(BitcodeID bitcodeID, Source source) {
         if (!sourceCache.containsKey(bitcodeID)) {
             sourceCache.put(bitcodeID, source);
