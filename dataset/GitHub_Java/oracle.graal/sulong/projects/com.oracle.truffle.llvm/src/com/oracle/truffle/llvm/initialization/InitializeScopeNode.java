@@ -31,7 +31,7 @@ package com.oracle.truffle.llvm.initialization;
 
 import java.util.ArrayList;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMLocalScope;
@@ -50,40 +50,52 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
  * @see InitializeExternalNode
  */
 public final class InitializeScopeNode extends LLVMNode {
-    @CompilationFinal(dimensions = 1) private final LLVMSymbol[] allocScopes;
+    @Children final AllocScopeNode[] allocScopes;
     private final LLVMScope fileScope;
 
     public InitializeScopeNode(LLVMParserRuntime runtime) {
         this.fileScope = runtime.getFileScope();
-        ArrayList<LLVMSymbol> allocScopesList = new ArrayList<>();
+        ArrayList<AllocScopeNode> allocScopesList = new ArrayList<>();
         for (LLVMSymbol symbol : fileScope.values()) {
             // Only exported symbols are allocated into the scope
             if (symbol.isExported()) {
-                allocScopesList.add(symbol);
+                allocScopesList.add(new AllocScopeNode(symbol));
             }
         }
-        this.allocScopes = allocScopesList.toArray(LLVMSymbol.EMPTY);
+        this.allocScopes = allocScopesList.toArray(AllocScopeNode.EMPTY);
     }
 
+    @ExplodeLoop
     public void execute(LLVMContext context, LLVMLocalScope localScope) {
         localScope.addMissingLinkageName(fileScope);
         for (int i = 0; i < allocScopes.length; i++) {
-            allocateScope(allocScopes[i], context, localScope);
+            AllocScopeNode allocScope = allocScopes[i];
+            allocScope.allocateScope(context, localScope);
         }
     }
 
     /**
      * Allocating a symbol to the global and local scope of a module.
      */
-    static void allocateScope(LLVMSymbol symbol, LLVMContext context, LLVMLocalScope localScope) {
-        LLVMScope globalScope = context.getGlobalScope();
-        LLVMSymbol exportedSymbol = globalScope.get(symbol.getName());
-        if (exportedSymbol == null) {
-            globalScope.register(symbol);
+    private static final class AllocScopeNode extends LLVMNode {
+
+        static final AllocScopeNode[] EMPTY = {};
+        final LLVMSymbol symbol;
+
+        AllocScopeNode(LLVMSymbol symbol) {
+            this.symbol = symbol;
         }
-        LLVMSymbol exportedSymbolFromLocal = localScope.get(symbol.getName());
-        if (exportedSymbolFromLocal == null) {
-            localScope.register(symbol);
+
+        void allocateScope(LLVMContext context, LLVMLocalScope localScope) {
+            LLVMScope globalScope = context.getGlobalScope();
+            LLVMSymbol exportedSymbol = globalScope.get(symbol.getName());
+            if (exportedSymbol == null) {
+                globalScope.register(symbol);
+            }
+            LLVMSymbol exportedSymbolFromLocal = localScope.get(symbol.getName());
+            if (exportedSymbolFromLocal == null) {
+                localScope.register(symbol);
+            }
         }
     }
 }
