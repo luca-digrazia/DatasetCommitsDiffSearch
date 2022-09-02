@@ -29,6 +29,8 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
+import java.math.BigInteger;
+
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
@@ -234,8 +236,6 @@ import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 import com.oracle.truffle.llvm.runtime.vector.LLVMVector;
 
-import java.math.BigInteger;
-
 public class CommonNodeFactory {
 
     public CommonNodeFactory() {
@@ -385,7 +385,7 @@ public class CommonNodeFactory {
         if (isGlobal) {
             assert valueNode instanceof LLVMAccessSymbolNode;
             LLVMAccessSymbolNode node = (LLVMAccessSymbolNode) valueNode;
-            LLVMSymbol symbol = node.getDescriptor();
+            LLVMSymbol symbol = node.getSymbol();
             if (symbol.isGlobalVariable()) {
                 value = new LLVMDebugGlobalVariable(symbol.asGlobalVariable(), context);
             } else {
@@ -682,7 +682,7 @@ public class CommonNodeFactory {
     }
 
     public static ForeignToLLVM createForeignToLLVM(Value type) {
-        switch (type.kind) {
+        switch (type.getKind()) {
             case I1:
                 return ToI1NodeGen.create();
             case I8:
@@ -698,9 +698,9 @@ public class CommonNodeFactory {
             case DOUBLE:
                 return ToDoubleNodeGen.create();
             case POINTER:
-                return ToPointer.create(type.baseType);
+                return ToPointer.create(type.getBaseType());
             default:
-                throw new IllegalStateException("unexpected interop kind " + type.kind);
+                throw new IllegalStateException("unexpected interop kind " + type.getKind());
         }
     }
 

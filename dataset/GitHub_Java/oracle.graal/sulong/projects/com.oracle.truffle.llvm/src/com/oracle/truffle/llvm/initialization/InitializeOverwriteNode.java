@@ -29,9 +29,7 @@
  */
 package com.oracle.truffle.llvm.initialization;
 
-import java.util.ArrayList;
-
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.initialization.AllocExternalSymbolNodeFactory.AllocExistingLocalSymbolsNodeGen;
 import com.oracle.truffle.llvm.initialization.AllocExternalSymbolNodeFactory.AllocExistingLocalSymbolsNodeGen.AllocExistingGlobalSymbolsNodeGen.AllocExternalGlobalNodeGen;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
@@ -41,11 +39,13 @@ import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMLocalScope;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
-import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMAccessSymbolNode;
+import com.oracle.truffle.llvm.runtime.nodes.others.LLVMWriteSymbolNode;
+import com.oracle.truffle.llvm.runtime.nodes.others.LLVMWriteSymbolNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+
+import java.util.ArrayList;
 
 /**
  *
@@ -69,11 +69,11 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
  */
 public final class InitializeOverwriteNode extends LLVMNode {
 
-    @Children private final AllocExternalSymbolNode[] allocExternalSymbols;
-    @CompilationFinal(dimensions = 1) private final LLVMSymbol[] symbols;
+    @Children final AllocExternalSymbolNode[] allocExternalSymbols;
+    @Children final LLVMWriteSymbolNode[] writeSymbols;
 
     public InitializeOverwriteNode(LLVMParserResult result) {
-        ArrayList<LLVMSymbol> symbolsList = new ArrayList<>();
+        ArrayList<LLVMWriteSymbolNode> writeSymbolsList = new ArrayList<>();
         ArrayList<AllocExternalSymbolNode> allocExternaSymbolsList = new ArrayList<>();
         LLVMScope fileScope = result.getRuntime().getFileScope();
 
@@ -83,7 +83,7 @@ public final class InitializeOverwriteNode extends LLVMNode {
             if (symbol.isOverridable()) {
                 LLVMFunction function = fileScope.getFunction(symbol.getName());
                 // Functions are overwritten by functions from the localScope
-                symbolsList.add(function);
+                writeSymbolsList.add(LLVMWriteSymbolNodeGen.create(function));
                 allocExternaSymbolsList.add(AllocExistingLocalSymbolsNodeGen.create(function));
             }
         }
@@ -94,24 +94,25 @@ public final class InitializeOverwriteNode extends LLVMNode {
                 LLVMGlobal global = fileScope.getGlobalVariable(symbol.getName());
                 // Globals are overwritten by (non-hidden) global symbol of the same name in the
                 // globalscope
-                symbolsList.add(global);
+                writeSymbolsList.add(LLVMWriteSymbolNodeGen.create(global));
                 allocExternaSymbolsList.add(AllocExternalGlobalNodeGen.create(global));
             }
         }
-        this.symbols = symbolsList.toArray(LLVMSymbol.EMPTY);
+        this.writeSymbols = writeSymbolsList.toArray(LLVMWriteSymbolNode.EMPTY);
         this.allocExternalSymbols = allocExternaSymbolsList.toArray(AllocExternalSymbolNode.EMPTY);
     }
 
+    @ExplodeLoop
     public void execute(LLVMContext context, LLVMLocalScope localScope) {
         LLVMScope globalScope = context.getGlobalScope();
         for (int i = 0; i < allocExternalSymbols.length; i++) {
             AllocExternalSymbolNode allocSymbol = allocExternalSymbols[i];
-            LLVMPointer pointer = allocSymbol.execute(localScope, globalScope, null, null, context);
+            LLVMPointer pointer = allocSymbol.execute(localScope, globalScope, null, null);
             // skip allocating fallbacks
             if (pointer == null) {
                 continue;
             }
-            LLVMAccessSymbolNode.writeSymbol(symbols[i], pointer, context, this);
+            writeSymbols[i].execute(pointer);
         }
     }
 }
