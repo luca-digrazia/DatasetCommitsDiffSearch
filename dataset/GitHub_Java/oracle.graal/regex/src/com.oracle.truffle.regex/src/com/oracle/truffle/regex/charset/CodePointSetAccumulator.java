@@ -80,7 +80,7 @@ public class CodePointSetAccumulator implements Iterable<Range> {
         acc.appendRange(lo, hi);
     }
 
-    public void addSet(SortedListOfRanges set) {
+    public void addSet(CodePointSet set) {
         IntRangesBuffer t = getTmp();
         tmp = acc;
         acc = t;
@@ -128,7 +128,7 @@ public class CodePointSetAccumulator implements Iterable<Range> {
         IntRangesBuffer t = getTmp();
         tmp = acc;
         acc = t;
-        SortedListOfRanges.intersect(tmp, other, acc);
+        SortedListOfRanges.union(tmp, other, acc);
     }
 
     @Override
