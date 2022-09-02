@@ -355,7 +355,11 @@ public class LanguageSPITest {
                 future.get();
                 fail();
             } catch (ExecutionException e) {
-                PolyglotException polyglotException = (PolyglotException) e.getCause();
+                Throwable cause = e.getCause();
+                if (!(cause instanceof PolyglotException)) {
+                    throw new AssertionError(cause);
+                }
+                PolyglotException polyglotException = (PolyglotException) cause;
                 assertTrue(polyglotException.isCancelled());
             }
             engine.close();
@@ -514,6 +518,11 @@ public class LanguageSPITest {
         Context context = Context.create();
         Function<Env, Object> f = new Function<Env, Object>() {
             public Object apply(Env env) {
+                boolean assertions = false;
+                assert (assertions = true) == true;
+                if (!assertions) {
+                    fail("Tests must be run with assertions on");
+                }
                 LanguageSPITestLanguage.runinside = null; // No more recursive runs inside
                 Throwable[] error = new Throwable[1];
                 Thread thread = new Thread(() -> {
@@ -523,12 +532,12 @@ public class LanguageSPITest {
                         try {
                             // execute Truffle code in a fresh thread fails
                             env.parsePublic(source).call();
-                        } catch (IllegalStateException e) {
+                        } catch (AssertionError e) {
                             // No current context available.
                             parsingFailed = true;
                         }
                         if (!parsingFailed) {
-                            fail("no IllegalStateException \"No current context available.\"");
+                            fail("no assertion error \"No current context available.\"");
                         }
 
                         TruffleContext truffleContext = env.getContext();
