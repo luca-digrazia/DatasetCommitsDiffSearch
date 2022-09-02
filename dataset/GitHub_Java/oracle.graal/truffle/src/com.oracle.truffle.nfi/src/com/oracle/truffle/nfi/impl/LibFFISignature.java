@@ -69,7 +69,6 @@ import com.oracle.truffle.nfi.spi.NFIBackendSignatureLibrary;
 import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 import com.oracle.truffle.nfi.util.ProfiledArrayBuilder;
 import com.oracle.truffle.nfi.util.ProfiledArrayBuilder.ArrayBuilderFactory;
-import com.oracle.truffle.nfi.util.ProfiledArrayBuilder.ArrayFactory;
 
 /**
  * Runtime object representing native signatures. Instances of this class can not be cached in
@@ -203,7 +202,7 @@ final class LibFFISignature {
 
         final CallTarget callTarget;
 
-        CachedSignatureInfo(NFILanguageImpl language, CachedTypeInfo retType, CachedTypeInfo[] argTypes, int primitiveSize, int objectCount, Direction allowedCallDirection) {
+        public CachedSignatureInfo(NFILanguageImpl language, CachedTypeInfo retType, CachedTypeInfo[] argTypes, int primitiveSize, int objectCount, Direction allowedCallDirection) {
             this.retType = retType;
             this.argTypes = argTypes;
             this.primitiveSize = primitiveSize;
@@ -213,23 +212,23 @@ final class LibFFISignature {
             this.callTarget = Truffle.getRuntime().createCallTarget(new SignatureExecuteNode(language, this));
         }
 
-        NativeArgumentBuffer.Array prepareBuffer() {
+        public NativeArgumentBuffer.Array prepareBuffer() {
             return new NativeArgumentBuffer.Array(primitiveSize, objectCount);
         }
 
-        CachedTypeInfo[] getArgTypes() {
+        public CachedTypeInfo[] getArgTypes() {
             return argTypes;
         }
 
-        CachedTypeInfo getRetType() {
+        public CachedTypeInfo getRetType() {
             return retType;
         }
 
-        Direction getAllowedCallDirection() {
+        public Direction getAllowedCallDirection() {
             return allowedCallDirection;
         }
 
-        Object execute(LibFFISignature signature, NFIContext ctx, long functionPointer, NativeArgumentBuffer.Array argBuffer) {
+        public Object execute(LibFFISignature signature, NFIContext ctx, long functionPointer, NativeArgumentBuffer.Array argBuffer) {
             assert signature.signatureInfo == this;
             CompilerAsserts.partialEvaluationConstant(retType);
             if (retType instanceof LibFFIType.ObjectType) {
@@ -266,7 +265,7 @@ final class LibFFISignature {
         final CachedTypeInfo lastArg;
         final ArgsState prev;
 
-        ArgsState(int argCount, int primitiveSize, int objectCount, boolean allowJavaToNativeCall, boolean allowNativeToJavaCall, CachedTypeInfo lastArg, ArgsState prev) {
+        public ArgsState(int argCount, int primitiveSize, int objectCount, boolean allowJavaToNativeCall, boolean allowNativeToJavaCall, CachedTypeInfo lastArg, ArgsState prev) {
             this.argCount = argCount;
             this.primitiveSize = primitiveSize;
             this.objectCount = objectCount;
@@ -318,18 +317,10 @@ final class LibFFISignature {
 
         int fixedArgCount;
 
-        private static final ArrayFactory<LibFFIType> FACTORY = new ArrayFactory<LibFFIType>() {
-
-            @Override
-            public LibFFIType[] create(int size) {
-                return new LibFFIType[size];
-            }
-        };
-
         SignatureBuilder(ArrayBuilderFactory factory) {
             this.state = ArgsState.NO_ARGS;
             this.fixedArgCount = NOT_VARARGS;
-            this.argTypes = factory.allocate(FACTORY);
+            this.argTypes = factory.allocate(LibFFIType[]::new);
         }
 
         void addArg(LibFFIType arg, ArgsState newState) {

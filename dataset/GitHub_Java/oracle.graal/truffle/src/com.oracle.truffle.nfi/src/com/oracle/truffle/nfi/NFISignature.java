@@ -77,7 +77,7 @@ final class NFISignature implements TruffleObject {
     final int nativeArgCount;
     final int managedArgCount;
 
-    NFISignature(String backendId, CallTarget optimizedSignatureCall, CallTarget optimizedClosureCall, Object nativeSignature, NFIType retType, NFIType[] argTypes, int nativeArgCount,
+    public NFISignature(String backendId, CallTarget optimizedSignatureCall, CallTarget optimizedClosureCall, Object nativeSignature, NFIType retType, NFIType[] argTypes, int nativeArgCount,
                     int managedArgCount) {
         this.backendId = backendId;
         this.optimizedSignatureCall = optimizedSignatureCall;
@@ -180,7 +180,7 @@ final class NFISignature implements TruffleObject {
         }
 
         @ExportMessage
-        void makeVarargs(
+        final void makeVarargs(
                         @CachedLibrary("this.backendBuilder") NFIBackendSignatureBuilderLibrary backendLibrary) {
             /*
              * Just forward to the NFI backend. The NFI frontend does not distinguish between
