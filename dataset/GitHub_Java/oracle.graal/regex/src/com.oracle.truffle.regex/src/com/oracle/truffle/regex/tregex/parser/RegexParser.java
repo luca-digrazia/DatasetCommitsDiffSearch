@@ -42,10 +42,10 @@ package com.oracle.truffle.regex.tregex.parser;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.function.Function;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.RegexFlags;
-import com.oracle.truffle.regex.RegexLanguage;
 import com.oracle.truffle.regex.RegexOptions;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
@@ -83,7 +83,42 @@ import com.oracle.truffle.regex.tregex.string.Encodings;
 
 public final class RegexParser {
 
-    private final RegexParserGlobals globals;
+    private static final Group WORD_BOUNDARY_SUBSTITUTION;
+    private static final Group NON_WORD_BOUNDARY_SUBSTITUTION;
+    private static final Group UNICODE_IGNORE_CASE_WORD_BOUNDARY_SUBSTITUTION;
+    private static final Group UNICODE_IGNORE_CASE_NON_WORD_BOUNDARY_SUBSTITUTION;
+    private static final Group MULTI_LINE_CARET_SUBSTITUTION;
+    private static final Group MULTI_LINE_DOLLAR_SUBSTITUTION;
+    private static final Group NO_LEAD_SURROGATE_BEHIND;
+    private static final Group NO_TRAIL_SURROGATE_AHEAD;
+
+    static {
+        final String wordBoundarySrc = "(?:^|(?<=\\W))(?=\\w)|(?<=\\w)(?:(?=\\W)|$)";
+        final String nonWordBoundarySrc = "(?:^|(?<=\\W))(?:(?=\\W)|$)|(?<=\\w)(?=\\w)";
+        WORD_BOUNDARY_SUBSTITUTION = parseRootLess(wordBoundarySrc);
+        NON_WORD_BOUNDARY_SUBSTITUTION = parseRootLess(nonWordBoundarySrc);
+        // The definitions of \w and \W depend on whether or not we are using the 'u' and 'i'
+        // regexp flags. This means that we cannot substitute \b and \B by the same regular
+        // expression all the time; we need an alternative for when both the Unicode and
+        // IgnoreCase flags are enabled. The straightforward way to do so would be to parse the
+        // expressions `wordBoundarySrc` and `nonWordBoundarySrc` with the 'u' and 'i' flags.
+        // However, the resulting expressions would be needlessly complicated (the unicode
+        // expansion for \W matches complete surrogate pairs, which we do not care about in
+        // these look-around assertions). More importantly, the engine currently does not
+        // support complex lookbehind and so \W, which can match anywhere between one or two code
+        // units in Unicode mode, would break the engine. Therefore, we make use of the fact
+        // that the difference between /\w/ and /\w/ui is only in the two characters \u017F and
+        // \u212A and we just slightly adjust the expressions `wordBoundarySrc` and
+        // `nonWordBoundarySrc` and parse them in non-Unicode mode.
+        final Function<String, String> includeExtraCases = s -> s.replace("\\w", "[\\w\\u017F\\u212A]").replace("\\W", "[^\\w\\u017F\\u212A]");
+        UNICODE_IGNORE_CASE_WORD_BOUNDARY_SUBSTITUTION = parseRootLess(includeExtraCases.apply(wordBoundarySrc));
+        UNICODE_IGNORE_CASE_NON_WORD_BOUNDARY_SUBSTITUTION = parseRootLess(includeExtraCases.apply(nonWordBoundarySrc));
+        MULTI_LINE_CARET_SUBSTITUTION = parseRootLess("(?:^|(?<=[\\r\\n\\u2028\\u2029]))");
+        MULTI_LINE_DOLLAR_SUBSTITUTION = parseRootLess("(?:$|(?=[\\r\\n\\u2028\\u2029]))");
+        NO_LEAD_SURROGATE_BEHIND = parseRootLess("(?:^|(?<=[^\\uD800-\\uDBFF]))");
+        NO_TRAIL_SURROGATE_AHEAD = parseRootLess("(?:$|(?=[^\\uDC00-\\uDFFF]))");
+    }
+
     private final RegexAST ast;
     private final RegexSource source;
     private final RegexFlags flags;
@@ -102,13 +137,12 @@ public final class RegexParser {
     private final CompilationBuffer compilationBuffer;
 
     @TruffleBoundary
-    public RegexParser(RegexLanguage language, RegexSource source, RegexFlags flags, RegexOptions options, CompilationBuffer compilationBuffer) throws RegexSyntaxException {
-        this.globals = language.parserGlobals;
+    public RegexParser(RegexSource source, RegexFlags flags, RegexOptions options, CompilationBuffer compilationBuffer) throws RegexSyntaxException {
         this.source = source;
         this.flags = flags;
         this.options = options;
         this.lexer = new RegexLexer(source, flags, options);
-        this.ast = new RegexAST(language, source, flags, options);
+        this.ast = new RegexAST(source, flags, options);
         this.properties = ast.getProperties();
         this.groupCount = ast.getGroupCount();
         this.copyVisitor = new CopyVisitor(ast);
@@ -117,8 +151,8 @@ public final class RegexParser {
         this.compilationBuffer = compilationBuffer;
     }
 
-    public static Group parseRootLess(RegexLanguage language, String pattern) throws RegexSyntaxException {
-        return new RegexParser(language, new RegexSource(pattern, "", Encodings.UTF_16_RAW), RegexFlags.DEFAULT, RegexOptions.DEFAULT, new CompilationBuffer(Encodings.UTF_16_RAW)).parse(false);
+    private static Group parseRootLess(String pattern) throws RegexSyntaxException {
+        return new RegexParser(new RegexSource(pattern, "", Encodings.UTF_16_RAW), RegexFlags.DEFAULT, RegexOptions.DEFAULT, new CompilationBuffer(Encodings.UTF_16_RAW)).parse(false);
     }
 
     @TruffleBoundary
@@ -369,12 +403,12 @@ public final class RegexParser {
         if (loneLeadSurrogateRanges.matchesSomething()) {
             Sequence loneLeadSurrogateAlternative = group.addSequence(ast);
             loneLeadSurrogateAlternative.add(createCharClass(loneLeadSurrogateRanges, token));
-            loneLeadSurrogateAlternative.add(globals.noTrailSurrogateAhead.copyRecursive(ast, compilationBuffer));
+            loneLeadSurrogateAlternative.add(NO_TRAIL_SURROGATE_AHEAD.copyRecursive(ast, compilationBuffer));
         }
 
         if (loneTrailSurrogateRanges.matchesSomething()) {
             Sequence loneTrailSurrogateAlternative = group.addSequence(ast);
-            loneTrailSurrogateAlternative.add(globals.noLeadSurrogateBehind.copyRecursive(ast, compilationBuffer));
+            loneTrailSurrogateAlternative.add(NO_LEAD_SURROGATE_BEHIND.copyRecursive(ast, compilationBuffer));
             loneTrailSurrogateAlternative.add(createCharClass(loneTrailSurrogateRanges, token));
         }
 
@@ -653,7 +687,7 @@ public final class RegexParser {
                 case caret:
                     if (prevKind != Token.Kind.caret) {
                         if (flags.isMultiline()) {
-                            substitute(token, globals.multiLineCaretSubstitution);
+                            substitute(token, MULTI_LINE_CARET_SUBSTITUTION);
                             properties.setAlternations();
                         } else {
                             PositionAssertion caret = ast.createPositionAssertion(PositionAssertion.Type.CARET);
@@ -665,7 +699,7 @@ public final class RegexParser {
                 case dollar:
                     if (prevKind != Token.Kind.dollar) {
                         if (flags.isMultiline()) {
-                            substitute(token, globals.multiLineDollarSubsitution);
+                            substitute(token, MULTI_LINE_DOLLAR_SUBSTITUTION);
                             properties.setAlternations();
                         } else {
                             PositionAssertion dollar = ast.createPositionAssertion(PositionAssertion.Type.DOLLAR);
@@ -683,9 +717,9 @@ public final class RegexParser {
                         break;
                     }
                     if (flags.isUnicode() && flags.isIgnoreCase()) {
-                        substitute(token, globals.unicodeIgnoreCaseWordBoundarySubstitution);
+                        substitute(token, UNICODE_IGNORE_CASE_WORD_BOUNDARY_SUBSTITUTION);
                     } else {
-                        substitute(token, globals.wordBoundarySubstituion);
+                        substitute(token, WORD_BOUNDARY_SUBSTITUTION);
                     }
                     properties.setAlternations();
                     break;
@@ -698,9 +732,9 @@ public final class RegexParser {
                         break;
                     }
                     if (flags.isUnicode() && flags.isIgnoreCase()) {
-                        substitute(token, globals.unicodeIgnoreCaseNonWordBoundarySubsitution);
+                        substitute(token, UNICODE_IGNORE_CASE_NON_WORD_BOUNDARY_SUBSTITUTION);
                     } else {
-                        substitute(token, globals.nonWordBoundarySubstitution);
+                        substitute(token, NON_WORD_BOUNDARY_SUBSTITUTION);
                     }
                     properties.setAlternations();
                     break;

@@ -54,7 +54,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.regex.AbstractRegexObject;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
 import com.oracle.truffle.regex.UnsupportedRegexException;
@@ -64,7 +64,7 @@ import com.oracle.truffle.regex.charset.Range;
 import com.oracle.truffle.regex.charset.UnicodeProperties;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
 import com.oracle.truffle.regex.tregex.string.Encodings;
-import com.oracle.truffle.regex.util.TBitSet;
+import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 /**
  * Implements the parsing and translating of Ruby regular expressions to ECMAScript regular
@@ -78,11 +78,11 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * Characters that are considered special in ECMAScript regexes. To match these characters, they
      * need to be escaped using a backslash.
      */
-    private static final TBitSet SYNTAX_CHARACTERS = TBitSet.valueOf('^', '$', '\\', '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|');
+    private static final CompilationFinalBitSet SYNTAX_CHARACTERS = CompilationFinalBitSet.valueOf('^', '$', '\\', '.', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|');
     /**
      * Characters that are considered special in ECMAScript regex character classes.
      */
-    private static final TBitSet CHAR_CLASS_SYNTAX_CHARACTERS = TBitSet.valueOf('\\', ']', '-', '^');
+    private static final CompilationFinalBitSet CHAR_CLASS_SYNTAX_CHARACTERS = CompilationFinalBitSet.valueOf('\\', ']', '-', '^');
 
     // Ruby's predefined character classes.
     // This one is for classes like \w, \s or \d...
@@ -268,7 +268,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     /**
      * Characters considered as whitespace in Ruby's regex verbose mode.
      */
-    private static final TBitSet WHITESPACE = TBitSet.valueOf(' ', '\t', '\n', '\r', '\f');
+    private static final CompilationFinalBitSet WHITESPACE = CompilationFinalBitSet.valueOf(' ', '\t', '\n', '\r', '\f');
 
     /**
      * The source object of the input pattern.
@@ -392,7 +392,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     }
 
     @Override
-    public AbstractRegexObject getFlags() {
+    public TruffleObject getFlags() {
         return globalFlags;
     }
 
@@ -419,7 +419,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         // some of the ECMAScript regex escape sequences which are restricted to Unicode regexes.
         // It also lets us reason with a more rigid grammar (as the ECMAScript non-Unicode regexes
         // contain a lot of ambiguous syntactic constructions for backwards compatibility).
-        return new RegexSource(outPattern.toString(), globalFlags.isSticky() ? "suy" : "su", inSource.getOptions(), inSource.getSource());
+        return new RegexSource(outPattern.toString(), globalFlags.isSticky() ? "suy" : "su", inSource.getEncoding());
     }
 
     private RubyFlags getLocalFlags() {
@@ -533,7 +533,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      */
     private void emitCharNoCasing(int codepoint, boolean inCharClass) {
         if (!silent) {
-            TBitSet syntaxChars = inCharClass ? CHAR_CLASS_SYNTAX_CHARACTERS : SYNTAX_CHARACTERS;
+            CompilationFinalBitSet syntaxChars = inCharClass ? CHAR_CLASS_SYNTAX_CHARACTERS : SYNTAX_CHARACTERS;
             if (syntaxChars.get(codepoint)) {
                 emitSnippet("\\");
             }
@@ -637,7 +637,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     // Error reporting
 
     private RegexSyntaxException syntaxError(String message) {
-        return RegexSyntaxException.createPattern(inSource, message);
+        return new RegexSyntaxException(inSource, message);
     }
 
     // Character predicates
