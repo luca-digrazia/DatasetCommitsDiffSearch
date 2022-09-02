@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,26 +28,29 @@ import com.oracle.svm.core.option.SubstrateOptionsParser;
 import org.graalvm.collections.Pair;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
+import java.util.Set;
 import java.util.spi.LocaleServiceProvider;
 
 //Checkstyle: stop
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 import sun.util.locale.provider.LocaleProviderAdapter;
 //Checkstyle: resume
 
 public class OptimizedLocalizationSupport extends LocalizationSupport {
-    final Map<Pair<Class<? extends LocaleServiceProvider>, Locale>, LocaleProviderAdapter> adaptersByClass = new HashMap<>();
-    final Map<LocaleProviderAdapter.Type, LocaleProviderAdapter> adaptersByType = new HashMap<>();
-    final Map<Class<? extends LocaleServiceProvider>, Object> providerPools = new HashMap<>();
+    public final Map<Pair<Class<? extends LocaleServiceProvider>, Locale>, LocaleProviderAdapter> adaptersByClass = new HashMap<>();
+    public final Map<LocaleProviderAdapter.Type, LocaleProviderAdapter> adaptersByType = new HashMap<>();
+    public final Map<Class<? extends LocaleServiceProvider>, Object> providerPools = new HashMap<>();
+
     final Map<Pair<String, Locale>, ResourceBundle> resourceBundles = new HashMap<>();
 
     private final String includeResourceBundlesOption = SubstrateOptionsParser.commandArgument(LocalizationFeature.Options.IncludeResourceBundles, "");
 
-    public OptimizedLocalizationSupport(Locale defaultLocale, List<Locale> locales) {
+    public OptimizedLocalizationSupport(Locale defaultLocale, Set<Locale> locales) {
         super(defaultLocale, locales);
     }
 
@@ -57,7 +60,7 @@ public class OptimizedLocalizationSupport extends LocalizationSupport {
      * @param locale this parameter is not currently used.
      */
     public ResourceBundle getCached(String baseName, Locale locale) throws MissingResourceException {
-        // todo optimize the map into a trie-like structure instead instead of linear search?
+        /*- Try out the whole candidate chain as JVM does */
         for (Locale candidateLocale : control.getCandidateLocales(baseName, locale)) {
             ResourceBundle result = resourceBundles.get(Pair.create(baseName, candidateLocale));
             if (result != null) {
@@ -70,9 +73,16 @@ public class OptimizedLocalizationSupport extends LocalizationSupport {
 
     }
 
+    @Platforms(Platform.HOSTED_ONLY.class)
     @Override
     public void prepareBundle(String bundleName, ResourceBundle bundle, Locale locale) {
         bundle.keySet();
         this.resourceBundles.put(Pair.create(bundleName, locale), bundle);
+    }
+
+    @Override
+    public boolean shouldSubstituteLoadLookup(String className) {
+        /*- All bundles are stored in the image heap as objects, no need to keep the content around */
+        return true;
     }
 }
