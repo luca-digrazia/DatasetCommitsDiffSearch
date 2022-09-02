@@ -71,7 +71,7 @@ public final class AnalysisHeapHistogramPrinter extends ObjectScanner {
     private final Map<AnalysisType, Integer> histogram = new HashMap<>();
 
     private AnalysisHeapHistogramPrinter(BigBang bigbang) {
-        super(bigbang, null, new ReusableSet());
+        super(bigbang, new ReusableSet());
     }
 
     @Override

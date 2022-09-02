@@ -306,10 +306,10 @@ public class MethodTypeFlowBuilder {
                 registerForeignCall(bb, node.getDescriptor());
             } else if (n instanceof UnaryMathIntrinsicNode) {
                 UnaryMathIntrinsicNode node = (UnaryMathIntrinsicNode) n;
-                registerForeignCall(bb, bb.getProviders().getForeignCalls().getDescriptor(node.getOperation().foreignCallSignature));
+                registerForeignCall(bb, node.getOperation().foreignCallDescriptor);
             } else if (n instanceof BinaryMathIntrinsicNode) {
                 BinaryMathIntrinsicNode node = (BinaryMathIntrinsicNode) n;
-                registerForeignCall(bb, bb.getProviders().getForeignCalls().getDescriptor(node.getOperation().foreignCallSignature));
+                registerForeignCall(bb, node.getOperation().foreignCallDescriptor);
             }
         }
     }
@@ -1439,7 +1439,7 @@ public class MethodTypeFlowBuilder {
 
         /**
          * Model an unsafe-read-and-write operation.
-         *
+         * 
          * In the analysis this is used to model both {@link AtomicReadAndWriteNode}, i.e., an
          * atomic read-and-write operation like
          * {@link sun.misc.Unsafe#getAndSetObject(Object, long, Object)}, and a

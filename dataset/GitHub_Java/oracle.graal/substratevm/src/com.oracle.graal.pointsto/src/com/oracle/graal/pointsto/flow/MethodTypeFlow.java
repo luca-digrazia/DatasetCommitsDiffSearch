@@ -177,7 +177,7 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
         originalMethodFlows.addClone(sourceFlow);
     }
 
-    public void addSource(SourceTypeFlow sourceFlow) {
+    protected void addSource(SourceTypeFlow sourceFlow) {
         originalMethodFlows.addSource(sourceFlow);
     }
 
@@ -185,7 +185,7 @@ public class MethodTypeFlow extends TypeFlow<AnalysisMethod> {
         originalMethodFlows.addInstanceOf(key, instanceOf);
     }
 
-    public void addMiscEntry(TypeFlow<?> input) {
+    protected void addMiscEntry(TypeFlow<?> input) {
         originalMethodFlows.addMiscEntryFlow(input);
     }
 
