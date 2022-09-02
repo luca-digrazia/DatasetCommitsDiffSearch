@@ -39,7 +39,6 @@ import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.genscavenge.AlignedHeapChunk.AlignedHeader;
 import com.oracle.svm.core.genscavenge.HeapChunk.Header;
 import com.oracle.svm.core.genscavenge.UnalignedHeapChunk.UnalignedHeader;
-import com.oracle.svm.core.genscavenge.remset.RememberedSet;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicUnsigned;
 import com.oracle.svm.core.log.Log;
@@ -114,7 +113,7 @@ final class HeapChunkProvider {
             log().string("  new chunk: ").hex(result).newline();
 
             initializeChunk(result, chunkSize);
-            AlignedHeapChunk.initialize(result);
+            resetAlignedHeapChunk(result);
         }
         assert HeapChunk.getTopOffset(result).equal(AlignedHeapChunk.getObjectsStartOffset());
         assert HeapChunk.getEndOffset(result).equal(chunkSize);
@@ -154,7 +153,7 @@ final class HeapChunkProvider {
     }
 
     private static void cleanAlignedChunk(AlignedHeader alignedChunk) {
-        AlignedHeapChunk.reset(alignedChunk);
+        resetAlignedHeapChunk(alignedChunk);
         if (HeapPolicy.getZapConsumedHeapChunks()) {
             zap(alignedChunk, HeapPolicy.getConsumedHeapChunkZapWord());
         }
@@ -235,7 +234,7 @@ final class HeapChunkProvider {
         }
 
         initializeChunk(result, chunkSize);
-        UnalignedHeapChunk.initializeChunk(result);
+        resetUnalignedChunk(result);
         assert objectSize.belowOrEqual(HeapChunk.availableObjectMemory(result)) : "UnalignedHeapChunk insufficient for requested object";
 
         if (HeapPolicy.getZapProducedHeapChunks()) {
@@ -259,6 +258,27 @@ final class HeapChunkProvider {
     /** Initialize the immutable state of a chunk. */
     private static void initializeChunk(Header<?> that, UnsignedWord chunkSize) {
         HeapChunk.setEndOffset(that, chunkSize);
+    }
+
+    /** Reset the mutable state of a chunk. */
+    private static void resetChunkHeader(Header<?> chunk, Pointer objectsStart) {
+        HeapChunk.setTopPointer(chunk, objectsStart);
+        HeapChunk.setSpace(chunk, null);
+        HeapChunk.setNext(chunk, WordFactory.nullPointer());
+        HeapChunk.setPrevious(chunk, WordFactory.nullPointer());
+    }
+
+    private static void resetAlignedHeapChunk(AlignedHeader chunk) {
+        resetChunkHeader(chunk, AlignedHeapChunk.getObjectsStart(chunk));
+
+        CardTable.cleanTableToPointer(AlignedHeapChunk.getCardTableStart(chunk), AlignedHeapChunk.getCardTableLimit(chunk));
+        FirstObjectTable.initializeTableToLimit(AlignedHeapChunk.getFirstObjectTableStart(chunk), AlignedHeapChunk.getFirstObjectTableLimit(chunk));
+    }
+
+    private static void resetUnalignedChunk(UnalignedHeader result) {
+        resetChunkHeader(result, UnalignedHeapChunk.getObjectStart(result));
+
+        CardTable.cleanTableToPointer(UnalignedHeapChunk.getCardTableStart(result), UnalignedHeapChunk.getCardTableLimit(result));
     }
 
     private static void zap(Header<?> chunk, WordBase value) {
@@ -305,6 +325,16 @@ final class HeapChunkProvider {
 
     long getFirstAllocationTime() {
         return firstAllocationTime;
+    }
+
+    boolean slowlyFindPointer(Pointer p) {
+        for (AlignedHeader chunk = unusedAlignedChunks.get(); chunk.isNonNull(); chunk = HeapChunk.getNext(chunk)) {
+            Pointer chunkPtr = HeapChunk.asPointer(chunk);
+            if (p.aboveOrEqual(chunkPtr) && p.belowThan(chunkPtr.add(HeapPolicy.getAlignedHeapChunkSize()))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
