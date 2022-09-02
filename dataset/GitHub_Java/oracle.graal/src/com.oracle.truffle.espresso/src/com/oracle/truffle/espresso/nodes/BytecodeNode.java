@@ -295,8 +295,6 @@ import com.oracle.truffle.object.DebugCounter;
  */
 public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
-    public static final boolean DEBUG_GENERAL = false;
-
     public static final DebugCounter bcCount = DebugCounter.create("Bytecodes executed");
 
     static final DebugCounter injectAndCallCount = DebugCounter.create("injectAndCallCount");
@@ -1078,9 +1076,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
                         case ATHROW:
                             CompilerDirectives.transferToInterpreter();
-                            if (DEBUG_GENERAL) {
-                                System.err.println("Throwing at " + curBCI + " in " + getMethod());
-                            }
+//                            System.err.println("Throwing at " + curBCI + " in " + getMethod());
                             throw new EspressoException(nullCheck(peekObject(frame, top - 1)));
 
                         case CHECKCAST:
@@ -1126,16 +1122,16 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                     if (e instanceof EspressoException) {
                         throw e;
                     }
-                    if (DEBUG_GENERAL) {
-                        System.err.println("Internal error (caught in invocation): " + this +
-                                        "\nBCI:" + curBCI);
-                        e.printStackTrace();
-                    }
-                    CompilerDirectives.transferToInterpreter();
-                    throw getMeta().throwEx(VirtualMachineError.class);
+                    // System.err.println("Internal error (caught in invocation): " + this +
+                    // "\nBCI:" + curBCI);
+                    // e.printStackTrace();
+                    // CompilerDirectives.transferToInterpreter();
+                    // throw getMeta().throwEx(VirtualMachineError.class);
                 }
             } catch (EspressoException e) {
                 CompilerDirectives.transferToInterpreter();
+                // System.err.println("Finding handler for a " + e.getException().getKlass() + "at:"
+                // + curBCI + " in " + getMethod());
                 ExceptionHandler handler = resolveExceptionHandlers(curBCI, e.getException());
                 if (handler != null) {
                     top = 0;
@@ -1456,12 +1452,8 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
         // Checkstyle: stop
         switch (opCode) {
             case INVOKESTATIC    : invoke = new InvokeStaticNode(resolutionSeed);          break;
-            case INVOKEINTERFACE :
-                assert resolutionSeed.getDeclaringKlass().isInterface();
-                invoke = InvokeInterfaceNodeGen.create(resolutionSeed); break;
-            case INVOKEVIRTUAL   :
-                assert !resolutionSeed.getDeclaringKlass().isInterface();
-                invoke = InvokeVirtualNodeGen.create(resolutionSeed);   break;
+            case INVOKEINTERFACE : invoke = InvokeInterfaceNodeGen.create(resolutionSeed); break;
+            case INVOKEVIRTUAL   : invoke = InvokeVirtualNodeGen.create(resolutionSeed);   break;
             case INVOKESPECIAL   : invoke = new InvokeSpecialNode(resolutionSeed);         break;
             default              :
                 throw EspressoError.unimplemented("Quickening for " + Bytecodes.nameOf(opCode));
@@ -1872,7 +1864,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
 
     // Effort to prevent double copies.
     @ExplodeLoop
-    public Object[] peekBasicArgumentsWithArray(VirtualFrame frame, int top, final Symbol<Type>[] signature, Object[] args, final int argCount) {
+    public Object[] peekArgumentsWithArray(VirtualFrame frame, int top, final Symbol<Type>[] signature, Object[] args, final int argCount) {
         // Use basic types
         CompilerAsserts.partialEvaluationConstant(argCount);
         CompilerAsserts.partialEvaluationConstant(signature);

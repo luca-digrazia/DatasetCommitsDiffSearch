@@ -91,13 +91,13 @@ public final class ArrayKlass extends Klass {
     }
 
     @Override
-    public final Method vtableLooup(int vtableIndex) {
-        return getSuperKlass().vtableLooup(vtableIndex);
+    public final Method lookupMethod(int vtableIndex) {
+        return getSuperKlass().lookupMethod(vtableIndex);
     }
 
     @Override
-    public final Method itableLookup(Klass interfKlass, int itableIndex) {
-        return getSuperKlass().itableLookup(interfKlass, itableIndex);
+    public final Method lookupMethod(Klass interfKlass, int itableIndex) {
+        return getSuperKlass().lookupMethod(interfKlass, itableIndex);
     }
 
     @Override

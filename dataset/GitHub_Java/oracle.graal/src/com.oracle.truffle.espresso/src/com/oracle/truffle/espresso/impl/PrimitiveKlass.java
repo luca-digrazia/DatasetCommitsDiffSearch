@@ -61,12 +61,12 @@ public final class PrimitiveKlass extends Klass {
     }
 
     @Override
-    public Method vtableLooup(int vtableIndex) {
+    public Method lookupMethod(int vtableIndex) {
         return null;
     }
 
     @Override
-    public Method itableLookup(Klass interfKlass, int itableIndex) {
+    public Method lookupMethod(Klass interfKlass, int itableIndex) {
         return null;
     }
 
