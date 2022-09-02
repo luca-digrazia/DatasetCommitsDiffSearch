@@ -27,6 +27,7 @@ package org.graalvm.compiler.truffle.runtime;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.nodes.IndirectCallNode;
 import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.profiles.ValueProfile;
@@ -58,6 +59,21 @@ public final class OptimizedIndirectCallNode extends IndirectCallNode {
             GraalRuntimeAccessor.LANGUAGE.onThrowable(this, null, profiledT, null);
             throw OptimizedCallTarget.rethrow(profiledT);
         }
+    }
+
+    static IndirectCallNode createUncached() {
+        return new IndirectCallNode() {
+            @Override
+            public boolean isAdoptable() {
+                return false;
+            }
+
+            @Override
+            @TruffleBoundary
+            public Object call(CallTarget target, Object... arguments) {
+                return target.call(arguments);
+            }
+        };
     }
 
 }
