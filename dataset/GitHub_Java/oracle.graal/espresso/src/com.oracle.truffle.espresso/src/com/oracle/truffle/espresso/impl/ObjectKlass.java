@@ -574,7 +574,6 @@ public final class ObjectKlass extends Klass {
     }
 
     public boolean permittedSubclassCheck(ObjectKlass k) {
-        CompilerAsserts.neverPartOfCompilation();
         if (!getContext().getJavaVersion().java17OrLater()) {
             return true;
         }
