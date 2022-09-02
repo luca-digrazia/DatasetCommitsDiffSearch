@@ -35,7 +35,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
@@ -76,16 +75,11 @@ public abstract class UntypedArrayObject<T> implements TruffleObject {
 
     @ExportMessage(limit = "3")
     void writeArrayElement(long idx, Object value,
-                    @CachedLibrary("value") InteropLibrary interop) throws InvalidArrayIndexException, UnsupportedTypeException {
+                    @CachedLibrary("value") InteropLibrary interop) throws InvalidArrayIndexException, UnsupportedMessageException {
         if (!inBounds(idx)) {
             throw InvalidArrayIndexException.create(idx);
         }
-        try {
-            Array.set(array, (int) idx, convertValue(value, interop));
-        } catch (UnsupportedMessageException ex) {
-            // from convertValue
-            throw UnsupportedTypeException.create(new Object[]{value});
-        }
+        Array.set(array, (int) idx, convertValue(value, interop));
     }
 
     protected abstract T convertValue(Object value, InteropLibrary interop) throws UnsupportedMessageException;
