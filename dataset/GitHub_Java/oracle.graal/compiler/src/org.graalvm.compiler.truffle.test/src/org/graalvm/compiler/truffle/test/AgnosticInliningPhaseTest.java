@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,10 +26,9 @@ package org.graalvm.compiler.truffle.test;
 
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
-import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl;
 import org.graalvm.compiler.truffle.compiler.phases.inlining.AgnosticInliningPhase;
+import org.graalvm.compiler.truffle.runtime.NoInliningPolicy;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
 import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
@@ -53,6 +52,7 @@ public class AgnosticInliningPhaseTest extends PartialEvaluationTest {
     }
 
     protected StructuredGraph runLanguageAgnosticInliningPhase(OptimizedCallTarget callTarget) {
+        final TruffleInlining callNodeProvider = new TruffleInlining(callTarget, new NoInliningPolicy());
         final PartialEvaluator partialEvaluator = getTruffleCompiler(callTarget).getPartialEvaluator();
         final CompilationIdentifier compilationIdentifier = new CompilationIdentifier() {
             @Override
@@ -61,19 +61,8 @@ public class AgnosticInliningPhaseTest extends PartialEvaluationTest {
             }
         };
         final PartialEvaluator.Request request = partialEvaluator.new Request(callTarget.getOptionValues(), getDebugContext(), callTarget, partialEvaluator.rootForCallTarget(callTarget),
-                        new TruffleInlining(),
-                        compilationIdentifier, getSpeculationLog(),
-                new TruffleCompilerImpl.CancellableTruffleCompilationTask(new TruffleCompilationTask() {
-                    @Override
-                    public boolean isCancelled() {
-                        return false;
-                    }
-
-                    @Override
-                    public boolean isLastTier() {
-                        return true;
-                    }
-                }));
+                        callNodeProvider,
+                        compilationIdentifier, getSpeculationLog(), null);
         final AgnosticInliningPhase agnosticInliningPhase = new AgnosticInliningPhase(partialEvaluator, request);
         agnosticInliningPhase.apply(request.graph, getTruffleCompiler(callTarget).getPartialEvaluator().getProviders());
         return request.graph;
