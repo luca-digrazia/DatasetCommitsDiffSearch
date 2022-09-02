@@ -35,7 +35,6 @@ import org.graalvm.compiler.graph.spi.Simplifiable;
 import org.graalvm.compiler.graph.spi.SimplifierTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodeinfo.Verbosity;
-import org.graalvm.compiler.nodes.BeginNode;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.FixedGuardNode;
 import org.graalvm.compiler.nodes.Invoke;
@@ -44,7 +43,7 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.extended.AnchoringNode;
+import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.spi.UncheckedInterfaceProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
 
@@ -233,7 +232,11 @@ public class MethodCallTargetNode extends CallTargetNode implements IterableNode
                  * an assumption but as we need an instanceof check anyway we can verify both
                  * properties by checking of the receiver is an instance of the single implementor.
                  */
-                AnchoringNode anchor = BeginNode.prevBegin(invoke().asNode());
+                ValueAnchorNode anchor = new ValueAnchorNode(null);
+                if (anchor != null) {
+                    graph().add(anchor);
+                    graph().addBeforeFixed(invoke().asNode(), anchor);
+                }
                 LogicNode condition = graph().addOrUniqueWithInputs(InstanceOfNode.create(speculatedType, receiver, getProfile(), anchor));
                 FixedGuardNode guard = graph().add(new FixedGuardNode(condition, DeoptimizationReason.OptimizedTypeCheckViolated, DeoptimizationAction.InvalidateRecompile, false));
                 graph().addBeforeFixed(invoke().asNode(), guard);
