@@ -448,7 +448,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
     }
 
-    void patch(DispatchOutputStream newOut,
+    boolean patch(DispatchOutputStream newOut,
                     DispatchOutputStream newErr,
                     InputStream newIn,
                     OptionValuesImpl engineOptions,
@@ -458,11 +458,13 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     boolean newAllowExperimentalOptions,
                     ClassLoader newContextClassLoader, boolean newBoundEngine, Handler newLogHandler) {
         CompilerAsserts.neverPartOfCompilation();
+        if (this.boundEngine != newBoundEngine) {
+            return false;
+        }
         this.out = newOut;
         this.err = newErr;
         this.in = newIn;
         this.contextClassLoader = newContextClassLoader;
-        boolean wasBound = this.boundEngine;
         this.boundEngine = newBoundEngine;
         this.logHandler = newLogHandler;
         this.engineOptionValues = engineOptions;
@@ -471,10 +473,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         this.storeEngine = RUNTIME.isStoreEnabled(engineOptions);
 
         intitializeStore(wasStore, storeEngine);
-
-        if (wasBound && !newBoundEngine) {
-            initializeMultiContext(null);
-        }
 
         INSTRUMENT.patchInstrumentationHandler(instrumentationHandler, newOut, newErr, newIn);
 
@@ -494,6 +492,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             instrument.getEngineOptionValues().putAll(instrumentsOptions.get(instrument), newAllowExperimentalOptions);
         }
         registerShutDownHook();
+        return true;
     }
 
     static Handler createLogHandler(LogConfig logConfig, DispatchOutputStream errDispatchOutputStream) {
@@ -917,10 +916,8 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             for (PolyglotLanguageContext lc : context.contexts) {
                 LanguageInfo language = lc.language.info;
                 if (lc.eventsEnabled && lc.env != null) {
-                    listener.onLanguageContextCreate(context.creatorTruffleContext, language);
                     listener.onLanguageContextCreated(context.creatorTruffleContext, language);
                     if (lc.isInitialized()) {
-                        listener.onLanguageContextInitialize(context.creatorTruffleContext, language);
                         listener.onLanguageContextInitialized(context.creatorTruffleContext, language);
                         if (lc.finalized) {
                             listener.onLanguageContextFinalized(context.creatorTruffleContext, language);
@@ -1147,7 +1144,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     }
 
     List<PolyglotContextImpl> collectAliveContexts() {
-        assert Thread.holdsLock(this.lock);
+        Thread.holdsLock(this.lock);
         List<PolyglotContextImpl> localContexts = new ArrayList<>(contexts.size());
         for (ContextWeakReference ref : contexts) {
             PolyglotContextImpl context = ref.get();
@@ -1194,10 +1191,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     public Set<Source> getCachedSources() {
         checkState();
         Set<Source> sources = new HashSet<>();
-        List<PolyglotContextImpl> activeContexts;
-        synchronized (lock) {
-            activeContexts = collectAliveContexts();
-        }
+        List<PolyglotContextImpl> activeContexts = collectAliveContexts();
         for (PolyglotContextImpl context : activeContexts) {
             for (PolyglotLanguageContext language : context.contexts) {
                 PolyglotLanguageInstance instance = language.getLanguageInstanceOrNull();
@@ -1685,9 +1679,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     if (contextAddedToEngine) {
                         synchronized (this.lock) {
                             removeContext(context);
-                            if (boundEngine) {
-                                ensureClosed(false, false);
-                            }
                         }
                     }
                     throw t;
@@ -1933,7 +1924,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
         for (PolyglotContextImpl context : aliveContexts) {
             synchronized (context) {
-                if (context.localsCleared) {
+                if (context.closed || context.invalid) {
                     continue;
                 }
                 context.resizeContextLocals(newStableLocations);
@@ -1966,7 +1957,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         }
         for (PolyglotContextImpl context : aliveContexts) {
             synchronized (context) {
-                if (context.localsCleared) {
+                if (context.closed || context.invalid) {
                     continue;
                 }
                 context.resizeContextThreadLocals(newStableLocations);
