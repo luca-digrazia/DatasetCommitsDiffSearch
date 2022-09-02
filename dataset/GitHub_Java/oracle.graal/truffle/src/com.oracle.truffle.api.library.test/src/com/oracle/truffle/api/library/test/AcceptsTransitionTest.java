@@ -45,7 +45,13 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import java.util.Arrays;
+import java.util.List;
+
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
@@ -57,8 +63,14 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 
+@RunWith(Parameterized.class)
 @SuppressWarnings("unused")
-public class AcceptsTransitionTest extends AbstractLibraryTest {
+public class AcceptsTransitionTest extends AbstractParametrizedLibraryTest {
+
+    @Parameters(name = "{0}")
+    public static List<TestRun> data() {
+        return Arrays.asList(TestRun.CACHED, TestRun.UNCACHED);
+    }
 
     @GenerateLibrary
     abstract static class TransitionTestLibrary extends Library {
@@ -75,10 +87,8 @@ public class AcceptsTransitionTest extends AbstractLibraryTest {
         STRATEGY3;
     }
 
-    @ExportLibrary(value = TransitionTestLibrary.class, transitionLimit = "LIMIT")
+    @ExportLibrary(value = TransitionTestLibrary.class, allowTransition = true)
     static class StrategyObject {
-
-        static final int LIMIT = 1;
 
         protected Strategy strategy = Strategy.STRATEGY1;
 
@@ -96,7 +106,6 @@ public class AcceptsTransitionTest extends AbstractLibraryTest {
         @ExportMessage
         String transition(Strategy s,
                         @Shared("strategy") @Cached("this.strategy") Strategy cached,
-                        @CachedLibrary("this") TransitionTestLibrary thisLibrary,
                         @CachedLibrary("cached.toString()") InteropLibrary lib) {
             assertSame(cached, this.strategy);
             try {
@@ -108,33 +117,28 @@ public class AcceptsTransitionTest extends AbstractLibraryTest {
             }
             Strategy old = this.strategy;
             this.strategy = s;
-            return "transition_" + old + "_" + s + "_" + (thisLibrary.isAdoptable() ? "cached" : "uncached");
+            return "transition_" + old + "_" + s;
         }
     }
 
     @Test
-    public void testTransitionsUncached() {
+    public void testTransitions() {
         StrategyObject o = new StrategyObject(Strategy.STRATEGY1);
-        TransitionTestLibrary lib = getUncached(TransitionTestLibrary.class, o);
+        TransitionTestLibrary lib = createLibrary(TransitionTestLibrary.class, o);
         assertTrue(lib.accepts(o));
-        assertEquals("transition_STRATEGY1_STRATEGY2_uncached", lib.transition(o, Strategy.STRATEGY2));
-        assertTrue(lib.accepts(o));
-        assertEquals("transition_STRATEGY2_STRATEGY3_uncached", lib.transition(o, Strategy.STRATEGY3));
-        assertTrue(lib.accepts(o));
-        assertEquals("transition_STRATEGY3_STRATEGY1_uncached", lib.transition(o, Strategy.STRATEGY1));
-        assertTrue(lib.accepts(o));
-    }
-
-    @Test
-    public void testTransitionsCached() {
-        StrategyObject o = new StrategyObject(Strategy.STRATEGY1);
-        TransitionTestLibrary lib = createCached(TransitionTestLibrary.class, o);
-        assertTrue(lib.accepts(o));
-        assertEquals("transition_STRATEGY1_STRATEGY2_cached", lib.transition(o, Strategy.STRATEGY2));
-        assertFalse(lib.accepts(o));
-        assertEquals("transition_STRATEGY2_STRATEGY3_cached", lib.transition(o, Strategy.STRATEGY3));
-        assertFalse(lib.accepts(o));
-        assertEquals("transition_STRATEGY3_STRATEGY1_uncached", lib.transition(o, Strategy.STRATEGY1));
+        assertEquals("transition_STRATEGY1_STRATEGY2", lib.transition(o, Strategy.STRATEGY2));
+        if (this.run == TestRun.CACHED) {
+            assertFalse(lib.accepts(o));
+        } else {
+            assertTrue(lib.accepts(o));
+        }
+        assertEquals("transition_STRATEGY2_STRATEGY3", lib.transition(o, Strategy.STRATEGY3));
+        if (this.run == TestRun.CACHED) {
+            assertFalse(lib.accepts(o));
+        } else {
+            assertTrue(lib.accepts(o));
+        }
+        assertEquals("transition_STRATEGY3_STRATEGY1", lib.transition(o, Strategy.STRATEGY1));
         assertTrue(lib.accepts(o));
     }
 

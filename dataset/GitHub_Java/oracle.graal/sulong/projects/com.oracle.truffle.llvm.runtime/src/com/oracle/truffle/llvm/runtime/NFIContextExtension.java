@@ -71,7 +71,7 @@ public final class NFIContextExtension implements ContextExtension {
 
     public NFIContextExtension(Env env) {
         this.env = env;
-        this.defaultLibrary = ExternalLibrary.externalFromName("NativeDefault", true);
+        this.defaultLibrary = ExternalLibrary.external("NativeDefault", true);
     }
 
     @Override
