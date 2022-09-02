@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2016, Intel Corporation. Intel Math Library (LIBM) Source Code
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Intel Corporation. All rights reserved.
+ * Intel Math Library (LIBM) Source Code
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,92 +51,100 @@ import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.recordExternalAd
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler;
+import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.lir.LIRInstructionClass;
+import org.graalvm.compiler.lir.StubPort;
 import org.graalvm.compiler.lir.asm.ArrayDataPointerConstant;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.amd64.AMD64;
 
-public final class AMD64MathTanOp extends AMD64MathStubUnaryOp {
+/**
+ * <pre>
+ *                     ALGORITHM DESCRIPTION - TAN()
+ *                     ---------------------
+ *
+ * Polynomials coefficients and other constants.
+ *
+ * Note that in this algorithm, there is a different polynomial for
+ * each breakpoint, so there are 32 sets of polynomial coefficients
+ * as well as 32 instances of the other constants.
+ *
+ * The polynomial coefficients and constants are offset from the start
+ * of the main block as follows:
+ *
+ *   0:  c8 | c0
+ *  16:  c9 | c1
+ *  32: c10 | c2
+ *  48: c11 | c3
+ *  64: c12 | c4
+ *  80: c13 | c5
+ *  96: c14 | c6
+ * 112: c15 | c7
+ * 128: T_hi
+ * 136: T_lo
+ * 144: Sigma
+ * 152: T_hl
+ * 160: Tau
+ * 168: Mask
+ * 176: (end of block)
+ *
+ * The total table size is therefore 5632 bytes.
+ *
+ * Note that c0 and c1 are always zero. We could try storing
+ * other constants here, and just loading the low part of the
+ * SIMD register in these cases, after ensuring the high part
+ * is zero.
+ *
+ * The higher terms of the polynomial are computed in the *low*
+ * part of the SIMD register. This is so we can overlap the
+ * multiplication by r^8 and the unpacking of the other part.
+ *
+ * The constants are:
+ * T_hi + T_lo = accurate constant term in power series
+ * Sigma + T_hl = accurate coefficient of r in power series (Sigma=1 bit)
+ * Tau = multiplier for the reciprocal, always -1 or 0
+ *
+ * The basic reconstruction formula using these constants is:
+ *
+ * High = tau * recip_hi + t_hi
+ * Med = (sgn * r + t_hl * r)_hi
+ * Low = (sgn * r + t_hl * r)_lo +
+ *       tau * recip_lo + T_lo + (T_hl + sigma) * c + pol
+ *
+ * where pol = c0 + c1 * r + c2 * r^2 + ... + c15 * r^15
+ *
+ * (c0 = c1 = 0, but using them keeps SIMD regularity)
+ *
+ * We then do a compensated sum High + Med, add the low parts together
+ * and then do the final sum.
+ *
+ * Here recip_hi + recip_lo is an accurate reciprocal of the remainder
+ * modulo pi/2
+ *
+ * Special cases:
+ *  tan(NaN) = quiet NaN, and raise invalid exception
+ *  tan(INF) = NaN and raise invalid exception
+ *  tan(+/-0) = +/-0
+ * </pre>
+ */
+// @formatter:off
+@StubPort(path      = "src/hotspot/cpu/x86/macroAssembler_x86_tan.cpp",
+          lineStart = 0,
+          lineEnd   = 1059,
+          commit    = "12bac3a02d7b0f17da78d5ee810fd2742ec43ba6",
+          sha1      = "466fa030d8bf2c1ba0630839bce6f46549a4ebe0")
+// @formatter:on
+public final class AMD64MathTanOp extends AMD64MathIntrinsicUnaryOp {
 
     public static final LIRInstructionClass<AMD64MathTanOp> TYPE = LIRInstructionClass.create(AMD64MathTanOp.class);
 
     public AMD64MathTanOp() {
         super(TYPE, /* GPR */ rax, rcx, rdx, rbx, rsi, rdi, r8, r9, r10, r11,
-                        /* XMM */ xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
+                        /* XMM */ xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
     }
 
-    /******************************************************************************/
-// ALGORITHM DESCRIPTION - TAN()
-// ---------------------
-//
-// Polynomials coefficients and other constants.
-//
-// Note that in this algorithm, there is a different polynomial for
-// each breakpoint, so there are 32 sets of polynomial coefficients
-// as well as 32 instances of the other constants.
-//
-// The polynomial coefficients and constants are offset from the start
-// of the main block as follows:
-//
-// 0: c8 | c0
-// 16: c9 | c1
-// 32: c10 | c2
-// 48: c11 | c3
-// 64: c12 | c4
-// 80: c13 | c5
-// 96: c14 | c6
-// 112: c15 | c7
-// 128: T_hi
-// 136: T_lo
-// 144: Sigma
-// 152: T_hl
-// 160: Tau
-// 168: Mask
-// 176: (end of block)
-//
-// The total table size is therefore 5632 bytes.
-//
-// Note that c0 and c1 are always zero. We could try storing
-// other constants here, and just loading the low part of the
-// SIMD register in these cases, after ensuring the high part
-// is zero.
-//
-// The higher terms of the polynomial are computed in the *low*
-// part of the SIMD register. This is so we can overlap the
-// multiplication by r^8 and the unpacking of the other part.
-//
-// The constants are:
-// T_hi + T_lo = accurate constant term in power series
-// Sigma + T_hl = accurate coefficient of r in power series (Sigma=1 bit)
-// Tau = multiplier for the reciprocal, always -1 or 0
-//
-// The basic reconstruction formula using these constants is:
-//
-// High = tau * recip_hi + t_hi
-// Med = (sgn * r + t_hl * r)_hi
-// Low = (sgn * r + t_hl * r)_lo +
-// tau * recip_lo + T_lo + (T_hl + sigma) * c + pol
-//
-// where pol = c0 + c1 * r + c2 * r^2 + ... + c15 * r^15
-//
-// (c0 = c1 = 0, but using them keeps SIMD regularity)
-//
-// We then do a compensated sum High + Med, add the low parts together
-// and then do the final sum.
-//
-// Here recip_hi + recip_lo is an accurate reciprocal of the remainder
-// modulo pi/2
-//
-// Special cases:
-// tan(NaN) = quiet NaN, and raise invalid exception
-// tan(INF) = NaN and raise invalid exception
-// tan(+/-0) = +/-0
-//
-    /******************************************************************************/
-
-// The 64 bit code is at most SSE2 compliant
     private ArrayDataPointerConstant onehalf = pointerConstant(16, new int[]{
             // @formatter:off
             0x00000000, 0x3fe00000, 0x00000000, 0x3fe00000
@@ -579,8 +588,7 @@ public final class AMD64MathTanOp extends AMD64MathStubUnaryOp {
         masm.pextrw(rax, xmm0, 3);
         masm.andl(rax, 32767);
         masm.subl(rax, 16314);
-        masm.cmpl(rax, 270);
-        masm.jcc(AMD64Assembler.ConditionFlag.Above, block0);
+        masm.cmplAndJcc(rax, 270, ConditionFlag.Above, block0, false);
         masm.movdqu(xmm5, recordExternalAddress(crb, onehalf));        // 0x00000000, 0x3fe00000,
                                                                        // 0x00000000, 0x3fe00000
         masm.movdqu(xmm6, recordExternalAddress(crb, mul16));          // 0x00000000, 0x40300000,
@@ -701,11 +709,9 @@ public final class AMD64MathTanOp extends AMD64MathStubUnaryOp {
         masm.jcc(AMD64Assembler.ConditionFlag.Greater, block1);
         masm.pextrw(rax, xmm0, 3);
         masm.movl(rdx, rax);
-        masm.andl(rax, 32752);
-        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block2);
+        masm.andlAndJcc(rax, 32752, ConditionFlag.Equal, block2, false);
         masm.andl(rdx, 32767);
-        masm.cmpl(rdx, 15904);
-        masm.jcc(AMD64Assembler.ConditionFlag.Below, block3);
+        masm.cmplAndJcc(rdx, 15904, ConditionFlag.Below, block3, false);
         masm.movdqu(xmm2, xmm0);
         masm.movdqu(xmm3, xmm0);
         masm.movq(xmm1, recordExternalAddress(crb, q11));              // 0xb8fe4d77, 0x3f82609a
@@ -738,8 +744,7 @@ public final class AMD64MathTanOp extends AMD64MathStubUnaryOp {
         masm.bind(block1);
         masm.pextrw(rax, xmm0, 3);
         masm.andl(rax, 32752);
-        masm.cmpl(rax, 32752);
-        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block4);
+        masm.cmplAndJcc(rax, 32752, ConditionFlag.Equal, block4, false);
         masm.pextrw(rcx, xmm0, 3);
         masm.andl(rcx, 32752);
         masm.subl(rcx, 16224);
@@ -831,15 +836,13 @@ public final class AMD64MathTanOp extends AMD64MathStubUnaryOp {
         masm.addq(r9, rdx);
         masm.movl(rdx, rcx);
         masm.addl(rdx, 32);
-        masm.cmpl(rcx, 0);
-        masm.jcc(AMD64Assembler.ConditionFlag.Less, block5);
+        masm.cmplAndJcc(rcx, 0, ConditionFlag.Less, block5, false);
         masm.negl(rcx);
         masm.addl(rcx, 29);
         masm.shll(r9);
         masm.movl(rdi, r9);
         masm.andl(r9, 1073741823);
-        masm.testl(r9, 536870912);
-        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block6);
+        masm.testlAndJcc(r9, 536870912, ConditionFlag.NotEqual, block6, false);
         masm.shrl(r9);
         masm.movl(rbx, 0);
         masm.shlq(r9, 32);
@@ -848,14 +851,12 @@ public final class AMD64MathTanOp extends AMD64MathStubUnaryOp {
         masm.bind(block7);
 
         masm.bind(block8);
-        masm.cmpq(r9, 0);
-        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block9);
+        masm.cmpqAndJcc(r9, 0, ConditionFlag.Equal, block9, false);
 
         masm.bind(block10);
         masm.bsrq(r11, r9);
         masm.movl(rcx, 29);
-        masm.subl(rcx, r11);
-        masm.jcc(AMD64Assembler.ConditionFlag.LessEqual, block11);
+        masm.sublAndJcc(rcx, r11, ConditionFlag.LessEqual, block11, false);
         masm.shlq(r9);
         masm.movq(rax, r10);
         masm.shlq(r10);
@@ -1036,13 +1037,11 @@ public final class AMD64MathTanOp extends AMD64MathStubUnaryOp {
         masm.movq(r9, r10);
         masm.movq(r10, r8);
         masm.movl(r8, 0);
-        masm.cmpq(r9, 0);
-        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block10);
+        masm.cmpqAndJcc(r9, 0, ConditionFlag.NotEqual, block10, false);
         masm.addl(rdx, 64);
         masm.movq(r9, r10);
         masm.movq(r10, r8);
-        masm.cmpq(r9, 0);
-        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block10);
+        masm.cmpqAndJcc(r9, 0, ConditionFlag.NotEqual, block10, false);
         masm.jmp(block12);
 
         masm.bind(block11);
@@ -1064,8 +1063,7 @@ public final class AMD64MathTanOp extends AMD64MathStubUnaryOp {
         masm.orq(r9, r11);
         masm.shlq(r9);
         masm.movq(rdi, r9);
-        masm.testl(r9, Integer.MIN_VALUE);
-        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block13);
+        masm.testlAndJcc(r9, Integer.MIN_VALUE, ConditionFlag.NotEqual, block13, false);
         masm.shrl(r9);
         masm.movl(rbx, 0);
         masm.shrq(rdi, 2);

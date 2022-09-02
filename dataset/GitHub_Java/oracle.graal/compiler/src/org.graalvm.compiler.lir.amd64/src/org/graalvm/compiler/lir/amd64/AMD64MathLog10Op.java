@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2016, Intel Corporation. Intel Math Library (LIBM) Source Code
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Intel Corporation. All rights reserved.
+ * Intel Math Library (LIBM) Source Code
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,46 +46,54 @@ import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.recordExternalAd
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler;
+import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.lir.LIRInstructionClass;
+import org.graalvm.compiler.lir.StubPort;
 import org.graalvm.compiler.lir.asm.ArrayDataPointerConstant;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
-public final class AMD64MathLog10Op extends AMD64MathStubUnaryOp {
+/**
+ * <pre>
+ *                     ALGORITHM DESCRIPTION - LOG10()
+ *                     ---------------------
+ *
+ *    Let x=2^k * mx, mx in [1,2)
+ *
+ *    Get B~1/mx based on the output of rcpss instruction (B0)
+ *    B = int((B0*LH*2^7+0.5))/2^7
+ *    LH is a short approximation for log10(e)
+ *
+ *    Reduced argument: r=B*mx-LH (computed accurately in high and low parts)
+ *
+ *    Result:  k*log10(2) - log(B) + p(r)
+ *             p(r) is a degree 7 polynomial
+ *             -log(B) read from data table (high, low parts)
+ *             Result is formed from high and low parts.
+ *
+ * Special cases:
+ *  log10(0) = -INF with divide-by-zero exception raised
+ *  log10(1) = +0
+ *  log10(x) = NaN with invalid exception raised if x < -0, including -INF
+ *  log10(+INF) = +INF
+ * </pre>
+ */
+// @formatter:off
+@StubPort(path      = "src/hotspot/cpu/x86/macroAssembler_x86_log10.cpp",
+          lineStart = 0,
+          lineEnd   = 382,
+          commit    = "12bac3a02d7b0f17da78d5ee810fd2742ec43ba6",
+          sha1      = "ce7879887e5360ad4c1ca8b776daca5497d6b349")
+// @formatter:on
+public final class AMD64MathLog10Op extends AMD64MathIntrinsicUnaryOp {
 
     public static final LIRInstructionClass<AMD64MathLog10Op> TYPE = LIRInstructionClass.create(AMD64MathLog10Op.class);
 
     public AMD64MathLog10Op() {
         super(TYPE, /* GPR */ rax, rcx, rdx, r8, r11,
-                        /* XMM */ xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
+                        /* XMM */ xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
     }
 
-    /******************************************************************************/
-// ALGORITHM DESCRIPTION - LOG10()
-// ---------------------
-//
-// Let x=2^k * mx, mx in [1,2)
-//
-// Get B~1/mx based on the output of rcpss instruction (B0)
-// B = int((B0*LH*2^7+0.5))/2^7
-// LH is a short approximation for log10(e)
-//
-// Reduced argument: r=B*mx-LH (computed accurately in high and low parts)
-//
-// Result: k*log10(2) - log(B) + p(r)
-// p(r) is a degree 7 polynomial
-// -log(B) read from data table (high, low parts)
-// Result is formed from high and low parts
-//
-// Special cases:
-// log10(0) = -INF with divide-by-zero exception raised
-// log10(1) = +0
-// log10(x) = NaN with invalid exception raised if x < -0, including -INF
-// log10(+INF) = +INF
-//
-    /******************************************************************************/
-
-// The 64 bit code is at most SSE2 compliant
     private ArrayDataPointerConstant highsigmask = pointerConstant(16, new int[]{
             // @formatter:off
             0xf8000000, 0xffffffff, 0x00000000, 0xffffe000
@@ -277,8 +286,7 @@ public final class AMD64MathLog10Op extends AMD64MathStubUnaryOp {
         masm.pshufd(xmm6, xmm5, 78);
         masm.psrlq(xmm1, 12);
         masm.subl(rax, 16);
-        masm.cmpl(rax, 32736);
-        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block0);
+        masm.cmplAndJcc(rax, 32736, ConditionFlag.AboveEqual, block0, false);
 
         masm.bind(block1);
         masm.mulss(xmm0, xmm7);
@@ -341,10 +349,8 @@ public final class AMD64MathLog10Op extends AMD64MathStubUnaryOp {
         masm.movq(xmm0, new AMD64Address(rsp, 0));
         masm.movq(xmm1, new AMD64Address(rsp, 0));
         masm.addl(rax, 16);
-        masm.cmpl(rax, 32768);
-        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block2);
-        masm.cmpl(rax, 16);
-        masm.jcc(AMD64Assembler.ConditionFlag.Below, block3);
+        masm.cmplAndJcc(rax, 32768, ConditionFlag.AboveEqual, block2, false);
+        masm.cmplAndJcc(rax, 16, ConditionFlag.Below, block3, false);
 
         masm.bind(block4);
         masm.addsd(xmm0, xmm0);
@@ -352,8 +358,7 @@ public final class AMD64MathLog10Op extends AMD64MathStubUnaryOp {
 
         masm.bind(block5);
         masm.jcc(AMD64Assembler.ConditionFlag.Above, block4);
-        masm.cmpl(rdx, 0);
-        masm.jcc(AMD64Assembler.ConditionFlag.Above, block4);
+        masm.cmplAndJcc(rdx, 0, ConditionFlag.Above, block4, false);
         masm.jmp(block6);
 
         masm.bind(block3);
@@ -363,8 +368,7 @@ public final class AMD64MathLog10Op extends AMD64MathStubUnaryOp {
         masm.psrlq(xmm1, 32);
         masm.movdl(rcx, xmm1);
         masm.orl(rdx, rcx);
-        masm.cmpl(rdx, 0);
-        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block7);
+        masm.cmplAndJcc(rdx, 0, ConditionFlag.Equal, block7, false);
         masm.xorpd(xmm1, xmm1);
         masm.movl(rax, 18416);
         masm.pinsrw(xmm1, rax, 3);
@@ -391,11 +395,9 @@ public final class AMD64MathLog10Op extends AMD64MathStubUnaryOp {
         masm.psrlq(xmm1, 32);
         masm.movdl(rcx, xmm1);
         masm.addl(rcx, rcx);
-        masm.cmpl(rcx, -2097152);
-        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block5);
+        masm.cmplAndJcc(rcx, -2097152, ConditionFlag.AboveEqual, block5, false);
         masm.orl(rdx, rcx);
-        masm.cmpl(rdx, 0);
-        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block7);
+        masm.cmplAndJcc(rdx, 0, ConditionFlag.Equal, block7, false);
 
         masm.bind(block6);
         masm.xorpd(xmm1, xmm1);

@@ -48,11 +48,6 @@ import javax.tools.Diagnostic;
 
 import org.graalvm.compiler.processor.AbstractProcessor;
 
-/**
- * Processor for the {@code org.graalvm.compiler.lir.StubPort} annotation. It verifies whether the
- * digest of the latest source code from the OpenJDK repository matches the one specified in the
- * {@code StubPort}.
- */
 public class StubPortProcessor extends AbstractProcessor {
 
     static final String JDK_LATEST = "https://raw.githubusercontent.com/openjdk/jdk/master/";

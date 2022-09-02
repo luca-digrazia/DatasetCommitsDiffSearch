@@ -1,6 +1,7 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2016, Intel Corporation. Intel Math Library (LIBM) Source Code
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, Intel Corporation. All rights reserved.
+ * Intel Math Library (LIBM) Source Code
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,165 +53,172 @@ import org.graalvm.compiler.asm.amd64.AMD64Address;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.lir.LIRInstructionClass;
+import org.graalvm.compiler.lir.StubPort;
 import org.graalvm.compiler.lir.asm.ArrayDataPointerConstant;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.amd64.AMD64;
 
-public final class AMD64MathSinOp extends AMD64MathStubUnaryOp {
+/**
+ * <pre>
+ *                     ALGORITHM DESCRIPTION - SIN()
+ *                     ---------------------
+ *
+ *     1. RANGE REDUCTION
+ *
+ *     We perform an initial range reduction from X to r with
+ *
+ *          X =~= N * pi/32 + r
+ *
+ *     so that |r| <= pi/64 + epsilon. We restrict inputs to those
+ *     where |N| <= 932560. Beyond this, the range reduction is
+ *     insufficiently accurate. For extremely small inputs,
+ *     denormalization can occur internally, impacting performance.
+ *     This means that the main path is actually only taken for
+ *     2^-252 <= |X| < 90112.
+ *
+ *     To avoid branches, we perform the range reduction to full
+ *     accuracy each time.
+ *
+ *          X - N * (P_1 + P_2 + P_3)
+ *
+ *     where P_1 and P_2 are 32-bit numbers (so multiplication by N
+ *     is exact) and P_3 is a 53-bit number. Together, these
+ *     approximate pi well enough for all cases in the restricted
+ *     range.
+ *
+ *     The main reduction sequence is:
+ *
+ *             y = 32/pi * x
+ *             N = integer(y)
+ *     (computed by adding and subtracting off SHIFTER)
+ *
+ *             m_1 = N * P_1
+ *             m_2 = N * P_2
+ *             r_1 = x - m_1
+ *             r = r_1 - m_2
+ *     (this r can be used for most of the calculation)
+ *
+ *             c_1 = r_1 - r
+ *             m_3 = N * P_3
+ *             c_2 = c_1 - m_2
+ *             c = c_2 - m_3
+ *
+ *     2. MAIN ALGORITHM
+ *
+ *     The algorithm uses a table lookup based on B = M * pi / 32
+ *     where M = N mod 64. The stored values are:
+ *       sigma             closest power of 2 to cos(B)
+ *       C_hl              53-bit cos(B) - sigma
+ *       S_hi + S_lo       2 * 53-bit sin(B)
+ *
+ *     The computation is organized as follows:
+ *
+ *          sin(B + r + c) = [sin(B) + sigma * r] +
+ *                           r * (cos(B) - sigma) +
+ *                           sin(B) * [cos(r + c) - 1] +
+ *                           cos(B) * [sin(r + c) - r]
+ *
+ *     which is approximately:
+ *
+ *          [S_hi + sigma * r] +
+ *          C_hl * r +
+ *          S_lo + S_hi * [(cos(r) - 1) - r * c] +
+ *          (C_hl + sigma) * [(sin(r) - r) + c]
+ *
+ *     and this is what is actually computed. We separate this sum
+ *     into four parts:
+ *
+ *          hi + med + pols + corr
+ *
+ *     where
+ *
+ *          hi       = S_hi + sigma r
+ *          med      = C_hl * r
+ *          pols     = S_hi * (cos(r) - 1) + (C_hl + sigma) * (sin(r) - r)
+ *          corr     = S_lo + c * ((C_hl + sigma) - S_hi * r)
+ *
+ *     3. POLYNOMIAL
+ *
+ *     The polynomial S_hi * (cos(r) - 1) + (C_hl + sigma) *
+ *     (sin(r) - r) can be rearranged freely, since it is quite
+ *     small, so we exploit parallelism to the fullest.
+ *
+ *          psc4       =   SC_4 * r_1
+ *          msc4       =   psc4 * r
+ *          r2         =   r * r
+ *          msc2       =   SC_2 * r2
+ *          r4         =   r2 * r2
+ *          psc3       =   SC_3 + msc4
+ *          psc1       =   SC_1 + msc2
+ *          msc3       =   r4 * psc3
+ *          sincospols =   psc1 + msc3
+ *          pols       =   sincospols *
+ *                         <S_hi * r^2 | (C_hl + sigma) * r^3>
+ *
+ *     4. CORRECTION TERM
+ *
+ *     This is where the "c" component of the range reduction is
+ *     taken into account; recall that just "r" is used for most of
+ *     the calculation.
+ *
+ *          -c   = m_3 - c_2
+ *          -d   = S_hi * r - (C_hl + sigma)
+ *          corr = -c * -d + S_lo
+ *
+ *     5. COMPENSATED SUMMATIONS
+ *
+ *     The two successive compensated summations add up the high
+ *     and medium parts, leaving just the low parts to add up at
+ *     the end.
+ *
+ *          rs        =  sigma * r
+ *          res_int   =  S_hi + rs
+ *          k_0       =  S_hi - res_int
+ *          k_2       =  k_0 + rs
+ *          med       =  C_hl * r
+ *          res_hi    =  res_int + med
+ *          k_1       =  res_int - res_hi
+ *          k_3       =  k_1 + med
+ *
+ *     6. FINAL SUMMATION
+ *
+ *     We now add up all the small parts:
+ *
+ *          res_lo = pols(hi) + pols(lo) + corr + k_1 + k_3
+ *
+ *     Now the overall result is just:
+ *
+ *          res_hi + res_lo
+ *
+ *     7. SMALL ARGUMENTS
+ *
+ *     If |x| < SNN (SNN meaning the smallest normal number), we
+ *     simply perform 0.1111111 cdots 1111 * x. For SNN <= |x|, we
+ *     do 2^-55 * (2^55 * x - x).
+ *
+ * Special cases:
+ *  sin(NaN) = quiet NaN, and raise invalid exception
+ *  sin(INF) = NaN and raise invalid exception
+ *  sin(+/-0) = +/-0
+ * </pre>
+ */
+// @formatter:off
+@StubPort(path      = "src/hotspot/cpu/x86/macroAssembler_x86_sin.cpp",
+          lineStart = 0,
+          lineEnd   = 848,
+          commit    = "12bac3a02d7b0f17da78d5ee810fd2742ec43ba6",
+          sha1      = "2ee75c53633f6044ce351d90bbb79081bfad1663")
+// @formatter:on
+public final class AMD64MathSinOp extends AMD64MathIntrinsicUnaryOp {
 
     public static final LIRInstructionClass<AMD64MathSinOp> TYPE = LIRInstructionClass.create(AMD64MathSinOp.class);
 
     public AMD64MathSinOp() {
-        super(TYPE, /* GPR */ rax, rcx, rdx, rbx, rsp, rsi, rdi, r8, r9, r10, r11,
-                        /* XMM */ xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
+        super(TYPE, /* GPR */ rax, rcx, rdx, rbx, rsi, rdi, r8, r9, r10, r11,
+                        /* XMM */ xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7);
     }
 
-    /******************************************************************************/
-// ALGORITHM DESCRIPTION - SIN()
-// ---------------------
-//
-// 1. RANGE REDUCTION
-//
-// We perform an initial range reduction from X to r with
-//
-// X =~= N * pi/32 + r
-//
-// so that |r| <= pi/64 + epsilon. We restrict inputs to those
-// where |N| <= 932560. Beyond this, the range reduction is
-// insufficiently accurate. For extremely small inputs,
-// denormalization can occur internally, impacting performance.
-// This means that the main path is actually only taken for
-// 2^-252 <= |X| < 90112.
-//
-// To avoid branches, we perform the range reduction to full
-// accuracy each time.
-//
-// X - N * (P_1 + P_2 + P_3)
-//
-// where P_1 and P_2 are 32-bit numbers (so multiplication by N
-// is exact) and P_3 is a 53-bit number. Together, these
-// approximate pi well enough for all cases in the restricted
-// range.
-//
-// The main reduction sequence is:
-//
-// y = 32/pi * x
-// N = integer(y)
-// (computed by adding and subtracting off SHIFTER)
-//
-// m_1 = N * P_1
-// m_2 = N * P_2
-// r_1 = x - m_1
-// r = r_1 - m_2
-// (this r can be used for most of the calculation)
-//
-// c_1 = r_1 - r
-// m_3 = N * P_3
-// c_2 = c_1 - m_2
-// c = c_2 - m_3
-//
-// 2. MAIN ALGORITHM
-//
-// The algorithm uses a table lookup based on B = M * pi / 32
-// where M = N mod 64. The stored values are:
-// sigma closest power of 2 to cos(B)
-// C_hl 53-bit cos(B) - sigma
-// S_hi + S_lo 2 * 53-bit sin(B)
-//
-// The computation is organized as follows:
-//
-// sin(B + r + c) = [sin(B) + sigma * r] +
-// r * (cos(B) - sigma) +
-// sin(B) * [cos(r + c) - 1] +
-// cos(B) * [sin(r + c) - r]
-//
-// which is approximately:
-//
-// [S_hi + sigma * r] +
-// C_hl * r +
-// S_lo + S_hi * [(cos(r) - 1) - r * c] +
-// (C_hl + sigma) * [(sin(r) - r) + c]
-//
-// and this is what is actually computed. We separate this sum
-// into four parts:
-//
-// hi + med + pols + corr
-//
-// where
-//
-// hi = S_hi + sigma r
-// med = C_hl * r
-// pols = S_hi * (cos(r) - 1) + (C_hl + sigma) * (sin(r) - r)
-// corr = S_lo + c * ((C_hl + sigma) - S_hi * r)
-//
-// 3. POLYNOMIAL
-//
-// The polynomial S_hi * (cos(r) - 1) + (C_hl + sigma) *
-// (sin(r) - r) can be rearranged freely, since it is quite
-// small, so we exploit parallelism to the fullest.
-//
-// psc4 = SC_4 * r_1
-// msc4 = psc4 * r
-// r2 = r * r
-// msc2 = SC_2 * r2
-// r4 = r2 * r2
-// psc3 = SC_3 + msc4
-// psc1 = SC_1 + msc2
-// msc3 = r4 * psc3
-// sincospols = psc1 + msc3
-// pols = sincospols *
-// <S_hi * r^2 | (C_hl + sigma) * r^3>
-//
-// 4. CORRECTION TERM
-//
-// This is where the "c" component of the range reduction is
-// taken into account; recall that just "r" is used for most of
-// the calculation.
-//
-// -c = m_3 - c_2
-// -d = S_hi * r - (C_hl + sigma)
-// corr = -c * -d + S_lo
-//
-// 5. COMPENSATED SUMMATIONS
-//
-// The two successive compensated summations add up the high
-// and medium parts, leaving just the low parts to add up at
-// the end.
-//
-// rs = sigma * r
-// res_int = S_hi + rs
-// k_0 = S_hi - res_int
-// k_2 = k_0 + rs
-// med = C_hl * r
-// res_hi = res_int + med
-// k_1 = res_int - res_hi
-// k_3 = k_1 + med
-//
-// 6. FINAL SUMMATION
-//
-// We now add up all the small parts:
-//
-// res_lo = pols(hi) + pols(lo) + corr + k_1 + k_3
-//
-// Now the overall result is just:
-//
-// res_hi + res_lo
-//
-// 7. SMALL ARGUMENTS
-//
-// If |x| < SNN (SNN meaning the smallest normal number), we
-// simply perform 0.1111111 cdots 1111 * x. For SNN <= |x|, we
-// do 2^-55 * (2^55 * x - x).
-//
-// Special cases:
-// sin(NaN) = quiet NaN, and raise invalid exception
-// sin(INF) = NaN and raise invalid exception
-// sin(+/-0) = +/-0
-//
-    /******************************************************************************/
-
-// The 64 bit code is at most SSE2 compliant
     private ArrayDataPointerConstant onehalf = pointerConstant(16, new int[]{
             // @formatter:off
             0x00000000, 0x3fe00000, 0x00000000, 0x3fe00000
@@ -458,8 +466,7 @@ public final class AMD64MathSinOp extends AMD64MathStubUnaryOp {
         masm.movq(xmm2, recordExternalAddress(crb, shifter));          // 0x00000000, 0x43380000
         masm.andl(rax, 2147418112);
         masm.subl(rax, 808452096);
-        masm.cmpl(rax, 281346048);
-        masm.jcc(ConditionFlag.Above, block0);
+        masm.cmplAndJcc(rax, 281346048, ConditionFlag.Above, block0, false);
         masm.mulsd(xmm1, xmm0);
         masm.movdqu(xmm5, recordExternalAddress(crb, onehalf));        // 0x00000000, 0x3fe00000,
                                                                        // 0x00000000, 0x3fe00000
@@ -549,8 +556,7 @@ public final class AMD64MathSinOp extends AMD64MathStubUnaryOp {
         masm.bind(block0);
         masm.jcc(ConditionFlag.Greater, block1);
         masm.shrl(rax, 20);
-        masm.cmpl(rax, 3325);
-        masm.jcc(ConditionFlag.NotEqual, block2);
+        masm.cmplAndJcc(rax, 3325, ConditionFlag.NotEqual, block2, false);
         masm.mulsd(xmm0, recordExternalAddress(crb, allOnes));         // 0xffffffff, 0x3fefffff
         masm.jmp(block14);
 
@@ -564,8 +570,7 @@ public final class AMD64MathSinOp extends AMD64MathStubUnaryOp {
         masm.bind(block1);
         masm.pextrw(rax, xmm0, 3);
         masm.andl(rax, 32752);
-        masm.cmpl(rax, 32752);
-        masm.jcc(ConditionFlag.Equal, block3);
+        masm.cmplAndJcc(rax, 32752, ConditionFlag.Equal, block3, false);
         masm.pextrw(rcx, xmm0, 3);
         masm.andl(rcx, 32752);
         masm.subl(rcx, 16224);
@@ -657,15 +662,13 @@ public final class AMD64MathSinOp extends AMD64MathStubUnaryOp {
         masm.addq(r9, AMD64.rdx);
         masm.movl(rdx, rcx);
         masm.addl(rdx, 32);
-        masm.cmpl(rcx, 1);
-        masm.jcc(ConditionFlag.Less, block4);
+        masm.cmplAndJcc(rcx, 1, ConditionFlag.Less, block4, false);
         masm.negl(rcx);
         masm.addl(rcx, 29);
         masm.shll(r9);
         masm.movl(rdi, r9);
         masm.andl(r9, 536870911);
-        masm.testl(r9, 268435456);
-        masm.jcc(ConditionFlag.NotEqual, block5);
+        masm.testlAndJcc(r9, 268435456, ConditionFlag.NotEqual, block5, false);
         masm.shrl(r9);
         masm.movl(rbx, 0);
         masm.shlq(r9, 32);
@@ -675,14 +678,12 @@ public final class AMD64MathSinOp extends AMD64MathStubUnaryOp {
 
         masm.bind(block7);
 
-        masm.cmpq(r9, 0);
-        masm.jcc(ConditionFlag.Equal, block8);
+        masm.cmpqAndJcc(r9, 0, ConditionFlag.Equal, block8, false);
 
         masm.bind(block9);
         masm.bsrq(r11, r9);
         masm.movl(rcx, 29);
-        masm.subl(rcx, r11);
-        masm.jcc(ConditionFlag.LessEqual, block10);
+        masm.sublAndJcc(rcx, r11, ConditionFlag.LessEqual, block10, false);
         masm.shlq(r9);
         masm.movq(AMD64.rax, r10);
         masm.shlq(r10);
@@ -817,13 +818,11 @@ public final class AMD64MathSinOp extends AMD64MathStubUnaryOp {
         masm.movq(r9, r10);
         masm.movq(r10, r8);
         masm.movl(r8, 0);
-        masm.cmpq(r9, 0);
-        masm.jcc(ConditionFlag.NotEqual, block9);
+        masm.cmpqAndJcc(r9, 0, ConditionFlag.NotEqual, block9, false);
         masm.addl(rdx, 64);
         masm.movq(r9, r10);
         masm.movq(r10, r8);
-        masm.cmpq(r9, 0);
-        masm.jcc(ConditionFlag.NotEqual, block9);
+        masm.cmpqAndJcc(r9, 0, ConditionFlag.NotEqual, block9, false);
         masm.xorpd(xmm0, xmm0);
         masm.xorpd(xmm6, xmm6);
         masm.jmp(block12);
@@ -847,8 +846,7 @@ public final class AMD64MathSinOp extends AMD64MathStubUnaryOp {
         masm.orq(r9, r11);
         masm.shlq(r9);
         masm.movq(rdi, r9);
-        masm.testl(r9, Integer.MIN_VALUE);
-        masm.jcc(ConditionFlag.NotEqual, block13);
+        masm.testlAndJcc(r9, Integer.MIN_VALUE, ConditionFlag.NotEqual, block13, false);
         masm.shrl(r9);
         masm.movl(rbx, 0);
         masm.shrq(rdi, 3);
