@@ -24,21 +24,33 @@
  */
 package org.graalvm.compiler.hotspot.stubs;
 
-import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
+import static org.graalvm.compiler.core.common.type.PrimitiveStamp.getBits;
+import static org.graalvm.compiler.hotspot.meta.HotSpotHostForeignCallsProvider.INVOKE_STATIC_METHOD_ONE_ARG;
+
+import org.graalvm.compiler.core.common.type.FloatStamp;
+import org.graalvm.compiler.core.common.type.ObjectStamp;
+import org.graalvm.compiler.core.common.type.PrimitiveStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
+import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.hotspot.nodes.StubForeignCallNode;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.calc.ReinterpretNode;
+import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.GraphKit;
 import org.graalvm.compiler.replacements.nodes.ReadRegisterNode;
-import org.graalvm.compiler.word.Word;
+import org.graalvm.compiler.word.WordCastNode;
 
+import jdk.vm.ci.code.site.ConstantReference;
+import jdk.vm.ci.code.site.DataPatch;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
+import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -60,11 +72,14 @@ public class InvokeJavaMethodStub extends AbstractForeignCallStub {
                     ResolvedJavaMethod staticMethod) {
         super(options, runtime, providers, address, descriptor, true);
         this.javaMethod = staticMethod;
+        // This stub is compiled to kill no registers which interferes with returning float and
+        // double through a long. For simplicity disallow that case until it's required.
+        GraalError.guarantee(!javaMethod.getSignature().getReturnKind().isNumericFloat(), "float/double returns don't work with register save/restore logic: %s", javaMethod);
     }
 
     @Override
-    protected Class<?>[] createTargetParameters(ForeignCallDescriptor descriptor) {
-        return new Class<?>[]{Word.class, Word.class, Long.TYPE};
+    protected HotSpotForeignCallDescriptor getTargetSignature(HotSpotForeignCallDescriptor descriptor) {
+        return INVOKE_STATIC_METHOD_ONE_ARG;
     }
 
     @Override
@@ -78,8 +93,7 @@ public class InvokeJavaMethodStub extends AbstractForeignCallStub {
     }
 
     @Override
-    protected StubForeignCallNode createTargetCall(GraphKit kit, ReadRegisterNode thread) {
-        Stamp stamp = StampFactory.forKind(javaMethod.getSignature().getReturnKind());
+    protected ValueNode createTargetCall(GraphKit kit, ReadRegisterNode thread) {
         ParameterNode[] params = createParameters(kit);
         ValueNode[] targetArguments = new ValueNode[2 + params.length];
         targetArguments[0] = thread;
@@ -87,9 +101,45 @@ public class InvokeJavaMethodStub extends AbstractForeignCallStub {
         if (params.length == 0) {
             targetArguments[2] = ConstantNode.defaultForKind(JavaKind.Long, kit.getGraph());
         } else {
-            targetArguments[2] = params[0];
+            // Repack the value into a Java long
+            ValueNode value = params[0];
+            Stamp valueStamp = value.stamp(NodeView.DEFAULT);
+            if (valueStamp instanceof ObjectStamp) {
+                value = WordCastNode.objectToUntrackedPointer(value, JavaKind.Long);
+                kit.append(value);
+            } else if (valueStamp instanceof PrimitiveStamp) {
+                if (valueStamp instanceof FloatStamp) {
+                    // Convert float to integer
+                    value = ReinterpretNode.create(valueStamp.getStackKind() == JavaKind.Float ? JavaKind.Int : JavaKind.Long, value, NodeView.DEFAULT);
+                }
+                int bits = getBits(valueStamp);
+                if (bits != 0 && bits < JavaKind.Long.getBitCount()) {
+                    // The VM will narrow these values to their expected size so simply zero extend
+                    // to the required bits.
+                    value = new ZeroExtendNode(value, JavaKind.Long.getBitCount());
+                }
+            }
+            targetArguments[2] = value;
         }
+        assert INVOKE_STATIC_METHOD_ONE_ARG.getResultType() == long.class;
+        Stamp returnStamp = StampFactory.forKind(JavaKind.Long);
+        ValueNode result = kit.append(new StubForeignCallNode(providers.getForeignCalls(), returnStamp, INVOKE_STATIC_METHOD_ONE_ARG, targetArguments));
+        return result;
+    }
 
-        return kit.append(new StubForeignCallNode(providers.getForeignCalls(), stamp, target.getDescriptor(), targetArguments));
+    @Override
+    protected void checkSafeDataReference(DataPatch data) {
+        if (data.reference instanceof ConstantReference) {
+            ConstantReference reference = (ConstantReference) data.reference;
+            if (reference.getConstant() instanceof HotSpotMetaspaceConstant) {
+                HotSpotMetaspaceConstant meta = (HotSpotMetaspaceConstant) reference.getConstant();
+                if (javaMethod.equals(meta.asResolvedJavaMethod())) {
+                    // Permit direct metadata reference to the target method since metadata doesn't
+                    // move and the ResolvedJavaMethod instance will keep it alive.
+                    return;
+                }
+            }
+        }
+        super.checkSafeDataReference(data);
     }
 }
