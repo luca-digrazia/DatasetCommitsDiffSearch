@@ -161,7 +161,7 @@ public final class LLVMScope implements TruffleObject {
 
     @ExportMessage
     boolean isMemberReadable(@SuppressWarnings("unused") String name) {
-        return contains(name);
+        return true;
     }
 
     @ExportMessage
