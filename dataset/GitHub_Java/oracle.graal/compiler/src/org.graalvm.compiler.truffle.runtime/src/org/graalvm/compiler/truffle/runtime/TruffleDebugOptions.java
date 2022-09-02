@@ -66,6 +66,7 @@ final class TruffleDebugOptions {
         Disable;
 
         static PrintGraphTarget translate(Object value) {
+            assert value.getClass().isEnum();
             return valueOf(String.valueOf(value));
         }
 
