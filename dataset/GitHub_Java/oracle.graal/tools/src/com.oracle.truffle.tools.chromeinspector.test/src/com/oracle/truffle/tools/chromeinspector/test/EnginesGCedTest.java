@@ -35,7 +35,7 @@ import org.graalvm.polyglot.Engine;
 
 import com.oracle.truffle.api.test.GCUtils;
 
-public abstract class EnginesGCedTest {
+abstract class EnginesGCedTest {
 
     private Set<WeakReference<Engine>> engineRefs;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -68,7 +68,7 @@ public final class InspectServerSession implements MessageEndpoint {
     private volatile MessageEndpoint messageEndpoint;
     private volatile JSONMessageListener jsonMessageListener;
     private volatile CommandProcessThread processThread;
-    private volatile Runnable onClose;
+    private Runnable onClose;
 
     private InspectServerSession(RuntimeDomain runtime, DebuggerDomain debugger, ProfilerDomain profiler,
                     InspectorExecutionContext context, ReadWriteLock domainLock) {
@@ -93,9 +93,23 @@ public final class InspectServerSession implements MessageEndpoint {
 
     @Override
     public void sendClose() {
-        dispose();
-        Runnable onCloseRunnable = onClose;
-        onClose = null;
+        Runnable onCloseRunnable = null;
+        Lock lock = domainLock.writeLock();
+        lock.lock();
+        try {
+            runtime.disable();
+            debugger.disable();
+            profiler.disable();
+        } finally {
+            lock.unlock();
+        }
+        context.reset();
+        synchronized (this) {
+            messageEndpoint = null;
+            processThread.dispose();
+            processThread = null;
+            onCloseRunnable = onClose;
+        }
         if (onCloseRunnable != null) {
             onCloseRunnable.run();
         }
@@ -107,16 +121,6 @@ public final class InspectServerSession implements MessageEndpoint {
     }
 
     public void dispose() {
-        Lock lock = domainLock.writeLock();
-        lock.lock();
-        try {
-            runtime.disable();
-            debugger.disable();
-            profiler.disable();
-        } finally {
-            lock.unlock();
-        }
-        context.reset();
         CommandProcessThread cmdProcessThread;
         synchronized (this) {
             this.messageEndpoint = null;
