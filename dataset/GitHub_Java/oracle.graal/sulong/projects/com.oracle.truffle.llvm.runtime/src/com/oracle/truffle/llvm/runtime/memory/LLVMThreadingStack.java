@@ -58,7 +58,7 @@ public final class LLVMThreadingStack {
     }
 
     @TruffleBoundary
-    private synchronized LLVMStack getCurrentStack() {
+    private LLVMStack getCurrentStack() {
         return threadMap.get(Thread.currentThread());
     }
 
