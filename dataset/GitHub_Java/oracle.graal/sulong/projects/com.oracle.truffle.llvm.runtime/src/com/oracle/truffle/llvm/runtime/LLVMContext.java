@@ -30,6 +30,7 @@
 package com.oracle.truffle.llvm.runtime;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
@@ -62,8 +63,8 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.utilities.AssumedValue;
 import com.oracle.truffle.llvm.api.Toolchain;
+import com.oracle.truffle.llvm.instruments.trace.LLVMTracerInstrument;
 import com.oracle.truffle.llvm.runtime.LLVMArgumentBuffer.LLVMArgumentArray;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage.Loader;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
@@ -72,7 +73,6 @@ import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalContainer;
-import com.oracle.truffle.llvm.runtime.instruments.trace.LLVMTracerInstrument;
 import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
@@ -84,7 +84,6 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMThreadingStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.sulong.LLVMPrintToolchainPath;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
-import com.oracle.truffle.llvm.runtime.options.TargetStream;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -116,7 +115,7 @@ public final class LLVMContext {
     private final Map<String, String> environment;
     private final ArrayList<LLVMNativePointer> caughtExceptionStack = new ArrayList<>();
     private ConcurrentHashMap<String, Integer> nativeCallStatistics;        // effectively final
-    // after initialization
+                                                                            // after initialization
 
     private final HandleContainer handleContainer;
     private final HandleContainer derefHandleContainer;
@@ -134,7 +133,7 @@ public final class LLVMContext {
     private final Map<Thread, Object> tls = new ConcurrentHashMap<>();
 
     // private for storing the globals of each bcode file;
-    @CompilationFinal(dimensions = 2) private AssumedValue<LLVMPointer>[][] globalStorage;
+    private LLVMPointer[][] globalStorage = new LLVMPointer[10][];
 
     // signals
     private final LLVMNativePointer sigDfl;
@@ -171,7 +170,6 @@ public final class LLVMContext {
         }
     }
 
-    @SuppressWarnings("unchecked")
     LLVMContext(LLVMLanguage language, Env env, Toolchain toolchain) {
         this.language = language;
         this.libsulongDatalayout = null;
@@ -204,8 +202,6 @@ public final class LLVMContext {
         addLibraryPaths(SulongEngineOption.getPolyglotOptionSearchPaths(env));
 
         pThreadContext = new LLVMPThreadContext(this);
-
-        globalStorage = new AssumedValue[10][];
     }
 
     boolean patchContext(Env newEnv) {
@@ -260,15 +256,16 @@ public final class LLVMContext {
     void initialize() {
         this.initializeContextCalled = true;
         assert this.threadingStack == null;
-
         final String traceOption = env.getOptions().get(SulongEngineOption.TRACE_IR);
-        if (SulongEngineOption.optionEnabled(traceOption)) {
+        if (!"".equalsIgnoreCase(traceOption)) {
             if (!env.getOptions().get(SulongEngineOption.LL_DEBUG)) {
                 throw new IllegalStateException("\'--llvm.traceIR\' requires \'--llvm.llDebug=true\'");
             }
-            tracer = new LLVMTracerInstrument(env, traceOption);
+            tracer = new LLVMTracerInstrument();
+            tracer.initialize(env, traceOption);
+        } else {
+            tracer = null;
         }
-
         this.threadingStack = new LLVMThreadingStack(Thread.currentThread(), parseStackSize(env.getOptions().get(SulongEngineOption.STACK_SIZE)));
         for (ContextExtension ext : language.getLanguageContextExtension()) {
             ext.initialize();
@@ -470,14 +467,6 @@ public final class LLVMContext {
         if (tracer != null) {
             tracer.dispose();
         }
-
-        if (loaderTraceStream != null) {
-            loaderTraceStream.dispose();
-        }
-
-        if (syscallTraceStream != null) {
-            syscallTraceStream.dispose();
-        }
     }
 
     public ExternalLibrary addInternalLibrary(String lib, boolean isNative) {
@@ -615,22 +604,23 @@ public final class LLVMContext {
         return globalScope;
     }
 
-    public AssumedValue<LLVMPointer>[] findGlobalTable(int id) {
+    public LLVMPointer[] findGlobal(int id) {
         return globalStorage[id];
     }
-
-    @SuppressWarnings("unchecked")
+    
     @TruffleBoundary
-    public void registerGlobalTable(int index, AssumedValue<LLVMPointer>[] target) {
-        synchronized (this) {
+    public void registerGlobalMap(int index, LLVMPointer[] target) {
+        synchronized (globalStorage) {
             if (index < globalStorage.length) {
                 globalStorage[index] = target;
             } else {
                 int newLength = (index + 1) + ((index + 1) / 2);
-                AssumedValue<LLVMPointer>[][] temp = new AssumedValue[newLength][];
-                System.arraycopy(globalStorage, 0, temp, 0, globalStorage.length);
-                globalStorage = temp;
-                globalStorage[index] = target;
+                LLVMPointer[][] temp = new LLVMPointer[newLength][];
+                synchronized (temp) {
+                    System.arraycopy(globalStorage, 0, temp, 0, globalStorage.length);
+                    globalStorage = temp;
+                    globalStorage[index] = target;
+                }
             }
         }
     }
@@ -964,39 +954,26 @@ public final class LLVMContext {
         }
     }
 
-    @CompilationFinal private TargetStream loaderTraceStream;
-    @CompilationFinal private boolean loaderTraceStreamInitialized = false;
+    @CompilationFinal private boolean traceLoaderEnabled;
+    @CompilationFinal private PrintStream traceLoaderStream;
 
-    public TargetStream loaderTraceStream() {
-        if (!loaderTraceStreamInitialized) {
+    private void cacheTrace() {
+        if (traceLoaderStream == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-
-            final String loaderDebugOption = env.getOptions().get(SulongEngineOption.LD_DEBUG);
-            if (SulongEngineOption.optionEnabled(loaderDebugOption)) {
-                loaderTraceStream = new TargetStream(env, loaderDebugOption);
-            }
-
-            loaderTraceStreamInitialized = true;
+            traceLoaderStream = SulongEngineOption.getStream(getEnv().getOptions().get(SulongEngineOption.LD_DEBUG));
+            traceLoaderEnabled = SulongEngineOption.isTrue(getEnv().getOptions().get(SulongEngineOption.LD_DEBUG));
+            assert traceLoaderStream != null;
         }
-        return loaderTraceStream;
     }
 
-    @CompilationFinal private TargetStream syscallTraceStream;
-    @CompilationFinal private boolean syscallTraceStreamInitialized = false;
+    boolean ldDebugEnabled() {
+        cacheTrace();
+        return traceLoaderEnabled;
+    }
 
-    public TargetStream syscallTraceStream() {
-        if (!syscallTraceStreamInitialized) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-
-            final String debugSyscallsOption = env.getOptions().get(SulongEngineOption.DEBUG_SYSCALLS);
-            if (SulongEngineOption.optionEnabled(debugSyscallsOption)) {
-                syscallTraceStream = new TargetStream(env, debugSyscallsOption);
-            }
-
-            syscallTraceStreamInitialized = true;
-        }
-
-        return syscallTraceStream;
+    PrintStream ldDebugStream() {
+        cacheTrace();
+        return traceLoaderStream;
     }
 
 }
