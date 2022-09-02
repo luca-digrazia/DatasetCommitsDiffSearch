@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2007, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,6 +35,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Enumeration;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -45,6 +46,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 
+import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.core.common.SuppressFBWarnings;
 import org.graalvm.compiler.serviceprovider.GraalUnsafeAccess;
 import org.graalvm.compiler.word.ObjectAccess;
@@ -83,7 +85,7 @@ import jdk.vm.ci.meta.ResolvedJavaField;
 final class Target_java_lang_Object {
 
     @Substitute
-    @TargetElement(name = "registerNatives", onlyWith = JDK11OrEarlier.class)
+    @TargetElement(name = "registerNatives")
     private static void registerNativesSubst() {
         /* We reimplemented all native methods, so nothing to do. */
     }
@@ -735,17 +737,6 @@ final class Target_java_lang_Package {
     }
 }
 
-@TargetClass(java.lang.NullPointerException.class)
-final class Target_java_lang_NullPointerException {
-
-    @Substitute
-    @TargetElement(onlyWith = JDK14OrLater.class)
-    @SuppressWarnings("static-method")
-    private String getExtendedNPEMessage() {
-        return null;
-    }
-}
-
 @TargetClass(className = "jdk.internal.loader.BootLoader", onlyWith = JDK11OrLater.class)
 final class Target_jdk_internal_loader_BootLoader {
 
@@ -801,6 +792,39 @@ final class Target_jdk_internal_loader_BootLoader {
 
 /** Dummy class to have a class with the file's name. */
 public final class JavaLangSubstitutions {
+
+    public static class ClassLoaderSupport {
+        public Target_java_lang_ClassLoader systemClassLoader;
+        public Target_java_lang_ClassLoader platformClassLoader;
+
+        @Platforms(Platform.HOSTED_ONLY.class) public Map<ClassLoader, Target_java_lang_ClassLoader> classLoaders = Collections.synchronizedMap(new IdentityHashMap<>());
+
+        @Fold
+        public static ClassLoaderSupport getInstance() {
+            return ImageSingletons.lookup(ClassLoaderSupport.class);
+        }
+
+        public Target_java_lang_ClassLoader getOrCreate(ClassLoader classLoader) {
+            createClassLoaders(classLoader);
+            return classLoaders.get(classLoader);
+        }
+
+        public void createClassLoaders(ClassLoader loader) {
+            if (loader == null) {
+                return;
+            }
+            Map<ClassLoader, Target_java_lang_ClassLoader> loaders = ClassLoaderSupport.getInstance().classLoaders;
+            if (!loaders.containsKey(loader)) {
+                ClassLoader parent = loader.getParent();
+                if (parent != null) {
+                    createClassLoaders(parent);
+                    loaders.put(loader, new Target_java_lang_ClassLoader(loaders.get(parent)));
+                } else {
+                    loaders.put(loader, new Target_java_lang_ClassLoader());
+                }
+            }
+        }
+    }
 
     @Platforms(Platform.HOSTED_ONLY.class)//
     public static final class ClassValueSupport {
