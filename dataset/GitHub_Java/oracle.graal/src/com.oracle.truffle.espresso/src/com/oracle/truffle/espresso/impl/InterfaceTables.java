@@ -119,11 +119,11 @@ class InterfaceTables {
      * @param thisKlass the Klass for which the table is constructed
      * @param superKlass the super class of thisKlass
      * @param superInterfaces the superInterfaces of thisKlass
-     * @return a 3-uple containing: <p>
+     * @return a 3-uple containing:
      *      - An intermediate helper for the itable.
-     *        Each entry of the helper table contains information of where to find the method that will be put in its place<p>
-     *      - An array containing all directly and indirectly implemented interfaces<p>
-     *      - An array of implicitly declared methods (aka, mirandas). This most notably contains default methods.<p>
+     *        Each entry of the helper table contains information of where to find the method that will be put in its place
+     *      - An array containing all directly and indirectly implemented interfaces
+     *      - An array of implicitly declared methods (aka, mirandas). This most notably contains default methods.
      */
     // checkstyle: resume
     // @formatter:on
@@ -206,33 +206,21 @@ class InterfaceTables {
                     break;
             }
             Method interfMethod = interfMethods[i];
-            if (!virtualMethod.hasCode() && interfMethod.hasCode()) {
-                // Abstract method vs. default method: take default and shortcut default conflict
-                // checking.
-                updateEntry(vtable, mirandas, entry, index, virtualMethod, interfMethod);
-            } else if (checkDefaultConflict(virtualMethod, interfMethod)) {
+            if (virtualMethod.hasCode() && checkDefaultConflict(virtualMethod, interfMethod)) {
                 Method result = resolveMaximallySpecific(virtualMethod, interfMethod);
                 if (result != virtualMethod) {
-                    updateEntry(vtable, mirandas, entry, index, virtualMethod, result);
+                    if (entry.loc == Location.MIRANDAS) {
+                        result = new Method(result);
+                        int vtableIndex = virtualMethod.getVTableIndex();
+                        vtable[vtableIndex] = result;
+                        mirandas[index] = result;
+                        result.setVTableIndex(vtableIndex);
+                    } else {
+                        vtable[index] = result;
+                        result.setVTableIndex(index);
+                    }
                 }
             }
-        }
-    }
-
-    private static void updateEntry(Method[] vtable, Method[] mirandas, Entry entry, int index, Method virtualMethod, Method toPut) {
-        if (entry.loc == Location.MIRANDAS) {
-            Method newMiranda = new Method(toPut);
-            int vtableIndex = virtualMethod.getVTableIndex();
-            vtable[vtableIndex] = newMiranda;
-            mirandas[index] = newMiranda;
-            newMiranda.setVTableIndex(vtableIndex);
-        }
-        if (entry.loc == Location.SUPERVTABLE) {
-            vtable[index] = toPut;
-            toPut.setVTableIndex(index);
-        } else {
-            vtable[virtualMethod.getVTableIndex()] = toPut;
-            toPut.setVTableIndex(virtualMethod.getVTableIndex());
         }
     }
 
@@ -310,11 +298,9 @@ class InterfaceTables {
     }
 
     private static Method resolveMaximallySpecific(Method m1, Method m2) {
-        Klass k1 = m1.getDeclaringKlass();
-        Klass k2 = m2.getDeclaringKlass();
-        if (k1.isAssignableFrom(k2)) {
+        if (m1.getDeclaringKlass().isAssignableFrom(m2.getDeclaringKlass())) {
             return m2;
-        } else if (k2.isAssignableFrom(k1)) {
+        } else if (m2.getDeclaringKlass().isAssignableFrom(m1.getDeclaringKlass())) {
             return m1;
         } else {
             // Java specs:
