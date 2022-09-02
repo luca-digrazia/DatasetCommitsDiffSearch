@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -25,12 +27,11 @@ package org.graalvm.compiler.nodes.calc;
 import static org.graalvm.compiler.nodeinfo.NodeCycles.CYCLES_32;
 
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
-import org.graalvm.compiler.core.common.type.FloatStamp;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.BinaryOp;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable.BinaryOp.Div;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.ConstantNode;
@@ -50,18 +51,22 @@ public class FloatDivNode extends BinaryArithmeticNode<Div> {
     }
 
     protected FloatDivNode(NodeClass<? extends FloatDivNode> c, ValueNode x, ValueNode y) {
-        super(c, ArithmeticOpTable::getDiv, x, y);
-        assert stamp instanceof FloatStamp;
+        super(c, getArithmeticOpTable(x).getDiv(), x, y);
     }
 
-    public static ValueNode create(ValueNode x, ValueNode y) {
-        BinaryOp<Div> op = ArithmeticOpTable.forStamp(x.stamp(NodeView.DEFAULT)).getDiv();
-        Stamp stamp = op.foldStamp(x.stamp(NodeView.DEFAULT), y.stamp(NodeView.DEFAULT));
-        ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp);
+    public static ValueNode create(ValueNode x, ValueNode y, NodeView view) {
+        BinaryOp<Div> op = ArithmeticOpTable.forStamp(x.stamp(view)).getDiv();
+        Stamp stamp = op.foldStamp(x.stamp(view), y.stamp(view));
+        ConstantNode tryConstantFold = tryConstantFold(op, x, y, stamp, view);
         if (tryConstantFold != null) {
             return tryConstantFold;
         }
         return canonical(null, op, x, y);
+    }
+
+    @Override
+    protected BinaryOp<Div> getOp(ArithmeticOpTable table) {
+        return table.getDiv();
     }
 
     @Override
