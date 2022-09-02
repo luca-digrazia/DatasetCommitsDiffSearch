@@ -39,7 +39,7 @@ public interface TruffleCompiler {
      * Initializes the compiler before the first compilation.
      *
      * @param options the options for initialization
-     * @param compilation the Truffle AST that triggered the initialization
+     * @param compilation the Truffle AST triggered the initialization
      * @param firstInitialization first initialization. For a multi-isolate compiler the
      *            {@code firstInitialization} must be {@code true} for an initialization in the
      *            first isolate and {@code false} for an initialization in the following isolates.
@@ -93,7 +93,7 @@ public interface TruffleCompiler {
 
     /**
      * Notifies this object that it will no longer being used and should thus perform all relevant
-     * finalization tasks. This is typically performed when the process exits.
+     * finalization tasks.
      */
     void shutdown();
 }

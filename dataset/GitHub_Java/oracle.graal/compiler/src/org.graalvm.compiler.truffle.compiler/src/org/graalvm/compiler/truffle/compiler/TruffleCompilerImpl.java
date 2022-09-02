@@ -524,7 +524,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
             Suites selectedSuites = lastTierSuites;
             LIRSuites selectedLirSuites = lastTierLirSuites;
             Providers selectedProviders = lastTierProviders;
-            if (task != null && task.isFirstTier()) {
+            if (task != null && !task.isLastTier()) {
                 selectedSuites = firstTierSuites;
                 selectedLirSuites = firstTierLirSuites;
                 selectedProviders = firstTierProviders;

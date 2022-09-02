@@ -79,6 +79,7 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Split
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingDumpDecisions;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingGrowthLimit;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingMaxCalleeSize;
+import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingMaxNumberOfSplitNodes;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingMaxPropagationDepth;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.SplittingTraceEvents;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceAssumptions;
@@ -100,7 +101,6 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.collections.MapCursor;
 import org.graalvm.collections.Pair;
-import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
@@ -278,15 +278,6 @@ public final class TruffleCompilerOptions {
         return compilationExceptionsAreFatal || performanceWarningsAreFatal || exitVM;
     }
 
-    static OptionValues enableNodeSourcePositions(OptionValues values) {
-        if (GraalOptions.TrackNodeSourcePosition.getValue(values)) {
-            // already enabled nothing to do
-            return values;
-        } else {
-            return new OptionValues(values, GraalOptions.TrackNodeSourcePosition, Boolean.TRUE);
-        }
-    }
-
     /**
      * Gets the object holding the values of Truffle options.
      */
@@ -349,7 +340,7 @@ public final class TruffleCompilerOptions {
                 String polyglotOptionName = polyglotOptionKeyToName.get(deprecatedCursor.getValue());
                 formatter.format("WARNING: The option '%s' was deprecated. Truffle runtime options are no longer specified as Graal options (-Dgraal.*).%n", deprecatedOptionKey.getName());
                 formatter.format("Replace the Graal option usage with one of the following replacements:%n");
-                if (value instanceof Boolean && ((boolean) value) == true) {
+                if (value instanceof Boolean) {
                     formatter.format("* '--%s' if the option is passed using a guest language launcher.%n", polyglotOptionName);
                 } else {
                     formatter.format("* '--%s=%s' if the option is passed using a guest language launcher.%n", polyglotOptionName, strValue);
@@ -427,6 +418,7 @@ public final class TruffleCompilerOptions {
             result.put(Splitting, identity(SharedTruffleCompilerOptions.TruffleSplitting));
             result.put(SplittingMaxCalleeSize, identity(SharedTruffleCompilerOptions.TruffleSplittingMaxCalleeSize));
             result.put(SplittingGrowthLimit, identity(SharedTruffleCompilerOptions.TruffleSplittingGrowthLimit));
+            result.put(SplittingMaxNumberOfSplitNodes, identity(SharedTruffleCompilerOptions.TruffleSplittingMaxNumberOfSplitNodes));
             result.put(SplittingMaxPropagationDepth, identity(SharedTruffleCompilerOptions.TruffleSplittingMaxPropagationDepth));
             result.put(TraceSplittingSummary, identity(SharedTruffleCompilerOptions.TruffleTraceSplittingSummary));
             result.put(SplittingTraceEvents, identity(SharedTruffleCompilerOptions.TruffleSplittingTraceEvents));

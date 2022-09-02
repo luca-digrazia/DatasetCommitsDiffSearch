@@ -34,10 +34,10 @@ import org.graalvm.compiler.truffle.common.TruffleCompilation;
 import org.graalvm.compiler.truffle.common.TruffleCompilationTask;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener;
 import org.graalvm.compiler.truffle.common.TruffleDebugContext;
-import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
+import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.common.hotspot.HotSpotTruffleCompiler;
-import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 import org.graalvm.libgraal.LibGraalObject;
 import org.graalvm.libgraal.LibGraalScope;
 import org.graalvm.util.OptionsEncoder;
@@ -67,14 +67,10 @@ final class LibGraalHotSpotTruffleCompiler implements HotSpotTruffleCompiler {
         });
     }
 
-    private static long handle() {
+    static long handle() {
         return handleImpl(() -> {
             throw new IllegalStateException("Handle not yet created. Missing call of the TruffleCompiler::initialize method or calling compiler method outside of the compiler thread scope.");
         });
-    }
-
-    long handle(Map<String, Object> options, LibGraalTruffleCompilation compilation) {
-        return handle(() -> options, compilation != null ? compilation.getCompilable() : null, false);
     }
 
     private static long handleImpl(Supplier<Handle> handleSupplier) {
@@ -98,7 +94,7 @@ final class LibGraalHotSpotTruffleCompiler implements HotSpotTruffleCompiler {
 
     @Override
     public TruffleCompilation openCompilation(CompilableTruffleAST compilable) {
-        LibGraalScope scope = new LibGraalScope(LibGraalScope.DetachAction.DETACH_RUNTIME_AND_RELEASE);
+        LibGraalScope scope = new LibGraalScope();
         long compilationHandle = TruffleToLibGraalCalls.openCompilation(getIsolateThread(), handle(optionsEncoder(compilable), compilable, false), compilable);
         LibGraalTruffleCompilation compilation = new LibGraalTruffleCompilation(this, compilationHandle, scope);
         activeCompilation.set(compilation);
@@ -114,7 +110,7 @@ final class LibGraalHotSpotTruffleCompiler implements HotSpotTruffleCompiler {
     public void doCompile(TruffleDebugContext debug,
                     TruffleCompilation compilation,
                     Map<String, Object> options,
-                    TruffleMetaAccessProvider inlining,
+                    TruffleInliningPlan inlining,
                     TruffleCompilationTask task,
                     TruffleCompilerListener listener) {
         byte[] encodedOptions = OptionsEncoder.encode(options);
@@ -142,7 +138,7 @@ final class LibGraalHotSpotTruffleCompiler implements HotSpotTruffleCompiler {
     @SuppressWarnings("try")
     @Override
     public void installTruffleCallBoundaryMethods(CompilableTruffleAST compilable) {
-        try (LibGraalScope scope = new LibGraalScope(LibGraalScope.DetachAction.DETACH_RUNTIME_AND_RELEASE)) {
+        try (LibGraalScope scope = new LibGraalScope()) {
             TruffleToLibGraalCalls.installTruffleCallBoundaryMethods(getIsolateThread(), handle(optionsEncoder(compilable), compilable, false), compilable);
         }
     }
@@ -153,7 +149,7 @@ final class LibGraalHotSpotTruffleCompiler implements HotSpotTruffleCompiler {
     @Override
     public int pendingTransferToInterpreterOffset(CompilableTruffleAST compilable) {
         if (pendingTransferToInterpreterOffset == null) {
-            try (LibGraalScope scope = new LibGraalScope(LibGraalScope.DetachAction.DETACH_RUNTIME_AND_RELEASE)) {
+            try (LibGraalScope scope = new LibGraalScope()) {
                 pendingTransferToInterpreterOffset = TruffleToLibGraalCalls.pendingTransferToInterpreterOffset(getIsolateThread(), handle(optionsEncoder(compilable), compilable, false), compilable);
             }
         }
@@ -170,6 +166,6 @@ final class LibGraalHotSpotTruffleCompiler implements HotSpotTruffleCompiler {
     }
 
     private static Supplier<Map<String, Object>> optionsEncoder(CompilableTruffleAST compilable) {
-        return () -> GraalTruffleRuntime.getOptionsForCompiler((OptimizedCallTarget) compilable);
+        return () -> TruffleRuntimeOptions.getOptionsForCompiler((OptimizedCallTarget) compilable);
     }
 }

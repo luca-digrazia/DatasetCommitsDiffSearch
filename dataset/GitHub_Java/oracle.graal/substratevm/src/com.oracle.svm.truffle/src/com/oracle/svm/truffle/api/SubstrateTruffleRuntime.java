@@ -113,6 +113,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
 
     @Override
     protected BackgroundCompileQueue getCompileQueue() {
+        assert compileQueue != null;
         return compileQueue;
     }
 
