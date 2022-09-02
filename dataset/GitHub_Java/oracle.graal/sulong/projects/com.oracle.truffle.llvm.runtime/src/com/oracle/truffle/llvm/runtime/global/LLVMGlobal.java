@@ -45,6 +45,7 @@ public final class LLVMGlobal extends LLVMSymbol {
 
     private final LLVMSourceSymbol sourceSymbol;
     private final boolean readOnly;
+    private final boolean exported;
     public static final LLVMGlobal[] EMPTY = {};
 
     @CompilationFinal private String name;
@@ -67,11 +68,12 @@ public final class LLVMGlobal extends LLVMSymbol {
     }
 
     private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int globalIndex, int moduleId, boolean exported) {
-        super(name, null, moduleId, globalIndex, exported);
+        super(name, null, moduleId, globalIndex);
         this.name = name;
         this.type = type;
         this.sourceSymbol = sourceSymbol;
         this.readOnly = readOnly;
+        this.exported = exported;
 
         this.interopTypeCached = false;
         this.interopType = null;
@@ -139,6 +141,11 @@ public final class LLVMGlobal extends LLVMSymbol {
     @Override
     public boolean isAlias() {
         return false;
+    }
+
+    @Override
+    public boolean isExported() {
+        return exported;
     }
 
     @Override

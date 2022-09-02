@@ -42,6 +42,7 @@ public final class LLVMFunction extends LLVMSymbol {
 
     private final FunctionType type;
     private final Function function;
+    private final boolean exported;
     public static final LLVMFunction[] EMPTY = {};
 
     public static LLVMFunction create(String name, ExternalLibrary library, Function function, FunctionType type, int bitcodeID, int symbolIndex, boolean exported) {
@@ -49,9 +50,10 @@ public final class LLVMFunction extends LLVMSymbol {
     }
 
     public LLVMFunction(String name, ExternalLibrary library, Function function, FunctionType type, int bitcodeID, int symbolIndex, boolean exported) {
-        super(name, library, bitcodeID, symbolIndex, exported);
+        super(name, library, bitcodeID, symbolIndex);
         this.type = type;
         this.function = function;
+        this.exported = exported;
     }
 
     public FunctionType getType() {
@@ -80,6 +82,11 @@ public final class LLVMFunction extends LLVMSymbol {
     @Override
     public boolean isAlias() {
         return false;
+    }
+
+    @Override
+    public boolean isExported() {
+        return exported;
     }
 
     @Override
