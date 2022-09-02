@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -31,7 +33,6 @@ import org.graalvm.compiler.lir.LIRInsertionBuffer;
 import org.graalvm.compiler.lir.LIRInstruction;
 import org.graalvm.compiler.lir.StandardOp;
 import org.graalvm.compiler.lir.Variable;
-import org.graalvm.compiler.lir.framemap.FrameMapBuilder;
 import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.lir.phases.PreAllocationOptimizationPhase;
@@ -48,25 +49,24 @@ public class SaveCalleeSaveRegisters extends PreAllocationOptimizationPhase {
 
     @Override
     protected void run(TargetDescription target, LIRGenerationResult lirGenRes, PreAllocationOptimizationContext context) {
-        FrameMapBuilder frameMapBuilder = lirGenRes.getFrameMapBuilder();
-        RegisterArray calleeSaveRegisters = frameMapBuilder.getCodeCache().getRegisterConfig().getCalleeSaveRegisters();
+        RegisterArray calleeSaveRegisters = lirGenRes.getRegisterConfig().getCalleeSaveRegisters();
         if (calleeSaveRegisters == null || calleeSaveRegisters.size() == 0) {
             return;
         }
         LIR lir = lirGenRes.getLIR();
-        RegisterMap<Variable> savedRegisters = saveAtEntry(lir, context.lirGen, calleeSaveRegisters, target.arch);
+        RegisterMap<Variable> savedRegisters = saveAtEntry(lir, context.lirGen, lirGenRes, calleeSaveRegisters, target.arch);
 
         for (AbstractBlockBase<?> block : lir.codeEmittingOrder()) {
             if (block == null) {
                 continue;
             }
             if (block.getSuccessorCount() == 0) {
-                restoreAtExit(lir, context.lirGen.getSpillMoveFactory(), savedRegisters, block);
+                restoreAtExit(lir, context.lirGen.getSpillMoveFactory(), lirGenRes, savedRegisters, block);
             }
         }
     }
 
-    private static RegisterMap<Variable> saveAtEntry(LIR lir, LIRGeneratorTool lirGen, RegisterArray calleeSaveRegisters, Architecture arch) {
+    private static RegisterMap<Variable> saveAtEntry(LIR lir, LIRGeneratorTool lirGen, LIRGenerationResult lirGenRes, RegisterArray calleeSaveRegisters, Architecture arch) {
         AbstractBlockBase<?> startBlock = lir.getControlFlowGraph().getStartBlock();
         ArrayList<LIRInstruction> instructions = lir.getLIRforBlock(startBlock);
         int insertionIndex = 1;
@@ -83,6 +83,7 @@ public class SaveCalleeSaveRegisters extends PreAllocationOptimizationPhase {
             Variable saveVariable = lirGen.newVariable(lirKind);
             LIRInstruction save = lirGen.getSpillMoveFactory().createMove(saveVariable, registerValue);
             buffer.append(insertionIndex, save);
+            save.setComment(lirGenRes, "SaveCalleeSavedRegisters: saveAtEntry");
             saveMap.put(register, saveVariable);
             savedRegisterValues[savedRegisterValueIndex++] = registerValue;
         }
@@ -91,7 +92,7 @@ public class SaveCalleeSaveRegisters extends PreAllocationOptimizationPhase {
         return saveMap;
     }
 
-    private static void restoreAtExit(LIR lir, LIRGeneratorTool.MoveFactory moveFactory, RegisterMap<Variable> calleeSaveRegisters, AbstractBlockBase<?> block) {
+    private static void restoreAtExit(LIR lir, LIRGeneratorTool.MoveFactory moveFactory, LIRGenerationResult lirGenRes, RegisterMap<Variable> calleeSaveRegisters, AbstractBlockBase<?> block) {
         ArrayList<LIRInstruction> instructions = lir.getLIRforBlock(block);
         int insertionIndex = instructions.size() - 1;
         LIRInsertionBuffer buffer = new LIRInsertionBuffer();
@@ -100,6 +101,7 @@ public class SaveCalleeSaveRegisters extends PreAllocationOptimizationPhase {
         calleeSaveRegisters.forEach((Register register, Variable saved) -> {
             LIRInstruction restore = moveFactory.createMove(register.asValue(saved.getValueKind()), saved);
             buffer.append(insertionIndex, restore);
+            restore.setComment(lirGenRes, "SaveCalleeSavedRegisters: restoreAtExit");
         });
         buffer.finish();
     }
