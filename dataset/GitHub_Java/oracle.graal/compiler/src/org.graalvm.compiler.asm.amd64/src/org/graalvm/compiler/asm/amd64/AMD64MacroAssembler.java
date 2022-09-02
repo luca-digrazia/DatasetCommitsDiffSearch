@@ -27,17 +27,12 @@ package org.graalvm.compiler.asm.amd64;
 import static org.graalvm.compiler.asm.amd64.AMD64AsmOptions.UseIncDec;
 import static org.graalvm.compiler.asm.amd64.AMD64AsmOptions.UseXmmLoadAndClearUpper;
 import static org.graalvm.compiler.asm.amd64.AMD64AsmOptions.UseXmmRegToRegMoveAll;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64BinaryArithmetic.CMP;
-import static org.graalvm.compiler.asm.amd64.AMD64BaseAssembler.OperandSize.DWORD;
-import static org.graalvm.compiler.asm.amd64.AMD64BaseAssembler.OperandSize.QWORD;
-import static org.graalvm.compiler.core.common.NumUtil.isByte;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AVXKind.AVXSize;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.lir.LIRFrameState;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
-import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.amd64.AMD64;
 import jdk.vm.ci.amd64.AMD64Kind;
@@ -53,10 +48,6 @@ public class AMD64MacroAssembler extends AMD64Assembler {
 
     public AMD64MacroAssembler(TargetDescription target) {
         super(target);
-    }
-
-    public AMD64MacroAssembler(TargetDescription target, OptionValues optionValues) {
-        super(target, optionValues);
     }
 
     public final void decrementq(Register reg, int value) {
@@ -385,247 +376,78 @@ public class AMD64MacroAssembler extends AMD64Assembler {
         addq(AMD64.rsp, AMD64Kind.DOUBLE.getSizeInBytes());
     }
 
-    /**
-     * Emit a direct call to a fixed address, which will be patched later during code installation.
-     *
-     * @param align indicates whether the displacement bytes (offset by
-     *            {@code callDisplacementOffset}) of this call instruction should be aligned to
-     *            {@code wordSize}.
-     * @return where the actual call instruction starts.
-     */
-    public final int directCall(boolean align, int callDisplacementOffset, int wordSize) {
-        emitAlignmentForDirectCall(align, callDisplacementOffset, wordSize);
-        testAndAlignNextOp(5);
-        // After padding to mitigate JCC erratum, the displacement may be unaligned again. The
-        // previous pass is essential because JCC erratum padding may not trigger without the
-        // displacement alignment.
-        emitAlignmentForDirectCall(align, callDisplacementOffset, wordSize);
-        int before = position();
-        call();
-        return before;
+    public final void testAndJcc(OperandSize size, Register src, int imm32, ConditionFlag cc, Label branchTarget) {
+        AMD64MIOp.TEST.emit(this, size, src, imm32, false);
+        jcc(cc, branchTarget);
     }
 
-    private void emitAlignmentForDirectCall(boolean align, int callDisplacementOffset, int wordSize) {
-        if (align) {
-            // make sure that the displacement word of the call ends up word aligned
-            int offset = position();
-            offset += callDisplacementOffset;
-            int modulus = wordSize;
-            if (offset % modulus != 0) {
-                nop(modulus - offset % modulus);
-            }
-        }
-    }
-
-    public final int indirectCall(Register callReg) {
-        int before = position();
-        call(callReg);
-        int bytesShifted = testAndAlignLastOp(before);
-        return before + bytesShifted;
-    }
-
-    public final int directCall(long address, Register scratch) {
-        int beforeMov = position();
-        movq(scratch, address);
-        int beforeCall = position();
-        call(scratch);
-        if (useBranchesWithin32ByteBoundary) {
-            int afterCall = position();
-            if (mayCrossBoundary(beforeCall, afterCall)) {
-                int bytesToShift = bytesUntilBoundary(beforeCall);
-                shiftAndFillWithNop(beforeMov, afterCall, bytesToShift);
-                return beforeMov + bytesToShift;
-            }
-        }
-        return beforeMov;
-    }
-
-    public final int directJmp(long address, Register scratch) {
-        int beforeMov = position();
-        movq(scratch, address);
-        int beforeJmp = position();
-        jmp(scratch);
-        if (useBranchesWithin32ByteBoundary) {
-            int afterJmp = position();
-            if (mayCrossBoundary(beforeJmp, afterJmp)) {
-                int bytesToShift = bytesUntilBoundary(beforeJmp);
-                shiftAndFillWithNop(beforeMov, afterJmp, bytesToShift);
-                return beforeMov + bytesToShift;
-            }
-        }
-        return beforeMov;
-    }
-
-    private int jcc(ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        if (branchTarget == null) {
-            // jump to placeholder
-            return jcc(cc, 0, true);
-        } else if (isShortJmp) {
-            return jccb(cc, branchTarget);
-        } else {
-            return jcc(cc, branchTarget);
-        }
-    }
-
-    public final void testAndJcc(OperandSize size, Register src, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        AMD64MIOp.TEST.emit(this, size, src, imm32);
-        jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final void testlAndJcc(Register src, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        testAndJcc(DWORD, src, imm32, cc, branchTarget, isShortJmp);
-    }
-
-    public final void testAndJcc(OperandSize size, AMD64Address src, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp, CompilationResultBuilder crb, LIRFrameState state) {
-        if (crb != null && state != null) {
+    public final void testAndJcc(OperandSize size, AMD64Address src, int imm32, ConditionFlag cc, Label branchTarget, CompilationResultBuilder crb, LIRFrameState state) {
+        if (state != null) {
             crb.recordImplicitException(position(), state);
         }
         AMD64MIOp.TEST.emit(this, size, src, imm32, false);
-        jcc(cc, branchTarget, isShortJmp);
+        jcc(cc, branchTarget);
     }
 
-    public final int testAndJcc(OperandSize size, Register src1, Register src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+    public final void testAndJcc(OperandSize size, Register src1, Register src2, ConditionFlag cc, Label branchTarget) {
         AMD64RMOp.TEST.emit(this, size, src1, src2);
-        return jcc(cc, branchTarget, isShortJmp);
+        jcc(cc, branchTarget);
     }
 
-    public final void testlAndJcc(Register src1, Register src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        testAndJcc(DWORD, src1, src2, cc, branchTarget, isShortJmp);
-    }
-
-    public final int testqAndJcc(Register src1, Register src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        return testAndJcc(QWORD, src1, src2, cc, branchTarget, isShortJmp);
-    }
-
-    public final void testAndJcc(OperandSize size, Register src1, AMD64Address src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp, CompilationResultBuilder crb, LIRFrameState state) {
-        if (crb != null && state != null) {
+    public final void testAndJcc(OperandSize size, Register src1, AMD64Address src2, ConditionFlag cc, Label branchTarget, CompilationResultBuilder crb, LIRFrameState state) {
+        if (state != null) {
             crb.recordImplicitException(position(), state);
         }
         AMD64RMOp.TEST.emit(this, size, src1, src2);
-        jcc(cc, branchTarget, isShortJmp);
+        jcc(cc, branchTarget);
     }
 
-    public final void testbAndJcc(Register src1, Register src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+    public final void testbAndJcc(Register src1, Register src2, ConditionFlag cc, Label branchTarget) {
         AMD64RMOp.TESTB.emit(this, OperandSize.BYTE, src1, src2);
         jcc(cc, branchTarget);
     }
 
-    public final void testbAndJcc(Register src1, AMD64Address src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
+    public final void testbAndJcc(Register src1, AMD64Address src2, ConditionFlag cc, Label branchTarget) {
         AMD64RMOp.TESTB.emit(this, OperandSize.BYTE, src1, src2);
         jcc(cc, branchTarget);
     }
 
-    public final int cmpAndJcc(OperandSize size, Register src, int imm32, VMConstant inlinedConstant, ConditionFlag cc, Label branchTarget, boolean isShortJmp, CompilationResultBuilder crb) {
-        if (crb != null && inlinedConstant != null) {
+    public final void cmpAndJcc(OperandSize size, Register src, int imm32, VMConstant inlinedConstant, ConditionFlag cc, Label branchTarget, CompilationResultBuilder crb) {
+        if (inlinedConstant != null) {
             crb.recordInlineDataInCode(inlinedConstant);
         }
-        CMP.getMIOpcode(size, isByte(imm32)).emit(this, size, src, imm32, inlinedConstant != null);
-        return jcc(cc, branchTarget, isShortJmp);
+        AMD64BinaryArithmetic.CMP.getMIOpcode(size, NumUtil.isByte(imm32)).emit(this, size, src, imm32, inlinedConstant != null);
+        jcc(cc, branchTarget);
     }
 
-    public final void cmplAndJcc(Register src, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        cmpAndJcc(DWORD, src, imm32, null, cc, branchTarget, isShortJmp, null);
-    }
-
-    public final void cmpqAndJcc(Register src, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        cmpAndJcc(QWORD, src, imm32, null, cc, branchTarget, isShortJmp, null);
-    }
-
-    public final void cmpAndJcc(OperandSize size, AMD64Address src, int imm32, VMConstant inlinedConstant, ConditionFlag cc, Label branchTarget, boolean isShortJmp, CompilationResultBuilder crb,
-                    LIRFrameState state) {
-        if (crb != null) {
-            if (inlinedConstant != null) {
-                crb.recordInlineDataInCode(inlinedConstant);
-            }
-            if (state != null) {
-                crb.recordImplicitException(position(), state);
-            }
+    public final void cmpAndJcc(OperandSize size, AMD64Address src, int imm32, VMConstant inlinedConstant, ConditionFlag cc, Label branchTarget, CompilationResultBuilder crb, LIRFrameState state) {
+        if (inlinedConstant != null) {
+            crb.recordInlineDataInCode(inlinedConstant);
         }
-        CMP.getMIOpcode(size, NumUtil.isByte(imm32)).emit(this, size, src, imm32, inlinedConstant != null);
-        jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final int cmpAndJcc(OperandSize size, Register src1, Register src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        CMP.getRMOpcode(size).emit(this, size, src1, src2);
-        return jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final void cmplAndJcc(Register src1, Register src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        cmpAndJcc(DWORD, src1, src2, cc, branchTarget, isShortJmp);
-    }
-
-    public final int cmpqAndJcc(Register src1, Register src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        return cmpAndJcc(QWORD, src1, src2, cc, branchTarget, isShortJmp);
-    }
-
-    public final int cmpAndJcc(OperandSize size, Register src1, AMD64Address src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp, CompilationResultBuilder crb, LIRFrameState state) {
-        if (crb != null && state != null) {
+        if (state != null) {
             crb.recordImplicitException(position(), state);
         }
-        CMP.getRMOpcode(size).emit(this, size, src1, src2);
-        return jcc(cc, branchTarget, isShortJmp);
+        AMD64BinaryArithmetic.CMP.getMIOpcode(size, NumUtil.isByte(imm32)).emit(this, size, src, imm32, inlinedConstant != null);
+        jcc(cc, branchTarget);
     }
 
-    public final void cmplAndJcc(Register src1, AMD64Address src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        cmpAndJcc(DWORD, src1, src2, cc, branchTarget, isShortJmp, null, null);
+    public final void cmpAndJcc(OperandSize size, Register src1, Register src2, ConditionFlag cc, Label branchTarget) {
+        AMD64BinaryArithmetic.CMP.getRMOpcode(size).emit(this, size, src1, src2);
+        jcc(cc, branchTarget);
     }
 
-    public final int cmpqAndJcc(Register src1, AMD64Address src2, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        return cmpAndJcc(QWORD, src1, src2, cc, branchTarget, isShortJmp, null, null);
+    public final void cmpAndJcc(OperandSize size, Register src1, AMD64Address src2, ConditionFlag cc, Label branchTarget, CompilationResultBuilder crb, LIRFrameState state) {
+        if (state != null) {
+            crb.recordImplicitException(position(), state);
+        }
+        AMD64BinaryArithmetic.CMP.getRMOpcode(size).emit(this, size, src1, src2);
+        jcc(cc, branchTarget);
     }
 
     public final void cmpAndJcc(OperandSize size, Register src1, Constant src2, ConditionFlag cc, Label branchTarget, CompilationResultBuilder crb) {
         AMD64Address src2AsAddress = (AMD64Address) crb.recordDataReferenceInCode(src2, size.getBytes());
-        CMP.getRMOpcode(size).emit(this, size, src1, src2AsAddress);
+        AMD64BinaryArithmetic.CMP.getRMOpcode(size).emit(this, size, src1, src2AsAddress);
         jcc(cc, branchTarget);
-    }
-
-    public final void andlAndJcc(Register dst, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        markJCCPrecedingInstruction();
-        andl(dst, imm32);
-        jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final void addqAndJcc(Register dst, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        markJCCPrecedingInstruction();
-        addq(dst, imm32);
-        jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final void sublAndJcc(Register dst, Register src, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        markJCCPrecedingInstruction();
-        subl(dst, src);
-        jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final void sublAndJcc(Register dst, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        markJCCPrecedingInstruction();
-        subl(dst, imm32);
-        jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final void subqAndJcc(Register dst, Register src, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        markJCCPrecedingInstruction();
-        subq(dst, src);
-        jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final void subqAndJcc(Register dst, int imm32, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        markJCCPrecedingInstruction();
-        subq(dst, imm32);
-        jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final void incqAndJcc(Register dst, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        markJCCPrecedingInstruction();
-        incq(dst);
-        jcc(cc, branchTarget, isShortJmp);
-    }
-
-    public final void decqAndJcc(Register dst, ConditionFlag cc, Label branchTarget, boolean isShortJmp) {
-        markJCCPrecedingInstruction();
-        decq(dst);
-        jcc(cc, branchTarget, isShortJmp);
     }
 
 }

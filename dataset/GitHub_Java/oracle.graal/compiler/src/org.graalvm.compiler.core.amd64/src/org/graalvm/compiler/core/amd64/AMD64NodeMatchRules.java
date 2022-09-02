@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,6 @@ import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64BinaryArithmeti
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64RMOp.MOVSX;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64RMOp.MOVSXB;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64RMOp.MOVSXD;
-import static org.graalvm.compiler.asm.amd64.AMD64Assembler.AMD64Shift.ROL;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VADDSD;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VADDSS;
 import static org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRVMOp.VMULSD;
@@ -80,9 +79,8 @@ import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
 import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
 import org.graalvm.compiler.nodes.java.LogicCompareAndSwapNode;
 import org.graalvm.compiler.nodes.java.ValueCompareAndSwapNode;
-import org.graalvm.compiler.nodes.memory.AddressableMemoryAccess;
+import org.graalvm.compiler.nodes.memory.Access;
 import org.graalvm.compiler.nodes.memory.LIRLowerableAccess;
-import org.graalvm.compiler.nodes.memory.MemoryAccess;
 import org.graalvm.compiler.nodes.memory.WriteNode;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 
@@ -102,7 +100,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
         super(gen);
     }
 
-    protected LIRFrameState getState(MemoryAccess access) {
+    protected LIRFrameState getState(Access access) {
         if (access instanceof DeoptimizingNode) {
             return state((DeoptimizingNode) access);
         }
@@ -114,7 +112,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
     }
 
     protected LIRKind getLirKind(LIRLowerableAccess access) {
-        return gen.getLIRKind(access.getAccessStamp(NodeView.DEFAULT));
+        return gen.getLIRKind(access.getAccessStamp());
     }
 
     protected OperandSize getMemorySize(LIRLowerableAccess access) {
@@ -213,7 +211,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
         }
     }
 
-    protected ComplexMatchResult emitConvertMemoryOp(PlatformKind kind, AMD64RMOp op, OperandSize size, AddressableMemoryAccess access, ValueKind<?> addressKind) {
+    protected ComplexMatchResult emitConvertMemoryOp(PlatformKind kind, AMD64RMOp op, OperandSize size, Access access, ValueKind<?> addressKind) {
         return builder -> {
             AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
             LIRFrameState state = getState(access);
@@ -224,11 +222,11 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
         };
     }
 
-    protected ComplexMatchResult emitConvertMemoryOp(PlatformKind kind, AMD64RMOp op, OperandSize size, AddressableMemoryAccess access) {
+    protected ComplexMatchResult emitConvertMemoryOp(PlatformKind kind, AMD64RMOp op, OperandSize size, Access access) {
         return emitConvertMemoryOp(kind, op, size, access, null);
     }
 
-    private ComplexMatchResult emitSignExtendMemory(AddressableMemoryAccess access, int fromBits, int toBits, ValueKind<?> addressKind) {
+    private ComplexMatchResult emitSignExtendMemory(Access access, int fromBits, int toBits, ValueKind<?> addressKind) {
         assert fromBits <= toBits && toBits <= 64;
         AMD64Kind kind = null;
         AMD64RMOp op;
@@ -275,7 +273,7 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
         return null;
     }
 
-    private Value emitReinterpretMemory(LIRKind to, AddressableMemoryAccess access) {
+    private Value emitReinterpretMemory(LIRKind to, Access access) {
         AMD64AddressValue address = (AMD64AddressValue) operand(access.getAddress());
         LIRFrameState state = getState(access);
         return getArithmeticLIRGenerator().emitLoad(to, address, state);
@@ -450,15 +448,8 @@ public class AMD64NodeMatchRules extends NodeMatchRules {
 
     @MatchRule("(Or (LeftShift=lshift value Constant) (UnsignedRightShift=rshift value Constant))")
     public ComplexMatchResult rotateLeftConstant(LeftShiftNode lshift, UnsignedRightShiftNode rshift) {
-        JavaConstant lshiftConst = lshift.getY().asJavaConstant();
-        JavaConstant rshiftConst = rshift.getY().asJavaConstant();
-        if ((lshift.getShiftAmountMask() & (lshiftConst.asInt() + rshiftConst.asInt())) == 0) {
-            return builder -> {
-                Value a = operand(lshift.getX());
-                OperandSize size = OperandSize.get(a.getPlatformKind());
-                assert size == OperandSize.DWORD || size == OperandSize.QWORD;
-                return getArithmeticLIRGenerator().emitShiftConst(ROL, size, a, lshiftConst);
-            };
+        if ((lshift.getShiftAmountMask() & (lshift.getY().asJavaConstant().asInt() + rshift.getY().asJavaConstant().asInt())) == 0) {
+            return builder -> getArithmeticLIRGenerator().emitRol(operand(lshift.getX()), operand(lshift.getY()));
         }
         return null;
     }
