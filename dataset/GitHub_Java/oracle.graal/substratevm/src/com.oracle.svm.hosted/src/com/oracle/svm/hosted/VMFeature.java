@@ -39,7 +39,6 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.c.CGlobalDataFactory;
 import com.oracle.svm.core.c.libc.LibCBase;
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.hosted.c.CAnnotationProcessorCache;
 import com.oracle.svm.hosted.c.CGlobalDataFeature;
 import com.oracle.svm.hosted.c.NativeLibraries;
 import com.oracle.svm.hosted.c.codegen.CCompilerInvoker;
@@ -80,10 +79,7 @@ public class VMFeature implements Feature {
         addCGlobalDataString("Target.Libraries", String.join("|", nativeLibraries.getLibraries()));
         addCGlobalDataString("Target.StaticLibraries", nativeLibraries.getStaticLibraries().stream()
                         .map(Path::getFileName).map(Path::toString).collect(Collectors.joining("|")));
-        if (!(SubstrateOptions.useLLVMBackend() && NativeImageOptions.ExitAfterRelocatableImageWrite.getValue() && CAnnotationProcessorCache.Options.UseCAPCache.getValue())) {
-
-            addCGlobalDataString("Target.CCompiler", ImageSingletons.lookup(CCompilerInvoker.class).compilerInfo.toString());
-        }
+        addCGlobalDataString("Target.CCompiler", ImageSingletons.lookup(CCompilerInvoker.class).compilerInfo.toString());
 
         if (SubstrateOptions.DumpTargetInfo.getValue()) {
             System.out.println("# Static libraries:");
