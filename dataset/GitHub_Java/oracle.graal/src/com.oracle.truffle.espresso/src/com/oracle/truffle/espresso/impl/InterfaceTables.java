@@ -73,7 +73,7 @@ class InterfaceTables {
         for (ObjectKlass interf : superInterfaces) {
             fillSuperInterfaceTables(interf, thisKlass, mirandas, tmpTables, tmpKlassTable);
         }
-        // Attach the mirandas to thisKlass
+        // Adds all the miranda methods to thisKlass' declared methods
         thisKlass.setMirandas(mirandas);
         if (superKlass == null) {
             fixMirandas(mirandas, tmpTables, thisKlass);
@@ -82,7 +82,7 @@ class InterfaceTables {
         // Inherit superklass' interfaces
         Method[][] superKlassITable = superKlass.getItable();
         // Check for inherited method override.
-        // At this point, mirandas are in thisKlass
+        // At this point, mirandas are in thisKlass' declared methods
         for (int n_itable = 0; n_itable < superKlassITable.length; n_itable++) {
             // Prevent duplicate tables
             int dupePos = dupePos(superKlass.getiKlassTable()[n_itable], tmpKlassTable);
@@ -208,7 +208,7 @@ class InterfaceTables {
     }
 
     /**
-     * Should be called before copying superKlass' superInterfaces. Given one of our interfaces, inherit all its
+     * Should be called before copying superInterface. Given one of our interfaces, inherit all its
      * itables. Merge the dupe ones.
      */
     private static void fillSuperInterfaceTables(ObjectKlass superInterface, ObjectKlass thisKlass, ArrayList<Miranda> mirandas, ArrayList<Method[]> tmpTables, ArrayList<Klass> tmpKlassTable) {
@@ -243,25 +243,21 @@ class InterfaceTables {
     private static Method[] lookupOverride(Method[] curItable, ObjectKlass thisKlass, ArrayList<Miranda> mirandas) {
         for (int i = 0; i < curItable.length; i++) {
             Method im = curItable[i];
-            int overridePos = lookupIndexMethods(im, thisKlass.getDeclaredMethods());
+            int overridePos = lookupIndexDeclaredMethod(im, thisKlass.getDeclaredMethods());
             if (overridePos != -1) {
                 Method override = thisKlass.getDeclaredMethods()[overridePos];
-                return inheritSuperKlass(curItable, thisKlass, i, new Method(override), mirandas);
-            }
-            overridePos = lookupIndexMethods(im, thisKlass.getMirandaMethods());
-            if (overridePos != -1) {
-                Method override = thisKlass.getMirandaMethods()[overridePos];
                 if (checkDefaultConflict(override, im)) {
                     Method result = resolveMaximallySpecific(override, im);
                     if (result != override) {
-                        // We adopted a new method. Commit to it, and prepare future fixing.
                         lookupAndSetFixMirandas(result, mirandas);
-                        thisKlass.getMirandaMethods()[overridePos] = result;
+                        thisKlass.getDeclaredMethods()[overridePos] = result;
                     } else {
-                        return inheritSuperKlass(curItable, thisKlass, i, new Method(override), mirandas);
+                        return inherit(curItable, thisKlass, i, new Method(override), mirandas);
                     }
-                } else if (im.hasCode() && !override.hasCode()) {
-                    return inheritSuperKlass(curItable, thisKlass, i, new Method(override), mirandas);
+                } else {
+                    // Interface method override detected, make a copy of the inherited table and
+                    // re-fill it. Pass along info to avoid duplicate lookups
+                    return inherit(curItable, thisKlass, i, new Method(override), mirandas);
                 }
             }
         }
@@ -272,10 +268,7 @@ class InterfaceTables {
      * Performs method lookup, but instead of returning the method, return its position. Useful for
      * patching the declaredMethod.
      */
-    private static int lookupIndexMethods(Method method, Method[] declaredMethods) {
-        if (declaredMethods == null) {
-            return -1;
-        }
+    private static int lookupIndexDeclaredMethod(Method method, Method[] declaredMethods) {
         Symbol<Symbol.Name> name = method.getName();
         Symbol<Symbol.Signature> sig = method.getRawSignature();
         for (int i = 0; i < declaredMethods.length; i++) {
@@ -302,37 +295,30 @@ class InterfaceTables {
      * @param thisKlass The class implementing this interface
      * @return the interface table for thisKlass.
      */
-    private static Method[] inheritSuperKlass(Method[] interfTable, ObjectKlass thisKlass, int start, Method override, ArrayList<Miranda> mirandas) {
+    private static Method[] inherit(Method[] interfTable, Klass thisKlass, int start, Method override, ArrayList<Miranda> mirandas) {
         Method[] res = Arrays.copyOf(interfTable, interfTable.length);
         res[start] = override;
         override.setITableIndex(start);
 
         for (int i = start + 1; i < res.length; i++) {
             Method im = res[i];
-            int overridePos = lookupIndexMethods(im, thisKlass.getDeclaredMethods());
+            int overridePos = lookupIndexDeclaredMethod(im, thisKlass.getDeclaredMethods());
             if (overridePos != -1) {
-                Method proxy = new Method(thisKlass.getDeclaredMethods()[overridePos]);
-                proxy.setITableIndex(i);
-                res[i] = proxy;
-            } else {
-                overridePos = lookupIndexMethods(im, thisKlass.getMirandaMethods());
-                if (overridePos != -1) {
-                    Method m = thisKlass.getMirandaMethods()[overridePos];
-                    if (checkDefaultConflict(m, im)) {
-                        Method result = resolveMaximallySpecific(m, im);
-                        if (result != m) {
-                            lookupAndSetFixMirandas(result, mirandas);
-                            thisKlass.getMirandaMethods()[overridePos] = result;
-                        } else {
-                            Method proxy = new Method(m);
-                            proxy.setITableIndex(i);
-                            res[i] = proxy;
-                        }
-                    } else if (im.hasCode() && !override.hasCode()) {
+                Method m = thisKlass.getDeclaredMethods()[overridePos];
+                if (checkDefaultConflict(m, im)) {
+                    Method result = resolveMaximallySpecific(m, im);
+                    if (result != m) {
+                        lookupAndSetFixMirandas(result, mirandas);
+                        thisKlass.getDeclaredMethods()[overridePos] = result;
+                    } else {
                         Method proxy = new Method(m);
                         proxy.setITableIndex(i);
                         res[i] = proxy;
                     }
+                } else {
+                    Method proxy = new Method(m);
+                    proxy.setITableIndex(i);
+                    res[i] = proxy;
                 }
             }
         }
@@ -448,7 +434,7 @@ class InterfaceTables {
                     tmpITTable.get(miranda.n_itables.get(i))[miranda.itablesIndex.get(i)] = new Method(miranda.method);
                 }
                 if (miranda.toPatch) {
-                    thisKlass.getMirandaMethods()[miranda.declaredMethodPos] = miranda.method;
+                    thisKlass.getDeclaredMethods()[miranda.declaredMethodPos] = miranda.method;
                 }
                 miranda.setFix(false);
             }
