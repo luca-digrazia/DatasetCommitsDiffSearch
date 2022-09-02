@@ -48,7 +48,8 @@ import static com.oracle.truffle.api.nodes.RepeatingNode.CONTINUE_LOOP_STATUS;
 
 public final class DefaultLoopNode extends LoopNode {
 
-    @Child private RepeatingNode repeatNode;
+    @Child
+    private RepeatingNode repeatNode;
 
     public DefaultLoopNode(RepeatingNode repeatNode) {
         this.repeatNode = repeatNode;
@@ -62,13 +63,13 @@ public final class DefaultLoopNode extends LoopNode {
     @SuppressWarnings("deprecation")
     @Override
     public void executeLoop(VirtualFrame frame) {
-        execute(frame);
+        executeLoopWithValue(frame);
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
+    public Object executeLoopWithValue(VirtualFrame frame) {
         Object status;
-        while ((status = repeatNode.executeRepeatingWithValue(frame)) == CONTINUE_LOOP_STATUS) {
+        while ((status = repeatNode.executeRepeatingWithStatus(frame)) == CONTINUE_LOOP_STATUS) {
             // Empty
         }
         return status;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,7 +28,8 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.RepeatingNode;
-import com.oracle.truffle.api.nodes.RepeatingNode.ShouldContinue;
+
+import static com.oracle.truffle.api.nodes.RepeatingNode.CONTINUE_LOOP_STATUS;
 
 public final class OptimizedLoopNode extends LoopNode {
 
@@ -46,15 +47,15 @@ public final class OptimizedLoopNode extends LoopNode {
     @SuppressWarnings("deprecation")
     @Override
     public void executeLoop(VirtualFrame frame) {
-        execute(frame);
+        executeLoopWithValue(frame);
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
-        ShouldContinue status;
+    public Object executeLoopWithValue(VirtualFrame frame) {
+        Object status;
         int loopCount = 0;
         try {
-            while ((status = repeatingNode.executeRepeatingWithValue(frame)).shouldContinue()) {
+            while ((status = repeatingNode.executeRepeatingWithStatus(frame)) == CONTINUE_LOOP_STATUS) {
                 if (CompilerDirectives.inInterpreter()) {
                     loopCount++;
                 }

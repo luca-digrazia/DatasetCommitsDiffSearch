@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,7 +38,6 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.LoopNode;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
-import com.oracle.truffle.api.nodes.RepeatingNode.ShouldContinue;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.SourceSection;
 
@@ -110,15 +109,15 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
     @SuppressWarnings("deprecation")
     @Override
     public void executeLoop(VirtualFrame frame) {
-        execute(frame);
+        executeLoopWithValue(frame);
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
+    public Object executeLoopWithValue(VirtualFrame frame) {
         if (CompilerDirectives.inInterpreter()) {
             try {
-                RepeatingNode.ShouldContinue status = CONTINUE_LOOP_STATUS;
-                while (status.shouldContinue()) {
+                Object status = CONTINUE_LOOP_STATUS;
+                while (status == CONTINUE_LOOP_STATUS) {
                     if (compiledOSRLoop == null) {
                         status = profilingLoop(frame);
                     } else {
@@ -130,30 +129,30 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
                 baseLoopCount = 0;
             }
         } else {
-            ShouldContinue status;
-            while ((status = repeatableNode.executeRepeatingWithValue(frame)).shouldContinue()) {
+            Object status;
+            while ((status = repeatableNode.executeRepeatingWithStatus(frame)) == CONTINUE_LOOP_STATUS) {
                 if (CompilerDirectives.inInterpreter()) {
                     // compiled method got invalidated. We might need OSR again.
-                    return execute(frame);
+                    return executeLoopWithValue(frame);
                 }
             }
             return status;
         }
     }
 
-    private ShouldContinue profilingLoop(VirtualFrame frame) {
+    private Object profilingLoop(VirtualFrame frame) {
         int iterations = 0;
         try {
-            RepeatingNode.ShouldContinue status;
-            while ((status = repeatableNode.executeRepeatingWithValue(frame)).shouldContinue()) {
+            Object status;
+            while ((status = repeatableNode.executeRepeatingWithStatus(frame)) == CONTINUE_LOOP_STATUS) {
                 // the baseLoopCount might be updated from a child loop during an iteration.
                 if (++iterations + baseLoopCount > osrThreshold) {
                     compileLoop(frame);
-                    // The status returned here is for continuing the loop.
+                    // The status returned here is CONTINUE_LOOP_STATUS.
                     return status;
                 }
             }
-            // The status returned here is not continuing the loop.
+            // The status returned here is different than CONTINUE_LOOP_STATUS.
             return status;
         } finally {
             baseLoopCount += iterations;
@@ -186,10 +185,10 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         return compiledOSRLoop;
     }
 
-    private ShouldContinue compilingLoop(VirtualFrame frame) {
+    private Object compilingLoop(VirtualFrame frame) {
         int iterations = 0;
         try {
-            RepeatingNode.ShouldContinue status;
+            Object status;
             do {
                 OptimizedCallTarget target = compiledOSRLoop;
                 if (target == null) {
@@ -205,7 +204,7 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
                 iterations++;
 
-            } while ((status = repeatableNode.executeRepeatingWithValue(frame)).shouldContinue());
+            } while ((status = repeatableNode.executeRepeatingWithStatus(frame)) == CONTINUE_LOOP_STATUS);
             return status;
         } finally {
             baseLoopCount += iterations;
@@ -213,9 +212,9 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
         }
     }
 
-    private RepeatingNode.ShouldContinue callOSR(OptimizedCallTarget target, VirtualFrame frame) {
-        RepeatingNode.ShouldContinue status = (ShouldContinue) target.callOSR(frame);
-        if (!status.shouldContinue()) {
+    private Object callOSR(OptimizedCallTarget target, VirtualFrame frame) {
+        Object status = target.callOSR(frame);
+        if (!CONTINUE_LOOP_STATUS.equals(status)) {
             return status;
         } else {
             if (!target.isValid()) {
@@ -411,8 +410,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
 
         protected Object executeImpl(VirtualFrame frame) {
             VirtualFrame parentFrame = clazz.cast(frame.getArguments()[0]);
-            ShouldContinue status;
-            while ((status = loopNode.getRepeatingNode().executeRepeatingWithValue(parentFrame)).shouldContinue()) {
+            Object status;
+            while ((status = loopNode.getRepeatingNode().executeRepeatingWithStatus(parentFrame)) == CONTINUE_LOOP_STATUS) {
                 if (CompilerDirectives.inInterpreter()) {
                     return CONTINUE_LOOP_STATUS;
                 }
@@ -492,8 +491,8 @@ public abstract class OptimizedOSRLoopNode extends LoopNode implements ReplaceOb
             FrameWithoutBoxing parentFrame = (FrameWithoutBoxing) (loopFrame.getArguments()[0]);
             executeTransfer(parentFrame, loopFrame, readFrameSlots, readFrameSlotsTags);
             try {
-                ShouldContinue status;
-                while ((status = loopNode.getRepeatingNode().executeRepeatingWithValue(loopFrame)).shouldContinue()) {
+                Object status;
+                while ((status = loopNode.getRepeatingNode().executeRepeatingWithStatus(loopFrame)) == CONTINUE_LOOP_STATUS) {
                     if (CompilerDirectives.inInterpreter()) {
                         return CONTINUE_LOOP_STATUS;
                     }

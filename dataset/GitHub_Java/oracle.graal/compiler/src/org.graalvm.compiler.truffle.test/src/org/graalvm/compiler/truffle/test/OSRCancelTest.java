@@ -162,15 +162,6 @@ public class OSRCancelTest {
             }
             return true;
         }
-
-        @Override
-        public Object executeRepeatingWithValue(VirtualFrame frame) {
-            if (executeRepeating(frame)) {
-                return RepeatingNode.CONTINUE_LOOP_STATUS;
-            } else {
-                return RepeatingNode.BREAK_LOOP_STATUS;
-            }
-        }
     }
 
     static class TestMaterializedLoopNode extends TestInstrumentableNode {
@@ -183,7 +174,7 @@ public class OSRCancelTest {
 
         @Override
         void execute(VirtualFrame frame) {
-            loop.execute(frame);
+            loop.executeLoopWithValue(frame);
         }
 
     }
@@ -203,7 +194,7 @@ public class OSRCancelTest {
 
         @Override
         void execute(VirtualFrame frame) {
-            loop.execute(frame);
+            loop.executeLoopWithValue(frame);
         }
 
     }
