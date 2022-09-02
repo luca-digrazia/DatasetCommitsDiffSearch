@@ -180,15 +180,15 @@ final class Runner {
     private final LLVMContext context;
     private final DefaultLoader loader;
     private final LLVMLanguage language;
-    private final AtomicInteger moduleID;
+    private final AtomicInteger id;
     private final LLVMLocalScope localScope;
     private final LLVMLocalScope localScopeTmp;
 
-    private Runner(LLVMContext context, DefaultLoader loader, AtomicInteger moduleID) {
+    private Runner(LLVMContext context, DefaultLoader loader, AtomicInteger id) {
         this.context = context;
         this.loader = loader;
         this.language = context.getLanguage();
-        this.moduleID = moduleID;
+        this.id = id;
         this.localScope = new LLVMLocalScope();
         this.localScopeTmp = new LLVMLocalScope();
         this.context.addLocalScopeTmp(localScopeTmp);
@@ -435,6 +435,7 @@ final class Runner {
 
         List<LLVMParserResult> parserResults = parseContext.getParserResults();
         addExternalSymbolsToScopes(parserResults);
+
         InitializationOrder initializationOrder = computeInitializationOrder(parserResults, sulongLibraries);
 
         return createLibraryCallTarget(source.getName(), parserResults, initializationOrder);
@@ -1342,7 +1343,7 @@ final class Runner {
         NodeFactory nodeFactory = context.getLanguage().getActiveConfiguration().createNodeFactory(context, targetDataLayout);
         // This needs to be removed once the nodefactory is taken out of the language.
         LLVMScope fileScope = new LLVMScope();
-        int bitcodeID = moduleID.getAndIncrement();
+        int bitcodeID = id.getAndIncrement();
         LLVMParserRuntime runtime = new LLVMParserRuntime(context, library, fileScope, nodeFactory, bitcodeID);
         localScopeTmp.addID(bitcodeID);
         localScope.addID(bitcodeID);
@@ -1608,7 +1609,7 @@ final class Runner {
         }
 
         @TruffleBoundary
-        private static NFIContextExtension getNfiContextExtension() {
+        private NFIContextExtension getNfiContextExtension() {
             return LLVMLanguage.getLanguage().getContextExtensionOrNull(NFIContextExtension.class);
         }
 
