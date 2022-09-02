@@ -385,7 +385,7 @@ public class CompileQueue {
         removeDeoptTargetOptimizations(deoptTargetLIRSuites);
     }
 
-    protected void modifyRegularSuites(@SuppressWarnings("unused") Suites suites) {
+    protected void modifyRegularSuites(Suites regularSuites) {
     }
 
     public static PhaseSuite<HighTierContext> afterParseCanonicalization() {
