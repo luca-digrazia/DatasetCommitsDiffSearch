@@ -503,7 +503,6 @@ public final class VMEventListenerImpl implements VMEventListener {
                 stream.writeLong(callFrame.getMethodId());
                 stream.writeLong(catchLocation);
                 caught = true;
-                break;
             }
         }
         if (!caught) {
