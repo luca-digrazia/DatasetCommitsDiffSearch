@@ -208,28 +208,15 @@ public abstract class ConstantPool {
         }
     }
 
-    public final <T> Symbol<T> symbolAt(int index) {
-        return symbolAt(index, null);
-    }
-
-    @SuppressWarnings("unchecked")
-    public final <T> Symbol<T> symbolAt(int index, String description) {
-        try {
-            final Utf8Constant constant = (Utf8Constant) at(index);
-            return (Symbol<T>) constant.value();
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, description, UTF8);
-        }
-    }
-
-    public final Utf8Constant utf8At(int index) {
+    public final <T> Symbol<T> utf8At(int index) {
         return utf8At(index, null);
     }
 
-    public final Utf8Constant utf8At(int index, String description) {
+    @SuppressWarnings("unchecked")
+    public final <T> Symbol<T> utf8At(int index, String description) {
         try {
             final Utf8Constant constant = (Utf8Constant) at(index);
-            return constant;
+            return (Symbol<T>) constant.value();
         } catch (ClassCastException e) {
             throw unexpectedEntry(index, description, UTF8);
         }
@@ -524,7 +511,11 @@ public abstract class ConstantPool {
 
         // Validation
         for (int j = 1; j < constantPool.length(); ++j) {
-            entries[j].validate(constantPool);
+            try {
+                entries[j].checkValidity(constantPool);
+            } catch (Throwable e) {
+                throw classFormatError(e.getMessage());
+            }
         }
 
         return constantPool;

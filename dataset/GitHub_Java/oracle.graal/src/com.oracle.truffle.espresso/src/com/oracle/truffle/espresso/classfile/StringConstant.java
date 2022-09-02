@@ -54,7 +54,7 @@ public interface StringConstant extends PoolConstant {
 
         @Override
         public Symbol<ModifiedUTF8> getSymbol(ConstantPool pool) {
-            return pool.symbolAt(utf8Index);
+            return pool.utf8At(utf8Index);
         }
 
         Index(int utf8Index) {
@@ -67,8 +67,11 @@ public interface StringConstant extends PoolConstant {
         }
 
         @Override
-        public void validate(ConstantPool pool) {
-            pool.utf8At(utf8Index).validateUTF8();
+        public void checkValidity(ConstantPool pool) {
+            if (pool.at(utf8Index).tag() != Tag.UTF8) {
+                throw new VerifyError("invalid pool constant: " + tag());
+            }
+            pool.at(utf8Index).checkValidity(pool);
         }
     }
 
