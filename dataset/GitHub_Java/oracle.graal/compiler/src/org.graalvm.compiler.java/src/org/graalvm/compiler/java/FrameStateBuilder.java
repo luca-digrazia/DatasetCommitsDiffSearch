@@ -39,7 +39,6 @@ import static org.graalvm.compiler.nodes.util.GraphUtil.originalValue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
@@ -340,11 +339,22 @@ public final class FrameStateBuilder implements SideEffectsState {
             throw shouldNotReachHere();
         }
 
-        if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI) {
-            assert outerFrameState == null;
-            clearLocals();
+        if (pushedValues != null) {
+            assert pushedSlotKinds.length == pushedValues.length;
+            int stackSizeToRestore = stackSize;
+            for (int i = 0; i < pushedValues.length; i++) {
+                push(pushedSlotKinds[i], pushedValues[i]);
+            }
+            FrameState res = graph.add(new FrameState(outerFrameState, code, bci, locals, stack, stackSize, lockedObjects, Arrays.asList(monitorIds), rethrowException, duringCall));
+            stackSize = stackSizeToRestore;
+            return res;
+        } else {
+            if (bci == BytecodeFrame.AFTER_EXCEPTION_BCI) {
+                assert outerFrameState == null;
+                clearLocals();
+            }
+            return graph.add(new FrameState(outerFrameState, code, bci, locals, stack, stackSize, lockedObjects, Arrays.asList(monitorIds), rethrowException, duringCall));
         }
-        return graph.add(new FrameState(outerFrameState, code, bci, locals, stack, stackSize, pushedSlotKinds, pushedValues, lockedObjects, Arrays.asList(monitorIds), rethrowException, duringCall));
     }
 
     public NodeSourcePosition createBytecodePosition(int bci) {
@@ -1035,38 +1045,4 @@ public final class FrameStateBuilder implements SideEffectsState {
             }
         }
     }
-
-    public FrameState createInitialIntrinsicFrameState(ResolvedJavaMethod original) {
-        FrameState stateAfterStart;
-
-        ValueNode[] newLocals;
-        if (original.getMaxLocals() == localsSize() || original.isNative()) {
-            newLocals = new ValueNode[original.getMaxLocals()];
-            for (int i = 0; i < newLocals.length; i++) {
-                ValueNode node = locals[i];
-                if (node == FrameState.TWO_SLOT_MARKER) {
-                    node = null;
-                }
-                newLocals[i] = node;
-            }
-        } else {
-            newLocals = new ValueNode[original.getMaxLocals()];
-            int parameterCount = original.getSignature().getParameterCount(!original.isStatic());
-            for (int i = 0; i < parameterCount; i++) {
-                ValueNode param = locals[i];
-                if (param == FrameState.TWO_SLOT_MARKER) {
-                    param = null;
-                }
-                newLocals[i] = param;
-                assert param == null || param instanceof ParameterNode || param.isConstant();
-            }
-        }
-        assert stackSize == 0;
-        ValueNode[] newStack = {};
-        ValueNode[] locks = {};
-        assert monitorIds.length == 0;
-        stateAfterStart = graph.add(new FrameState(null, new ResolvedJavaMethodBytecode(original), 0, newLocals, newStack, stackSize, null, null, locks, Collections.emptyList(), false, false));
-        return stateAfterStart;
-    }
-
 }
