@@ -29,8 +29,8 @@ import java.util.regex.Pattern;
 
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
+import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.phases.VerifyPhase;
-import org.graalvm.compiler.phases.tiers.PhaseContext;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -43,7 +43,7 @@ import jdk.vm.ci.services.Services;
  * can be modified by application code so {@link Services#getSavedProperties()} should be used
  * instead.
  */
-public class VerifySystemPropertyUsage extends VerifyPhase<PhaseContext> {
+public class VerifySystemPropertyUsage extends VerifyPhase<CoreProviders> {
 
     static final Class<?>[] BOXES = {Integer.class, Long.class, Boolean.class, Float.class, Double.class};
     static final int JVMCI_VERSION_MAJOR;
@@ -65,7 +65,7 @@ public class VerifySystemPropertyUsage extends VerifyPhase<PhaseContext> {
     }
 
     @Override
-    protected boolean verify(StructuredGraph graph, PhaseContext context) {
+    protected void verify(StructuredGraph graph, CoreProviders context) {
         MetaAccessProvider metaAccess = context.getMetaAccess();
         final ResolvedJavaType systemType = metaAccess.lookupJavaType(System.class);
         final ResolvedJavaType[] boxTypes = new ResolvedJavaType[BOXES.length];
@@ -82,20 +82,29 @@ public class VerifySystemPropertyUsage extends VerifyPhase<PhaseContext> {
                 // This JVMCI version should not use non-saved system properties
             } else {
                 // This JVMCI version still has some calls that need to be removed
-                return true;
+                return;
             }
         } else if (holderQualified.equals("org.graalvm.compiler.hotspot.JVMCIVersionCheck") && caller.getName().equals("main")) {
             // The main method in JVMCIVersionCheck is only called from the shell
-            return true;
-        } else if (packageName.startsWith("com.oracle.truffle") || packageName.startsWith("org.graalvm.polyglot")) {
-            // Truffle and Polyglot do not depend on JVMCI so cannot use
+            return;
+        } else if (packageName.startsWith("com.oracle.truffle") || packageName.startsWith("org.graalvm.polyglot") || packageName.startsWith("org.graalvm.home")) {
+            // Truffle and SDK do not depend on JVMCI so they cannot use
             // Services.getSavedProperties()
-            return true;
+            return;
         } else if (packageName.startsWith("com.oracle.svm")) {
             // SVM must read system properties in:
             // * its JDK substitutions to mimic required JDK semantics
             // * native-image for config info
-            return true;
+            return;
+        } else if (packageName.startsWith("jdk.jfr")) {
+            // JFR for SVM must read system properties in:
+            // * its JDK substitutions to mimic required JDK semantics
+            // * native-image for config info
+            return;
+        } else if (packageName.startsWith("jdk.tools.jaotc")) {
+            // Workaround since jdk.internal.vm.ci/jdk.vm.ci.services is not exported to jdk.aot.
+            // The jaotc launcher dynamically adds these exports.
+            return;
         }
         for (MethodCallTargetNode t : graph.getNodes(MethodCallTargetNode.TYPE)) {
             ResolvedJavaMethod callee = t.targetMethod();
@@ -120,7 +129,6 @@ public class VerifySystemPropertyUsage extends VerifyPhase<PhaseContext> {
                 }
             }
         }
-        return true;
     }
 
 }
