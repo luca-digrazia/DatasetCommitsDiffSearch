@@ -95,9 +95,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     private volatile SpeculationLog speculationLog;
     private volatile int callSitesKnown;
 
-    private static final AtomicReferenceFieldUpdater<OptimizedCallTarget, SpeculationLog> SPECULATION_LOG_UPDATER = AtomicReferenceFieldUpdater.newUpdater(OptimizedCallTarget.class,
-                    SpeculationLog.class, "speculationLog");
-
     /**
      * When this field is not null, this {@link OptimizedCallTarget} is {@linkplain #isCompiling()
      * being compiled}.<br/>
@@ -484,14 +481,14 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      * this call target. Note that this may differ from the speculation log
      * {@linkplain CompilableTruffleAST#getCompilationSpeculationLog() used for compilation}.
      */
-    public SpeculationLog getSpeculationLog() {
+    public synchronized SpeculationLog getSpeculationLog() {
         if (speculationLog == null) {
-            SPECULATION_LOG_UPDATER.compareAndSet(this, null, ((GraalTruffleRuntime) Truffle.getRuntime()).createSpeculationLog());
+            speculationLog = ((GraalTruffleRuntime) Truffle.getRuntime()).createSpeculationLog();
         }
         return speculationLog;
     }
 
-    void setSpeculationLog(SpeculationLog speculationLog) {
+    synchronized void setSpeculationLog(SpeculationLog speculationLog) {
         this.speculationLog = speculationLog;
     }
 
