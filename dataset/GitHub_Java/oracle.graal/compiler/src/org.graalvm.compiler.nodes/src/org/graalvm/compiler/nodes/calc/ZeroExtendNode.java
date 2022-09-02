@@ -36,7 +36,7 @@ import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.PrimitiveStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
+import org.graalvm.compiler.graph.spi.CanonicalizerTool;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.NodeView;
@@ -71,6 +71,11 @@ public final class ZeroExtendNode extends IntegerConvertNode<ZeroExtend, Narrow>
 
     public static ValueNode create(ValueNode input, int inputBits, int resultBits, NodeView view) {
         return create(input, inputBits, resultBits, view, false);
+    }
+
+    @Override
+    public boolean inferStamp() {
+        return updateStamp(getArithmeticOpTable(value).getZeroExtend().foldStamp(inputBits, resultBits, value.stamp(NodeView.DEFAULT)));
     }
 
     public static ValueNode create(ValueNode input, int inputBits, int resultBits, NodeView view, boolean alwaysPositive) {
