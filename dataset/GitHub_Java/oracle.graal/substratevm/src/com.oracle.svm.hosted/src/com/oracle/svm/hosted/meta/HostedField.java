@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,10 +25,10 @@
 package com.oracle.svm.hosted.meta;
 
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Modifier;
+import java.lang.reflect.Field;
 
+import com.oracle.graal.pointsto.infrastructure.OriginalFieldProvider;
 import com.oracle.graal.pointsto.meta.AnalysisField;
-import com.oracle.svm.core.meta.ReadableJavaField;
 import com.oracle.svm.core.meta.SharedField;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 
@@ -37,7 +39,7 @@ import jdk.vm.ci.meta.JavaTypeProfile;
 /**
  * Store the compile-time information for a field in the Substrate VM, such as the field offset.
  */
-public class HostedField implements ReadableJavaField, SharedField {
+public class HostedField implements OriginalFieldProvider, SharedField, Comparable<HostedField> {
 
     private final HostedUniverse universe;
     private final HostedMetaAccess metaAccess;
@@ -50,7 +52,7 @@ public class HostedField implements ReadableJavaField, SharedField {
 
     private final JavaTypeProfile typeProfile;
 
-    private static final int LOC_CONSTANT_STATIC_FIELD = -10;
+    static final int LOC_UNMATERIALIZED_STATIC_CONSTANT = -10;
 
     public HostedField(HostedUniverse universe, HostedMetaAccess metaAccess, AnalysisField wrapped, HostedType holder, HostedType type, JavaTypeProfile typeProfile) {
         this.universe = universe;
@@ -72,17 +74,9 @@ public class HostedField implements ReadableJavaField, SharedField {
         this.location = location;
     }
 
-    protected void setConstantValue() {
-        assert this.location == LOC_UNINITIALIZED;
-        this.location = LOC_CONSTANT_STATIC_FIELD;
-    }
-
-    public JavaConstant getConstantValue() {
-        if (location == LOC_CONSTANT_STATIC_FIELD) {
-            return universe.getConstantReflectionProvider().readFieldValue(wrapped, null);
-        } else {
-            return null;
-        }
+    protected void setUnmaterializedStaticConstant() {
+        assert this.location == LOC_UNINITIALIZED && isStatic();
+        this.location = LOC_UNMATERIALIZED_STATIC_CONSTANT;
     }
 
     public boolean hasLocation() {
@@ -110,6 +104,10 @@ public class HostedField implements ReadableJavaField, SharedField {
         return wrapped.isAccessed();
     }
 
+    public boolean isRead() {
+        return wrapped.isRead();
+    }
+
     @Override
     public boolean isWritten() {
         return wrapped.isWritten();
@@ -131,52 +129,24 @@ public class HostedField implements ReadableJavaField, SharedField {
     }
 
     @Override
+    public int getOffset() {
+        return getLocation();
+    }
+
+    @Override
     public int hashCode() {
         return wrapped.hashCode();
     }
 
-    @Override
     public JavaConstant readValue(JavaConstant receiver) {
-        JavaConstant result;
-        if (location == LOC_CONSTANT_STATIC_FIELD) {
-            return getConstantValue();
+        JavaConstant wrappedReceiver;
+        if (receiver != null && SubstrateObjectConstant.asObject(receiver) instanceof Class) {
+            /* Manual object replacement from java.lang.Class to DynamicHub. */
+            wrappedReceiver = SubstrateObjectConstant.forObject(metaAccess.lookupJavaType((Class<?>) SubstrateObjectConstant.asObject(receiver)).getHub());
         } else {
-            JavaConstant wrappedReceiver;
-            if (receiver != null && SubstrateObjectConstant.asObject(receiver) instanceof Class) {
-                /* Manual object replacement from java.lang.Class to DynamicHub. */
-                wrappedReceiver = SubstrateObjectConstant.forObject(metaAccess.lookupJavaType((Class<?>) SubstrateObjectConstant.asObject(receiver)).getHub());
-            } else {
-                wrappedReceiver = receiver;
-            }
-            result = universe.lookup(universe.getConstantReflectionProvider().readFieldValue(wrapped, wrappedReceiver));
+            wrappedReceiver = receiver;
         }
-
-        return result;
-    }
-
-    @Override
-    public boolean allowConstantFolding() {
-        if (location == LOC_CONSTANT_STATIC_FIELD) {
-            return true;
-        } else if (!wrapped.isWritten()) {
-            assert !Modifier.isStatic(getModifiers()) : "should have constantValue in this case";
-            return true;
-        } else if (Modifier.isFinal(getModifiers()) && !Modifier.isStatic(getModifiers())) {
-            /*
-             * No check for value.isDefaultForKind() is needed here, since during native image
-             * generation we are sure that we are not in the middle of a constructor where the final
-             * field has not been written yet. Only for dynamic compilation at run time, the check
-             * is necessary, but we use a different field implementation class for that.
-             */
-            return true;
-        }
-
-        return false;
-    }
-
-    @Override
-    public boolean injectFinalForRuntimeCompilation() {
-        return ReadableJavaField.injectFinalForRuntimeCompilation(wrapped);
+        return universe.lookup(universe.getConstantReflectionProvider().readValue(metaAccess, wrapped, wrappedReceiver));
     }
 
     public JavaConstant readStorageValue(JavaConstant receiver) {
@@ -223,5 +193,24 @@ public class HostedField implements ReadableJavaField, SharedField {
     @Override
     public JavaKind getStorageKind() {
         return getType().getStorageKind();
+    }
+
+    @Override
+    public int compareTo(HostedField other) {
+        /*
+         * Order by JavaKind. This is required, since we want instance fields of the same size and
+         * kind consecutive.
+         */
+        int result = other.getJavaKind().ordinal() - this.getJavaKind().ordinal();
+        /*
+         * If the kind is the same, i.e., result == 0, we return 0 so that the sorting keeps the
+         * order unchanged and therefore keeps the field order we get from the hosting VM.
+         */
+        return result;
+    }
+
+    @Override
+    public Field getJavaField() {
+        return OriginalFieldProvider.getJavaField(getDeclaringClass().universe.getSnippetReflection(), wrapped);
     }
 }
