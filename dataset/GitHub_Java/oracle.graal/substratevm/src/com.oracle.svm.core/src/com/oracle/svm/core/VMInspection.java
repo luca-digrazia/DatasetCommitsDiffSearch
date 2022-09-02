@@ -129,11 +129,12 @@ class DumpHeapReport implements SignalHandler {
         Signal.handle(new Signal("USR1"), new DumpHeapReport());
     }
 
-    private static void performHeapDump(FileOutputStream fileOutputStream) {
-        try {
-            RuntimeSupport.getRuntimeSupport().dumpHeap(fileOutputStream, true);
-        } catch (IOException e) {
-            Log.log().string("HeapDump failed: ").string(e.getMessage()).newline();
+    @SuppressWarnings("deprecation")
+    @NeverInline("Ensure ClassCastException gets caught")
+    private static void performHeapDump(FileOutputStream fileOutputStream) throws Exception {
+        Object[] args = new Object[]{"HeapDump.dumpHeap(FileOutputStream, Boolean)Boolean", fileOutputStream, Boolean.TRUE};
+        if (!((Boolean) Compiler.command(args))) {
+            throw new RuntimeException();
         }
     }
 
