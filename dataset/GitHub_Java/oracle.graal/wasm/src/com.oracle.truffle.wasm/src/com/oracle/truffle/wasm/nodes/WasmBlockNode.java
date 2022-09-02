@@ -291,7 +291,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @SuppressWarnings("hiding")
-    public void initialize(WasmNode[] nestedControlTable, Node[] callNodeTable, int byteLength, int byteConstantLength,
+    public final void initialize(WasmNode[] nestedControlTable, Node[] callNodeTable, int byteLength, int byteConstantLength,
                     int intConstantLength, int longConstantLength, int branchTableLength) {
         initialize(byteLength);
         this.nestedControlTable = nestedControlTable;
