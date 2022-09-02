@@ -40,113 +40,30 @@
  */
 package org.graalvm.wasm.exception;
 
-import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
-import com.oracle.truffle.api.interop.ExceptionType;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.nodes.Node;
-import org.graalvm.wasm.nodes.WasmBlockNode;
 
-import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+/**
+ * Thrown on various errors that may occur in the WebAssembly engine, but not during the execution
+ * of a WebAssembly program.
+ */
+public class WasmException extends RuntimeException implements TruffleException {
 
-@ExportLibrary(InteropLibrary.class)
-@SuppressWarnings("static-method")
-public final class WasmException extends AbstractTruffleException {
-    private static final long serialVersionUID = -84137683950579647L;
+    private static final long serialVersionUID = 8195809219857028793L;
 
-    private final Failure failure;
-
-    private WasmException(String message, Node location, Failure failure) {
-        super(message, location);
-        CompilerAsserts.neverPartOfCompilation();
-        this.failure = failure;
+    @TruffleBoundary
+    public WasmException(String message) {
+        super(message);
     }
 
     @TruffleBoundary
-    public static WasmException create(Failure failure, Node location, String message) {
-        return new WasmException(message, location, failure);
+    public WasmException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    @TruffleBoundary
-    public static WasmException create(Failure failure, Node location) {
-        return create(failure, location, failure.name);
-    }
-
-    @TruffleBoundary
-    public static WasmException create(Failure failure, String message) {
-        return create(failure, null, message);
-    }
-
-    @TruffleBoundary
-    public static WasmException format(Failure failure, String format, Object arg) {
-        return create(failure, String.format(format, arg));
-    }
-
-    @TruffleBoundary
-    public static WasmException format(Failure failure, Node location, String format, Object... args) {
-        return create(failure, location, String.format(format, args));
-    }
-
-    @TruffleBoundary
-    public static WasmException fromArithmeticException(WasmBlockNode location, ArithmeticException exception) {
-        return create(Failure.fromArithmeticException(exception), location, exception.getMessage());
-    }
-
-    @ExportMessage
-    public boolean hasMembers() {
-        return true;
-    }
-
-    @ExportMessage
-    public ExceptionType getExceptionType() {
-        switch (failure.type) {
-            case MALFORMED:
-            case INVALID:
-            case UNLINKABLE:
-                return ExceptionType.PARSE_ERROR;
-            case INTERNAL:
-            case EXHAUSTION:
-            case TRAP:
-            default:
-                return ExceptionType.RUNTIME_ERROR;
-        }
-    }
-
-    @ExportMessage
-    @SuppressWarnings({"unused", "static-method"})
-    Object getMembers(boolean includeInternal) throws UnsupportedMessageException {
-        throw UnsupportedMessageException.create();
-    }
-
-    @ExportMessage
-    @TruffleBoundary
-    public Object readMember(String member) throws UnknownIdentifierException {
-        switch (member) {
-            case "message":
-                return getMessage();
-            case "failureType":
-                return failure.type.name;
-            case "failure":
-                return failure.name;
-            default:
-                throw UnknownIdentifierException.create(member);
-        }
-    }
-
-    @ExportMessage
-    @TruffleBoundary
-    public boolean isMemberReadable(String member) {
-        switch (member) {
-            case "message":
-            case "failureType":
-            case "failure":
-                return true;
-            default:
-                return false;
-        }
+    @Override
+    public Node getLocation() {
+        return null;
     }
 }

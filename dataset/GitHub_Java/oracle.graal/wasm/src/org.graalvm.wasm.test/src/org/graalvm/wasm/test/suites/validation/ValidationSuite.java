@@ -53,9 +53,9 @@ import org.graalvm.wasm.utils.cases.WasmCaseData;
 import org.graalvm.wasm.utils.cases.WasmStringCase;
 import org.junit.Test;
 
-import org.graalvm.wasm.test.WasmFileSuite;
+import org.graalvm.wasm.test.WasmSuiteBase;
 
-public class ValidationSuite extends WasmFileSuite {
+public class ValidationSuite extends WasmSuiteBase {
     private WasmCase[] testCases = {
                     // # 3.2 Types
 
@@ -281,11 +281,11 @@ public class ValidationSuite extends WasmFileSuite {
         String source = "(module\n" +
                         snippet +
                         "(func (export \"_main\") (result i32) i32.const 42)\n )";
-        return WasmCase.create(name, WasmCase.expectedThrows(errorMessage, WasmCaseData.ErrorType.Validation), source, opts);
+        return WasmCase.create(name, WasmCase.expectedThrows(errorMessage, WasmCaseData.ErrorType.Validation), source, null, opts);
     }
 
     private static WasmBinaryCase binaryCase(String name, String errorMessage, String hexString) {
-        return WasmCase.create(name, WasmCase.expectedThrows(errorMessage, WasmCaseData.ErrorType.Validation), hexStringToByteArray(hexString), opts);
+        return WasmCase.create(name, WasmCase.expectedThrows(errorMessage, WasmCaseData.ErrorType.Validation), hexStringToByteArray(hexString), null, opts);
     }
 
     private static byte[] hexStringToByteArray(String input) {
