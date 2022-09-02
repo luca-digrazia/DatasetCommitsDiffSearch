@@ -48,9 +48,9 @@ import java.util.Set;
 /**
  * JDK 11+ implementation of {@code TruffleJDKServices}.
  */
-final class TruffleJDKServices {
+public class TruffleJDKServices {
 
-    static void exportTo(ClassLoader loader, String moduleName) {
+    public static void exportTo(ClassLoader loader, String moduleName) {
         assert (loader == null) != (moduleName == null) : "exactly one of a class loader or module name is required when exporting Truffle";
         Module truffleModule = TruffleJDKServices.class.getModule();
         Module clientModule;
@@ -62,7 +62,7 @@ final class TruffleJDKServices {
         exportFromTo(truffleModule, clientModule);
     }
 
-    static void exportTo(Class<?> client) {
+    public static void exportTo(Class<?> client) {
         Module truffleModule = TruffleJDKServices.class.getModule();
         exportFromTo(truffleModule, client.getModule());
     }
@@ -79,25 +79,25 @@ final class TruffleJDKServices {
         }
     }
 
-    static <Service> List<Iterable<Service>> getTruffleRuntimeLoaders(Class<Service> serviceClass) {
+    public static <Service> List<Iterable<Service>> getTruffleRuntimeLoaders(Class<Service> serviceClass) {
         return Collections.singletonList(ServiceLoader.load(serviceClass));
     }
 
-    static <S> void addUses(Class<S> service) {
+    public static <S> void addUses(Class<S> service) {
         Module module = TruffleJDKServices.class.getModule();
         if (!module.canUse(service)) {
             module.addUses(service);
         }
     }
 
-    static Object getUnnamedModule(ClassLoader classLoader) {
+    public static Object getUnnamedModule(ClassLoader classLoader) {
         if (classLoader == null) {
             return null;
         }
         return classLoader.getUnnamedModule();
     }
 
-    static boolean verifyModuleVisibility(Object module, Class<?> memberClass) {
+    public static boolean verifyModuleVisibility(Object module, Class<?> memberClass) {
         Module lookupModule = (Module) module;
         if (lookupModule == null) {
             /*

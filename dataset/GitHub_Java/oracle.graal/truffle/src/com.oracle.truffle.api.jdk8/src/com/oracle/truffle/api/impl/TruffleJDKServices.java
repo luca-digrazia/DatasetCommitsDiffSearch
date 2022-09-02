@@ -49,27 +49,27 @@ import java.util.ServiceLoader;
 /**
  * JDK 8 implementation of {@code TruffleJDKServices}.
  */
-final class TruffleJDKServices {
+public class TruffleJDKServices {
 
     @SuppressWarnings("unused")
-    static void exportTo(ClassLoader loader, String moduleName) {
+    public static void exportTo(ClassLoader loader, String moduleName) {
         // No need to do anything on JDK 8
     }
 
     @SuppressWarnings("unused")
-    static void exportTo(Class<?> client) {
+    public static void exportTo(Class<?> client) {
         // No need to do anything on JDK 8
     }
 
     @SuppressWarnings("unused")
-    static <S> void addUses(Class<S> service) {
+    public static <S> void addUses(Class<S> service) {
         // No need to do anything on JDK 8
     }
 
     /**
      * Gets the ordered list of loaders for {@link TruffleRuntimeAccess} providers.
      */
-    static <Service> List<Iterable<Service>> getTruffleRuntimeLoaders(Class<Service> serviceClass) {
+    public static <Service> List<Iterable<Service>> getTruffleRuntimeLoaders(Class<Service> serviceClass) {
         // public static List<Iterable<TruffleRuntimeAccess>> getTruffleRuntimeLoaders() {
         Iterable<Service> jvmciProviders = getJVMCIProviders(serviceClass);
         if (Boolean.getBoolean("truffle.TrustAllTruffleRuntimeProviders")) {
@@ -123,11 +123,11 @@ final class TruffleJDKServices {
         }
     }
 
-    static Object getUnnamedModule(@SuppressWarnings("unused") ClassLoader classLoader) {
+    public static Object getUnnamedModule(@SuppressWarnings("unused") ClassLoader classLoader) {
         return null;
     }
 
-    static boolean verifyModuleVisibility(Object currentModule, @SuppressWarnings("unused") Class<?> memberClass) {
+    public static boolean verifyModuleVisibility(Object currentModule, @SuppressWarnings("unused") Class<?> memberClass) {
         assert currentModule == null;
         return true;
     }

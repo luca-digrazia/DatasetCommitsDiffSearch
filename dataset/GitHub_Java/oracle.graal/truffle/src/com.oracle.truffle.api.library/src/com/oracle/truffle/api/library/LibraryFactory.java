@@ -52,6 +52,7 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.GeneratedBy;
+import com.oracle.truffle.api.impl.TruffleJDKServices;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeUtil;
@@ -119,7 +120,7 @@ public abstract class LibraryFactory<T extends Library> {
     private static void clearNonTruffleClasses(Map<Class<?>, ?> map) {
         Class<?>[] classes = map.keySet().toArray(new Class<?>[0]);
         for (Class<?> clazz : classes) {
-            if (LibraryAccessor.jdkServicesAccessor().isNonTruffleClass(clazz)) {
+            if (TruffleJDKServices.isNonTruffleClass(clazz)) {
                 map.remove(clazz);
             }
         }
@@ -132,7 +133,7 @@ public abstract class LibraryFactory<T extends Library> {
     private final ConcurrentHashMap<Class<?>, T> cachedCache = new ConcurrentHashMap<>();
     private final ProxyExports proxyExports = new ProxyExports();
     final Map<String, Message> nameToMessages;
-    @CompilationFinal private volatile T uncachedDispatch;
+    @CompilationFinal private T uncachedDispatch;
 
     final DynamicDispatchLibrary dispatchLibrary;
 
@@ -259,10 +260,6 @@ public abstract class LibraryFactory<T extends Library> {
 
     final void ensureInitialized() {
         if (this.uncachedDispatch == null) {
-            /*
-             * We deliberately don't lock here. We don't care if we have multiple different
-             * instances of uncachedDispatch.
-             */
             this.uncachedDispatch = createUncachedDispatch();
         }
     }
