@@ -39,6 +39,9 @@ public interface InliningPolicy {
         return null;
     }
 
+    default void afterPartialEvaluation(CallNode node) {
+    }
+
     default void putProperties(CallNode callNode, Map<Object, Object> properties) {
     }
 
