@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -40,14 +40,9 @@ import java.util.concurrent.Callable;
 import org.graalvm.compiler.truffle.runtime.OptimizedBlockNode;
 import org.graalvm.compiler.truffle.runtime.OptimizedBlockNode.PartialBlocks;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
-import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
-import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Value;
 import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CompilerAsserts;
@@ -57,12 +52,12 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.BlockNode;
+import com.oracle.truffle.api.nodes.BlockNode.ElementExecutor;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.api.nodes.BlockNode.ElementExceptionHandler;
 import com.oracle.truffle.sl.SLLanguage;
 
 public class OptimizedBlockNodeTest {
@@ -74,6 +69,7 @@ public class OptimizedBlockNodeTest {
             setup(blockSize);
             OptimizedBlockNode<?> block = createBlock(blockSize, 1);
             OptimizedCallTarget target = createTest(block);
+            target.computeBlockCompilations();
             target.call();
             target.compile(true);
             // should not trigger and block compilation
@@ -83,18 +79,42 @@ public class OptimizedBlockNodeTest {
     }
 
     @Test
+    public void testFirstBlockElementExceedsLimit() {
+        setup(1);
+        OptimizedBlockNode<TestElement> block = createBlock(2, 1, null, new TestElementExecutor(), 5);
+        OptimizedCallTarget target = createTest(block);
+        target.computeBlockCompilations();
+        target.call();
+        target.compile(true);
+
+        // should not trigger and block compilation
+        PartialBlocks<TestElement> partialBlocks = block.getPartialBlocks();
+        assertNotNull(partialBlocks);
+        assertNotNull(partialBlocks.getBlockRanges());
+        assertEquals(1, partialBlocks.getBlockRanges().length);
+        assertEquals(1, partialBlocks.getBlockRanges()[0]);
+        assertNotNull(partialBlocks.getBlockTargets());
+        assertEquals(2, partialBlocks.getBlockTargets().length);
+        assertTrue(partialBlocks.getBlockTargets()[0].isValid());
+        assertTrue(partialBlocks.getBlockTargets()[1].isValid());
+
+        assertEquals(1, target.call());
+    }
+
+    @Test
     public void testBlockSizePlusOne() {
         int groupSize = 1;
         for (int i = 0; i < 5; i++) {
             setup(groupSize);
             OptimizedBlockNode<TestElement> block = createBlock(groupSize + 1, 1);
             OptimizedCallTarget target = createTest(block);
-            target.call();
             assertNull(block.getPartialBlocks());
+            target.computeBlockCompilations();
+            target.call();
             target.compile(true);
 
             // should not trigger and block compilation
-            PartialBlocks partialBlocks = block.getPartialBlocks();
+            PartialBlocks<TestElement> partialBlocks = block.getPartialBlocks();
             assertNotNull(partialBlocks);
             assertNotNull(partialBlocks.getBlockRanges());
             assertEquals(1, partialBlocks.getBlockRanges().length);
@@ -112,18 +132,17 @@ public class OptimizedBlockNodeTest {
             assertTrue(partialBlocks.getBlockTargets()[1].isValid());
 
             // test explicit invalidations
-            partialBlocks.getBlockTargets()[0].invalidate(null, "test invalidation");
+            partialBlocks.getBlockTargets()[0].invalidate("test invalidation");
             assertTrue(target.isValid());
             assertFalse(partialBlocks.getBlockTargets()[0].isValid());
             assertTrue(partialBlocks.getBlockTargets()[1].isValid());
 
-            target.invalidate(null, "test invalidation");
+            target.invalidate("test invalidation");
             assertFalse(target.isValid());
             assertFalse(partialBlocks.getBlockTargets()[0].isValid());
             assertTrue(partialBlocks.getBlockTargets()[1].isValid());
             assertEquals(groupSize, target.call());
-            assertFalse(target.isValid());
-            assertFalse(partialBlocks.getBlockTargets()[0].isValid());
+            // 0 or 1 might be compiled or not
             assertTrue(partialBlocks.getBlockTargets()[1].isValid());
 
             // test partial recompilation
@@ -146,7 +165,7 @@ public class OptimizedBlockNodeTest {
     public void testSimulateReplace() {
         OptimizedBlockNode<TestElement> block;
         OptimizedCallTarget target;
-        PartialBlocks partialBlocks;
+        PartialBlocks<TestElement> partialBlocks;
         int groupSize;
         int expectedResult;
 
@@ -156,6 +175,7 @@ public class OptimizedBlockNodeTest {
         target = createTest(block);
         expectedResult = groupSize * 3 - 1;
         assertEquals(expectedResult, target.call());
+        target.computeBlockCompilations();
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
 
@@ -214,7 +234,6 @@ public class OptimizedBlockNodeTest {
         assertFalse(target.isValid());
         assertFalse(partialBlocks.getBlockTargets()[0].isValid());
         assertTrue(partialBlocks.getBlockTargets()[1].isValid());
-        assertFalse(partialBlocks.getBlockTargets()[2].isValid());
         assertEquals(expectedResult, target.call());
 
         target.compile(true);
@@ -225,7 +244,7 @@ public class OptimizedBlockNodeTest {
     public void testExecuteMethods() throws UnexpectedResultException {
         OptimizedBlockNode<TestElement> block;
         OptimizedCallTarget target;
-        PartialBlocks partialBlocks;
+        PartialBlocks<TestElement> partialBlocks;
         Object expectedResult;
         MaterializedFrame testFrame = Truffle.getRuntime().createMaterializedFrame(new Object[0]);
 
@@ -235,64 +254,68 @@ public class OptimizedBlockNodeTest {
         target = createTest(block);
         expectedResult = 8;
         assertEquals(expectedResult, target.call());
+        target.computeBlockCompilations();
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
         assertValid(target, partialBlocks);
 
-        assertEquals(expectedResult, block.executeInt(testFrame, 0, null));
-        block.executeVoid(testFrame, 0, null);
+        assertEquals(expectedResult, block.executeInt(testFrame, BlockNode.NO_ARGUMENT));
+        block.executeVoid(testFrame, BlockNode.NO_ARGUMENT);
         OptimizedBlockNode<TestElement> block0 = block;
-        assertUnexpected(() -> block0.executeLong(testFrame, 0, null), expectedResult);
-        assertUnexpected(() -> block0.executeDouble(testFrame, 0, null), expectedResult);
-        assertUnexpected(() -> block0.executeBoolean(testFrame, 0, null), expectedResult);
+        assertUnexpected(() -> block0.executeLong(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
+        assertUnexpected(() -> block0.executeDouble(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
+        assertUnexpected(() -> block0.executeBoolean(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
         assertValid(target, partialBlocks);
 
         expectedResult = 42.d;
         block = createBlock(13, 1, expectedResult);
         target = createTest(block);
         assertEquals(expectedResult, target.call());
+        target.computeBlockCompilations();
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
         assertValid(target, partialBlocks);
 
-        assertEquals(expectedResult, block.executeDouble(testFrame, 0, null));
-        block.executeVoid(testFrame, 0, null);
+        assertEquals(expectedResult, block.executeDouble(testFrame, BlockNode.NO_ARGUMENT));
+        block.executeVoid(testFrame, BlockNode.NO_ARGUMENT);
         OptimizedBlockNode<TestElement> block1 = block;
-        assertUnexpected(() -> block1.executeLong(testFrame, 0, null), expectedResult);
-        assertUnexpected(() -> block1.executeInt(testFrame, 0, null), expectedResult);
-        assertUnexpected(() -> block1.executeBoolean(testFrame, 0, null), expectedResult);
+        assertUnexpected(() -> block1.executeLong(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
+        assertUnexpected(() -> block1.executeInt(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
+        assertUnexpected(() -> block1.executeBoolean(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
         assertValid(target, partialBlocks);
 
         expectedResult = 42L;
         block = createBlock(12, 1, expectedResult);
         target = createTest(block);
         assertEquals(expectedResult, target.call());
+        target.computeBlockCompilations();
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
         assertValid(target, partialBlocks);
 
-        assertEquals(expectedResult, block.executeLong(testFrame, 0, null));
-        block.executeVoid(testFrame, 0, null);
+        assertEquals(expectedResult, block.executeLong(testFrame, BlockNode.NO_ARGUMENT));
+        block.executeVoid(testFrame, BlockNode.NO_ARGUMENT);
         OptimizedBlockNode<TestElement> block2 = block;
-        assertUnexpected(() -> block2.executeDouble(testFrame, 0, null), expectedResult);
-        assertUnexpected(() -> block2.executeInt(testFrame, 0, null), expectedResult);
-        assertUnexpected(() -> block2.executeBoolean(testFrame, 0, null), expectedResult);
+        assertUnexpected(() -> block2.executeDouble(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
+        assertUnexpected(() -> block2.executeInt(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
+        assertUnexpected(() -> block2.executeBoolean(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
         assertValid(target, partialBlocks);
 
         expectedResult = false;
         block = createBlock(7, 1, expectedResult);
         target = createTest(block);
         assertEquals(expectedResult, target.call());
+        target.computeBlockCompilations();
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
         assertValid(target, partialBlocks);
 
-        assertEquals(expectedResult, block.executeBoolean(testFrame, 0, null));
-        block.executeVoid(testFrame, 0, null);
+        assertEquals(expectedResult, block.executeBoolean(testFrame, BlockNode.NO_ARGUMENT));
+        block.executeVoid(testFrame, BlockNode.NO_ARGUMENT);
         OptimizedBlockNode<TestElement> block3 = block;
-        assertUnexpected(() -> block3.executeDouble(testFrame, 0, null), expectedResult);
-        assertUnexpected(() -> block3.executeInt(testFrame, 0, null), expectedResult);
-        assertUnexpected(() -> block3.executeLong(testFrame, 0, null), expectedResult);
+        assertUnexpected(() -> block3.executeDouble(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
+        assertUnexpected(() -> block3.executeInt(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
+        assertUnexpected(() -> block3.executeLong(testFrame, BlockNode.NO_ARGUMENT), expectedResult);
         assertValid(target, partialBlocks);
     }
 
@@ -300,46 +323,45 @@ public class OptimizedBlockNodeTest {
     public void testStartsWithCompilation() {
         OptimizedBlockNode<TestElement> block;
         OptimizedCallTarget target;
-        PartialBlocks partialBlocks;
+        PartialBlocks<TestElement> partialBlocks;
         Object expectedResult;
-        boolean[] elementExecuted;
+        int[] elementExecuted;
 
         setup(2);
 
-        block = createBlock(5, 1, null);
+        block = createBlock(5, 1, null, new StartsWithExecutor(), 0);
         target = createTest(block);
         elementExecuted = ((TestRootNode) block.getRootNode()).elementExecuted;
         expectedResult = 4;
         assertEquals(expectedResult, target.call(0));
+        target.computeBlockCompilations();
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
         assertValid(target, partialBlocks);
         assertEquals(expectedResult, target.call(1));
-        // first time observed a different start value -> deopt
-        assertInvalid(target, partialBlocks, 0);
-        assertFalse(elementExecuted[0]);
-        assertTrue(elementExecuted[1]);
-        assertTrue(elementExecuted[2]);
-        assertTrue(elementExecuted[3]);
-        assertTrue(elementExecuted[4]);
+        assertEquals(0, elementExecuted[0]);
+        assertEquals(1, elementExecuted[1]);
+        assertEquals(1, elementExecuted[2]);
+        assertEquals(1, elementExecuted[3]);
+        assertEquals(1, elementExecuted[4]);
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
         assertValid(target, partialBlocks);
         assertEquals(expectedResult, target.call(3));
-        assertFalse(elementExecuted[0]);
-        assertFalse(elementExecuted[1]);
-        assertFalse(elementExecuted[2]);
-        assertTrue(elementExecuted[3]);
-        assertTrue(elementExecuted[4]);
+        assertEquals(0, elementExecuted[0]);
+        assertEquals(0, elementExecuted[1]);
+        assertEquals(0, elementExecuted[2]);
+        assertEquals(1, elementExecuted[3]);
+        assertEquals(1, elementExecuted[4]);
         assertValid(target, partialBlocks);
         target.compile(true);
         assertValid(target, partialBlocks);
         assertEquals(expectedResult, target.call(4));
-        assertFalse(elementExecuted[0]);
-        assertFalse(elementExecuted[1]);
-        assertFalse(elementExecuted[2]);
-        assertFalse(elementExecuted[3]);
-        assertTrue(elementExecuted[4]);
+        assertEquals(0, elementExecuted[0]);
+        assertEquals(0, elementExecuted[1]);
+        assertEquals(0, elementExecuted[2]);
+        assertEquals(0, elementExecuted[3]);
+        assertEquals(1, elementExecuted[4]);
         assertValid(target, partialBlocks);
         target.compile(true);
         try {
@@ -347,23 +369,24 @@ public class OptimizedBlockNodeTest {
             fail();
         } catch (IllegalArgumentException e) {
         }
-        assertFalse(elementExecuted[0]);
-        assertFalse(elementExecuted[1]);
-        assertFalse(elementExecuted[2]);
-        assertFalse(elementExecuted[3]);
-        assertFalse(elementExecuted[4]);
+        assertEquals(0, elementExecuted[0]);
+        assertEquals(0, elementExecuted[1]);
+        assertEquals(0, elementExecuted[2]);
+        assertEquals(0, elementExecuted[3]);
+        assertEquals(0, elementExecuted[4]);
     }
 
     @Test
     public void testHierarchicalBlocks() {
         OptimizedBlockNode<TestElement> block;
         OptimizedCallTarget target;
-        PartialBlocks partialBlocks;
+        PartialBlocks<TestElement> partialBlocks;
 
         setup(3);
 
         block = createBlock(5, 2, null);
         target = createTest(block);
+        target.computeBlockCompilations();
         target.call();
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
@@ -374,6 +397,7 @@ public class OptimizedBlockNodeTest {
 
         block = createBlock(5, 3, null);
         target = createTest(block);
+        target.computeBlockCompilations();
         target.call();
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
@@ -387,11 +411,12 @@ public class OptimizedBlockNodeTest {
     public void testHierarchicalUnbalanced() {
         OptimizedBlockNode<TestElement> block;
         OptimizedCallTarget target;
-        PartialBlocks partialBlocks;
+        PartialBlocks<TestElement> partialBlocks;
 
         setup(50);
         block = createBlock(10, 4, null);
         target = createTest(block);
+        target.computeBlockCompilations();
         target.call();
         target.compile(true);
         partialBlocks = block.getPartialBlocks();
@@ -409,33 +434,10 @@ public class OptimizedBlockNodeTest {
             setup(blockSize);
             OptimizedBlockNode<?> block = createBlock(blockSize + 1, 1);
             OptimizedCallTarget target = createTest(block);
+            target.computeBlockCompilations();
             target.compile(true);
             assertValid(target, block.getPartialBlocks());
             target.call();
-            assertValid(target, block.getPartialBlocks());
-            blockSize = blockSize * 2;
-        }
-    }
-
-    @Test
-    public void testExceptionHandlerCompilation() {
-        int blockSize = 1;
-        ElementExceptionHandler e = new ElementExceptionHandler() {
-            @Override
-            public void onBlockElementException(VirtualFrame frame, Throwable ex, int elementIndex) {
-                CompilerAsserts.partialEvaluationConstant(this.getClass());
-                CompilerAsserts.partialEvaluationConstant(elementIndex);
-            }
-        };
-        for (int i = 0; i < 5; i++) {
-            setup(blockSize);
-            OptimizedBlockNode<?> block = createBlock(blockSize + 1, 1);
-            OptimizedCallTarget target = createTest(block);
-            ((TestRootNode) target.getRootNode()).exceptionHandler = e;
-            target.call(0);
-            target.compile(true);
-            assertValid(target, block.getPartialBlocks());
-            target.call(0);
             assertValid(target, block.getPartialBlocks());
             blockSize = blockSize * 2;
         }
@@ -447,7 +449,7 @@ public class OptimizedBlockNodeTest {
         final int targetBlocks = 4;
 
         setup(testBlockSize);
-        int emptyNodeCount = generateSLFunction(context, "empty", 0).getNonTrivialNodeCount();
+        int emptyNodeCount = generateSLFunction(context, "empty", BlockNode.NO_ARGUMENT).getNonTrivialNodeCount();
         int singleNodeCount = generateSLFunction(context, "single", 1).getNonTrivialNodeCount();
         int twoNodeCount = generateSLFunction(context, "two", 2).getNonTrivialNodeCount();
         int singleStatementNodeCount = twoNodeCount - singleNodeCount;
@@ -457,8 +459,8 @@ public class OptimizedBlockNodeTest {
 
         int statements = Math.floorDiv(((testBlockSize * targetBlocks) - (blockOverhead)), singleStatementNodeCount);
         OptimizedCallTarget target = generateSLFunction(context, "test", statements);
+        target.computeBlockCompilations();
         assertEquals((statements - 1) * singleStatementNodeCount + singleNodeCount, target.getNonTrivialNodeCount());
-
         Value v = context.getBindings("sl").getMember("test");
 
         // make it compile with threshold
@@ -466,22 +468,41 @@ public class OptimizedBlockNodeTest {
             assertEquals(statements, v.execute().asInt());
         }
         assertTrue(target.isValid());
-        List<OptimizedBlockNode<?>> blocks = new ArrayList<>();
+        List<OptimizedBlockNode<TestElement>> blocks = new ArrayList<>();
         target.getRootNode().accept(new NodeVisitor() {
 
+            @SuppressWarnings("unchecked")
             @Override
             public boolean visit(Node node) {
                 if (node instanceof OptimizedBlockNode<?>) {
-                    blocks.add((OptimizedBlockNode<?>) node);
+                    blocks.add((OptimizedBlockNode<TestElement>) node);
                 }
                 return true;
             }
         });
         assertEquals(1, blocks.size());
-        OptimizedBlockNode<?> block = blocks.iterator().next();
-        PartialBlocks partialBlocks = block.getPartialBlocks();
+        OptimizedBlockNode<TestElement> block = blocks.iterator().next();
+        PartialBlocks<TestElement> partialBlocks = block.getPartialBlocks();
         assertNotNull(partialBlocks);
         assertEquals(targetBlocks, partialBlocks.getBlockTargets().length);
+    }
+
+    @Test
+    public void testBlockCompilationTrigger() {
+        // the number 200 for the maximum compile limit is heavily dependent
+        // on implementation details and might need to be updated the future.
+        setup(10, 200);
+
+        // test not triggering the limit
+        OptimizedBlockNode<?> block = createBlock(1, 1);
+        OptimizedCallTarget target = createTest(block);
+        target.compile(true);
+        assertNull(block.getPartialBlocks());
+
+        block = createBlock(10 + 1, 1);
+        target = createTest(block);
+        target.compile(true);
+        assertNotNull(block.getPartialBlocks());
     }
 
     private static OptimizedBlockNode<TestElement> createBlock(int blockSize, int depth) {
@@ -489,19 +510,43 @@ public class OptimizedBlockNodeTest {
     }
 
     private static OptimizedBlockNode<TestElement> createBlock(int blockSize, int depth, Object returnValue) {
+        return createBlock(blockSize, depth, returnValue, new TestElementExecutor(), 0);
+    }
+
+    private static OptimizedBlockNode<TestElement> createBlock(int blockSize, int depth, Object returnValue, ElementExecutor<TestElement> executor, int extraChildrenOfFirstElement) {
         if (depth == 0) {
             return null;
         }
         TestElement[] elements = new TestElement[blockSize];
         for (int i = 0; i < blockSize; i++) {
-            elements[i] = new TestElement(createBlock(blockSize, depth - 1, returnValue), returnValue == null ? i : returnValue, i);
+            Node[] extraDummyChildren;
+            if (i == 0 && extraChildrenOfFirstElement > 0) {
+                extraDummyChildren = new Node[extraChildrenOfFirstElement];
+                for (int j = 0; j < extraDummyChildren.length; j++) {
+                    extraDummyChildren[j] = new Node() {
+                    };
+                }
+            } else {
+                extraDummyChildren = new Node[0];
+            }
+            elements[i] = new TestElement(createBlock(blockSize, depth - 1, returnValue), returnValue == null ? i : returnValue, i, extraDummyChildren);
         }
-        return (OptimizedBlockNode<TestElement>) BlockNode.create(elements);
+        return (OptimizedBlockNode<TestElement>) BlockNode.create(elements, executor);
     }
 
     private static OptimizedCallTarget createTest(BlockNode<?> block) {
         TestRootNode root = new TestRootNode(block, "Block[" + block.getElements().length + "]");
-        return (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root);
+        OptimizedCallTarget target = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(root);
+        root.accept(new NodeVisitor() {
+            @Override
+            public boolean visit(Node node) {
+                if (node instanceof TestElement) {
+                    ((TestElement) node).onAdopt();
+                }
+                return true;
+            }
+        });
+        return target;
     }
 
     private static OptimizedCallTarget generateSLFunction(Context context, String name, int statements) {
@@ -520,26 +565,21 @@ public class OptimizedBlockNodeTest {
         context.getBindings("sl").getMember(name).execute();
         context.enter();
         try {
-            return ((OptimizedCallTarget) SLLanguage.getCurrentContext().getFunctionRegistry().getFunction(name).getCallTarget());
+            OptimizedCallTarget target = ((OptimizedCallTarget) SLLanguage.getCurrentContext().getFunctionRegistry().getFunction(name).getCallTarget());
+            // we invalidate to make sure the call counts are updated.
+            target.invalidate("invalidate for test");
+            return target;
         } finally {
             context.leave();
         }
     }
 
-    private static void assertValid(OptimizedCallTarget target, PartialBlocks partialBlocks) {
+    private static void assertValid(OptimizedCallTarget target, PartialBlocks<?> partialBlocks) {
         assertNotNull(partialBlocks);
         assertTrue(target.isValid());
         for (int i = 0; i < partialBlocks.getBlockTargets().length; i++) {
             OptimizedCallTarget blockTarget = partialBlocks.getBlockTargets()[i];
             assertTrue(String.valueOf(i), blockTarget.isValid());
-        }
-    }
-
-    private static void assertInvalid(OptimizedCallTarget target, PartialBlocks partialBlocks, int startIndex) {
-        assertFalse(target.isValid());
-        for (int i = startIndex; i < partialBlocks.getBlockTargets().length; i++) {
-            OptimizedCallTarget blockTarget = partialBlocks.getBlockTargets()[i];
-            assertFalse(String.valueOf(i), blockTarget.isValid());
         }
     }
 
@@ -555,26 +595,6 @@ public class OptimizedBlockNodeTest {
         fail("expected unexpected result but no exception was thrown");
     }
 
-    private static TruffleRuntimeOptionsOverrideScope backgroundCompilation;
-
-    @BeforeClass
-    public static void beforeClass() {
-        backgroundCompilation = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleBackgroundCompilation, false);
-
-        /*
-         * Do some dummy compilation to make sure everything is resolved.
-         */
-        OptimizedBlockNode<?> block = createBlock(10, 1);
-        OptimizedCallTarget target = createTest(block);
-        target.call();
-        target.compile(true);
-    }
-
-    @AfterClass
-    public static void afterClass() {
-        backgroundCompilation.close();
-    }
-
     private Context context;
 
     @After
@@ -588,10 +608,17 @@ public class OptimizedBlockNodeTest {
     private static final int TEST_COMPILATION_THRESHOLD = 10;
 
     private void setup(int blockCompilationSize) {
+        setup(blockCompilationSize, 10000);
+    }
+
+    private void setup(int blockCompilationSize, int maxGraalNodeCount) {
         clearContext();
         context = Context.newBuilder().allowAllAccess(true)//
+                        .option("engine.BackgroundCompilation", "false") //
+                        .option("engine.MultiTier", "false") //
                         .option("engine.PartialBlockCompilationSize", String.valueOf(blockCompilationSize))//
-                        .option("engine.CompilationThreshold", String.valueOf(TEST_COMPILATION_THRESHOLD)).build();
+                        .option("engine.MaximumGraalNodeCount", String.valueOf(maxGraalNodeCount))//
+                        .option("engine.SingleTierCompilationThreshold", String.valueOf(TEST_COMPILATION_THRESHOLD)).build();
         context.enter();
     }
 
@@ -605,114 +632,78 @@ public class OptimizedBlockNodeTest {
 
     }
 
-    static class TestElement extends Node implements BlockNode.TypedElement {
+    static class StartsWithExecutor extends TestElementExecutor {
+
+        @Override
+        public void executeVoid(VirtualFrame frame, TestElement node, int elementIndex, int startsWith) {
+            CompilerAsserts.partialEvaluationConstant(this.getClass());
+            CompilerAsserts.partialEvaluationConstant(elementIndex);
+            if (elementIndex >= startsWith) {
+                node.execute(frame);
+            }
+        }
+
+        @Override
+        public Object executeGeneric(VirtualFrame frame, TestElement node, int elementIndex, int startsWith) {
+            CompilerAsserts.partialEvaluationConstant(this.getClass());
+            CompilerAsserts.partialEvaluationConstant(elementIndex);
+            if (elementIndex >= startsWith) {
+                return node.execute(frame);
+            }
+            CompilerDirectives.transferToInterpreter();
+            throw new IllegalArgumentException();
+        }
+
+    }
+
+    static class TestElementExecutor implements BlockNode.ElementExecutor<TestElement> {
+
+        @Override
+        public void executeVoid(VirtualFrame frame, TestElement node, int index, int argument) {
+            executeGeneric(frame, node, index, argument);
+        }
+
+        @Override
+        public Object executeGeneric(VirtualFrame frame, TestElement node, int index, int argument) {
+            CompilerAsserts.partialEvaluationConstant(this.getClass());
+            CompilerAsserts.partialEvaluationConstant(index);
+            return node.execute(frame);
+        }
+
+    }
+
+    static class TestElement extends Node {
 
         @Child BlockNode<?> childBlock;
         @Child ElementChildNode childNode = new ElementChildNode();
+        @Children Node[] extraDummyChildren;
 
         final Object returnValue;
-
         final int childIndex;
 
         @CompilationFinal TestRootNode root;
 
-        TestElement(BlockNode<?> childBlock, Object returnValue, int childIndex) {
+        TestElement(BlockNode<?> childBlock, Object returnValue, int childIndex, Node[] extraDummyChildren) {
             this.childBlock = childBlock;
             this.returnValue = returnValue;
             this.childIndex = childIndex;
+            this.extraDummyChildren = extraDummyChildren;
+        }
+
+        void onAdopt() {
+            root = (TestRootNode) getRootNode();
         }
 
         public void simulateReplace() {
             childNode.replace(new ElementChildNode());
         }
 
-        @Override
         public Object execute(VirtualFrame frame) {
-            if (CompilerDirectives.inInterpreter()) {
-                if (root == null) {
-                    CompilerDirectives.transferToInterpreterAndInvalidate();
-                    root = (TestRootNode) getRootNode();
-                }
-            }
-            if (root != null) {
-                root.elementExecuted[childIndex] = true;
-            }
+            root.elementExecuted[childIndex]++;
             if (childBlock != null) {
-                return childBlock.execute(frame, 0, null);
+                return childBlock.executeGeneric(frame, BlockNode.NO_ARGUMENT);
             }
             return returnValue;
-        }
-
-        @Override
-        public byte executeByte(VirtualFrame frame) throws UnexpectedResultException {
-            Object result = execute(frame);
-            if (result instanceof Byte) {
-                return (byte) result;
-            }
-            throw new UnexpectedResultException(result);
-        }
-
-        @Override
-        public short executeShort(VirtualFrame frame) throws UnexpectedResultException {
-            Object result = execute(frame);
-            if (result instanceof Short) {
-                return (short) result;
-            }
-            throw new UnexpectedResultException(result);
-        }
-
-        @Override
-        public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
-            Object result = execute(frame);
-            if (result instanceof Integer) {
-                return (int) result;
-            }
-            throw new UnexpectedResultException(result);
-        }
-
-        @Override
-        public char executeChar(VirtualFrame frame) throws UnexpectedResultException {
-            Object result = execute(frame);
-            if (result instanceof Character) {
-                return (char) result;
-            }
-            throw new UnexpectedResultException(result);
-        }
-
-        @Override
-        public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-            Object result = execute(frame);
-            if (result instanceof Long) {
-                return (long) result;
-            }
-            throw new UnexpectedResultException(result);
-        }
-
-        @Override
-        public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
-            Object result = execute(frame);
-            if (result instanceof Float) {
-                return (float) result;
-            }
-            throw new UnexpectedResultException(result);
-        }
-
-        @Override
-        public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
-            Object result = execute(frame);
-            if (result instanceof Double) {
-                return (double) result;
-            }
-            throw new UnexpectedResultException(result);
-        }
-
-        @Override
-        public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
-            Object result = execute(frame);
-            if (result instanceof Boolean) {
-                return (boolean) result;
-            }
-            throw new UnexpectedResultException(result);
         }
 
     }
@@ -720,16 +711,15 @@ public class OptimizedBlockNodeTest {
     static class TestRootNode extends RootNode {
 
         @Child BlockNode<?> block;
-        final boolean[] elementExecuted;
+        final int[] elementExecuted;
 
         private final String name;
-        @CompilationFinal ElementExceptionHandler exceptionHandler;
 
         TestRootNode(BlockNode<?> block, String name) {
             super(null);
             this.block = block;
             this.name = name;
-            this.elementExecuted = new boolean[block.getElements().length];
+            this.elementExecuted = new int[block.getElements().length];
         }
 
         @Override
@@ -740,15 +730,15 @@ public class OptimizedBlockNodeTest {
         @Override
         public Object execute(VirtualFrame frame) {
             for (int i = 0; i < elementExecuted.length; i++) {
-                elementExecuted[i] = false;
+                elementExecuted[i] = 0;
             }
-            int startIndex;
+            int argument;
             if (frame.getArguments().length > 0) {
-                startIndex = (int) frame.getArguments()[0];
+                argument = (int) frame.getArguments()[0];
             } else {
-                startIndex = 0;
+                argument = 0;
             }
-            return block.execute(frame, startIndex, exceptionHandler);
+            return block.executeGeneric(frame, argument);
         }
 
         @Override

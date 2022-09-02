@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -29,509 +29,248 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
+
 import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.CompilerAsserts;
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.ReplaceObserver;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.BlockNode;
-import com.oracle.truffle.api.nodes.BlockNode.VoidElement;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.api.profiles.ValueProfile;
+import com.oracle.truffle.api.source.SourceSection;
+import com.oracle.truffle.api.utilities.NeverValidAssumption;
 
-public final class OptimizedBlockNode<T extends Node & VoidElement> extends BlockNode<T> implements ReplaceObserver {
+public final class OptimizedBlockNode<T extends Node> extends BlockNode<T> implements ReplaceObserver {
 
-    private static class NullElementExceptionHandler implements ElementExceptionHandler {
-        @Override
-        public void onBlockElementException(VirtualFrame frame, Throwable e, int elementIndex) {
-        }
-    }
+    @CompilationFinal private volatile PartialBlocks<T> partialBlocks;
+    private final ElementExecutor<T> executor;
+    @CompilationFinal private volatile Assumption alwaysNoArgument;
 
-    /*
-     * We use a dedicated instance to represent null exception handler at the call boundary as the
-     * call target profile does not (and should not) support null values.
-     */
-    private static final NullElementExceptionHandler NULL_ELEMENT_EXCEPTION_HANDLER = new NullElementExceptionHandler();
-
-    @CompilationFinal private volatile PartialBlocks partialBlocks;
-    @CompilationFinal private volatile Assumption startAlwaysZero;
-    @CompilationFinal Class<? extends ElementExceptionHandler> exceptionHandlerClass = ElementExceptionHandler.class;
-
-    OptimizedBlockNode(T[] elements) {
+    OptimizedBlockNode(T[] elements, ElementExecutor<T> executor) {
         super(elements);
-    }
-
-    private static void handleElementException(VirtualFrame frame, ElementExceptionHandler exceptionHandler, int index, Throwable ex) {
-        if (exceptionHandler != null) {
-            exceptionHandler.onBlockElementException(frame, ex, index);
-        }
-    }
-
-    @Override
-    public Object execute(VirtualFrame frame, int start, ElementExceptionHandler eh) {
-        handleStart(start, eh);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                return g.execute(frame, start, eh);
-            }
-        }
-        T[] e = getElements();
-        int last = e.length - 1;
-        executeBlockComplex(frame, e, start, last, eh);
-        try {
-            return ((GenericElement) e[last]).execute(frame);
-        } catch (Throwable ex) {
-            handleElementException(frame, eh, last, ex);
-            throw ex;
-        }
+        this.executor = executor;
     }
 
     @Override
     @ExplodeLoop
-    public Object execute(VirtualFrame frame) {
-        assert handleStart(0, null);
+    public Object executeGeneric(VirtualFrame frame, int argument) {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                return g.execute(frame, 0, null);
+                return g.execute(frame, arg);
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
         int last = e.length - 1;
-        for (int i = 0; i < last; i++) {
-            e[i].executeVoid(frame);
+        for (int i = 0; i < last; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
-        return ((GenericElement) e[last]).execute(frame);
+        return ex.executeGeneric(frame, e[last], last, arg);
+    }
+
+    private int profileArg(int arg) {
+        Assumption a = alwaysNoArgument;
+        if (a == null) {
+            if (CompilerDirectives.inInterpreter()) {
+                // no need to deoptimize if the block was never executed
+                if (arg == NO_ARGUMENT) {
+                    alwaysNoArgument = Truffle.getRuntime().createAssumption("Always zero block node argument.");
+                } else {
+                    alwaysNoArgument = NeverValidAssumption.INSTANCE;
+                }
+            }
+        } else if (a.isValid()) {
+            if (arg == NO_ARGUMENT) {
+                return NO_ARGUMENT;
+            } else {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                a.invalidate();
+            }
+        }
+        return arg;
     }
 
     @Override
-    public void executeVoid(VirtualFrame frame, int start, ElementExceptionHandler eh) {
-        handleStart(start, eh);
+    @ExplodeLoop
+    public void executeVoid(VirtualFrame frame, int argument) {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                g.execute(frame, start, eh);
+                g.execute(frame, arg);
                 return;
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
-        executeBlockComplex(frame, e, start, e.length, eh);
-    }
-
-    @Override
-    @ExplodeLoop
-    public void executeVoid(VirtualFrame frame) {
-        assert handleStart(0, null);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                g.execute(frame, 0, null);
-                return;
-            }
-        }
-        T[] e = getElements();
-        for (int i = 0; i < e.length; i++) {
-            e[i].executeVoid(frame);
-        }
-    }
-
-    @Override
-    public byte executeByte(VirtualFrame frame, int start, ElementExceptionHandler eh) throws UnexpectedResultException {
-        handleStart(start, eh);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                return g.executeByte(frame, start, eh);
-            }
-        }
-        T[] e = getElements();
-        int last = e.length - 1;
-        executeBlockComplex(frame, e, start, last, eh);
-        try {
-            return ((TypedElement) e[last]).executeByte(frame);
-        } catch (UnexpectedResultException ex) {
-            throw ex;
-        } catch (Throwable ex) {
-            handleElementException(frame, eh, last, ex);
-            throw ex;
+        for (int i = 0; i < e.length; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
     }
 
     @Override
     @ExplodeLoop
-    public byte executeByte(VirtualFrame frame) throws UnexpectedResultException {
-        assert handleStart(0, null);
+    public byte executeByte(VirtualFrame frame, int argument) throws UnexpectedResultException {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                return g.executeByte(frame, 0, null);
+                return g.executeByte(frame, arg);
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
         int last = e.length - 1;
-        for (int i = 0; i < last; i++) {
-            e[i].executeVoid(frame);
+        for (int i = 0; i < last; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
-        return ((TypedElement) e[last]).executeByte(frame);
-    }
-
-    @Override
-    public short executeShort(VirtualFrame frame, int start, ElementExceptionHandler eh) throws UnexpectedResultException {
-        handleStart(start, eh);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                return g.executeShort(frame, start, eh);
-            }
-        }
-        T[] e = getElements();
-        int last = e.length - 1;
-        executeBlockComplex(frame, e, start, last, eh);
-        try {
-            return ((TypedElement) e[last]).executeShort(frame);
-        } catch (UnexpectedResultException ex) {
-            throw ex;
-        } catch (Throwable ex) {
-            handleElementException(frame, eh, last, ex);
-            throw ex;
-        }
+        return ex.executeByte(frame, e[last], last, arg);
     }
 
     @Override
     @ExplodeLoop
-    public short executeShort(VirtualFrame frame) throws UnexpectedResultException {
-        assert handleStart(0, null);
+    public short executeShort(VirtualFrame frame, int argument) throws UnexpectedResultException {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                return g.executeShort(frame, 0, null);
+                return g.executeShort(frame, arg);
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
         int last = e.length - 1;
-        for (int i = 0; i < last; i++) {
-            e[i].executeVoid(frame);
+        for (int i = 0; i < last; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
-        return ((TypedElement) e[last]).executeShort(frame);
-    }
-
-    @Override
-    public int executeInt(VirtualFrame frame, int start, ElementExceptionHandler eh) throws UnexpectedResultException {
-        handleStart(start, eh);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                return g.executeInt(frame, start, eh);
-            }
-        }
-        T[] e = getElements();
-        int last = e.length - 1;
-        executeBlockComplex(frame, e, start, last, eh);
-        try {
-            return ((TypedElement) e[last]).executeInt(frame);
-        } catch (UnexpectedResultException ex) {
-            throw ex;
-        } catch (Throwable ex) {
-            handleElementException(frame, eh, last, ex);
-            throw ex;
-        }
+        return ex.executeShort(frame, e[last], last, arg);
     }
 
     @Override
     @ExplodeLoop
-    public int executeInt(VirtualFrame frame) throws UnexpectedResultException {
-        assert handleStart(0, null);
+    public char executeChar(VirtualFrame frame, int argument) throws UnexpectedResultException {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                return g.executeInt(frame, 0, null);
+                return g.executeChar(frame, arg);
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
         int last = e.length - 1;
-        for (int i = 0; i < last; i++) {
-            e[i].executeVoid(frame);
+        for (int i = 0; i < last; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
-        return ((TypedElement) e[last]).executeInt(frame);
-    }
-
-    @Override
-    public char executeChar(VirtualFrame frame, int start, ElementExceptionHandler eh) throws UnexpectedResultException {
-        handleStart(start, eh);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                return g.executeChar(frame, start, eh);
-            }
-        }
-        T[] e = getElements();
-        int last = e.length - 1;
-        executeBlockComplex(frame, e, start, last, eh);
-        try {
-            return ((TypedElement) e[last]).executeChar(frame);
-        } catch (UnexpectedResultException ex) {
-            throw ex;
-        } catch (Throwable ex) {
-            handleElementException(frame, eh, last, ex);
-            throw ex;
-        }
+        return ex.executeChar(frame, e[last], last, arg);
     }
 
     @Override
     @ExplodeLoop
-    public char executeChar(VirtualFrame frame) throws UnexpectedResultException {
-        assert handleStart(0, null);
+    public int executeInt(VirtualFrame frame, int argument) throws UnexpectedResultException {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                return g.executeChar(frame, 0, null);
+                return g.executeInt(frame, arg);
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
         int last = e.length - 1;
-        for (int i = 0; i < last; i++) {
-            e[i].executeVoid(frame);
+        for (int i = 0; i < last; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
-        return ((TypedElement) e[last]).executeChar(frame);
-    }
-
-    @Override
-    public long executeLong(VirtualFrame frame, int start, ElementExceptionHandler eh) throws UnexpectedResultException {
-        handleStart(start, eh);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                return g.executeLong(frame, start, eh);
-            }
-        }
-        T[] e = getElements();
-        int last = e.length - 1;
-        executeBlockComplex(frame, e, start, last, eh);
-        try {
-            return ((TypedElement) e[last]).executeLong(frame);
-        } catch (UnexpectedResultException ex) {
-            throw ex;
-        } catch (Throwable ex) {
-            handleElementException(frame, eh, last, ex);
-            throw ex;
-        }
+        return ex.executeInt(frame, e[last], last, arg);
     }
 
     @Override
     @ExplodeLoop
-    public long executeLong(VirtualFrame frame) throws UnexpectedResultException {
-        assert handleStart(0, null);
+    public long executeLong(VirtualFrame frame, int argument) throws UnexpectedResultException {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                return g.executeLong(frame, 0, null);
+                return g.executeLong(frame, arg);
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
         int last = e.length - 1;
-        for (int i = 0; i < last; i++) {
-            e[i].executeVoid(frame);
+        for (int i = 0; i < last; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
-        return ((TypedElement) e[last]).executeLong(frame);
-    }
-
-    @Override
-    public float executeFloat(VirtualFrame frame, int start, ElementExceptionHandler eh) throws UnexpectedResultException {
-        handleStart(start, eh);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                return g.executeFloat(frame, start, eh);
-            }
-        }
-        T[] e = getElements();
-        int last = e.length - 1;
-        executeBlockComplex(frame, e, start, last, eh);
-        try {
-            return ((TypedElement) e[last]).executeFloat(frame);
-        } catch (UnexpectedResultException ex) {
-            throw ex;
-        } catch (Throwable ex) {
-            handleElementException(frame, eh, last, ex);
-            throw ex;
-        }
+        return ex.executeLong(frame, e[last], last, arg);
     }
 
     @Override
     @ExplodeLoop
-    public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
-        assert handleStart(0, null);
+    public float executeFloat(VirtualFrame frame, int argument) throws UnexpectedResultException {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                return g.executeFloat(frame, 0, null);
+                return g.executeFloat(frame, arg);
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
         int last = e.length - 1;
-        for (int i = 0; i < last; i++) {
-            e[i].executeVoid(frame);
+        for (int i = 0; i < last; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
-        return ((TypedElement) e[last]).executeFloat(frame);
-    }
-
-    @Override
-    public double executeDouble(VirtualFrame frame, int start, ElementExceptionHandler eh) throws UnexpectedResultException {
-        handleStart(start, eh);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                return g.executeDouble(frame, start, eh);
-            }
-        }
-        T[] e = getElements();
-        int last = e.length - 1;
-        executeBlockComplex(frame, e, start, last, eh);
-        try {
-            return ((TypedElement) e[last]).executeDouble(frame);
-        } catch (UnexpectedResultException ex) {
-            throw ex;
-        } catch (Throwable ex) {
-            handleElementException(frame, eh, last, ex);
-            throw ex;
-        }
+        return ex.executeFloat(frame, e[last], last, arg);
     }
 
     @Override
     @ExplodeLoop
-    public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
-        assert handleStart(0, null);
+    public double executeDouble(VirtualFrame frame, int argument) throws UnexpectedResultException {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                return g.executeDouble(frame, 0, null);
+                return g.executeDouble(frame, arg);
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
         int last = e.length - 1;
-        for (int i = 0; i < last; i++) {
-            e[i].executeVoid(frame);
+        for (int i = 0; i < last; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
-        return ((TypedElement) e[last]).executeDouble(frame);
-    }
-
-    @Override
-    public boolean executeBoolean(VirtualFrame frame, int start, ElementExceptionHandler eh) throws UnexpectedResultException {
-        handleStart(start, eh);
-        if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
-            if (g != null) {
-                return g.executeBoolean(frame, start, eh);
-            }
-        }
-
-        T[] e = getElements();
-        int last = e.length - 1;
-        executeBlockComplex(frame, e, start, last, eh);
-        try {
-            return ((TypedElement) e[last]).executeBoolean(frame);
-        } catch (UnexpectedResultException ex) {
-            throw ex;
-        } catch (Throwable ex) {
-            handleElementException(frame, eh, last, ex);
-            throw ex;
-        }
+        return ex.executeDouble(frame, e[last], last, arg);
     }
 
     @Override
     @ExplodeLoop
-    public boolean executeBoolean(VirtualFrame frame) throws UnexpectedResultException {
-        assert handleStart(0, null);
+    public boolean executeBoolean(VirtualFrame frame, int argument) throws UnexpectedResultException {
+        int arg = profileArg(argument);
         if (CompilerDirectives.inCompiledCode()) {
-            PartialBlocks g = this.partialBlocks;
+            PartialBlocks<T> g = this.partialBlocks;
             if (g != null) {
-                return g.executeBoolean(frame, 0, null);
+                return g.executeBoolean(frame, arg);
             }
         }
+        ElementExecutor<T> ex = this.executor;
         T[] e = getElements();
         int last = e.length - 1;
-        for (int i = 0; i < last; i++) {
-            e[i].executeVoid(frame);
+        for (int i = 0; i < last; ++i) {
+            ex.executeVoid(frame, e[i], i, arg);
         }
-        return ((TypedElement) e[last]).executeBoolean(frame);
-    }
-
-    @SuppressWarnings("static-method")
-    @ExplodeLoop
-    private T[] executeBlockComplex(VirtualFrame frame, T[] e, int start, int end, ElementExceptionHandler eh) {
-        /*
-         * The interpreter code can be simpler with an explicit start index.
-         */
-        if (CompilerDirectives.inCompiledCode()) {
-            CompilerAsserts.partialEvaluationConstant(eh);
-            for (int i = 0; i < end; i++) {
-                if (i >= start) {
-                    try {
-                        e[i].executeVoid(frame);
-                    } catch (Throwable ex) {
-                        handleElementException(frame, eh, i, ex);
-                        throw ex;
-                    }
-                }
-            }
-        } else {
-            for (int i = start; i < end; i++) {
-                try {
-                    e[i].executeVoid(frame);
-                } catch (Throwable ex) {
-                    handleElementException(frame, eh, i, ex);
-                    throw ex;
-                }
-            }
-        }
-        return e;
-    }
-
-    Assumption getStartAlwaysZero() {
-        Assumption local = this.startAlwaysZero;
-        if (local == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            this.startAlwaysZero = local = Truffle.getRuntime().createAssumption();
-        }
-        return local;
-    }
-
-    private boolean handleStart(int start, ElementExceptionHandler eh) {
-        CompilerAsserts.partialEvaluationConstant(eh);
-        if (start < 0 || start >= getElements().length) {
-            CompilerDirectives.transferToInterpreter();
-            throw new IllegalArgumentException("Invalid startIndex " + start + " for block with " + getElements().length + " elements.");
-        }
-        if (start != 0 && getStartAlwaysZero().isValid()) {
-            CompilerDirectives.transferToInterpreter();
-            getStartAlwaysZero().invalidate("Observed non-zero start.");
-        }
-        /*
-         * We only run the profiling in interpreter because we don't want to deoptimize if we
-         * compile a block that was never executed.
-         */
-        if (CompilerDirectives.inInterpreter()) {
-            Class<? extends ElementExceptionHandler> cachedEhClass = this.exceptionHandlerClass;
-            Class<? extends ElementExceptionHandler> ehClass = eh == null ? NULL_ELEMENT_EXCEPTION_HANDLER.getClass() : eh.getClass();
-            if (cachedEhClass == ElementExceptionHandler.class) {
-                exceptionHandlerClass = cachedEhClass = ehClass;
-            }
-            if (cachedEhClass != ehClass) {
-                throw new IllegalArgumentException(String.format("Block node must be invoked with a compilation final exception handler type. " +
-                                "Got type %s but was expecting type %s from a previous execution.", ehClass, cachedEhClass));
-            }
-        }
-        return true;
+        return ex.executeBoolean(frame, e[last], last, arg);
     }
 
     static List<OptimizedCallTarget> preparePartialBlockCompilations(OptimizedCallTarget rootCompilation) {
@@ -547,11 +286,21 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
         return Collections.emptyList();
     }
 
-    private static PartialBlocks computePartialBlocks(OptimizedCallTarget rootCompilation, OptimizedBlockNode<?> currentBlock, BlockVisitor visitor, Object[] array, int maxBlockSize) {
+    /*
+     * The partial blocks are computed depth first. The deepest block is computed first and if that
+     * block computes partial blocks then these nodes will be subtracted from the parent block
+     * computation. A block might be split if it has at least two elements. A set of block elements
+     * is split if it reaches the maxBlockSize limit. If the total number of child nodes of a block
+     * is smaller than the maxBlockSize limit, then the block will not be split. A parent block
+     * might still split in that case.
+     */
+    private static <T extends Node> PartialBlocks<T> computePartialBlocks(OptimizedCallTarget rootCompilation, OptimizedBlockNode<T> currentBlock, BlockVisitor visitor, Object[] array,
+                    int maxBlockSize) {
         int currentBlockSize = 0;
         int currentBlockIndex = 0;
         int totalCount = 0;
         int[] blockRanges = null;
+        int[] blockSizes = null;
         for (int i = 0; i < array.length; i++) {
             Object child = array[i];
             if (child != null) {
@@ -564,18 +313,28 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
                 if (newBlockSize <= maxBlockSize) {
                     currentBlockSize = newBlockSize;
                 } else {
-                    if (blockRanges == null) {
-                        blockRanges = new int[8];
-                    } else if (currentBlockIndex >= blockRanges.length) {
-                        blockRanges = Arrays.copyOf(blockRanges, blockRanges.length * 2);
+                    /*
+                     * If the first child already exceeds the limit, there are no previous elements
+                     * to create a partial block from.
+                     */
+                    if (i > 0) {
+                        if (blockRanges == null) {
+                            blockRanges = new int[8];
+                            blockSizes = new int[8];
+                        } else if (currentBlockIndex >= blockRanges.length) {
+                            blockRanges = Arrays.copyOf(blockRanges, blockRanges.length * 2);
+                            blockSizes = Arrays.copyOf(blockSizes, blockSizes.length * 2);
+                        }
+                        blockSizes[currentBlockIndex] = currentBlockSize;
+                        blockRanges[currentBlockIndex++] = i;
                     }
-                    blockRanges[currentBlockIndex++] = i;
                     currentBlockSize = childCount;
                 }
             }
         }
 
         if (blockRanges != null) {
+            blockSizes[currentBlockIndex] = currentBlockSize;
             /*
              * parent blocks should not count partial child blocks. they can hardly do much better.
              */
@@ -583,18 +342,18 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
 
             // trim block ranges
             blockRanges = blockRanges.length != currentBlockIndex ? Arrays.copyOf(blockRanges, currentBlockIndex) : blockRanges;
-            return new PartialBlocks(rootCompilation, currentBlock, blockRanges, visitor.blockIndex++);
+            return new PartialBlocks<>(rootCompilation, currentBlock, blockRanges, blockSizes, visitor.blockIndex++);
         }
         return null;
     }
 
-    public PartialBlocks getPartialBlocks() {
+    public PartialBlocks<T> getPartialBlocks() {
         return partialBlocks;
     }
 
     @Override
     public boolean nodeReplaced(Node oldNode, Node newNode, CharSequence reason) {
-        PartialBlocks blocks = this.partialBlocks;
+        PartialBlocks<T> blocks = this.partialBlocks;
         if (blocks == null) {
             /* No partial compilation units compiled -> common case */
             return false;
@@ -611,9 +370,9 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
             element = elementParent;
             elementParent = elementParent.getParent();
         }
-        assert elementParent == this;
         if (elementParent != this) {
             // could not find element, should not happen
+            assert false;
             return false;
         }
 
@@ -630,9 +389,9 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
                 break;
             }
         }
-        assert elementIndex != -1;
         if (elementIndex == -1) {
             // could not find element, should not happen
+            assert false;
             return false;
         }
         assert elementIndex < getElements().length;
@@ -654,6 +413,26 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
         return false;
     }
 
+    private void reportBlocksInstalled(CharSequence reason) {
+        // no need to report for current node.
+        Node node = getParent();
+        while (node != null) {
+            boolean consumed = false;
+            if (node instanceof ReplaceObserver) {
+                consumed = ((ReplaceObserver) node).nodeReplaced(this, this, reason);
+            } else if (node instanceof RootNode) {
+                CallTarget target = ((RootNode) node).getCallTarget();
+                if (target instanceof ReplaceObserver) {
+                    consumed = ((ReplaceObserver) target).nodeReplaced(this, this, reason);
+                }
+            }
+            if (consumed) {
+                break;
+            }
+            node = node.getParent();
+        }
+    }
+
     static final class BlockVisitor implements NodeVisitor {
 
         final List<OptimizedCallTarget> blockTargets = new ArrayList<>();
@@ -673,45 +452,49 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
                 count++;
             }
             if (node instanceof BlockNode<?>) {
-                OptimizedBlockNode<?> blockNode = ((OptimizedBlockNode<?>) node);
-                Object[] children = blockNode.getElements();
-                PartialBlocks oldBlocks = blockNode.getPartialBlocks();
-                PartialBlocks newBlocks;
-                if (oldBlocks == null) {
-                    newBlocks = computePartialBlocks(rootCompilation, blockNode, this, children, maxBlockSize);
-                } else {
-                    newBlocks = oldBlocks;
-                }
-                if (oldBlocks == null) {
-                    blockNode.atomic(new Runnable() {
-                        @Override
-                        public void run() {
-                            PartialBlocks otherOldBlocks = blockNode.getPartialBlocks();
-                            if (otherOldBlocks == null) {
-                                blockNode.partialBlocks = newBlocks;
-                            }
-                        }
-                    });
-                }
-                if (newBlocks != null) {
-                    blockTargets.addAll(Arrays.asList(newBlocks.blockTargets));
-                }
+                computeBlock((OptimizedBlockNode<?>) node);
             } else {
                 NodeUtil.forEachChild(node, this);
             }
             return true;
         }
+
+        private <T extends Node> void computeBlock(OptimizedBlockNode<T> blockNode) {
+            Object[] children = blockNode.getElements();
+            PartialBlocks<T> oldBlocks = blockNode.getPartialBlocks();
+            PartialBlocks<T> newBlocks;
+            if (oldBlocks == null) {
+                newBlocks = computePartialBlocks(rootCompilation, blockNode, this, children, maxBlockSize);
+            } else {
+                newBlocks = oldBlocks;
+            }
+            if (oldBlocks == null) {
+                blockNode.atomic(new Runnable() {
+                    @Override
+                    public void run() {
+                        PartialBlocks<T> otherOldBlocks = blockNode.getPartialBlocks();
+                        if (otherOldBlocks == null) {
+                            blockNode.partialBlocks = newBlocks;
+                            blockNode.reportBlocksInstalled("Partial blocks installed");
+                        }
+                    }
+                });
+            }
+            if (newBlocks != null) {
+                blockTargets.addAll(Arrays.asList(newBlocks.blockTargets));
+            }
+        }
     }
 
-    static final class PartialBlockRootNode extends RootNode {
+    static final class PartialBlockRootNode<T extends Node> extends RootNode {
 
-        private final OptimizedBlockNode<?> block;
+        private final OptimizedBlockNode<T> block;
         private final int startIndex;
         private final int endIndex;
         private final int blockIndex;
-        @CompilationFinal private ValueProfile ehClassProfile;
+        private SourceSection cachedSourceSection;
 
-        PartialBlockRootNode(FrameDescriptor descriptor, OptimizedBlockNode<?> block, int startIndex, int endIndex, int blockIndex) {
+        PartialBlockRootNode(FrameDescriptor descriptor, OptimizedBlockNode<T> block, int startIndex, int endIndex, int blockIndex) {
             super(null, descriptor);
             this.block = block;
             this.startIndex = startIndex;
@@ -736,6 +519,26 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
         }
 
         @Override
+        @TruffleBoundary
+        public SourceSection getSourceSection() {
+            SourceSection section = this.cachedSourceSection;
+            if (section == null) {
+                T[] elements = block.getElements();
+                SourceSection startSection = elements[startIndex].getSourceSection();
+                SourceSection endSection = elements[endIndex - 1].getSourceSection();
+                if (startSection != null && endSection != null && startSection.getSource().equals(endSection.getSource())) {
+                    section = startSection.getSource().createSection(startSection.getStartLine(), startSection.getStartColumn(), endSection.getEndLine(), endSection.getEndColumn());
+                } else if (startSection != null) {
+                    section = startSection;
+                } else {
+                    section = endSection;
+                }
+                this.cachedSourceSection = section;
+            }
+            return section;
+        }
+
+        @Override
         public String getQualifiedName() {
             return computeName(block.getRootNode().getQualifiedName());
         }
@@ -745,9 +548,9 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
             Node parent = block.getParent();
             while (parent != null) {
                 if (parent instanceof OptimizedBlockNode<?>) {
-                    PartialBlocks blocks = ((OptimizedBlockNode<?>) parent).getPartialBlocks();
+                    PartialBlocks<?> blocks = ((OptimizedBlockNode<?>) parent).getPartialBlocks();
                     if (blocks != null) {
-                        blockIndices.append(((PartialBlockRootNode) blocks.getBlockTargets()[0].getRootNode()).blockIndex);
+                        blockIndices.append(((PartialBlockRootNode<?>) blocks.getBlockTargets()[0].getRootNode()).blockIndex);
                         blockIndices.append(":");
                     }
                 }
@@ -768,45 +571,26 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
         public Object execute(VirtualFrame frame) {
             Object[] arguments = frame.getArguments();
             MaterializedFrame outerFrame = (MaterializedFrame) arguments[0];
-            int start = readAndProfileStart(arguments);
-            ElementExceptionHandler eh = readElementExceptionHandler(arguments);
-            VoidElement[] elements = block.getElements();
-            int lastIndex = endIndex - 1;
-            for (int i = startIndex; i < lastIndex; i++) {
-                if (i >= start) {
-                    try {
-                        elements[i].executeVoid(outerFrame);
-                    } catch (Throwable ex) {
-                        handleElementException(frame, eh, i, ex);
-                        throw ex;
-                    }
-                }
+            int arg = readAndProfileArg(arguments);
+            ElementExecutor<T> ex = block.executor;
+            T[] e = block.getElements();
+            int last = endIndex - 1;
+            for (int i = startIndex; i < last; ++i) {
+                ex.executeVoid(outerFrame, e[i], i, arg);
             }
-            try {
-                if (lastIndex == elements.length - 1 && elements[lastIndex] instanceof GenericElement) {
-                    return ((GenericElement) elements[lastIndex]).execute(outerFrame);
-                } else {
-                    elements[lastIndex].executeVoid(outerFrame);
-                    return null;
-                }
-            } catch (Throwable ex) {
-                handleElementException(frame, eh, lastIndex, ex);
-                throw ex;
-            }
-        }
-
-        private ElementExceptionHandler readElementExceptionHandler(Object[] arguments) {
-            ElementExceptionHandler eh = (ElementExceptionHandler) arguments[2];
-            if (eh == null) {
+            if (last == block.getElements().length - 1) {
+                // last element of the block -> return a value
+                return ex.executeGeneric(outerFrame, e[last], last, arg);
+            } else {
+                ex.executeVoid(outerFrame, e[last], last, arg);
                 return null;
             }
-            return block.exceptionHandlerClass.cast(eh);
         }
 
-        private int readAndProfileStart(Object[] arguments) {
-            assert block.startAlwaysZero != null;
-            if (block.startAlwaysZero.isValid()) {
-                return 0;
+        private int readAndProfileArg(Object[] arguments) {
+            Assumption alwaysNoArgument = block.alwaysNoArgument;
+            if (alwaysNoArgument != null && alwaysNoArgument.isValid()) {
+                return NO_ARGUMENT;
             } else {
                 return (int) arguments[1];
             }
@@ -818,7 +602,7 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
         }
     }
 
-    public static final class PartialBlocks {
+    public static final class PartialBlocks<T extends Node> {
 
         final OptimizedBlockNode<?> block;
         /*
@@ -827,11 +611,10 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
         @CompilationFinal(dimensions = 1) final OptimizedCallTarget[] blockTargets;
         @CompilationFinal(dimensions = 1) final int[] blockRanges;
 
-        PartialBlocks(OptimizedCallTarget rootCompilation, OptimizedBlockNode<?> block, int[] blockRanges, int blockIndex) {
+        PartialBlocks(OptimizedCallTarget rootCompilation, OptimizedBlockNode<T> block, int[] blockRanges, int[] blockSizes, int blockIndex) {
             assert blockRanges.length > 0;
             this.block = block;
             this.blockRanges = blockRanges;
-            block.getStartAlwaysZero(); // make sure assumption is initialized
 
             RootNode rootNode = rootCompilation.getRootNode();
             assert rootNode == block.getRootNode();
@@ -848,10 +631,15 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
                 } else {
                     endIndex = block.getElements().length;
                 }
-                targets[i] = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(new PartialBlockRootNode(new FrameDescriptor(), block, startIndex, endIndex, blockIndex));
+
+                PartialBlockRootNode<T> partialRootNode = new PartialBlockRootNode<>(new FrameDescriptor(), block, startIndex, endIndex, blockIndex);
+                GraalRuntimeAccessor.NODES.applyPolyglotEngine(rootNode, partialRootNode);
+
+                targets[i] = (OptimizedCallTarget) Truffle.getRuntime().createCallTarget(partialRootNode);
+                targets[i].setNonTrivialNodeCount(blockSizes[i]);
                 // we know the parameter types for block compilations. No need to check, lets cast
                 // them unsafely.
-                targets[i].getCompilationProfile().initializeArgumentTypes(new Class<?>[]{materializedFrameClass, Integer.class, block.exceptionHandlerClass});
+                targets[i].initializeUnsafeArgumentTypes(new Class<?>[]{materializedFrameClass, Integer.class});
                 // All block compilations share the speculation log of the root compilation.
                 targets[i].setSpeculationLog(rootCompilation.getSpeculationLog());
                 startIndex = endIndex;
@@ -867,64 +655,64 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
             return blockRanges;
         }
 
-        int executeInt(VirtualFrame frame, int startElement, ElementExceptionHandler exceptionHandler) throws UnexpectedResultException {
-            Object result = execute(frame, startElement, exceptionHandler);
+        int executeInt(VirtualFrame frame, int arg) throws UnexpectedResultException {
+            Object result = execute(frame, arg);
             if (result instanceof Integer) {
                 return (int) result;
             }
             throw new UnexpectedResultException(result);
         }
 
-        byte executeByte(VirtualFrame frame, int startElement, ElementExceptionHandler exceptionHandler) throws UnexpectedResultException {
-            Object result = execute(frame, startElement, exceptionHandler);
+        byte executeByte(VirtualFrame frame, int arg) throws UnexpectedResultException {
+            Object result = execute(frame, arg);
             if (result instanceof Byte) {
                 return (byte) result;
             }
             throw new UnexpectedResultException(result);
         }
 
-        short executeShort(VirtualFrame frame, int startElement, ElementExceptionHandler exceptionHandler) throws UnexpectedResultException {
-            Object result = execute(frame, startElement, exceptionHandler);
+        short executeShort(VirtualFrame frame, int arg) throws UnexpectedResultException {
+            Object result = execute(frame, arg);
             if (result instanceof Short) {
                 return (short) result;
             }
             throw new UnexpectedResultException(result);
         }
 
-        long executeLong(VirtualFrame frame, int startElement, ElementExceptionHandler exceptionHandler) throws UnexpectedResultException {
-            Object result = execute(frame, startElement, exceptionHandler);
+        long executeLong(VirtualFrame frame, int arg) throws UnexpectedResultException {
+            Object result = execute(frame, arg);
             if (result instanceof Long) {
                 return (long) result;
             }
             throw new UnexpectedResultException(result);
         }
 
-        char executeChar(VirtualFrame frame, int startElement, ElementExceptionHandler exceptionHandler) throws UnexpectedResultException {
-            Object result = execute(frame, startElement, exceptionHandler);
+        char executeChar(VirtualFrame frame, int arg) throws UnexpectedResultException {
+            Object result = execute(frame, arg);
             if (result instanceof Character) {
                 return (char) result;
             }
             throw new UnexpectedResultException(result);
         }
 
-        float executeFloat(VirtualFrame frame, int startElement, ElementExceptionHandler exceptionHandler) throws UnexpectedResultException {
-            Object result = execute(frame, startElement, exceptionHandler);
+        float executeFloat(VirtualFrame frame, int arg) throws UnexpectedResultException {
+            Object result = execute(frame, arg);
             if (result instanceof Float) {
                 return (float) result;
             }
             throw new UnexpectedResultException(result);
         }
 
-        double executeDouble(VirtualFrame frame, int startElement, ElementExceptionHandler exceptionHandler) throws UnexpectedResultException {
-            Object result = execute(frame, startElement, exceptionHandler);
+        double executeDouble(VirtualFrame frame, int arg) throws UnexpectedResultException {
+            Object result = execute(frame, arg);
             if (result instanceof Double) {
                 return (double) result;
             }
             throw new UnexpectedResultException(result);
         }
 
-        boolean executeBoolean(VirtualFrame frame, int startElement, ElementExceptionHandler exceptionHandler) throws UnexpectedResultException {
-            Object result = execute(frame, startElement, exceptionHandler);
+        boolean executeBoolean(VirtualFrame frame, int arg) throws UnexpectedResultException {
+            Object result = execute(frame, arg);
             if (result instanceof Boolean) {
                 return (boolean) result;
             }
@@ -932,21 +720,14 @@ public final class OptimizedBlockNode<T extends Node & VoidElement> extends Bloc
         }
 
         @ExplodeLoop
-        Object execute(VirtualFrame frame, int startElement, ElementExceptionHandler exceptionHandler) {
-            int start = startElement;
-            Object[] arguments = new Object[]{frame.materialize(), start, exceptionHandler == null ? NULL_ELEMENT_EXCEPTION_HANDLER : exceptionHandler};
+        Object execute(VirtualFrame frame, int arg) {
+            Object[] arguments = new Object[]{frame.materialize(), arg};
             int[] ranges = blockRanges;
             OptimizedCallTarget[] targets = this.blockTargets;
             for (int i = 0; i < ranges.length; i++) {
-                if (start < ranges[i]) {
-                    targets[i].doInvoke(arguments);
-                }
+                targets[i].doInvoke(arguments);
             }
-            if (start < block.getElements().length) {
-                return targets[ranges.length].doInvoke(arguments);
-            }
-            CompilerDirectives.transferToInterpreter();
-            throw new AssertionError("should not happen, verified by the block node.");
+            return targets[ranges.length].doInvoke(arguments);
         }
     }
 
