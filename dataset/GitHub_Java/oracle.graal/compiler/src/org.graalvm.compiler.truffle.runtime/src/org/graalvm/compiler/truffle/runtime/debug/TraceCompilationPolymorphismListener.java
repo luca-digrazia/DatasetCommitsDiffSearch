@@ -51,7 +51,7 @@ public final class TraceCompilationPolymorphismListener extends AbstractGraalTru
     }
 
     @Override
-    public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result, int tier) {
+    public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
         if (target.getOptionValue(PolyglotCompilerOptions.TraceCompilationPolymorphism)) {
             target.accept(new NodeVisitor() {
                 @Override

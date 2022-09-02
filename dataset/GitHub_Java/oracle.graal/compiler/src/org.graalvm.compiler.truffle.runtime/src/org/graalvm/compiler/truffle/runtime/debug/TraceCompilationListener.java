@@ -27,6 +27,7 @@ package org.graalvm.compiler.truffle.runtime.debug;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import com.oracle.truffle.api.nodes.NodeVisitor;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
@@ -38,7 +39,6 @@ import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeVisitor;
 import com.oracle.truffle.api.source.SourceSection;
 
 /**
@@ -67,20 +67,20 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
 
     private Map<String, Object> queueProperties(OptimizedCallTarget target) {
         Map<String, Object> properties = defaultProperties(target);
-        properties.put("QueueSize", runtime.getCompilationQueueSize());
+        properties.put("Queue", runtime.getCompilationQueueSize());
         properties.put("Time", System.nanoTime() - startTime);
         return properties;
     }
 
     @Override
-    public void onCompilationQueued(OptimizedCallTarget target, int tier) {
+    public void onCompilationQueued(OptimizedCallTarget target) {
         if (target.engine.traceCompilationDetails) {
             runtime.logEvent(target, 0, "opt queued", queueProperties(target));
         }
     }
 
     @Override
-    public void onCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason, int tier) {
+    public void onCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason) {
         if (target.engine.traceCompilationDetails) {
             Map<String, Object> properties = queueProperties(target);
             properties.put("Reason", reason);
@@ -89,10 +89,10 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
     }
 
     @Override
-    public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanentBailout, int tier) {
+    public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanentBailout) {
         if (target.engine.traceCompilation || target.engine.traceCompilationDetails) {
             if (!isPermanentFailure(bailout, permanentBailout)) {
-                onCompilationDequeued(target, null, "Non permanent bailout: " + reason, tier);
+                onCompilationDequeued(target, null, "Non permanent bailout: " + reason);
             } else {
                 Map<String, Object> properties = defaultProperties(target);
                 properties.put("Reason", reason);
@@ -103,25 +103,9 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
     }
 
     @Override
-    public void onCompilationStarted(OptimizedCallTarget target, int tier) {
+    public void onCompilationStarted(OptimizedCallTarget target) {
         if (target.engine.traceCompilationDetails) {
-            Map<String, Object> properties = new LinkedHashMap<>();
-            GraalTruffleRuntimeListener.addASTSizeProperty(target, properties);
-            properties.put("Calls/Thres", String.format("%7d/%5d", target.getCallCount(), target.engine.callThresholdInInterpreter));
-            properties.put("CallsAndLoop/Thres", String.format("%7d/%5d", target.getCallAndLoopCount(), target.engine.callAndLoopThresholdInInterpreter));
-            if (target.engine.multiTier) {
-                properties.put("Tier", "0");
-                if (target.isValid()) {
-                    properties.put("Tier", "1");
-                    properties.put("Calls/Thres", String.format("%7d/%5d", target.getCallCount(), target.engine.callThresholdInFirstTier));
-                    properties.put("CallsAndLoop/Thres", String.format("%7d/%5d", target.getCallAndLoopCount(), target.engine.callAndLoopThresholdInFirstTier));
-                }
-                if (target.isValidLastTier()) {
-                    properties.put("Tier", "2");
-                }
-            }
-            properties.put("Src", formatSourceSection(target.getRootNode().getSourceSection()));
-            runtime.logEvent(target, 0, "opt start", properties);
+            runtime.logEvent(target, 0, "opt start", defaultProperties(target));
         }
 
         if (target.engine.traceCompilation || target.engine.traceCompilationDetails) {
@@ -132,10 +116,7 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
     @Override
     public void onCompilationDeoptimized(OptimizedCallTarget target, Frame frame) {
         if (target.engine.traceCompilation || target.engine.traceCompilationDetails) {
-            Map<String, Object> properties = new LinkedHashMap<>();
-            GraalTruffleRuntimeListener.addASTSizeProperty(target, properties);
-            properties.put("Src", formatSourceSection(target.getRootNode().getSourceSection()));
-            runtime.logEvent(target, 0, "opt deopt", properties);
+            runtime.logEvent(target, 0, "opt deopt", defaultProperties(target));
         }
     }
 
@@ -149,7 +130,7 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
     }
 
     @Override
-    public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result, int tier) {
+    public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
         if (!target.engine.traceCompilation && !target.engine.traceCompilationDetails) {
             return;
         }
@@ -213,7 +194,7 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
      * Determines if a failure is permanent.
      *
      * @see GraalTruffleRuntimeListener#onCompilationFailed(OptimizedCallTarget, String, boolean,
-     *      boolean, int tier)
+     *      boolean)
      */
     private static boolean isPermanentFailure(boolean bailout, boolean permanentBailout) {
         return !bailout || permanentBailout;
