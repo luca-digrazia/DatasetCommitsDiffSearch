@@ -81,7 +81,7 @@ public class SymbolTable {
      * This array is monotonically populated from left to right during parsing. Any code that uses
      * this array should only access the locations in the array that have already been populated.
      */
-    @CompilationFinal(dimensions = 1) private WasmFunction[] functions;
+    @CompilationFinal(dimensions = 1) private WasmFunction[] functionTypes;
     @CompilationFinal private int numFunctions;
 
     @CompilationFinal private Map<String, WasmFunction> exportedFunctions;
@@ -93,7 +93,7 @@ public class SymbolTable {
         this.offsets = new int[INITIAL_OFFSET_SIZE];
         this.typeDataSize = 0;
         this.offsetsSize = 0;
-        this.functions = new WasmFunction[INITIAL_FUNCTION_TYPES_SIZE];
+        this.functionTypes = new WasmFunction[INITIAL_FUNCTION_TYPES_SIZE];
         this.numFunctions = 0;
         this.exportedFunctions = new HashMap<>();
         this.startFunctionIndex = -1;
@@ -163,21 +163,21 @@ public class SymbolTable {
         typeData[idx] = type;
     }
 
-    private void ensureFunctionsCapacity(int index) {
-        if (functions.length <= index) {
-            int newLength = Math.max(Integer.highestOneBit(index) << 1, 2 * functions.length);
-            functions = reallocate(functions, numFunctions, newLength);
+    private void ensureFunctionTypeCapacity(int index) {
+        if (functionTypes.length <= index) {
+            int newLength = Math.max(Integer.highestOneBit(index) << 1, 2 * functionTypes.length);
+            functionTypes = reallocate(functionTypes, numFunctions, newLength);
         }
     }
 
-    public void allocateFunction(WasmLanguage language, int typeIndex) {
-        ensureFunctionsCapacity(numFunctions);
-        functions[numFunctions] = new WasmFunction(this, language, numFunctions, typeIndex);
+    public void allocateFunction(WasmLanguage language, int functionIndex, int typeIndex) {
+        ensureFunctionTypeCapacity(functionIndex);
+        functionTypes[numFunctions] = new WasmFunction(this, language, functionIndex, typeIndex);
         numFunctions++;
     }
 
     public void markFunctionAsExported(String exportName, int functionIndex) {
-        exportedFunctions.put(exportName, functions[functionIndex]);
+        exportedFunctions.put(exportName, functionTypes[functionIndex]);
     }
 
     public void setStartFunction(int functionIndex) {
@@ -190,7 +190,7 @@ public class SymbolTable {
 
     public WasmFunction function(int funcIndex) {
         assert 0 <= funcIndex && funcIndex <= numFunctions() - 1;
-        return functions[funcIndex];
+        return functionTypes[funcIndex];
     }
 
     public WasmFunction function(String exportName) {
@@ -222,7 +222,7 @@ public class SymbolTable {
         if (startFunctionIndex == -1) {
             return null;
         }
-        return functions[startFunctionIndex];
+        return functionTypes[startFunctionIndex];
     }
 
     WasmModule module() {
