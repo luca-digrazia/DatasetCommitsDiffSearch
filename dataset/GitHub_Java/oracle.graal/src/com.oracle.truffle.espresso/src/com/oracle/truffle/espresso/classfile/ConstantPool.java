@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007, 2012, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,6 +28,7 @@ import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.FIELD_REF;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.FLOAT;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.INTEGER;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.INTERFACE_METHOD_REF;
+import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.INVOKEDYNAMIC;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.LONG;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.METHOD_REF;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.NAME_AND_TYPE;
@@ -35,50 +36,93 @@ import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.STRING;
 import static com.oracle.truffle.espresso.classfile.ConstantPool.Tag.UTF8;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Formatter;
 import java.util.List;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.object.DynamicObject;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.espresso.EspressoLanguage;
+import com.oracle.truffle.espresso.classfile.constantpool.ClassConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.ClassMethodRefConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.DoubleConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.DynamicConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.FieldRefConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.FloatConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.IntegerConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.InterfaceMethodRefConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.InvalidConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.InvokeDynamicConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.LongConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.MemberRefConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.MethodHandleConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.MethodRefConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.MethodTypeConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.NameAndTypeConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.PoolConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.StringConstant;
+import com.oracle.truffle.espresso.classfile.constantpool.Utf8Constant;
+import com.oracle.truffle.espresso.descriptors.ByteSequence;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.ModifiedUTF8;
+import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
+import com.oracle.truffle.espresso.runtime.EspressoException;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.substitutions.Host;
+import com.oracle.truffle.object.DebugCounter;
 
-public final class ConstantPool {
+/**
+ * Immutable, shareable constant-pool representation.
+ */
+public abstract class ConstantPool {
+
+    private static final DebugCounter UTF8_ENTRY_COUNT = DebugCounter.create("UTF8 Constant Pool entries");
 
     public enum Tag {
         INVALID(0),
         UTF8(1),
-        INTEGER(3),
-        FLOAT(4),
-        LONG(5),
-        DOUBLE(6),
-        CLASS(7),
-        STRING(8),
+        INTEGER(3, true),
+        FLOAT(4, true),
+        LONG(5, true),
+        DOUBLE(6, true),
+        CLASS(7, true),
+        STRING(8, true),
         FIELD_REF(9),
         METHOD_REF(10),
         INTERFACE_METHOD_REF(11),
         NAME_AND_TYPE(12),
-        METHODHANDLE(15),
-        METHODTYPE(16),
-        DYNAMIC(17),
+        METHODHANDLE(15, true),
+        METHODTYPE(16, true),
+        DYNAMIC(17, true),
         INVOKEDYNAMIC(18),
         MODULE(19),
         PACKAGE(20);
 
-        public final byte value;
+        private final byte value;
+        private final boolean loadable;
 
-        /**
-         * @param value
-         */
-        private Tag(int value) {
+        Tag(int value) {
             assert (byte) value == value;
             this.value = (byte) value;
+            this.loadable = false;
         }
 
-        public int getValue() {
+        Tag(int value, boolean isLoadable) {
+            assert (byte) value == value;
+            this.value = (byte) value;
+            this.loadable = isLoadable;
+        }
+
+        public final int getValue() {
             return value;
         }
 
-        static Tag fromValue(int value) {
+        public final boolean isLoadable() {
+            return loadable;
+        }
+
+        public static Tag fromValue(int value) {
             // @formatter:off
             switch (value) {
                 case 1: return UTF8;
@@ -103,136 +147,407 @@ public final class ConstantPool {
             // @formatter:on
         }
 
-        public static final List<Tag> VALUES = Arrays.asList(values());
+        public static final List<Tag> VALUES = Collections.unmodifiableList(Arrays.asList(values()));
+
     }
 
-    @CompilationFinal(dimensions = 1) private final PoolConstant[] constants;
+    public abstract int getMajorVersion();
 
-    private final EspressoContext context;
+    public abstract int getMinorVersion();
 
-    public EspressoContext getContext() {
-        return context;
+    public abstract int length();
+
+    public abstract PoolConstant at(int index, String description);
+
+    public final PoolConstant at(int index) {
+        return at(index, null);
     }
 
-    private final DynamicObject classLoader;
+    public byte[] getRawBytes() {
+        return new byte[0];
+    }
+
+    static @Host(ClassFormatError.class) EspressoException unexpectedEntry(int index, ConstantPool.Tag tag, String description, ConstantPool.Tag... expected) {
+        CompilerDirectives.transferToInterpreter();
+        throw classFormatError("Constant pool entry" + (description == null ? "" : " for " + description) + " at " + index + " is a " + tag + ", expected " + Arrays.toString(expected));
+    }
+
+    final @Host(ClassFormatError.class) EspressoException unexpectedEntry(int index, String description, ConstantPool.Tag... expected) {
+        CompilerDirectives.transferToInterpreter();
+        throw unexpectedEntry(index, tagAt(index), description, expected);
+    }
+
+    static @Host(VerifyError.class) EspressoException verifyError(String message) {
+        CompilerDirectives.transferToInterpreter();
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        throw Meta.throwExceptionWithMessage(meta.java_lang_VerifyError, message);
+    }
+
+    public static @Host(ClassFormatError.class) EspressoException classFormatError(String message) {
+        CompilerDirectives.transferToInterpreter();
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        throw Meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, message);
+    }
+
+    static @Host(NoClassDefFoundError.class) EspressoException noClassDefFoundError(String message) {
+        CompilerDirectives.transferToInterpreter();
+        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
+        throw Meta.throwExceptionWithMessage(meta.java_lang_NoClassDefFoundError, message);
+    }
+
+    /**
+     * Gets the tag at a given index. If {@code index == 0} or there is no valid entry at
+     * {@code index} (e.g. it denotes the slot following a double or long entry), then
+     * {@link ConstantPool.Tag#INVALID} is returned.
+     */
+    public final Tag tagAt(int index) {
+        return at(index).tag();
+    }
+
+    public final int intAt(int index) {
+        return intAt(index, null);
+    }
+
+    public final int intAt(int index, String description) {
+        try {
+            final IntegerConstant constant = (IntegerConstant) at(index);
+            return constant.value();
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, INTEGER);
+        }
+    }
+
+    public final long longAt(int index) {
+        return longAt(index, null);
+    }
+
+    public final long longAt(int index, String description) {
+        try {
+            final LongConstant constant = (LongConstant) at(index);
+            return constant.value();
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, LONG);
+        }
+    }
+
+    public final float floatAt(int index) {
+        return floatAt(index, null);
+    }
+
+    public final float floatAt(int index, String description) {
+        try {
+            final FloatConstant constant = (FloatConstant) at(index);
+            return constant.value();
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, FLOAT);
+        }
+    }
+
+    public final double doubleAt(int index) {
+        return doubleAt(index, null);
+    }
+
+    public final double doubleAt(int index, String description) {
+        try {
+            final DoubleConstant constant = (DoubleConstant) at(index);
+            return constant.value();
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, DOUBLE);
+        }
+    }
+
+    public final <T> Symbol<T> symbolAt(int index) {
+        return symbolAt(index, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    public final <T> Symbol<T> symbolAt(int index, String description) {
+        try {
+            final Utf8Constant constant = (Utf8Constant) at(index);
+            return (Symbol<T>) constant.value();
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, UTF8);
+        }
+    }
+
+    public final Utf8Constant utf8At(int index) {
+        return utf8At(index, null);
+    }
+
+    public final Utf8Constant utf8At(int index, String description) {
+        try {
+            return (Utf8Constant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, UTF8);
+        }
+    }
+
+    public final Symbol<ModifiedUTF8> stringAt(int index) {
+        return stringAt(index, null);
+    }
+
+    public final Symbol<ModifiedUTF8> stringAt(int index, String description) {
+        try {
+            final StringConstant constant = (StringConstant) at(index);
+            return constant.getSymbol(this);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, STRING);
+        }
+    }
+
+    // region unresolved constants
+
+    public final NameAndTypeConstant nameAndTypeAt(int index) {
+        return nameAndTypeAt(index, null);
+    }
+
+    public final NameAndTypeConstant nameAndTypeAt(int index, String description) {
+        try {
+            return (NameAndTypeConstant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, NAME_AND_TYPE);
+        }
+    }
+
+    public final ClassConstant classAt(int index) {
+        return classAt(index, null);
+    }
+
+    public final ClassConstant classAt(int index, String description) {
+        try {
+            return (ClassConstant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, CLASS);
+        }
+    }
+
+    public final MemberRefConstant memberAt(int index) {
+        return memberAt(index, null);
+    }
+
+    public final MemberRefConstant memberAt(int index, String description) {
+        try {
+            return (MemberRefConstant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, description, METHOD_REF, INTERFACE_METHOD_REF, FIELD_REF);
+        }
+    }
+
+    public final MethodRefConstant methodAt(int index) {
+        try {
+            return (MethodRefConstant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, null, METHOD_REF, INTERFACE_METHOD_REF);
+        }
+    }
+
+    public final ClassMethodRefConstant classMethodAt(int index) {
+        try {
+            return (ClassMethodRefConstant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, null, METHOD_REF);
+        }
+    }
+
+    public final InterfaceMethodRefConstant interfaceMethodAt(int index) {
+        try {
+            return (InterfaceMethodRefConstant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, null, INTERFACE_METHOD_REF);
+        }
+    }
+
+    public final FieldRefConstant fieldAt(int index) {
+        try {
+            return (FieldRefConstant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, null, FIELD_REF);
+        }
+    }
+
+    public final StringConstant stringConstantAt(int index) {
+        try {
+            return (StringConstant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, null, STRING);
+        }
+    }
+
+    public final InvokeDynamicConstant indyAt(int index) {
+        try {
+            return (InvokeDynamicConstant) at(index);
+        } catch (ClassCastException e) {
+            throw unexpectedEntry(index, null, INVOKEDYNAMIC);
+        }
+    }
+
+    // endregion unresolved constants
+
+    @Override
+    public String toString() {
+        Formatter buf = new Formatter();
+        for (int i = 0; i < length(); i++) {
+            PoolConstant c = at(i);
+            buf.format("#%d = %-15s // %s%n", i, c.tag(), c.toString(this));
+        }
+        return buf.toString();
+    }
 
     /**
      * Creates a constant pool from a class file.
      */
-    public ConstantPool(EspressoContext context, DynamicObject classLoader, ClassfileStream stream, ClassfileParser parser) {
-        this.context = context;
+    public static ConstantPool parse(EspressoLanguage language, ClassfileStream stream, ClassfileParser parser, int majorVersion, int minorVersion) {
+        return parse(language, stream, parser, null, null, majorVersion, minorVersion);
+    }
+
+    /**
+     * Creates a constant pool from a class file.
+     */
+    public static ConstantPool parse(EspressoLanguage language, ClassfileStream stream, ClassfileParser parser, StaticObject[] patches, EspressoContext context, int majorVersion, int minorVersion) {
         final int length = stream.readU2();
         if (length < 1) {
             throw stream.classFormatError("Invalid constant pool size (" + length + ")");
         }
-
+        int rawPoolStartPosition = stream.getPosition();
         final PoolConstant[] entries = new PoolConstant[length];
         entries[0] = InvalidConstant.VALUE;
-
-        this.classLoader = classLoader;
 
         int i = 1;
         while (i < length) {
             final int tagByte = stream.readU1();
             final Tag tag = Tag.fromValue(tagByte);
             if (tag == null) {
-                throw new ClassFormatError("Invalid constant pool entry type at index " + i);
+                throw classFormatError("Invalid constant pool entry type at index " + i);
             }
             switch (tag) {
                 case CLASS: {
-                    int classNameIndex = stream.readU2();
-                    if (classNameIndex < i) {
-                        String className = entries[classNameIndex].toString();
-                        entries[i] = new ClassConstant.Unresolved(getContext().getLanguage().getTypeDescriptors().make(className));
-                    } else {
-                        entries[i] = new ClassConstant.Index(classNameIndex);
+                    if (existsAt(patches, i)) {
+                        StaticObject classSpecifier = patches[i];
+                        int index = stream.readU2();
+                        if (index == 0 || index >= length) {
+                            throw classFormatError("Invalid Class constant index " + (i - 1));
+                        }
+                        if (classSpecifier.getKlass().getType() == Type.java_lang_Class) {
+                            entries[i] = ClassConstant.preResolved(classSpecifier.getMirrorKlass());
+                        } else {
+                            entries[i] = ClassConstant.withString(context.getNames().lookup(context.getMeta().toHostString(patches[i])));
+                        }
+
+                        break;
                     }
+                    int classNameIndex = stream.readU2();
+                    entries[i] = ClassConstant.create(classNameIndex);
                     break;
                 }
                 case STRING: {
-                    entries[i] = new StringConstant(stream.readU2());
+                    int index = stream.readU2();
+                    if (index == 0 || index >= length) {
+                        throw classFormatError("Invalid String constant index " + (i - 1));
+                    }
+                    if (existsAt(patches, i)) {
+                        entries[i] = StringConstant.preResolved(patches[i]);
+                    } else {
+                        entries[i] = StringConstant.create(index);
+                    }
                     break;
                 }
                 case FIELD_REF: {
                     int classIndex = stream.readU2();
                     int nameAndTypeIndex = stream.readU2();
-                    entries[i] = new FieldRefConstant.Indexes(classIndex, nameAndTypeIndex);
+                    entries[i] = FieldRefConstant.create(classIndex, nameAndTypeIndex);
                     break;
                 }
                 case METHOD_REF: {
                     int classIndex = stream.readU2();
                     int nameAndTypeIndex = stream.readU2();
-                    entries[i] = new ClassMethodRefConstant.Indexes(classIndex, nameAndTypeIndex);
+                    entries[i] = ClassMethodRefConstant.create(classIndex, nameAndTypeIndex);
                     break;
                 }
                 case INTERFACE_METHOD_REF: {
                     int classIndex = stream.readU2();
                     int nameAndTypeIndex = stream.readU2();
-                    entries[i] = new InterfaceMethodRefConstant.Indexes(classIndex, nameAndTypeIndex);
+                    entries[i] = InterfaceMethodRefConstant.create(classIndex, nameAndTypeIndex);
                     break;
                 }
                 case NAME_AND_TYPE: {
                     int nameIndex = stream.readU2();
                     int typeIndex = stream.readU2();
-                    if (nameIndex < i && typeIndex < i) {
-                        Utf8Constant name = (Utf8Constant) entries[nameIndex];
-                        Utf8Constant type = (Utf8Constant) entries[typeIndex];
-                        entries[i] = new NameAndTypeConstant.Resolved(name, type);
-                    } else {
-                        entries[i] = new NameAndTypeConstant.Indexes(nameIndex, typeIndex);
-                    }
+                    entries[i] = NameAndTypeConstant.create(nameIndex, typeIndex);
                     break;
                 }
                 case INTEGER: {
-                    entries[i] = new IntegerConstant(stream.readS4());
+                    if (existsAt(patches, i)) {
+                        entries[i] = IntegerConstant.create(context.getMeta().unboxInteger(patches[i]));
+                        stream.readS4();
+                        break;
+                    }
+                    entries[i] = IntegerConstant.create(stream.readS4());
                     break;
                 }
                 case FLOAT: {
-                    entries[i] = new FloatConstant(stream.readFloat());
+                    if (existsAt(patches, i)) {
+                        entries[i] = FloatConstant.create(context.getMeta().unboxFloat(patches[i]));
+                        stream.readFloat();
+                        break;
+                    }
+                    entries[i] = FloatConstant.create(stream.readFloat());
                     break;
                 }
                 case LONG: {
-                    entries[i] = new LongConstant(stream.readS8());
+                    if (existsAt(patches, i)) {
+                        entries[i] = LongConstant.create(context.getMeta().unboxLong(patches[i]));
+                        stream.readS8();
+                    } else {
+                        entries[i] = LongConstant.create(stream.readS8());
+                    }
                     ++i;
                     try {
                         entries[i] = InvalidConstant.VALUE;
                     } catch (ArrayIndexOutOfBoundsException e) {
-                        throw new ClassFormatError("Invalid long constant index " + (i - 1));
+                        throw classFormatError("Invalid long constant index " + (i - 1));
                     }
                     break;
                 }
                 case DOUBLE: {
-                    entries[i] = new DoubleConstant(stream.readDouble());
+                    if (existsAt(patches, i)) {
+                        entries[i] = DoubleConstant.create(context.getMeta().unboxDouble(patches[i]));
+                        stream.readDouble();
+                    } else {
+                        entries[i] = DoubleConstant.create(stream.readDouble());
+                    }
                     ++i;
                     try {
                         entries[i] = InvalidConstant.VALUE;
                     } catch (ArrayIndexOutOfBoundsException e) {
-                        throw new ClassFormatError("Invalid double constant index " + (i - 1));
+                        throw classFormatError("Invalid double constant index " + (i - 1));
                     }
                     break;
                 }
                 case UTF8: {
-                    entries[i] = context.getLanguage().getSymbols().make(stream.readString());
+                    // Copy-less UTF8 constant.
+                    // A new symbol is spawned (copy) only if doesn't already exists.
+                    UTF8_ENTRY_COUNT.inc();
+                    ByteSequence bytes = stream.readByteSequenceUTF();
+                    entries[i] = language.getUtf8ConstantTable().getOrCreate(bytes);
                     break;
                 }
                 case METHODHANDLE: {
                     parser.checkInvokeDynamicSupport(tag);
                     int refKind = stream.readU1();
                     int refIndex = stream.readU2();
-                    entries[i] = new MethodHandleConstant.Index(refKind, refIndex);
+                    entries[i] = MethodHandleConstant.create(refKind, refIndex);
                     break;
                 }
                 case METHODTYPE: {
                     parser.checkInvokeDynamicSupport(tag);
-                    int descriptorIndex = stream.readU2();
-                    entries[i] = new MethodTypeConstant.Index(descriptorIndex);
+                    entries[i] = MethodTypeConstant.create(stream.readU2());
                     break;
                 }
                 case DYNAMIC: {
                     parser.checkDynamicConstantSupport(tag);
                     int bootstrapMethodAttrIndex = stream.readU2();
                     int nameAndTypeIndex = stream.readU2();
-                    entries[i] = new DynamicConstant.Indexes(bootstrapMethodAttrIndex, nameAndTypeIndex);
+                    entries[i] = DynamicConstant.create(bootstrapMethodAttrIndex, nameAndTypeIndex);
                     parser.updateMaxBootstrapMethodAttrIndex(bootstrapMethodAttrIndex);
                     break;
                 }
@@ -240,7 +555,7 @@ public final class ConstantPool {
                     parser.checkInvokeDynamicSupport(tag);
                     int bootstrapMethodAttrIndex = stream.readU2();
                     int nameAndTypeIndex = stream.readU2();
-                    entries[i] = new InvokeDynamicConstant.Indexes(bootstrapMethodAttrIndex, nameAndTypeIndex);
+                    entries[i] = InvokeDynamicConstant.create(bootstrapMethodAttrIndex, nameAndTypeIndex);
                     parser.updateMaxBootstrapMethodAttrIndex(bootstrapMethodAttrIndex);
                     break;
                 }
@@ -251,210 +566,27 @@ public final class ConstantPool {
             }
             i++;
         }
-        constants = entries;
-    }
+        int rawPoolLength = stream.getPosition() - rawPoolStartPosition;
 
-    public DynamicObject classLoader() {
-        return classLoader;
-    }
+        final ConstantPool constantPool = new ConstantPoolImpl(entries, majorVersion, minorVersion, rawPoolLength);
 
-    public PoolConstant at(int index) {
-        return at(index, null);
-    }
+        // Cannot faithfully reconstruct patched pools. obtaining raw pool of patched class is
+        // meaningless anyway.
+        assert patches != null || sameRawPool(constantPool, stream, rawPoolStartPosition, rawPoolLength);
 
-    public PoolConstant at(int index, String description) {
-        try {
-            return constants[index];
-        } catch (IndexOutOfBoundsException exception) {
-            throw verifyError("Constant pool index (" + index + ")" + (description == null ? "" : " for " + description) + " is out of range");
+        // Validation
+        for (int j = 1; j < constantPool.length(); ++j) {
+            entries[j].validate(constantPool);
         }
+
+        return constantPool;
     }
 
-    /**
-     * Updates the constant entry at a given index.
-     */
-    PoolConstant updateAt(int index, PoolConstant constant) {
-        assert constant.tag() == constants[index].tag() : "cannot replace a " + constants[index].tag() + " with a " + constant.tag();
-        constants[index] = constant;
-        return constant;
+    private static boolean sameRawPool(ConstantPool constantPool, ClassfileStream stream, int rawPoolStartPosition, int rawPoolLength) {
+        return Arrays.equals(constantPool.getRawBytes(), stream.getByteRange(rawPoolStartPosition, rawPoolLength));
     }
 
-    /**
-     * Gets the tag at a given index. If {@code index == 0} or there is no valid entry at
-     * {@code index} (e.g. it denotes the slot following a double or long entry), then
-     * {@link Tag#INVALID} is returned.
-     */
-    public Tag tagAt(int index) {
-        try {
-            return constants[index].tag();
-        } catch (IndexOutOfBoundsException exception) {
-            throw verifyError("Constant pool index " + index + " is out of range");
-        }
-    }
-
-    static ClassFormatError unexpectedEntry(int index, Tag tag, String description, Tag... expected) {
-        throw verifyError("Constant pool entry" + (description == null ? "" : " for " + description) + " at " + index + " is a " + tag + ", expected " + Arrays.toString(expected));
-    }
-
-    private ClassFormatError unexpectedEntry(int index, String description, Tag... expected) {
-        throw unexpectedEntry(index, tagAt(index), description, expected);
-    }
-
-    static VerifyError verifyError(String message) {
-        throw new VerifyError(message);
-    }
-
-    public int intAt(int index) {
-        return intAt(index, null);
-    }
-
-    public int intAt(int index, String description) {
-        try {
-            final IntegerConstant constant = (IntegerConstant) at(index);
-            return constant.value();
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, description, INTEGER);
-        }
-    }
-
-    public long longAt(int index) {
-        return longAt(index, null);
-    }
-
-    public long longAt(int index, String description) {
-        try {
-            final LongConstant constant = (LongConstant) at(index);
-            return constant.value();
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, description, LONG);
-        }
-    }
-
-    public float floatAt(int index) {
-        return floatAt(index, null);
-    }
-
-    public float floatAt(int index, String description) {
-        try {
-            final FloatConstant constant = (FloatConstant) at(index);
-            return constant.value();
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, description, FLOAT);
-        }
-    }
-
-    public double doubleAt(int index) {
-        return doubleAt(index, null);
-    }
-
-    public double doubleAt(int index, String description) {
-        try {
-            final DoubleConstant constant = (DoubleConstant) at(index);
-            return constant.value();
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, description, DOUBLE);
-        }
-    }
-
-    public NameAndTypeConstant nameAndTypeAt(int index) {
-        return nameAndTypeAt(index, null);
-    }
-
-    public NameAndTypeConstant nameAndTypeAt(int index, String description) {
-        try {
-            return (NameAndTypeConstant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, description, NAME_AND_TYPE);
-        }
-    }
-
-    public Utf8Constant utf8At(int index, String description) {
-        return utf8ConstantAt(index, description);
-    }
-
-    public Utf8Constant utf8At(int index) {
-        return utf8ConstantAt(index, null);
-    }
-
-    public ClassConstant classAt(int index) {
-        return classAt(index, null);
-    }
-
-    public ClassConstant classAt(int index, String description) {
-        try {
-            return (ClassConstant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, description, CLASS);
-        }
-    }
-
-    public MemberRefConstant memberAt(int index) {
-        return memberAt(index, null);
-    }
-
-    public MemberRefConstant memberAt(int index, String description) {
-        try {
-            return (MemberRefConstant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, description, METHOD_REF, INTERFACE_METHOD_REF, FIELD_REF);
-        }
-    }
-
-    public MethodRefConstant methodAt(int index) {
-        try {
-            return (MethodRefConstant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, null, METHOD_REF, INTERFACE_METHOD_REF);
-        }
-    }
-
-    public ClassMethodRefConstant classMethodAt(int index) {
-        try {
-            return (ClassMethodRefConstant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, null, METHOD_REF);
-        }
-    }
-
-    public InterfaceMethodRefConstant interfaceMethodAt(int index) {
-        try {
-            return (InterfaceMethodRefConstant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, null, INTERFACE_METHOD_REF);
-        }
-    }
-
-    public FieldRefConstant fieldAt(int index) {
-        try {
-            return (FieldRefConstant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, null, FIELD_REF);
-        }
-    }
-
-    public Utf8Constant utf8ConstantAt(int index, String description) {
-        try {
-            return (Utf8Constant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, description, UTF8);
-        }
-    }
-
-    public StringConstant stringConstantAt(int index) {
-        try {
-            return (StringConstant) at(index);
-        } catch (ClassCastException e) {
-            throw unexpectedEntry(index, null, STRING);
-        }
-    }
-
-    @Override
-    public String toString() {
-        Formatter buf = new Formatter();
-        for (int i = 0; i < constants.length; i++) {
-            PoolConstant c = constants[i];
-            buf.format("#%d = %-15s // %s%n", i, c.tag(), c.toString(this, i));
-        }
-        return buf.toString();
+    private static boolean existsAt(StaticObject[] patches, int index) {
+        return patches != null && 0 <= index && index < patches.length && StaticObject.notNull(patches[index]);
     }
 }
