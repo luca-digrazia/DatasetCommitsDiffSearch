@@ -26,6 +26,7 @@ package org.graalvm.polybench;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -42,6 +43,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.proxy.ProxyArray;
+import org.graalvm.polyglot.proxy.ProxyObject;
 
 public final class PolyBenchLauncher extends AbstractLanguageLauncher {
     static class ArgumentConsumer {
@@ -151,6 +153,9 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
 
     @Override
     protected List<String> preprocessArguments(List<String> arguments, Map<String, String> polyglotOptions) {
+        // Add the default arguments.
+        polyglotOptions.put("wasm.Builtins", "wasi_snapshot_preview1");
+
         try {
             this.config = PARSER.parse(arguments);
         } catch (IllegalArgumentException e) {
@@ -264,14 +269,9 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
             contextBuilder.logHandler(handler);
         }
 
-        switch (getExtension(config.path)) {
-            // Set Java class path before spawning context.
-            case "jar":
-                contextBuilder.option("java.Classpath", config.path);
-                break;
-            case "wasm":
-                contextBuilder.option("wasm.Builtins", "wasi_snapshot_preview1");
-                break;
+        // Set Java class path before spawning context.
+        if ("jar".equals(getExtension(config.path))) {
+            contextBuilder.option("java.Classpath", config.path);
         }
 
         try (Context context = contextBuilder.build()) {
