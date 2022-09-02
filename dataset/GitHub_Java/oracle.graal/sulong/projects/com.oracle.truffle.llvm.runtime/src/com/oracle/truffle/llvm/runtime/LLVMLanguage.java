@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 
@@ -102,7 +101,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     @CompilationFinal private List<ContextExtension> contextExtensions;
 
     public abstract static class Loader implements LLVMCapability {
-        public abstract void loadDefaults(LLVMContext context, Path internalLibraryPath);
 
         public abstract CallTarget load(LLVMContext context, Source source);
     }
