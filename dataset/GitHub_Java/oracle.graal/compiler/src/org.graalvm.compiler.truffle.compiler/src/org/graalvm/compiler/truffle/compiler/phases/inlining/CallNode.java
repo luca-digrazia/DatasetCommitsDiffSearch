@@ -108,7 +108,6 @@ public final class CallNode extends Node {
         properties.put("Truffle Callees", truffleCallees.length);
         properties.put("Explore/inline ratio", exploreInlineRatio());
         properties.put("Depth", depth);
-        properties.put("Forced", isRoot() ? false : isForced());
         getPolicy().putProperties(this, properties);
     }
 

@@ -48,32 +48,22 @@ final class DefaultPolicy implements InliningPolicy {
 
     @Override
     public void run(CallTree tree) {
-        final int expansionBudget = TruffleCompilerOptions.TruffleInliningExpansionBudget.getValue(optionValues);
-        CallNode candidate;
-        while ((candidate = getNodeToExpand(tree)) != null) {
-            if (candidate.isForced()) {
-                candidate.expand();
-                continue;
-            }
-            if (expandedCount > expansionBudget) {
+        while (expandedCount <= TruffleCompilerOptions.TruffleInliningExpansionBudget.getValue(optionValues)) {
+            final CallNode highestFrequencyNode = getNodeToExpand(tree);
+            if (highestFrequencyNode == null) {
                 break;
             }
             final Integer maximumRecursiveInliningValue = SharedTruffleCompilerOptions.TruffleMaximumRecursiveInlining.getValue(optionValues);
-            if (candidate.getRecursionDepth() > maximumRecursiveInliningValue && candidate.getDepth() > MAX_DEPTH) {
-                break;
+            if (highestFrequencyNode.getRecursionDepth() <= maximumRecursiveInliningValue && highestFrequencyNode.getDepth() < MAX_DEPTH) {
+                highestFrequencyNode.expand();
             }
-            candidate.expand();
         }
-        final int inliningBudget = TruffleCompilerOptions.TruffleInliningInliningBudget.getValue(optionValues);
-        while ((candidate = getNodeToInline(tree)) != null) {
-            if (candidate.isForced()) {
-                candidate.inline();
-                continue;
-            }
-            if (tree.getRoot().getIR().getNodeCount() + candidate.getIR().getNodeCount() > inliningBudget) {
+        while (tree.getRoot().getIR().getNodeCount() <= TruffleCompilerOptions.TruffleInliningInliningBudget.getValue(optionValues)) {
+            final CallNode highestFrequencyNode = getNodeToInline(tree);
+            if (highestFrequencyNode == null) {
                 break;
             }
-            candidate.inline();
+            highestFrequencyNode.inline();
         }
     }
 
