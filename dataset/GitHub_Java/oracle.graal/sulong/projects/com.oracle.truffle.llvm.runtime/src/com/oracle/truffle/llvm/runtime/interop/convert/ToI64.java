@@ -38,7 +38,6 @@ import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMAsForeignLibrary;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
 public abstract class ToI64 extends ForeignToLLVM {
@@ -93,25 +92,23 @@ public abstract class ToI64 extends ForeignToLLVM {
         return value;
     }
 
-    @Specialization(limit = "5", guards = {"foreigns.isForeign(obj)", "interop.isNumber(foreigns.asForeign(obj))"})
+    @Specialization(limit = "5", guards = {"notLLVM(obj)", "interop.isNumber(obj)"})
     protected long fromForeign(Object obj,
-                    @CachedLibrary("obj") LLVMAsForeignLibrary foreigns,
-                    @CachedLibrary(limit = "3") InteropLibrary interop,
+                    @CachedLibrary("obj") InteropLibrary interop,
                     @Cached BranchProfile exception) {
         try {
-            return interop.asLong(foreigns.asForeign(obj));
+            return interop.asLong(obj);
         } catch (UnsupportedMessageException ex) {
             exception.enter();
             throw new LLVMPolyglotException(this, "Polyglot number can't be converted to long.");
         }
     }
 
-    @Specialization(limit = "5", guards = {"foreigns.isForeign(obj)", "!interop.isNumber(obj)"})
+    @Specialization(limit = "5", guards = {"notLLVM(obj)", "!interop.isNumber(obj)"})
     @SuppressWarnings("unused")
     protected Object fromForeignPointer(Object obj,
                     @CachedLibrary("obj") InteropLibrary interop,
-                    @Cached ToPointer toPointer,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") LLVMAsForeignLibrary foreigns) {
+                    @Cached ToPointer toPointer) {
         return toPointer.executeWithTarget(obj);
     }
 
