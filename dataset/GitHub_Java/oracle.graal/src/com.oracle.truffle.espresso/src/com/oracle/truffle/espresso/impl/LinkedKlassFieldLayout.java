@@ -22,167 +22,237 @@
  */
 package com.oracle.truffle.espresso.impl;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import sun.misc.Unsafe;
 
-class LinkedKlassFieldLayout {
+final class LinkedKlassFieldLayout {
+    /*
+     * If the object model does not start on a long-aligned offset. To manage, we will align our
+     * indexes to the actual relative address to the start of the object. Note that we still make a
+     * pretty strong assumption here: All arrays are allocated at an address aligned with a *long*
+     * 
+     * Note that we cannot use static final fields here, as SVM initializes them at build time using
+     * HotSpot's values, and thus the values for base and alignment would not be correct.
+     */
+
+    private static int base() {
+        return Unsafe.ARRAY_BYTE_BASE_OFFSET;
+    }
+
+    private static int alignmentCorrection() {
+        int misalignment = Unsafe.ARRAY_BYTE_BASE_OFFSET % Unsafe.ARRAY_LONG_INDEX_SCALE;
+        return misalignment == 0 ? 0 : Unsafe.ARRAY_LONG_INDEX_SCALE - misalignment;
+    }
+
     private static final int N_PRIMITIVES = 8;
     private static final JavaKind[] order = {JavaKind.Long, JavaKind.Double, JavaKind.Int, JavaKind.Float, JavaKind.Short, JavaKind.Char, JavaKind.Byte, JavaKind.Boolean};
 
+    // instance fields declared in the corresponding LinkedKlass (includes hidden fields)
+    @CompilerDirectives.CompilationFinal(dimensions = 1) //
     final LinkedField[] instanceFields;
+    // static fields declared in the corresponding LinkedKlass (no hidden fields)
+    @CompilerDirectives.CompilationFinal(dimensions = 1) //
     final LinkedField[] staticFields;
 
+    @CompilerDirectives.CompilationFinal(dimensions = 2) //
     final int[][] leftoverHoles;
-
-    final int primitiveFieldTotalByteCount;
-    final int primitiveStaticFieldTotalByteCount;
+    final int instanceToAlloc;
+    final int staticToAlloc;
+    final int primInstanceLastOffset;
+    final int primStaticLastOffset;
     final int fieldTableLength;
     final int objectFields;
     final int staticObjectFields;
 
-    private LinkedKlassFieldLayout(LinkedField[] instanceFields, LinkedField[] staticFields, int[][] leftoverHoles, int primitiveFieldTotalByteCount, int primitiveStaticFieldTotalByteCount,
-                    int fieldTableLength, int objectFields, int staticObjectFields) {
+    private LinkedKlassFieldLayout(LinkedField[] instanceFields, LinkedField[] staticFields, int[][] leftoverHoles,
+                    int instanceToAlloc, int staticToAlloc,
+                    int primInstanceLastOffset, int primStaticLastOffset,
+                    int fieldTableLength,
+                    int objectFields, int staticObjectFields) {
         this.instanceFields = instanceFields;
         this.staticFields = staticFields;
         this.leftoverHoles = leftoverHoles;
-        this.primitiveFieldTotalByteCount = primitiveFieldTotalByteCount;
-        this.primitiveStaticFieldTotalByteCount = primitiveStaticFieldTotalByteCount;
+        this.instanceToAlloc = instanceToAlloc;
+        this.staticToAlloc = staticToAlloc;
+        this.primInstanceLastOffset = primInstanceLastOffset;
+        this.primStaticLastOffset = primStaticLastOffset;
         this.fieldTableLength = fieldTableLength;
         this.objectFields = objectFields;
         this.staticObjectFields = staticObjectFields;
     }
 
-    static LinkedKlassFieldLayout create(LinkedKlass linkedKlass) {
-        ParserField[] parserFields = linkedKlass.getParserKlass().getFields();
-        Symbol<Name>[] hiddenFieldNames = getHiddenFieldNames(linkedKlass);
+    /**
+     * <p>
+     * Creates a layout for the primitive fields of a given class, and assigns to each field the raw
+     * offset in the byte array that represents the data. The layout tries to be as compact as
+     * possible. The rules for determining the layout are as follow:
+     * 
+     * <li>The Top klass (j.l.Object) will have its field offset corresponding the point where the
+     * data in the byte array begins (the first offset after the array header)</li>
+     * <li>If this offset is not long-aligned, then start further so that this new offset is aligned
+     * to a long. Register that there is some space between the start of the raw data and the first
+     * field offset (perhaps a byte could be squeezed in).</li>
+     * <li>Other klasses will inherit their super klass' layout, and start appending their own
+     * declared field at the first offset aligned with the biggest primitive a given class has.</li>
+     * <li>If there are known holes in the parents layout, the klass will attempt to squeeze its own
+     * fields in these holes.</li>
+     * </p>
+     * <p>
+     * For example, suppose we have the following hierarchy, and that the first offset of the data
+     * in a byte array is at 14:
+     * </p>
+     * 
+     * <pre>
+     * class A {
+     *     long l;
+     *     int i;
+     * }
+     * 
+     * class B extends A {
+     *     double d;
+     * }
+     * 
+     * class C extends B {
+     *     float f;
+     *     short s;
+     * }
+     * </pre>
+     * 
+     * Then, the resulting layout for A would be:
+     * 
+     * <pre>
+     * - 0-13: header
+     * - 14-15: unused  -> Padding for aligned long
+     * - 16-23: l
+     * - 24-27: i
+     * </pre>
+     * 
+     * the resulting layout for B would be:
+     * 
+     * <pre>
+     * - 0-13: header   }
+     * - 14-15: unused  }   Same as
+     * - 16-23: l       }      A
+     * - 24-27: i       }
+     * - 28-31: unused  -> Padding for aligned double
+     * - 32-39: d
+     * </pre>
+     * 
+     * the resulting layout for C would be:
+     * 
+     * <pre>
+     * - 0-13: header   
+     * - 14-15: s       ->   hole filled
+     * - 16-23: l       
+     * - 24-27: i       
+     * - 28-31: f       ->   hole filled
+     * - 32-39: d
+     * </pre>
+     */
+    static LinkedKlassFieldLayout create(ParserKlass parserKlass, LinkedKlass superKlass) {
+        FieldCounter fieldCounter = new FieldCounter(parserKlass);
 
-        // Conservatively allocate the largest array that we might need, and shrink it later
-        LinkedField[] instanceFields = new LinkedField[parserFields.length + hiddenFieldNames.length];
-        LinkedField[] staticFields = new LinkedField[parserFields.length];
-
-        int[] primitiveCounts = new int[N_PRIMITIVES];
-        int[] staticPrimitiveCounts = new int[N_PRIMITIVES];
-
-        // primitive fields
-        int superTotalByteCount;
+        // Stats about primitive fields
+        int superTotalInstanceByteCount;
         int superTotalStaticByteCount;
         int[][] leftoverHoles;
 
-        // object fields
+        // Indexes for object fields
+        int instanceFieldInsertionIndex = 0;
         int nextFieldTableSlot;
         int nextObjectFieldIndex;
+        // The staticFieldTable does not include fields of parent classes.
+        // Therefore, nextStaticFieldTableSlot can be used also as staticFieldInsertionIndex.
+        int nextStaticFieldTableSlot = 0;
         int nextStaticObjectFieldIndex;
 
-        int instanceFieldIndex = 0;
-        // The staticFieldTable does not include fields of parent classes.
-        // Therefore, staticFieldIndex is also used as staticFieldTable slot.
-        int staticFieldIndex = 0;
-
-        LinkedKlass superKlass = linkedKlass.getSuperKlass();
         if (superKlass != null) {
-            superTotalByteCount = superKlass.getPrimitiveFieldTotalByteCount();
-            superTotalStaticByteCount = superKlass.getPrimitiveStaticFieldTotalByteCount();
+            superTotalInstanceByteCount = superKlass.getPrimitiveInstanceFieldLastOffset();
+            superTotalStaticByteCount = superKlass.getPrimitiveStaticFieldLastOffset();
             leftoverHoles = superKlass.getLeftoverHoles();
             nextFieldTableSlot = superKlass.getFieldTableLength();
             nextObjectFieldIndex = superKlass.getObjectFieldsCount();
             nextStaticObjectFieldIndex = superKlass.getStaticObjectFieldsCount();
         } else {
-            superTotalByteCount = 0;
-            superTotalStaticByteCount = 0;
-            leftoverHoles = new int[0][];
+            // Align the starting offset to a long.
+            superTotalInstanceByteCount = base() + alignmentCorrection();
+            superTotalStaticByteCount = base() + alignmentCorrection();
+            // Register a hole if we had to realign.
+            if (alignmentCorrection() > 0) {
+                leftoverHoles = new int[][]{{base(), base() + alignmentCorrection()}};
+            } else {
+                leftoverHoles = new int[0][];
+            }
             nextFieldTableSlot = 0;
             nextObjectFieldIndex = 0;
             nextStaticObjectFieldIndex = 0;
         }
 
-        for (int i = 0; i < parserFields.length; i++) {
-            LinkedField f = new LinkedField(parserFields[i]);
-            if (f.isStatic()) {
-                staticFields[staticFieldIndex] = f;
-                f.setSlot(staticFieldIndex++);
-                if (f.getKind().isPrimitive()) {
-                    staticPrimitiveCounts[indexFromKind(f.getKind())]++;
+        PrimitiveFieldIndexes instancePrimitiveFieldIndexes = new PrimitiveFieldIndexes(fieldCounter.instancePrimitiveFields, superTotalInstanceByteCount, leftoverHoles);
+        PrimitiveFieldIndexes staticPrimitiveFieldIndexes = new PrimitiveFieldIndexes(fieldCounter.staticPrimitiveFields, superTotalStaticByteCount, FillingSchedule.EMPTY_INT_ARRAY_ARRAY);
+
+        LinkedField[] instanceFields = new LinkedField[fieldCounter.instanceFields];
+        LinkedField[] staticFields = new LinkedField[fieldCounter.staticFields];
+
+        for (ParserField parserField : parserKlass.getFields()) {
+            JavaKind kind = parserField.getKind();
+            int index;
+            if (parserField.isStatic()) {
+                if (kind.isPrimitive()) {
+                    index = staticPrimitiveFieldIndexes.getIndex(kind);
                 } else {
-                    f.setFieldIndex(nextStaticObjectFieldIndex++);
+                    index = nextStaticObjectFieldIndex++;
                 }
+                LinkedField linkedField = new LinkedField(parserField, nextStaticFieldTableSlot, index);
+                staticFields[nextStaticFieldTableSlot++] = linkedField;
             } else {
-                instanceFields[instanceFieldIndex++] = f;
-                f.setSlot(nextFieldTableSlot++);
-                if (f.getKind().isPrimitive()) {
-                    primitiveCounts[indexFromKind(f.getKind())]++;
+                if (kind.isPrimitive()) {
+                    index = instancePrimitiveFieldIndexes.getIndex(kind);
                 } else {
-                    f.setFieldIndex(nextObjectFieldIndex++);
+                    index = nextObjectFieldIndex++;
                 }
+                LinkedField linkedField = new LinkedField(parserField, nextFieldTableSlot++, index);
+                instanceFields[instanceFieldInsertionIndex++] = linkedField;
             }
         }
 
         // Add hidden fields after all instance fields
-        for (Symbol<Name> hiddenFieldName : hiddenFieldNames) {
+        for (Symbol<Name> hiddenFieldName : fieldCounter.hiddenFieldNames) {
             LinkedField hiddenField = LinkedField.createHidden(hiddenFieldName, nextFieldTableSlot++, nextObjectFieldIndex++);
-            instanceFields[instanceFieldIndex++] = hiddenField;
+            instanceFields[instanceFieldInsertionIndex++] = hiddenField;
         }
 
-        // Now that we know the actual size of the arrays, shrink them
-        instanceFields = Arrays.copyOf(instanceFields, instanceFieldIndex);
-        staticFields = Arrays.copyOf(staticFields, staticFieldIndex);
-
-        int[] primitiveOffsets = new int[N_PRIMITIVES];
-        int[] staticPrimitiveOffsets = new int[N_PRIMITIVES];
-
-        int startOffset = startOffset(superTotalByteCount, primitiveCounts);
-        primitiveOffsets[0] = startOffset;
-
-        int staticStartOffset = startOffset(superTotalStaticByteCount, staticPrimitiveCounts);
-        staticPrimitiveOffsets[0] = staticStartOffset;
-
-        FillingSchedule schedule = FillingSchedule.create(superTotalByteCount, startOffset, primitiveCounts, leftoverHoles);
-        FillingSchedule staticSchedule = FillingSchedule.create(superTotalStaticByteCount, staticStartOffset, staticPrimitiveCounts);
-
-        for (int i = 1; i < N_PRIMITIVES; i++) {
-            primitiveOffsets[i] = primitiveOffsets[i - 1] + primitiveCounts[i - 1] * order[i - 1].getByteCount();
-            staticPrimitiveOffsets[i] = staticPrimitiveOffsets[i - 1] + staticPrimitiveCounts[i - 1] * order[i - 1].getByteCount();
-        }
-
-        for (LinkedField instanceField : instanceFields) {
-            if (instanceField.getKind().isPrimitive()) {
-                ScheduleEntry entry = schedule.query(instanceField.getKind());
-                if (entry != null) {
-                    instanceField.setFieldIndex(entry.offset);
-                } else {
-                    instanceField.setFieldIndex(primitiveOffsets[indexFromKind(instanceField.getKind())]);
-                    primitiveOffsets[indexFromKind(instanceField.getKind())] += instanceField.getKind().getByteCount();
-                }
-            }
-        }
-
-        for (LinkedField staticField : staticFields) {
-            if (staticField.getKind().isPrimitive()) {
-                ScheduleEntry entry = staticSchedule.query(staticField.getKind());
-                if (entry != null) {
-                    staticField.setFieldIndex(entry.offset);
-                } else {
-                    staticField.setFieldIndex(staticPrimitiveOffsets[indexFromKind(staticField.getKind())]);
-                    staticPrimitiveOffsets[indexFromKind(staticField.getKind())] += staticField.getKind().getByteCount();
-                }
-            }
-        }
+        int instancePrimToAlloc = getSizeToAlloc(superKlass == null ? 0 : superKlass.getInstancePrimitiveToAlloc(), instancePrimitiveFieldIndexes);
+        int staticPrimToAlloc = getSizeToAlloc(superKlass == null ? 0 : superKlass.getStaticPrimitiveToAlloc(), staticPrimitiveFieldIndexes);
 
         return new LinkedKlassFieldLayout(
-                        instanceFields,
-                        staticFields,
-                        schedule.nextLeftoverHoles,
-                        primitiveOffsets[N_PRIMITIVES - 1],
-                        staticPrimitiveOffsets[N_PRIMITIVES - 1],
+                        instanceFields, staticFields, instancePrimitiveFieldIndexes.schedule.nextLeftoverHoles,
+                        instancePrimToAlloc, staticPrimToAlloc,
+                        instancePrimitiveFieldIndexes.offsets[N_PRIMITIVES - 1], staticPrimitiveFieldIndexes.offsets[N_PRIMITIVES - 1],
                         nextFieldTableSlot,
-                        nextObjectFieldIndex,
-                        nextStaticObjectFieldIndex);
+                        nextObjectFieldIndex, nextStaticObjectFieldIndex);
+    }
+
+    private static int getSizeToAlloc(int superToAlloc, PrimitiveFieldIndexes fieldIndexes) {
+        int toAlloc = fieldIndexes.offsets[N_PRIMITIVES - 1] - base();
+        assert toAlloc >= 0;
+        if (toAlloc == alignmentCorrection() && fieldIndexes.schedule.isEmpty()) {
+            // If superKlass has fields in the alignment hole, we will need to allocate. If not, we
+            // can save an array. Note that if such a field exists, we will allocate an array of
+            // size at least the alignment correction, since we fill holes from the right to the
+            // left.
+            toAlloc = superToAlloc;
+        }
+        return toAlloc;
     }
 
     private static int indexFromKind(JavaKind kind) {
@@ -202,82 +272,149 @@ class LinkedKlassFieldLayout {
         // @formatter:on
     }
 
-    // Find first primitive to set, and align on it.
-    private static int startOffset(int superTotalByteCount, int[] primitiveCounts) {
-        int i = 0;
-        while (i < N_PRIMITIVES && primitiveCounts[i] == 0) {
-            i++;
+    private static final class FieldCounter {
+        final int[] instancePrimitiveFields = new int[N_PRIMITIVES];
+        final int[] staticPrimitiveFields = new int[N_PRIMITIVES];
+
+        final Symbol<Name>[] hiddenFieldNames;
+
+        // Includes hidden fields
+        final int instanceFields;
+        final int staticFields;
+
+        FieldCounter(ParserKlass parserKlass) {
+            int iFields = 0;
+            int sFields = 0;
+            for (ParserField f : parserKlass.getFields()) {
+                JavaKind kind = f.getKind();
+                if (f.isStatic()) {
+                    sFields++;
+                    if (kind.isPrimitive()) {
+                        staticPrimitiveFields[indexFromKind(kind)]++;
+                    }
+                } else {
+                    iFields++;
+                    if (kind.isPrimitive()) {
+                        instancePrimitiveFields[indexFromKind(kind)]++;
+                    }
+                }
+            }
+            // All hidden fields are of Object kind
+            hiddenFieldNames = getHiddenFieldNames(parserKlass);
+            instanceFields = iFields + hiddenFieldNames.length;
+            staticFields = sFields;
         }
-        if (i == N_PRIMITIVES) {
-            return superTotalByteCount;
+
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        private static Symbol<Name>[] getHiddenFieldNames(ParserKlass parserKlass) {
+            Symbol<Type> type = parserKlass.getType();
+            if (type == Type.java_lang_invoke_MemberName) {
+                return new Symbol[]{
+                                Name.HIDDEN_VMTARGET,
+                                Name.HIDDEN_VMINDEX
+                };
+            } else if (type == Type.java_lang_reflect_Method) {
+                return new Symbol[]{
+                                Name.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
+                                Name.HIDDEN_METHOD_KEY
+                };
+            } else if (type == Type.java_lang_reflect_Constructor) {
+                return new Symbol[]{
+                                Name.HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
+                                Name.HIDDEN_CONSTRUCTOR_KEY
+                };
+            } else if (type == Type.java_lang_reflect_Field) {
+                return new Symbol[]{
+                                Name.HIDDEN_FIELD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
+                                Name.HIDDEN_FIELD_KEY
+                };
+            } else if (type == Type.java_lang_ref_Reference) {
+                return new Symbol[]{
+                                // All references (including strong) get an extra hidden field, this
+                                // simplifies the code for weak/soft/phantom/final references.
+                                Name.HIDDEN_HOST_REFERENCE
+                };
+            } else if (type == Type.java_lang_Throwable) {
+                return new Symbol[]{
+                                Name.HIDDEN_FRAMES
+                };
+            } else if (type == Type.java_lang_Thread) {
+                return new Symbol[]{
+                                Name.HIDDEN_HOST_THREAD,
+                                Name.HIDDEN_IS_ALIVE,
+                                Name.HIDDEN_INTERRUPTED,
+                                Name.HIDDEN_DEATH,
+                                Name.HIDDEN_DEATH_THROWABLE,
+                                Name.HIDDEN_SUSPEND_LOCK,
+
+                                // Only used for j.l.management bookkeeping.
+                                Name.HIDDEN_THREAD_BLOCKED_OBJECT,
+                                Name.HIDDEN_THREAD_BLOCKED_COUNT,
+                                Name.HIDDEN_THREAD_WAITED_COUNT
+                };
+            } else if (type == Type.java_lang_Class) {
+                return new Symbol[]{
+                                Name.HIDDEN_SIGNERS,
+                                Name.HIDDEN_MIRROR_KLASS,
+                                Name.HIDDEN_PROTECTION_DOMAIN
+                };
+            } else if (type == Type.java_lang_ClassLoader) {
+                return new Symbol[]{
+                                Name.HIDDEN_CLASS_LOADER_REGISTRY
+                };
+            } else if (type == Type.java_lang_Module) {
+                return new Symbol[]{
+                                Name.HIDDEN_MODULE_ENTRY
+                };
+            }
+            return Symbol.EMPTY_ARRAY;
         }
-        int r = superTotalByteCount % order[i].getByteCount();
-        if (r == 0) {
-            return superTotalByteCount;
-        }
-        return superTotalByteCount + order[i].getByteCount() - r;
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private static Symbol<Name>[] getHiddenFieldNames(LinkedKlass klass) {
-        Symbol<Type> type = klass.getType();
-        if (type == Type.java_lang_invoke_MemberName) {
-            return new Symbol[]{
-                            Name.HIDDEN_VMTARGET,
-                            Name.HIDDEN_VMINDEX
-            };
-        } else if (type == Type.java_lang_reflect_Method) {
-            return new Symbol[]{
-                            Name.HIDDEN_METHOD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
-                            Name.HIDDEN_METHOD_KEY
-            };
-        } else if (type == Type.java_lang_reflect_Constructor) {
-            return new Symbol[]{
-                            Name.HIDDEN_CONSTRUCTOR_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
-                            Name.HIDDEN_CONSTRUCTOR_KEY
-            };
-        } else if (type == Type.java_lang_reflect_Field) {
-            return new Symbol[]{
-                            Name.HIDDEN_FIELD_RUNTIME_VISIBLE_TYPE_ANNOTATIONS,
-                            Name.HIDDEN_FIELD_KEY
-            };
-        } else if (type == Type.java_lang_ref_Reference) {
-            return new Symbol[]{
-                            // All references (including strong) get an extra hidden field, this
-                            // simplifies the code
-                            // for weak/soft/phantom/final references.
-                            Name.HIDDEN_HOST_REFERENCE
-            };
-        } else if (type == Type.java_lang_Throwable) {
-            return new Symbol[]{
-                            Name.HIDDEN_FRAMES
-            };
-        } else if (type == Type.java_lang_Thread) {
-            return new Symbol[]{
-                            Name.HIDDEN_HOST_THREAD,
-                            Name.HIDDEN_IS_ALIVE,
-                            Name.HIDDEN_INTERRUPTED,
-                            Name.HIDDEN_DEATH,
-                            Name.HIDDEN_DEATH_THROWABLE,
-                            Name.HIDDEN_SUSPEND_LOCK,
+    private static final class PrimitiveFieldIndexes {
+        final int[] offsets;
+        final FillingSchedule schedule;
 
-                            // Only used for j.l.management bookkeeping.
-                            Name.HIDDEN_THREAD_BLOCKED_OBJECT,
-                            Name.HIDDEN_THREAD_BLOCKED_COUNT,
-                            Name.HIDDEN_THREAD_WAITED_COUNT
-            };
-        } else if (type == Type.java_lang_Class) {
-            return new Symbol[]{
-                            Name.HIDDEN_SIGNERS,
-                            Name.HIDDEN_MIRROR_KLASS,
-                            Name.HIDDEN_PROTECTION_DOMAIN
-            };
-        } else if (type == Type.java_lang_ClassLoader) {
-            return new Symbol[]{
-                            Name.HIDDEN_CLASS_LOADER_REGISTRY
-            };
+        // To ignore leftoverHoles, pass FillingSchedule.EMPTY_INT_ARRAY_ARRAY.
+        // This is used for static fields, where the gain would be negligible.
+        PrimitiveFieldIndexes(int[] primitiveFields, int superTotalByteCount, int[][] leftoverHoles) {
+            offsets = new int[N_PRIMITIVES];
+            offsets[0] = startOffset(superTotalByteCount, primitiveFields);
+            this.schedule = FillingSchedule.create(superTotalByteCount, offsets[0], primitiveFields, leftoverHoles);
+            // FillingSchedule.create() modifies primitiveFields.
+            // Only offsets[0] must be initialized before creating the filling schedule.
+            for (int i = 1; i < N_PRIMITIVES; i++) {
+                offsets[i] = offsets[i - 1] + primitiveFields[i - 1] * order[i - 1].getByteCount();
+            }
         }
-        return Symbol.EMPTY_ARRAY;
+
+        int getIndex(JavaKind kind) {
+            ScheduleEntry entry = schedule.query(kind);
+            if (entry != null) {
+                return entry.offset;
+            } else {
+                int offsetsIndex = indexFromKind(kind);
+                int prevOffset = offsets[offsetsIndex];
+                offsets[offsetsIndex] += kind.getByteCount();
+                return prevOffset;
+            }
+        }
+
+        // Find first primitive to set, and align on it.
+        private static int startOffset(int superTotalByteCount, int[] primitiveCounts) {
+            int i = 0;
+            while (i < N_PRIMITIVES && primitiveCounts[i] == 0) {
+                i++;
+            }
+            if (i == N_PRIMITIVES) {
+                return superTotalByteCount;
+            }
+            int r = superTotalByteCount % order[i].getByteCount();
+            if (r == 0) {
+                return superTotalByteCount;
+            }
+            return superTotalByteCount + order[i].getByteCount() - r;
+        }
     }
 
     /**
@@ -286,32 +423,33 @@ class LinkedKlassFieldLayout {
     private static final class FillingSchedule {
         static final int[][] EMPTY_INT_ARRAY_ARRAY = new int[0][];
 
-        List<ScheduleEntry> schedule;
+        final List<ScheduleEntry> schedule;
         int[][] nextLeftoverHoles;
+
+        final boolean isEmpty;
+
+        boolean isEmpty() {
+            return isEmpty;
+        }
 
         static FillingSchedule create(int holeStart, int holeEnd, int[] counts, int[][] leftoverHoles) {
             List<ScheduleEntry> schedule = new ArrayList<>();
-            List<int[]> nextHoles = new ArrayList<>();
-
-            scheduleHole(holeStart, holeEnd, counts, schedule, nextHoles);
-            if (leftoverHoles != null) {
-                for (int[] hole : leftoverHoles) {
-                    scheduleHole(hole[0], hole[1], counts, schedule, nextHoles);
+            if (leftoverHoles == EMPTY_INT_ARRAY_ARRAY) {
+                // packing static fields is not as interesting as instance fields: the array created
+                // to remember the hole would be bigger than what we would gain. Only schedule for
+                // direct parent.
+                scheduleHole(holeStart, holeEnd, counts, schedule);
+                return new FillingSchedule(schedule);
+            } else {
+                List<int[]> nextHoles = new ArrayList<>();
+                scheduleHole(holeStart, holeEnd, counts, schedule, nextHoles);
+                if (leftoverHoles != null) {
+                    for (int[] hole : leftoverHoles) {
+                        scheduleHole(hole[0], hole[1], counts, schedule, nextHoles);
+                    }
                 }
+                return new FillingSchedule(schedule, nextHoles);
             }
-
-            return new FillingSchedule(schedule, nextHoles);
-        }
-
-        // packing static fields is not as interesting as instance fields: the array created to
-        // remember the hole would be bigger than what we would gain. Only schedule for direct
-        // parent.
-        static FillingSchedule create(int holeStart, int holeEnd, int[] counts) {
-            List<ScheduleEntry> schedule = new ArrayList<>();
-
-            scheduleHole(holeStart, holeEnd, counts, schedule);
-
-            return new FillingSchedule(schedule);
         }
 
         private static void scheduleHole(int holeStart, int holeEnd, int[] counts, List<ScheduleEntry> schedule, List<int[]> nextHoles) {
@@ -371,11 +509,13 @@ class LinkedKlassFieldLayout {
 
         private FillingSchedule(List<ScheduleEntry> schedule) {
             this.schedule = schedule;
+            this.isEmpty = schedule == null || schedule.isEmpty();
         }
 
         private FillingSchedule(List<ScheduleEntry> schedule, List<int[]> nextHoles) {
             this.schedule = schedule;
             this.nextLeftoverHoles = nextHoles.isEmpty() ? null : nextHoles.toArray(EMPTY_INT_ARRAY_ARRAY);
+            this.isEmpty = schedule != null && schedule.isEmpty();
         }
 
         ScheduleEntry query(JavaKind kind) {
