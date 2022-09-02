@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -33,7 +33,7 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMBuiltin;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMGetElementPtrNode.LLVMIncrementPointerNode;
+import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
@@ -51,6 +51,16 @@ public abstract class LLVMArithmetic {
         boolean evalI32(int left, int right, Object addr, LLVMStoreNode store);
 
         boolean evalI64(long left, long right, Object addr, LLVMStoreNode store);
+    }
+
+    public interface SaturatingArithmetic {
+        byte evalI8(byte left, byte right);
+
+        short evalI16(short left, short right);
+
+        int evalI32(int left, int right);
+
+        long evalI64(long left, long right);
     }
 
     public interface CarryArithmetic {
@@ -203,6 +213,67 @@ public abstract class LLVMArithmetic {
         }
     };
 
+    public static final SaturatingArithmetic SIGNED_ADD_SAT = new SaturatingArithmetic() {
+
+        @Override
+        public byte evalI8(byte left, byte right) {
+            final int res = left + right;
+            final boolean overflow = (((res ^ left) & (res ^ right)) & (1 << (Byte.SIZE - 1))) != 0;
+            if (overflow) {
+                return left > 0 ? Byte.MAX_VALUE : Byte.MIN_VALUE;
+            } else {
+                return (byte) res;
+            }
+        }
+
+        @Override
+        public short evalI16(short left, short right) {
+            final int res = left + right;
+            final boolean overflow = (((res ^ left) & (res ^ right)) & (1 << (Short.SIZE - 1))) != 0;
+            if (overflow) {
+                return left > 0 ? Short.MAX_VALUE : Short.MIN_VALUE;
+            } else {
+                return (short) res;
+            }
+        }
+
+        @Override
+        public int evalI32(int left, int right) {
+            int res;
+            boolean overflow = false;
+            try {
+                res = Math.addExact(left, right);
+            } catch (ArithmeticException e) {
+                // no transferToInterpreter - we want the compiler to remove that exception
+                res = left + right;
+                overflow = true;
+            }
+            if (overflow) {
+                return left > 0 ? Integer.MAX_VALUE : Integer.MIN_VALUE;
+            } else {
+                return res;
+            }
+        }
+
+        @Override
+        public long evalI64(long left, long right) {
+            long res;
+            boolean overflow = false;
+            try {
+                res = Math.addExact(left, right);
+            } catch (ArithmeticException e) {
+                // no transferToInterpreter - we want the compiler to remove that exception
+                res = left + right;
+                overflow = true;
+            }
+            if (overflow) {
+                return left > 0 ? Long.MAX_VALUE : Long.MIN_VALUE;
+            } else {
+                return res;
+            }
+        }
+    };
+
     public static final Arithmetic UNSIGNED_ADD = new Arithmetic() {
 
         @Override
@@ -236,6 +307,37 @@ public abstract class LLVMArithmetic {
             final boolean overflow = ((~res & left) | (~res & right) | (left & right)) < 0;
             store.executeWithTarget(addr, res);
             return overflow;
+        }
+    };
+
+    public static final SaturatingArithmetic UNSIGNED_ADD_SAT = new SaturatingArithmetic() {
+
+        @Override
+        public byte evalI8(byte left, byte right) {
+            final int res = (left & LLVMExpressionNode.I8_MASK) + (right & LLVMExpressionNode.I8_MASK);
+            final boolean overflow = (res & (1 << Byte.SIZE)) != 0;
+            return (byte) (overflow ? LLVMExpressionNode.I8_MASK : res);
+        }
+
+        @Override
+        public short evalI16(short left, short right) {
+            final int res = (left & LLVMExpressionNode.I16_MASK) + (right & LLVMExpressionNode.I16_MASK);
+            final boolean overflow = (res & (1 << Short.SIZE)) != 0;
+            return (short) (overflow ? LLVMExpressionNode.I16_MASK : res);
+        }
+
+        @Override
+        public int evalI32(int left, int right) {
+            final int res = left + right;
+            final boolean overflow = ((~res & left) | (~res & right) | (left & right)) < 0;
+            return overflow ? -1 : res;
+        }
+
+        @Override
+        public long evalI64(long left, long right) {
+            final long res = left + right;
+            final boolean overflow = ((~res & left) | (~res & right) | (left & right)) < 0;
+            return overflow ? -1 : res;
         }
     };
 
@@ -289,6 +391,67 @@ public abstract class LLVMArithmetic {
         }
     };
 
+    public static final SaturatingArithmetic SIGNED_SUB_SAT = new SaturatingArithmetic() {
+
+        @Override
+        public byte evalI8(byte left, byte right) {
+            final int res = left - right;
+            final boolean overflow = (((left ^ right) & (left ^ res)) & (1 << (Byte.SIZE - 1))) != 0;
+            if (overflow) {
+                return ((left > 0) ^ (right < 0)) ? Byte.MAX_VALUE : Byte.MIN_VALUE;
+            } else {
+                return (byte) res;
+            }
+        }
+
+        @Override
+        public short evalI16(short left, short right) {
+            final int res = left - right;
+            final boolean overflow = (((left ^ right) & (left ^ res)) & (1 << (Short.SIZE - 1))) != 0;
+            if (overflow) {
+                return ((left > 0) ^ (right < 0)) ? Short.MAX_VALUE : Short.MIN_VALUE;
+            } else {
+                return (short) res;
+            }
+        }
+
+        @Override
+        public int evalI32(int left, int right) {
+            int res;
+            boolean overflow = false;
+            try {
+                res = Math.subtractExact(left, right);
+            } catch (ArithmeticException e) {
+                // no transferToInterpreter - we want the compiler to remove that exception
+                res = left - right;
+                overflow = true;
+            }
+            if (overflow) {
+                return ((left > 0) ^ (right < 0)) ? Integer.MAX_VALUE : Integer.MIN_VALUE;
+            } else {
+                return res;
+            }
+        }
+
+        @Override
+        public long evalI64(long left, long right) {
+            long res;
+            boolean overflow = false;
+            try {
+                res = Math.subtractExact(left, right);
+            } catch (ArithmeticException e) {
+                // no transferToInterpreter - we want the compiler to remove that exception
+                res = left - right;
+                overflow = true;
+            }
+            if (overflow) {
+                return ((left > 0) ^ (right < 0)) ? Long.MAX_VALUE : Long.MIN_VALUE;
+            } else {
+                return res;
+            }
+        }
+    };
+
     public static final Arithmetic UNSIGNED_SUB = new Arithmetic() {
 
         @Override
@@ -322,6 +485,37 @@ public abstract class LLVMArithmetic {
             final boolean overflow = Long.compareUnsigned(left, right) < 0;
             store.executeWithTarget(addr, res);
             return overflow;
+        }
+    };
+
+    public static final SaturatingArithmetic UNSIGNED_SUB_SAT = new SaturatingArithmetic() {
+
+        @Override
+        public byte evalI8(byte left, byte right) {
+            final int res = (left & LLVMExpressionNode.I8_MASK) - (right & LLVMExpressionNode.I8_MASK);
+            boolean overflow = res < 0;
+            return (byte) (overflow ? 0 : res);
+        }
+
+        @Override
+        public short evalI16(short left, short right) {
+            final int res = (left & LLVMExpressionNode.I16_MASK) - (right & LLVMExpressionNode.I16_MASK);
+            boolean overflow = res < 0;
+            return (short) (overflow ? 0 : res);
+        }
+
+        @Override
+        public int evalI32(int left, int right) {
+            final int res = left - right;
+            final boolean overflow = Integer.compareUnsigned(left, right) < 0;
+            return overflow ? 0 : res;
+        }
+
+        @Override
+        public long evalI64(long left, long right) {
+            final long res = left - right;
+            final boolean overflow = Long.compareUnsigned(left, right) < 0;
+            return overflow ? 0 : res;
         }
     };
 
@@ -456,6 +650,37 @@ public abstract class LLVMArithmetic {
 
     @NodeChild(value = "left", type = LLVMExpressionNode.class)
     @NodeChild(value = "right", type = LLVMExpressionNode.class)
+    public abstract static class LLVMSimpleArithmeticPrimitive extends LLVMBuiltin {
+        private final SaturatingArithmetic arithmetic;
+
+        public LLVMSimpleArithmeticPrimitive(SaturatingArithmetic arithmetic) {
+            this.arithmetic = arithmetic;
+        }
+
+        @Specialization
+        protected byte doIntrinsic(byte left, byte right) {
+            return arithmetic.evalI8(left, right);
+        }
+
+        @Specialization
+        protected short doIntrinsic(short left, short right) {
+            return arithmetic.evalI16(left, right);
+        }
+
+        @Specialization
+        protected int doIntrinsic(int left, int right) {
+            return arithmetic.evalI32(left, right);
+        }
+
+        @Specialization
+        protected long doIntrinsic(long left, long right) {
+            return arithmetic.evalI64(left, right);
+        }
+
+    }
+
+    @NodeChild(value = "left", type = LLVMExpressionNode.class)
+    @NodeChild(value = "right", type = LLVMExpressionNode.class)
     @NodeChild(value = "target", type = LLVMExpressionNode.class)
     public abstract static class LLVMArithmeticWithOverflow extends LLVMBuiltin {
 
@@ -469,38 +694,34 @@ public abstract class LLVMArithmetic {
         }
 
         @Specialization
-        protected Object doIntrinsic(byte left, byte right, Object addr,
-                        @Cached("createStoreI8()") LLVMStoreNode store,
-                        @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
+        protected Object doIntrinsic(byte left, byte right, LLVMPointer addr,
+                        @Cached("createStoreI8()") LLVMStoreNode store) {
             final boolean overflow = arithmetic.evalI8(left, right, addr, store);
-            storeI8.executeWithTarget(incrementPointer.executeWithTarget(addr, secondValueOffset), overflow);
+            storeI8.executeWithTarget(addr.increment(secondValueOffset), overflow);
             return addr;
         }
 
         @Specialization
-        protected Object doIntrinsic(short left, short right, Object addr,
-                        @Cached("createStoreI16()") LLVMStoreNode store,
-                        @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
+        protected Object doIntrinsic(short left, short right, LLVMPointer addr,
+                        @Cached("createStoreI16()") LLVMStoreNode store) {
             final boolean overflow = arithmetic.evalI16(left, right, addr, store);
-            storeI8.executeWithTarget(incrementPointer.executeWithTarget(addr, secondValueOffset), overflow);
+            storeI8.executeWithTarget(addr.increment(secondValueOffset), overflow);
             return addr;
         }
 
         @Specialization
-        protected Object doIntrinsic(int left, int right, Object addr,
-                        @Cached("createStoreI32()") LLVMStoreNode store,
-                        @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
+        protected Object doIntrinsic(int left, int right, LLVMPointer addr,
+                        @Cached("createStoreI32()") LLVMStoreNode store) {
             final boolean overflow = arithmetic.evalI32(left, right, addr, store);
-            storeI8.executeWithTarget(incrementPointer.executeWithTarget(addr, secondValueOffset), overflow);
+            storeI8.executeWithTarget(addr.increment(secondValueOffset), overflow);
             return addr;
         }
 
         @Specialization
-        protected Object doIntrinsic(long left, long right, Object addr,
-                        @Cached("createStoreI64()") LLVMStoreNode store,
-                        @Cached("getIncrementPointerNode()") LLVMIncrementPointerNode incrementPointer) {
+        protected Object doIntrinsic(long left, long right, LLVMPointer addr,
+                        @Cached("createStoreI64()") LLVMStoreNode store) {
             final boolean overflow = arithmetic.evalI64(left, right, addr, store);
-            storeI8.executeWithTarget(incrementPointer.executeWithTarget(addr, secondValueOffset), overflow);
+            storeI8.executeWithTarget(addr.increment(secondValueOffset), overflow);
             return addr;
         }
     }
