@@ -26,7 +26,6 @@ package com.oracle.svm.hosted;
 
 import java.io.File;
 import java.lang.module.Configuration;
-import java.lang.module.ModuleDescriptor;
 import java.lang.module.ModuleFinder;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -36,14 +35,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.oracle.svm.core.util.UserError;
-import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.util.ModuleSupport;
-
-import jdk.internal.module.Modules;
 
 public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoaderSupport {
 
@@ -51,7 +47,8 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
     private final List<Path> buildmp;
 
     private final ClassLoader classLoader;
-    private final ModuleLayer moduleLayerForImageBuild;
+    private final Function<String, Optional<Module>> moduleFinder;
+    private final ModuleLayer.Controller moduleController;
 
     NativeImageClassLoaderSupport(ClassLoader defaultSystemClassLoader, String[] classpath, String[] modulePath) {
         super(defaultSystemClassLoader, classpath);
@@ -59,63 +56,27 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
         imagemp = Arrays.stream(modulePath).map(Paths::get).collect(Collectors.toUnmodifiableList());
         buildmp = Arrays.stream(System.getProperty("jdk.module.path", "").split(File.pathSeparator)).map(Paths::get).collect(Collectors.toUnmodifiableList());
 
-        ModuleLayer moduleLayer = createModuleLayer(imagemp.toArray(Path[]::new), classPathClassLoader);
+        moduleController = createModuleController(imagemp.toArray(Path[]::new), classPathClassLoader);
+        ModuleLayer moduleLayer = moduleController.layer();
         if (moduleLayer.modules().isEmpty()) {
-            this.moduleLayerForImageBuild = null;
             classLoader = classPathClassLoader;
+            moduleFinder = null;
         } else {
-            adjustBootLayerQualifiedExports(moduleLayer);
-            this.moduleLayerForImageBuild = moduleLayer;
-            classLoader = getSingleClassloader(moduleLayer);
+            /*
+             * java.lang.ModuleLayer.defineModulesWithOneLoader creates a jdk.internal.loader.Loader
+             * which is a SecureClassLoader.
+             */
+            classLoader = moduleLayer.modules().iterator().next().getClassLoader();
+            moduleFinder = moduleLayer::findModule;
         }
     }
 
-    private static ModuleLayer createModuleLayer(Path[] modulePaths, ClassLoader parent) {
+    private static ModuleLayer.Controller createModuleController(Path[] modulePaths, ClassLoader parent) {
         ModuleFinder finder = ModuleFinder.of(modulePaths);
         List<Configuration> parents = List.of(ModuleLayer.boot().configuration());
         Set<String> moduleNames = finder.findAll().stream().map(moduleReference -> moduleReference.descriptor().name()).collect(Collectors.toSet());
         Configuration configuration = Configuration.resolve(finder, parents, finder, moduleNames);
-        /**
-         * For the modules we want to build an image for, a ModuleLayer is needed that can be
-         * accessed with a single classloader so we can use it for {@link ImageClassLoader}.
-         */
-        return ModuleLayer.defineModulesWithOneLoader(configuration, List.of(ModuleLayer.boot()), parent).layer();
-    }
-
-    private void adjustBootLayerQualifiedExports(ModuleLayer layer) {
-        /*
-         * For all qualified exports packages of modules in the the boot layer we check if layer
-         * contains modules that satisfy such qualified exports. If we find a match we perform a
-         * addExports.
-         */
-        for (Module module : ModuleLayer.boot().modules()) {
-            for (ModuleDescriptor.Exports export : module.getDescriptor().exports()) {
-                for (String target : export.targets()) {
-                    Optional<Module> optExportTargetModule = layer.findModule(target);
-                    if (optExportTargetModule.isEmpty()) {
-                        continue;
-                    }
-                    Module exportTargetModule = optExportTargetModule.get();
-                    if (module.isExported(export.source(), exportTargetModule)) {
-                        continue;
-                    }
-                    Modules.addExports(module, export.source(), exportTargetModule);
-                }
-            }
-        }
-    }
-
-    private static ClassLoader getSingleClassloader(ModuleLayer moduleLayer) {
-        ClassLoader singleClassloader = null;
-        for (Module module : moduleLayer.modules()) {
-            ClassLoader moduleClassLoader = module.getClassLoader();
-            if (singleClassloader == null) {
-                singleClassloader = moduleClassLoader;
-            } else {
-                VMError.guarantee(singleClassloader == moduleClassLoader);
-            }
-        }
-        return singleClassloader;
+        return ModuleLayer.defineModulesWithOneLoader(configuration, List.of(ModuleLayer.boot()), parent);
     }
 
     @Override
@@ -129,11 +90,8 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
     }
 
     @Override
-    public Optional<Module> findModule(String moduleName) {
-        if (moduleLayerForImageBuild == null) {
-            return Optional.empty();
-        }
-        return moduleLayerForImageBuild.findModule(moduleName);
+    public Optional<Object> findModule(String moduleName) {
+        return Optional.ofNullable(moduleFinder).flatMap(f -> f.apply(moduleName));
     }
 
     @Override
@@ -148,19 +106,13 @@ public class NativeImageClassLoaderSupport extends AbstractNativeImageClassLoade
         if (m.getClassLoader() != classLoader) {
             throw new IllegalArgumentException("Argument `module` is java.lang.Module from different ClassLoader");
         }
-        String moduleClassName = className;
-        if (moduleClassName.isEmpty()) {
-            moduleClassName = m.getDescriptor().mainClass().orElseThrow(
-                            () -> UserError.abort("module %s does not have a ModuleMainClass attribute, use -m <module>/<main-class>", m.getName()));
-        }
-        Class<?> clazz = Class.forName(m, moduleClassName);
+        Class<?> clazz = Class.forName(m, className);
         if (clazz == null) {
-            throw new ClassNotFoundException(moduleClassName);
+            throw new ClassNotFoundException(className);
         }
         return clazz;
     }
 
-    @Override
     ClassLoader getClassLoader() {
         return classLoader;
     }

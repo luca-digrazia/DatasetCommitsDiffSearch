@@ -219,7 +219,9 @@ public abstract class AbstractNativeImageClassLoaderSupport {
 
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                    assert !excludes.contains(file.getParent()) : "Visiting file '" + file + "' with excluded parent directory";
+                    if (excludes.contains(file.getParent())) {
+                        return FileVisitResult.SKIP_SIBLINGS;
+                    }
                     String fileName = root.relativize(file).toString();
                     if (fileName.endsWith(CLASS_EXTENSION)) {
                         executor.execute(() -> handleClassFileName(unversionedFileName(fileName), fileSystemSeparatorChar));
