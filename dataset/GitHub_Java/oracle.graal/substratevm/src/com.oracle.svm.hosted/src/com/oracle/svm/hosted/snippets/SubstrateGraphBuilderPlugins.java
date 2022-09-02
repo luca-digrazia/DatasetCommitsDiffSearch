@@ -101,17 +101,16 @@ import com.oracle.graal.pointsto.infrastructure.UniverseMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
+import com.oracle.graal.pointsto.nodes.AnalysisArraysCopyOfNode;
+import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionLoadNode;
+import com.oracle.graal.pointsto.nodes.AnalysisUnsafePartitionStoreNode;
 import com.oracle.graal.pointsto.nodes.ConvertUnknownValueNode;
-import com.oracle.graal.pointsto.nodes.UnsafePartitionLoadNode;
-import com.oracle.graal.pointsto.nodes.UnsafePartitionStoreNode;
 import com.oracle.svm.core.FrameAccess;
-import com.oracle.svm.core.OS;
 import com.oracle.svm.core.RuntimeAssertionsSupport;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.classinitialization.EnsureClassInitializedNode;
 import com.oracle.svm.core.config.ConfigurationValues;
-import com.oracle.svm.core.graal.GraalEdgeUnsafePartition;
 import com.oracle.svm.core.graal.jdk.ObjectCloneWithExceptionNode;
 import com.oracle.svm.core.graal.jdk.SubstrateArraysCopyOfWithExceptionNode;
 import com.oracle.svm.core.graal.jdk.SubstrateObjectCloneNode;
@@ -138,6 +137,7 @@ import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FallbackFeature;
+import com.oracle.svm.hosted.GraalEdgeUnsafePartition;
 import com.oracle.svm.hosted.meta.HostedField;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
@@ -154,14 +154,13 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
+/** Collection of debug options for SubstrateGraphBuilderPlugins. */
+class Options {
+    @Option(help = "Enable trace logging for dynamic proxy.")//
+    static final HostedOptionKey<Boolean> DynamicProxyTracing = new HostedOptionKey<>(false);
+}
+
 public class SubstrateGraphBuilderPlugins {
-
-    /** Collection of debug options for SubstrateGraphBuilderPlugins. */
-    public static class Options {
-        @Option(help = "Enable trace logging for dynamic proxy.")//
-        public static final HostedOptionKey<Boolean> DynamicProxyTracing = new HostedOptionKey<>(false);
-    }
-
     private static final String reflectionClass;
 
     static {
@@ -183,12 +182,12 @@ public class SubstrateGraphBuilderPlugins {
         registerAtomicUpdaterPlugins(metaAccess, snippetReflection, plugins, analysis);
         registerObjectPlugins(plugins);
         registerUnsafePlugins(metaAccess, plugins, snippetReflection, analysis);
-        registerKnownIntrinsicsPlugins(plugins);
+        registerKnownIntrinsicsPlugins(plugins, analysis);
         registerStackValuePlugins(snippetReflection, plugins);
-        registerArraysPlugins(plugins);
+        registerArraysPlugins(plugins, analysis);
         registerArrayPlugins(plugins, snippetReflection, analysis);
         registerClassPlugins(plugins, snippetReflection);
-        registerEdgesPlugins(metaAccess, plugins);
+        registerEdgesPlugins(metaAccess, plugins, analysis);
         registerJFRThrowablePlugins(plugins, replacements);
         registerJFREventTokenPlugins(plugins, replacements);
         registerVMConfigurationPlugins(snippetReflection, plugins);
@@ -655,20 +654,24 @@ public class SubstrateGraphBuilderPlugins {
         });
     }
 
-    private static void registerArraysPlugins(InvocationPlugins plugins) {
+    private static void registerArraysPlugins(InvocationPlugins plugins, boolean analysis) {
 
         Registration r = new Registration(plugins, Arrays.class).setAllowOverwrite(true);
 
         r.register2("copyOf", Object[].class, int.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode original, ValueNode newLength) {
-                /* Get the class from the original node. */
-                GetClassNode originalArrayType = b.add(new GetClassNode(original.stamp(NodeView.DEFAULT), b.nullCheckedValue(original)));
+                if (analysis) {
+                    b.addPush(JavaKind.Object, new AnalysisArraysCopyOfNode(b.getInvokeReturnStamp(b.getAssumptions()).getTrustedStamp(), original, newLength));
+                } else {
+                    /* Get the class from the original node. */
+                    GetClassNode originalArrayType = b.add(new GetClassNode(original.stamp(NodeView.DEFAULT), b.nullCheckedValue(original)));
 
-                ValueNode originalLength = b.add(ArrayLengthNode.create(original, b.getConstantReflection()));
-                Stamp stamp = b.getInvokeReturnStamp(b.getAssumptions()).getTrustedStamp().join(original.stamp(NodeView.DEFAULT));
+                    ValueNode originalLength = b.add(ArrayLengthNode.create(original, b.getConstantReflection()));
+                    Stamp stamp = b.getInvokeReturnStamp(b.getAssumptions()).getTrustedStamp().join(original.stamp(NodeView.DEFAULT));
 
-                b.addPush(JavaKind.Object, new SubstrateArraysCopyOfWithExceptionNode(stamp, original, originalLength, newLength, originalArrayType, b.bci()));
+                    b.addPush(JavaKind.Object, new SubstrateArraysCopyOfWithExceptionNode(stamp, original, originalLength, newLength, originalArrayType, b.bci()));
+                }
                 return true;
             }
         });
@@ -676,23 +679,32 @@ public class SubstrateGraphBuilderPlugins {
         r.register3("copyOf", Object[].class, int.class, Class.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode original, ValueNode newLength, ValueNode newArrayType) {
-                Stamp stamp;
-                if (newArrayType.isConstant()) {
-                    ResolvedJavaType newType = b.getConstantReflection().asJavaType(newArrayType.asConstant());
-                    stamp = StampFactory.objectNonNull(TypeReference.createExactTrusted(newType));
+                if (analysis) {
+                    /*
+                     * If the new array type comes from a GetClassNode or is a constant we can infer
+                     * the concrete type of the new array, otherwise we conservatively assume that
+                     * the new array can have any of the instantiated array types.
+                     */
+                    b.addPush(JavaKind.Object, new AnalysisArraysCopyOfNode(b.getInvokeReturnStamp(b.getAssumptions()).getTrustedStamp(), original, newLength, newArrayType));
                 } else {
-                    stamp = b.getInvokeReturnStamp(b.getAssumptions()).getTrustedStamp();
-                }
+                    Stamp stamp;
+                    if (newArrayType.isConstant()) {
+                        ResolvedJavaType newType = b.getConstantReflection().asJavaType(newArrayType.asConstant());
+                        stamp = StampFactory.objectNonNull(TypeReference.createExactTrusted(newType));
+                    } else {
+                        stamp = b.getInvokeReturnStamp(b.getAssumptions()).getTrustedStamp();
+                    }
 
-                ValueNode originalLength = b.add(ArrayLengthNode.create(original, b.getConstantReflection()));
-                b.addPush(JavaKind.Object, new SubstrateArraysCopyOfWithExceptionNode(stamp, original, originalLength, newLength, newArrayType, b.bci()));
+                    ValueNode originalLength = b.add(ArrayLengthNode.create(original, b.getConstantReflection()));
+                    b.addPush(JavaKind.Object, new SubstrateArraysCopyOfWithExceptionNode(stamp, original, originalLength, newLength, newArrayType, b.bci()));
+                }
                 return true;
             }
         });
 
     }
 
-    private static void registerKnownIntrinsicsPlugins(InvocationPlugins plugins) {
+    private static void registerKnownIntrinsicsPlugins(InvocationPlugins plugins, boolean analysis) {
         Registration r = new Registration(plugins, KnownIntrinsics.class);
         r.register0("heapBase", new InvocationPlugin() {
             @Override
@@ -785,14 +797,11 @@ public class SubstrateGraphBuilderPlugins {
                 ResolvedJavaType type = typeValue(b.getConstantReflection(), b, targetMethod, typeNode, "type");
                 TypeReference typeRef = TypeReference.createTrustedWithoutAssumptions(type);
                 Stamp stamp = StampFactory.object(typeRef);
-
-                /* The type cast for Graal optimization phases. */
-                ValueNode piNode = PiNode.create(object, stamp);
-                /*
-                 * The special handling node for static analysis. This node removes itself during
-                 * compilation.
-                 */
-                b.addPush(JavaKind.Object, new ConvertUnknownValueNode(piNode, stamp));
+                if (analysis) {
+                    b.addPush(JavaKind.Object, new ConvertUnknownValueNode(object, stamp));
+                } else {
+                    b.addPush(JavaKind.Object, PiNode.create(object, stamp));
+                }
                 return true;
             }
         });
@@ -914,24 +923,27 @@ public class SubstrateGraphBuilderPlugins {
         });
     }
 
-    private static void registerEdgesPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins) {
-        Registration r = new Registration(plugins, Edges.class).setAllowOverwrite(true);
-        for (Class<?> c : new Class<?>[]{Node.class, NodeList.class}) {
-            r.register2("get" + c.getSimpleName() + "Unsafe", Node.class, long.class, new InvocationPlugin() {
-                @Override
-                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode node, ValueNode offset) {
-                    b.addPush(JavaKind.Object, new UnsafePartitionLoadNode(node, offset, JavaKind.Object, LocationIdentity.any(), GraalEdgeUnsafePartition.get(), metaAccess.lookupJavaType(c)));
-                    return true;
-                }
-            });
+    private static void registerEdgesPlugins(MetaAccessProvider metaAccess, InvocationPlugins plugins, boolean analysis) {
+        if (analysis) {
+            Registration r = new Registration(plugins, Edges.class).setAllowOverwrite(true);
+            for (Class<?> c : new Class<?>[]{Node.class, NodeList.class}) {
+                r.register2("get" + c.getSimpleName() + "Unsafe", Node.class, long.class, new InvocationPlugin() {
+                    @Override
+                    public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode node, ValueNode offset) {
+                        b.addPush(JavaKind.Object, new AnalysisUnsafePartitionLoadNode(node, offset, JavaKind.Object, //
+                                        LocationIdentity.any(), GraalEdgeUnsafePartition.get(), metaAccess.lookupJavaType(c)));
+                        return true;
+                    }
+                });
 
-            r.register3("put" + c.getSimpleName() + "Unsafe", Node.class, long.class, c, new InvocationPlugin() {
-                @Override
-                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode node, ValueNode offset, ValueNode value) {
-                    b.add(new UnsafePartitionStoreNode(node, offset, value, JavaKind.Object, LocationIdentity.any(), GraalEdgeUnsafePartition.get(), metaAccess.lookupJavaType(c)));
-                    return true;
-                }
-            });
+                r.register3("put" + c.getSimpleName() + "Unsafe", Node.class, long.class, c, new InvocationPlugin() {
+                    @Override
+                    public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode node, ValueNode offset, ValueNode value) {
+                        b.add(new AnalysisUnsafePartitionStoreNode(node, offset, value, JavaKind.Object, LocationIdentity.any(), GraalEdgeUnsafePartition.get(), metaAccess.lookupJavaType(c)));
+                        return true;
+                    }
+                });
+            }
         }
     }
 
@@ -1011,23 +1023,21 @@ public class SubstrateGraphBuilderPlugins {
         });
     }
 
-    /**
-     * To prevent AWT linkage error on {@link OS#LINUX} that happens with 'awt_headless' in headless
-     * mode, we eliminate native methods that depend on 'awt_xawt' library in the call-tree.
+    /*
+     * To prevent AWT linkage error that happens with 'awt_headless' in headless mode, we eliminate
+     * native methods that depend on 'awt_xawt' library in the call-tree.
      */
     private static void registerAWTPlugins(InvocationPlugins plugins) {
-        if (OS.getCurrent() == OS.LINUX) {
-            Registration r = new Registration(plugins, GraphicsEnvironment.class);
-            r.register0("isHeadless", new InvocationPlugin() {
-                @SuppressWarnings("unchecked")
-                @Override
-                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                    boolean isHeadless = GraphicsEnvironment.isHeadless();
-                    b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(isHeadless));
-                    return true;
-                }
-            });
-        }
+        Registration r = new Registration(plugins, GraphicsEnvironment.class);
+        r.register0("isHeadless", new InvocationPlugin() {
+            @SuppressWarnings("unchecked")
+            @Override
+            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
+                boolean isHeadless = GraphicsEnvironment.isHeadless();
+                b.addPush(JavaKind.Boolean, ConstantNode.forBoolean(isHeadless));
+                return true;
+            }
+        });
     }
 
     private static void registerSizeOfPlugins(SnippetReflectionProvider snippetReflection, InvocationPlugins plugins) {
