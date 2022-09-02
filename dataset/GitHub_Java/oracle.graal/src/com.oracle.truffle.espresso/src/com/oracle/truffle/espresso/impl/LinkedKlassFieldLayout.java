@@ -68,26 +68,20 @@ final class LinkedKlassFieldLayout {
 
     @CompilerDirectives.CompilationFinal(dimensions = 2) //
     final int[][] leftoverHoles;
-    final int instanceToAlloc;
-    final int staticToAlloc;
-    final int primInstanceLastOffset;
-    final int primStaticLastOffset;
+
+    final int primitiveFieldTotalByteCount;
+    final int primitiveStaticFieldTotalByteCount;
     final int fieldTableLength;
     final int objectFields;
     final int staticObjectFields;
 
-    private LinkedKlassFieldLayout(LinkedField[] instanceFields, LinkedField[] staticFields, int[][] leftoverHoles,
-                    int instanceToAlloc, int staticToAlloc,
-                    int primInstanceLastOffset, int primStaticLastOffset,
-                    int fieldTableLength,
-                    int objectFields, int staticObjectFields) {
+    private LinkedKlassFieldLayout(LinkedField[] instanceFields, LinkedField[] staticFields, int[][] leftoverHoles, int primitiveFieldTotalByteCount, int primitiveStaticFieldTotalByteCount,
+                    int fieldTableLength, int objectFields, int staticObjectFields) {
         this.instanceFields = instanceFields;
         this.staticFields = staticFields;
         this.leftoverHoles = leftoverHoles;
-        this.instanceToAlloc = instanceToAlloc;
-        this.staticToAlloc = staticToAlloc;
-        this.primInstanceLastOffset = primInstanceLastOffset;
-        this.primStaticLastOffset = primStaticLastOffset;
+        this.primitiveFieldTotalByteCount = primitiveFieldTotalByteCount;
+        this.primitiveStaticFieldTotalByteCount = primitiveStaticFieldTotalByteCount;
         this.fieldTableLength = fieldTableLength;
         this.objectFields = objectFields;
         this.staticObjectFields = staticObjectFields;
@@ -179,8 +173,8 @@ final class LinkedKlassFieldLayout {
         int nextStaticObjectFieldIndex;
 
         if (superKlass != null) {
-            superTotalInstanceByteCount = superKlass.getPrimitiveInstanceFieldLastOffset();
-            superTotalStaticByteCount = superKlass.getPrimitiveStaticFieldLastOffset();
+            superTotalInstanceByteCount = superKlass.getPrimitiveFieldTotalByteCount();
+            superTotalStaticByteCount = superKlass.getPrimitiveStaticFieldTotalByteCount();
             leftoverHoles = superKlass.getLeftoverHoles();
             nextFieldTableSlot = superKlass.getFieldTableLength();
             nextObjectFieldIndex = superKlass.getObjectFieldsCount();
@@ -234,28 +228,15 @@ final class LinkedKlassFieldLayout {
             instanceFields[instanceFieldInsertionIndex++] = hiddenField;
         }
 
-        int instancePrimToAlloc = getSizeToAlloc(instancePrimitiveFieldIndexes);
-        int staticPrimToAlloc = getSizeToAlloc(staticPrimitiveFieldIndexes);
-
         return new LinkedKlassFieldLayout(
                         instanceFields,
                         staticFields,
                         instancePrimitiveFieldIndexes.schedule.nextLeftoverHoles,
-                        instancePrimToAlloc,
-                        staticPrimToAlloc,
                         instancePrimitiveFieldIndexes.offsets[N_PRIMITIVES - 1],
                         staticPrimitiveFieldIndexes.offsets[N_PRIMITIVES - 1],
-                        nextFieldTableSlot, nextObjectFieldIndex, nextStaticObjectFieldIndex);
-    }
-
-    private static int getSizeToAlloc(PrimitiveFieldIndexes fieldIndexes) {
-        int toAlloc = fieldIndexes.offsets[N_PRIMITIVES - 1] - BASE;
-        assert toAlloc >= 0;
-        if (toAlloc == ALIGNMENT_CORRECTION && fieldIndexes.schedule.isEmpty()) {
-            // No need to allocate primitive field array if there is no such fields.
-            toAlloc = 0;
-        }
-        return toAlloc;
+                        nextFieldTableSlot,
+                        nextObjectFieldIndex,
+                        nextStaticObjectFieldIndex);
     }
 
     private static int indexFromKind(JavaKind kind) {
@@ -428,10 +409,6 @@ final class LinkedKlassFieldLayout {
 
         List<ScheduleEntry> schedule;
         int[][] nextLeftoverHoles;
-
-        boolean isEmpty() {
-            return schedule.isEmpty();
-        }
 
         static FillingSchedule create(int holeStart, int holeEnd, int[] counts, int[][] leftoverHoles) {
             List<ScheduleEntry> schedule = new ArrayList<>();
