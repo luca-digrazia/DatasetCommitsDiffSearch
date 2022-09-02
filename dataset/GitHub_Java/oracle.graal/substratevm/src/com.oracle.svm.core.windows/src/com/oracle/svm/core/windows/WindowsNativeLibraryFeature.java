@@ -119,10 +119,13 @@ class WindowsNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
 
         private final String canonicalIdentifier;
         private final boolean builtin;
-        private HMODULE dlhandle;
-        private boolean loaded = false;
+        private HMODULE dlhandle = WordFactory.nullPointer();
 
         WindowsNativeLibrary(String canonicalIdentifier, boolean builtin) {
+            // Make sure the jvm.lib is available for linking
+            // Need a better place to put this.
+            Jvm.initialize();
+
             this.canonicalIdentifier = canonicalIdentifier;
             this.builtin = builtin;
         }
@@ -139,16 +142,6 @@ class WindowsNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
 
         @Override
         public boolean load() {
-            assert !loaded;
-            loaded = doLoad();
-            return loaded;
-        }
-
-        private boolean doLoad() {
-            // Make sure the jvm.lib is available for linking
-            // Need a better place to put this.
-            Jvm.initialize();
-
             if (builtin) {
                 return true;
             }
@@ -165,18 +158,15 @@ class WindowsNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
         }
 
         @Override
-        public boolean isLoaded() {
-            return loaded;
-        }
-
-        @Override
         public PointerBase findSymbol(String name) {
             if (builtin) {
-                return findBuiltinSymbol(name);
+                PointerBase addr = findBuiltinSymbol(name);
+                return (addr);
             }
             assert dlhandle.isNonNull();
             try (CCharPointerHolder symbol = CTypeConversion.toCString(name)) {
-                return WinBase.GetProcAddress(dlhandle, symbol.get());
+                PointerBase addr = WinBase.GetProcAddress(dlhandle, symbol.get());
+                return (addr);
             }
         }
     }

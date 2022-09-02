@@ -222,11 +222,6 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
      * isolate, which is coordinated via this variable.
      */
     private static final CGlobalData<PointerBase> FIRST_ISOLATE_INIT_STATE = CGlobalDataFactory.createWord();
-    private static boolean isolateInitialized;
-
-    public static boolean isIsolateInitialized() {
-        return isolateInitialized;
-    }
 
     @SubstrateForeignCallTarget
     private static int initializeIsolate() {
@@ -258,8 +253,6 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
         if (!success) {
             return CEntryPointErrors.ISOLATE_INITIALIZATION_FAILED;
         }
-        assert !isolateInitialized;
-        isolateInitialized = true;
 
         if (UseDedicatedVMOperationThread.getValue()) {
             VMOperationControl.startVMOperationThread();
