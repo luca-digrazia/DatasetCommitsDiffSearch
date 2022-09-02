@@ -106,8 +106,6 @@ import org.graalvm.compiler.nodes.java.NewInstanceNode;
 import org.graalvm.compiler.nodes.java.NewMultiArrayNode;
 import org.graalvm.compiler.nodes.java.StoreFieldNode;
 import org.graalvm.compiler.nodes.java.StoreIndexedNode;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
-import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.util.GraphUtil;
@@ -311,27 +309,22 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
         @Override
         public StampProvider getStampProvider() {
-            return providers.getStampProvider();
+            return stampProvider;
         }
 
         @Override
         public MetaAccessProvider getMetaAccess() {
-            return providers.getMetaAccess();
+            return metaAccess;
         }
 
         @Override
         public ConstantReflectionProvider getConstantReflection() {
-            return providers.getConstantReflection();
+            return constantReflection;
         }
 
         @Override
         public ConstantFieldProvider getConstantFieldProvider() {
-            return providers.getConstantFieldProvider();
-        }
-
-        @Override
-        public Replacements getReplacements() {
-            return providers.getReplacements();
+            return constantFieldProvider;
         }
 
         @Override
@@ -572,11 +565,11 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     private final ResolvedJavaMethod callInlinedMethod;
     protected final SourceLanguagePositionProvider sourceLanguagePositionProvider;
 
-    public PEGraphDecoder(Architecture architecture, StructuredGraph graph, CoreProviders providers, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins,
-                    InlineInvokePlugin[] inlineInvokePlugins,
+    public PEGraphDecoder(Architecture architecture, StructuredGraph graph, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
+                    StampProvider stampProvider, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins, InlineInvokePlugin[] inlineInvokePlugins,
                     ParameterPlugin parameterPlugin,
                     NodePlugin[] nodePlugins, ResolvedJavaMethod callInlinedMethod, SourceLanguagePositionProvider sourceLanguagePositionProvider) {
-        super(architecture, graph, providers, true);
+        super(architecture, graph, metaAccess, constantReflection, constantFieldProvider, stampProvider, true);
         this.loopExplosionPlugin = loopExplosionPlugin;
         this.invocationPlugins = invocationPlugins;
         this.inlineInvokePlugins = inlineInvokePlugins;

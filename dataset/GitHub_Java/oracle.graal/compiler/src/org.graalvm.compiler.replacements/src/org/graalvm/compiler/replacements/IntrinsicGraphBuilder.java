@@ -51,8 +51,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin.Receiver;
-import org.graalvm.compiler.nodes.spi.CoreProviders;
-import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.options.OptionValues;
 
@@ -72,7 +70,10 @@ import jdk.vm.ci.meta.Signature;
  */
 public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
 
-    protected final CoreProviders providers;
+    protected final MetaAccessProvider metaAccess;
+    protected final ConstantReflectionProvider constantReflection;
+    protected final ConstantFieldProvider constantFieldProvider;
+    protected final StampProvider stampProvider;
     protected final StructuredGraph graph;
     protected final Bytecode code;
     protected final ResolvedJavaMethod method;
@@ -81,12 +82,17 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
     protected ValueNode[] arguments;
     protected ValueNode returnValue;
 
-    public IntrinsicGraphBuilder(OptionValues options, DebugContext debug, CoreProviders providers, Bytecode code, int invokeBci) {
-        this(options, debug, providers, code, invokeBci, AllowAssumptions.YES);
+    public IntrinsicGraphBuilder(OptionValues options, DebugContext debug, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
+                    StampProvider stampProvider, Bytecode code, int invokeBci) {
+        this(options, debug, metaAccess, constantReflection, constantFieldProvider, stampProvider, code, invokeBci, AllowAssumptions.YES);
     }
 
-    protected IntrinsicGraphBuilder(OptionValues options, DebugContext debug, CoreProviders providers, Bytecode code, int invokeBci, AllowAssumptions allowAssumptions) {
-        this.providers = providers;
+    protected IntrinsicGraphBuilder(OptionValues options, DebugContext debug, MetaAccessProvider metaAccess, ConstantReflectionProvider constantReflection, ConstantFieldProvider constantFieldProvider,
+                    StampProvider stampProvider, Bytecode code, int invokeBci, AllowAssumptions allowAssumptions) {
+        this.metaAccess = metaAccess;
+        this.constantReflection = constantReflection;
+        this.constantFieldProvider = constantFieldProvider;
+        this.stampProvider = stampProvider;
         this.code = code;
         this.method = code.getMethod();
         this.graph = new StructuredGraph.Builder(options, debug, allowAssumptions).method(method).setIsSubstitution(true).trackNodeSourcePosition(true).build();
@@ -169,27 +175,22 @@ public class IntrinsicGraphBuilder implements GraphBuilderContext, Receiver {
 
     @Override
     public StampProvider getStampProvider() {
-        return providers.getStampProvider();
+        return stampProvider;
     }
 
     @Override
     public MetaAccessProvider getMetaAccess() {
-        return providers.getMetaAccess();
+        return metaAccess;
     }
 
     @Override
     public ConstantReflectionProvider getConstantReflection() {
-        return providers.getConstantReflection();
+        return constantReflection;
     }
 
     @Override
     public ConstantFieldProvider getConstantFieldProvider() {
-        return providers.getConstantFieldProvider();
-    }
-
-    @Override
-    public Replacements getReplacements() {
-        return providers.getReplacements();
+        return constantFieldProvider;
     }
 
     @Override
