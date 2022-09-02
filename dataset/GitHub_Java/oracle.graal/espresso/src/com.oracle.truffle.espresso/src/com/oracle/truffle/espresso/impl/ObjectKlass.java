@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,7 +23,6 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.espresso.EspressoOptions.VerifyMode;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINALIZER;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_SUPER;
 import static com.oracle.truffle.espresso.classfile.Constants.JVM_ACC_WRITTEN_FLAGS;
@@ -33,6 +32,7 @@ import java.lang.ref.WeakReference;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -46,12 +46,15 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
+import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
 import com.oracle.truffle.espresso.classfile.attributes.ConstantValueAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.EnclosingMethodAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.InnerClassesAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.NestHostAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.NestMembersAttribute;
+import com.oracle.truffle.espresso.classfile.attributes.PermittedSubclassesAttribute;
+import com.oracle.truffle.espresso.classfile.attributes.RecordAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SignatureAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.SourceDebugExtensionAttribute;
 import com.oracle.truffle.espresso.descriptors.Names;
@@ -59,19 +62,22 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
 import com.oracle.truffle.espresso.impl.PackageTable.PackageEntry;
+import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
-import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
+import com.oracle.truffle.espresso.jdwp.impl.JDWP;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.redefinition.ChangePacket;
+import com.oracle.truffle.espresso.redefinition.ClassRedefinition;
+import com.oracle.truffle.espresso.redefinition.DetectedChange;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Host;
+import com.oracle.truffle.espresso.substitutions.JavaType;
 import com.oracle.truffle.espresso.verifier.MethodVerifier;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
@@ -120,10 +126,10 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal private int computedModifiers = -1;
 
-    @CompilationFinal volatile RedefinitionCache redefineCache;
+    @CompilationFinal volatile KlassVersion klassVersion;
 
     // used for class redefintion when refreshing vtables etc.
-    private ArrayList<WeakReference<ObjectKlass>> subTypes;
+    private volatile ArrayList<WeakReference<ObjectKlass>> subTypes;
 
     public static final int LOADED = 0;
     public static final int LINKED = 1;
@@ -138,13 +144,15 @@ public final class ObjectKlass extends Klass {
     }
 
     public ObjectKlass(EspressoContext context, LinkedKlass linkedKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, StaticObject classLoader) {
-        this(context, linkedKlass, superKlass, superInterfaces, classLoader, null);
+        this(context, linkedKlass, superKlass, superInterfaces, classLoader, ClassRegistry.ClassDefinitionInfo.EMPTY);
     }
 
-    public ObjectKlass(EspressoContext context, LinkedKlass linkedKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, StaticObject classLoader, Klass hostKlass) {
+    public ObjectKlass(EspressoContext context, LinkedKlass linkedKlass, ObjectKlass superKlass, ObjectKlass[] superInterfaces, StaticObject classLoader, ClassRegistry.ClassDefinitionInfo info) {
         super(context, linkedKlass.getName(), linkedKlass.getType(), superKlass, superInterfaces, linkedKlass.getFlags());
 
-        this.hostKlass = hostKlass;
+        this.nest = info.dynamicNest;
+        this.hostKlass = info.hostKlass;
+
         // TODO(peterssen): Make writable copy.
         RuntimeConstantPool pool = new RuntimeConstantPool(getContext(), linkedKlass.getConstantPool(), classLoader);
         definingClassLoader = pool.getClassLoader();
@@ -159,11 +167,11 @@ public final class ObjectKlass extends Klass {
         System.arraycopy(skFieldTable, 0, fieldTable, 0, skFieldTable.length);
         localFieldTableIndex = skFieldTable.length;
         for (int i = 0; i < lkInstanceFields.length; i++) {
-            Field instanceField = new Field(this, lkInstanceFields[i], lkInstanceFields[i].isHidden());
+            Field instanceField = new Field(this, lkInstanceFields[i], pool);
             fieldTable[localFieldTableIndex + i] = instanceField;
         }
         for (int i = 0; i < lkStaticFields.length; i++) {
-            Field staticField = new Field(this, lkStaticFields[i], false);
+            Field staticField = new Field(this, lkStaticFields[i], pool);
             staticFieldTable[i] = staticField;
         }
 
@@ -204,20 +212,44 @@ public final class ObjectKlass extends Klass {
         for (ObjectKlass superInterface : superInterfaces) {
             superInterface.addSubType(this);
         }
-        this.redefineCache = new RedefinitionCache(pool, linkedKlass, methods, mirandaMethods, vtable, itable, iKlassTable);
+        this.klassVersion = new KlassVersion(pool, linkedKlass, methods, mirandaMethods, vtable, itable, iKlassTable);
+
+        // Only forcefully initialization of the mirror if necessary
+        if (info.protectionDomain != null && !StaticObject.isNull(info.protectionDomain)) {
+            // Protection domain should not be host null, and will be initialized to guest null on
+            // mirror creation.
+            getMeta().HIDDEN_PROTECTION_DOMAIN.setHiddenObject(mirror(), info.protectionDomain);
+        }
+        if (info.classData != null) {
+            getMeta().java_lang_Class_classData.setHiddenObject(mirror(), info.classData);
+        }
+        if (!info.addedToRegistry()) {
+            initSelfReferenceInPool();
+        }
+
         this.initState = LINKED;
         assert verifyTables();
     }
 
     private void addSubType(ObjectKlass objectKlass) {
-        if (subTypes == null) {
-            subTypes = new ArrayList<>(1);
+        // We only build subtypes model iff jdwp is enabled
+        if (getContext().JDWPOptions != null) {
+            if (subTypes == null) {
+                synchronized (this) {
+                    // double-checked locking
+                    if (subTypes == null) {
+                        subTypes = new ArrayList<>(1);
+                    }
+                }
+            }
+            synchronized (subTypes) {
+                subTypes.add(new WeakReference<>(objectKlass));
+            }
         }
-        subTypes.add(new WeakReference<>(objectKlass));
     }
 
     private boolean verifyTables() {
-        Method[] vtable = getRedefineCache().vtable;
+        Method[] vtable = getKlassVersion().vtable;
         if (vtable != null) {
             for (int i = 0; i < vtable.length; i++) {
                 if (isInterface()) {
@@ -290,9 +322,9 @@ public final class ObjectKlass extends Klass {
 
                     initState = PREPARED;
                     if (getContext().isMainThreadCreated()) {
-                        if (getContext().getJDWPListener() != null) {
+                        if (getContext().shouldReportVMEvents()) {
                             prepareThread = getContext().getGuestThreadFromHost(Thread.currentThread());
-                            getContext().getJDWPListener().classPrepared(this, prepareThread);
+                            getContext().reportClassPrepared(this, prepareThread);
                         }
                     }
                     if (!isInterface()) {
@@ -322,7 +354,7 @@ public final class ObjectKlass extends Klass {
                     StaticObject cause = e.getExceptionObject();
                     Meta meta = getMeta();
                     if (!InterpreterToVM.instanceOf(cause, meta.java_lang_Error)) {
-                        throw Meta.throwExceptionWithCause(meta.java_lang_ExceptionInInitializerError, cause);
+                        throw meta.throwExceptionWithCause(meta.java_lang_ExceptionInInitializerError, cause);
                     } else {
                         throw e;
                     }
@@ -430,13 +462,13 @@ public final class ObjectKlass extends Klass {
     }
 
     @Override
-    public @Host(ClassLoader.class) StaticObject getDefiningClassLoader() {
+    public @JavaType(ClassLoader.class) StaticObject getDefiningClassLoader() {
         return definingClassLoader;
     }
 
     @Override
     public RuntimeConstantPool getConstantPool() {
-        return getRedefineCache().pool;
+        return getKlassVersion().pool;
     }
 
     @Override
@@ -466,12 +498,12 @@ public final class ObjectKlass extends Klass {
     }
 
     Method[] getMirandaMethods() {
-        return getRedefineCache().mirandaMethods;
+        return getKlassVersion().mirandaMethods;
     }
 
     @Override
     public Method[] getDeclaredMethods() {
-        return getRedefineCache().declaredMethods;
+        return getKlassVersion().declaredMethods;
     }
 
     @Override
@@ -506,7 +538,7 @@ public final class ObjectKlass extends Klass {
     }
 
     public LinkedKlass getLinkedKlass() {
-        return getRedefineCache().linkedKlass;
+        return getKlassVersion().linkedKlass;
     }
 
     public Attribute getRuntimeVisibleAnnotations() {
@@ -529,7 +561,8 @@ public final class ObjectKlass extends Klass {
                 Klass host = thisPool.resolvedKlassAt(this, nestHost.hostClassIndex);
 
                 if (!host.nestMembersCheck(this)) {
-                    throw Meta.throwException(getMeta().java_lang_IncompatibleClassChangeError);
+                    Meta meta = getMeta();
+                    throw meta.throwException(meta.java_lang_IncompatibleClassChangeError);
                 }
                 nest = host;
             }
@@ -557,6 +590,37 @@ public final class ObjectKlass extends Klass {
         return false;
     }
 
+    public boolean isSealed() {
+        PermittedSubclassesAttribute permittedSubclasses = (PermittedSubclassesAttribute) getAttribute(PermittedSubclassesAttribute.NAME);
+        return permittedSubclasses != null && permittedSubclasses.getClasses().length > 0;
+    }
+
+    public boolean permittedSubclassCheck(ObjectKlass k) {
+        CompilerAsserts.neverPartOfCompilation();
+        if (!getContext().getJavaVersion().java17OrLater()) {
+            return true;
+        }
+        PermittedSubclassesAttribute permittedSubclasses = (PermittedSubclassesAttribute) getAttribute(PermittedSubclassesAttribute.NAME);
+        if (permittedSubclasses == null) {
+            return true;
+        }
+        if (module() != k.module()) {
+            return false;
+        }
+        if (!isPublic() && !sameRuntimePackage(k)) {
+            return false;
+        }
+        RuntimeConstantPool pool = getConstantPool();
+        for (int index : permittedSubclasses.getClasses()) {
+            if (k.getName().equals(pool.classAt(index).getName(pool))) {
+                // There should be no need to resolve: the previous checks guarantees it would
+                // resolve to k, but resolving here would cause circularity errors.
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public Klass[] getNestMembers() {
         NestMembersAttribute nestMembers = (NestMembersAttribute) getAttribute(NestMembersAttribute.NAME);
@@ -564,12 +628,19 @@ public final class ObjectKlass extends Klass {
             return EMPTY_ARRAY;
         }
         RuntimeConstantPool pool = getConstantPool();
-        Klass[] result = new Klass[nestMembers.getClasses().length];
-        for (int i = 0; i < result.length; i++) {
+        ArrayList<Klass> klasses = new ArrayList<>();
+        for (int i = 0; i < nestMembers.getClasses().length; i++) {
             int index = nestMembers.getClasses()[i];
-            result[i] = pool.resolvedKlassAt(this, index);
+            try {
+                klasses.add(pool.resolvedKlassAt(this, index));
+            } catch (EspressoException e) {
+                /*
+                 * Don't allow badly constructed nest members to break execution here, only report
+                 * well-constructed entries.
+                 */
+            }
         }
-        return result;
+        return klasses.toArray(Klass.EMPTY_ARRAY);
     }
 
     Field lookupFieldTableImpl(int slot) {
@@ -582,26 +653,26 @@ public final class ObjectKlass extends Klass {
         return staticFieldTable[slot];
     }
 
-    public Field lookupHiddenField(Symbol<Name> fieldName) {
+    public Field requireHiddenField(Symbol<Name> fieldName) {
         // Hidden fields are (usually) located at the end of the field table.
-        for (int i = fieldTable.length - 1; i > 0; i--) {
+        for (int i = fieldTable.length - 1; i >= 0; i--) {
             Field f = fieldTable[i];
             if (f.getName() == fieldName && f.isHidden()) {
                 return f;
             }
         }
-        throw EspressoError.shouldNotReachHere();
+        throw EspressoError.shouldNotReachHere("Missing hidden field ", fieldName, " in ", this);
     }
 
     // Exposed to LookupVirtualMethodNode
     public Method[] getVTable() {
         assert !isInterface();
-        return getRedefineCache().vtable;
+        return getKlassVersion().vtable;
     }
 
     Method[] getInterfaceMethodsTable() {
         assert isInterface();
-        return getRedefineCache().vtable;
+        return getKlassVersion().vtable;
     }
 
     Method vtableLookupImpl(int vtableIndex) {
@@ -614,16 +685,17 @@ public final class ObjectKlass extends Klass {
         try {
             return getItable()[fastLookup(interfKlass, getiKlassTable())][index];
         } catch (IndexOutOfBoundsException e) {
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_IncompatibleClassChangeError, "Class " + getName() + " does not implement interface " + interfKlass.getName());
+            Meta meta = getMeta();
+            throw meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "Class " + getName() + " does not implement interface " + interfKlass.getName());
         }
     }
 
     Method[][] getItable() {
-        return getRedefineCache().itable;
+        return getKlassVersion().itable;
     }
 
     ObjectKlass[] getiKlassTable() {
-        return getRedefineCache().iKlassTable;
+        return getKlassVersion().iKlassTable;
     }
 
     int findVirtualMethodIndex(Symbol<Name> methodName, Symbol<Signature> signature, Klass subClass) {
@@ -804,52 +876,48 @@ public final class ObjectKlass extends Klass {
 
     private void verifyImpl() {
         CompilerAsserts.neverPartOfCompilation();
-        VerifyMode mode = getContext().Verify;
-        if (mode != VerifyMode.NONE) {
-            // Do not verify BootClassLoader classes, they are trusted.
-            if (mode == VerifyMode.ALL || !StaticObject.isNull(getDefiningClassLoader())) {
-                Meta meta = getMeta();
-                if (getSuperKlass() != null && getSuperKlass().isFinalFlagSet()) {
-                    throw Meta.throwException(meta.java_lang_VerifyError);
-                }
-                if (getSuperKlass() != null) {
-                    getSuperKlass().verify();
-                }
-                for (ObjectKlass interf : getSuperInterfaces()) {
-                    interf.verify();
-                }
-                if (meta.sun_reflect_MagicAccessorImpl.isAssignableFrom(this)) {
-                    // Hotspot comment:
-                    // As of the fix for 4486457 we disable verification for all of the
-                    // dynamically-generated bytecodes associated with the 1.4
-                    // reflection implementation, not just those associated with
-                    // sun/reflect/SerializationConstructorAccessor.
-                    // NOTE: this is called too early in the bootstrapping process to be
-                    // guarded by Universe::is_gte_jdk14x_version()/UseNewReflection.
-                    // Also for lambda generated code, gte jdk8
-                    return;
-                }
-                for (Method m : getDeclaredMethods()) {
-                    try {
-                        MethodVerifier.verify(m);
-                        // The verifier convention use host exceptions and they must be
-                        // explicitly converted.
-                        // This is acceptable since these particular set of host exceptions are not
-                        // expected at all e.g. we don't expect any host
-                        // VerifyError/ClassFormatError to be thrown by the host itself (at this
-                        // point, or even ever at all).
-                    } catch (VerifyError e) {
-                        throw Meta.throwExceptionWithMessage(meta.java_lang_VerifyError, e.getMessage());
-                    } catch (ClassFormatError e) {
-                        throw Meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, e.getMessage());
-                    } catch (IncompatibleClassChangeError e) {
-                        throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, e.getMessage());
-                    } catch (NoClassDefFoundError e) {
-                        throw Meta.throwExceptionWithMessage(meta.java_lang_NoClassDefFoundError, e.getMessage());
+        if (getContext().needsVerify(getDefiningClassLoader())) {
+            Meta meta = getMeta();
+            if (getSuperKlass() != null && getSuperKlass().isFinalFlagSet()) {
+                throw meta.throwException(meta.java_lang_VerifyError);
+            }
+            if (getSuperKlass() != null) {
+                getSuperKlass().verify();
+            }
+            for (ObjectKlass interf : getSuperInterfaces()) {
+                interf.verify();
+            }
+            if (meta.sun_reflect_MagicAccessorImpl.isAssignableFrom(this)) {
+                /*
+                 * Hotspot comment:
+                 * 
+                 * As of the fix for 4486457 we disable verification for all of the
+                 * dynamically-generated bytecodes associated with the 1.4 reflection
+                 * implementation, not just those associated with
+                 * sun/reflect/SerializationConstructorAccessor. NOTE: this is called too early in
+                 * the bootstrapping process to be guarded by
+                 * Universe::is_gte_jdk14x_version()/UseNewReflection. Also for lambda generated
+                 * code, gte jdk8
+                 */
+                return;
+            }
+            for (Method m : getDeclaredMethods()) {
+                try {
+                    MethodVerifier.verify(m);
+                } catch (MethodVerifier.VerifierError e) {
+                    String message = String.format("Verification for class `%s` failed for method `%s`: \n\t%s", getExternalName(), m.getNameAsString(), e.getMessage());
+                    switch (e.kind()) {
+                        case Verify:
+                            throw meta.throwExceptionWithMessage(meta.java_lang_VerifyError, message);
+                        case ClassFormat:
+                            throw meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, message);
+                        case NoClassDefFound:
+                            throw meta.throwExceptionWithMessage(meta.java_lang_NoClassDefFoundError, message);
                     }
                 }
             }
         }
+
     }
 
     void print(PrintStream out) {
@@ -908,7 +976,8 @@ public final class ObjectKlass extends Klass {
 
     private void checkErroneousInitialization() {
         if (initState == ERRONEOUS) {
-            throw Meta.throwExceptionWithMessage(getMeta().java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
+            Meta meta = getMeta();
+            throw meta.throwExceptionWithMessage(meta.java_lang_NoClassDefFoundError, "Erroneous class: " + getName());
         }
     }
 
@@ -961,7 +1030,7 @@ public final class ObjectKlass extends Klass {
         return result;
     }
 
-    private void initPackage(@Host(ClassLoader.class) StaticObject classLoader) {
+    private void initPackage(@JavaType(ClassLoader.class) StaticObject classLoader) {
         if (!Names.isUnnamedPackage(getRuntimePackage())) {
             ClassRegistry registry = getRegistries().getClassRegistry(classLoader);
             packageEntry = registry.packages().lookup(getRuntimePackage());
@@ -1032,6 +1101,14 @@ public final class ObjectKlass extends Klass {
         return hasDeclaredDefaultMethods;
     }
 
+    public void initSelfReferenceInPool() {
+        getConstantPool().setKlassAt(getLinkedKlass().getParserKlass().getThisKlassIndex(), this);
+    }
+
+    public boolean isRecord() {
+        return isFinalFlagSet() && getSuperKlass() == getMeta().java_lang_Record && getAttribute(RecordAttribute.NAME) != null;
+    }
+
     @Override
     public String getGenericTypeAsString() {
         if (genericSignature == null) {
@@ -1061,15 +1138,15 @@ public final class ObjectKlass extends Klass {
         return attribute != null ? attribute.getDebugExtension() : null;
     }
 
-    public RedefinitionCache getRedefineCache() {
+    public KlassVersion getKlassVersion() {
         // block execution during class redefinition
         ClassRedefinition.check();
 
-        RedefinitionCache cache = redefineCache;
+        KlassVersion cache = klassVersion;
         if (!cache.assumption.isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             do {
-                cache = redefineCache;
+                cache = klassVersion;
             } while (!cache.assumption.isValid());
         }
         return cache;
@@ -1078,33 +1155,19 @@ public final class ObjectKlass extends Klass {
     public void redefineClass(ChangePacket packet, List<ObjectKlass> refreshSubClasses, Ids<Object> ids) {
         ParserKlass parserKlass = packet.parserKlass;
         DetectedChange change = packet.detectedChange;
-        RedefinitionCache oldVersion = redefineCache;
+        KlassVersion oldVersion = klassVersion;
         RuntimeConstantPool pool = new RuntimeConstantPool(getContext(), parserKlass.getConstantPool(), oldVersion.pool.getClassLoader());
         ObjectKlass[] superInterfaces = getSuperInterfaces();
         LinkedKlass[] interfaces = new LinkedKlass[superInterfaces.length];
         for (int i = 0; i < superInterfaces.length; i++) {
             interfaces[i] = superInterfaces[i].getLinkedKlass();
         }
-        LinkedKlass linkedKlass = new LinkedKlass(parserKlass, getSuperKlass().getLinkedKlass(), interfaces);
+        LinkedKlass linkedKlass = LinkedKlass.redefine(parserKlass, getSuperKlass().getLinkedKlass(), interfaces, getLinkedKlass());
 
-        // fields
-        if (!change.getOuterFields().isEmpty()) {
-            LinkedField[] instanceFields = linkedKlass.getInstanceFields();
-            for (Field outerField : change.getOuterFields()) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-
-                // we know that the special field is always at the same index
-                for (int i = 0; i < fieldTable.length; i++) {
-                    Field oldField = fieldTable[i];
-                    if (outerField == oldField) {
-                        for (LinkedField instanceField : instanceFields) {
-                            if (instanceField.getName().equals(outerField.getName())) {
-                                // replace with new field
-                                fieldTable[i] = new Field(this, instanceField, false);
-                            }
-                        }
-                    }
-                }
+        // changed object type fields handling
+        if (!change.getChangedObjectTypeFields().isEmpty()) {
+            for (Map.Entry<Field, ParserField> entry : change.getChangedObjectTypeFields().entrySet()) {
+                entry.getKey().redefineField(entry.getValue(), pool);
             }
         }
 
@@ -1119,7 +1182,7 @@ public final class ObjectKlass extends Klass {
             Method method = entry.getKey();
             ParserMethod newMethod = entry.getValue();
             Method.SharedRedefinitionContent redefineContent = method.redefine(newMethod, packet.parserKlass, ids);
-            JDWPLogger.log("Redefining method %s.%s", JDWPLogger.LogLevel.REDEFINE, method.getDeclaringKlass().getName(), method.getName());
+            JDWP.LOGGER.fine(() -> "Redefining method " + method.getDeclaringKlass().getName() + "." + method.getName());
 
             // look in tables for copied methods that also needs to be invalidated
             if (!method.isStatic() && !method.isPrivate() && !Name._init_.equals(method.getName())) {
@@ -1145,7 +1208,7 @@ public final class ObjectKlass extends Klass {
             updateOverrideMethods(ids, parserMethod.getFlags(), parserMethod.getName(), parserMethod.getSignature());
             removedMethod.removedByRedefinition();
             removedMethod.getMethodVersion().getAssumption().invalidate();
-            JDWPLogger.log("Removed method %s.%s", JDWPLogger.LogLevel.REDEFINE, removedMethod.getDeclaringKlass().getName(), removedMethod.getName());
+            JDWP.LOGGER.fine(() -> "Removed method " + removedMethod.getDeclaringKlass().getName() + "." + removedMethod.getName());
         }
 
         for (ParserMethod addedMethod : addedMethods) {
@@ -1154,7 +1217,7 @@ public final class ObjectKlass extends Klass {
             declaredMethods.addLast(added);
             virtualMethodsModified |= isVirtual(addedMethod);
             updateOverrideMethods(ids, addedMethod.getFlags(), addedMethod.getName(), addedMethod.getSignature());
-            JDWPLogger.log("Added method %s.%s", JDWPLogger.LogLevel.REDEFINE, added.getDeclaringKlass().getName(), added.getName());
+            JDWP.LOGGER.fine(() -> "Added method " + added.getDeclaringKlass().getName() + "." + added.getName());
         }
 
         Method[] newDeclaredMethods = declaredMethods.toArray(new Method[declaredMethods.size()]);
@@ -1175,14 +1238,15 @@ public final class ObjectKlass extends Klass {
             refreshSubClasses.addAll(getSubTypes());
         }
 
-        redefineCache = new RedefinitionCache(pool, linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
+        klassVersion = new KlassVersion(pool, linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
 
-        // flush caches before invalidating to avoid races
-        // a potential thread fetching new reflection data
-        // will be blocked at entry until the redefinition
-        // transaction is ended
-        flushReflectionCaches();
+        incrementKlassRedefinitionCount();
         oldVersion.assumption.invalidate();
+    }
+
+    // used by some plugins during klass redefitnion
+    public void reRunClinit() {
+        getClassInitializer().getCallTarget().call();
     }
 
     private static void checkCopyMethods(Method method, Method[][] table, Method.SharedRedefinitionContent content, Ids<Object> ids) {
@@ -1199,7 +1263,7 @@ public final class ObjectKlass extends Klass {
         }
     }
 
-    private void flushReflectionCaches() {
+    private void incrementKlassRedefinitionCount() {
         // increment the redefine count on the class instance to flush reflection caches
         int value = InterpreterToVM.getFieldInt(mirror(), getMeta().java_lang_Class_classRedefinedCount);
         InterpreterToVM.setFieldInt(++value, mirror(), getMeta().java_lang_Class_classRedefinedCount);
@@ -1224,7 +1288,7 @@ public final class ObjectKlass extends Klass {
     }
 
     public void onSuperKlassUpdate() {
-        RedefinitionCache oldVersion = redefineCache;
+        KlassVersion oldVersion = klassVersion;
 
         Method[][] itable = oldVersion.itable;
         Method[] vtable;
@@ -1244,37 +1308,40 @@ public final class ObjectKlass extends Klass {
             itable = InterfaceTables.fixTables(vtable, mirandaMethods, newDeclaredMethods, methodCR.tables, iKlassTable);
         }
 
-        redefineCache = new RedefinitionCache(oldVersion.pool, oldVersion.linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
+        klassVersion = new KlassVersion(oldVersion.pool, oldVersion.linkedKlass, newDeclaredMethods, mirandaMethods, vtable, itable, iKlassTable);
 
         // flush caches before invalidating to avoid races
         // a potential thread fetching new reflection data
         // will be blocked at entry until the redefinition
         // transaction is ended
-        flushReflectionCaches();
+        incrementKlassRedefinitionCount();
         oldVersion.assumption.invalidate();
     }
 
     private List<ObjectKlass> getSubTypes() {
-        List<ObjectKlass> result = new ArrayList<>();
         if (subTypes != null) {
-            for (WeakReference<ObjectKlass> subType : subTypes) {
-                ObjectKlass sub = subType.get();
-                if (sub != null) {
-                    result.add(sub);
-                    result.addAll(sub.getSubTypes());
+            List<ObjectKlass> result = new ArrayList<>();
+            synchronized (subTypes) {
+                for (WeakReference<ObjectKlass> subType : subTypes) {
+                    ObjectKlass sub = subType.get();
+                    if (sub != null) {
+                        result.add(sub);
+                        result.addAll(sub.getSubTypes());
+                    }
                 }
             }
+            return result;
         }
-        return result;
+        return Collections.emptyList();
     }
 
     private static boolean isVirtual(ParserMethod m) {
         return !Modifier.isStatic(m.getFlags()) && !Modifier.isPrivate(m.getFlags()) && !Name._init_.equals(m.getName());
     }
 
-    public void patchClassName(Symbol<Symbol.Name> newName) {
+    public void patchClassName(Symbol<Symbol.Name> newName, Symbol<Symbol.Type> newType) {
         name = newName;
-        type = getContext().getTypes().fromName(newName);
+        type = newType;
     }
 
     public void removeByRedefinition() {
@@ -1285,7 +1352,7 @@ public final class ObjectKlass extends Klass {
         }
     }
 
-    private static final class RedefinitionCache {
+    public final class KlassVersion {
         final Assumption assumption;
         final RuntimeConstantPool pool;
         final LinkedKlass linkedKlass;
@@ -1297,7 +1364,7 @@ public final class ObjectKlass extends Klass {
         private final Method[] declaredMethods;
         private final Method[] mirandaMethods;
 
-        RedefinitionCache(RuntimeConstantPool pool, LinkedKlass linkedKlass, Method[] declaredMethods, Method[] mirandaMethods, Method[] vtable, Method[][] itable, ObjectKlass[] iKlassTable) {
+        KlassVersion(RuntimeConstantPool pool, LinkedKlass linkedKlass, Method[] declaredMethods, Method[] mirandaMethods, Method[] vtable, Method[][] itable, ObjectKlass[] iKlassTable) {
             this.assumption = Truffle.getRuntime().createAssumption();
             this.pool = pool;
             this.linkedKlass = linkedKlass;
@@ -1307,5 +1374,22 @@ public final class ObjectKlass extends Klass {
             this.vtable = vtable;
             this.iKlassTable = iKlassTable;
         }
+
+        public Assumption getAssumption() {
+            return assumption;
+        }
+
+        public ObjectKlass getKlass() {
+            return ObjectKlass.this;
+        }
+
+        Object getAttribute(Symbol<Name> attrName) {
+            return linkedKlass.getAttribute(attrName);
+        }
+
+        ConstantPool getConstantPool() {
+            return pool;
+        }
+
     }
 }
