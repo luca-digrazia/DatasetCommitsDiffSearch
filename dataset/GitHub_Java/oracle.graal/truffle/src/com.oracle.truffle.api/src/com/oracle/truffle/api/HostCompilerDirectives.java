@@ -54,15 +54,6 @@ import java.lang.annotation.Target;
 public final class HostCompilerDirectives {
 
     /**
-     * This object is a placeholder for the static methods that implement compiler directives, and
-     * cannot be constructed.
-     *
-     * @since 21.0
-     */
-    private HostCompilerDirectives() {
-    }
-
-    /**
      * Marks a method that is an implementation of a Truffle interpreter, and which should receive
      * additional optimization budget.
      *
@@ -94,5 +85,35 @@ public final class HostCompilerDirectives {
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
     public @interface BytecodeInterpreterSwitchBoundary {
+    }
+
+    /**
+     * Consume a value, making sure the compiler does not optimize away the computation of this
+     * value, even if it is otherwise unused.
+     *
+     * This method can be used to force expressions to be hoisted out of branches. For example, the
+     * following code hoists the read of a final field {@code value} in front of the loop:
+     *
+     * <code>
+     * HostCompilerDirectives.consume(this.value);
+     * while (i < ops.length) {
+     *   int op = ops[i++];
+     *   switch (op) {
+     *     case OP1:
+     *       // ...
+     *     case OP2:
+     *       // This field-read is replaced with the result of the earlier one.
+     *       result += this.value;
+     *       break;
+     *     case OP3:
+     *       // ...
+     *   }
+     * }
+     * </code>
+     *
+     * @since 21.0
+     */
+    @SuppressWarnings("unused")
+    public static void consume(int value) {
     }
 }
