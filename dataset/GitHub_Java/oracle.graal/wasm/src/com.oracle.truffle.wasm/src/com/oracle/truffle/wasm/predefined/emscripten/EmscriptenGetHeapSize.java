@@ -33,12 +33,11 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.wasm.binary.WasmCodeEntry;
 import com.oracle.truffle.wasm.binary.WasmContext;
 import com.oracle.truffle.wasm.binary.WasmLanguage;
-import com.oracle.truffle.wasm.binary.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
 
 public class EmscriptenGetHeapSize extends WasmPredefinedRootNode {
-    public EmscriptenGetHeapSize(WasmLanguage language, WasmCodeEntry codeEntry, WasmMemory memory) {
-        super(language, codeEntry, memory);
+    public EmscriptenGetHeapSize(WasmLanguage language, WasmCodeEntry codeEntry) {
+        super(language, codeEntry);
     }
 
     @Override
@@ -47,7 +46,7 @@ public class EmscriptenGetHeapSize extends WasmPredefinedRootNode {
 
         logger.finest("EmscriptenGetHeapSize EXECUTE");
 
-        return memory.size();
+        return (int) context.memory().size();
     }
 
     @Override
