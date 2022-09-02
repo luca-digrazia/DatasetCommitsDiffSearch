@@ -83,7 +83,7 @@ public final class ImageClassLoader {
         Word.ensureInitialized();
     }
 
-    final Platform platform;
+    private final Platform platform;
     private final NativeImageClassLoader classLoader;
     private final String[] classpath;
     private final EconomicSet<Class<?>> systemClasses = EconomicSet.create();
@@ -466,4 +466,7 @@ public final class ImageClassLoader {
         return classLoader;
     }
 
+    public Package[] getPackages() {
+        return classLoader.getPackages();
+    }
 }

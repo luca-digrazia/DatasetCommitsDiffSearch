@@ -120,7 +120,6 @@ public class SubstrateOptionsParser {
     public enum BooleanOptionFormat {
         NAME_VALUE("<name>=<value>"),
         PLUS_MINUS("+/-<name>");
-
         BooleanOptionFormat(String help) {
             this.help = help;
         }
@@ -555,7 +554,6 @@ public class SubstrateOptionsParser {
                     }
                 }
             }
-            assert apiOptionName == null : "invalid API option name " + apiOptionName;
             return HOSTED_OPTION_PREFIX + option.getName() + "=" + value;
         }
     }

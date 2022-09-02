@@ -24,13 +24,13 @@
  */
 package com.oracle.svm.driver;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
 import java.util.ServiceLoader;
 import java.util.SortedMap;
@@ -41,28 +41,22 @@ import java.util.stream.Collectors;
 
 import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.Feature;
 
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.option.APIOption;
 import com.oracle.svm.core.option.APIOption.APIOptionKind;
-import com.oracle.svm.core.option.APIOptionGroup;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl;
 import com.oracle.svm.hosted.option.HostedOptionParser;
-import com.oracle.svm.util.ReflectionUtil;
-import com.oracle.svm.util.ReflectionUtil.ReflectionUtilError;
 
 class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
 
     static final class OptionInfo {
-        final String[] variants;
-        final char valueSeparator;
         final String builderOption;
         final String defaultValue;
         final String helpText;
@@ -71,12 +65,9 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
         final String deprecationWarning;
 
         final List<Function<Object, Object>> valueTransformers;
-        final APIOptionGroup group;
 
-        OptionInfo(String[] variants, char valueSeparator, String builderOption, String defaultValue, String helpText, boolean hasPathArguments, boolean defaultFinal, String deprecationWarning,
-                        List<Function<Object, Object>> valueTransformers, APIOptionGroup group) {
-            this.variants = variants;
-            this.valueSeparator = valueSeparator;
+        OptionInfo(String builderOption, String defaultValue, String helpText, boolean hasPathArguments, boolean defaultFinal, String deprecationWarning,
+                        List<Function<Object, Object>> valueTransformers) {
             this.builderOption = builderOption;
             this.defaultValue = defaultValue;
             this.helpText = helpText;
@@ -84,7 +75,6 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
             this.defaultFinal = defaultFinal;
             this.deprecationWarning = deprecationWarning;
             this.valueTransformers = valueTransformers;
-            this.group = group;
         }
 
         boolean isDeprecated() {
@@ -113,54 +103,22 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
         SortedMap<String, OptionDescriptor> runtimeOptions = new TreeMap<>();
         HostedOptionParser.collectOptions(optionsClasses, hostedOptions, runtimeOptions);
         SortedMap<String, OptionInfo> apiOptions = new TreeMap<>();
-        Map<String, List<String>> groupDefaults = new HashMap<>();
-        hostedOptions.values().forEach(o -> extractOption(NativeImage.oH, o, apiOptions, groupDefaults));
-        runtimeOptions.values().forEach(o -> extractOption(NativeImage.oR, o, apiOptions, groupDefaults));
-        groupDefaults.forEach((groupName, defaults) -> {
-            VMError.guarantee(defaults.size() <= 1,
-                            String.format("APIOptionGroup %s can only have a single default (having: %s)",
-                                            APIOption.Utils.optionName(groupName), String.join(", ", defaults)));
-
-        });
+        hostedOptions.values().forEach(o -> extractOption(NativeImage.oH, o, apiOptions));
+        runtimeOptions.values().forEach(o -> extractOption(NativeImage.oR, o, apiOptions));
         return apiOptions;
     }
 
-    private static void extractOption(String optionPrefix, OptionDescriptor optionDescriptor,
-                    SortedMap<String, OptionInfo> apiOptions, Map<String, List<String>> groupDefaults) {
+    private static void extractOption(String optionPrefix, OptionDescriptor optionDescriptor, SortedMap<String, OptionInfo> apiOptions) {
         try {
             Field optionField = optionDescriptor.getDeclaringClass().getDeclaredField(optionDescriptor.getFieldName());
             APIOption[] apiAnnotations = optionField.getAnnotationsByType(APIOption.class);
 
             for (APIOption apiAnnotation : apiAnnotations) {
                 String builderOption = optionPrefix;
-
-                VMError.guarantee(apiAnnotation.name().length > 0,
-                                String.format("APIOption for %s does not provide a name entry", optionDescriptor.getLocation()));
-                String apiOptionName = APIOption.Utils.optionName(apiAnnotation.name()[0]);
+                String apiOptionName = APIOption.Utils.name(apiAnnotation);
                 String rawOptionName = optionDescriptor.getName();
-                APIOptionGroup group = null;
-                String defaultValue = null;
-
                 boolean booleanOption = false;
                 if (optionDescriptor.getOptionValueType().equals(Boolean.class)) {
-                    if (!apiAnnotation.group().equals(APIOption.NullGroup.class)) {
-                        try {
-                            Class<? extends APIOptionGroup> groupClass = apiAnnotation.group();
-                            group = ReflectionUtil.newInstance(groupClass);
-                            String groupName = APIOption.Utils.groupName(group);
-                            String groupMember = apiAnnotation.name()[0];
-                            apiOptionName = groupName + groupMember;
-                            Boolean isEnabled = (Boolean) optionDescriptor.getOptionKey().getDefaultValue();
-                            if (isEnabled) {
-                                groupDefaults.computeIfAbsent(groupName, cls -> new ArrayList<>()).add(groupMember);
-                                /* Use OptionInfo.defaultValue to remember group default value */
-                                defaultValue = groupMember;
-                            }
-                        } catch (ReflectionUtilError ex) {
-                            throw VMError.shouldNotReachHere(
-                                            "Class specified as group for @APIOption " + apiOptionName + " cannot be loaded or instantiated: " + apiAnnotation.group().getTypeName(), ex.getCause());
-                        }
-                    }
                     VMError.guarantee(!apiAnnotation.kind().equals(APIOptionKind.Paths),
                                     String.format("Boolean APIOption %s(%s) cannot use APIOptionKind.Paths", apiOptionName, rawOptionName));
                     VMError.guarantee(apiAnnotation.defaultValue().length == 0,
@@ -171,8 +129,6 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                     builderOption += rawOptionName;
                     booleanOption = true;
                 } else {
-                    VMError.guarantee(apiAnnotation.group().equals(APIOption.NullGroup.class),
-                                    String.format("Using @APIOption.group not supported for non-boolean APIOption %s(%s)", apiOptionName, rawOptionName));
                     VMError.guarantee(!apiAnnotation.kind().equals(APIOptionKind.Negated),
                                     String.format("Non-boolean APIOption %s(%s) cannot use APIOptionKind.Negated", apiOptionName, rawOptionName));
                     VMError.guarantee(apiAnnotation.defaultValue().length <= 1,
@@ -194,6 +150,7 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                                 String.format("APIOption %s(%s) needs to provide help text", apiOptionName, rawOptionName));
                 helpText = helpText.substring(0, 1).toLowerCase() + helpText.substring(1);
 
+                String defaultValue = null;
                 if (apiAnnotation.defaultValue().length > 0) {
                     defaultValue = apiAnnotation.defaultValue()[0];
                 }
@@ -204,16 +161,17 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                 List<Function<Object, Object>> valueTransformers = new ArrayList<>(apiAnnotation.valueTransformer().length);
                 for (Class<? extends Function<Object, Object>> transformerClass : apiAnnotation.valueTransformer()) {
                     try {
-                        valueTransformers.add(ReflectionUtil.newInstance(transformerClass));
-                    } catch (ReflectionUtilError ex) {
+                        Constructor<? extends Function<Object, Object>> constructor = transformerClass.getDeclaredConstructor();
+                        constructor.setAccessible(true);
+                        valueTransformers.add(constructor.newInstance());
+                    } catch (NoSuchMethodException | InstantiationException | IllegalAccessException | IllegalArgumentException | InvocationTargetException ex) {
                         throw VMError.shouldNotReachHere(
-                                        "Class specified as valueTransformer for @APIOption " + apiOptionName + " cannot be loaded or instantiated: " + transformerClass.getTypeName(), ex.getCause());
+                                        "Class specified as valueTransformer for @APIOption " + apiOptionName + " cannot be loaded or instantiated: " + transformerClass.getTypeName(), ex);
                     }
                 }
                 apiOptions.put(apiOptionName,
-                                new APIOptionHandler.OptionInfo(apiAnnotation.name(), apiAnnotation.valueSeparator(), builderOption, defaultValue, helpText,
-                                                apiAnnotation.kind().equals(APIOptionKind.Paths),
-                                                booleanOption || apiAnnotation.fixedValue().length > 0, apiAnnotation.deprecated(), valueTransformers, group));
+                                new APIOptionHandler.OptionInfo(builderOption, defaultValue, helpText, apiAnnotation.kind().equals(APIOptionKind.Paths),
+                                                booleanOption || apiAnnotation.fixedValue().length > 0, apiAnnotation.deprecated(), valueTransformers));
             }
         } catch (NoSuchFieldException e) {
             /* Does not qualify as APIOption */
@@ -233,45 +191,23 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
     }
 
     String translateOption(String arg) {
-        OptionInfo option = null;
-        String[] optionNameAndOptionValue = null;
-        found: for (OptionInfo optionInfo : apiOptions.values()) {
-            for (String variant : optionInfo.variants) {
-                String optionName;
-                if (optionInfo.group == null) {
-                    optionName = APIOption.Utils.optionName(variant);
-                } else {
-                    optionName = APIOption.Utils.groupName(optionInfo.group) + variant;
-                }
-                if (arg.equals(optionName)) {
-                    option = optionInfo;
-                    optionNameAndOptionValue = new String[]{optionName};
-                    break found;
-                }
-                if (arg.startsWith(optionName + optionInfo.valueSeparator)) {
-                    option = optionInfo;
-                    optionNameAndOptionValue = SubstrateUtil.split(arg, Character.toString(optionInfo.valueSeparator), 2);
-                    break found;
-                }
-            }
-
-        }
+        String[] optionParts = arg.split("=", 2);
+        OptionInfo option = apiOptions.get(optionParts[0]);
         if (option != null) {
             if (!option.deprecationWarning.isEmpty()) {
-                NativeImage.showWarning("Using a deprecated option " + optionNameAndOptionValue[0] + ". " + option.deprecationWarning);
+                NativeImage.showWarning("Using a deprecated option " + optionParts[0] + ": " + option.deprecationWarning);
             }
             String builderOption = option.builderOption;
-            /* If option is in group, defaultValue has different use */
-            String optionValue = option.group != null ? null : option.defaultValue;
-            if (optionNameAndOptionValue.length == 2) {
+            String optionValue = option.defaultValue;
+            if (optionParts.length == 2) {
                 if (option.defaultFinal) {
-                    NativeImage.showError("Passing values to option " + optionNameAndOptionValue[0] + " is not supported.");
+                    NativeImage.showError("Passing values to option " + optionParts[0] + " is not supported.");
                 }
-                optionValue = optionNameAndOptionValue[1];
+                optionValue = optionParts[1];
             }
             if (optionValue != null) {
                 if (option.hasPathArguments) {
-                    optionValue = Arrays.stream(SubstrateUtil.split(optionValue, ","))
+                    optionValue = Arrays.stream(optionValue.split(","))
                                     .filter(s -> !s.isEmpty())
                                     .map(this::tryCanonicalize)
                                     .collect(Collectors.joining(","));
@@ -317,7 +253,7 @@ final class APIOptionCollector implements Feature {
     @Override
     public void duringSetup(DuringSetupAccess access) {
         FeatureImpl.DuringSetupAccessImpl accessImpl = (FeatureImpl.DuringSetupAccessImpl) access;
-        List<Class<? extends OptionDescriptors>> optionClasses = accessImpl.getImageClassLoader().findSubclasses(OptionDescriptors.class, true);
+        List<Class<? extends OptionDescriptors>> optionClasses = accessImpl.getImageClassLoader().findSubclasses(OptionDescriptors.class);
         options = APIOptionHandler.extractOptions(optionClasses);
     }
 }

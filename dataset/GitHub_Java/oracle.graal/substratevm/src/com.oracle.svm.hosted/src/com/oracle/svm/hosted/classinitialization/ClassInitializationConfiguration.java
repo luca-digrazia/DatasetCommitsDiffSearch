@@ -35,34 +35,17 @@ import org.graalvm.collections.EconomicSet;
 
 import com.oracle.svm.core.util.UserError;
 
-/**
- * Maintains user and system configuration for class initialization in Native Image.
- *
- * The configuration is maintained in a tree, where the root (
- * {@link ClassInitializationConfiguration#root}) represents the whole package hierarchy. Every
- * non-leaf node in the tree represents a package and leafs can represent either packages or
- * classes. The {@link InitKind} of a class is determined by looking at the longest path from the
- * root that * matches the qualified name of the class and has a non-null kind.
- *
- * The kind ({@link InitializationNode#kind}) of tree nodes can be either: <code>null</code> which
- * denotes there is no initialization config or one of the {@link InitKind}s that are set over the
- * command line or programmatically through features. Once defined, a node can not be changed,
- * however, the node children can override the value for nested packages or classes.
- *
- * Every node tracks a list of reasons for the set configuration. This list helps the users debug
- * conflicts in the configuration.
- */
 public class ClassInitializationConfiguration {
     private static final String ROOT_QUALIFIER = "";
     private static final int MAX_NUMBER_OF_REASONS = 3;
     private InitializationNode root = new InitializationNode("", null, null);
 
-    public synchronized void insert(String classOrPackage, InitKind kind, String reason) {
+    public synchronized void insert(String classOrPackage, ClassInitializationSupport.InitKind kind, String reason) {
         assert kind != null;
         insertRec(root, qualifierList(classOrPackage), kind, reason);
     }
 
-    synchronized InitKind lookupKind(String classOrPackage) {
+    synchronized ClassInitializationSupport.InitKind lookupKind(String classOrPackage) {
         return lookupKindRec(root, qualifierList(classOrPackage), null);
     }
 
@@ -73,7 +56,7 @@ public class ClassInitializationConfiguration {
         return prefixed;
     }
 
-    private void insertRec(InitializationNode node, List<String> classOrPackage, InitKind kind, String reason) {
+    private void insertRec(InitializationNode node, List<String> classOrPackage, ClassInitializationSupport.InitKind kind, String reason) {
         assert !classOrPackage.isEmpty();
         assert node.qualifier.equals(classOrPackage.get(0));
         if (classOrPackage.size() == 1) {
@@ -101,7 +84,7 @@ public class ClassInitializationConfiguration {
         }
     }
 
-    private InitKind lookupKindRec(InitializationNode node, List<String> classOrPackage, InitKind lastNonNullKind) {
+    private ClassInitializationSupport.InitKind lookupKindRec(InitializationNode node, List<String> classOrPackage, ClassInitializationSupport.InitKind lastNonNullKind) {
         List<String> tail = new ArrayList<>(classOrPackage);
         tail.remove(0);
         if (!tail.isEmpty() && node.children.containsKey(tail.get(0))) {
@@ -126,15 +109,15 @@ public class ClassInitializationConfiguration {
         return String.join(".", name);
     }
 
-    synchronized List<ClassOrPackageConfig> allConfigs() {
+    synchronized List<ClassInitializationSupport.ClassOrPackageConfig> allConfigs() {
         LinkedList<InitializationNode> printingQueue = new LinkedList<>();
         printingQueue.add(root);
-        ArrayList<ClassOrPackageConfig> allClasses = new ArrayList<>();
+        ArrayList<ClassInitializationSupport.ClassOrPackageConfig> allClasses = new ArrayList<>();
         while (!printingQueue.isEmpty()) {
             InitializationNode node = printingQueue.remove();
             if (node.kind != null) {
                 String name = node.qualifier.isEmpty() ? "whole type hierarchy" : qualifiedName(node);
-                allClasses.add(new ClassOrPackageConfig(name, node.reasons, node.kind));
+                allClasses.add(new ClassInitializationSupport.ClassOrPackageConfig(name, node.reasons, node.kind));
             }
 
             node.children.getValues().forEach(printingQueue::push);
@@ -145,13 +128,13 @@ public class ClassInitializationConfiguration {
 
 final class InitializationNode {
     final String qualifier;
-    InitKind kind;
+    ClassInitializationSupport.InitKind kind;
     final EconomicSet<String> reasons = EconomicSet.create();
 
     final InitializationNode parent;
     final EconomicMap<String, InitializationNode> children = EconomicMap.create();
 
-    InitializationNode(String qualifier, InitializationNode parent, InitKind kind, String... reasons) {
+    InitializationNode(String qualifier, InitializationNode parent, ClassInitializationSupport.InitKind kind, String... reasons) {
         this.parent = parent;
         this.qualifier = qualifier;
         this.kind = kind;

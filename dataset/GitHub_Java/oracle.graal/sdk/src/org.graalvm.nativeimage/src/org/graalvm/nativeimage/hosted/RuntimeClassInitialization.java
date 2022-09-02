@@ -79,10 +79,8 @@ import sun.reflect.Reflection;
  * <ul>
  *
  * @since 1.0
- * @deprected Use ClassInitialization instead
  */
 @Platforms(Platform.HOSTED_ONLY.class)
-@Deprecated
 public final class RuntimeClassInitialization {
 
     /**
