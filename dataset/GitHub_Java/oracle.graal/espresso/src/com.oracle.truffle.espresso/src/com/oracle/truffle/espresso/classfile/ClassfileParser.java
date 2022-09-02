@@ -1251,14 +1251,11 @@ public final class ClassfileParser {
     private PermittedSubclassesAttribute parsePermittedSubclasses(Symbol<Name> attributeName) {
         assert PermittedSubclassesAttribute.NAME.equals(attributeName);
         int numberOfClasses = stream.readU2();
-        if (numberOfClasses == 0) {
-            return PermittedSubclassesAttribute.EMPTY;
-        }
-        short[] classes = new short[numberOfClasses];
+        int[] classes = new int[numberOfClasses];
         for (int i = 0; i < numberOfClasses; i++) {
             int pos = stream.readU2();
             pool.classAt(pos).validate(pool);
-            classes[i] = (short) pos;
+            classes[i] = pos;
         }
         return new PermittedSubclassesAttribute(attributeName, classes);
     }
