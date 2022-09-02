@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,6 +45,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
+import com.oracle.truffle.llvm.parser.binary.BinaryParser;
+import com.oracle.truffle.llvm.parser.binary.BinaryParserResult;
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
@@ -68,8 +71,6 @@ import com.oracle.truffle.llvm.parser.LLVMParser;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
 import com.oracle.truffle.llvm.parser.StackManager;
-import com.oracle.truffle.llvm.parser.binary.BinaryParser;
-import com.oracle.truffle.llvm.parser.binary.BinaryParserResult;
 import com.oracle.truffle.llvm.parser.model.ModelModule;
 import com.oracle.truffle.llvm.parser.model.SymbolImpl;
 import com.oracle.truffle.llvm.parser.model.functions.FunctionSymbol;
@@ -92,8 +93,8 @@ import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension.NativeLookupResult;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension.NativePointerIntoLibrary;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
-import com.oracle.truffle.llvm.runtime.PlatformCapability;
 import com.oracle.truffle.llvm.runtime.SulongLibrary;
+import com.oracle.truffle.llvm.runtime.SystemContextExtension;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
@@ -144,12 +145,17 @@ final class Runner {
      * Parse bitcode data and do first initializations to prepare bitcode execution.
      */
     CallTarget parse(Source source) {
+        ParserInput input = getParserData(source);
+        return parse(source, input.bytes, input.library);
+    }
+
+    private static ParserInput getParserData(Source source) {
         ByteSequence bytes;
         ExternalLibrary library;
         if (source.hasBytes()) {
             bytes = source.getBytes();
             if (source.getPath() != null) {
-                library = new ExternalLibrary(context.getEnv().getInternalTruffleFile(source.getPath()), false, source.isInternal());
+                library = new ExternalLibrary(Paths.get(source.getPath()), false, source.isInternal());
             } else {
                 library = new ExternalLibrary("<STREAM-" + UUID.randomUUID().toString() + ">", false, source.isInternal());
             }
@@ -165,7 +171,7 @@ final class Runner {
         } else {
             throw new LLVMParserException("Should not reach here: Source is neither char-based nor byte-based!");
         }
-        return parse(source, bytes, library);
+        return new ParserInput(bytes, library);
     }
 
     private static class LoadModulesNode extends RootNode {
@@ -421,7 +427,7 @@ final class Runner {
         @TruffleBoundary
         private void bindUnresolvedSymbols(LLVMContext ctx) {
             NFIContextExtension nfiContextExtension = ctx.getLanguage().getContextExtensionOrNull(NFIContextExtension.class);
-            LLVMIntrinsicProvider intrinsicProvider = ctx.getLanguage().getCapability(LLVMIntrinsicProvider.class);
+            LLVMIntrinsicProvider intrinsicProvider = ctx.getLanguage().getContextExtensionOrNull(LLVMIntrinsicProvider.class);
             for (LLVMSymbol symbol : fileScope.values()) {
                 if (!symbol.isDefined()) {
                     if (symbol instanceof LLVMGlobal) {
@@ -474,7 +480,7 @@ final class Runner {
         // There could be conflicts between Sulong's default libraries and the ones that are
         // passed on the command-line. To resolve that, we add ours first but parse them later
         // on.
-        String[] sulongLibraryNames = language.getCapability(PlatformCapability.class).getSulongDefaultLibraries();
+        String[] sulongLibraryNames = language.getContextExtension(SystemContextExtension.class).getSulongDefaultLibraries();
         ExternalLibrary[] sulongLibraries = new ExternalLibrary[sulongLibraryNames.length];
         for (int i = 0; i < sulongLibraries.length; i++) {
             sulongLibraries[i] = context.addInternalLibrary(sulongLibraryNames[i], false);
@@ -636,7 +642,7 @@ final class Runner {
     }
 
     private LLVMParserResult parse(List<LLVMParserResult> parserResults, ArrayDeque<ExternalLibrary> dependencyQueue, ExternalLibrary lib) {
-        if (lib.hasFile() && !lib.getFile().isRegularFile() || lib.getPath() == null || !lib.getPath().toFile().isFile()) {
+        if (lib.getPath() == null || !lib.getPath().toFile().isFile()) {
             if (!lib.isNative()) {
                 throw new LLVMParserException("'" + lib.getPath() + "' is not a file or does not exist.");
             } else {
@@ -644,12 +650,14 @@ final class Runner {
                 return null;
             }
         }
-        TruffleFile file = lib.hasFile() ? lib.getFile() : context.getEnv().getInternalTruffleFile(lib.getPath().toUri());
+
+        Path path = lib.getPath();
+        TruffleFile file = context.getEnv().getInternalTruffleFile(path.toUri());
         Source source;
         try {
             source = Source.newBuilder("llvm", file).internal(lib.isInternal()).build();
         } catch (IOException | SecurityException | OutOfMemoryError ex) {
-            throw new LLVMParserException("Error reading file " + lib.getPath() + ".");
+            throw new LLVMParserException("Error reading file " + path + ".");
         }
         return parse(parserResults, dependencyQueue, source, lib, source.getBytes());
     }
@@ -661,7 +669,6 @@ final class Runner {
             ModelModule module = new ModelModule();
             LLVMScanner.parseBitcode(binaryParserResult.getBitcode(), module, source, context);
             library.setIsNative(false);
-            context.addExternalLibrary(library);
             context.addLibraryPaths(binaryParserResult.getLibraryPaths());
             List<String> libraries = binaryParserResult.getLibraries();
             for (String lib : libraries) {
@@ -1055,7 +1062,7 @@ final class Runner {
     }
 
     private void overrideSulongLibraryFunctionsWithIntrinsics(List<LLVMParserResult> sulongLibraries) {
-        LLVMIntrinsicProvider intrinsicProvider = language.getCapability(LLVMIntrinsicProvider.class);
+        LLVMIntrinsicProvider intrinsicProvider = language.getContextExtensionOrNull(LLVMIntrinsicProvider.class);
         if (intrinsicProvider != null) {
             for (LLVMParserResult parserResult : sulongLibraries) {
                 for (LLVMSymbol symbol : parserResult.getRuntime().getFileScope().values()) {
@@ -1098,6 +1105,16 @@ final class Runner {
         private InitializationOrder(List<LLVMParserResult> sulongLibraries, List<LLVMParserResult> otherLibraries) {
             this.sulongLibraries = sulongLibraries;
             this.otherLibraries = otherLibraries;
+        }
+    }
+
+    private static final class ParserInput {
+        private final ByteSequence bytes;
+        private final ExternalLibrary library;
+
+        private ParserInput(ByteSequence bytes, ExternalLibrary library) {
+            this.bytes = bytes;
+            this.library = library;
         }
     }
 }

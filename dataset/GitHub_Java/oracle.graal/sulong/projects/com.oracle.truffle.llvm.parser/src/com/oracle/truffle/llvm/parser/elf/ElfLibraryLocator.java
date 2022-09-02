@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.parser.binary.BinaryParser;
 import com.oracle.truffle.llvm.runtime.DefaultLibraryLocator;
@@ -87,12 +86,12 @@ public final class ElfLibraryLocator extends LibraryLocator {
     }
 
     @Override
-    public TruffleFile locateLibrary(LLVMContext context, String lib, Object reason) {
+    public Path locateLibrary(LLVMContext context, String lib, Object reason) {
         Path libPath = Paths.get(lib);
         if (libPath.isAbsolute()) {
             return DefaultLibraryLocator.locateAbsolute(context, lib, libPath);
         }
-        TruffleFile path = DefaultLibraryLocator.locateGlobal(context, lib);
+        Path path = DefaultLibraryLocator.locateGlobal(context, lib);
         if (path != null) {
             return path;
         }
@@ -103,12 +102,13 @@ public final class ElfLibraryLocator extends LibraryLocator {
             for (String p : localPaths) {
                 Path absPath = Paths.get(p, lib);
                 traceTry(context, absPath);
-                TruffleFile file = context.getEnv().getInternalTruffleFile(absPath.toUri());
-                if (file.exists()) {
-                    return file;
+                if (context.getEnv().getInternalTruffleFile(absPath.toUri()).exists()) {
+                    return absPath;
                 }
             }
         }
-        return null;
+
+        traceTry(context, libPath);
+        return libPath;
     }
 }
