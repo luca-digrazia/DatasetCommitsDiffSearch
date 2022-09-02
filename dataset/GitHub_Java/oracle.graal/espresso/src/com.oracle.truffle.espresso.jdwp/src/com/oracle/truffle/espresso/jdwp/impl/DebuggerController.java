@@ -142,7 +142,7 @@ public final class DebuggerController implements ContextsListener {
     }
 
     public void setCommandRequestId(Object thread, int commandRequestId, byte suspendPolicy, boolean isPopFrames, boolean isForceEarlyReturn, DebuggerCommand.Kind stepKind) {
-        JDWP.LOGGER.fine(() -> "Adding step command request in thread " + getThreadName(thread) + " with ID: " + commandRequestId);
+        JDWPLogger.log("Adding step command request in thread %s with ID %s", JDWPLogger.LogLevel.STEPPING, getThreadName(thread), commandRequestId);
         commandRequestIds.put(thread, new SteppingInfo(commandRequestId, suspendPolicy, isPopFrames, isForceEarlyReturn, stepKind));
     }
 
@@ -162,12 +162,12 @@ public final class DebuggerController implements ContextsListener {
             }
             mapBreakpoint(bp, command.getBreakpointInfo());
             debuggerSession.install(bp);
-            JDWP.LOGGER.fine(() -> "Breakpoint submitted at " + bp.getLocationDescription());
+            JDWPLogger.log("Breakpoint submitted at %s", JDWPLogger.LogLevel.STEPPING, bp.getLocationDescription());
 
         } catch (NoSuchSourceLineException ex) {
             // perhaps the debugger's view on the source is out of sync, in which case
             // the bytecode and source does not match.
-            JDWP.LOGGER.warning(() -> "Failed submitting breakpoint at non-existing location: " + location);
+            JDWPLogger.log("Failed submitting breakpoint at non-existing location: %s", JDWPLogger.LogLevel.ALL, location);
         }
     }
 
@@ -204,7 +204,7 @@ public final class DebuggerController implements ContextsListener {
         }
         mapBreakpoint(bp, command.getBreakpointInfo());
         debuggerSession.install(bp);
-        JDWP.LOGGER.fine(() -> "exception breakpoint submitted");
+        JDWPLogger.log("exception breakpoint submitted", JDWPLogger.LogLevel.STEPPING);
     }
 
     @CompilerDirectives.TruffleBoundary
@@ -221,13 +221,13 @@ public final class DebuggerController implements ContextsListener {
 
     public void stepOut(RequestFilter filter) {
         Object thread = filter.getStepInfo().getGuestThread();
-        JDWP.LOGGER.fine(() -> "STEP_OUT for thread: " + getThreadName(thread));
+        JDWPLogger.log("STEP_OUT for thread: %s", JDWPLogger.LogLevel.STEPPING, getThreadName(thread));
 
         SuspendedInfo susp = suspendedInfos.get(thread);
         if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
             doStepOut(susp);
         } else {
-            JDWP.LOGGER.fine(() -> "not STEPPING OUT for thread: " + getThreadName(thread));
+            JDWPLogger.log("not STEPPING OUT for thread: %s", JDWPLogger.LogLevel.STEPPING, getThreadName(thread));
         }
     }
 
@@ -275,7 +275,7 @@ public final class DebuggerController implements ContextsListener {
     public boolean resume(Object thread, boolean sessionClosed) {
         SimpleLock lock = getSuspendLock(thread);
         synchronized (lock) {
-            JDWP.LOGGER.fine(() -> "Called resume thread: " + getThreadName(thread) + " with suspension count: " + threadSuspension.getSuspensionCount(thread));
+            JDWPLogger.log("Called resume thread: %s with suspension count: %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
 
             if (threadSuspension.getSuspensionCount(thread) == 0) {
                 // already running, so nothing to do
@@ -291,7 +291,7 @@ public final class DebuggerController implements ContextsListener {
                 if (steppingInfo == null) {
                     if (!sessionClosed) {
                         try {
-                            JDWP.LOGGER.fine(() -> "calling underlying resume method for thread: " + getThreadName(thread));
+                            JDWPLogger.log("calling underlying resume method for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
                             debuggerSession.resume(getContext().asHostThread(thread));
                         } catch (Exception e) {
                             throw new RuntimeException("Failed to resume thread: " + getThreadName(thread), e);
@@ -330,17 +330,17 @@ public final class DebuggerController implements ContextsListener {
                         }
                     }
                 }
-                JDWP.LOGGER.fine(() -> "resume call, clearing suspended info on: " + getThreadName(thread));
+                JDWPLogger.log("resume call, clearing suspended info on: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
 
                 suspendedInfos.put(thread, null);
 
-                JDWP.LOGGER.fine(() -> "Waking up thread: " + getThreadName(thread));
+                JDWPLogger.log("Waking up thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
                 threadSuspension.removeHardSuspendedThread(thread);
                 lock.release();
                 lock.notifyAll();
                 return true;
             } else {
-                JDWP.LOGGER.fine(() -> "Not resuming thread: " + getThreadName(thread) + " with suspension count: " + threadSuspension.getSuspensionCount(thread));
+                JDWPLogger.log("Not resuming thread: %s with suspension count: %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
                 return false;
             }
         }
@@ -380,7 +380,7 @@ public final class DebuggerController implements ContextsListener {
     public void suspend(Object guestThread) {
         SimpleLock suspendLock = getSuspendLock(guestThread);
         synchronized (suspendLock) {
-            JDWP.LOGGER.fine(() -> "suspend called for guestThread: " + getThreadName(guestThread) + " with suspension count " + threadSuspension.getSuspensionCount(guestThread));
+            JDWPLogger.log("suspend called for guestThread: %s with suspension count %d", JDWPLogger.LogLevel.THREAD, getThreadName(guestThread), threadSuspension.getSuspensionCount(guestThread));
 
             if (threadSuspension.getSuspensionCount(guestThread) > 0) {
                 // already suspended, so only increase the suspension count
@@ -389,8 +389,8 @@ public final class DebuggerController implements ContextsListener {
             }
 
             try {
-                JDWP.LOGGER.fine(() -> "State: " + getContext().asHostThread(guestThread).getState());
-                JDWP.LOGGER.fine(() -> "calling underlying suspend method for guestThread: " + getThreadName(guestThread));
+                JDWPLogger.log("State: %s", JDWPLogger.LogLevel.THREAD, getContext().asHostThread(guestThread).getState());
+                JDWPLogger.log("calling underlying suspend method for guestThread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(guestThread));
                 debuggerSession.suspend(getContext().asHostThread(guestThread));
 
                 // quite often the Debug API will not call back the onSuspend method in time,
@@ -403,7 +403,7 @@ public final class DebuggerController implements ContextsListener {
                     suspendedInfos.put(guestThread, new UnknownSuspendedInfo(guestThread, getContext()));
                 }
             } catch (Exception e) {
-                JDWP.LOGGER.fine(() -> "not able to suspend guestThread: " + getThreadName(guestThread));
+                JDWPLogger.log("not able to suspend guestThread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(guestThread));
             }
         }
     }
@@ -439,7 +439,7 @@ public final class DebuggerController implements ContextsListener {
     }
 
     public void suspendAll() {
-        JDWP.LOGGER.fine(() -> "Called suspendAll");
+        JDWPLogger.log("Called suspendAll", JDWPLogger.LogLevel.THREAD);
 
         for (Object thread : getContext().getAllGuestThreads()) {
             suspend(thread);
@@ -537,7 +537,7 @@ public final class DebuggerController implements ContextsListener {
     }
 
     public void suspend(CallFrame currentFrame, Object thread, byte suspendPolicy, List<Callable<Void>> jobs, SteppingInfo steppingInfo, boolean breakpointHit) {
-        JDWP.LOGGER.fine(() -> "suspending from callback in thread: " + getThreadName(thread));
+        JDWPLogger.log("suspending from callback in thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
 
         // before sending any events to debugger, make sure to mark
         // the thread lock as locked, in case a resume command happens
@@ -549,14 +549,14 @@ public final class DebuggerController implements ContextsListener {
                 runJobs(jobs);
                 break;
             case SuspendStrategy.EVENT_THREAD:
-                JDWP.LOGGER.fine(() -> "Suspend EVENT_THREAD");
+                JDWPLogger.log("Suspend EVENT_THREAD", JDWPLogger.LogLevel.THREAD);
 
                 threadSuspension.suspendThread(thread);
                 runJobs(jobs);
                 suspendEventThread(currentFrame, thread, steppingInfo, breakpointHit);
                 break;
             case SuspendStrategy.ALL:
-                JDWP.LOGGER.fine(() -> "Suspend ALL");
+                JDWPLogger.log("Suspend ALL", JDWPLogger.LogLevel.THREAD);
 
                 Thread suspendThread = new Thread(new Runnable() {
                     @Override
@@ -564,7 +564,7 @@ public final class DebuggerController implements ContextsListener {
                         // suspend other threads
                         for (Object activeThread : getContext().getAllGuestThreads()) {
                             if (activeThread != thread) {
-                                JDWP.LOGGER.fine(() -> "Request thread suspend for other thread: " + getThreadName(activeThread));
+                                JDWPLogger.log("Request thread suspend for other thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(activeThread));
                                 DebuggerController.this.suspend(activeThread);
                             }
                         }
@@ -592,7 +592,7 @@ public final class DebuggerController implements ContextsListener {
     }
 
     private void suspendEventThread(CallFrame currentFrame, Object thread, SteppingInfo info, boolean breakpointHit) {
-        JDWP.LOGGER.fine(() -> "Suspending event thread: " + getThreadName(thread) + " with new suspension count: " + threadSuspension.getSuspensionCount(thread));
+        JDWPLogger.log("Suspending event thread: %s with new suspension count: %d", JDWPLogger.LogLevel.THREAD, getThreadName(thread), threadSuspension.getSuspensionCount(thread));
 
         // if during stepping, send a step completed event back to the debugger
         if (info != null && !breakpointHit) {
@@ -614,7 +614,7 @@ public final class DebuggerController implements ContextsListener {
                 // in case a thread job is already posted on this thread
                 checkThreadJobsAndRun(thread);
                 while (lock.isLocked()) {
-                    JDWP.LOGGER.fine(() -> "lock.wait() for thread: " + getThreadName(thread));
+                    JDWPLogger.log("lock.wait() for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
                     lock.wait();
                 }
             } catch (InterruptedException e) {
@@ -626,7 +626,7 @@ public final class DebuggerController implements ContextsListener {
 
         checkThreadJobsAndRun(thread);
 
-        JDWP.LOGGER.fine(() -> "lock wakeup for thread: " + getThreadName(thread));
+        JDWPLogger.log("lock wakeup for thread: %s", JDWPLogger.LogLevel.THREAD, getThreadName(thread));
     }
 
     private void checkThreadJobsAndRun(Object thread) {
@@ -700,7 +700,7 @@ public final class DebuggerController implements ContextsListener {
                 try {
                     codeIndex = context.readBCIFromFrame(root, frame);
                 } catch (Throwable t) {
-                    JDWP.LOGGER.fine(() -> "Unable to read current BCI from frame in method: " + klass.getNameAsString() + "." + method.getNameAsString());
+                    JDWPLogger.log("Unable to read current BCI from frame in method: %s.%s", JDWPLogger.LogLevel.ALL, klass.getNameAsString(), method.getNameAsString());
                 }
                 if (codeIndex == -1) {
                     // fall back to start of the method then
@@ -713,7 +713,14 @@ public final class DebuggerController implements ContextsListener {
                 if (codeIndex > lastLineBCI) {
                     codeIndex = lastLineBCI;
                 }
-                callFrames.add(new CallFrame(context.getIds().getIdAsLong(guestThread), typeTag, klassId, method, methodId, codeIndex, frame, root, null, context));
+                Node currentNode = frameInstance.getCallNode();
+                if (currentNode == null) {
+                    CallTarget callTarget = frameInstance.getCallTarget();
+                    if (callTarget instanceof RootCallTarget) {
+                        currentNode = ((RootCallTarget) callTarget).getRootNode();
+                    }
+                }
+                callFrames.add(new CallFrame(context.getIds().getIdAsLong(guestThread), typeTag, klassId, method, methodId, codeIndex, frame, currentNode, root, null, context));
                 return null;
             }
         });
@@ -759,25 +766,18 @@ public final class DebuggerController implements ContextsListener {
 
         @Override
         public void onSuspend(SuspendedEvent event) {
-            if (context.isSystemThread()) {
-                // always allow VM threads to run guest code without
-                // the risk of being suspended
-                return;
-            }
-            Thread hostThread = Thread.currentThread();
-            Object currentThread = getContext().asGuestThread(hostThread);
-            JDWP.LOGGER.fine(() -> "Suspended at: " + event.getSourceSection() + " in thread: " + getThreadName(currentThread));
-
+            Object currentThread = getContext().asGuestThread(Thread.currentThread());
+            JDWPLogger.log("Suspended at: %s in thread: %s", JDWPLogger.LogLevel.STEPPING, event.getSourceSection().toString(), getThreadName(currentThread));
             SteppingInfo steppingInfo = commandRequestIds.remove(currentThread);
             if (steppingInfo != null) {
                 if (steppingInfo.isForceEarlyReturn()) {
-                    JDWP.LOGGER.fine(() -> "not suspending here due to force early return: " + event.getSourceSection());
+                    JDWPLogger.log("not suspending here due to force early return: %s", JDWPLogger.LogLevel.STEPPING, event.getSourceSection());
                     return;
                 }
                 CallFrame[] callFrames = createCallFrames(ids.getIdAsLong(currentThread), event.getStackFrames(), 1, steppingInfo);
                 // get the top frame for checking instance filters
                 if (callFrames.length > 0 && checkExclusionFilters(steppingInfo, event, currentThread, callFrames[0])) {
-                    JDWP.LOGGER.fine(() -> "not suspending here: " + event.getSourceSection());
+                    JDWPLogger.log("not suspending here: %s", JDWPLogger.LogLevel.STEPPING, event.getSourceSection());
                     // continue stepping until completed
                     commandRequestIds.put(currentThread, steppingInfo);
                     return;
@@ -827,12 +827,12 @@ public final class DebuggerController implements ContextsListener {
                     // get the specific exception type if any
                     Throwable exception = event.getException().getRawException(context.getLanguageClass());
                     if (exception == null) {
-                        JDWP.LOGGER.fine(() -> "Unable to retrieve raw exception for " + event.getException());
+                        JDWPLogger.log("Unable to retrieve raw exception for %s", JDWPLogger.LogLevel.ALL, event.getException());
                         // failed to get the raw exception, so don't suspend here.
                         return;
                     }
                     Object guestException = getContext().getGuestException(exception);
-                    JDWP.LOGGER.fine(() -> "checking exception breakpoint for exception: " + exception);
+                    JDWPLogger.log("checking exception breakpoint for exception: %s", JDWPLogger.LogLevel.STEPPING, exception);
                     // TODO(Gregersen) - rewrite this when instanceof implementation in Truffle is
                     // completed
                     // See /browse/GR-10371
@@ -847,7 +847,7 @@ public final class DebuggerController implements ContextsListener {
                         // always hit when broad exception filter is used
                         hit = true;
                     } else if (klass == null || getContext().isInstanceOf(guestException, klass)) {
-                        JDWP.LOGGER.fine(() -> "Exception type matched the klass type: " + klass.getNameAsString());
+                        JDWPLogger.log("Exception type matched the klass type: %s", JDWPLogger.LogLevel.STEPPING, klass.getNameAsString());
                         // check filters if we should not suspend
                         Pattern[] positivePatterns = info.getFilter().getIncludePatterns();
                         // verify include patterns
@@ -860,7 +860,7 @@ public final class DebuggerController implements ContextsListener {
                         }
                     }
                     if (hit) {
-                        JDWP.LOGGER.fine(() -> "Breakpoint hit in thread: " + getThreadName(currentThread));
+                        JDWPLogger.log("Breakpoint hit in thread: %s", JDWPLogger.LogLevel.STEPPING, getThreadName(currentThread));
 
                         jobs.add(new Callable<Void>() {
                             @Override
@@ -920,7 +920,7 @@ public final class DebuggerController implements ContextsListener {
             KlassRef klass = (KlassRef) ids.fromId((int) callFrame.getClassId());
 
             for (Pattern pattern : patterns) {
-                JDWP.LOGGER.fine(() -> "Matching klass: " + klass.getNameAsString() + " against pattern: " + pattern.pattern());
+                JDWPLogger.log("Matching klass: %s against pattern: %s", JDWPLogger.LogLevel.STEPPING, klass.getNameAsString(), pattern.pattern());
                 if (pattern.pattern().matches(klass.getNameAsString().replace('/', '.'))) {
                     return true;
                 }
@@ -1017,7 +1017,7 @@ public final class DebuggerController implements ContextsListener {
                     codeIndex = context.getBCI(rawNode, rawFrame);
                 }
 
-                list.addLast(new CallFrame(threadId, typeTag, klassId, method, methodId, codeIndex, rawFrame, root, frame, context));
+                list.addLast(new CallFrame(threadId, typeTag, klassId, method, methodId, codeIndex, rawFrame, rawNode, root, frame, context));
                 frameCount++;
                 if (frameLimit != -1 && frameCount >= frameLimit) {
                     return list.toArray(new CallFrame[list.size()]);
