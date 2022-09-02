@@ -260,9 +260,7 @@ public abstract class InteropLibrary extends Library {
     }
 
     /**
-     * Instantiates the receiver value with the given arguments. The returned object must be
-     * initialized correctly according to the language specification (e.g. by calling the
-     * constructor or initialization routine).
+     * Instantiates the receiver value with the given arguments.
      *
      * @throws UnsupportedTypeException if one of the arguments is not compatible to the executable
      *             signature

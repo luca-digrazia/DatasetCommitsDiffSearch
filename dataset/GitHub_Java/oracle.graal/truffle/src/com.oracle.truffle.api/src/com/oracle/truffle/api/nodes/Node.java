@@ -511,15 +511,18 @@ public abstract class Node implements NodeInterface, Cloneable {
      * @since 0.8 or earlier
      */
     public final RootNode getRootNode() {
-        Node rootNode = this;
-        while (rootNode.getParent() != null) {
-            assert !(rootNode instanceof RootNode) : "root node must not have a parent";
-            rootNode = rootNode.getParent();
+        Node node = this;
+        Node prev;
+        do {
+            prev = node;
+            node = node.getParent();
+        } while (node != null);
+
+        if (prev instanceof RootNode) {
+            return (RootNode) prev;
+        } else {
+            return null;
         }
-        if (rootNode instanceof RootNode) {
-            return (RootNode) rootNode;
-        }
-        return null;
     }
 
     /**
@@ -595,11 +598,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         // it is never reset to null, and thus, rootNode is always reachable.
         // GIL: used for nodes that are replace in ASTs that are not yet adopted
         RootNode root = getRootNode();
-        if (root == null) {
-            return GIL_LOCK;
-        } else {
-            return root.getLazyLock();
-        }
+        return root == null ? GIL_LOCK : root.lock;
     }
 
     /**
@@ -671,17 +670,16 @@ public abstract class Node implements NodeInterface, Cloneable {
             }
             ExecutableNode executableNode = getExecutableNode();
             if (executableNode != null) {
-                TruffleLanguage<?> language = executableNode.getLanguage();
-                Object engine = executableNode.getEngine();
-                if (language != null && language.getClass() == languageClass) {
-                    return NodeAccessor.ACCESSOR.engineSupport().getDirectLanguageReference(engine, language, languageClass);
+                if (executableNode.language != null && executableNode.language.getClass() == languageClass) {
+                    return NodeAccessor.ACCESSOR.engineSupport().getDirectLanguageReference(executableNode.polyglotEngine,
+                                    executableNode.language, languageClass);
                 } else {
                     ReferenceCache cache = executableNode.lookupReferenceCache(languageClass);
                     if (cache != null) {
                         return (LanguageReference<T>) cache.languageReference;
                     } else {
-                        return NodeAccessor.ACCESSOR.engineSupport().lookupLanguageReference(engine,
-                                        language, languageClass);
+                        return NodeAccessor.ACCESSOR.engineSupport().lookupLanguageReference(executableNode.polyglotEngine,
+                                        executableNode.language, languageClass);
                     }
                 }
             }
@@ -786,18 +784,16 @@ public abstract class Node implements NodeInterface, Cloneable {
             }
             ExecutableNode executableNode = getExecutableNode();
             if (executableNode != null) {
-                TruffleLanguage<?> language = executableNode.getLanguage();
-                Object engine = executableNode.getEngine();
-                if (language != null && language.getClass() == languageClass) {
-                    return NodeAccessor.ACCESSOR.engineSupport().getDirectContextReference(engine,
-                                    language, languageClass);
+                if (executableNode.language != null && executableNode.language.getClass() == languageClass) {
+                    return NodeAccessor.ACCESSOR.engineSupport().getDirectContextReference(executableNode.polyglotEngine,
+                                    executableNode.language, languageClass);
                 } else {
                     ReferenceCache cache = executableNode.lookupReferenceCache(languageClass);
                     if (cache != null) {
                         return (ContextReference<C>) cache.contextReference;
                     } else {
-                        return NodeAccessor.ACCESSOR.engineSupport().lookupContextReference(engine,
-                                        language, languageClass);
+                        return NodeAccessor.ACCESSOR.engineSupport().lookupContextReference(executableNode.polyglotEngine,
+                                        executableNode.language, languageClass);
                     }
                 }
             }
