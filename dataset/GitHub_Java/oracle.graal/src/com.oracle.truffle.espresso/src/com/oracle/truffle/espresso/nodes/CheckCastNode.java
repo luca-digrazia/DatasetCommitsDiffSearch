@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,6 +26,7 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
@@ -51,8 +52,7 @@ public abstract class CheckCastNode extends QuickNode {
         return checkCast(typeToCheck, instanceKlass);
     }
 
-    CheckCastNode(Klass typeToCheck, int top, int callerBCI) {
-        super(top, callerBCI);
+    CheckCastNode(Klass typeToCheck) {
         assert !typeToCheck.isPrimitive();
         this.typeToCheck = typeToCheck;
     }
@@ -63,13 +63,13 @@ public abstract class CheckCastNode extends QuickNode {
     }
 
     @Override
-    public final int execute(final VirtualFrame frame) {
-        BytecodeNode root = getBytecodesNode();
+    public final int invoke(final VirtualFrame frame, int top) {
+        BytecodeNode root = (BytecodeNode) getParent();
         StaticObject receiver = root.peekObject(frame, top - 1);
         if (StaticObject.isNull(receiver) || executeCheckCast(receiver.getKlass())) {
             return 0;
         }
-        throw typeToCheck.getMeta().throwExWithMessage(ClassCastException.class,
+        throw EspressoLanguage.getCurrentContext().getMeta().throwExWithMessage(ClassCastException.class,
                         receiver.getKlass().getType() + " cannot be cast to: " + typeToCheck.getType() + " in context " + root.getMethod().toString());
     }
 }
