@@ -148,8 +148,8 @@ public final class Target_java_lang_Thread {
             Meta meta = context.getMeta();
             KillStatus killStatus = getKillStatus(self);
             if (killStatus != null || context.isClosing()) {
+                self.setIntField(meta.Thread_threadStatus, State.TERMINATED.value);
                 synchronized (self) {
-                    self.setIntField(meta.Thread_threadStatus, State.TERMINATED.value);
                     // Notify waiting threads you were terminated
                     self.notifyAll();
                 }
@@ -171,8 +171,8 @@ public final class Target_java_lang_Thread {
                     } finally {
                         setThreadStop(self, KillStatus.EXITING);
                         meta.Thread_exit.invokeDirect(self);
+                        self.setIntField(meta.Thread_threadStatus, State.TERMINATED.value);
                         synchronized (self) {
-                            self.setIntField(meta.Thread_threadStatus, State.TERMINATED.value);
                             // Notify waiting threads you are done working
                             self.notifyAll();
                         }
@@ -316,16 +316,16 @@ public final class Target_java_lang_Thread {
     @TruffleBoundary
     @SuppressWarnings({"unused"})
     @Substitution(hasReceiver = true)
-    public static void suspend0(@Host(Object.class) StaticObject toSuspend) {
-        toSuspend.getKlass().getContext().invalidateNoSuspend("Calling Thread.suspend()");
-        SuspendLock lock = getSuspendLock(toSuspend);
+    public static void suspend0(@Host(Object.class) StaticObject self) {
+        self.getKlass().getContext().invalidateNoSuspend("Calling Thread.suspend()");
+        SuspendLock lock = getSuspendLock(self);
         if (lock == null) {
-            if (!isAlive(toSuspend)) {
+            if (!isAlive(self)) {
                 return;
             }
-            lock = initSuspendLock(toSuspend);
+            lock = initSuspendLock(self);
         }
-        suspendHandshake(lock, toSuspend.getKlass().getMeta(), toSuspend);
+        suspendHandshake(lock, self.getKlass().getMeta(), self);
     }
 
     @TruffleBoundary
@@ -455,18 +455,17 @@ public final class Target_java_lang_Thread {
     }
 
     @TruffleBoundary
-    private static void suspendHandshake(SuspendLock lock, Meta meta, StaticObject toSuspend) {
+    private static void suspendHandshake(SuspendLock lock, Meta meta, StaticObject self) {
         Object notifier = lock.notifier;
         boolean wasInterrupted = false;
         while (!lock.targetThreadIsSuspended()) {
             lock.shouldSuspend = true;
+            if (self.getIntField(meta.Thread_threadStatus) != State.RUNNABLE.value) {
+                break;
+            }
             try {
                 synchronized (notifier) {
-                    if (toSuspend.getIntField(meta.Thread_threadStatus) == State.RUNNABLE.value) {
-                        notifier.wait();
-                    } else {
-                        break;
-                    }
+                    notifier.wait();
                 }
             } catch (InterruptedException e) {
                 /* Thread.suspend() is not supposed to be interrupted */
