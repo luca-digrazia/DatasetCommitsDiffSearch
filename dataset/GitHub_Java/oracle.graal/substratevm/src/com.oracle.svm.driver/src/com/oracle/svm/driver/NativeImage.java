@@ -226,13 +226,6 @@ public class NativeImage {
         Path getWorkingDirectory();
 
         /**
-         * @return java.home that is associated with this BuildConfiguration
-         */
-        default Path getJavaHome() {
-            throw VMError.unimplemented();
-        }
-
-        /**
          * @return path to Java executable
          */
         default Path getJavaExecutable() {
@@ -443,11 +436,6 @@ public class NativeImage {
         }
 
         @Override
-        public Path getJavaHome() {
-            return useJavaModules() ? rootDir : rootDir.getParent();
-        }
-
-        @Override
         public Path getJavaExecutable() {
             Path binJava = Paths.get("bin", OS.getCurrent() == OS.WINDOWS ? "java.exe" : "java");
             if (Files.isExecutable(rootDir.resolve(binJava))) {
@@ -458,14 +446,11 @@ public class NativeImage {
             if (javaHome == null) {
                 throw showError("Environment variable JAVA_HOME is not set");
             }
-            Path javaHomeDir = Paths.get(javaHome);
-            if (!Files.isDirectory(javaHomeDir)) {
-                throw showError("Environment variable JAVA_HOME does not refer to a directory");
-            }
-            if (!Files.isExecutable(javaHomeDir.resolve(binJava))) {
+            Path javaHomePath = Paths.get(javaHome);
+            if (!Files.isExecutable(javaHomePath.resolve(binJava))) {
                 throw showError("Environment variable JAVA_HOME does not refer to a directory with a " + binJava + " executable");
             }
-            return javaHomeDir.resolve(binJava);
+            return javaHomePath.resolve(binJava);
         }
 
         @Override
@@ -890,7 +875,7 @@ public class NativeImage {
                             String optionArgKey = componentDirectory.subpath(2, nameCount).toString();
                             optionArg = propertyFileSubstitutionValues.get(optionArgKey);
                         }
-                        return resolvePropertyValue(str, optionArg, componentDirectory, config);
+                        return resolvePropertyValue(str, optionArg, componentDirectory.toString());
                     };
                     showVerboseMessage(isVerbose(), "Apply " + nativeImageMetaInfFile.toUri());
                     try {
@@ -1593,7 +1578,7 @@ public class NativeImage {
         propertyFileSubstitutionValues.put(key, value);
     }
 
-    static String resolvePropertyValue(String val, String optionArg, Path componentDirectory, BuildConfiguration config) {
+    static String resolvePropertyValue(String val, String optionArg, String componentDirectory) {
         String resultVal = val;
         if (optionArg != null) {
             /* Substitute ${*} -> optionArg in resultVal (always possible) */
@@ -1614,9 +1599,7 @@ public class NativeImage {
             }
         }
         /* Substitute ${.} -> absolute path to optionDirectory */
-        resultVal = safeSubstitution(resultVal, "${.}", componentDirectory.toString());
-        /* Substitute ${java.home} -> to java.home of BuildConfiguration */
-        resultVal = safeSubstitution(resultVal, "${java.home}", config.getJavaHome().toString());
+        resultVal = safeSubstitution(resultVal, "${.}", componentDirectory);
         return resultVal;
     }
 
