@@ -385,13 +385,8 @@ final class JDWP {
                     if (refTypeId != -1) { // -1 for new classes in tests
                         klass = verifyRefType(refTypeId, reply, context);
                         if (klass == null) {
-                            // check if klass was removed by a previous redefinition
-                            if (!context.getIds().checkRemoved(refTypeId)) {
-                                reply.errorCode(ErrorCodes.INVALID_OBJECT);
-                                return new CommandResult(reply);
-                            }
-                        }
-                        if (klass == context.getNullObject()) {
+                            return new CommandResult(reply);
+                        } else if (klass == context.getNullObject()) {
                             reply.errorCode(ErrorCodes.INVALID_OBJECT);
                             return new CommandResult(reply);
                         }
@@ -2409,11 +2404,6 @@ final class JDWP {
                 }
 
                 int arrayLength = context.getArrayLength(array);
-                if (arrayLength == -1) {
-                    // can happen for foreign arrays
-                    reply.errorCode(ErrorCodes.INVALID_OBJECT);
-                    return new CommandResult(reply);
-                }
 
                 reply.writeInt(arrayLength);
                 return new CommandResult(reply);
