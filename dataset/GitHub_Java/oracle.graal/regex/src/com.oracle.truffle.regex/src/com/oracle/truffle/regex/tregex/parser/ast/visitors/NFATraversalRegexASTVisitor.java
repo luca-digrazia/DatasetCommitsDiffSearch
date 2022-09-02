@@ -412,6 +412,7 @@ public abstract class NFATraversalRegexASTVisitor {
                 } else {
                     pushGroupExit(parent);
                 }
+                unregisterInsideLoop(parent);
                 return advanceTerm(parent);
             } else {
                 cur = forward ? sequence.getFirstTerm() : sequence.getLastTerm();
