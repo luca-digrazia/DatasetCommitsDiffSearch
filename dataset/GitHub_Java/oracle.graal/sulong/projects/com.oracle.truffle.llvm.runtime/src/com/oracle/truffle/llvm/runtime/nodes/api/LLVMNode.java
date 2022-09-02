@@ -34,6 +34,8 @@ import java.io.PrintStream;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
+import com.oracle.truffle.api.instrumentation.StandardTags;
+import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
@@ -94,25 +96,25 @@ public abstract class LLVMNode extends Node {
         return SulongEngineOption.isTrue(context.get().getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
     }
 
-    public LLVMNodeSourceDescriptor getSourceDescriptor() {
-        return null;
+    public boolean hasTag(Class<? extends Tag> tag) {
+        // only nodes that have a SourceSection attached are considered to be tagged by any
+        // anything, for sulong only those nodes that actually represent source language statements
+        // should have one
+        return tag == StandardTags.StatementTag.class;
     }
 
-    /**
-     * Get a {@link LLVMSourceLocation descriptor} for the source-level code location and scope
-     * information of this node.
-     *
-     * @return the descriptor attached to this node
-     */
     public LLVMSourceLocation getSourceLocation() {
-        final LLVMNodeSourceDescriptor sourceDescriptor = getSourceDescriptor();
-        return sourceDescriptor != null ? sourceDescriptor.getSourceLocation() : null;
+        return null;
     }
 
     @Override
     public SourceSection getSourceSection() {
-        final LLVMNodeSourceDescriptor sourceDescriptor = getSourceDescriptor();
-        return sourceDescriptor != null ? sourceDescriptor.getSourceSection() : null;
+        final LLVMSourceLocation location = getSourceLocation();
+        if (location != null) {
+            return location.getSourceSection();
+        }
+
+        return null;
     }
 
     protected static boolean isFunctionDescriptor(Object object) {

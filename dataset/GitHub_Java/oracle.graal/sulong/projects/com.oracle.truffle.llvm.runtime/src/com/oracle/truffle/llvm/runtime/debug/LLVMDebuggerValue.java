@@ -30,18 +30,14 @@
 package com.oracle.truffle.llvm.runtime.debug;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.profiles.BranchProfile;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 
 @ExportLibrary(InteropLibrary.class)
 public abstract class LLVMDebuggerValue implements TruffleObject {
@@ -54,26 +50,18 @@ public abstract class LLVMDebuggerValue implements TruffleObject {
 
     protected abstract Object getElementForDebugger(String key);
 
-    @SuppressWarnings("static-method")
+    public Object getMetaObject() {
+        return null;
+    }
+
     @ExportMessage
-    public final boolean hasMembers() {
+    boolean hasMembers() {
         return true;
     }
 
-    @TruffleBoundary
-    public Object resolveMetaObject() {
-        InteropLibrary debuggerInterop = InteropLibrary.getFactory().getUncached(this);
-        try {
-            return debuggerInterop.hasMetaObject(this) ? debuggerInterop.getMetaObject(this) : null;
-        } catch (UnsupportedMessageException e) {
-            CompilerDirectives.transferToInterpreter();
-            throw new AssertionError("Unexpected unsupported message.", e);
-        }
-    }
-
     @ExportMessage
     @TruffleBoundary
-    public final Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+    Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
         if (getElementCountForDebugger() == 0) {
             return SubElements.EMPTY;
         }
@@ -84,14 +72,14 @@ public abstract class LLVMDebuggerValue implements TruffleObject {
 
     @ExportMessage
     @TruffleBoundary
-    public final boolean isMemberReadable(String key) {
+    boolean isMemberReadable(String key) {
         Object element = getElementForDebugger(key);
         return element != null;
     }
 
     @ExportMessage
     @TruffleBoundary
-    public final Object readMember(String key,
+    Object readMember(String key,
                     @Cached BranchProfile exception) throws UnknownIdentifierException {
         Object element = getElementForDebugger(key);
         if (element != null) {
@@ -139,23 +127,5 @@ public abstract class LLVMDebuggerValue implements TruffleObject {
                 throw InvalidArrayIndexException.create(idx);
             }
         }
-    }
-
-    @ExportMessage
-    @SuppressWarnings({"unused", "static-method"})
-    public final boolean hasLanguage() {
-        return true;
-    }
-
-    @ExportMessage
-    @SuppressWarnings({"static-method"})
-    public final Class<? extends TruffleLanguage<?>> getLanguage() {
-        return LLVMLanguage.class;
-    }
-
-    @ExportMessage
-    @TruffleBoundary
-    public final String toDisplayString(@SuppressWarnings("unused") boolean allowSideEffects) {
-        return toString();
     }
 }
