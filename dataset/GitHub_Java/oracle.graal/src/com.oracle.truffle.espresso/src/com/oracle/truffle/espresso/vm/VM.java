@@ -304,15 +304,11 @@ public final class VM extends NativeEnv implements ContextAccess {
                         return defaultValue(m.returnType());
                     }
                     throw EspressoError.shouldNotReachHere(e);
-                } catch (StackOverflowError | OutOfMemoryError e) {
+                } catch (RuntimeException | VirtualMachineError e) {
                     if (isJni) {
-                        // This will most likely SOE again. Nothing we can do about that
-                        // unfortunately.
                         jniEnv.getThreadLocalPendingException().set(getMeta().initEx(e.getClass()));
                         return defaultValue(m.returnType());
                     }
-                    throw e;
-                } catch (RuntimeException | VirtualMachineError e) {
                     throw e;
                 } catch (ThreadDeath e) {
                     throw getMeta().throwEx(ThreadDeath.class);
@@ -508,18 +504,18 @@ public final class VM extends NativeEnv implements ContextAccess {
             throw meta.throwEx(IndexOutOfBoundsException.class);
         }
         StackElement stackElement = frames.trace[index];
-        Method method = stackElement.getMethod();
-        if (method == null) {
+        Method caller = stackElement.getMethod();
+        if (caller == null) {
             return StaticObject.NULL;
         }
         int bci = stackElement.getBCI();
 
         meta.StackTraceElement_init.invokeDirect(
                         /* this */ ste,
-                        /* declaringClass */ meta.toGuestString(MetaUtil.internalNameToJava(method.getDeclaringKlass().getType().toString(), true, true)),
-                        /* methodName */ meta.toGuestString(method.getName()),
-                        /* fileName */ meta.toGuestString(method.getSourceFile()),
-                        /* lineNumber */ method.BCItoLineNumber(bci));
+                        /* declaringClass */ meta.toGuestString(MetaUtil.internalNameToJava(caller.getDeclaringKlass().getType().toString(), true, true)),
+                        /* methodName */ meta.toGuestString(caller.getName()),
+                        /* fileName */ meta.toGuestString(caller.getSourceFile()),
+                        /* lineNumber */ caller.BCItoLineNumber(bci));
 
         return ste;
     }
