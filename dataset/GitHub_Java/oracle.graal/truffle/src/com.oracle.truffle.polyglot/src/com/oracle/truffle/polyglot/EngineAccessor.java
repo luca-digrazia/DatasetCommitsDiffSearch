@@ -759,7 +759,7 @@ final class EngineAccessor extends Accessor {
 
         private static PolyglotEngineImpl resolveEngine(Node node, PolyglotContextImpl context) {
             PolyglotEngineImpl engine;
-            if (CompilerDirectives.inCompiledCode() && node != null) {
+            if (node != null) {
                 RootNode root = node.getRootNode();
                 if (root == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
@@ -793,7 +793,7 @@ final class EngineAccessor extends Accessor {
                 impl.initializeContextLocals();
                 impl.engine.initializeMultiContext(creator.context);
                 impl.notifyContextCreated();
-                impl.initializeLanguage(creator.language.getId());
+                impl.initializeInnerContextLanguage(creator.language.getId());
             }
             return impl.creatorTruffleContext;
         }

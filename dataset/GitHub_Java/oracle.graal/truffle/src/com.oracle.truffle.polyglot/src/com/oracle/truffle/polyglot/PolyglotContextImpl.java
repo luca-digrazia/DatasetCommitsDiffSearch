@@ -178,7 +178,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
      * closed state.
      */
     volatile boolean cancelling;
-    volatile boolean cancelled;
     volatile String invalidMessage;
     volatile boolean invalidResourceLimit;
     volatile Thread closingThread;
@@ -914,23 +913,39 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         return context;
     }
 
+    void initializeInnerContextLanguage(String languageId) {
+        PolyglotLanguage language = engine.idToLanguage.get(languageId);
+        assert language != null : "language creating the inner context not be found";
+        Object prev = engine.enterIfNeeded(this);
+        try {
+            initializeLanguage(language);
+        } finally {
+            engine.leaveIfNeeded(prev, this);
+        }
+    }
+
+    private boolean initializeLanguage(PolyglotLanguage language) {
+        PolyglotLanguageContext languageContext = getContext(language);
+        assert languageContext != null;
+        languageContext.checkAccess(null);
+        if (!languageContext.isInitialized()) {
+            return languageContext.ensureInitialized(null);
+        }
+        return false;
+    }
+
     @Override
     public boolean initializeLanguage(String languageId) {
         PolyglotLanguage language = requirePublicLanguage(languageId);
         PolyglotLanguageContext languageContext = getContext(language);
-        assert languageContext != null;
         Object prev = hostEnter(languageContext);
         try {
-            languageContext.checkAccess(null);
-            if (!languageContext.isInitialized()) {
-                return languageContext.ensureInitialized(null);
-            }
+            return initializeLanguage(language);
         } catch (Throwable t) {
             throw PolyglotImpl.guestToHostException(languageContext, t, true);
         } finally {
             hostLeave(languageContext, prev);
         }
-        return false;
     }
 
     @Override
@@ -1304,7 +1319,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         }
     }
 
-    long calculateHeapSize(long stopAtBytes, AtomicBoolean calculationCancelled) {
+    long calculateHeapSize(long stopAtBytes, AtomicBoolean cancelled) {
         try {
             ObjectSizeCalculator localObjectSizeCalculator;
             synchronized (this) {
@@ -1314,7 +1329,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                     objectSizeCalculator = localObjectSizeCalculator;
                 }
             }
-            return localObjectSizeCalculator.calculateObjectSize(getContextHeapRoots(), stopAtBytes, calculationCancelled);
+            return localObjectSizeCalculator.calculateObjectSize(getContextHeapRoots(), stopAtBytes, cancelled);
         } catch (UnsupportedOperationException e) {
             throw new UnsupportedOperationException("Polyglot context heap size calculation is not supported on current Truffle runtime.", e);
         }
@@ -1506,9 +1521,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                     engine.leave(prev, this);
                     if (success) {
                         remainingThreads = threads.keySet().toArray(new Thread[0]);
-                    }
-                    if (success && cancelling) {
-                        cancelled = true;
                     }
                     cancelling = false;
                     if (success) {
