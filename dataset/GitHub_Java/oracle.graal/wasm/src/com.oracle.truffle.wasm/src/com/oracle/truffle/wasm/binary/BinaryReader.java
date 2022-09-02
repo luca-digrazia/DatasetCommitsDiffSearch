@@ -135,7 +135,6 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SHR_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SHR_U;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_STORE;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_STORE_16;
-import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_STORE_8;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_SUB;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_TRUNC_F32_S;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.I32_TRUNC_F32_U;
@@ -672,7 +671,6 @@ public class BinaryReader extends BinaryStreamReader {
                 case I64_STORE:
                 case F32_STORE:
                 case F64_STORE:
-                case I32_STORE_8:
                 case I32_STORE_16:
                 case I64_STORE_8:
                 case I64_STORE_16:
