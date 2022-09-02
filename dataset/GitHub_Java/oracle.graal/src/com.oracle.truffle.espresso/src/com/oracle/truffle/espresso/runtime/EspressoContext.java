@@ -33,6 +33,7 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.graalvm.polyglot.Engine;
@@ -104,7 +105,6 @@ public final class EspressoContext {
 
     // Set on calling guest Therad.stop0(), or when closing context.
     @CompilationFinal private Assumption noThreadStop = Truffle.getRuntime().createAssumption();
-    @CompilationFinal private Assumption noSuspend = Truffle.getRuntime().createAssumption();
     private boolean isClosing = false;
 
     public EspressoContext(TruffleLanguage.Env env, EspressoLanguage language) {
@@ -269,7 +269,6 @@ public final class EspressoContext {
         mainThread.setHiddenField(this.meta.HIDDEN_HOST_THREAD, Thread.currentThread());
         meta.Thread_threadStatus.set(mainThread, Target_java_lang_Thread.State.RUNNABLE.value);
         mainThread.setHiddenField(meta.HIDDEN_HOST_THREAD, Thread.currentThread());
-        mainThread.setHiddenField(meta.HIDDEN_DEATH, Target_java_lang_Thread.KillStatus.NORMAL);
         host2guest.put(Thread.currentThread(), mainThread);
         activeThreads.add(mainThread);
         StaticObject mainThreadGroup = meta.ThreadGroup.allocateInstance();
@@ -412,20 +411,12 @@ public final class EspressoContext {
         activeThreads.remove(thread);
     }
 
-    public void invalidateNoThreadStop(String message) {
-        noThreadStop.invalidate(message);
-    }
-
     public boolean noThreadStop() {
         return noThreadStop.isValid();
     }
 
-    public void invalidateNoSuspend(String message) {
-        noSuspend.invalidate(message);
-    }
-
-    public boolean noSuspend() {
-        return noSuspend.isValid();
+    public void invalidateNoThreadStop(String message) {
+        noThreadStop.invalidate(message);
     }
 
     public boolean isClosing() {
@@ -433,8 +424,8 @@ public final class EspressoContext {
     }
 
     // region Options
-    public final boolean InlineFieldAccessors;
 
+    public final boolean InlineFieldAccessors;
     public final EspressoOptions.VerifyMode Verify;
     public final EspressoOptions.JDWPOptions JDWPOptions;
 
