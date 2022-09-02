@@ -65,18 +65,12 @@ public abstract class CheckCastNode extends QuickNode {
     }
 
     @Override
-    public boolean producedForeignObject(VirtualFrame frame) {
-        return false;
-    }
-
-    @Override
     public final int execute(final VirtualFrame frame) {
         BytecodeNode root = getBytecodesNode();
         StaticObject receiver = root.peekObject(frame, top - 1);
         if (StaticObject.isNull(receiver) || executeCheckCast(receiver.getKlass())) {
             return 0;
         }
-        getExceptionProfile().enter();
         Meta meta = typeToCheck.getMeta();
         throw Meta.throwExceptionWithMessage(meta.java_lang_ClassCastException,
                         getExceptionMessage(root, receiver));
