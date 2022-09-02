@@ -38,6 +38,7 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 public abstract class EspressoMethodNode extends EspressoInstrumentableNode implements ContextAccess {
 
     private final Method method;
+    private Source source;
 
     EspressoMethodNode(Method method) {
         this.method = method;
