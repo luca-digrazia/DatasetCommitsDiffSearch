@@ -20,10 +20,8 @@ import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
 @ExportLibrary(InteropLibrary.class)
@@ -31,8 +29,7 @@ public final class EspressoBindings implements TruffleObject {
 
     final StaticObject loader;
 
-    public EspressoBindings(@Host(ClassLoader.class) StaticObject loader) {
-        assert StaticObject.notNull(loader) : "boot classloader (null) not supported";
+    public EspressoBindings(StaticObject loader) {
         this.loader = loader;
     }
 
@@ -57,10 +54,7 @@ public final class EspressoBindings implements TruffleObject {
     }
 
     @ExportMessage
-    Object readMember(String member,
-                      @CachedLibrary("this.loader") InteropLibrary interop,
-                      @CachedContext(EspressoLanguage.class) EspressoContext context,
-                      @Cached BranchProfile error) throws UnsupportedMessageException, UnknownIdentifierException {
+    Object readMember(String member, @CachedLibrary("this.loader") InteropLibrary interop, @Cached BranchProfile error) throws UnsupportedMessageException, UnknownIdentifierException {
         if (!isMemberReadable(member)) {
             error.enter();
             throw UnknownIdentifierException.create(member);
@@ -70,7 +64,7 @@ public final class EspressoBindings implements TruffleObject {
             return clazz.getMirrorKlass();
         } catch (EspressoException e) {
             error.enter();
-            Meta meta = context.getMeta();
+            Meta meta = loader.getKlass().getMeta();
             if (InterpreterToVM.instanceOf(e.getExceptionObject(), meta.java_lang_ClassNotFoundException)) {
                 throw UnknownIdentifierException.create(member, e);
             }
