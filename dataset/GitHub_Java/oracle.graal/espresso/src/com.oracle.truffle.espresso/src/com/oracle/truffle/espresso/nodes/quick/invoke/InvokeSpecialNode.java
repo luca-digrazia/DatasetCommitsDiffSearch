@@ -24,7 +24,6 @@ package com.oracle.truffle.espresso.nodes.quick.invoke;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
@@ -56,9 +55,25 @@ public final class InvokeSpecialNode extends QuickNode {
             // update to the latest method version and grab a new direct call target
             CompilerDirectives.transferToInterpreterAndInvalidate();
             if (removedByRedefintion()) {
-                // accept a slow path once the method has been removed
-                // put method behind a boundary to avoid a deopt loop
-                handleRemovedMethod(method);
+                try {
+                    ClassRedefinition.lock();
+
+                    Method resolutionSeed = method.getMethod();
+                    Klass accessingKlass = resolutionSeed.getDeclaringKlass();
+                    Method replacementMethod = resolutionSeed.getDeclaringKlass().lookupMethod(resolutionSeed.getName(), resolutionSeed.getRawSignature(), accessingKlass);
+                    Meta meta = resolutionSeed.getMeta();
+                    if (replacementMethod == null) {
+                        throw Meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError,
+                                        meta.toGuestString(resolutionSeed.getDeclaringKlass().getNameAsString() + "." + resolutionSeed.getName() + resolutionSeed.getRawSignature()));
+                    } else if (replacementMethod.isStatic()) {
+                        throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "expected non-static method: " + replacementMethod.getName());
+                    } else {
+                        // Update to the latest version of the replacement method
+                        method = replacementMethod.getMethodVersion();
+                    }
+                } finally {
+                    ClassRedefinition.unlock();
+                }
             } else {
                 method = method.getMethod().getMethodVersion();
             }
@@ -71,29 +86,6 @@ public final class InvokeSpecialNode extends QuickNode {
         nullCheck((StaticObject) args[0]); // nullcheck receiver
         Object result = directCallNode.call(args);
         return (getResultAt() - top) + BytecodeNode.putKind(primitives, refs, getResultAt(), result, method.getMethod().getReturnKind());
-    }
-
-    @TruffleBoundary
-    private static void handleRemovedMethod(MethodVersion method) {
-        try {
-            ClassRedefinition.lock();
-
-            Method resolutionSeed = method.getMethod();
-            Klass accessingKlass = resolutionSeed.getDeclaringKlass();
-            Method replacementMethod = resolutionSeed.getDeclaringKlass().lookupMethod(resolutionSeed.getName(), resolutionSeed.getRawSignature(), accessingKlass);
-            Meta meta = resolutionSeed.getMeta();
-            if (replacementMethod == null) {
-                throw Meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError,
-                                meta.toGuestString(resolutionSeed.getDeclaringKlass().getNameAsString() + "." + resolutionSeed.getName() + resolutionSeed.getRawSignature()));
-            } else if (replacementMethod.isStatic()) {
-                throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "expected non-static method: " + replacementMethod.getName());
-            } else {
-                // Update to the latest version of the replacement method
-                method = replacementMethod.getMethodVersion();
-            }
-        } finally {
-            ClassRedefinition.unlock();
-        }
     }
 
     @Override
