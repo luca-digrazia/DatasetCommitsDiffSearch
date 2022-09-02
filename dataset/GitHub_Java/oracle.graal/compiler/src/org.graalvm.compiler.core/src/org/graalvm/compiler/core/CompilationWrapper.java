@@ -302,16 +302,10 @@ public abstract class CompilationWrapper<T> {
         }
     }
 
-    /**
-     * Calls {@link System#exit(int)} in the runtime embedding the Graal compiler. This will be a
-     * different runtime than Graal's runtime in the case of libgraal.
-     */
-    protected abstract void exitHostVM(int status);
-
     private void maybeExitVM(ExceptionAction action) {
         if (action == ExitVM) {
             TTY.println("Exiting VM after retry compilation of " + this);
-            exitHostVM(-1);
+            System.exit(-1);
         }
     }
 
