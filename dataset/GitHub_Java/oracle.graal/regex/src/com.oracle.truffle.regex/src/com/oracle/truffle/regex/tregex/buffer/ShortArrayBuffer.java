@@ -22,14 +22,12 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
 package com.oracle.truffle.regex.tregex.buffer;
 
 import java.util.Arrays;
-import java.util.Iterator;
 
 /**
- * This class is designed as a "scratchpad" for generating many Object arrays of unknown size. It
+ * This class is designed as a "scratchpad" for generating many short arrays of unknown size. It
  * will never shrink its internal buffer, so it should be disposed as soon as it is no longer
  * needed.
  * <p>
@@ -37,28 +35,27 @@ import java.util.Iterator;
  * </p>
  * 
  * <pre>
- * SomeClass[] typedArray = new SomeClass[0];
- * ObjectArrayBuffer buf = new ObjectArrayBuffer();
- * List<SomeClass[]> results = new ArrayList<>();
+ * ShortArrayBuffer buf = new ShortArrayBuffer();
+ * List<short[]> results = new ArrayList<>();
  * for (Object obj : listOfThingsToProcess) {
- *     for (Object x : obj.thingsThatShouldBecomeSomeClass()) {
+ *     for (Object x : obj.thingsThatShouldBecomeShorts()) {
  *         buf.add(someCalculation(x));
  *     }
- *     results.add(buf.toArray(typedArray));
+ *     results.add(buf.toArray());
  *     buf.clear();
  * }
  * </pre>
  */
-public final class ObjectArrayBuffer extends AbstractArrayBuffer implements Iterable<Object> {
+public class ShortArrayBuffer extends AbstractArrayBuffer {
 
-    private Object[] buf;
+    private short[] buf;
 
-    public ObjectArrayBuffer() {
+    public ShortArrayBuffer() {
         this(16);
     }
 
-    public ObjectArrayBuffer(int initialSize) {
-        buf = new Object[initialSize];
+    public ShortArrayBuffer(int initialSize) {
+        buf = new short[initialSize];
     }
 
     @Override
@@ -71,51 +68,25 @@ public final class ObjectArrayBuffer extends AbstractArrayBuffer implements Iter
         buf = Arrays.copyOf(buf, newSize);
     }
 
-    public Object get(int i) {
+    public short get(int i) {
         return buf[i];
     }
 
-    public void add(Object o) {
+    public void add(short s) {
         if (length == buf.length) {
             grow(length * 2);
         }
-        buf[length] = o;
+        buf[length] = s;
         length++;
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> T[] toArray(T[] a) {
-        if (a.length < length) {
-            return (T[]) Arrays.copyOf(buf, length, a.getClass());
-        }
-        System.arraycopy(buf, 0, a, 0, length);
-        return a;
+    public void addAll(short[] values, int valuesLength) {
+        ensureCapacity(length + valuesLength);
+        System.arraycopy(values, 0, buf, length, valuesLength);
+        length += valuesLength;
     }
 
-    @Override
-    public Iterator<Object> iterator() {
-        return new ObjectBufferIterator(buf, length);
-    }
-
-    private static final class ObjectBufferIterator implements Iterator<Object> {
-
-        private final Object[] buf;
-        private final int size;
-        private int i = 0;
-
-        private ObjectBufferIterator(Object[] buf, int size) {
-            this.buf = buf;
-            this.size = size;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return i < size;
-        }
-
-        @Override
-        public Object next() {
-            return buf[i++];
-        }
+    public short[] toArray() {
+        return Arrays.copyOf(buf, length);
     }
 }

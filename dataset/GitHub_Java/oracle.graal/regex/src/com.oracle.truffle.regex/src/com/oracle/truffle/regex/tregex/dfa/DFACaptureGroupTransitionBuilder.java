@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,8 +31,8 @@ import com.oracle.truffle.regex.tregex.buffer.ByteArrayBuffer;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
 import com.oracle.truffle.regex.tregex.buffer.ObjectArrayBuffer;
 import com.oracle.truffle.regex.tregex.nfa.NFAStateTransition;
-import com.oracle.truffle.regex.tregex.nodes.dfa.DFACaptureGroupLazyTransitionNode;
-import com.oracle.truffle.regex.tregex.nodes.dfa.DFACaptureGroupPartialTransitionNode;
+import com.oracle.truffle.regex.tregex.nodes.DFACaptureGroupLazyTransitionNode;
+import com.oracle.truffle.regex.tregex.nodes.DFACaptureGroupPartialTransitionNode;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonObject;

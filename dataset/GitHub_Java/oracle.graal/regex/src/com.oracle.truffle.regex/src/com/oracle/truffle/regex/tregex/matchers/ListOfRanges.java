@@ -22,9 +22,13 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.regex.chardata;
+package com.oracle.truffle.regex.tregex.matchers;
 
-public interface CharacterSet {
+public interface ListOfRanges {
 
-    boolean contains(int codepoint);
+    int getLo(int i);
+
+    int getHi(int i);
+
+    int size();
 }

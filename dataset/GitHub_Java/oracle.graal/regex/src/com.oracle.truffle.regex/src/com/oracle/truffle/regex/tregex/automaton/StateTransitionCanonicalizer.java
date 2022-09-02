@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,7 +25,6 @@
 package com.oracle.truffle.regex.tregex.automaton;
 
 import com.oracle.truffle.regex.charset.CharSet;
-import com.oracle.truffle.regex.charset.ImmutableSortedListOfRanges;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
 
 import org.graalvm.collections.EconomicMap;
@@ -46,6 +45,7 @@ import java.util.List;
  */
 public abstract class StateTransitionCanonicalizer<TS extends TransitionSet, TB extends TransitionBuilder<TS>> {
 
+    private final CharSet[] intersectionResult = new CharSet[3];
     private final ArrayList<TB> disjointTransitions = new ArrayList<>();
     private final EconomicMap<TS, TB> mergeSameTargetsMap = EconomicMap.create();
 
@@ -127,10 +127,10 @@ public abstract class StateTransitionCanonicalizer<TS extends TransitionSet, TB 
         for (TB e : transitions) {
             for (int i = 0; i < disjointTransitions.size(); i++) {
                 TB r = disjointTransitions.get(i);
-                ImmutableSortedListOfRanges.IntersectAndSubtractResult<CharSet> result = r.getMatcherBuilder().intersectAndSubtract(e.getMatcherBuilder(), compilationBuffer);
-                CharSet rSubtractedMatcher = result.subtractedA;
-                CharSet eSubtractedMatcher = result.subtractedB;
-                CharSet intersection = result.intersection;
+                r.getMatcherBuilder().intersectAndSubtract(e.getMatcherBuilder(), compilationBuffer, intersectionResult);
+                CharSet rSubtractedMatcher = intersectionResult[0];
+                CharSet eSubtractedMatcher = intersectionResult[1];
+                CharSet intersection = intersectionResult[2];
                 if (intersection.matchesSomething()) {
                     if (rSubtractedMatcher.matchesNothing()) {
                         r.getTransitionSet().addAll(e.getTransitionSet());

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,9 +26,6 @@ package com.oracle.truffle.regex.tregex.matchers;
 
 import com.oracle.truffle.regex.charset.CharSet;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
-
-import static org.junit.Assert.assertTrue;
-
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -74,13 +71,12 @@ public class MatcherBuilderTest {
     }
 
     private static void checkInverse(CharSet a, char... values) {
-        checkMatch("inverse(" + a + ")", a.createInverse(), values);
+        checkMatch("inverse(" + a + ")", a.createInverse(new CompilationBuffer()), values);
     }
 
     private static void checkIntersection(CharSet a, CharSet b, char... values) {
-        CharSet intersection = a.createIntersection(b, new CompilationBuffer());
+        CharSet intersection = a.createIntersectionMatcher(b, new CompilationBuffer());
         checkMatch("intersection(" + a + "," + b + ")", intersection, values);
-        assertTrue("intersection(" + a + "," + b + ")", a.intersects(b) == intersection.matchesSomething());
         CharSet[] result = new CharSet[3];
         a.intersectAndSubtract(b, new CompilationBuffer(), result);
         checkMatch("intersectAndSubtract(" + a + "," + b + ")[0]", result[0], a.subtract(intersection, new CompilationBuffer()));

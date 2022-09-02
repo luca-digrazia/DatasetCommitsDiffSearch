@@ -22,43 +22,39 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-
 package com.oracle.truffle.regex.tregex.buffer;
 
 import java.util.Arrays;
-import java.util.Iterator;
 
 /**
- * This class is designed as a "scratchpad" for generating many Object arrays of unknown size. It
- * will never shrink its internal buffer, so it should be disposed as soon as it is no longer
- * needed.
+ * This class is designed as a "scratchpad" for generating many byte arrays of unknown size. It will
+ * never shrink its internal buffer, so it should be disposed as soon as it is no longer needed.
  * <p>
  * Usage Example:
  * </p>
  * 
  * <pre>
- * SomeClass[] typedArray = new SomeClass[0];
- * ObjectArrayBuffer buf = new ObjectArrayBuffer();
- * List<SomeClass[]> results = new ArrayList<>();
+ * ByteArrayBuffer buf = new ByteArrayBuffer();
+ * List<byte[]> results = new ArrayList<>();
  * for (Object obj : listOfThingsToProcess) {
- *     for (Object x : obj.thingsThatShouldBecomeSomeClass()) {
+ *     for (Object x : obj.thingsThatShouldBecomeBytes()) {
  *         buf.add(someCalculation(x));
  *     }
- *     results.add(buf.toArray(typedArray));
+ *     results.add(buf.toArray());
  *     buf.clear();
  * }
  * </pre>
  */
-public final class ObjectArrayBuffer extends AbstractArrayBuffer implements Iterable<Object> {
+public class ByteArrayBuffer extends AbstractArrayBuffer {
 
-    private Object[] buf;
+    private byte[] buf;
 
-    public ObjectArrayBuffer() {
+    public ByteArrayBuffer() {
         this(16);
     }
 
-    public ObjectArrayBuffer(int initialSize) {
-        buf = new Object[initialSize];
+    public ByteArrayBuffer(int initialSize) {
+        buf = new byte[initialSize];
     }
 
     @Override
@@ -71,51 +67,19 @@ public final class ObjectArrayBuffer extends AbstractArrayBuffer implements Iter
         buf = Arrays.copyOf(buf, newSize);
     }
 
-    public Object get(int i) {
+    public byte get(int i) {
         return buf[i];
     }
 
-    public void add(Object o) {
+    public void add(byte b) {
         if (length == buf.length) {
             grow(length * 2);
         }
-        buf[length] = o;
+        buf[length] = b;
         length++;
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> T[] toArray(T[] a) {
-        if (a.length < length) {
-            return (T[]) Arrays.copyOf(buf, length, a.getClass());
-        }
-        System.arraycopy(buf, 0, a, 0, length);
-        return a;
-    }
-
-    @Override
-    public Iterator<Object> iterator() {
-        return new ObjectBufferIterator(buf, length);
-    }
-
-    private static final class ObjectBufferIterator implements Iterator<Object> {
-
-        private final Object[] buf;
-        private final int size;
-        private int i = 0;
-
-        private ObjectBufferIterator(Object[] buf, int size) {
-            this.buf = buf;
-            this.size = size;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return i < size;
-        }
-
-        @Override
-        public Object next() {
-            return buf[i++];
-        }
+    public byte[] toArray() {
+        return Arrays.copyOf(buf, length);
     }
 }
