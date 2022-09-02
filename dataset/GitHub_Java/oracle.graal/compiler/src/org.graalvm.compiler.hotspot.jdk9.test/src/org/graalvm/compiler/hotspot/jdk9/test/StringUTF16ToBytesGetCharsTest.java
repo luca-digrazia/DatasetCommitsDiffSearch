@@ -27,6 +27,7 @@ package org.graalvm.compiler.hotspot.jdk9.test;
 import static org.junit.Assume.assumeFalse;
 
 import org.graalvm.compiler.core.common.CompilationIdentifier;
+import org.graalvm.compiler.hotspot.replacements.StringUTF16Substitutions;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
@@ -41,7 +42,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 
 /**
  * Test substitutions for (innate) methods StringUTF16.toBytes and StringUTF16.getChars provided by
- * {@link org.graalvm.compiler.hotspot.meta.HotSpotGraphBuilderPlugins#registerStringPlugins}.
+ * {@link StringUTF16Substitutions}.
  */
 @AddExports({"java.base/java.lang"})
 public final class StringUTF16ToBytesGetCharsTest extends MethodSubstitutionTest {

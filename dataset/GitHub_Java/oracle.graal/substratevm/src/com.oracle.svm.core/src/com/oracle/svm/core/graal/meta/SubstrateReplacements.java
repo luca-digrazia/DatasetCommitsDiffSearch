@@ -38,15 +38,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
-import org.graalvm.collections.EconomicMap;
-import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.api.replacements.Snippet;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.core.common.type.Stamp;
-import org.graalvm.compiler.core.common.type.StampFactory;
-import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.NodeClass;
 import org.graalvm.compiler.graph.NodeSourcePosition;
@@ -74,7 +69,6 @@ import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.compiler.replacements.ConstantBindingParameterPlugin;
 import org.graalvm.compiler.replacements.PEGraphDecoder;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
-import org.graalvm.compiler.word.WordTypes;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -84,9 +78,7 @@ import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.code.TargetDescription;
-import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 
 /**
  * The replacements implementation for the compiler at runtime. All snippets and method
@@ -139,14 +131,12 @@ public class SubstrateReplacements extends ReplacementsImpl {
     private Object[] snippetObjects;
     private NodeClass<?>[] snippetNodeClasses;
     private Map<ResolvedJavaMethod, Integer> snippetStartOffsets;
-    private final WordTypes wordTypes;
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public SubstrateReplacements(Providers providers, SnippetReflectionProvider snippetReflection, BytecodeProvider bytecodeProvider, TargetDescription target,
-                    WordTypes wordTypes, GraphMakerFactory graphMakerFactory) {
+                    GraphMakerFactory graphMakerFactory) {
         // Snippets cannot have optimistic assumptions.
         super(new GraalDebugHandlersFactory(snippetReflection), providers, snippetReflection, bytecodeProvider, target);
-        this.wordTypes = wordTypes;
         this.builder = new Builder(graphMakerFactory);
     }
 
@@ -206,7 +196,7 @@ public class SubstrateReplacements extends ReplacementsImpl {
         try (DebugContext debug = openDebugContext("SVMSnippet_", method, options)) {
             StructuredGraph result = new StructuredGraph.Builder(options, debug).method(method).trackNodeSourcePosition(trackNodeSourcePosition).setIsSubstitution(true).build();
             PEGraphDecoder graphDecoder = new PEGraphDecoder(ConfigurationValues.getTarget().arch, result, providers, null, snippetInvocationPlugins, new InlineInvokePlugin[0], parameterPlugin, null,
-                            null, null, EconomicMap.create(Equivalence.DEFAULT)) {
+                            null, null) {
 
                 private IntrinsicContext intrinsic = new IntrinsicContext(method, null, providers.getReplacements().getDefaultReplacementBytecodeProvider(), INLINE_AFTER_PARSING, false);
 
@@ -319,7 +309,7 @@ public class SubstrateReplacements extends ReplacementsImpl {
     }
 
     @Override
-    public boolean hasSubstitution(ResolvedJavaMethod method) {
+    public boolean hasSubstitution(ResolvedJavaMethod method, int callerBci) {
         // This override keeps graphBuilderPlugins from being reached during image generation.
         return false;
     }
@@ -348,29 +338,5 @@ public class SubstrateReplacements extends ReplacementsImpl {
             return new Object[]{receiver};
         }
         return null;
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public <T> T getInjectedArgument(Class<T> capability) {
-        if (capability.isAssignableFrom(WordTypes.class)) {
-            return (T) wordTypes;
-        }
-        return super.getInjectedArgument(capability);
-    }
-
-    @Override
-    public Stamp getInjectedStamp(Class<?> type, boolean nonNull) {
-        JavaKind kind = JavaKind.fromJavaClass(type);
-        if (kind == JavaKind.Object) {
-            ResolvedJavaType returnType = providers.getMetaAccess().lookupJavaType(type);
-            if (wordTypes.isWord(returnType)) {
-                return wordTypes.getWordStamp(returnType);
-            } else {
-                return StampFactory.object(TypeReference.createWithoutAssumptions(returnType), nonNull);
-            }
-        } else {
-            return StampFactory.forKind(kind);
-        }
     }
 }

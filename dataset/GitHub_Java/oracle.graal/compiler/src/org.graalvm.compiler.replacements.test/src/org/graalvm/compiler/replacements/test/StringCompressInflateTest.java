@@ -30,7 +30,6 @@ import static org.junit.Assume.assumeTrue;
 import java.io.UnsupportedEncodingException;
 
 import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.replacements.amd64.AMD64StringLatin1InflateNode;
@@ -315,7 +314,7 @@ public final class StringCompressInflateTest extends MethodSubstitutionTest {
         }
 
         StructuredGraph replacementGraph() {
-            return getReplacements().getInlineSubstitution(javamethod, 0, Invoke.InlineControl.Normal, false, null, testgraph.allowAssumptions(), getInitialOptions());
+            return getReplacements().getSubstitution(javamethod, -1, false, null, testgraph.allowAssumptions(), getInitialOptions());
         }
 
         StructuredGraph testMethodGraph() {

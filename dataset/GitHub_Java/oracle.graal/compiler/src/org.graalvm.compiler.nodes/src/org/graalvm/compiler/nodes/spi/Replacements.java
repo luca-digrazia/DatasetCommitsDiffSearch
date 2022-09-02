@@ -33,7 +33,6 @@ import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
-import org.graalvm.compiler.nodes.graphbuilderconf.GeneratedPluginInjectionProvider;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
@@ -46,7 +45,7 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 /**
  * Interface for managing replacements.
  */
-public interface Replacements extends GeneratedPluginInjectionProvider {
+public interface Replacements {
 
     CoreProviders getProviders();
 
@@ -84,14 +83,6 @@ public interface Replacements extends GeneratedPluginInjectionProvider {
      * Return true if the method is a {@link org.graalvm.compiler.api.replacements.Snippet}.
      */
     boolean isSnippet(ResolvedJavaMethod method);
-
-    /**
-     * Returns {@code true} if this {@code Replacements} is being used for preparation of snippets
-     * and substitutions for libgraal.
-     */
-    default boolean isEncodingSnippets() {
-        return false;
-    }
 
     /**
      * Registers a method as snippet.
