@@ -188,8 +188,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            Meta meta = getMeta();
-            throw meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, e.getMessage());
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
         }
 
         // Proxy the method, so that we have the same callTarget if it is not yet initialized.
@@ -211,8 +210,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            Meta meta = getMeta();
-            throw meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, e.getMessage());
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
         }
         // Proxy the method, so that we have the same callTarget if it is not yet initialized.
         // Allows for not duplicating the codeAttribute
@@ -237,8 +235,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
         } catch (IllegalArgumentException | ClassFormatError e) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            Meta meta = getMeta();
-            throw meta.throwExceptionWithMessage(meta.java_lang_ClassFormatError, e.getMessage());
+            throw Meta.throwExceptionWithMessage(getMeta().java_lang_ClassFormatError, e.getMessage());
         }
 
         this.exceptionsAttribute = (ExceptionsAttribute) linkedMethod.getAttribute(ExceptionsAttribute.NAME);
@@ -418,9 +415,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                  * Supposed to be IncompatibleClassChangeError (see jvms-6.5.invokeinterface), but
                  * HotSpot throws AbstractMethodError.
                  */
-                throw meta.throwExceptionWithMessage(meta.java_lang_AbstractMethodError, "Conflicting default methods: " + getName());
+                throw Meta.throwExceptionWithMessage(meta.java_lang_AbstractMethodError, "Conflicting default methods: " + getName());
             }
-            throw meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "Conflicting default methods: " + getName());
+            throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "Conflicting default methods: " + getName());
         }
     }
 
@@ -1228,13 +1225,11 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
                 if (target == null) {
                     getContext().getLogger().log(Level.WARNING, "Failed to link native method: {0}", getMethod().toString());
-                    Meta meta = getMeta();
-                    throw meta.throwException(meta.java_lang_UnsatisfiedLinkError);
+                    throw Meta.throwException(getMeta().java_lang_UnsatisfiedLinkError);
                 }
             } else {
                 if (codeAttribute == null) {
-                    Meta meta = getMeta();
-                    throw meta.throwExceptionWithMessage(meta.java_lang_AbstractMethodError,
+                    throw Meta.throwExceptionWithMessage(getMeta().java_lang_AbstractMethodError,
                                     "Calling abstract method: " + getMethod().getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
                 }
                 FrameDescriptor frameDescriptor = new FrameDescriptor();
@@ -1339,9 +1334,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         @Override
         public Object invokeMethod(Object callee, Object[] args) {
             if (getMethod().isRemovedByRedefition()) {
-                Meta meta = getMeta();
-                throw meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError,
-                                meta.toGuestString(getMethod().getDeclaringKlass().getNameAsString() + "." + getMethod().getName() + getMethod().getRawSignature()));
+                throw Meta.throwExceptionWithMessage(getMeta().java_lang_NoSuchMethodError,
+                                getMeta().toGuestString(getMethod().getDeclaringKlass().getNameAsString() + "." + getMethod().getName() + getMethod().getRawSignature()));
             }
             return getMethod().invokeMethod(callee, args);
         }
@@ -1419,7 +1413,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         }
     }
 
-    static class SharedRedefinitionContent {
+    class SharedRedefinitionContent {
 
         private final LinkedMethod linkedMethod;
         private final RuntimeConstantPool pool;

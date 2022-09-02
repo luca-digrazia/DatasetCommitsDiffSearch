@@ -29,7 +29,6 @@ import java.util.Set;
 
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
@@ -41,23 +40,17 @@ import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.tools.Diagnostic;
 
-/**
- * Handles the generation of boilerplate code for native interface implementations.
- */
-public final class IntrinsicsProcessor extends EspressoProcessor {
+public abstract class IntrinsicsProcessor extends EspressoProcessor {
     private static final String JNI_PACKAGE = "com.oracle.truffle.espresso.jni";
     protected static final String FFI_PACKAGE = "com.oracle.truffle.espresso.ffi";
     private static final String POINTER = FFI_PACKAGE + "." + "Pointer";
     private static final String HANDLE = JNI_PACKAGE + "." + "Handle";
     private static final String JNI_IMPL = JNI_PACKAGE + "." + "JniImpl";
 
-    private static final String SUBSTITUTIONS_PACKAGE = "com.oracle.truffle.espresso.substitutions";
+    private static final String SUBSTITUTOR_PACKAGE = "com.oracle.truffle.espresso.substitutions";
     private static final String SUBSTITUTOR = "IntrinsicSubstitutor";
 
     private static final String ENV_ARG_NAME = "env";
-    private static final String INVOKE = "invoke(Object " + ENV_ARG_NAME + ", Object[] " + ARGS_NAME + ") {\n";
-
-    private static final String GENERATE_INTRISIFICATION = "com.oracle.truffle.espresso.substitutions.GenerateIntrinsification";
 
     protected static final String IMPORT_NATIVE_SIGNATURE = "import " + FFI_PACKAGE + "." + "NativeSignature" + ";\n";
     protected static final String IMPORT_NATIVE_TYPE = "import " + FFI_PACKAGE + "." + "NativeType" + ";\n";
@@ -68,35 +61,18 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
     // @Handle
     private TypeElement handleAnnotation;
 
-    private String envPackage;
-    private String envClassName;
+    private final String ENV_NAME;
+    private final String ENV_PACKAGE;
+    private final String ENV_CLASSNAME;
+    private final String SUPPORTED_ANNOTATION;
 
-    private String envName;
-    private String imports;
+    private final String INVOKE;
+    private final String IMPORT;
 
-    // @GenerateIntrinsification
-    private TypeElement generateIntrinsification;
-    // @GenerateIntrinsification.target()
-    private ExecutableElement targetAttribute;
     // @JniImpl
     private TypeElement jniImpl;
-
-    private static final class IntrinsificationTarget {
-        // The package for the target intrinsified native env.
-        private final String envPackage;
-        // The simple name of the target intrisified class.
-        private final String envClassName;
-        // The annotation supported by the target intrinsified class.
-        private final TypeElement intrinsicAnnotation;
-
-        public IntrinsificationTarget(String envPackage, String envClassName, TypeElement intrinsicAnnotation) {
-            this.envPackage = envPackage;
-            this.envClassName = envClassName;
-            this.intrinsicAnnotation = intrinsicAnnotation;
-        }
-    }
-
-    private final List<IntrinsificationTarget> targets = new ArrayList<>();
+    // The annotation for this processor.
+    private TypeElement intrinsicAnnotation;
 
     public static final class IntrinsincsHelper extends SubstitutionHelper {
         final NativeType[] jniNativeSignature;
@@ -121,8 +97,14 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
         }
     }
 
-    public IntrinsicsProcessor() {
-        super(SUBSTITUTIONS_PACKAGE, SUBSTITUTOR);
+    public IntrinsicsProcessor(String ENV_NAME, String ENV_CLASSNAME, String SUPPORTED_ANNOTATION, String ENV_PACKAGE, String COLLECTOR, String COLLECTOR_INSTANCE_NAME) {
+        super(SUBSTITUTOR_PACKAGE, SUBSTITUTOR, COLLECTOR, COLLECTOR_INSTANCE_NAME);
+        this.ENV_NAME = ENV_NAME;
+        this.ENV_PACKAGE = ENV_PACKAGE;
+        this.ENV_CLASSNAME = ENV_CLASSNAME;
+        this.SUPPORTED_ANNOTATION = SUPPORTED_ANNOTATION;
+        this.INVOKE = "invoke(Object " + ENV_ARG_NAME + ", Object[] " + ARGS_NAME + ") {\n";
+        this.IMPORT = "import " + ENV_PACKAGE + "." + ENV_CLASSNAME + ";\n";
     }
 
     protected void initNfiType() {
@@ -133,65 +115,21 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
     @Override
     void processImpl(RoundEnvironment env) {
         // Set up the different annotations, along with their values, that we will need.
-        this.generateIntrinsification = processingEnv.getElementUtils().getTypeElement(GENERATE_INTRISIFICATION);
         this.jniImpl = processingEnv.getElementUtils().getTypeElement(JNI_IMPL);
+        this.intrinsicAnnotation = processingEnv.getElementUtils().getTypeElement(SUPPORTED_ANNOTATION);
         initNfiType();
-        for (Element e : generateIntrinsification.getEnclosedElements()) {
-            if (e.getKind() == ElementKind.METHOD) {
-                if (e.getSimpleName().contentEquals("target")) {
-                    this.targetAttribute = (ExecutableElement) e;
-                }
-            }
-        }
-        for (Element e : env.getElementsAnnotatedWith(generateIntrinsification)) {
-            findIntrisificationTarget(e);
-        }
-        for (IntrinsificationTarget target : targets) {
-            initClosure(target);
-            for (Element e : env.getElementsAnnotatedWith(target.intrinsicAnnotation)) {
-                processElement(e);
-            }
+        for (Element e : env.getElementsAnnotatedWith(intrinsicAnnotation)) {
+            processElement(e);
         }
     }
 
-    private void initClosure(IntrinsificationTarget target) {
-        this.envPackage = target.envPackage;
-        this.envClassName = target.envClassName;
-
-        this.envName = envClassName.toLowerCase();
-        this.imports = "import " + envPackage + "." + envClassName + ";\n";
-
-        initCollector(envClassName + "Collector");
-    }
-
-    private void findIntrisificationTarget(Element e) {
-        assert e.getKind() == ElementKind.CLASS;
-        TypeElement c = (TypeElement) e;
-        AnnotationMirror genIntrisification = getAnnotation(c, generateIntrinsification);
-        AnnotationValue v = getAttribute(genIntrisification, targetAttribute);
-        assert v.getValue() instanceof TypeMirror;
-        TypeElement targetAnnotation = processingEnv.getElementUtils().getTypeElement(v.getValue().toString());
-        String qualifiedName = c.getQualifiedName().toString();
-        int lastDot = qualifiedName.lastIndexOf('.');
-        String packageName;
-        String className;
-        if (lastDot > 0) {
-            packageName = qualifiedName.substring(0, lastDot);
-            className = qualifiedName.substring(lastDot + 1);
-        } else {
-            packageName = "";
-            className = qualifiedName;
-        }
-        targets.add(new IntrinsificationTarget(packageName, className, targetAnnotation));
-    }
-
-    void processElement(Element element) {
+    final void processElement(Element element) {
         assert element.getKind() == ElementKind.METHOD;
         ExecutableElement method = (ExecutableElement) element;
         assert method.getEnclosingElement().getKind() == ElementKind.CLASS;
         TypeElement declaringClass = (TypeElement) method.getEnclosingElement();
-        if (declaringClass.getQualifiedName().toString().equals(envPackage + "." + envClassName)) {
-            String className = envClassName;
+        if (declaringClass.getQualifiedName().toString().equals(ENV_PACKAGE + "." + ENV_CLASSNAME)) {
+            String className = ENV_CLASSNAME;
             // Extract the class name.
             // Obtain the name of the method to be substituted in.
             String targetMethodName = method.getSimpleName().toString();
@@ -299,7 +237,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
             if (!clazz.equals("StaticObject")) {
                 return decl + castTo(obj, clazz) + ";\n";
             }
-            return decl + envName + ".getHandles().get(Math.toIntExact((long) " + obj + "))" + ";\n";
+            return decl + ENV_NAME + ".getHandles().get(Math.toIntExact((long) " + obj + "))" + ";\n";
         }
         return decl + castTo(obj, clazz) + ";\n";
     }
@@ -309,7 +247,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
         if (isStatic) {
             str.append(className).append(".").append(methodName).append("(");
         } else {
-            str.append(envName).append(".").append(methodName).append("(");
+            str.append(ENV_NAME).append(".").append(methodName).append("(");
         }
         boolean first = true;
         for (int i = 0; i < nParameters; i++) {
@@ -324,7 +262,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> annotations = new HashSet<>();
-        annotations.add(GENERATE_INTRISIFICATION);
+        annotations.add(SUPPORTED_ANNOTATION);
         return annotations;
     }
 
@@ -332,7 +270,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
     String generateImports(String className, String targetMethodName, List<String> parameterTypeName, SubstitutionHelper helper) {
         StringBuilder str = new StringBuilder();
         IntrinsincsHelper h = (IntrinsincsHelper) helper;
-        str.append(imports);
+        str.append(IMPORT);
         str.append(IMPORT_NATIVE_SIGNATURE);
         str.append(IMPORT_NATIVE_TYPE);
         if (parameterTypeName.contains("String")) {
@@ -368,7 +306,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
         IntrinsincsHelper h = (IntrinsincsHelper) helper;
         str.append(TAB_1).append(PUBLIC_FINAL_OBJECT).append(INVOKE);
         if (h.needsHandlify || !h.isStatic) {
-            str.append(TAB_2).append(envClassName).append(" ").append(envName).append(" = ").append("(").append(envClassName).append(") " + ENV_ARG_NAME + ";\n");
+            str.append(TAB_2).append(ENV_CLASSNAME).append(" ").append(ENV_NAME).append(" = ").append("(").append(ENV_CLASSNAME).append(") " + ENV_ARG_NAME + ";\n");
         }
         int argIndex = 0;
         for (String type : parameterTypes) {
@@ -382,7 +320,7 @@ public final class IntrinsicsProcessor extends EspressoProcessor {
                 break;
             case OBJECT:
                 str.append(TAB_2).append("return ").append(
-                                "(long) " + envName + ".getHandles().createLocal(" + extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper) + ")").append(";\n");
+                                "(long) " + ENV_NAME + ".getHandles().createLocal(" + extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper) + ")").append(";\n");
                 break;
             default:
                 str.append(TAB_2).append("return ").append(extractInvocation(className, targetMethodName, argIndex, h.isStatic, helper)).append(";\n");

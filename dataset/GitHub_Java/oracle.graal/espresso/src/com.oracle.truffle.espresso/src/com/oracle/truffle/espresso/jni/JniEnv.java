@@ -35,20 +35,22 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.logging.Level;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleLogger;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.ffi.NativeSignature;
 import com.oracle.truffle.espresso.ffi.NativeType;
 import com.oracle.truffle.espresso.ffi.Pointer;
@@ -62,6 +64,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Validation;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
+import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
@@ -75,20 +78,29 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoProperties;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.GenerateIntrinsification;
 import com.oracle.truffle.espresso.substitutions.GuestCall;
 import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.InjectMeta;
 import com.oracle.truffle.espresso.substitutions.InjectProfile;
 import com.oracle.truffle.espresso.substitutions.IntrinsicSubstitutor;
-import com.oracle.truffle.espresso.substitutions.JniEnvCollector;
+import com.oracle.truffle.espresso.substitutions.JniCollector;
 import com.oracle.truffle.espresso.substitutions.SubstitutionProfiler;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Class;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 
-@GenerateIntrinsification(target = JniImpl.class)
-public final class JniEnv extends IntrinsifiedNativeEnv {
+public final class JniEnv extends NativeEnv implements ContextAccess {
+
+    private final TruffleLogger logger = TruffleLogger.getLogger(EspressoLanguage.ID, JniEnv.class);
+    private final InteropLibrary uncached = InteropLibrary.getUncached();
+
+    protected InteropLibrary getUncached() {
+        return uncached;
+    }
+
+    protected TruffleLogger getLogger() {
+        return logger;
+    }
 
     public static final int JNI_OK = 0; /* success */
     public static final int JNI_ERR = -1; /* unknown error */
@@ -137,11 +149,6 @@ public final class JniEnv extends IntrinsifiedNativeEnv {
 
     private static final Map<String, IntrinsicSubstitutor.Factory> jniMethods = buildJniMethods();
 
-    @Override
-    protected List<IntrinsicSubstitutor.Factory> getCollector() {
-        return JniEnvCollector.getCollector();
-    }
-
     private final WeakHandles<Field> fieldIds = new WeakHandles<>();
     private final WeakHandles<Method> methodIds = new WeakHandles<>();
 
@@ -175,6 +182,63 @@ public final class JniEnv extends IntrinsifiedNativeEnv {
     public void setPendingException(StaticObject ex) {
         assert StaticObject.notNull(ex) && getMeta().java_lang_Throwable.isAssignableFrom(ex.getKlass());
         threadLocalPendingException.set(ex);
+    }
+
+    public Callback jniMethodWrapper(IntrinsicSubstitutor.Factory factory) {
+        return new Callback(factory.parameterCount() + 1, new Callback.Function() {
+            @CompilationFinal private IntrinsicSubstitutor subst = null;
+
+            @Override
+            public Object call(Object... args) {
+                assert NativeUtils.interopAsPointer((TruffleObject) args[0]) == NativeUtils.interopAsPointer(JniEnv.this.getNativePointer()) : "Calling " + factory + " from alien JniEnv";
+                try {
+                    if (subst == null) {
+                        CompilerDirectives.transferToInterpreterAndInvalidate();
+                        subst = factory.create(getMeta());
+                    }
+                    return subst.invoke(JniEnv.this, args);
+                } catch (EspressoException | StackOverflowError | OutOfMemoryError e) {
+                    // This will most likely SOE again. Nothing we can do about that
+                    // unfortunately.
+                    EspressoException wrappedError = (e instanceof EspressoException)
+                                    ? (EspressoException) e
+                                    : (e instanceof StackOverflowError)
+                                                    ? getContext().getStackOverflow()
+                                                    : getContext().getOutOfMemory();
+                    setPendingException(wrappedError.getExceptionObject());
+                    return defaultValue(factory.returnType());
+                }
+            }
+        });
+    }
+
+    private static final int LOOKUP_JNI_IMPL_PARAMETER_COUNT = 1;
+
+    @TruffleBoundary
+    public TruffleObject lookupJniImpl(String methodName) {
+        IntrinsicSubstitutor.Factory m = jniMethods.get(methodName);
+        // Dummy placeholder for unimplemented/unknown methods.
+        if (m == null) {
+            getLogger().log(Level.FINER, "Fetching unknown/unimplemented JNI method: {0}", methodName);
+            @Pointer
+            TruffleObject errorClosure = getNativeAccess().createNativeClosure(new Callback(0, new Callback.Function() {
+                @Override
+                public Object call(Object... args) {
+                    CompilerDirectives.transferToInterpreter();
+                    getLogger().log(Level.SEVERE, "Calling unimplemented JNI method: {0}", methodName);
+                    throw EspressoError.unimplemented("JNI method: " + methodName);
+                }
+            }), NativeSignature.create(NativeType.VOID));
+            nativeClosures.add(errorClosure);
+            return errorClosure;
+        }
+
+        NativeSignature signature = m.jniNativeSignature();
+        Callback target = jniMethodWrapper(m);
+        @Pointer
+        TruffleObject nativeClosure = getNativeAccess().createNativeClosure(target, signature);
+        nativeClosures.add(nativeClosure);
+        return nativeClosure;
     }
 
     public static boolean containsMethod(String methodName) {
@@ -338,7 +402,24 @@ public final class JniEnv extends IntrinsifiedNativeEnv {
             popLong = getNativeAccess().lookupAndBindSymbol(nespressoLibrary, "pop_long", NativeSignature.create(NativeType.LONG, NativeType.POINTER));
             popObject = getNativeAccess().lookupAndBindSymbol(nespressoLibrary, "pop_object", NativeSignature.create(NativeType.OBJECT, NativeType.POINTER));
 
-            this.jniEnvPtr = (TruffleObject) getUncached().execute(initializeNativeContext, getLookupCallback());
+            Callback lookupJniImplCallback = new Callback(LOOKUP_JNI_IMPL_PARAMETER_COUNT, new Callback.Function() {
+                @Override
+                public Object call(Object... args) {
+                    try {
+                        String name = NativeUtils.interopPointerToString((TruffleObject) args[0]);
+                        return JniEnv.this.lookupJniImpl(name);
+                    } catch (ClassCastException e) {
+                        throw EspressoError.shouldNotReachHere(e);
+                    } catch (RuntimeException e) {
+                        throw e;
+                    } catch (Throwable e) {
+                        throw EspressoError.shouldNotReachHere(e);
+                    }
+                }
+            });
+            @Pointer
+            TruffleObject lookupJniImplNativeCallback = getNativeAccess().createNativeClosure(lookupJniImplCallback, NativeSignature.create(NativeType.POINTER, NativeType.POINTER));
+            this.jniEnvPtr = (TruffleObject) getUncached().execute(initializeNativeContext, lookupJniImplNativeCallback);
             assert getUncached().isPointer(jniEnvPtr);
 
             this.handles = new JNIHandles();
@@ -349,7 +430,6 @@ public final class JniEnv extends IntrinsifiedNativeEnv {
         }
     }
 
-    @Override
     public JNIHandles getHandles() {
         return handles;
     }
@@ -369,7 +449,7 @@ public final class JniEnv extends IntrinsifiedNativeEnv {
 
     private static Map<String, IntrinsicSubstitutor.Factory> buildJniMethods() {
         Map<String, IntrinsicSubstitutor.Factory> map = new HashMap<>();
-        for (IntrinsicSubstitutor.Factory method : JniEnvCollector.getCollector()) {
+        for (IntrinsicSubstitutor.Factory method : JniCollector.getCollector()) {
             assert !map.containsKey(method.methodName()) : "JniImpl for " + method.methodName() + " already exists";
             map.put(method.methodName(), method);
         }

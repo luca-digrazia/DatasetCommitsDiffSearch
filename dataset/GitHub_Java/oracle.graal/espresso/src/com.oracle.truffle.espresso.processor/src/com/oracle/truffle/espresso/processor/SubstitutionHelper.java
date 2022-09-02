@@ -22,43 +22,40 @@
  */
 package com.oracle.truffle.espresso.processor;
 
-import javax.lang.model.element.Element;
+import java.util.List;
+
 import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.TypeElement;
 
 /**
- * Passed around during espresso annotation processing. It is meant to be subclassed to serve as
+ * passed around during espresso annotation processing. It is meant to be subclassed to serve as
  * storage for the data required during processing.
  * 
- * @see NativeEnvProcessor.IntrinsincsHelper
+ * @see com.oracle.truffle.espresso.processor.IntrinsicsProcessor.IntrinsincsHelper
  * @see com.oracle.truffle.espresso.processor.SubstitutionProcessor.SubstitutorHelper
  */
 public class SubstitutionHelper {
-    final boolean hasMetaInjection;
-    final boolean hasProfileInjection;
+    List<GuestCall> guestCalls;
+    boolean hasMetaInjection;
+    boolean hasProfileInjection;
 
-    // Target of the substitution, cab be a public static method or a node.
-    private final Element target;
-
-    public TypeElement getNodeTarget() {
-        return (TypeElement) target;
+    public SubstitutionHelper(EspressoProcessor processor, ExecutableElement method) {
+        guestCalls = processor.getGuestCalls(method);
+        hasMetaInjection = processor.hasMetaInjection(method);
+        hasProfileInjection = processor.hasProfileInjection(method);
     }
 
-    public ExecutableElement getMethodTarget() {
-        return (ExecutableElement) target;
-    }
+    public static final class GuestCall {
+        public final String target;
+        public final boolean original;
 
-    public SubstitutionHelper(EspressoProcessor processor, Element target) {
-        this.target = target;
-        // If the target is a node, obtain the abstract execute* method.
-        ExecutableElement targetMethod = isNodeTarget()
-                        ? EspressoProcessor.findNodeExecute(processor.getMessager(), getNodeTarget())
-                        : getMethodTarget();
-        this.hasMetaInjection = processor.hasMetaInjection(targetMethod);
-        this.hasProfileInjection = processor.hasProfileInjection(targetMethod);
-    }
+        public GuestCall(String target, boolean original) {
+            this.target = target;
+            this.original = original;
+        }
 
-    public boolean isNodeTarget() {
-        return target instanceof TypeElement;
+        @Override
+        public String toString() {
+            return target;
+        }
     }
 }
