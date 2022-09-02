@@ -134,11 +134,12 @@ public final class TruffleCompilerOptions {
      */
     public static boolean areTruffleCompilationExceptionsFatal() {
         /*
-         * This is duplicated in TruffleRuntimeOptions#areTruffleCompilationExceptionsFatal.
+         * Automatically enable TruffleCompilationExceptionsAreFatal when asserts are enabled but
+         * respect TruffleCompilationExceptionsAreFatal if it's been explicitly set.
          */
-        boolean compilationExceptionsAreFatal = TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreFatal);
-        boolean performanceWarningsAreFatal = TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal);
-        return compilationExceptionsAreFatal || performanceWarningsAreFatal;
+        boolean truffleCompilationExceptionsAreFatal = TruffleCompilerOptions.getValue(TruffleCompilationExceptionsAreFatal);
+        assert TruffleCompilationExceptionsAreFatal.hasBeenSet(TruffleCompilerOptions.getOptions()) || (truffleCompilationExceptionsAreFatal = true) == true;
+        return truffleCompilationExceptionsAreFatal || TruffleCompilerOptions.getValue(TrufflePerformanceWarningsAreFatal);
     }
 
     /**
