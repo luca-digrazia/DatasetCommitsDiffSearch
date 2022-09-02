@@ -50,7 +50,7 @@ import org.graalvm.compiler.nodes.extended.LoadHubNode;
 import org.graalvm.compiler.nodes.java.NewArrayNode;
 import org.graalvm.compiler.nodes.java.NewInstanceNode;
 import org.graalvm.compiler.nodes.memory.FloatingReadNode;
-import org.graalvm.compiler.nodes.memory.OnHeapMemoryAccess.BarrierType;
+import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.nodes.memory.address.OffsetAddressNode;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
@@ -83,7 +83,6 @@ import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.meta.SharedField;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 
-import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -174,9 +173,8 @@ public abstract class SubstrateBasicLoweringProvider extends DefaultJavaLowering
 
         assert !object.isConstant() || object.asJavaConstant().isNull();
 
-        ObjectLayout objectLayout = getObjectLayout();
-        Stamp headerBitsStamp = StampFactory.forUnsignedInteger(8 * objectLayout.getReferenceSize());
-        ConstantNode headerOffset = ConstantNode.forIntegerKind(target.wordJavaKind, objectLayout.getHubOffset(), graph);
+        Stamp headerBitsStamp = StampFactory.forUnsignedInteger(8 * getObjectLayout().getReferenceSize());
+        ConstantNode headerOffset = ConstantNode.forIntegerKind(target.wordJavaKind, getObjectLayout().getHubOffset(), graph);
         AddressNode headerAddress = graph.unique(new OffsetAddressNode(object, headerOffset));
         ValueNode headerBits = graph.unique(new FloatingReadNode(headerAddress, NamedLocationIdentity.FINAL_LOCATION, null, headerBitsStamp, null, BarrierType.NONE));
         ValueNode hubBits;
@@ -184,15 +182,11 @@ public abstract class SubstrateBasicLoweringProvider extends DefaultJavaLowering
         if (reservedBitsMask != 0) {
             // get rid of the reserved header bits and extract the actual pointer to the hub
             int encodingShift = ReferenceAccess.singleton().getCompressEncoding().getShift();
-            if ((reservedBitsMask >>> encodingShift) == 0) {
+            if (encodingShift != 0) {
+                assert (reservedBitsMask >>> encodingShift) == 0 : "Compression shift must mask object header bits";
                 hubBits = graph.unique(new UnsignedRightShiftNode(headerBits, ConstantNode.forInt(encodingShift, graph)));
-            } else if (reservedBitsMask < objectLayout.getAlignment()) {
-                hubBits = graph.unique(new AndNode(headerBits, ConstantNode.forIntegerStamp(headerBitsStamp, ~reservedBitsMask, graph)));
             } else {
-                assert encodingShift > 0 : "shift below results in a compressed value";
-                assert CodeUtil.isPowerOf2(reservedBitsMask + 1) : "only the lowest bits may be set";
-                int numReservedBits = CodeUtil.log2(reservedBitsMask + 1);
-                hubBits = graph.unique(new UnsignedRightShiftNode(headerBits, ConstantNode.forInt(numReservedBits, graph)));
+                hubBits = graph.unique(new AndNode(headerBits, ConstantNode.forIntegerStamp(headerBitsStamp, ~reservedBitsMask, graph)));
             }
         } else {
             hubBits = headerBits;
