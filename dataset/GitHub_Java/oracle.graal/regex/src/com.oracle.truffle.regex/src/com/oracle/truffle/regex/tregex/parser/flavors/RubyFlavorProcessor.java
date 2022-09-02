@@ -1068,18 +1068,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         }
     }
 
-    private CodePointSet getUnicodeCharClass(char className) {
-        return trimToEncoding(UNICODE_CHAR_CLASSES.get(className));
-    }
-
-    private CodePointSet getUnicodePosixCharClass(String className) {
-        return trimToEncoding(UNICODE_POSIX_CHAR_CLASSES.get(className));
-    }
-
-    private CodePointSet trimToEncoding(CodePointSet codePointSet) {
-        return inSource.getEncoding().getFullSet().createIntersectionSingleRange(codePointSet);
-    }
-
     /**
      * Tries to parse an assertion escape. An assertion escape can be one of the following:
      * <ul>
@@ -1112,14 +1100,14 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 if (getLocalFlags().isAscii()) {
                     emitWordBoundaryAssertion(WORD_BOUNDARY, ASCII_CHAR_CLASSES.get('w'), ASCII_CHAR_CLASSES.get('W'));
                 } else {
-                    emitWordBoundaryAssertion(WORD_BOUNDARY, getUnicodeCharClass('w'), getUnicodeCharClass('W'));
+                    emitWordBoundaryAssertion(WORD_BOUNDARY, UNICODE_CHAR_CLASSES.get('w'), UNICODE_CHAR_CLASSES.get('W'));
                 }
                 return true;
             case 'B':
                 if (getLocalFlags().isAscii()) {
                     emitWordBoundaryAssertion(WORD_NON_BOUNDARY, ASCII_CHAR_CLASSES.get('w'), ASCII_CHAR_CLASSES.get('W'));
                 } else {
-                    emitWordBoundaryAssertion(WORD_NON_BOUNDARY, getUnicodeCharClass('w'), getUnicodeCharClass('W'));
+                    emitWordBoundaryAssertion(WORD_NON_BOUNDARY, UNICODE_CHAR_CLASSES.get('w'), UNICODE_CHAR_CLASSES.get('W'));
                 }
                 return true;
             default:
@@ -1180,7 +1168,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     charSet = ASCII_CHAR_CLASSES.get(className);
                 } else {
                     assert getLocalFlags().isUnicode();
-                    charSet = getUnicodeCharClass('w');
+                    charSet = UNICODE_CHAR_CLASSES.get(className);
                 }
                 if (inCharClass) {
                     curCharClass.addSet(charSet);
@@ -1210,13 +1198,13 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     }
                     CodePointSet property;
                     if (UNICODE_POSIX_CHAR_CLASSES.containsKey(propertySpec.toLowerCase())) {
-                        property = getUnicodePosixCharClass(propertySpec.toLowerCase());
+                        property = UNICODE_POSIX_CHAR_CLASSES.get(propertySpec.toLowerCase());
                     } else if (UnicodeProperties.isSupportedGeneralCategory(propertySpec, true)) {
-                        property = trimToEncoding(UnicodeProperties.getProperty("General_Category=" + propertySpec, true));
+                        property = UnicodeProperties.getProperty("General_Category=" + propertySpec, true);
                     } else if (UnicodeProperties.isSupportedScript(propertySpec, true)) {
-                        property = trimToEncoding(UnicodeProperties.getProperty("Script=" + propertySpec, true));
+                        property = UnicodeProperties.getProperty("Script=" + propertySpec, true);
                     } else if (UnicodeProperties.isSupportedProperty(propertySpec, true)) {
-                        property = trimToEncoding(UnicodeProperties.getProperty(propertySpec, true));
+                        property = UnicodeProperties.getProperty(propertySpec, true);
                     } else {
                         bailOut("unsupported Unicode property " + propertySpec);
                         // So that the property variable is always written to.
@@ -1844,7 +1832,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 charSet = ASCII_POSIX_CHAR_CLASSES.get(className);
             } else {
                 assert getLocalFlags().isDefault() || getLocalFlags().isUnicode();
-                charSet = getUnicodePosixCharClass(className);
+                charSet = UNICODE_POSIX_CHAR_CLASSES.get(className);
             }
             if (negated) {
                 charSet = charSet.createInverse(inSource.getEncoding());
