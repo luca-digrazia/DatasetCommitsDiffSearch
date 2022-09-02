@@ -1,175 +1,185 @@
+/*
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ *
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification, are
+ * permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this list of
+ * conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice, this list of
+ * conditions and the following disclaimer in the documentation and/or other materials provided
+ * with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors may be used to
+ * endorse or promote products derived from this software without specific prior written
+ * permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+ * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
+ * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+ * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
+
+import com.oracle.truffle.api.frame.MaterializedFrame;
+import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.llvm.runtime.ArithmeticOperation;
+import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
+import com.oracle.truffle.llvm.runtime.CompareOperator;
+import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
+import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
+import com.oracle.truffle.llvm.runtime.types.Type;
+import com.oracle.truffle.llvm.runtime.types.Type.TypeOverflowException;
 
 import java.util.List;
 
-import com.oracle.truffle.api.Scope;
-import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.llvm.runtime.ArithmeticOperation;
-import com.oracle.truffle.llvm.runtime.CompareOperator;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprBitFlipNodeFactory.BitFlipNodeGen;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprNotNode.NotNode;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprNotNodeFactory.NotNodeGen;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprShortCircuitEvaluationNodeFactory.DebugExprLogicalAndNodeGen;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprShortCircuitEvaluationNodeFactory.DebugExprLogicalOrNodeGen;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes.DebugExprTernaryNodeFactory.DebugExprConditionalNodeGen;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.Parser;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.types.PrimitiveType;
-
+@SuppressWarnings({"static-method"})
 public final class DebugExprNodeFactory {
-    private ContextReference<LLVMContext> contextReference;
-    public final static DebugExprErrorNode noObjNode = DebugExprErrorNode.create("<cannot find expression>");
-    public final static DebugExprErrorNode errorObjNode = DebugExprErrorNode.create("<cannot evaluate expression>");
-    public final static DebugExpressionPair noObjPair = DebugExpressionPair.create(noObjNode, DebugExprType.getVoidType());
-    public final static DebugExpressionPair errorObjPair = DebugExpressionPair.create(errorObjNode, DebugExprType.getVoidType());
-    private Iterable<Scope> scopes, globalScopes;
-    private Parser parser;
 
-    private DebugExprNodeFactory(ContextReference<LLVMContext> contextReference, Iterable<Scope> scopes, Parser parser, Iterable<Scope> globalScopes) {
-        this.contextReference = contextReference;
-        this.scopes = scopes;
-        this.parser = parser;
-        this.globalScopes = globalScopes;
+    private Object globalScope;
+    private MaterializedFrame frame;
+    private Node location;
+
+    private DebugExprNodeFactory(Object globalScope, MaterializedFrame frame, Node location) {
+        this.globalScope = globalScope;
+        this.frame = frame;
+        this.location = location;
     }
 
-    public static DebugExprNodeFactory create(ContextReference<LLVMContext> contextReference, Iterable<Scope> scopes, Parser parser, Iterable<Scope> globalScopes) {
-        return new DebugExprNodeFactory(contextReference, scopes, parser, globalScopes);
+    public static DebugExprNodeFactory create(Object globalScope, MaterializedFrame frame, Node location) {
+        return new DebugExprNodeFactory(globalScope, frame, location);
     }
 
-    private boolean isErrorPair(DebugExpressionPair p) {
-        if (p == null || p == errorObjPair) {
-            parser.SemErr("cannot evaluate expression");
-            return true;
-        } else if (p == noObjPair) {
-            parser.SemErr("cannot find expression");
-            return true;
+    private static void checkError(DebugExpressionPair p, String operationDescription) {
+        if (p == null) {
+            throw DebugExprException.nullObject(operationDescription);
         }
-
-        return false;
     }
 
     public DebugExpressionPair createArithmeticOp(ArithmeticOperation op, DebugExpressionPair left, DebugExpressionPair right) {
-        if (isErrorPair(left) || isErrorPair(right))
-            return errorObjPair;
-        /* null is passed as type, since a type check is done by the arithmetic node anyway */
+        checkError(left, op.name());
+        checkError(right, op.name());
         DebugExprType commonType = DebugExprType.commonType(left.getType(), right.getType());
         DebugExpressionPair leftPair = createCastIfNecessary(left, commonType);
         DebugExpressionPair rightPair = createCastIfNecessary(right, commonType);
-        LLVMExpressionNode node = contextReference.get().getNodeFactory().createArithmeticOp(op, null, leftPair.getNode(), rightPair.getNode());
+        LLVMExpressionNode node = CommonNodeFactory.createArithmeticOp(op, commonType.getLLVMRuntimeType(), leftPair.getNode(), rightPair.getNode());
         return DebugExpressionPair.create(node, commonType);
     }
 
     public DebugExpressionPair createDivNode(DebugExpressionPair left, DebugExpressionPair right) {
-        if (isErrorPair(left) || isErrorPair(right))
-            return errorObjPair;
+        checkError(left, "/");
+        checkError(right, "/");
         DebugExprType commonType = DebugExprType.commonType(left.getType(), right.getType());
         DebugExpressionPair leftPair = createCastIfNecessary(left, commonType);
         DebugExpressionPair rightPair = createCastIfNecessary(right, commonType);
         ArithmeticOperation op = commonType.isUnsigned() ? ArithmeticOperation.UDIV : ArithmeticOperation.DIV;
-        LLVMExpressionNode node = contextReference.get().getNodeFactory().createArithmeticOp(op, null, leftPair.getNode(), rightPair.getNode());
+        LLVMExpressionNode node = CommonNodeFactory.createArithmeticOp(op, commonType.getLLVMRuntimeType(), leftPair.getNode(), rightPair.getNode());
         return DebugExpressionPair.create(node, commonType);
     }
 
     public DebugExpressionPair createRemNode(DebugExpressionPair left, DebugExpressionPair right) {
-        if (isErrorPair(left) || isErrorPair(right))
-            return errorObjPair;
+        checkError(left, "%");
+        checkError(right, "%");
         DebugExprType commonType = DebugExprType.commonType(left.getType(), right.getType());
         ArithmeticOperation op = commonType.isUnsigned() ? ArithmeticOperation.UREM : ArithmeticOperation.REM;
-        LLVMExpressionNode node = contextReference.get().getNodeFactory().createArithmeticOp(op, null, left.getNode(), right.getNode());
+        LLVMExpressionNode node = CommonNodeFactory.createArithmeticOp(op, commonType.getLLVMRuntimeType(), left.getNode(), right.getNode());
         return DebugExpressionPair.create(node, commonType);
     }
 
     public DebugExpressionPair createShiftLeft(DebugExpressionPair left, DebugExpressionPair right) {
-        if (isErrorPair(left) || isErrorPair(right))
-            return errorObjPair;
-        if (!right.getType().isIntegerType()) {
-            return errorObjPair;
-        } else if (!left.getType().isIntegerType()) {
-            return errorObjPair;
+        checkError(left, "<<");
+        checkError(right, "<<");
+        LLVMExpressionNode node = CommonNodeFactory.createArithmeticOp(ArithmeticOperation.SHL, left.getType().getLLVMRuntimeType(), left.getNode(), right.getNode());
+
+        if (!right.getType().isIntegerType() || !left.getType().isIntegerType()) {
+            throw DebugExprException.typeError(node, left.getNode(), right.getNode());
         } else {
-            LLVMExpressionNode node = contextReference.get().getNodeFactory().createArithmeticOp(ArithmeticOperation.SHL, null, left.getNode(), right.getNode());
             return DebugExpressionPair.create(node, left.getType());
         }
     }
 
     public DebugExpressionPair createShiftRight(DebugExpressionPair left, DebugExpressionPair right) {
-        if (isErrorPair(left) || isErrorPair(right))
-            return errorObjPair;
-        if (!right.getType().isIntegerType()) {
-            return errorObjPair;
-        } else if (!left.getType().isIntegerType()) {
-            return errorObjPair;
+        checkError(left, ">>");
+        checkError(right, ">>");
+
+        ArithmeticOperation op = left.getType().isUnsigned() ? ArithmeticOperation.LSHR : ArithmeticOperation.ASHR;
+        LLVMExpressionNode node = CommonNodeFactory.createArithmeticOp(op, left.getType().getLLVMRuntimeType(), left.getNode(), right.getNode());
+
+        if (!right.getType().isIntegerType() || !left.getType().isIntegerType()) {
+            throw DebugExprException.typeError(node, left.getNode(), right.getNode());
         } else {
-            ArithmeticOperation op = left.getType().isUnsigned() ? ArithmeticOperation.LSHR : ArithmeticOperation.ASHR;
-            LLVMExpressionNode node = contextReference.get().getNodeFactory().createArithmeticOp(op, null, left.getNode(), right.getNode());
             return DebugExpressionPair.create(node, left.getType());
         }
     }
 
-    @SuppressWarnings("static-method")
     public DebugExpressionPair createTernaryNode(DebugExpressionPair condition, DebugExpressionPair thenNode, DebugExpressionPair elseNode) {
-        if (isErrorPair(condition) || isErrorPair(thenNode) || isErrorPair(elseNode))
-            return errorObjPair;
-        LLVMExpressionNode node = DebugExprConditionalNodeGen.create(condition.getNode(), thenNode.getNode(), elseNode.getNode());
+        checkError(condition, "? :");
+        checkError(thenNode, "? :");
+        checkError(elseNode, "? :");
+        LLVMExpressionNode node = DebugExprTernaryNodeGen.create(thenNode.getNode(), elseNode.getNode(), condition.getNode());
         return DebugExpressionPair.create(node, DebugExprType.commonType(thenNode.getType(), elseNode.getType()));
     }
 
     public DebugExpressionPair createUnaryOpNode(DebugExpressionPair pair, char unaryOp) {
+        checkError(pair, Character.toString(unaryOp));
         switch (unaryOp) {
-            case '&':
             case '*':
-                return errorObjPair;
+                return createDereferenceNode(pair);
             case '+':
                 return pair;
             case '-':
                 return createArithmeticOp(ArithmeticOperation.SUB, createIntegerConstant(0), pair);
             case '~':
-                return DebugExpressionPair.create(BitFlipNodeGen.create(pair.getNode()), pair.getType());
+                return DebugExpressionPair.create(DebugExprBitFlipNodeGen.create(pair.getNode()), pair.getType());
             case '!':
-                return DebugExpressionPair.create(NotNodeGen.create(pair.getNode()), pair.getType());
+                return DebugExpressionPair.create(DebugExprNotNodeGen.create(pair.getNode()), pair.getType());
             default:
-                return errorObjPair;
+                throw DebugExprException.create(pair.getNode(), "unknown symbol: %c", unaryOp);
         }
     }
 
-    @SuppressWarnings("static-method")
     public DebugExpressionPair createVarNode(String name) {
-        DebugExprVarNode node = new DebugExprVarNode(name, scopes);
-        return DebugExpressionPair.create(node, node.getType());
+        DebugExprVarNode node = DebugExprVarNodeGen.create(name, location);
+        return DebugExpressionPair.create(node, node.getType(frame));
     }
 
-    @SuppressWarnings("static-method")
     public DebugExpressionPair createSizeofNode(DebugExprType type) {
-        LLVMExpressionNode node = DebugExprSizeofNodeGen.create(type);
+        LLVMExpressionNode node;
+        try {
+            node = DebugExprSizeofNode.create(type);
+        } catch (TypeOverflowException e) {
+            node = Type.handleOverflowExpression(e);
+        }
         return DebugExpressionPair.create(node, DebugExprType.getIntType(32, true));
     }
 
-    @SuppressWarnings("static-method")
     public DebugExpressionPair createLogicalAndNode(DebugExpressionPair left, DebugExpressionPair right) {
-        if (isErrorPair(left) || isErrorPair(right))
-            return errorObjPair;
-        LLVMExpressionNode node = DebugExprLogicalAndNodeGen.create(left.getNode(), right.getNode());
+        checkError(left, "&&");
+        checkError(right, "&&");
+        LLVMExpressionNode node = DebugExprShortCircuitEvaluationNodeGen.create(left.getNode(), right.getNode(), new DebugExprLogicalAndNode());
         return DebugExpressionPair.create(node, DebugExprType.getBoolType());
     }
 
-    @SuppressWarnings("static-method")
     public DebugExpressionPair createLogicalOrNode(DebugExpressionPair left, DebugExpressionPair right) {
-        if (isErrorPair(left) || isErrorPair(right))
-            return errorObjPair;
-        LLVMExpressionNode node = DebugExprLogicalOrNodeGen.create(left.getNode(), right.getNode());
+        checkError(left, "||");
+        checkError(right, "||");
+        LLVMExpressionNode node = DebugExprShortCircuitEvaluationNodeGen.create(left.getNode(), right.getNode(), new DebugExprLogicalOrNode());
         return DebugExpressionPair.create(node, DebugExprType.getBoolType());
-    }
-
-    @SuppressWarnings("static-method")
-    public LLVMExpressionNode createErrorNode(Object errorObj) {
-        return DebugExprErrorNode.create(errorObj);
     }
 
     public DebugExpressionPair createCompareNode(DebugExpressionPair left, CompareKind op, DebugExpressionPair right) {
-        if (isErrorPair(left) || isErrorPair(right))
-            return errorObjPair;
+        checkError(left, op.name());
+        checkError(right, op.name());
         DebugExprType commonType = DebugExprType.commonType(left.getType(), right.getType());
         DebugExpressionPair leftPair = createCastIfNecessary(left, commonType);
         DebugExpressionPair rightPair = createCastIfNecessary(right, commonType);
@@ -181,7 +191,7 @@ public final class DebugExprNodeFactory {
         } else {
             cop = getSignedCompareOperator(op);
         }
-        LLVMExpressionNode node = contextReference.get().getNodeFactory().createComparison(cop, null, leftPair.getNode(), rightPair.getNode());
+        LLVMExpressionNode node = CommonNodeFactory.createComparison(cop, commonType.getLLVMRuntimeType(), leftPair.getNode(), rightPair.getNode());
         return DebugExpressionPair.create(node, DebugExprType.getBoolType());
     }
 
@@ -190,69 +200,114 @@ public final class DebugExprNodeFactory {
     }
 
     public DebugExpressionPair createIntegerConstant(int value, boolean signed) {
-        LLVMExpressionNode node = contextReference.get().getNodeFactory().createSimpleConstantNoArray(value, PrimitiveType.I32);
+        LLVMExpressionNode node = CommonNodeFactory.createSimpleConstantNoArray(value, PrimitiveType.I32);
         return DebugExpressionPair.create(node, DebugExprType.getIntType(32, signed));
     }
 
     public DebugExpressionPair createFloatConstant(float value) {
-        LLVMExpressionNode node = contextReference.get().getNodeFactory().createSimpleConstantNoArray(value, PrimitiveType.FLOAT);
+        LLVMExpressionNode node = CommonNodeFactory.createSimpleConstantNoArray(value, PrimitiveType.FLOAT);
         return DebugExpressionPair.create(node, DebugExprType.getFloatType(32));
     }
 
+    public DebugExpressionPair createCharacterConstant(String charString) {
+        boolean valid = true;
+        char value = charString.charAt(1);
+        if (value == '\\') {
+            switch (charString.charAt(2)) {
+                case 'n':
+                    value = '\n';
+                    break;
+                case 'r':
+                    value = '\r';
+                    break;
+                case '\'':
+                    value = '\'';
+                    break;
+                case '\\':
+                    value = '\\';
+                    break;
+                case '\"':
+                    value = '\"';
+                    break;
+                default:
+                    valid = false;
+                    break;
+            }
+        }
+        LLVMExpressionNode node = CommonNodeFactory.createSimpleConstantNoArray((byte) value, PrimitiveType.I8);
+        if (!valid) {
+            throw DebugExprException.create(node, "character %s not found", charString);
+        }
+        return DebugExpressionPair.create(node, DebugExprType.getIntType(8, false));
+    }
+
     public DebugExpressionPair createCastIfNecessary(DebugExpressionPair pair, DebugExprType type) {
-        if (pair.getType() == type || pair == errorObjPair || pair == noObjPair) {
+        checkError(pair, "cast");
+        if (pair.getType().equalsType(type)) {
             return pair;
         }
+        if (!pair.getType().canBeCastTo(type)) {
+            throw DebugExprException.create(pair.getNode(), "Cast from %s to %s not possible!", pair.getType(), type);
+        }
         LLVMExpressionNode node;
-        if (type.isUnsigned())
-            node = contextReference.get().getNodeFactory().createUnsignedCast(pair.getNode(), type.getLLVMRuntimeType());
-        else
-            node = contextReference.get().getNodeFactory().createSignedCast(pair.getNode(), type.getLLVMRuntimeType());
+        if (type.isFloatingType() || type.isIntegerType()) {
+            if (type.isUnsigned()) {
+                node = CommonNodeFactory.createUnsignedCast(pair.getNode(), type.getLLVMRuntimeType());
+            } else {
+                node = CommonNodeFactory.createSignedCast(pair.getNode(), type.getLLVMRuntimeType());
+            }
+        } else {
+            node = CommonNodeFactory.createBitcast(pair.getNode(), type.getLLVMRuntimeType(), pair.getType().getLLVMRuntimeType());
+        }
         return DebugExpressionPair.create(node, type);
     }
 
-    @SuppressWarnings("static-method")
     public DebugExpressionPair createObjectMember(DebugExpressionPair receiver, String fieldName) {
-        Object baseMember = null;
-        if (receiver.getNode() instanceof DebugExprVarNode) {
-            baseMember = ((DebugExprVarNode) (receiver.getNode())).getMember();
-        } else if (receiver.getNode() instanceof DebugExprObjectMemberNode) {
-            baseMember = ((DebugExprObjectMemberNode) (receiver.getNode())).getMember();
-        }
-        if (baseMember != null) {
-            DebugExprObjectMemberNode node = new DebugExprObjectMemberNode(fieldName, baseMember);
-            return DebugExpressionPair.create(node, node.getType());
-        }
-        return errorObjPair;
+        LLVMExpressionNode baseNode = receiver.getNode();
+        DebugExprObjectMemberNode node = DebugExprObjectMemberNodeGen.create(baseNode, fieldName);
+        DebugExprType type = node.getType(frame);
+        return DebugExpressionPair.create(node, type);
+    }
+
+    public DebugExpressionPair createDereferenceNode(DebugExpressionPair pointerPair) {
+        checkError(pointerPair, "*");
+        DebugExprDereferenceNode node = DebugExprDereferenceNodeGen.create(pointerPair.getNode());
+        DebugExprType type = pointerPair.getType().getInnerType();
+        return DebugExpressionPair.create(node, type);
+    }
+
+    public DebugExpressionPair createObjectPointerMember(DebugExpressionPair receiver, String fieldName) {
+        DebugExpressionPair dereferenced = createDereferenceNode(receiver);
+        return createObjectMember(dereferenced, fieldName);
     }
 
     public DebugExpressionPair createFunctionCall(DebugExpressionPair functionPair, List<DebugExpressionPair> arguments) {
-        if (isErrorPair(functionPair))
-            return errorObjPair;
+        checkError(functionPair, "call(...)");
         if (functionPair.getNode() instanceof DebugExprVarNode) {
             DebugExprVarNode varNode = (DebugExprVarNode) functionPair.getNode();
-            LLVMExpressionNode node = varNode.createFunctionCall(arguments, globalScopes);
-            return DebugExpressionPair.create(node, varNode.getType());
+            DebugExprFunctionCallNode node = varNode.createFunctionCall(arguments, globalScope);
+            DebugExprType type = node.getType();
+            return DebugExpressionPair.create(node, type);
         }
-        return errorObjPair;
+        throw DebugExprException.typeError(functionPair.getNode(), functionPair.getNode().toString());
     }
 
-    @SuppressWarnings("static-method")
     public DebugExpressionPair createArrayElement(DebugExpressionPair array, DebugExpressionPair index) {
-        Object baseMember = null;
-        DebugExprType baseType = null;
-        if (array.getNode() instanceof DebugExprVarNode) {
-            baseMember = ((DebugExprVarNode) (array.getNode())).getMember();
-            baseType = ((DebugExprVarNode) (array.getNode())).getType();
-        } else if (array.getNode() instanceof DebugExprObjectMemberNode) {
-            baseMember = ((DebugExprObjectMemberNode) (array.getNode())).getMember();
-            baseType = ((DebugExprObjectMemberNode) (array.getNode())).getType();
+        DebugExprArrayElementNode node = DebugExprArrayElementNode.create(array, index.getNode());
+        if (array.getType() == null) {
+            throw DebugExprException.typeError(node, node);
         }
-        if (baseMember != null) {
-            DebugExprArrayElementNode node = new DebugExprArrayElementNode(baseMember, index.getNode(), baseType);
-            return DebugExpressionPair.create(node, baseType);
-        }
-        return errorObjPair;
+        return DebugExpressionPair.create(node, array.getType().getInnerType());
+    }
+
+    public DebugExprTypeofNode createTypeofNode(String ident) {
+        return DebugExprTypeofNodeGen.create(ident, location);
+    }
+
+    public DebugExpressionPair createPointerCastNode(DebugExpressionPair pair, DebugExprTypeofNode typeNode) {
+        checkError(pair, "pointer cast");
+        DebugExprPointerCastNode node = DebugExprPointerCastNodeGen.create(pair.getNode(), typeNode);
+        return DebugExpressionPair.create(node, node.getType(frame));
     }
 
     public enum CompareKind {
