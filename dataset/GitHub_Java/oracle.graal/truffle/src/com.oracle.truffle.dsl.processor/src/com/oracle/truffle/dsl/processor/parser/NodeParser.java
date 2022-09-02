@@ -1867,9 +1867,7 @@ public final class NodeParser extends AbstractParser<NodeData> {
         }
 
         if (!uncached && annotationValue != null && !specialization.hasMultipleInstances()) {
-            if (!specialization.hasErrors()) {
-                specialization.addWarning(annotationValue, "The limit expression has no effect. Multiple specialization instantiations are impossible for this specialization.");
-            }
+            specialization.addWarning(annotationValue, "The limit expression has no effect. Multiple specialization instantiations are impossible for this specialization.");
             return;
         }
 
@@ -2002,11 +2000,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
             }
             if (!ElementUtils.isAssignable(parameterType, context.getType(Library.class))) {
                 cachedLibrary.addError("Invalid library type %s. Library is not a subclass of %s.", getSimpleName(parameterType), Library.class.getSimpleName());
-                continue;
-            }
-
-            if (ElementUtils.findAnnotationMirror(cachedLibrary.getParameter().getVariableElement(), Shared.class) != null) {
-                cachedLibrary.addError("Specialized cached libraries cannot be shared yet.");
                 continue;
             }
 
