@@ -57,6 +57,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.graalvm.options.OptionCategory;
@@ -431,6 +432,15 @@ public abstract class TruffleLanguage<C> {
          * @return list of service types that this language can provide
          */
         Class<?>[] services() default {};
+
+        /**
+         * Declarative list of {@link TruffleFile.FileTypeDetector} classes provided by this
+         * language.
+         * 
+         * @return list of file type detectors
+         * @since 1.0
+         */
+        Class<? extends TruffleFile.FileTypeDetector>[] fileTypeDetectors() default {};
     }
 
     /**
@@ -1293,6 +1303,7 @@ public abstract class TruffleLanguage<C> {
         private final OptionValues options;
         private final String[] applicationArguments;
         private final FileSystem fileSystem;
+        private final boolean languageCacheUsesContextClassLoader;
 
         @CompilationFinal private volatile List<Object> services;
 
@@ -1305,7 +1316,7 @@ public abstract class TruffleLanguage<C> {
 
         @SuppressWarnings("unchecked")
         private Env(Object vmObject, TruffleLanguage<?> language, OutputStream out, OutputStream err, InputStream in, Map<String, Object> config, OptionValues options, String[] applicationArguments,
-                        FileSystem fileSystem) {
+                        FileSystem fileSystem, boolean languageCacheUsesContextClassLoader) {
             this.vmObject = vmObject;
             this.spi = (TruffleLanguage<Object>) language;
             this.in = in;
@@ -1316,6 +1327,7 @@ public abstract class TruffleLanguage<C> {
             this.applicationArguments = applicationArguments == null ? new String[0] : applicationArguments;
             this.valid = true;
             this.fileSystem = fileSystem;
+            this.languageCacheUsesContextClassLoader = languageCacheUsesContextClassLoader;
         }
 
         Object getVMObject() {
@@ -1513,10 +1525,7 @@ public abstract class TruffleLanguage<C> {
 
         /**
          * Returns <code>true</code> if host access is generally allowed. If this method returns
-         * <code>false</code> then {@link #lookupHostSymbol(String)} will always fail. Host lookup
-         * is generally disallowed if the embedder provided a null
-         * {@link org.graalvm.polyglot.Context.Builder#allowHostClassLookup(java.util.function.Predicate)
-         * host class filter}.
+         * <code>false</code> then {@link #lookupHostSymbol(String)} will always fail.
          *
          * @since 0.27
          */
@@ -1543,11 +1552,11 @@ public abstract class TruffleLanguage<C> {
         /**
          * Looks up a Java class in the top-most scope the host environment. Throws an error if no
          * symbol was found or the symbol was not accessible. Symbols might not be accessible if a
-         * {@link org.graalvm.polyglot.Context.Builder#allowHostClassLookup(java.util.function.Predicate)
-         * host class filter} prevents access. The returned object is always a
-         * <code>TruffleObject</code> that represents the class symbol.
+         * {@link org.graalvm.polyglot.Context.Builder#hostClassFilter(java.util.function.Predicate)
+         * class filter} prevents access. The returned object is always a <code>TruffleObject</code>
+         * .
          *
-         * @param symbolName the qualified class name in the host language.
+         * @param symbolName the name of the symbol in the the host language.
          * @since 0.27
          */
         @TruffleBoundary
@@ -1592,7 +1601,7 @@ public abstract class TruffleLanguage<C> {
          * guest language representation. To allocate new host objects users should use
          * {@link #lookupHostSymbol(String)} to lookup the class and then send a NEW interop message
          * to that object to instantiate it. This method does not respect configured
-         * {@link org.graalvm.polyglot.Context.Builder#allowHostClassLookup(java.util.function.Predicate)
+         * {@link org.graalvm.polyglot.Context.Builder#hostClassFilter(java.util.function.Predicate)
          * class filters}.
          *
          * @param hostObject the host object to convert
@@ -1947,7 +1956,7 @@ public abstract class TruffleLanguage<C> {
         public TruffleFile getTruffleFile(String path) {
             checkDisposed();
             try {
-                return new TruffleFile(fileSystem, fileSystem.parsePath(path));
+                return new TruffleFile(fileSystem, fileSystem.parsePath(path), languageCacheUsesContextClassLoader);
             } catch (UnsupportedOperationException e) {
                 throw e;
             } catch (Throwable t) {
@@ -1966,7 +1975,7 @@ public abstract class TruffleLanguage<C> {
         public TruffleFile getTruffleFile(URI uri) {
             checkDisposed();
             try {
-                return new TruffleFile(fileSystem, fileSystem.parsePath(uri));
+                return new TruffleFile(fileSystem, fileSystem.parsePath(uri), languageCacheUsesContextClassLoader);
             } catch (UnsupportedOperationException e) {
                 throw new FileSystemNotFoundException("FileSystem for: " + uri.getScheme() + " scheme is not supported.");
             } catch (Throwable t) {
@@ -2449,8 +2458,8 @@ public abstract class TruffleLanguage<C> {
 
         @Override
         public Env createEnv(Object vmObject, TruffleLanguage<?> language, OutputStream stdOut, OutputStream stdErr, InputStream stdIn, Map<String, Object> config, OptionValues options,
-                        String[] applicationArguments, FileSystem fileSystem) {
-            Env env = new Env(vmObject, language, stdOut, stdErr, stdIn, config, options, applicationArguments, fileSystem);
+                        String[] applicationArguments, FileSystem fileSystem, boolean languageCacheUsesContextClassLoader) {
+            Env env = new Env(vmObject, language, stdOut, stdErr, stdIn, config, options, applicationArguments, fileSystem, languageCacheUsesContextClassLoader);
             LinkedHashSet<Object> collectedServices = new LinkedHashSet<>();
             LanguageInfo info = language.languageInfo;
             AccessAPI.instrumentAccess().collectEnvServices(collectedServices, API.nodes().getEngineObject(info), language);
@@ -2647,7 +2656,7 @@ public abstract class TruffleLanguage<C> {
                             stdIn,
                             config,
                             options,
-                            applicationArguments, fileSystem);
+                            applicationArguments, fileSystem, env.languageCacheUsesContextClassLoader);
 
             newEnv.initialized = env.initialized;
             newEnv.context = env.context;
@@ -2656,8 +2665,37 @@ public abstract class TruffleLanguage<C> {
         }
 
         @Override
-        public Path getPath(TruffleFile file) {
-            return file.getSPIPath();
+        public TruffleFile getTruffleFile(Object origin, boolean embedder, boolean languageCacheUsesContextClassLoader) {
+            FileSystem fileSystem;
+            boolean useContextClassLoader;
+            if (embedder) {
+                fileSystem = AccessAPI.engineAccess().getDefaultFileSystem();
+                useContextClassLoader = languageCacheUsesContextClassLoader;
+            } else {
+                Object polyglotContextImpl = AccessAPI.engineAccess().getCurrentOuterContext();
+                if (polyglotContextImpl == null) {
+                    throw new IllegalStateException("No current context");
+                }
+                fileSystem = AccessAPI.engineAccess().getFileSystem(polyglotContextImpl);
+                useContextClassLoader = AccessAPI.engineAccess().isLanguageCacheUsingContextClassLoader(polyglotContextImpl);
+            }
+            if (origin instanceof Path) {
+                return new TruffleFile(fileSystem, fileSystem.parsePath(origin.toString()), useContextClassLoader);
+            } else if (origin instanceof URI) {
+                URI uri = (URI) origin;
+                try {
+                    return new TruffleFile(fileSystem, fileSystem.parsePath(uri), useContextClassLoader);
+                } catch (UnsupportedOperationException e) {
+                    throw new FileSystemNotFoundException("FileSystem for: " + uri.getScheme() + " scheme is not supported.");
+                }
+            } else {
+                throw new IllegalArgumentException("Origin must be Path of URI, origin " + Objects.toString(origin));
+            }
+        }
+
+        @Override
+        public String getMimeType(TruffleFile file, Set<String> validMimeTypes) throws IOException {
+            return file.getMimeType(validMimeTypes);
         }
 
         @Override

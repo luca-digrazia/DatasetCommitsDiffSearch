@@ -67,7 +67,6 @@ import com.oracle.truffle.api.TruffleLanguage.Registration;
 import com.oracle.truffle.api.TruffleOptions;
 import java.util.WeakHashMap;
 import com.oracle.truffle.api.TruffleFile.FileTypeDetector;
-import java.security.CodeSource;
 
 /**
  * Ahead-of-time initialization. If the JVM is started with {@link TruffleOptions#AOT}, it populates
@@ -201,6 +200,14 @@ final class LanguageCache implements Comparable<LanguageCache> {
         this.fileTypeDetectorClassNames = Collections.emptyList();
     }
 
+    static List<FileTypeDetector> fileTypeDetectors(ClassLoader loader) {
+        List<FileTypeDetector> res = new ArrayList<>();
+        for (LanguageCache cache : languages(loader).values()) {
+            res.addAll(cache.getFileTypeDetectors());
+        }
+        return res;
+    }
+
     static Map<String, LanguageCache> languageMimes() {
         if (TruffleOptions.AOT) {
             return nativeImageMimes;
@@ -243,7 +250,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
     private static Map<String, LanguageCache> createLanguages(ClassLoader additionalLoader) {
         List<LanguageCache> caches = new ArrayList<>();
-        for (ClassLoader loader : EngineAccessor.allLoaders()) {
+        for (ClassLoader loader : VMAccessor.allLoaders()) {
             collectLanguages(loader, caches);
         }
         if (additionalLoader != null) {
@@ -251,37 +258,9 @@ final class LanguageCache implements Comparable<LanguageCache> {
         }
         Map<String, LanguageCache> cacheToId = new HashMap<>();
         for (LanguageCache languageCache : caches) {
-            LanguageCache prev = cacheToId.put(languageCache.getId(), languageCache);
-            if (prev != null && (!prev.getClassName().equals(languageCache.getClassName()) || loadUninitialized(prev) != loadUninitialized(languageCache))) {
-                String message = String.format("Duplicate language id %s. First language [%s]. Second language [%s].",
-                                languageCache.getId(),
-                                formatLanguageLocation(prev),
-                                formatLanguageLocation(languageCache));
-                throw new IllegalStateException(message);
-            }
+            cacheToId.put(languageCache.getId(), languageCache);
         }
         return cacheToId;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Class<? extends TruffleLanguage<?>> loadUninitialized(LanguageCache cache) {
-        try {
-            return (Class<? extends TruffleLanguage<?>>) Class.forName(cache.getClassName(), false, cache.loader);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("Cannot load language " + cache.getName() + ". Language implementation class " + cache.getClassName() + " failed to load.", e);
-        }
-    }
-
-    private static String formatLanguageLocation(LanguageCache languageCache) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Name ").append(languageCache.getName()).append(", ");
-        sb.append("Version ").append(languageCache.getVersion()).append(", ");
-        sb.append("Language class ").append(languageCache.getClassName());
-        CodeSource source = languageCache.getLanguageClass().getProtectionDomain().getCodeSource();
-        if (source != null) {
-            sb.append(", Loaded from " + source.getLocation());
-        }
-        return sb.toString();
     }
 
     private static void collectLanguages(ClassLoader loader, List<LanguageCache> list) {
@@ -513,13 +492,13 @@ final class LanguageCache implements Comparable<LanguageCache> {
             synchronized (this) {
                 if (fileTypeDetectors == null) {
                     List<FileTypeDetector> instances = new ArrayList<>(fileTypeDetectorClassNames.size());
-                    for (String fileTypeDetectorClassName : fileTypeDetectorClassNames) {
+                    for (String className : fileTypeDetectorClassNames) {
                         try {
-                            Class<? extends FileTypeDetector> detectorClass = Class.forName(fileTypeDetectorClassName, true, loader).asSubclass(FileTypeDetector.class);
+                            Class<? extends FileTypeDetector> detectorClass = Class.forName(className, true, loader).asSubclass(FileTypeDetector.class);
                             FileTypeDetector instance = detectorClass.getDeclaredConstructor().newInstance();
                             instances.add(instance);
                         } catch (ReflectiveOperationException e) {
-                            throw new IllegalStateException("Cannot instantiate FileTypeDetector, class  " + fileTypeDetectorClassName + ".", e);
+                            throw new IllegalStateException("Cannot instantiate FileTypeDetector, class  " + className + ".", e);
                         }
                     }
                     fileTypeDetectors = Collections.unmodifiableList(instances);
