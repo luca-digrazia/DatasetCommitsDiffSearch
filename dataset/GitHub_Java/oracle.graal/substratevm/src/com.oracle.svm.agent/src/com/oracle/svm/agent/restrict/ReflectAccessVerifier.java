@@ -66,17 +66,11 @@ public class ReflectAccessVerifier extends AbstractAccessVerifier {
     }
 
     public boolean verifyForName(JNIEnvironment env, JNIObjectHandle callerClass, String className) {
-        if (shouldApproveWithoutChecks(env, callerClass)) {
-            return true;
-        }
-        return className == null || typeAccessChecker.getConfiguration().get(className) != null;
+        return verifyLoadClass(env, callerClass, className);
     }
 
     public boolean verifyLoadClass(JNIEnvironment env, JNIObjectHandle callerClass, String className) {
         if (shouldApproveWithoutChecks(env, callerClass)) {
-            return true;
-        }
-        if (accessAdvisor.shouldIgnoreLoadClass(lazyClassNameOrNull(env, callerClass))) {
             return true;
         }
         return className == null || typeAccessChecker.getConfiguration().get(className) != null;
