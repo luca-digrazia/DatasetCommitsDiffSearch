@@ -42,7 +42,6 @@ package com.oracle.truffle.nfi.impl;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
@@ -290,73 +289,49 @@ abstract class SerializeArgumentLibrary extends Library {
         }
 
         @ExportMessage
-        static class PutPointer {
-
-            @Specialization(guards = "interop.isPointer(arg)", rewriteOn = UnsupportedMessageException.class)
-            static void putPointer(Object arg, NativeArgumentBuffer buffer, int ptrSize,
-                    @CachedLibrary("arg") InteropLibrary interop) throws UnsupportedMessageException {
-                buffer.putPointer(interop.asPointer(arg), ptrSize);
-            }
-
-            @Specialization(guards = {"!interop.isPointer(arg)", "interop.isNull(arg)"})
-            static void putNull(@SuppressWarnings("unused") Object arg, NativeArgumentBuffer buffer, int ptrSize,
-                    @SuppressWarnings("unused") @CachedLibrary("arg") InteropLibrary interop) {
-                buffer.putPointer(0, ptrSize);
-            }
-
-            @Specialization(replaces = {"putPointer", "putNull"})
-            static void putGeneric(Object arg, NativeArgumentBuffer buffer, int ptrSize,
-                    @CachedLibrary("arg") InteropLibrary interop,
-                    @Shared("exception") @Cached BranchProfile exception) throws UnsupportedTypeException {
-                try {
-                    interop.toNative(arg);
+        static void putPointer(Object arg, NativeArgumentBuffer buffer, int ptrSize,
+                        @CachedLibrary("arg") InteropLibrary interop,
+                        @Shared("exception") @Cached BranchProfile exception) throws UnsupportedTypeException {
+            try {
+                interop.toNative(arg);
+                if (interop.isPointer(arg)) {
                     buffer.putPointer(interop.asPointer(arg), ptrSize);
-                } catch (UnsupportedMessageException ex) {
-                    exception.enter();
-                    if (interop.isNull(arg)) {
-                        buffer.putPointer(0, ptrSize);
-                        return;
-                    } else {
-                        try {
-                            buffer.putPointer(interop.asLong(arg), ptrSize);
-                            return;
-                        } catch (UnsupportedMessageException ex2) {
-                        }
-                    }
-                    throw UnsupportedTypeException.create(new Object[]{arg});
+                    return;
+                }
+            } catch (UnsupportedMessageException ex) {
+            }
+
+            exception.enter();
+            if (interop.isNull(arg)) {
+                buffer.putPointer(0, ptrSize);
+                return;
+            } else {
+                try {
+                    buffer.putPointer(interop.asLong(arg), ptrSize);
+                    return;
+                } catch (UnsupportedMessageException ex2) {
                 }
             }
+            throw UnsupportedTypeException.create(new Object[]{arg});
         }
 
         @ExportMessage
-        static class PutString {
-
-            @Specialization(guards = "interop.isString(arg)", rewriteOn = UnsupportedMessageException.class)
-            static void putString(Object arg, NativeArgumentBuffer buffer, int ptrSize,
-                    @CachedLibrary("arg") InteropLibrary interop) throws UnsupportedMessageException {
-                buffer.putObject(TypeTag.STRING, interop.asString(arg), ptrSize);
-            }
-
-            @Specialization(guards = {"!interop.isString(arg)", "interop.isNull(arg)"})
-            static void putNull(@SuppressWarnings("unused") Object arg, NativeArgumentBuffer buffer, int ptrSize,
-                    @SuppressWarnings("unused") @CachedLibrary("arg") InteropLibrary interop) {
-                buffer.putPointer(0, ptrSize);
-            }
-
-            @Specialization(replaces = {"putString", "putNull"})
-            static void putGeneric(Object arg, NativeArgumentBuffer buffer, int ptrSize,
-                            @CachedLibrary("arg") InteropLibrary interop,
-                            @Shared("exception") @Cached BranchProfile exception) throws UnsupportedTypeException {
-                try {
+        static void putString(Object arg, NativeArgumentBuffer buffer, int ptrSize,
+                        @CachedLibrary("arg") InteropLibrary interop,
+                        @Shared("exception") @Cached BranchProfile exception) throws UnsupportedTypeException {
+            try {
+                if (interop.isString(arg)) {
                     buffer.putObject(TypeTag.STRING, interop.asString(arg), ptrSize);
-                } catch (UnsupportedMessageException ex) {
-                    exception.enter();
-                    if (interop.isNull(arg)) {
-                        buffer.putPointer(0, ptrSize);
-                    } else {
-                        throw UnsupportedTypeException.create(new Object[]{arg});
-                    }
+                    return;
                 }
+            } catch (UnsupportedMessageException ex) {
+            }
+
+            exception.enter();
+            if (interop.isNull(arg)) {
+                buffer.putPointer(0, ptrSize);
+            } else {
+                throw UnsupportedTypeException.create(new Object[]{arg});
             }
         }
     }
