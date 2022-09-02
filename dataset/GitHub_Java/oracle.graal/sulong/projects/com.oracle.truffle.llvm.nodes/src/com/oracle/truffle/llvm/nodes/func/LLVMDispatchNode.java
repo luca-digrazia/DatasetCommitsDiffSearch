@@ -243,7 +243,7 @@ public abstract class LLVMDispatchNode extends LLVMNode {
             this.type = type;
         }
 
-        abstract Object execute(Object function, LLVMInteropType.Structured interopType, Object[] arguments);
+        abstract Object execute(TruffleObject function, LLVMInteropType.Structured interopType, Object[] arguments);
 
         @Specialization(guards = "functionType == cachedType", limit = "5")
         protected Object doCachedType(TruffleObject function, @SuppressWarnings("unused") LLVMInteropType.Function functionType, Object[] arguments,
@@ -294,10 +294,13 @@ public abstract class LLVMDispatchNode extends LLVMNode {
         private Object[] getForeignArguments(LLVMDataEscapeNode[] dataEscapeNodes, Object[] arguments, LLVMInteropType.Function functionType) {
             assert arguments.length == type.getArgumentTypes().length;
             Object[] args = new Object[dataEscapeNodes.length];
-            int i = 0;
-            if (functionType != null) {
+            if (functionType == null) {
+                for (int i = 0; i < args.length; i++) {
+                    args[i] = dataEscapeNodes[i].executeWithTarget(arguments[i + LLVMCallNode.USER_ARGUMENT_OFFSET]);
+                }
+            } else {
                 assert arguments.length == functionType.getParameterLength() + LLVMCallNode.USER_ARGUMENT_OFFSET;
-                for (; i < functionType.getParameterLength(); i++) {
+                for (int i = 0; i < args.length; i++) {
                     LLVMInteropType argType = functionType.getParameter(i);
                     if (argType instanceof LLVMInteropType.Value) {
                         LLVMInteropType.Structured baseType = ((LLVMInteropType.Value) argType).getBaseType();
@@ -307,11 +310,6 @@ public abstract class LLVMDispatchNode extends LLVMNode {
                         throw new LLVMPolyglotException(this, "Can not call polyglot function with structured argument type.");
                     }
                 }
-            }
-
-            // handle remaining arguments (varargs or functionType == null)
-            for (; i < args.length; i++) {
-                args[i] = dataEscapeNodes[i].executeWithTarget(arguments[i + LLVMCallNode.USER_ARGUMENT_OFFSET]);
             }
             return args;
         }

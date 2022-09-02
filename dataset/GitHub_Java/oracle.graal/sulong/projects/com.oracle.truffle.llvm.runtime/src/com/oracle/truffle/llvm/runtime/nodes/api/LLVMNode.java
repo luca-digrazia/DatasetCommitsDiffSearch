@@ -36,6 +36,7 @@ import com.oracle.truffle.api.TruffleLanguage.ContextReference;
 import com.oracle.truffle.api.dsl.TypeSystemReference;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
@@ -77,22 +78,18 @@ public abstract class LLVMNode extends Node {
     }
 
     public static LLVMMemory getLLVMMemory() {
-        CompilerAsserts.neverPartOfCompilation();
         return LLVMLanguage.getLanguage().getCapability(LLVMMemory.class);
     }
 
     public static UnsafeArrayAccess getUnsafeArrayAccess() {
-        CompilerAsserts.neverPartOfCompilation();
         return LLVMLanguage.getLanguage().getCapability(UnsafeArrayAccess.class);
     }
 
     protected static PrintStream nativeCallStatisticsStream(ContextReference<LLVMContext> context) {
-        CompilerAsserts.neverPartOfCompilation();
         return SulongEngineOption.getStream(context.get().getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
     }
 
     protected static boolean nativeCallStatisticsEnabled(ContextReference<LLVMContext> context) {
-        CompilerAsserts.neverPartOfCompilation();
         return SulongEngineOption.isTrue(context.get().getEnv().getOptions().get(SulongEngineOption.NATIVE_CALL_STATS));
     }
 
@@ -117,11 +114,11 @@ public abstract class LLVMNode extends Node {
         return null;
     }
 
-    protected static boolean isFunctionDescriptor(Object object) {
+    protected static boolean isFunctionDescriptor(TruffleObject object) {
         return object instanceof LLVMFunctionDescriptor;
     }
 
-    protected static LLVMFunctionDescriptor asFunctionDescriptor(Object object) {
+    protected static LLVMFunctionDescriptor asFunctionDescriptor(TruffleObject object) {
         return object instanceof LLVMFunctionDescriptor ? (LLVMFunctionDescriptor) object : null;
     }
 

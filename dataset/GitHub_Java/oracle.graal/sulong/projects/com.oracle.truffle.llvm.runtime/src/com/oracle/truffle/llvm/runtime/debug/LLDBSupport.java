@@ -33,12 +33,12 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.object.DynamicObject;
-import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugValue;
@@ -67,7 +67,7 @@ public final class LLDBSupport {
 
         LoadRootNode(LLDBSupport dbSupport, Type loadType) {
             super(dbSupport.language);
-            loadNode = CommonNodeFactory.createLoad(loadType, null);
+            loadNode = dbSupport.getNodeFactory().createLoad(loadType, null);
         }
 
         @Override
@@ -97,7 +97,7 @@ public final class LLDBSupport {
         }
 
         final LLVMManagedPointer managedPointer = LLVMManagedPointer.cast(pointer);
-        final Object target = managedPointer.getObject();
+        final TruffleObject target = managedPointer.getObject();
         return target instanceof DynamicObject && ((DynamicObject) target).getShape().getObjectType() instanceof LLVMObjectAccess;
     }
 

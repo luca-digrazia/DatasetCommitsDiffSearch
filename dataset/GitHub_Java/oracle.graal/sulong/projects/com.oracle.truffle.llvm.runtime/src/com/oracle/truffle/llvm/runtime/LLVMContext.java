@@ -239,11 +239,11 @@ public final class LLVMContext {
     void initialize() {
         assert this.threadingStack == null;
         this.threadingStack = new LLVMThreadingStack(Thread.currentThread(), parseStackSize(env.getOptions().get(SulongEngineOption.STACK_SIZE)));
-        for (ContextExtension ext : language.getLanguageContextExtension()) {
+        for (ContextExtension ext : LLVMLanguage.getLanguage().getLanguageContextExtension()) {
             ext.initialize();
         }
         if (languageHome != null) {
-            SystemContextExtension sysContextExt = language.getContextExtension(SystemContextExtension.class);
+            SystemContextExtension sysContextExt = LLVMLanguage.getLanguage().getContextExtension(SystemContextExtension.class);
             internalLibraryPath = Paths.get(languageHome).resolve(sysContextExt.getSulongLibrariesPath());
             // add internal library location also to the external library lookup path
             addLibraryPath(internalLibraryPath.toString());
