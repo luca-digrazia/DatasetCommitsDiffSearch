@@ -29,7 +29,9 @@ import java.lang.ref.ReferenceQueue;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
@@ -144,29 +146,25 @@ public final class EspressoContext {
      * waits for all non-daemon threads to finish.
      */
     private volatile boolean isClosing = false;
-    private volatile int exitStatus = -1;
-
-    public int getExitStatus() {
-        assert isClosing();
-        return exitStatus;
-    }
-
     /**
-     * On return of the main method, host main thread waits on this synchronizer. Once a thread
-     * terminates, or an exit method is called, it is notified
+     * Spawns on two occasions:
+     * <li>Main thread returns
+     * <li>An exit method is called
      */
-    private final Object shutdownSynchronizer = new Object() {
+    private volatile Thread closer = null;
+    /**
+     * Callback to Context.close().
+     */
+    private volatile Runnable closingPayload;
+    /**
+     * Closer thread waits on this synchronizer. Once a thread terminates, or an exit method is
+     * called, it is notified
+     */
+    private final Object threadRegistrationSynchronizer = new Object() {
     };
 
-    public Object getShutdownSynchronizer() {
-        return shutdownSynchronizer;
-    }
-
-    public void notifyShutdownSynchronizer() {
-        Object sync = getShutdownSynchronizer();
-        synchronized (sync) {
-            sync.notifyAll();
-        }
+    public Object getSynchronizer() {
+        return threadRegistrationSynchronizer;
     }
 
     public EspressoContext(TruffleLanguage.Env env, EspressoLanguage language) {
@@ -423,6 +421,8 @@ public final class EspressoContext {
 
         createMainThread();
 
+        registerClosingPayload();
+
         initializeKnownClass(Type.java_lang_ref_Finalizer);
 
         if (getJavaVersion().java8OrEarlier()) {
@@ -545,6 +545,30 @@ public final class EspressoContext {
         mainThreadCreated = true;
     }
 
+    @SuppressWarnings("unchecked")
+    private void registerClosingPayload() {
+        Thread t = Thread.currentThread();
+        assert t instanceof Supplier<?>;
+        assert t instanceof Consumer<?>;
+        try {
+            Supplier<Runnable> asSupplier = (Supplier<Runnable>) t;
+            Consumer<Supplier<Thread>> asConsumer = (Consumer<Supplier<Thread>>) t;
+
+            closingPayload = asSupplier.get();
+            Supplier<Thread> callback = new Supplier<Thread>() {
+                @Override
+                public Thread get() {
+                    threadManager.unregisterMainThread();
+                    startCloserThread(0);
+                    return closer;
+                }
+            };
+            asConsumer.accept(callback);
+        } catch (Throwable e) {
+            throw EspressoError.shouldNotReachHere();
+        }
+    }
+
     /**
      * Creates a new guest thread from the host thread, and adds it to the main thread group.
      */
@@ -587,26 +611,25 @@ public final class EspressoContext {
 
     private static final long MAX_KILL_PHASE_WAIT = 100;
 
-    public void teardown(boolean fromExit) {
+    public void interruptActiveThreads() {
         assert isClosing();
+        assert Thread.currentThread() instanceof CloserThread;
         invalidateNoThreadStop("Killing the VM");
         Thread initiatingThread = Thread.currentThread();
 
         // Phase 0: wait.
         boolean nextPhase = !waitSpin(initiatingThread);
 
-        if (!fromExit) {
-            if (nextPhase) {
-                // Phase 1: Interrupt threads, and stops daemons.
-                teardownPhase1(initiatingThread);
-                nextPhase = !waitSpin(initiatingThread);
-            }
+        if (nextPhase) {
+            // Phase 1: Interrupt threads, and stop daemons.
+            teardownPhase1(initiatingThread);
+            nextPhase = !waitSpin(initiatingThread);
+        }
 
-            if (nextPhase) {
-                // Phase 2: Stop all threads.
-                teardownPhase2(initiatingThread);
-                nextPhase = !waitSpin(initiatingThread);
-            }
+        if (nextPhase) {
+            // Phase 2: Stop all threads.
+            teardownPhase2(initiatingThread);
+            nextPhase = !waitSpin(initiatingThread);
         }
 
         if (nextPhase) {
@@ -632,7 +655,7 @@ public final class EspressoContext {
             assert !hostToGuestReferenceDrainThread.isAlive();
         }
 
-        throw new EspressoExitException(getExitStatus());
+        initiatingThread.interrupt();
     }
 
     private void teardownPhase1(Thread initiatingThread) {
@@ -684,6 +707,7 @@ public final class EspressoContext {
                 // TODO(garcia): Tell truffle to forget about this thread
                 // Or
                 // TODO(garcia): Gracefully exit and allow stopping threads in native.
+                System.exit(((CloserThread) Thread.currentThread()).code);
             }
         }
     }
@@ -921,61 +945,74 @@ public final class EspressoContext {
         return contextReady;
     }
 
-    @TruffleBoundary
     public void doExit(int code) {
-        if (!isClosing) {
-            Object sync = getShutdownSynchronizer();
-            synchronized (sync) {
-                if (isClosing) {
-                    return;
-                }
-                isClosing = true;
-                exitStatus = code;
-                // Wake up spinning main thread.
-                sync.notifyAll();
-            }
-            teardown(true);
+        isClosing = true;
+        startCloserThread(code);
+        Object sync = getSynchronizer();
+        synchronized (sync) {
+            sync.notifyAll();
         }
     }
 
-    @TruffleBoundary
-    public void destroyVM() {
-        waitForClose();
-        getMeta().java_lang_reflect_Shutdown_shutdown.invokeDirect(null);
-        teardown(false);
+    public synchronized void startCloserThread(int code) {
+        if (closer == null) {
+            closer = new CloserThread(closingPayload, code);
+            closer.start();
+        }
     }
 
-    private void waitForClose() throws EspressoExitException {
-        Object synchronizer = getShutdownSynchronizer();
-        synchronized (synchronizer) {
-            while (true) {
-                if (isClosing()) {
-                    throw new EspressoExitException(exitStatus);
-                }
-                if (hasActiveNonDaemon()) {
-                    try {
-                        synchronizer.wait();
-                    } catch (InterruptedException e) {
-                        /* loop back */
+    private class CloserThread extends Thread implements Supplier<Integer> {
+        private final Runnable payload;
+        private final int code;
+
+        public CloserThread(Runnable payload, int code) {
+            this.payload = payload;
+            this.code = code;
+        }
+
+        private boolean hasActiveNonDaemon() {
+            for (StaticObject guest : threadManager.activeThreads()) {
+                Thread host = Target_java_lang_Thread.getHostFromGuestThread(guest);
+                if (!host.isDaemon()) {
+                    if (host.isAlive()) {
+                        return true;
                     }
-                } else {
-                    isClosing = true;
-                    exitStatus = 0; // regular
-                    return;
                 }
             }
+            return false;
         }
-    }
 
-    private boolean hasActiveNonDaemon() {
-        for (StaticObject guest : threadManager.activeThreads()) {
-            Thread host = Target_java_lang_Thread.getHostFromGuestThread(guest);
-            if (!host.isDaemon()) {
-                if (host.isAlive()) {
-                    return true;
+        private void waitForClose() {
+            Object synchronizer = getSynchronizer();
+            synchronized (synchronizer) {
+                while (true) {
+                    if (isClosing()) {
+                        return;
+                    }
+                    if (hasActiveNonDaemon()) {
+                        try {
+                            synchronizer.wait();
+                        } catch (InterruptedException e) {
+                            /* loop back */
+                        }
+                    } else {
+                        isClosing = true;
+                        return;
+                    }
                 }
             }
         }
-        return false;
+
+        @Override
+        public void run() {
+            waitForClose();
+            interruptActiveThreads();
+            payload.run();
+        }
+
+        @Override
+        public Integer get() {
+            return code;
+        }
     }
 }

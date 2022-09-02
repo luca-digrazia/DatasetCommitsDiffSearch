@@ -119,6 +119,7 @@ import com.oracle.truffle.espresso.nodes.interop.ToEspressoNodeGen;
 import com.oracle.truffle.espresso.runtime.Classpath;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
+import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import com.oracle.truffle.espresso.runtime.EspressoProperties;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -1095,15 +1096,19 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     @VmImpl
+    @TruffleBoundary
     public void JVM_Halt(int code) {
         getContext().doExit(code);
+        throw new EspressoExitException(code);
     }
 
     @VmImpl
+    @TruffleBoundary
     public void JVM_Exit(int code) {
         getContext().doExit(code);
         // System.exit(code);
         // Unlike Halt, runs finalizers
+        throw new EspressoExitException(code);
     }
 
     @VmImpl
