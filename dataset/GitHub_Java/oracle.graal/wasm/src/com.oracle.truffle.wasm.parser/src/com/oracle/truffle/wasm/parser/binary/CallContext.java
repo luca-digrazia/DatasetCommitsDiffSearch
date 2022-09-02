@@ -29,32 +29,25 @@
  */
 package com.oracle.truffle.wasm.parser.binary;
 
-import com.oracle.truffle.api.RootCallTarget;
+public class CallContext extends BinaryStreamReader {
+    private long[] rawStack;
 
-public class WasmFunction {
-    private SymbolTable symbolTable;
-    private int typeIndex;
-    private RootCallTarget callTarget;
+    private int pointer;
 
-    private byte[] locals;
-    private int offset;
-
-    public WasmFunction(SymbolTable symbolTable, int typeIndex) {
-        this.symbolTable = symbolTable;
-        this.typeIndex = typeIndex;
-        this.callTarget = null;
+    public CallContext(byte[] data, int stackSize) {
+        super(data);
+        this.rawStack = new long[stackSize];
+        this.pointer = 0;
     }
 
-    public byte returnType() {
-        return symbolTable.getFunctionReturnType(typeIndex);
+    public void push(long value) {
+        rawStack[pointer] = value;
+        pointer++;
     }
 
-    void setCallTarget(RootCallTarget callTarget) {
-        this.callTarget = callTarget;
-    }
-
-    public void registerLocal(byte type) {
-        locals[offset] = type;
-        offset++;
+    public long pop() {
+        pointer--;
+        long value = rawStack[pointer];
+        return value;
     }
 }

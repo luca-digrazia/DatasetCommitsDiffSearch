@@ -29,32 +29,9 @@
  */
 package com.oracle.truffle.wasm.parser.binary;
 
-import com.oracle.truffle.api.RootCallTarget;
-
-public class WasmFunction {
-    private SymbolTable symbolTable;
-    private int typeIndex;
-    private RootCallTarget callTarget;
-
-    private byte[] locals;
-    private int offset;
-
-    public WasmFunction(SymbolTable symbolTable, int typeIndex) {
-        this.symbolTable = symbolTable;
-        this.typeIndex = typeIndex;
-        this.callTarget = null;
-    }
-
-    public byte returnType() {
-        return symbolTable.getFunctionReturnType(typeIndex);
-    }
-
-    void setCallTarget(RootCallTarget callTarget) {
-        this.callTarget = callTarget;
-    }
-
-    public void registerLocal(byte type) {
-        locals[offset] = type;
-        offset++;
-    }
+public class ValueTypes {
+    public static final int I32_TYPE = 0x7F;
+    public static final int I64_TYPE = 0x7E;
+    public static final int F32_TYPE = 0x7D;
+    public static final int F64_TYPE = 0x7C;
 }

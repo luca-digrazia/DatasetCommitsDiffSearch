@@ -30,7 +30,6 @@
 package com.oracle.truffle.wasm.parser.binary;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 
@@ -52,10 +51,5 @@ public final class WasmLanguage extends TruffleLanguage<WasmContext> {
         BinaryReader reader = new BinaryReader(this, request.getSource().getName(), request.getSource().getBytes().toByteArray());
         reader.readModule();
         return Truffle.getRuntime().createCallTarget(new WasmUndefinedFunctionRootCallNode(this));
-    }
-
-    @Override
-    protected Iterable<Scope> findTopScopes(WasmContext context) {
-        return context.getTopScopes();
     }
 }

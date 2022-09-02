@@ -27,34 +27,23 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
 package com.oracle.truffle.wasm.parser.binary;
 
-import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.TruffleException;
+import com.oracle.truffle.api.nodes.Node;
 
-public class WasmFunction {
-    private SymbolTable symbolTable;
-    private int typeIndex;
-    private RootCallTarget callTarget;
+public class WasmException extends RuntimeException implements TruffleException {
 
-    private byte[] locals;
-    private int offset;
+    private Node location;
 
-    public WasmFunction(SymbolTable symbolTable, int typeIndex) {
-        this.symbolTable = symbolTable;
-        this.typeIndex = typeIndex;
-        this.callTarget = null;
+    public WasmException(Node location, String message) {
+        super(message);
+        this.location = location;
     }
 
-    public byte returnType() {
-        return symbolTable.getFunctionReturnType(typeIndex);
-    }
-
-    void setCallTarget(RootCallTarget callTarget) {
-        this.callTarget = callTarget;
-    }
-
-    public void registerLocal(byte type) {
-        locals[offset] = type;
-        offset++;
+    @Override
+    public Node getLocation() {
+        return location;
     }
 }
