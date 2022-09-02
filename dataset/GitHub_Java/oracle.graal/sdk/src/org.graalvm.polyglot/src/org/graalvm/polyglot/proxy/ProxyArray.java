@@ -53,7 +53,7 @@ import org.graalvm.polyglot.Value;
  * @see Proxy
  * @since 19.0
  */
-public interface ProxyArray extends ProxyArrayIterable {
+public interface ProxyArray extends Proxy {
 
     /**
      * Returns the element at the given index.
@@ -95,16 +95,6 @@ public interface ProxyArray extends ProxyArrayIterable {
      * @since 19.0
      */
     long getSize();
-
-    /**
-     * {@inheritDoc}
-     *
-     * @since 20.1
-     */
-    @Override
-    default Object getArrayIterator() {
-        return new DefaultProxyArrayIterator(this);
-    }
 
     /**
      * Creates a proxy array backed by a Java Object array. If the set values of the array are host
@@ -180,6 +170,7 @@ public interface ProxyArray extends ProxyArrayIterable {
             public long getSize() {
                 return values.size();
             }
+
         };
     }
 
