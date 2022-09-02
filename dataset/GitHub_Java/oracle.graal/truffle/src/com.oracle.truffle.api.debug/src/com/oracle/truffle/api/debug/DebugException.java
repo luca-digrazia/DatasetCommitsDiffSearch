@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -48,13 +47,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.TruffleStackTraceElement;
-import com.oracle.truffle.api.debug.SuspendedEvent.DebugAsyncStackFrameLists;
 import com.oracle.truffle.api.frame.FrameInstance;
-import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
@@ -81,7 +78,6 @@ public final class DebugException extends RuntimeException {
     private volatile CatchLocation catchLocation; // the catch location, or null
     private SuspendedEvent suspendedEvent;    // the SuspendedEvent when from breakpoint, or null
     private List<DebugStackTraceElement> debugStackTrace;
-    private List<List<DebugStackTraceElement>> debugAsyncStacks;
     private StackTraceElement[] javaLikeStackTrace;
 
     DebugException(DebuggerSession session, String message, Node throwLocation, boolean isCatchNodeComputed, CatchLocation catchLocation) {
@@ -199,31 +195,6 @@ public final class DebugException extends RuntimeException {
     }
 
     /**
-     * Get a list of asynchronous stack traces that led to scheduling of the exception's execution.
-     * Returns an empty list if no asynchronous stack is known. The first asynchronous stack is at
-     * the first index in the list. A possible next asynchronous stack (that scheduled execution of
-     * the previous one) is at the next index in the list.
-     * <p>
-     * Languages might not provide asynchronous stack traces by default for performance reasons.
-     * Call {@link DebuggerSession#setAsynchronousStackDepth(int)} to request asynchronous stacks.
-     * Languages may provide asynchronous stacks if it's of no performance penalty, or if requested
-     * by other options.
-     *
-     * @see DebuggerSession#setAsynchronousStackDepth(int)
-     * @since 20.1.0
-     */
-    public List<List<DebugStackTraceElement>> getDebugAsynchronousStacks() {
-        if (debugAsyncStacks == null) {
-            int size = getDebugStackTrace().size();
-            if (size == 0) {
-                return Collections.emptyList();
-            }
-            debugAsyncStacks = new DebugAsyncStackFrameLists(session, getDebugStackTrace());
-        }
-        return debugAsyncStacks;
-    }
-
-    /**
      * {@inheritDoc}
      *
      * @since 19.0
@@ -241,7 +212,7 @@ public final class DebugException extends RuntimeException {
     @Override
     public void printStackTrace(PrintStream s) {
         super.printStackTrace(s);
-        if (!isTruffleException(exception)) {
+        if (!(exception instanceof TruffleException)) {
             s.print(CAUSE_CAPTION);
             exception.printStackTrace(s);
         }
@@ -255,7 +226,7 @@ public final class DebugException extends RuntimeException {
     @Override
     public void printStackTrace(PrintWriter s) {
         super.printStackTrace(s);
-        if (!isTruffleException(exception)) {
+        if (!(exception instanceof TruffleException)) {
             s.print(CAUSE_CAPTION);
             exception.printStackTrace(s);
         }
@@ -266,9 +237,8 @@ public final class DebugException extends RuntimeException {
      *
      * @since 19.0
      */
-    @SuppressWarnings("deprecation")
     public boolean isInternalError() {
-        if (!isTruffleException(exception)) {
+        if (exception != null && (!(exception instanceof TruffleException) || ((TruffleException) exception).isInternalError())) {
             if (exception instanceof DebugException) {
                 return ((DebugException) exception).isInternalError();
             }
@@ -283,12 +253,11 @@ public final class DebugException extends RuntimeException {
      * @return an exception object, or <code>null</code>
      * @since 19.0
      */
-    @SuppressWarnings("deprecation")
     public DebugValue getExceptionObject() {
-        if (!isTruffleException(exception)) {
+        if (!(exception instanceof TruffleException)) {
             return null;
         }
-        Object obj = ((com.oracle.truffle.api.TruffleException) exception).getExceptionObject();
+        Object obj = ((TruffleException) exception).getExceptionObject();
         if (obj == null) {
             return null;
         }
@@ -309,12 +278,10 @@ public final class DebugException extends RuntimeException {
      * @since 19.0
      */
     public SourceSection getThrowLocation() {
-        InteropLibrary interop = InteropLibrary.getUncached();
-        if (interop.isException(exception) && interop.hasSourceLocation(exception)) {
-            try {
-                return interop.getSourceLocation(exception);
-            } catch (UnsupportedMessageException ume) {
-                CompilerDirectives.shouldNotReachHere(ume);
+        if (exception instanceof TruffleException) {
+            SourceSection location = ((TruffleException) exception).getSourceLocation();
+            if (location != null) {
+                return location;
             }
         }
         if (throwLocation != null) {
@@ -335,7 +302,7 @@ public final class DebugException extends RuntimeException {
         if (!isCatchNodeComputed) {
             synchronized (this) {
                 if (!isCatchNodeComputed) {
-                    if (isTruffleException(exception)) {
+                    if (exception instanceof TruffleException) {
                         catchLocation = BreakpointExceptionFilter.getCatchNode(throwLocation, exception);
                         if (catchLocation != null) {
                             catchLocation.setSuspendedEvent(suspendedEvent);
@@ -432,9 +399,5 @@ public final class DebugException extends RuntimeException {
             }
             return clon;
         }
-    }
-
-    private static boolean isTruffleException(Throwable t) {
-        return t != null && InteropLibrary.getUncached().isException(t);
     }
 }
