@@ -251,14 +251,9 @@ final class Target_java_lang_ClassLoader {
         return ClassForNameSupport.forNameOrNull(name, false);
     }
 
-    /**
-     * All ClassLoaderValue are reset at run time for now. See also
-     * {@link Target_jdk_internal_loader_BootLoader#CLASS_LOADER_VALUE_MAP} for resetting of the
-     * boot class loader.
-     */
     @Alias @RecomputeFieldValue(kind = Kind.NewInstance, declClass = ConcurrentHashMap.class)//
     @TargetElement(onlyWith = JDK11OrLater.class)//
-    ConcurrentHashMap<?, ?> classLoaderValueMap;
+    private ConcurrentHashMap<?, ?> classLoaderValueMap;
 
     @Substitute //
     @TargetElement(onlyWith = JDK11OrLater.class) //
