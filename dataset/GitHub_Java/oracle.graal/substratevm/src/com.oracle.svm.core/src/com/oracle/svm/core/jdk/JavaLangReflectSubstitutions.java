@@ -36,21 +36,10 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.hub.LayoutEncoding;
-import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 
 @TargetClass(java.lang.reflect.Array.class)
 final class Target_java_lang_reflect_Array {
-
-    @Substitute
-    private static int getLength(Object array) {
-        if (array == null) {
-            throw new NullPointerException();
-        } else if (!array.getClass().isArray()) {
-            throw new IllegalArgumentException();
-        }
-        return KnownIntrinsics.readArrayLength(array);
-    }
 
     @Substitute
     private static boolean getBoolean(Object array, int index) {
@@ -364,7 +353,7 @@ final class Target_java_lang_reflect_Array {
                 return;
             }
         } else if (array instanceof Object[]) {
-            if (array.getClass().getComponentType().isAssignableFrom(value.getClass())) {
+            if (value == null || array.getClass().getComponentType().isAssignableFrom(value.getClass())) {
                 ((Object[]) array)[index] = value;
                 return;
             }
@@ -402,7 +391,7 @@ final class Util_java_lang_reflect_Array {
 
     static Object createMultiArrayAtIndex(int index, DynamicHub arrayHub, int[] dimensions) {
         final int length = dimensions[index];
-        final Object result = Array.newInstance(arrayHub.getComponentHub().asClass(), length);
+        final Object result = Array.newInstance(DynamicHub.toClass(arrayHub.getComponentHub()), length);
 
         final int nextIndex = index + 1;
         if (nextIndex < dimensions.length && length > 0) {

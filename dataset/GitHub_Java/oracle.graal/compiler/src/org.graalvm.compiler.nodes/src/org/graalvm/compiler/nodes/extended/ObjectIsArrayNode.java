@@ -101,11 +101,9 @@ public final class ObjectIsArrayNode extends UnaryOpLogicNode implements Lowerab
             }
 
             ResolvedJavaType type = StampTool.typeOrNull(objectStamp);
-            if (type != null && !type.isJavaLangObject() && !type.isInterface()) {
+            if (type != null && !type.isJavaLangObject()) {
                 /*
                  * Also fold the negative case, when the type shows that the value is not an array.
-                 * Note that arrays implement some interfaces, like Serializable. For simplicity, we
-                 * exclude all interface types.
                  */
                 assert !type.isArray() : "Positive case already covered by isAlwaysArray check above";
                 return TriState.get(type.isArray());

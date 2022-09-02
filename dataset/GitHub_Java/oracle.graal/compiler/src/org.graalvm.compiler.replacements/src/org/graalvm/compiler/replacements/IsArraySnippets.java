@@ -41,12 +41,12 @@ import jdk.vm.ci.code.TargetDescription;
 public abstract class IsArraySnippets implements Snippets {
 
     @Snippet
-    Object objectIsArraySnippet(@Snippet.NonNullParameter Object object, Object trueValue, Object falseValue) {
+    Object objectIsArraySnippet(Object object, Object trueValue, Object falseValue) {
         return classIsArray(object.getClass()) ? trueValue : falseValue;
     }
 
     @Snippet
-    Object classIsArraySnippet(@Snippet.NonNullParameter Class<?> clazz, Object trueValue, Object falseValue) {
+    Object classIsArraySnippet(Class<?> clazz, Object trueValue, Object falseValue) {
         return classIsArray(clazz) ? trueValue : falseValue;
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,6 @@ import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 
 import jdk.vm.ci.meta.Constant;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MemoryAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
@@ -40,16 +39,23 @@ public abstract class NarrowOopStamp extends AbstractObjectStamp {
 
     private final CompressEncoding encoding;
 
-    protected NarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, CompressEncoding encoding) {
-        super(type, exactType, nonNull, alwaysNull);
+    protected NarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, boolean alwaysArray, CompressEncoding encoding) {
+        super(type, exactType, nonNull, alwaysNull, alwaysArray);
         this.encoding = encoding;
     }
 
     @Override
-    protected abstract AbstractObjectStamp copyWith(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull);
+    public void accept(Visitor v) {
+        super.accept(v);
+        v.visitLong(encoding.getBase());
+        v.visitInt(encoding.getShift());
+    }
+
+    @Override
+    protected abstract AbstractObjectStamp copyWith(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, boolean alwaysArray);
 
     public Stamp uncompressed() {
-        return new ObjectStamp(type(), isExactType(), nonNull(), alwaysNull());
+        return new ObjectStamp(type(), isExactType(), nonNull(), alwaysNull(), isAlwaysArray());
     }
 
     public CompressEncoding getEncoding() {
@@ -108,8 +114,10 @@ public abstract class NarrowOopStamp extends AbstractObjectStamp {
     }
 
     @Override
-    public abstract JavaConstant asConstant();
+    public abstract boolean isCompatible(Constant other);
 
     @Override
-    public abstract boolean isCompatible(Constant other);
+    public boolean isCompressed() {
+        return true;
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,7 +22,7 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.hotspot.nodes.type;
+package com.oracle.svm.core.graal.nodes;
 
 import org.graalvm.compiler.core.common.CompressEncoding;
 import org.graalvm.compiler.core.common.type.AbstractObjectStamp;
@@ -32,75 +32,68 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.nodes.CompressionNode.CompressionOp;
 import org.graalvm.compiler.nodes.type.NarrowOopStamp;
 
-import jdk.vm.ci.hotspot.HotSpotCompressedNullConstant;
-import jdk.vm.ci.hotspot.HotSpotMemoryAccessProvider;
-import jdk.vm.ci.hotspot.HotSpotObjectConstant;
+import com.oracle.svm.core.graal.meta.SubstrateMemoryAccessProvider;
+import com.oracle.svm.core.heap.ReferenceAccess;
+import com.oracle.svm.core.meta.CompressedNullConstant;
+import com.oracle.svm.core.meta.CompressibleConstant;
+
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.MemoryAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaType;
 
-public final class HotSpotNarrowOopStamp extends NarrowOopStamp {
-    private HotSpotNarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, boolean alwaysArray, CompressEncoding encoding) {
+public final class SubstrateNarrowOopStamp extends NarrowOopStamp {
+    public SubstrateNarrowOopStamp(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, boolean alwaysArray, CompressEncoding encoding) {
         super(type, exactType, nonNull, alwaysNull, alwaysArray, encoding);
+        assert getEncoding().equals(ReferenceAccess.singleton().getCompressEncoding()) : "Using a non-default encoding is not supported: reference map support is needed.";
     }
 
     @Override
     protected AbstractObjectStamp copyWith(ResolvedJavaType type, boolean exactType, boolean nonNull, boolean alwaysNull, boolean alwaysArray) {
-        return new HotSpotNarrowOopStamp(type, exactType, nonNull, alwaysNull, alwaysArray, getEncoding());
+        return new SubstrateNarrowOopStamp(type, exactType, nonNull, alwaysNull, alwaysArray, getEncoding());
     }
 
-    public static Stamp compressed(AbstractObjectStamp stamp, CompressEncoding encoding) {
-        return new HotSpotNarrowOopStamp(stamp.type(), stamp.isExactType(), stamp.nonNull(), stamp.alwaysNull(), stamp.isAlwaysArray(), encoding);
+    public static AbstractObjectStamp compressed(AbstractObjectStamp stamp, CompressEncoding encoding) {
+        return new SubstrateNarrowOopStamp(stamp.type(), stamp.isExactType(), stamp.nonNull(), stamp.alwaysNull(), stamp.isAlwaysArray(), encoding);
     }
 
     @Override
-    public Constant readConstant(MemoryAccessProvider provider, Constant base, long displacement) {
-        try {
-            HotSpotMemoryAccessProvider hsProvider = (HotSpotMemoryAccessProvider) provider;
-            return hsProvider.readNarrowOopConstant(base, displacement);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
+    public Constant readConstant(MemoryAccessProvider memoryAccessProvider, Constant base, long displacement) {
+        JavaConstant constant = ((SubstrateMemoryAccessProvider) memoryAccessProvider).readNarrowObjectConstant(base, displacement, getEncoding());
+        /*
+         * Hosted memory provider does not handle the reading of stable array (i.e. base describes
+         * an array constant), thus we may see null here as the constant, which is fine according to
+         * the java doc
+         */
+        assert constant == null || ((CompressibleConstant) constant).isCompressed();
+        return constant;
     }
 
     @Override
     public JavaConstant nullConstant() {
-        return HotSpotCompressedNullConstant.COMPRESSED_NULL;
+        return CompressedNullConstant.COMPRESSED_NULL;
     }
 
     @Override
-    public boolean isCompatible(Constant other) {
-        if (other instanceof HotSpotObjectConstant) {
-            return ((HotSpotObjectConstant) other).isCompressed();
-        }
-        return true;
+    public boolean isCompatible(Constant c) {
+        return c instanceof CompressibleConstant && ((CompressibleConstant) c).isCompressed();
     }
 
     public static Stamp mkStamp(CompressionOp op, Stamp input, CompressEncoding encoding) {
         switch (op) {
             case Compress:
                 if (input instanceof ObjectStamp) {
-                    // compressed oop
-                    return HotSpotNarrowOopStamp.compressed((ObjectStamp) input, encoding);
-                } else if (input instanceof KlassPointerStamp) {
-                    // compressed klass pointer
-                    return ((KlassPointerStamp) input).compressed(encoding);
+                    return compressed((ObjectStamp) input, encoding);
                 }
                 break;
             case Uncompress:
                 if (input instanceof NarrowOopStamp) {
-                    // oop
-                    assert encoding.equals(((NarrowOopStamp) input).getEncoding());
-                    return ((NarrowOopStamp) input).uncompressed();
-                } else if (input instanceof KlassPointerStamp) {
-                    // metaspace pointer
-                    assert encoding.equals(((KlassPointerStamp) input).getEncoding());
-                    return ((KlassPointerStamp) input).uncompressed();
+                    NarrowOopStamp inputStamp = (NarrowOopStamp) input;
+                    assert encoding.equals(inputStamp.getEncoding());
+                    return inputStamp.uncompressed();
                 }
                 break;
         }
-        throw GraalError.shouldNotReachHere(String.format("Unexpected input stamp %s", input));
+        throw GraalError.shouldNotReachHere("Unexpected input stamp " + input);
     }
-
 }

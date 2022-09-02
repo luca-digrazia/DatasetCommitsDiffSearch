@@ -45,12 +45,12 @@ import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 
 public final class LoadNativeNode extends RootNode {
 
-    private final String path;
+    private final TruffleFile file;
     @CompilationFinal private ContextReference<LLVMContext> ctxRef;
 
     private LoadNativeNode(FrameDescriptor rootFrame, LLVMLanguage language, TruffleFile file) {
         super(language, rootFrame);
-        this.path = file.getPath();
+        this.file = file;
     }
 
     public static LoadNativeNode create(FrameDescriptor rootFrame, LLVMLanguage language, TruffleFile file) {
@@ -68,7 +68,7 @@ public final class LoadNativeNode extends RootNode {
         if (frame.getArguments().length > 0 && (frame.getArguments()[0] instanceof LoadModulesNode.LLVMLoadingPhase)) {
             phase = (LoadModulesNode.LLVMLoadingPhase) frame.getArguments()[0];
         } else if (frame.getArguments().length == 0) {
-            throw new LLVMParserException(this, "Toplevel executable %s does not contain bitcode", path);
+            throw new LLVMParserException(this, "Toplevel executable %s does not contain bitcode", file.getPath());
         } else {
             throw new LLVMParserException(this, "LoadNativeNode is called either with unexpected arguments or as a toplevel");
         }
@@ -84,7 +84,7 @@ public final class LoadNativeNode extends RootNode {
     private void parseAndInitialiseNativeLib(LLVMContext context) {
         NativeContextExtension nativeContextExtension = context.getContextExtensionOrNull(NativeContextExtension.class);
         if (nativeContextExtension != null) {
-            CallTarget callTarget = nativeContextExtension.parseNativeLibrary(path, context);
+            CallTarget callTarget = nativeContextExtension.parseNativeLibrary(file, context);
             nativeContextExtension.addLibraryHandles(callTarget.call());
         }
     }
