@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2016, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -101,12 +101,8 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
         }
     }
 
-    public NFAState getUnAnchoredInitialState() {
+    private NFAState getUnAnchoredInitialState() {
         return unAnchoredEntry[0].getTarget();
-    }
-
-    public NFAState getAnchoredInitialState() {
-        return anchoredEntry[0].getTarget();
     }
 
     public boolean hasReverseUnAnchoredEntry() {
@@ -189,10 +185,6 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
         return preCalculatedResults;
     }
 
-    public NFAStateTransition getInitialLoopBackTransition() {
-        return initialLoopBack;
-    }
-
     public boolean isTraceFinderNFA() {
         return preCalculatedResults != null;
     }
@@ -205,10 +197,6 @@ public final class NFA implements StateIndex<NFAState>, JsonConvertible {
     @Override
     public NFAState getState(int id) {
         return states[id];
-    }
-
-    public boolean isDead() {
-        return anchoredEntry != null ? getAnchoredInitialState().isDead(true) : (reverseAnchoredEntry.getSource().isDead(false) && reverseUnAnchoredEntry.getSource().isDead(false));
     }
 
     public void setInitialLoopBack(boolean enable) {
