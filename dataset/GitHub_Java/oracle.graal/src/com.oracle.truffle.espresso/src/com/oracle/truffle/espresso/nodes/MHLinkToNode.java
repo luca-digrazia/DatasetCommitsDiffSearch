@@ -21,11 +21,12 @@ public class MHLinkToNode extends EspressoBaseNode {
     @Override
     public Object invokeNaked(VirtualFrame frame) {
         assert (getMethod().isStatic());
-        return executeLinkTo(frame.getArguments());
+        Object[] args = frame.getArguments();
+        return executeLinkTo(args);
     }
 
     private static Object executeLinkTo(Object[] args) {
-        assert args.length >= 1;
+        assert args.length > 0;
         StaticObjectImpl memberName = (StaticObjectImpl) args[args.length - 1];
         assert (memberName.getKlass().getType() == Symbol.Type.MemberName);
 
@@ -33,8 +34,6 @@ public class MHLinkToNode extends EspressoBaseNode {
         int refKind = Target_java_lang_invoke_MethodHandleNatives.getRefKind((int) memberName.getField(memberName.getKlass().getMeta().MNflags));
 
         if (target.hasReceiver()) {
-            assert args.length >= 2;
-            // args of the form {receiver, arg1, arg2... , memberName}
             StaticObject receiver = (StaticObject) args[0];
             if (refKind == Target_java_lang_invoke_MethodHandleNatives.REF_invokeVirtual || refKind == Target_java_lang_invoke_MethodHandleNatives.REF_invokeInterface) {
                 target = receiver.getKlass().lookupMethod(target.getName(), target.getRawSignature());
@@ -45,7 +44,6 @@ public class MHLinkToNode extends EspressoBaseNode {
             }
             return target.invokeDirect(receiver, trueArgs);
         } else {
-            // args of the form {arg1, arg2... , memberName}
             Object[] trueArgs = new Object[args.length - 1];
             for (int i = 0; i < args.length - 1; i++) {
                 trueArgs[i] = args[i];
