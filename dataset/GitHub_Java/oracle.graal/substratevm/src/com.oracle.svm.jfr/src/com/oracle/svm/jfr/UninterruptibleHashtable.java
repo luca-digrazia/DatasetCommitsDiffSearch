@@ -70,10 +70,20 @@ public abstract class UninterruptibleHashtable<T extends UninterruptibleEntry<T>
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public void clear() {
         for (int i = 0; i < table.length; i++) {
-            free(table[i]);
+            T entry = table[i];
+            while (entry.isNonNull()) {
+                T tmp = entry;
+                entry = entry.getNext();
+                free(tmp);
+            }
             table[i] = WordFactory.nullPointer();
         }
         size = 0;
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    public void setSize(int size) {
+        this.size = size;
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -121,5 +131,9 @@ public abstract class UninterruptibleHashtable<T extends UninterruptibleEntry<T>
             return id;
         }
         return 0L;
+    }
+
+    public T[] getTable() {
+        return table;
     }
 }
