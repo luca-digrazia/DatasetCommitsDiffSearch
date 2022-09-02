@@ -39,6 +39,7 @@ import javax.management.AttributeList;
 import javax.management.AttributeNotFoundException;
 import javax.management.DynamicMBean;
 import javax.management.InstanceAlreadyExistsException;
+import javax.management.InstanceNotFoundException;
 import javax.management.InvalidAttributeValueException;
 import javax.management.MBeanAttributeInfo;
 import javax.management.MBeanException;
@@ -633,15 +634,18 @@ class SVMMBean implements DynamicMBean {
                         SVMMBean bean = new SVMMBean(svmRegistration);
                         String name = HotSpotToSVMCalls.getObjectName(LibGraalScope.getIsolateThread(), svmRegistration);
                         try {
+                            ObjectName objectName = new ObjectName(name);
                             try {
-                                platformMBeanServer.registerMBean(bean, new ObjectName(name));
+                                platformMBeanServer.registerMBean(bean, objectName);
                             } catch (InstanceAlreadyExistsException e) {
-                                String newName = name + "_" + Long.toHexString(LibGraalScope.getIsolateThread());
-                                TTY.out.printf("WARNING: The object name '%s' is already used by an existing MBean, using '%s' for libgraal MBean.%n",
-                                                name, newName);
-                                platformMBeanServer.registerMBean(bean, new ObjectName(newName));
+                                if (platformMBeanServer.isInstanceOf(objectName, SVMMBean.class.getName())) {
+                                    e.printStackTrace(TTY.out);
+                                } else {
+                                    platformMBeanServer.unregisterMBean(objectName);
+                                    platformMBeanServer.registerMBean(bean, objectName);
+                                }
                             }
-                        } catch (MalformedObjectNameException | InstanceAlreadyExistsException | MBeanRegistrationException | NotCompliantMBeanException e) {
+                        } catch (MalformedObjectNameException | InstanceAlreadyExistsException | InstanceNotFoundException | MBeanRegistrationException | NotCompliantMBeanException e) {
                             e.printStackTrace(TTY.out);
                         }
                     }

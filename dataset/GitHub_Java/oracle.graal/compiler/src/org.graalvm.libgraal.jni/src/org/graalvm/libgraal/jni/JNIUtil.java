@@ -36,7 +36,6 @@ import org.graalvm.libgraal.jni.JNI.JObjectArray;
 import org.graalvm.libgraal.jni.JNI.JString;
 import org.graalvm.libgraal.jni.JNI.JThrowable;
 import org.graalvm.libgraal.jni.JNI.JValue;
-import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.UnmanagedMemory;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CLongPointer;
@@ -93,11 +92,6 @@ public final class JNIUtil {
     public static JMethodID GetMethodID(JNIEnv env, JClass clazz, CCharPointer name, CCharPointer sig) {
         traceJNI("GetMethodID");
         return env.getFunctions().getGetMethodID().call(env, clazz, name, sig);
-    }
-
-    public static JNI.JFieldID GetStaticFieldID(JNIEnv env, JClass clazz, CCharPointer name, CCharPointer sig) {
-        traceJNI("GetStaticFieldID");
-        return env.getFunctions().getGetStaticFieldID().call(env, clazz, name, sig);
     }
 
     public static JObjectArray NewObjectArray(JNIEnv env, int len, JClass componentClass, JObject initialElement) {
@@ -308,8 +302,7 @@ public final class JNIUtil {
         if (traceLevel() >= level) {
             HotSpotToSVMScope<?> scope = HotSpotToSVMScope.scopeOrNull();
             String indent = scope == null ? "" : new String(new char[2 + (scope.depth() * 2)]).replace('\0', ' ');
-            String prefix = "[" + Long.toHexString(CurrentIsolate.getIsolate().rawValue()) + ":" + Thread.currentThread().getName() + "]";
-            TTY.printf(prefix + indent + format + "%n", args);
+            TTY.printf(indent + format + "%n", args);
         }
     }
 }
