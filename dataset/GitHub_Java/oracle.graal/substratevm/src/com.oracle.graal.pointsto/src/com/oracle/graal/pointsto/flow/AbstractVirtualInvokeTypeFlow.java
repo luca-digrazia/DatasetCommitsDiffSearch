@@ -30,12 +30,13 @@ import static com.oracle.graal.pointsto.util.ConcurrentLightHashSet.getElements;
 import java.util.Collection;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
+import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.Invoke;
+import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 
 import com.oracle.graal.pointsto.BigBang;
 import com.oracle.graal.pointsto.flow.context.BytecodeLocation;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
-import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.typestate.TypeState;
 import com.oracle.graal.pointsto.util.AnalysisError;
 
@@ -45,9 +46,10 @@ public abstract class AbstractVirtualInvokeTypeFlow extends InvokeTypeFlow {
 
     @SuppressWarnings("unused") private volatile Object callees;
 
-    protected AbstractVirtualInvokeTypeFlow(Invoke invoke, AnalysisType receiverType, AnalysisMethod targetMethod,
+    protected AbstractVirtualInvokeTypeFlow(Invoke invoke, MethodCallTargetNode target,
                     TypeFlow<?>[] actualParameters, ActualReturnTypeFlow actualReturn, BytecodeLocation location) {
-        super(invoke, receiverType, targetMethod, actualParameters, actualReturn, location);
+        super(invoke, target, actualParameters, actualReturn, location);
+        assert target.invokeKind() == InvokeKind.Virtual || target.invokeKind() == InvokeKind.Interface;
     }
 
     protected AbstractVirtualInvokeTypeFlow(BigBang bb, MethodFlowsGraph methodFlows, AbstractVirtualInvokeTypeFlow original) {
@@ -83,6 +85,6 @@ public abstract class AbstractVirtualInvokeTypeFlow extends InvokeTypeFlow {
 
     @Override
     public String toString() {
-        return "VirtualInvoke<" + targetMethod.format("%h.%n") + ">" + ":" + getState();
+        return "VirtualInvoke<" + getSource().targetMethod().format("%h.%n") + ">" + ":" + getState();
     }
 }
