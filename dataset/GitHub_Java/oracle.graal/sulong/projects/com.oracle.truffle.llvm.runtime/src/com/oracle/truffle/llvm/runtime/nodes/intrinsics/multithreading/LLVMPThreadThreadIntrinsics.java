@@ -134,7 +134,7 @@ public final class LLVMPThreadThreadIntrinsics {
             final LLVMPThreadContext threadContext = context.getpThreadContext();
             Thread thread = threadContext.getThread(id);
             if (thread == null) {
-                return LLVMAMD64Error.ERANGE;
+                return 34; // 34 is ERANGE.
             }
             setName(thread, name);
             return 0;
@@ -159,7 +159,7 @@ public final class LLVMPThreadThreadIntrinsics {
         protected int doIntrinsic(long threadID, LLVMPointer buffer, long targetLen,
                         @CachedContext(LLVMLanguage.class) LLVMContext context) {
             Thread thread = context.getpThreadContext().getThread(threadID);
-            byte[] byteString = getThreadNameAsBytes(thread);
+            byte[] byteString = getBytes(thread);
             long bytesWritten = 0;
             for (int i = 0; i < byteString.length && i < targetLen - 1; i++) {
                 write.executeWithTarget(buffer, bytesWritten, byteString[i]);
@@ -167,18 +167,13 @@ public final class LLVMPThreadThreadIntrinsics {
             }
             write.executeWithTarget(buffer, bytesWritten, (byte) 0);
             if (targetLen <= byteString.length) {
-                return LLVMAMD64Error.ERANGE;
+                return 34; // 34 is ERANGE.
             }
             return 0;
         }
 
         @TruffleBoundary
-        protected byte[] getThreadNameAsBytes(Thread thread) {
-            if (thread == null) {
-                throw new IllegalStateException("The thread is null");
-            } else if (thread.getName() == null) {
-                throw new IllegalStateException("The thread's name is null");
-            }
+        protected byte[] getBytes(Thread thread) {
             return thread.getName().getBytes();
         }
     }
