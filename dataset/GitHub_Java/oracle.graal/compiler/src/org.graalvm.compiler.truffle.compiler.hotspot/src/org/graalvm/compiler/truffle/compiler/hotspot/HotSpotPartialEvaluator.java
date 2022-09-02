@@ -66,7 +66,6 @@ public final class HotSpotPartialEvaluator extends PartialEvaluator {
         HotSpotTruffleGraphBuilderPlugins.registerCompilationFinalReferencePlugins(invocationPlugins, canDelayIntrinsification, (HotSpotKnownTruffleTypes) getKnownTruffleTypes());
     }
 
-    @SuppressWarnings("serial")
     private Map<ResolvedJavaMethod, EncodedGraph> createEncodedGraphMap() {
         if (encodedGraphCacheCapacity < 0) {
             // Unbounded cache.
