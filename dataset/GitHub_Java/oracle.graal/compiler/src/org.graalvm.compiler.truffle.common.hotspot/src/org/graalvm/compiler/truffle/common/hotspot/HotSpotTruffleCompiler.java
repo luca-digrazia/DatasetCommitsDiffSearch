@@ -24,7 +24,6 @@
  */
 package org.graalvm.compiler.truffle.common.hotspot;
 
-import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.TruffleCompiler;
 
 public interface HotSpotTruffleCompiler extends TruffleCompiler {
@@ -35,9 +34,9 @@ public interface HotSpotTruffleCompiler extends TruffleCompiler {
      * AbstractHotSpotTruffleRuntime.setDontInlineCallBoundaryMethod() for disabling compilation and
      * inlining for truffle call boundary methods.
      */
-    void installTruffleCallBoundaryMethods(CompilableTruffleAST compilable);
+    void installTruffleCallBoundaryMethods();
 
-    int pendingTransferToInterpreterOffset(CompilableTruffleAST compilable);
+    int pendingTransferToInterpreterOffset();
 
     /**
      * Releases caches used for PE/compilation.
