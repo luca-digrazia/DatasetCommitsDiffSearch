@@ -229,13 +229,13 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import org.graalvm.wasm.Assert;
 import org.graalvm.wasm.BinaryStreamParser;
-import org.graalvm.wasm.SymbolTable;
 import org.graalvm.wasm.ValueTypes;
 import org.graalvm.wasm.WasmCodeEntry;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmFunction;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
+import org.graalvm.wasm.constants.GlobalResolution;
 import org.graalvm.wasm.constants.TargetOffset;
 import org.graalvm.wasm.exception.WasmExecutionException;
 import org.graalvm.wasm.exception.WasmTrap;
@@ -577,22 +577,18 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 case CALL_INDIRECT: {
                     // Extract the function object.
                     stackPointer--;
-                    final SymbolTable symtab = module().symbolTable();
-                    final Object[] elements = symtab.table().elements();
+                    final int tableIndex = module().symbolTable().tableIndex();
+                    final Object[] table = context.tables().table(tableIndex);
                     final int elementIndex = popInt(frame, stackPointer);
-                    if (elementIndex < 0 || elementIndex >= elements.length) {
-                        throw new WasmTrap(this, "Element index '" + elementIndex + "' out of table bounds.");
+                    if (elementIndex < 0 || elementIndex >= table.length) {
+                        throw new WasmTrap(this, "Element index out of table bounds.");
                     }
                     // Currently, table elements may only be functions.
                     // We can add a check here when this changes in the future.
-                    final WasmFunction function = (WasmFunction) elements[elementIndex];
-                    if (function == null) {
-                        throw new WasmTrap(this, "Table element at index " + elementIndex + " is uninitialized.");
-                    }
+                    final WasmFunction function = (WasmFunction) table[elementIndex];
 
                     // Extract the function type index.
                     int expectedFunctionTypeIndex = codeEntry().longConstantAsInt(longConstantOffset);
-                    int expectedTypeEquivalenceClass = symtab.equivalenceClass(expectedFunctionTypeIndex);
                     longConstantOffset++;
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
@@ -601,12 +597,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     offset += 1;
 
                     // Validate that the function type matches the expected type.
-                    if (expectedTypeEquivalenceClass != function.typeEquivalenceClass()) {
+                    if (expectedFunctionTypeIndex != function.typeIndex()) {
                         // TODO: This check may be too rigorous, as the WebAssembly specification
                         // seems to allow multiple definitions of the same type.
                         // We should refine the check.
-                        throw new WasmTrap(this, Assert.format("Actual (type %d of function %s) and expected (type %d in module %s) types differ in the indirect call.",
-                                        function.typeIndex(), function.name(), expectedFunctionTypeIndex, module().name()));
+                        throw new WasmTrap(this, Assert.format("Actual (%d) and expected (%d) function types differ in the indirect call.",
+                                        function.typeIndex(), expectedFunctionTypeIndex));
                     }
 
                     // Invoke the resolved function.
@@ -815,6 +811,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byteConstantOffset++;
                     offset += constantLength;
 
+                    final GlobalResolution resolution = module().symbolTable().globalResolution(index);
+                    if (!resolution.isResolved()) {
+                        CompilerDirectives.transferToInterpreter();
+                        throw new WasmExecutionException(this, "Globals should be resolved before runtime.");
+                    }
+
                     byte type = module().symbolTable().globalValueType(index);
                     switch (type) {
                         case ValueTypes.I32_TYPE: {
@@ -861,6 +863,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byte constantLength = codeEntry().byteConstant(byteConstantOffset);
                     byteConstantOffset++;
                     offset += constantLength;
+
+                    final GlobalResolution resolution = module().symbolTable().globalResolution(index);
+                    if (!resolution.isResolved()) {
+                        CompilerDirectives.transferToInterpreterAndInvalidate();
+                        throw new WasmExecutionException(this, "Globals should be resolved before runtime.");
+                    }
 
                     byte type = module().symbolTable().globalValueType(index);
                     // For global.set, we don't need to make sure that the referenced global is
@@ -938,72 +946,86 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     try {
                         switch (opcode) {
                             case I32_LOAD: {
-                                int value = memory.load_i32(this, address);
+                                memory.validateAddress(this, address, 32);
+                                int value = memory.load_i32(address);
                                 pushInt(frame, stackPointer, value);
                                 break;
                             }
                             case I64_LOAD: {
-                                long value = memory.load_i64(this, address);
+                                memory.validateAddress(this, address, 64);
+                                long value = memory.load_i64(address);
                                 push(frame, stackPointer, value);
                                 break;
                             }
                             case F32_LOAD: {
-                                float value = memory.load_f32(this, address);
+                                memory.validateAddress(this, address, 32);
+                                float value = memory.load_f32(address);
                                 pushFloat(frame, stackPointer, value);
                                 break;
                             }
                             case F64_LOAD: {
-                                double value = memory.load_f64(this, address);
+                                memory.validateAddress(this, address, 64);
+                                double value = memory.load_f64(address);
                                 pushDouble(frame, stackPointer, value);
                                 break;
                             }
                             case I32_LOAD8_S: {
-                                int value = memory.load_i32_8s(this, address);
+                                memory.validateAddress(this, address, 8);
+                                int value = memory.load_i32_8s(address);
                                 pushInt(frame, stackPointer, value);
                                 break;
                             }
                             case I32_LOAD8_U: {
-                                int value = memory.load_i32_8u(this, address);
+                                memory.validateAddress(this, address, 8);
+                                int value = memory.load_i32_8u(address);
                                 pushInt(frame, stackPointer, value);
                                 break;
                             }
                             case I32_LOAD16_S: {
-                                int value = memory.load_i32_16s(this, address);
+                                memory.validateAddress(this, address, 16);
+                                int value = memory.load_i32_16s(address);
                                 pushInt(frame, stackPointer, value);
                                 break;
                             }
                             case I32_LOAD16_U: {
-                                int value = memory.load_i32_16u(this, address);
+                                memory.validateAddress(this, address, 16);
+                                int value = memory.load_i32_16u(address);
                                 pushInt(frame, stackPointer, value);
                                 break;
                             }
                             case I64_LOAD8_S: {
-                                long value = memory.load_i64_8s(this, address);
+                                memory.validateAddress(this, address, 8);
+                                long value = memory.load_i64_8s(address);
                                 push(frame, stackPointer, value);
                                 break;
                             }
                             case I64_LOAD8_U: {
-                                long value = memory.load_i64_8u(this, address);
+                                memory.validateAddress(this, address, 8);
+                                long value = memory.load_i64_8u(address);
                                 push(frame, stackPointer, value);
                                 break;
                             }
                             case I64_LOAD16_S: {
-                                long value = memory.load_i64_16s(this, address);
+                                memory.validateAddress(this, address, 16);
+                                long value = memory.load_i64_16s(address);
                                 push(frame, stackPointer, value);
                                 break;
                             }
                             case I64_LOAD16_U: {
-                                long value = memory.load_i64_16u(this, address);
+                                memory.validateAddress(this, address, 16);
+                                long value = memory.load_i64_16u(address);
                                 push(frame, stackPointer, value);
                                 break;
                             }
                             case I64_LOAD32_S: {
-                                long value = memory.load_i64_32s(this, address);
+                                memory.validateAddress(this, address, 32);
+                                long value = memory.load_i64_32s(address);
                                 push(frame, stackPointer, value);
                                 break;
                             }
                             case I64_LOAD32_U: {
-                                long value = memory.load_i64_32u(this, address);
+                                memory.validateAddress(this, address, 32);
+                                long value = memory.load_i64_32u(address);
                                 push(frame, stackPointer, value);
                                 break;
                             }
@@ -1046,7 +1068,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 stackPointer--;
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
-                                memory.store_i32(this, address, value);
+                                memory.validateAddress(this, address, 32);
+                                memory.store_i32(address, value);
                                 break;
                             }
                             case I64_STORE: {
@@ -1055,7 +1078,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 stackPointer--;
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
-                                memory.store_i64(this, address, value);
+                                memory.validateAddress(this, address, 64);
+                                memory.store_i64(address, value);
                                 break;
                             }
                             case F32_STORE: {
@@ -1064,7 +1088,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 stackPointer--;
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
-                                memory.store_f32(this, address, value);
+                                memory.validateAddress(this, address, 32);
+                                memory.store_f32(address, value);
                                 break;
                             }
                             case F64_STORE: {
@@ -1073,7 +1098,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 stackPointer--;
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
-                                memory.store_f64(this, address, value);
+                                memory.validateAddress(this, address, 64);
+                                memory.store_f64(address, value);
                                 break;
                             }
                             case I32_STORE_8: {
@@ -1082,7 +1108,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 stackPointer--;
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
-                                memory.store_i32_8(this, address, (byte) value);
+                                memory.validateAddress(this, address, 8);
+                                memory.store_i32_8(address, (byte) value);
                                 break;
                             }
                             case I32_STORE_16: {
@@ -1091,7 +1118,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 stackPointer--;
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
-                                memory.store_i32_16(this, address, (short) value);
+                                memory.validateAddress(this, address, 16);
+                                memory.store_i32_16(address, (short) value);
                                 break;
                             }
                             case I64_STORE_8: {
@@ -1100,7 +1128,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 stackPointer--;
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
-                                memory.store_i64_8(this, address, (byte) value);
+                                memory.validateAddress(this, address, 8);
+                                memory.store_i64_8(address, (byte) value);
                                 break;
                             }
                             case I64_STORE_16: {
@@ -1109,7 +1138,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 stackPointer--;
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
-                                memory.store_i64_16(this, address, (short) value);
+                                memory.validateAddress(this, address, 16);
+                                memory.store_i64_16(address, (short) value);
                                 break;
                             }
                             case I64_STORE_32: {
@@ -1118,7 +1148,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                                 stackPointer--;
                                 int baseAddress = popInt(frame, stackPointer);
                                 int address = baseAddress + memOffset;
-                                memory.store_i64_32(this, address, (int) value);
+                                memory.validateAddress(this, address, 32);
+                                memory.store_i64_32(address, (int) value);
                                 break;
                             }
                             default: {

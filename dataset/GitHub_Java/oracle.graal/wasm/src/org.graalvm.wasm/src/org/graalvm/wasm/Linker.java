@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import static org.graalvm.wasm.Linker.ResolutionDag.*;
-import static org.graalvm.wasm.TableRegistry.*;
 
 public class Linker {
     private enum LinkState {
@@ -133,10 +132,10 @@ public class Linker {
      *
      * The intent is to use this functionality only in the test suite and the benchmark suite.
      */
-    public void resetModuleState(WasmContext context, WasmModule module, byte[] data, boolean zeroMemory) {
+    public void resetModuleState(WasmModule module, byte[] data, boolean zeroMemory) {
         final BinaryParser reader = new BinaryParser(language, module, data);
         reader.resetGlobalState();
-        reader.resetMemoryState(context, zeroMemory);
+        reader.resetMemoryState(zeroMemory);
     }
 
     int importGlobal(WasmModule module, int index, String importedModuleName, String importedGlobalName, int valueType, int mutability) {
@@ -183,21 +182,21 @@ public class Linker {
         return address;
     }
 
-    // void tryInitializeElements(WasmContext context, WasmModule module, int globalIndex, int[] contents) {
-    //     final GlobalResolution resolution = module.symbolTable().globalResolution(globalIndex);
-    //     if (resolution.isResolved()) {
-    //         int address = module.symbolTable().globalAddress(globalIndex);
-    //         int offset = context.globals().loadAsInt(address);
-    //         module.symbolTable().initializeTableWithFunctions(context, offset, contents);
-    //     } else {
-    //         // TODO: Record the contents array for later initialization - with a single module,
-    //         // the predefined modules will be already initialized, so we don't yet run into this
-    //         // case.
-    //         throw new WasmLinkerException("Postponed table initialization not implemented.");
-    //     }
-    // }
+    void tryInitializeElements(WasmContext context, WasmModule module, int globalIndex, int[] contents) {
+        final GlobalResolution resolution = module.symbolTable().globalResolution(globalIndex);
+        if (resolution.isResolved()) {
+            int address = module.symbolTable().globalAddress(globalIndex);
+            int offset = context.globals().loadAsInt(address);
+            module.symbolTable().initializeTableWithFunctions(context, offset, contents);
+        } else {
+            // TODO: Record the contents array for later initialization - with a single module,
+            // the predefined modules will be already initialized, so we don't yet run into this
+            // case.
+            throw new WasmLinkerException("Postponed table initialization not implemented.");
+        }
+    }
 
-    Table importTable(WasmContext context, WasmModule module, String importedModuleName, String importedTableName, int initSize, int maxSize) {
+    int importTable(WasmContext context, WasmModule module, String importedModuleName, String importedTableName, int initSize, int maxSize) {
         final WasmModule importedModule = context.modules().get(importedModuleName);
         if (importedModule == null) {
             // TODO: Record the fact that this table was not resolved, to be able to resolve it
@@ -213,8 +212,8 @@ public class Linker {
                 throw new WasmLinkerException(String.format("The imported module '%s' exports a table '%s', but module '%s' imports a table '%s'.",
                                 importedModuleName, exportedTableName, module.name(), importedTableName));
             }
-            final Table table = importedModule.symbolTable().table();
-            final int declaredMaxSize = table.maxSize();
+            final int tableIndex = importedModule.symbolTable().tableIndex();
+            final int declaredMaxSize = context.tables().maxSizeOf(tableIndex);
             if (declaredMaxSize >= 0 && (initSize > declaredMaxSize || maxSize > declaredMaxSize)) {
                 // This requirement does not seem to be mentioned in the WebAssembly specification.
                 // It might be necessary to refine what maximum size means in the import-table
@@ -222,10 +221,10 @@ public class Linker {
                 throw new WasmLinkerException(String.format("The table '%s' in the imported module '%s' has maximum size %d, but module '%s' imports it with maximum size '%d'",
                                 importedTableName, importedModuleName, declaredMaxSize, module.name(), maxSize));
             }
-            table.ensureSizeAtLeast(initSize);
+            context.tables().ensureSizeAtLeast(tableIndex, initSize);
             module.symbolTable().setImportedTable(new ImportDescriptor(importedModuleName, importedTableName));
-            module.symbolTable().setTable(table);
-            return table;
+            module.symbolTable().setTableIndex(tableIndex);
+            return tableIndex;
         }
     }
 

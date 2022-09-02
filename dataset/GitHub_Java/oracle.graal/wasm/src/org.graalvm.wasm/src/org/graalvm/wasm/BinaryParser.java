@@ -67,8 +67,6 @@ import org.graalvm.wasm.nodes.WasmRootNode;
 import org.graalvm.wasm.constants.Instructions;
 import org.graalvm.wasm.constants.Section;
 
-import static org.graalvm.wasm.TableRegistry.*;
-
 /**
  * Simple recursive-descend parser for the binary WebAssembly format.
  */
@@ -144,13 +142,13 @@ public class BinaryParser extends BinaryStreamParser {
                     readStartSection();
                     break;
                 case Section.ELEMENT:
-                    readElementSection(context);
+                    readElementSection();
                     break;
                 case Section.CODE:
                     readCodeSection(context);
                     break;
                 case Section.DATA:
-                    readDataSection(context);
+                    readDataSection();
                     break;
                 default:
                     Assert.fail("invalid section ID: " + sectionID);
@@ -1002,7 +1000,8 @@ public class BinaryParser extends BinaryStreamParser {
         return new WasmIfNode(module, codeEntry, trueBranchBlock, falseBranchBlock, offset() - startOffset, blockTypeId, initialStackPointer);
     }
 
-    private void readElementSection(WasmContext context) {
+    private void readElementSection() {
+        final WasmContext context = WasmLanguage.getCurrentContext();
         int numElements = readVectorLength();
         for (int i = 0; i != numElements; ++i) {
             int tableIndex = readUnsignedInt32();
@@ -1010,51 +1009,31 @@ public class BinaryParser extends BinaryStreamParser {
             // table index is 0.
             Assert.assertIntEqual(tableIndex, 0, "Invalid table index");
 
+            // Read the offset expression.
+            byte instruction = read1();
             // Table offset expression must be a constant expression with result type i32.
             // https://webassembly.github.io/spec/core/syntax/modules.html#element-segments
             // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
-
-            // Read the offset expression.
-            byte instruction = read1();
-            int elementOffset = 0;
             switch (instruction) {
                 case Instructions.I32_CONST: {
-                    elementOffset = readSignedInt32();
+                    int elementOffset = readSignedInt32();
                     readEnd();
-                    // int[] contents = readElemContents();
-                    // module.symbolTable().initializeTableWithFunctions(context, elementOffset, contents);
+                    // Read the contents.
+                    int[] contents = readElemContents();
+                    module.symbolTable().initializeTableWithFunctions(context, elementOffset, contents);
                     break;
                 }
                 case Instructions.GLOBAL_GET: {
-                    int globalIndex = readGlobalIndex();
+                    int index = readGlobalIndex();
                     readEnd();
-                    throw new RuntimeException("Global get in element section not supported.");
-                    // int[] contents = readElemContents();
-                    // final Linker linker = context.linker();
-                    // linker.tryInitializeElements(context, module, index, contents);
+                    int[] contents = readElemContents();
+                    final Linker linker = context.linker();
+                    linker.tryInitializeElements(context, module, index, contents);
+                    break;
                 }
                 default: {
                     Assert.fail(String.format("Invalid instruction for table offset expression: 0x%02X", instruction));
                 }
-            }
-
-            // Copy the contents, or schedule a linker task for this.
-            int segmentLength = readUnsignedInt32();
-            final SymbolTable symbolTable = module.symbolTable();
-            final Table table = symbolTable.table();
-            if (table != null) {
-                // Note: we do not check if the earlier element segments were executed,
-                // and we do not try to execute the element segments in order,
-                // as we do with data sections for the memory.
-                // Instead, if any table element is written more than once, we report an error.
-                table.ensureSizeAtLeast(offset + segmentLength);
-                for (int index = 0; index != segmentLength; ++index) {
-                    final int functionIndex = readFunctionIndex();
-                    final WasmFunction function = symbolTable.function(functionIndex);
-                    table.set(offset + index, function);
-                }
-            } else {
-                throw new WasmException("Table not resolved.");
             }
         }
     }
@@ -1062,6 +1041,15 @@ public class BinaryParser extends BinaryStreamParser {
     private void readEnd() {
         byte instruction = read1();
         Assert.assertByteEqual(instruction, (byte) Instructions.END, "Initialization expression must end with an END");
+    }
+
+    private int[] readElemContents() {
+        int contentLength = readUnsignedInt32();
+        int[] contents = new int[contentLength];
+        for (int funcIdx = 0; funcIdx != contentLength; ++funcIdx) {
+            contents[funcIdx] = readFunctionIndex();
+        }
+        return contents;
     }
 
     private void readStartSection() {
@@ -1169,37 +1157,41 @@ public class BinaryParser extends BinaryStreamParser {
         }
     }
 
-    private void readDataSection(WasmContext context) {
-        int numDataSegments = readVectorLength();
+    private void readDataSection() {
+        final WasmContext context = WasmLanguage.getCurrentContext();
+        int numDataSections = readVectorLength();
         boolean allDataSectionsResolved = true;
-        for (int dataSegmentId = 0; dataSegmentId != numDataSegments; ++dataSegmentId) {
+        for (int dataSectionId = 0; dataSectionId != numDataSections; ++dataSectionId) {
             int memIndex = readUnsignedInt32();
             // At the moment, WebAssembly only supports one memory instance, thus the only valid
             // memory index is 0.
             Assert.assertIntEqual(memIndex, 0, "Invalid memory index, only the memory index 0 is currently supported");
             long dataOffset = 0;
-            byte instruction = read1();
+            byte instruction;
+            do {
+                instruction = read1();
 
-            // Data dataOffset expression must be a constant expression with result type i32.
-            // https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
-            // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
+                // Data dataOffset expression must be a constant expression with result type i32.
+                // https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
+                // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
 
-            // Read the offset expression.
-            switch (instruction) {
-                case Instructions.I32_CONST:
-                    dataOffset = readSignedInt32();
-                    readEnd();
-                    break;
-                case Instructions.GLOBAL_GET:
-                    int globalIndex = readGlobalIndex();
-                    readEnd();
-                    // TODO: Implement GLOBAL_GET case for data sections (and add tests).
-                    throw new WasmException("GLOBAL_GET in data section not implemented.");
-                default:
-                    Assert.fail(String.format("Invalid instruction for data offset expression: 0x%02X", instruction));
-            }
+                switch (instruction) {
+                    case Instructions.I32_CONST:
+                        dataOffset = readSignedInt32();
+                        break;
+                    case Instructions.GLOBAL_GET:
+                        readGlobalIndex();
+                        // TODO: Implement GLOBAL_GET case for data sections (and add tests).
+                        throw new WasmException("GLOBAL_GET in data section not implemented.");
+                        // dataOffset = module.globals().getAsInt(index);
+                        // break;
+                    case Instructions.END:
+                        break;
+                    default:
+                        Assert.fail(String.format("Invalid instruction for data offset expression: 0x%02X", instruction));
+                }
+            } while (instruction != Instructions.END);
 
-            // Copy the contents, or schedule a linker task for this.
             int byteLength = readVectorLength();
             long baseAddress = dataOffset;
             final WasmMemory memory = module.symbolTable().memory();
@@ -1219,7 +1211,7 @@ public class BinaryParser extends BinaryStreamParser {
                     byte b = read1();
                     dataSegment[writeOffset] = b;
                 }
-                context.linker().resolveDataSection(module, dataSegmentId, baseAddress, byteLength, dataSegment, allDataSectionsResolved);
+                context.linker().resolveDataSection(module, dataSectionId, baseAddress, byteLength, dataSegment, allDataSectionsResolved);
                 allDataSectionsResolved = false;
             }
         }
@@ -1464,13 +1456,13 @@ public class BinaryParser extends BinaryStreamParser {
         }
     }
 
-    void resetMemoryState(WasmContext context, boolean zeroMemory) {
+    void resetMemoryState(boolean zeroMemory) {
         final WasmMemory memory = module.symbolTable().memory();
         if (memory != null && zeroMemory) {
             memory.clear();
         }
         if (tryJumpToSection(Section.DATA)) {
-            readDataSection(context);
+            readDataSection();
         }
     }
 }

@@ -40,13 +40,23 @@
  */
 package org.graalvm.wasm;
 
-public class WasmFunction {
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
+import org.graalvm.wasm.nodes.WasmIndirectCallNode;
+
+@ExportLibrary(InteropLibrary.class)
+public class WasmFunction implements TruffleObject {
     private final SymbolTable symbolTable;
     private final int index;
     private ImportDescriptor importDescriptor;
     private WasmCodeEntry codeEntry;
     private final int typeIndex;
-    private int typeEquivalenceClass;
+    private CallTarget callTarget;
 
     /**
      * Represents a WebAssembly function.
@@ -57,7 +67,7 @@ public class WasmFunction {
         this.importDescriptor = importDescriptor;
         this.codeEntry = null;
         this.typeIndex = typeIndex;
-        this.typeEquivalenceClass = -1;
+        this.callTarget = null;
     }
 
     public String moduleName() {
@@ -76,12 +86,20 @@ public class WasmFunction {
         return symbolTable.functionTypeReturnType(typeIndex);
     }
 
-    int returnTypeLength() {
+    public int returnTypeLength() {
         return symbolTable.functionTypeReturnTypeLength(typeIndex);
     }
 
-    void setTypeEquivalenceClass(int typeEquivalenceClass) {
-        this.typeEquivalenceClass = typeEquivalenceClass;
+    public void setCallTarget(CallTarget callTarget) {
+        this.callTarget = callTarget;
+    }
+
+    public CallTarget resolveCallTarget() {
+        if (callTarget == null) {
+            CompilerDirectives.transferToInterpreter();
+            throw new RuntimeException("Call target was not resolved.");
+        }
+        return callTarget;
     }
 
     @Override
@@ -98,6 +116,16 @@ public class WasmFunction {
             return exportedName;
         }
         return "wasm-function:" + index;
+    }
+
+    @ExportMessage
+    boolean isExecutable() {
+        return true;
+    }
+
+    @ExportMessage
+    Object execute(Object[] arguments, @Cached WasmIndirectCallNode callNode) {
+        return callNode.execute(this, arguments);
     }
 
     public WasmCodeEntry codeEntry() {
@@ -129,10 +157,6 @@ public class WasmFunction {
 
     public int typeIndex() {
         return typeIndex;
-    }
-
-    public int typeEquivalenceClass() {
-        return typeEquivalenceClass;
     }
 
     public int index() {
