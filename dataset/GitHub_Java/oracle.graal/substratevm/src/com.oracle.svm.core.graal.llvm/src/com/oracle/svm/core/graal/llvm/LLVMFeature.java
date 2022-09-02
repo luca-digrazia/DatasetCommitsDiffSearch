@@ -70,7 +70,6 @@ import com.oracle.svm.core.graal.nodes.ExceptionStateNode;
 import com.oracle.svm.core.graal.nodes.ReadExceptionObjectNode;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.nodes.CFunctionEpilogueNode;
-import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.FeatureImpl;
@@ -105,13 +104,6 @@ public class LLVMFeature implements Feature, GraalFeature {
 
     @Override
     public boolean isInConfiguration(IsInConfigurationAccess access) {
-        if (!CompilerBackend.getValue().equals("llvm")) {
-            for (HostedOptionKey<?> llvmOption : LLVMOptions.allOptions) {
-                if (llvmOption.hasBeenSet()) {
-                    throw UserError.abort("Flag " + llvmOption.getName() + " can only be used together with -H:CompilerBackend=llvm");
-                }
-            }
-        }
         return CompilerBackend.getValue().equals("llvm");
     }
 
