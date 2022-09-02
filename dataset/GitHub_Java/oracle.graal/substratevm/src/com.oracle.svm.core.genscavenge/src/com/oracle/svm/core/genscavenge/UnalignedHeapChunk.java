@@ -257,8 +257,9 @@ public class UnalignedHeapChunk extends HeapChunk {
     protected static void setUpRememberedSetOfUnalignedHeapChunk(UnalignedHeader that) {
         // There is only one object in this chunk.
         final Object obj = getUnalignedStart(that).toObject();
+        final ObjectHeaderImpl ohi = ObjectHeaderImpl.getObjectHeaderImpl();
         // Mark the object header to say it has a remembered set.
-        ObjectHeaderImpl.setRememberedSetBit(obj);
+        ohi.setUnaligned(obj);
     }
 
     /*
@@ -354,16 +355,18 @@ public class UnalignedHeapChunk extends HeapChunk {
         final Log trace = HeapImpl.getHeapImpl().getHeapVerifierImpl().getTraceLog().string("[UnalignedHeapChunk.verifyUnalignedHeapChunk");
         trace.string("  that: ").hex(that).string("  start: ").hex(start).string("  top: ").hex(that.getTop()).string("  end: ").hex(that.getEnd()).newline();
         final UnsignedWord objHeader = ObjectHeaderImpl.readHeaderFromPointer(start);
+        final ObjectHeaderImpl ohi = ObjectHeaderImpl.getObjectHeaderImpl();
         // The object should not be forwarded.
-        if (ObjectHeaderImpl.isForwardedHeader(objHeader)) {
+        if (ohi.isForwardedHeader(objHeader)) {
             final Log witness = HeapImpl.getHeapImpl().getHeapVerifierImpl().getWitnessLog().string("[UnalignedHeapChunk.verify:");
             witness.string("  that: ").hex(that).string("  start: ").hex(start).string("  top: ").hex(that.getTop()).string("  end: ").hex(that.getEnd());
             witness.string("  space: ").string(that.getSpace().getName());
+            witness.string("  objHeader: ").string(ohi.toStringFromHeader(objHeader));
             witness.string("  should not be forwarded").string("]").newline();
             return false;
         }
         // The object should be marked as being unaligned.
-        if (!ObjectHeaderImpl.isUnalignedHeader(start, objHeader)) {
+        if (!ohi.isUnalignedHeader(objHeader)) {
             final Log witness = HeapImpl.getHeapImpl().getHeapVerifierImpl().getWitnessLog().string("[UnalignedHeapChunk.verify:");
             witness.string("  that: ").hex(that).string("  start: ").hex(start).string("  end: ").hex(that.getEnd());
             witness.string("  space: ").string(that.getSpace().getName());

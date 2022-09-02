@@ -271,6 +271,7 @@ public class Space {
         /* If oldChunk did not provide, try allocating a new chunk for the requested memory. */
         if (result.isNull()) {
             final AlignedHeapChunk.AlignedHeader newChunk = requestAlignedHeapChunk();
+            newChunk.setAge(this.getAge());
             trace.string("  newChunk: ").hex(newChunk);
             if (newChunk.isNonNull()) {
                 /* Allocate the Object within the new chunk. */
@@ -723,6 +724,7 @@ public class Space {
         final Space originalSpace = uChunk.getSpace();
         final boolean promote = (this != originalSpace);
         if (promote) {
+            uChunk.setAge(this.getAge());
             originalSpace.extractUnalignedHeapChunk(uChunk);
             appendUnalignedHeapChunk(uChunk);
             /*

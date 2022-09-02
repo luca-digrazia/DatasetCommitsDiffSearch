@@ -433,9 +433,9 @@ public class HeapImpl extends Heap {
     public UnsignedWord getUsedObjectBytes() {
         final Space edenSpace = getYoungGeneration().getEden();
         final UnsignedWord edenBytes = edenSpace.getObjectBytes();
-        UnsignedWord survivorFromBytes = WordFactory.zero();
+        final UnsignedWord survivorFromBytes = WordFactory.zero();
         for (int i = 0; i < HeapPolicy.getMaxSurvivorSpaces(); i++) {
-            survivorFromBytes = survivorFromBytes.add(getYoungGeneration().getSurvivorFromSpaceAt(i).getObjectBytes());
+            survivorFromBytes.add(getYoungGeneration().getSurvivorFromSpaceAt(i).getObjectBytes());
         }
         final Space fromSpace = getOldGeneration().getFromSpace();
         final UnsignedWord oldFromBytes = fromSpace.getObjectBytes();

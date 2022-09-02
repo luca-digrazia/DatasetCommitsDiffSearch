@@ -160,8 +160,8 @@ public class GreyToBlackObjRefVisitor implements ObjectReferenceVisitor {
         } else {
             getCounters().noteUnmodifiedReference();
         }
-        // The reference will not be updated if a whole chunk is promoted. However, we still might
-        // have to dirty the card.
+        // If promote unaligned object, the reference will not update, but still need dirty the card
+        // if necessary
         HeapImpl.getHeapImpl().dirtyCardIfNecessary(holderObject, objRef, copy);
         trace.string("]").newline();
         return true;

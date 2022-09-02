@@ -82,6 +82,9 @@ class HeapChunkProvider {
         bytesInUnusedAlignedChunks = new AtomicUnsigned();
     }
 
+    /**
+     * Get the singleton instance, which is stored in {@link HeapImpl#chunkProvider}.
+     */
     @Fold
     protected static HeapChunkProvider get() {
         return HeapImpl.getHeapImpl().chunkProvider;
@@ -92,11 +95,15 @@ class HeapChunkProvider {
         return Log.noopLog();
     }
 
+    /** An OutOFMemoryError for being unable to allocate memory for an aligned heap chunk. */
     private static final OutOfMemoryError ALIGNED_OUT_OF_MEMORY_ERROR = new OutOfMemoryError("Could not allocate an aligned heap chunk");
 
+    /** An OutOFMemoryError for being unable to allocate memory for an unaligned heap chunk. */
     private static final OutOfMemoryError UNALIGNED_OUT_OF_MEMORY_ERROR = new OutOfMemoryError("Could not allocate an unaligned heap chunk");
 
-    /** Acquire a new AlignedHeapChunk, either from the free list or from the operating system. */
+    /**
+     * Produce a new AlignedHeapChunk, either from the free list or from the operating system.
+     */
     AlignedHeader produceAlignedChunk() {
         UnsignedWord chunkSize = HeapPolicy.getAlignedHeapChunkSize();
         log().string("[HeapChunkProvider.produceAlignedChunk  chunk size: ").unsigned(chunkSize).newline();
@@ -129,10 +136,11 @@ class HeapChunkProvider {
         return result;
     }
 
-    /** Release an AlignedHeapChunk, either to the free list or back to the operating system. */
+    /** Recycle an AlignedHeapChunk, either to the free list or back to the operating system. */
     void consumeAlignedChunk(AlignedHeader chunk) {
         log().string("[HeapChunkProvider.consumeAlignedChunk  chunk: ").hex(chunk).newline();
 
+        /* Policy: Only keep a limited number of unused chunks. */
         if (keepAlignedChunk()) {
             cleanAlignedChunk(chunk);
             pushUnusedAlignedChunk(chunk);
@@ -143,13 +151,14 @@ class HeapChunkProvider {
         log().string("  ]").newline();
     }
 
+    /** Should I keep another aligned chunk on the free list? */
     private boolean keepAlignedChunk() {
         final Log trace = Log.noopLog().string("[HeapChunkProvider.keepAlignedChunk:");
         final UnsignedWord minimumHeapSize = HeapPolicy.getMinimumHeapSize();
         final UnsignedWord heapChunkBytes = HeapImpl.getHeapImpl().getUsedChunkBytes();
         final UnsignedWord unusedChunkBytes = bytesInUnusedAlignedChunks.get();
         final UnsignedWord bytesInUse = heapChunkBytes.add(unusedChunkBytes);
-
+        /* If I am under the minimum heap size, then I can keep this chunk. */
         final boolean result = bytesInUse.belowThan(minimumHeapSize);
         trace
                         .string("  minimumHeapSize: ").unsigned(minimumHeapSize)
@@ -161,6 +170,7 @@ class HeapChunkProvider {
         return result;
     }
 
+    /** Clean a chunk before putting it on a free list. */
     private static void cleanAlignedChunk(AlignedHeader alignedChunk) {
         resetAlignedHeapChunk(alignedChunk);
         if (HeapPolicy.getZapConsumedHeapChunks()) {
@@ -201,14 +211,19 @@ class HeapChunkProvider {
      * but it is <em>not</em> safe with respect to competing pushes. Since pushes can happen during
      * garbage collections, I avoid the ABA problem by making the kernel of this method
      * uninterruptible so it can not be interrupted by a safepoint.
+     *
+     * Note the asymmetry with {@link #popUnusedAlignedChunk()}, which does not use a global free
+     * list.
      */
     private AlignedHeader popUnusedAlignedChunk() {
         log().string("  old list top: ").hex(unusedAlignedChunks.get()).string("  list bytes ").signed(bytesInUnusedAlignedChunks.get()).newline();
 
         AlignedHeader result = popUnusedAlignedChunkUninterruptibly();
         if (result.isNull()) {
+            /* Unused list is empty. */
             return WordFactory.nullPointer();
         } else {
+            /* Successfully popped an unused chunk from the list. */
             bytesInUnusedAlignedChunks.subtractAndGet(HeapPolicy.getAlignedHeapChunkSize());
             log().string("  new list top: ").hex(unusedAlignedChunks.get()).string("  list bytes ").signed(bytesInUnusedAlignedChunks.get()).newline();
             return result;
@@ -218,12 +233,17 @@ class HeapChunkProvider {
     @Uninterruptible(reason = "Must not be interrupted by competing pushes.")
     private AlignedHeader popUnusedAlignedChunkUninterruptibly() {
         while (true) {
+            /* Sample the head of the list of unused chunks. */
             AlignedHeader result = unusedAlignedChunks.get();
             if (result.isNull()) {
+                /* Unused list is empty. */
                 return WordFactory.nullPointer();
             } else {
+                /* Sample the next pointer. */
                 AlignedHeader next = result.getNext();
+                /* Install next as the head of the list of unused chunks. */
                 if (unusedAlignedChunks.compareAndSet(result, next)) {
+                    /* Successfully popped an unused chunk from the list. */
                     result.setNext(WordFactory.nullPointer());
                     return result;
                 }
@@ -231,7 +251,9 @@ class HeapChunkProvider {
         }
     }
 
-    /** Acquire an UnalignedHeapChunk from the operating system. */
+    /**
+     * Produce an UnalignedHeapChunk from the operating system.
+     */
     UnalignedHeader produceUnalignedChunk(UnsignedWord objectSize) {
         UnsignedWord chunkSize = UnalignedHeapChunk.getChunkSizeForObject(objectSize);
         log().string("[HeapChunkProvider.produceUnalignedChunk  objectSize: ").unsigned(objectSize).string("  chunkSize: ").hex(chunkSize).newline();
@@ -257,7 +279,7 @@ class HeapChunkProvider {
     }
 
     /**
-     * Release an UnalignedHeapChunk back to the operating system. They are never recycled to a free
+     * Recycle an UnalignedHeapChunk back to the operating system. They are never recycled to a free
      * list.
      */
     void consumeUnalignedChunk(UnalignedHeader chunk) {
@@ -282,19 +304,31 @@ class HeapChunkProvider {
         chunk.setPrevious(WordFactory.nullPointer());
     }
 
+    /**
+     * Reset just the header of an aligned heap chunk. Consider
+     * {@link #resetAlignedHeapChunk(AlignedHeader)}.
+     */
+    static void resetAlignedHeader(AlignedHeader alignedChunk) {
+        resetChunkHeader(alignedChunk, AlignedHeapChunk.getAlignedHeapChunkStart(alignedChunk));
+    }
+
     private static void resetAlignedHeapChunk(AlignedHeader chunk) {
         resetChunkHeader(chunk, AlignedHeapChunk.getAlignedHeapChunkStart(chunk));
 
+        /* Initialize the space for the card remembered set table. */
         CardTable.cleanTableToPointer(AlignedHeapChunk.getCardTableStart(chunk), AlignedHeapChunk.getCardTableLimit(chunk));
-        FirstObjectTable.initializeTableToLimit(AlignedHeapChunk.getFirstObjectTableStart(chunk), AlignedHeapChunk.getFirstObjectTableLimit(chunk));
+        /* Initialize the space for the first object table. */
+        FirstObjectTable.initializeTableToPointer(AlignedHeapChunk.getFirstObjectTableStart(chunk), AlignedHeapChunk.getFirstObjectTableLimit(chunk));
     }
 
     private static void resetUnalignedChunk(UnalignedHeader result) {
         resetChunkHeader(result, UnalignedHeapChunk.getUnalignedStart(result));
 
+        /* Initialize the space for the card remembered set table. */
         CardTable.cleanTableToPointer(UnalignedHeapChunk.getCardTableStart(result), UnalignedHeapChunk.getCardTableLimit(result));
     }
 
+    /** Write the given value over all the Object memory in the chunk. */
     private static void zap(Header<?> chunk, WordBase value) {
         Pointer start = chunk.getTop();
         Pointer limit = chunk.getEnd();
@@ -352,6 +386,7 @@ class HeapChunkProvider {
         return false;
     }
 
+    /** Return all allocated virtual memory chunks to VirtualMemoryProvider. */
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     public final void tearDown() {
         freeAlignedChunkList(unusedAlignedChunks.get());
