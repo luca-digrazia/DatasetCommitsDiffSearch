@@ -270,7 +270,7 @@ public final class TRegexCompilationRequest {
     }
 
     private RegexParser createParser() {
-        return new RegexParser(language, source, RegexFlags.parseFlags(source), compilationBuffer);
+        return new RegexParser(language, source, RegexFlags.parseFlags(source.getFlags()), compilationBuffer);
     }
 
     private void createNFA() {

@@ -1050,6 +1050,6 @@ public final class RegexParser {
     }
 
     private RegexSyntaxException syntaxError(String msg) {
-        return RegexSyntaxException.createPattern(source, msg, lexer.getLastTokenPosition());
+        return new RegexSyntaxException(source, msg);
     }
 }
