@@ -88,13 +88,11 @@ import jdk.vm.ci.meta.Value;
  */
 public class CompilationResultBuilder {
 
-    private static final List<LIRInstructionVerifier> LIR_INSTRUCTION_VERIFIERS = new ArrayList<>();
+    private final static List<LIRInstructionVerifier> LIR_INSTRUCTION_VERIFIERS = new ArrayList<>();
 
     static {
         for (LIRInstructionVerifier verifier : GraalServices.load(LIRInstructionVerifier.class)) {
-            if (verifier.isEnabled()) {
-                LIR_INSTRUCTION_VERIFIERS.add(verifier);
-            }
+            LIR_INSTRUCTION_VERIFIERS.add(verifier);
         }
     }
 
@@ -605,7 +603,9 @@ public class CompilationResultBuilder {
                 }
                 byte[] emittedCode = asm.copy(start, end);
                 for (LIRInstructionVerifier verifier : LIR_INSTRUCTION_VERIFIERS) {
-                    verifier.verify(op, emittedCode);
+                    if (verifier.isEnabled()) {
+                        verifier.verify(op, emittedCode);
+                    }
                 }
             }
         } catch (BailoutException e) {
