@@ -25,9 +25,7 @@ package com.oracle.truffle.espresso.impl;
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.descriptors.ByteSequence;
-import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.jni.ModifiedUtf8;
-import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 import java.lang.instrument.IllegalClassFormatException;
 import java.util.ArrayList;
@@ -35,10 +33,9 @@ import java.util.Arrays;
 import java.util.Map;
 
 public class ConstantPoolPatcher {
-    public static void getDirectInnerClassNames(Symbol<Symbol.Name> fileSystemName, byte[] bytes, ArrayList<Symbol<Symbol.Name>> innerNames, EspressoContext context)
-                    throws IllegalClassFormatException {
+    public static void getDirectInnerClassNames(String fileSystemName, byte[] bytes, ArrayList<String> innerNames) throws IllegalClassFormatException {
         ClassfileStream stream = new ClassfileStream(bytes, null);
-        ByteSequence fileNameBytes = fileSystemName.subSequence(0, fileSystemName.length());
+
         // skip magic and version - 8 bytes
         stream.skip(8);
         final int length = stream.readU2();
@@ -51,9 +48,10 @@ public class ConstantPoolPatcher {
             switch (tag) {
                 case UTF8:
                     ByteSequence byteSequence = stream.readByteSequenceUTF();
-                    if (byteSequence.contentStartsWith(fileNameBytes) && !byteSequence.contentEquals(fileNameBytes)) {
-                        if (InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(byteSequence.toString()).matches()) {
-                            innerNames.add(context.getNames().getOrCreate(byteSequence));
+                    String value = byteSequence.toString();
+                    if (value.startsWith(fileSystemName) && !value.equals(fileSystemName)) {
+                        if (InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(value).matches()) {
+                            innerNames.add(value);
                         }
                     }
                     break;
@@ -96,7 +94,7 @@ public class ConstantPoolPatcher {
         }
     }
 
-    public static byte[] patchConstantPool(byte[] bytes, Map<Symbol<Symbol.Name>, Symbol<Symbol.Name>> rules, EspressoContext context) throws IllegalClassFormatException {
+    public static byte[] patchConstantPool(byte[] bytes, Map<String, String> rules) throws IllegalClassFormatException {
         byte[] result = Arrays.copyOf(bytes, bytes.length);
         ClassfileStream stream = new ClassfileStream(bytes, null);
 
@@ -114,11 +112,11 @@ public class ConstantPoolPatcher {
                 case UTF8:
                     int position = stream.getPosition() + 2; // utfLength is first two bytes
                     ByteSequence byteSequence = stream.readByteSequenceUTF();
-                    Symbol<Symbol.Name> asSymbol = context.getNames().getOrCreate(byteSequence);
+                    String value = byteSequence.toString();
 
-                    if (rules.containsKey(asSymbol)) {
+                    if (rules.containsKey(value)) {
                         int originalLegth = byteSequence.length();
-                        byte[] replacedBytes = ModifiedUtf8.fromJavaString(rules.get(asSymbol).toString());
+                        byte[] replacedBytes = ModifiedUtf8.fromJavaString(rules.get(value));
                         int newLength = replacedBytes.length;
                         if (originalLegth == newLength) {
                             System.arraycopy(replacedBytes, 0, result, position + byteArrayGrowth, replacedBytes.length);

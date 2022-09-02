@@ -57,18 +57,12 @@ public final class InnerClassRedefiner {
 
     public static final String HOT_CLASS_MARKER = "$hot";
 
-    private final EspressoContext context;
-
     // map from classloader to a map of class names to inner class infos
-    private final Map<StaticObject, Map<String, ImmutableClassInfo>> innerClassInfoMap = new WeakHashMap<>();
+    private static final Map<StaticObject, Map<String, ImmutableClassInfo>> innerClassInfoMap = new WeakHashMap<>();
     // list of class info for all top-level classed about to be redefined
-    private final Map<String, HotSwapClassInfo> hotswapState = new HashMap<>();
+    private static final Map<String, HotSwapClassInfo> hotswapState = new HashMap<>();
 
-    public InnerClassRedefiner(EspressoContext context) {
-        this.context = context;
-    }
-
-    public HotSwapClassInfo[] matchAnonymousInnerClasses(RedefineInfo[] redefineInfos, List<ObjectKlass> removedInnerClasses) {
+    public static HotSwapClassInfo[] matchAnonymousInnerClasses(RedefineInfo[] redefineInfos, EspressoContext context, List<ObjectKlass> removedInnerClasses) {
         hotswapState.clear();
         ArrayList<RedefineInfo> unhandled = new ArrayList<>(redefineInfos.length);
         Collections.addAll(unhandled, redefineInfos);
@@ -82,7 +76,7 @@ public final class InnerClassRedefiner {
             Iterator<RedefineInfo> it = unhandled.iterator();
             while (it.hasNext()) {
                 RedefineInfo redefineInfo = it.next();
-                String klassName = getClassNameFromBytes(redefineInfo.getClassBytes());
+                String klassName = getClassNameFromBytes(redefineInfo.getClassBytes(), context);
                 Matcher matcher = ANON_INNER_CLASS_PATTERN.matcher(klassName);
                 if (matcher.matches()) {
                     // don't assume that associated old klass instance represents this redefineInfo
@@ -113,7 +107,7 @@ public final class InnerClassRedefiner {
         Map<StaticObject, Map<String, String>> renamingRules = new HashMap<>(0);
         // begin matching from collected top-level classes
         for (HotSwapClassInfo info : hotswapState.values()) {
-            matchClassInfo(info, removedInnerClasses, renamingRules);
+            matchClassInfo(info, context, removedInnerClasses, renamingRules);
         }
 
         // get the full list of changed classes
@@ -137,7 +131,7 @@ public final class InnerClassRedefiner {
         return result.toArray(new HotSwapClassInfo[0]);
     }
 
-    private String getClassNameFromBytes(byte[] bytes) {
+    public static String getClassNameFromBytes(byte[] bytes, EspressoContext context) {
         try {
             // pass in a class name we know is not correct only to catch
             // the NoClassDefFoundError which is known to contain the type
@@ -166,7 +160,7 @@ public final class InnerClassRedefiner {
         }
     }
 
-    private void fetchMissingInnerClasses(HotSwapClassInfo hotswapInfo) {
+    private static void fetchMissingInnerClasses(HotSwapClassInfo hotswapInfo, EspressoContext context) {
         StaticObject definingLoader = hotswapInfo.getClassLoader();
 
         ArrayList<String> innerNames = new ArrayList<>(1);
@@ -183,7 +177,7 @@ public final class InnerClassRedefiner {
                 StaticObject resourceGuestString = context.getMeta().toGuestString(innerName + ".class");
                 StaticObject inputStream = (StaticObject) context.getMeta().java_lang_ClassLoader_getResourceAsStream.invokeDirect(definingLoader, resourceGuestString);
                 if (StaticObject.notNull(inputStream)) {
-                    classBytes = readAllBytes(inputStream);
+                    classBytes = readAllBytes(inputStream, context);
                 } else {
                     // There is no safe way to retrieve the class bytes using e.g. a scheme using
                     // j.l.ClassLoader#loadClass and special marker for the type to have the call
@@ -201,7 +195,7 @@ public final class InnerClassRedefiner {
         }
     }
 
-    private byte[] readAllBytes(StaticObject inputStream) {
+    private static byte[] readAllBytes(StaticObject inputStream, EspressoContext context) {
         byte[] buf = new byte[4 * 0x400];
         StaticObject guestBuf = StaticObject.wrap(buf, context.getMeta());
         int readLen;
@@ -226,18 +220,18 @@ public final class InnerClassRedefiner {
         ConstantPoolPatcher.getDirectInnerClassNames(classInfo.getName(), bytes, innerNames);
     }
 
-    private static String getOuterClassName(String innerName) {
+    static String getOuterClassName(String innerName) {
         assert innerName.contains("$");
         return innerName.substring(0, innerName.lastIndexOf('$'));
     }
 
-    private void matchClassInfo(HotSwapClassInfo hotSwapInfo, List<ObjectKlass> removedInnerClasses, Map<StaticObject, Map<String, String>> renamingRules) {
+    private static void matchClassInfo(HotSwapClassInfo hotSwapInfo, EspressoContext context, List<ObjectKlass> removedInnerClasses, Map<StaticObject, Map<String, String>> renamingRules) {
         Klass klass = hotSwapInfo.getKlass();
 
         // try to fetch all direct inner classes
         // based on the constant pool in the class bytes
         // by means of the defining class loader
-        fetchMissingInnerClasses(hotSwapInfo);
+        fetchMissingInnerClasses(hotSwapInfo, context);
         if (klass == null) {
             // non-mapped hotSwapInfo means it's a new inner class that didn't map
             // to any previous inner class
@@ -247,7 +241,7 @@ public final class InnerClassRedefiner {
             hotSwapInfo.rename(name);
             addRenamingRule(renamingRules, hotSwapInfo.getClassLoader(), hotSwapInfo.getName(), hotSwapInfo.getNewName());
         } else {
-            ImmutableClassInfo previousInfo = getGlobalClassInfo(klass);
+            ImmutableClassInfo previousInfo = getGlobalClassInfo(klass, context);
             ImmutableClassInfo[] previousInnerClasses = previousInfo.getInnerClasses();
             HotSwapClassInfo[] newInnerClasses = hotSwapInfo.getInnerClasses();
 
@@ -294,7 +288,7 @@ public final class InnerClassRedefiner {
         }
 
         for (HotSwapClassInfo innerClass : hotSwapInfo.getInnerClasses()) {
-            matchClassInfo(innerClass, removedInnerClasses, renamingRules);
+            matchClassInfo(innerClass, context, removedInnerClasses, renamingRules);
         }
     }
 
@@ -313,7 +307,7 @@ public final class InnerClassRedefiner {
         classLoaderRules.put("(L" + originalName + ";)V", "(L" + newName + ";)V");
     }
 
-    public ImmutableClassInfo getGlobalClassInfo(Klass klass) {
+    public static ImmutableClassInfo getGlobalClassInfo(Klass klass, EspressoContext context) {
         StaticObject classLoader = klass.getDefiningClassLoader();
         Map<String, ImmutableClassInfo> infos = innerClassInfoMap.get(classLoader);
 
@@ -325,13 +319,13 @@ public final class InnerClassRedefiner {
         ImmutableClassInfo result = infos.get(klass.getNameAsString());
 
         if (result == null) {
-            result = ClassInfo.create(klass, this);
+            result = ClassInfo.create(klass, context);
             infos.put(klass.getNameAsString(), result);
         }
         return result;
     }
 
-    Klass[] findLoadedInnerClasses(Klass klass) {
+    public static Klass[] findLoadedInnerClasses(Klass klass, EspressoContext context) {
         ArrayList<Klass> result = new ArrayList<>(1);
         String name = klass.getNameAsString();
         List<Klass> loadedKlasses = context.getRegistries().getClassRegistry(klass.getDefiningClassLoader()).getLoadedKlasses();
@@ -348,7 +342,7 @@ public final class InnerClassRedefiner {
         return result.toArray(new Klass[result.size()]);
     }
 
-    public void commit(HotSwapClassInfo[] infos) {
+    public static void commit(HotSwapClassInfo[] infos) {
         // first remove the previous info
         for (HotSwapClassInfo info : infos) {
             StaticObject classLoader = info.getClassLoader();
