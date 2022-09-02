@@ -139,6 +139,7 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
                 methodSubstitution.resetDebug(debug);
                 return methodSubstitution;
             }
+            return null;
         }
         return super.getIntrinsicGraph(method, compilationId, debug, allowAssumptions, cancellable);
     }

@@ -872,7 +872,7 @@ public class SymbolicSnippetEncoder {
                     }
                     type = getSnippetType(type);
                     assert type != null : type;
-                    cached = new ObjectStamp(type, objectStamp.isExactType(), objectStamp.nonNull(), objectStamp.alwaysNull(), objectStamp.isAlwaysArray());
+                    cached = new ObjectStamp(type, objectStamp.isExactType(), objectStamp.nonNull(), objectStamp.alwaysNull());
                 } else {
                     cached = stamp.makeSymbolic();
                 }
