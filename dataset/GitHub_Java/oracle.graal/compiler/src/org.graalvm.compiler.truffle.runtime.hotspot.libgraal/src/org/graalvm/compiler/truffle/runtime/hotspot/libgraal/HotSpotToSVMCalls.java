@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -53,7 +53,6 @@ import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.IsBasicDumpEnabled;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.IsDumpChannelOpen;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.Log;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.NewCompiler;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.OpenCompilation;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.OpenDebugContext;
 import static org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM.Id.OpenDebugContextScope;
@@ -81,11 +80,8 @@ final class HotSpotToSVMCalls {
     @HotSpotToSVM(GetCompilerConfigurationFactoryName)
     static native String getCompilerConfigurationFactoryName(long isolateThreadId);
 
-    @HotSpotToSVM(NewCompiler)
-    static native long newCompiler(long isolateThreadId, long truffleRuntimeHandle);
-
     @HotSpotToSVM(InitializeCompiler)
-    static native void initializeCompiler(long isolateThreadId, long compilerHandle);
+    static native long initializeCompiler(long isolateThreadId, long truffleRuntimeHandle);
 
     @HotSpotToSVM(GetInitialOptions)
     static native byte[] getInitialOptions(long isolateThreadId, long truffleRuntimeHandle);

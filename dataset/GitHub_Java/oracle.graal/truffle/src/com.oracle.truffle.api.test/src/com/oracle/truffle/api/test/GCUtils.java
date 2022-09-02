@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,10 +44,7 @@ import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
-import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 import org.junit.Assert;
@@ -77,9 +74,8 @@ public final class GCUtils {
         List<WeakReference<Object>> collectibleObjects = new ArrayList<>();
         for (int i = 0; i < GC_TEST_ITERATIONS; i++) {
             collectibleObjects.add(new WeakReference<>(objectFactory.apply(i), queue));
-            System.gc();
+            gc();
         }
-        gc(IsFreed.anyOf(collectibleObjects));
         int refsCleared = 0;
         while (queue.poll() != null) {
             refsCleared++;
@@ -95,17 +91,11 @@ public final class GCUtils {
      * @param ref the reference
      */
     public static void assertGc(final String message, final Reference<?> ref) {
-        if (!gc(IsFreed.allOf(Collections.singleton(ref)))) {
-            Assert.fail(message);
-        }
-    }
-
-    private static boolean gc(BooleanSupplier isFreed) {
         int blockSize = 100_000;
         final List<byte[]> blocks = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
-            if (isFreed.getAsBoolean()) {
-                return true;
+            if (ref.get() == null) {
+                return;
             }
             try {
                 System.gc();
@@ -129,47 +119,13 @@ public final class GCUtils {
                 }
             }
         }
-        return false;
+        Assert.fail(message);
     }
 
-    private static final class IsFreed implements BooleanSupplier {
-
-        private enum Operator {
-            AND,
-            OR
-        }
-
-        private final Collection<? extends Reference<?>> refs;
-        private final Operator operator;
-
-        private IsFreed(Collection<? extends Reference<?>> refs, Operator operator) {
-            this.refs = refs;
-            this.operator = operator;
-        }
-
-        @Override
-        public boolean getAsBoolean() {
-            for (Reference<?> ref : refs) {
-                boolean freed = ref.get() == null;
-                if (freed) {
-                    if (operator == Operator.OR) {
-                        return true;
-                    }
-                } else {
-                    if (operator == Operator.AND) {
-                        return false;
-                    }
-                }
-            }
-            return operator == Operator.AND;
-        }
-
-        static IsFreed anyOf(Collection<? extends Reference<?>> refs) {
-            return new IsFreed(refs, Operator.OR);
-        }
-
-        static IsFreed allOf(Collection<? extends Reference<?>> refs) {
-            return new IsFreed(refs, Operator.AND);
-        }
+    /**
+     * Performs GC.
+     */
+    public static void gc() {
+        System.gc();
     }
 }
