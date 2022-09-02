@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2016, Intel Corporation. All rights reserved.
  * Intel Math Library (LIBM) Source Code
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
@@ -47,12 +47,11 @@ import static org.graalvm.compiler.lir.amd64.AMD64HotSpotHelper.recordExternalAd
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
-import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
+import org.graalvm.compiler.asm.amd64.AMD64Assembler;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.lir.LIRInstructionClass;
 import org.graalvm.compiler.lir.asm.ArrayDataPointerConstant;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
-import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 
 import jdk.vm.ci.code.Register;
 
@@ -830,18 +829,6 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
             //@formatter:on
     });
 
-    private ArrayDataPointerConstant double0 = pointerConstant(8, new int[]{
-            //@formatter:off
-            0x00000000, 0x00000000
-            //@formatter:on
-    });
-
-    private ArrayDataPointerConstant double0Point5 = pointerConstant(8, new int[]{
-            //@formatter:off
-            0x00000000, 0x3fe00000
-            //@formatter:on
-    });
-
     @Override
     public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         // registers,
@@ -908,7 +895,6 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         Label block55 = new Label();
         Label block56 = new Label();
         Label block57 = new Label();
-        Label block58 = new Label();
 
         Register tmp1 = r8;
         Register tmp2 = r9;
@@ -921,31 +907,12 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
 
         // Special case: pow(x, 2.0) => x * x
         masm.movdq(tmp1, xmm1);
-        // TODO (yz) adjust recorded address before jcc mitigation
         masm.cmpq(tmp1, recordExternalAddress(crb, double2));
-        masm.jccb(ConditionFlag.NotEqual, block57);
+        masm.jccb(AMD64Assembler.ConditionFlag.NotEqual, block57);
         masm.mulsd(xmm0, xmm0);
         masm.jmp(block56);
 
         masm.bind(block57);
-
-        // Note: Math.pow(Double.MAX_VALUE, 0.5) changes from 0x5ff0000000000000 to
-        // 0x5fefffffffffffff on Java 17, possibly due to the change in macroAssembler_x86_pow.cpp
-        // as ported below (JDK-8265325).
-        if (JavaVersionUtil.JAVA_SPEC >= 17) {
-            // Special case: pow(x, 0.5) => sqrt(x)
-            // For pow(x, y), check whether y == 0.5
-            masm.cmpq(tmp1, recordExternalAddress(crb, double0Point5));
-            masm.jccb(ConditionFlag.NotEqual, block58);
-            masm.movdq(tmp2, xmm0);
-            // pow(x, 0.5) => sqrt(x) only for x >= 0.0 or x is +inf/NaN
-            masm.cmpq(tmp2, recordExternalAddress(crb, double0));
-            masm.jccb(ConditionFlag.Less, block58);
-            masm.sqrtsd(xmm0, xmm0);
-            masm.jmp(block56);
-            masm.bind(block58);
-        }
-
         masm.pextrw(rax, xmm0, 3);
         masm.xorpd(xmm2, xmm2);
         masm.movq(tmp2, 0x3ff0000000000000L);
@@ -978,7 +945,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movdq(xmm4, tmp4);
         masm.psrlq(xmm3, 12);
         masm.subl(rax, 16);
-        masm.cmplAndJcc(rax, 32736, ConditionFlag.AboveEqual, block0, false);
+        masm.cmpl(rax, 32736);
+        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block0);
         masm.movl(tmp1, 0);
 
         masm.bind(block1);
@@ -990,7 +958,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movdq(xmm5, rdx);
         masm.por(xmm3, xmm1);
         masm.subl(rax, 16351);
-        masm.cmplAndJcc(rax, 1, ConditionFlag.BelowEqual, block2, false);
+        masm.cmpl(rax, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.BelowEqual, block2);
         masm.paddd(xmm0, xmm4);
         masm.pand(xmm5, xmm3);
         masm.movdl(rdx, xmm0);
@@ -1049,7 +1018,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.andl(rcx, 32752);
         masm.addl(rax, rcx);
         masm.mulpd(xmm3, xmm6);
-        masm.cmplAndJcc(rax, 624, ConditionFlag.AboveEqual, block5, false);
+        masm.cmpl(rax, 624);
+        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block5);
         masm.xorpd(xmm6, xmm6);
         masm.movl(rdx, 17080);
         masm.pinsrw(xmm6, rdx, 3);
@@ -1110,8 +1080,10 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.addl(rax, 16);
         masm.movl(rdx, 32752);
         masm.andl(rdx, rax);
-        masm.cmplAndJcc(rdx, 32752, ConditionFlag.Equal, block6, false);
-        masm.testlAndJcc(rax, 32768, ConditionFlag.NotEqual, block7, false);
+        masm.cmpl(rdx, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block6);
+        masm.testl(rax, 32768);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block7);
 
         masm.bind(block8);
         masm.movq(xmm0, new AMD64Address(rsp, 8));
@@ -1120,7 +1092,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.psrlq(xmm3, 32);
         masm.movdl(rcx, xmm3);
         masm.orl(rdx, rcx);
-        masm.cmplAndJcc(rdx, 0, ConditionFlag.Equal, block9, false);
+        masm.cmpl(rdx, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block9);
         masm.xorpd(xmm3, xmm3);
         masm.movl(rax, 18416);
         masm.pinsrw(xmm3, rax, 3);
@@ -1167,7 +1140,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.psrlq(xmm3, 32);
         masm.movdl(rcx, xmm3);
         masm.orl(rdx, rcx);
-        masm.cmplAndJcc(rdx, 0, ConditionFlag.Equal, block9, false);
+        masm.cmpl(rdx, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block9);
         masm.xorpd(xmm3, xmm3);
         masm.movl(rax, 18416);
         masm.pinsrw(xmm3, rax, 3);
@@ -1208,8 +1182,10 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.jmp(block4);
 
         masm.bind(block5);
-        masm.cmplAndJcc(rax, 0, ConditionFlag.Less, block11, false);
-        masm.cmplAndJcc(rax, 752, ConditionFlag.AboveEqual, block12, false);
+        masm.cmpl(rax, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.Less, block11);
+        masm.cmpl(rax, 752);
+        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block12);
         masm.addsd(xmm0, xmm7);
         masm.movq(xmm2, recordExternalAddress(crb, halfmask));         // 0xf8000000, 0xffffffff,
                                                                        // 0xf8000000, 0xffffffff
@@ -1261,7 +1237,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movq(xmm1, recordExternalAddress(crb, eCoeff32));         // 0xfefa39ef, 0x3fe62e42,
                                                                        // 0x00000000, 0x00000000
         masm.andl(rdx, 32767);
-        masm.cmplAndJcc(rdx, 16529, ConditionFlag.Above, block12, false);
+        masm.cmpl(rdx, 16529);
+        masm.jcc(AMD64Assembler.ConditionFlag.Above, block12);
         masm.pshufd(xmm0, xmm2, 68);
         masm.pshufd(xmm4, xmm2, 68);
         masm.mulpd(xmm0, xmm0);
@@ -1288,8 +1265,10 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.addsd(xmm0, xmm5);
         masm.mulsd(xmm0, xmm4);
         masm.pextrw(rax, xmm0, 3);
-        masm.andlAndJcc(rax, 32752, ConditionFlag.Equal, block13, false);
-        masm.cmplAndJcc(rax, 32752, ConditionFlag.Equal, block14, false);
+        masm.andl(rax, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block13);
+        masm.cmpl(rax, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block14);
         masm.jmp(block56);
 
         masm.bind(block6);
@@ -1300,14 +1279,14 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.psrlq(xmm2, 20);
         masm.movdl(rdx, xmm2);
         masm.orl(rax, rdx);
-        masm.jcc(ConditionFlag.Equal, block15);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block15);
         masm.movdl(rax, xmm1);
         masm.psrlq(xmm1, 32);
         masm.movdl(rdx, xmm1);
         masm.movl(rcx, rdx);
         masm.addl(rdx, rdx);
         masm.orl(rax, rdx);
-        masm.jcc(ConditionFlag.Equal, block16);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block16);
         masm.addsd(xmm0, xmm0);
         masm.jmp(block56);
 
@@ -1331,36 +1310,44 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movl(rcx, rdx);
         masm.addl(rdx, rdx);
         masm.orl(rax, rdx);
-        masm.jcc(ConditionFlag.Equal, block19);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block19);
         masm.pextrw(rax, xmm2, 3);
         masm.andl(rax, 32752);
-        masm.cmplAndJcc(rax, 32752, ConditionFlag.NotEqual, block20, false);
+        masm.cmpl(rax, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block20);
         masm.movdl(rax, xmm2);
         masm.psrlq(xmm2, 20);
         masm.movdl(rdx, xmm2);
         masm.orl(rax, rdx);
-        masm.jcc(ConditionFlag.NotEqual, block18);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block18);
 
         masm.bind(block20);
         masm.pextrw(rax, xmm0, 3);
-        masm.testlAndJcc(rax, 32768, ConditionFlag.NotEqual, block21, false);
-        masm.testlAndJcc(rcx, Integer.MIN_VALUE, ConditionFlag.NotEqual, block22, false);
+        masm.testl(rax, 32768);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block21);
+        masm.testl(rcx, Integer.MIN_VALUE);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block22);
         masm.jmp(block56);
 
         masm.bind(block23);
         masm.movq(xmm1, new AMD64Address(rsp, 16));
         masm.movdl(rax, xmm1);
-        masm.testlAndJcc(rax, 1, ConditionFlag.NotEqual, block24, false);
-        masm.testlAndJcc(rax, 2, ConditionFlag.NotEqual, block25, false);
+        masm.testl(rax, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block24);
+        masm.testl(rax, 2);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block25);
         masm.jmp(block24);
 
         masm.bind(block21);
         masm.shrl(rcx, 20);
         masm.andl(rcx, 2047);
-        masm.cmplAndJcc(rcx, 1075, ConditionFlag.Above, block24, false);
-        masm.jcc(ConditionFlag.Equal, block26);
-        masm.cmplAndJcc(rcx, 1074, ConditionFlag.Above, block23, false);
-        masm.cmplAndJcc(rcx, 1023, ConditionFlag.Below, block24, false);
+        masm.cmpl(rcx, 1075);
+        masm.jcc(AMD64Assembler.ConditionFlag.Above, block24);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block26);
+        masm.cmpl(rcx, 1074);
+        masm.jcc(AMD64Assembler.ConditionFlag.Above, block23);
+        masm.cmpl(rcx, 1023);
+        masm.jcc(AMD64Assembler.ConditionFlag.Below, block24);
         masm.movq(xmm1, new AMD64Address(rsp, 16));
         masm.movl(rax, 17208);
         masm.xorpd(xmm3, xmm3);
@@ -1370,14 +1357,17 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.subsd(xmm4, xmm3);
         masm.addsd(xmm1, xmm4);
         masm.pextrw(rax, xmm1, 3);
-        masm.andlAndJcc(rax, 32752, ConditionFlag.NotEqual, block24, false);
+        masm.andl(rax, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block24);
         masm.movdl(rax, xmm3);
-        masm.andlAndJcc(rax, 1, ConditionFlag.Equal, block24, false);
+        masm.andl(rax, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block24);
 
         masm.bind(block25);
         masm.movq(xmm1, new AMD64Address(rsp, 16));
         masm.pextrw(rax, xmm1, 3);
-        masm.andlAndJcc(rax, 32768, ConditionFlag.NotEqual, block27, false);
+        masm.andl(rax, 32768);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block27);
         masm.jmp(block56);
 
         masm.bind(block27);
@@ -1389,7 +1379,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.bind(block24);
         masm.movq(xmm1, new AMD64Address(rsp, 16));
         masm.pextrw(rax, xmm1, 3);
-        masm.andlAndJcc(rax, 32768, ConditionFlag.NotEqual, block22, false);
+        masm.andl(rax, 32768);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block22);
         masm.xorpd(xmm0, xmm0);
         masm.movl(rax, 32752);
         masm.pinsrw(xmm0, rax, 3);
@@ -1398,7 +1389,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.bind(block26);
         masm.movq(xmm1, new AMD64Address(rsp, 16));
         masm.movdl(rax, xmm1);
-        masm.andlAndJcc(rax, 1, ConditionFlag.Equal, block24, false);
+        masm.andl(rax, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block24);
         masm.jmp(block25);
 
         masm.bind(block28);
@@ -1406,7 +1398,7 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.psrlq(xmm1, 20);
         masm.movdl(rdx, xmm1);
         masm.orl(rax, rdx);
-        masm.jcc(ConditionFlag.Equal, block29);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block29);
         masm.movq(xmm0, new AMD64Address(rsp, 16));
         masm.addsd(xmm0, xmm0);
         masm.jmp(block56);
@@ -1414,12 +1406,13 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.bind(block29);
         masm.movq(xmm0, new AMD64Address(rsp, 8));
         masm.pextrw(rax, xmm0, 3);
-        masm.cmplAndJcc(rax, 49136, ConditionFlag.NotEqual, block30, false);
+        masm.cmpl(rax, 49136);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block30);
         masm.movdl(rcx, xmm0);
         masm.psrlq(xmm0, 20);
         masm.movdl(rdx, xmm0);
         masm.orl(rcx, rdx);
-        masm.jcc(ConditionFlag.NotEqual, block30);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block30);
         masm.xorpd(xmm0, xmm0);
         masm.movl(rax, 32760);
         masm.pinsrw(xmm0, rax, 3);
@@ -1432,7 +1425,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.pextrw(rdx, xmm1, 3);
         masm.xorpd(xmm0, xmm0);
         masm.xorl(rax, rdx);
-        masm.andlAndJcc(rax, 32768, ConditionFlag.Equal, block31, false);
+        masm.andl(rax, 32768);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block31);
         masm.jmp(block56);
 
         masm.bind(block31);
@@ -1442,13 +1436,17 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
 
         masm.bind(block32);
         masm.movdl(rax, xmm1);
-        masm.cmplAndJcc(rdx, 17184, ConditionFlag.Above, block33, false);
-        masm.testlAndJcc(rax, 1, ConditionFlag.NotEqual, block34, false);
-        masm.testlAndJcc(rax, 2, ConditionFlag.Equal, block35, false);
+        masm.cmpl(rdx, 17184);
+        masm.jcc(AMD64Assembler.ConditionFlag.Above, block33);
+        masm.testl(rax, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block34);
+        masm.testl(rax, 2);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block35);
         masm.jmp(block36);
 
         masm.bind(block33);
-        masm.testlAndJcc(rax, 1, ConditionFlag.Equal, block35, false);
+        masm.testl(rax, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block35);
         masm.jmp(block36);
 
         masm.bind(block7);
@@ -1457,7 +1455,7 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.psrlq(xmm2, 31);
         masm.movdl(rcx, xmm2);
         masm.orl(rax, rcx);
-        masm.jcc(ConditionFlag.Equal, block9);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block9);
         masm.movq(xmm1, new AMD64Address(rsp, 16));
         masm.pextrw(rdx, xmm1, 3);
         masm.movdl(rax, xmm1);
@@ -1466,12 +1464,16 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movdl(rcx, xmm2);
         masm.addl(rcx, rcx);
         masm.orl(rcx, rax);
-        masm.jcc(ConditionFlag.Equal, block37);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block37);
         masm.andl(rdx, 32752);
-        masm.cmplAndJcc(rdx, 32752, ConditionFlag.Equal, block28, false);
-        masm.cmplAndJcc(rdx, 17200, ConditionFlag.Above, block35, false);
-        masm.cmplAndJcc(rdx, 17184, ConditionFlag.AboveEqual, block32, false);
-        masm.cmplAndJcc(rdx, 16368, ConditionFlag.Below, block34, false);
+        masm.cmpl(rdx, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block28);
+        masm.cmpl(rdx, 17200);
+        masm.jcc(AMD64Assembler.ConditionFlag.Above, block35);
+        masm.cmpl(rdx, 17184);
+        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block32);
+        masm.cmpl(rdx, 16368);
+        masm.jcc(AMD64Assembler.ConditionFlag.Below, block34);
         masm.movl(rax, 17208);
         masm.xorpd(xmm2, xmm2);
         masm.pinsrw(xmm2, rax, 3);
@@ -1480,9 +1482,11 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.subsd(xmm4, xmm2);
         masm.addsd(xmm1, xmm4);
         masm.pextrw(rax, xmm1, 3);
-        masm.andlAndJcc(rax, 32767, ConditionFlag.NotEqual, block34, false);
+        masm.andl(rax, 32767);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block34);
         masm.movdl(rax, xmm2);
-        masm.andlAndJcc(rax, 1, ConditionFlag.Equal, block35, false);
+        masm.andl(rax, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block35);
 
         masm.bind(block36);
         masm.xorpd(xmm1, xmm1);
@@ -1495,7 +1499,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movl(rdx, 8192);
         masm.movdl(xmm4, rdx);
         masm.andl(rax, 32767);
-        masm.sublAndJcc(rax, 16, ConditionFlag.Less, block10, false);
+        masm.subl(rax, 16);
+        masm.jcc(AMD64Assembler.ConditionFlag.Less, block10);
         masm.movl(rdx, rax);
         masm.andl(rdx, 32752);
         masm.subl(rdx, 16368);
@@ -1528,7 +1533,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movl(rdx, 8192);
         masm.movdl(xmm4, rdx);
         masm.andl(rax, 32767);
-        masm.sublAndJcc(rax, 16, ConditionFlag.Less, block8, false);
+        masm.subl(rax, 16);
+        masm.jcc(AMD64Assembler.ConditionFlag.Less, block8);
         masm.movl(rdx, rax);
         masm.andl(rdx, 32752);
         masm.subl(rdx, 16368);
@@ -1553,7 +1559,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
 
         masm.bind(block11);
         masm.addl(rax, 384);
-        masm.cmplAndJcc(rax, 0, ConditionFlag.Less, block38, false);
+        masm.cmpl(rax, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.Less, block38);
         masm.mulsd(xmm5, xmm1);
         masm.addsd(xmm0, xmm7);
         masm.shrl(tmp1, 31);
@@ -1594,12 +1601,13 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movdqu(xmm2, xmm1);
         masm.pextrw(rax, xmm1, 3);
         masm.andl(rax, 32752);
-        masm.cmplAndJcc(rax, 32752, ConditionFlag.NotEqual, block40, false);
+        masm.cmpl(rax, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block40);
         masm.movdl(rax, xmm2);
         masm.psrlq(xmm2, 20);
         masm.movdl(rdx, xmm2);
         masm.orl(rax, rdx);
-        masm.jcc(ConditionFlag.NotEqual, block18);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block18);
 
         masm.bind(block40);
         masm.movdl(rax, xmm1);
@@ -1608,11 +1616,13 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movl(rcx, rdx);
         masm.addl(rdx, rdx);
         masm.orl(rax, rdx);
-        masm.jcc(ConditionFlag.Equal, block39);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block39);
         masm.shrl(rdx, 21);
-        masm.cmplAndJcc(rdx, 1075, ConditionFlag.Above, block41, false);
-        masm.jcc(ConditionFlag.Equal, block42);
-        masm.cmplAndJcc(rdx, 1023, ConditionFlag.Below, block41, false);
+        masm.cmpl(rdx, 1075);
+        masm.jcc(AMD64Assembler.ConditionFlag.Above, block41);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block42);
+        masm.cmpl(rdx, 1023);
+        masm.jcc(AMD64Assembler.ConditionFlag.Below, block41);
         masm.movq(xmm1, new AMD64Address(rsp, 16));
         masm.movl(rax, 17208);
         masm.xorpd(xmm3, xmm3);
@@ -1622,22 +1632,27 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.subsd(xmm4, xmm3);
         masm.addsd(xmm1, xmm4);
         masm.pextrw(rax, xmm1, 3);
-        masm.andlAndJcc(rax, 32752, ConditionFlag.NotEqual, block41, false);
+        masm.andl(rax, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block41);
         masm.movdl(rax, xmm3);
-        masm.andlAndJcc(rax, 1, ConditionFlag.Equal, block41, false);
+        masm.andl(rax, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block41);
 
         masm.bind(block43);
         masm.movq(xmm0, new AMD64Address(rsp, 8));
-        masm.testlAndJcc(rcx, Integer.MIN_VALUE, ConditionFlag.NotEqual, block44, false);
+        masm.testl(rcx, Integer.MIN_VALUE);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block44);
         masm.jmp(block56);
 
         masm.bind(block42);
         masm.movq(xmm1, new AMD64Address(rsp, 16));
         masm.movdl(rax, xmm1);
-        masm.testlAndJcc(rax, 1, ConditionFlag.NotEqual, block43, false);
+        masm.testl(rax, 1);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block43);
 
         masm.bind(block41);
-        masm.testlAndJcc(rcx, Integer.MIN_VALUE, ConditionFlag.Equal, block22, false);
+        masm.testl(rcx, Integer.MIN_VALUE);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block22);
         masm.xorpd(xmm0, xmm0);
 
         masm.bind(block44);
@@ -1656,11 +1671,13 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.pextrw(rdx, xmm6, 3);
         masm.movl(rcx, 32752);
         masm.andl(rcx, rdx);
-        masm.cmplAndJcc(rcx, 32752, ConditionFlag.Equal, block45, false);
+        masm.cmpl(rcx, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block45);
         masm.andl(rax, 32752);
         masm.subl(rax, 16368);
         masm.xorl(rdx, rax);
-        masm.testlAndJcc(rdx, 32768, ConditionFlag.NotEqual, block46, false);
+        masm.testl(rdx, 32768);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block46);
 
         masm.bind(block47);
         masm.movl(rax, 32736);
@@ -1678,7 +1695,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.movl(rax, 16);
         masm.pinsrw(xmm0, rax, 3);
         masm.mulsd(xmm0, xmm0);
-        masm.testlAndJcc(tmp1, Integer.MIN_VALUE, ConditionFlag.Equal, block48, false);
+        masm.testl(tmp1, Integer.MIN_VALUE);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block48);
         masm.movq(tmp2, 0x8000000000000000L);
         masm.movdq(xmm2, tmp2);
         masm.xorpd(xmm0, xmm2);
@@ -1697,8 +1715,10 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.addl(rdx, rcx);
         masm.movl(rcx, -31);
         masm.sarl(rdx, 4);
-        masm.sublAndJcc(rcx, rdx, ConditionFlag.LessEqual, block49, false);
-        masm.cmplAndJcc(rcx, 20, ConditionFlag.Above, block50, false);
+        masm.subl(rcx, rdx);
+        masm.jcc(AMD64Assembler.ConditionFlag.LessEqual, block49);
+        masm.cmpl(rcx, 20);
+        masm.jcc(AMD64Assembler.ConditionFlag.Above, block50);
         masm.shll(rax);
 
         masm.bind(block49);
@@ -1725,7 +1745,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.paddq(xmm1, xmm3);
         masm.pand(xmm5, xmm1);
         masm.andl(rcx, 32752);
-        masm.cmplAndJcc(rcx, 16560, ConditionFlag.Less, block3, false);
+        masm.cmpl(rcx, 16560);
+        masm.jcc(AMD64Assembler.ConditionFlag.Less, block3);
         masm.pand(xmm0, xmm6);
         masm.subsd(xmm3, xmm5);
         masm.addl(rax, 16351);
@@ -1817,9 +1838,11 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.andl(rax, 32752);
         masm.subl(rax, 16368);
         masm.andl(rcx, 32752);
-        masm.cmplAndJcc(rcx, 32752, ConditionFlag.Equal, block45, false);
+        masm.cmpl(rcx, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block45);
         masm.addl(rcx, rax);
-        masm.cmplAndJcc(rcx, 16576, ConditionFlag.AboveEqual, block51, false);
+        masm.cmpl(rcx, 16576);
+        masm.jcc(AMD64Assembler.ConditionFlag.AboveEqual, block51);
         masm.pshufd(xmm0, xmm5, 238);
         masm.pand(xmm4, xmm1);
         masm.movdqu(xmm3, xmm1);
@@ -1864,7 +1887,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.pshufd(xmm6, xmm6, 17);
         masm.mulsd(xmm2, xmm4);
         masm.andl(rdx, 32767);
-        masm.cmplAndJcc(rdx, 16529, ConditionFlag.Above, block12, false);
+        masm.cmpl(rdx, 16529);
+        masm.jcc(AMD64Assembler.ConditionFlag.Above, block12);
         masm.mulsd(xmm0, xmm0);
         masm.paddd(xmm5, xmm6);
         masm.addpd(xmm3, xmm7);
@@ -1886,8 +1910,10 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.addsd(xmm0, xmm5);
         masm.mulsd(xmm0, xmm4);
         masm.pextrw(rax, xmm0, 3);
-        masm.andlAndJcc(rax, 32752, ConditionFlag.Equal, block13, false);
-        masm.cmplAndJcc(rax, 32752, ConditionFlag.Equal, block14, false);
+        masm.andl(rax, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block13);
+        masm.cmpl(rax, 32752);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block14);
 
         masm.bind(block52);
         masm.jmp(block56);
@@ -1899,7 +1925,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.pinsrw(xmm2, rax, 3);
         masm.addsd(xmm2, xmm0);
         masm.pextrw(rax, xmm2, 3);
-        masm.cmplAndJcc(rax, 0, ConditionFlag.NotEqual, block53, false);
+        masm.cmpl(rax, 0);
+        masm.jcc(AMD64Assembler.ConditionFlag.NotEqual, block53);
         masm.xorpd(xmm0, xmm0);
         masm.movl(rax, 32760);
         masm.pinsrw(xmm0, rax, 3);
@@ -1912,7 +1939,7 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.psrlq(xmm3, 20);
         masm.movdl(rcx, xmm3);
         masm.orl(rcx, rdx);
-        masm.jcc(ConditionFlag.Equal, block54);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block54);
         masm.addsd(xmm1, xmm1);
         masm.movdqu(xmm0, xmm1);
         masm.jmp(block56);
@@ -1921,7 +1948,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.pextrw(rax, xmm1, 3);
         masm.pextrw(rcx, xmm2, 3);
         masm.xorl(rax, rcx);
-        masm.testlAndJcc(rax, 32768, ConditionFlag.Equal, block47, false);
+        masm.testl(rax, 32768);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block47);
         masm.jmp(block46);
 
         masm.bind(block54);
@@ -1931,7 +1959,8 @@ public final class AMD64MathPowOp extends AMD64MathIntrinsicBinaryOp {
         masm.xorpd(xmm0, xmm0);
         masm.subl(rax, 16368);
         masm.xorl(rax, rdx);
-        masm.testlAndJcc(rax, 32768, ConditionFlag.Equal, block55, false);
+        masm.testl(rax, 32768);
+        masm.jcc(AMD64Assembler.ConditionFlag.Equal, block55);
         masm.jmp(block56);
 
         masm.bind(block55);
