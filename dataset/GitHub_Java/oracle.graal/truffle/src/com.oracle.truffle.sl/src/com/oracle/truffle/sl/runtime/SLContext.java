@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.sl.runtime;
 
-import static com.oracle.truffle.api.CompilerAsserts.shouldNotReachHere;
-
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -49,6 +47,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
@@ -259,7 +258,7 @@ public final class SLContext {
         if (a instanceof Long || a instanceof SLBigNumber || a instanceof String || a instanceof Boolean) {
             return a;
         } else if (a instanceof Character) {
-            return fromForeignCharacter((Character) a);
+            return fromForeignCharacter(a);
         } else if (a instanceof Number) {
             return fromForeignNumber(a);
         } else if (a instanceof TruffleObject) {
@@ -267,7 +266,8 @@ public final class SLContext {
         } else if (a instanceof SLContext) {
             return a;
         }
-        throw shouldNotReachHere("Value is not a truffle value.");
+        CompilerDirectives.transferToInterpreter();
+        throw new IllegalStateException(a + " is not a Truffle value");
     }
 
     @TruffleBoundary
@@ -276,7 +276,7 @@ public final class SLContext {
     }
 
     @TruffleBoundary
-    private static String fromForeignCharacter(char c) {
+    private static String fromForeignCharacter(Object c) {
         return String.valueOf(c);
     }
 

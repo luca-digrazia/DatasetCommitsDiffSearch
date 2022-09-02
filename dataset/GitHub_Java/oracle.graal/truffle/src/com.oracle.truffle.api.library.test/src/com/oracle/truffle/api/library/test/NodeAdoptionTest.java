@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,6 +40,7 @@
  */
 package com.oracle.truffle.api.library.test;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
@@ -53,6 +54,7 @@ import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.test.AbstractLibraryTest;
 
 @SuppressWarnings({"unused", "static-method"})
 public class NodeAdoptionTest extends AbstractLibraryTest {
@@ -68,17 +70,18 @@ public class NodeAdoptionTest extends AbstractLibraryTest {
     static final class NodeAdoptionObject {
 
         @ExportMessage
-        String m0() {
-            return "uncached";
-        }
-
-        @ExportMessage
         static class M0 {
             @Specialization(guards = "innerNode.execute(receiver)")
+            @CompilerDirectives.TruffleBoundary
             static String doM0(NodeAdoptionObject receiver,
-                            @Cached InnerNode innerNode) {
-                assertNotNull(innerNode.getRootNode());
-                return "cached";
+                            @Cached(allowUncached = true) InnerNode innerNode,
+                            @Cached(value = "0", uncached = "1") int cached) {
+                if (cached == 0) {
+                    assertNotNull(innerNode.getRootNode());
+                    return "cached";
+                } else {
+                    return "uncached";
+                }
             }
         }
     }
@@ -88,6 +91,7 @@ public class NodeAdoptionTest extends AbstractLibraryTest {
         abstract boolean execute(Object argument);
 
         @Specialization
+        @CompilerDirectives.TruffleBoundary
         boolean s0(Object argument) {
             assertNotNull(this.getRootNode());
             return true;
@@ -100,10 +104,10 @@ public class NodeAdoptionTest extends AbstractLibraryTest {
         Object o = new Object();
 
         // defaults are cached as singleton and don't have a parent.
-        NodeAdoptionLibrary cached = LibraryFactory.resolve(NodeAdoptionLibrary.class).createCached(o);
+        NodeAdoptionLibrary cached = LibraryFactory.resolve(NodeAdoptionLibrary.class).create(o);
         assertEquals("default", cached.m0(o));
 
-        NodeAdoptionLibrary dispatched = LibraryFactory.resolve(NodeAdoptionLibrary.class).createCachedLimit(3);
+        NodeAdoptionLibrary dispatched = LibraryFactory.resolve(NodeAdoptionLibrary.class).createDispatched(3);
         assertEquals("default", dispatched.m0(o));
     }
 
@@ -111,14 +115,14 @@ public class NodeAdoptionTest extends AbstractLibraryTest {
     public void testExports() {
         NodeAdoptionObject o = new NodeAdoptionObject();
 
-        NodeAdoptionLibrary cached = LibraryFactory.resolve(NodeAdoptionLibrary.class).createCached(new NodeAdoptionObject());
+        NodeAdoptionLibrary cached = LibraryFactory.resolve(NodeAdoptionLibrary.class).create(new NodeAdoptionObject());
         assertAssertionError(() -> cached.m0(o));
-        adopt(cached);
+        adoptNode(cached);
         assertEquals("cached", cached.m0(o));
 
-        NodeAdoptionLibrary dispatched = LibraryFactory.resolve(NodeAdoptionLibrary.class).createCachedLimit(3);
+        NodeAdoptionLibrary dispatched = LibraryFactory.resolve(NodeAdoptionLibrary.class).createDispatched(3);
         assertAssertionError(() -> dispatched.m0(o));
-        adopt(dispatched);
+        adoptNode(dispatched);
         assertEquals("cached", dispatched.m0(o));
     }
 

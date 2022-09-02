@@ -84,7 +84,6 @@ import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.junit.After;
 import org.junit.Assert;
-import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -121,7 +120,6 @@ public class ContextPreInitializationTest {
     public void setUp() throws Exception {
         // Initialize IMPL
         Class.forName("org.graalvm.polyglot.Engine$ImplHolder", true, ContextPreInitializationTest.class.getClassLoader());
-        Assume.assumeTrue(false);
     }
 
     @After
