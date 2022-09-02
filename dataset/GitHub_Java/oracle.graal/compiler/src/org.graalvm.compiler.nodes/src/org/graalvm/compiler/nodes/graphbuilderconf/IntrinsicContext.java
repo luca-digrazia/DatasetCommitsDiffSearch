@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,18 +24,25 @@
  */
 package org.graalvm.compiler.nodes.graphbuilderconf;
 
-import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
-import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
 import static jdk.vm.ci.code.BytecodeFrame.AFTER_BCI;
+import static jdk.vm.ci.code.BytecodeFrame.AFTER_EXCEPTION_BCI;
 import static jdk.vm.ci.code.BytecodeFrame.BEFORE_BCI;
 import static jdk.vm.ci.code.BytecodeFrame.INVALID_FRAMESTATE_BCI;
+import static jdk.vm.ci.services.Services.IS_IN_NATIVE_IMAGE;
+import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
+import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION;
+import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.ROOT_COMPILATION_ENCODING;
 
+import org.graalvm.compiler.api.replacements.MethodSubstitution;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
+import org.graalvm.compiler.graph.NodeSourcePosition;
 import org.graalvm.compiler.nodes.AbstractMergeNode;
 import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.Invoke;
+import org.graalvm.compiler.nodes.LoopExitNode;
 import org.graalvm.compiler.nodes.StateSplit;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.nodes.java.ExceptionObjectNode;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -51,30 +60,59 @@ public class IntrinsicContext {
     /**
      * Method being intrinsified.
      */
-    final ResolvedJavaMethod method;
+    final ResolvedJavaMethod originalMethod;
 
     /**
      * Method providing the intrinsic implementation.
      */
-    final ResolvedJavaMethod intrinsic;
+    final ResolvedJavaMethod intrinsicMethod;
 
     /**
      * Provider of bytecode to be parsed for a method that is part of an intrinsic.
      */
     final BytecodeProvider bytecodeProvider;
 
+    final CompilationContext compilationContext;
+
+    final boolean allowPartialIntrinsicArgumentMismatch;
+
+    public IntrinsicContext(ResolvedJavaMethod method, ResolvedJavaMethod intrinsic, BytecodeProvider bytecodeProvider, CompilationContext compilationContext) {
+        this(method, intrinsic, bytecodeProvider, compilationContext, false);
+    }
+
+    public IntrinsicContext(ResolvedJavaMethod method, ResolvedJavaMethod intrinsic, BytecodeProvider bytecodeProvider, CompilationContext compilationContext,
+                    boolean allowPartialIntrinsicArgumentMismatch) {
+        this.originalMethod = method;
+        this.intrinsicMethod = intrinsic;
+        this.bytecodeProvider = bytecodeProvider;
+        assert bytecodeProvider != null;
+        this.compilationContext = compilationContext;
+        this.allowPartialIntrinsicArgumentMismatch = allowPartialIntrinsicArgumentMismatch;
+        assert !isCompilationRoot() || method.hasBytecodes() : "Cannot root compile intrinsic for native or abstract method " + method.format("%H.%n(%p)");
+        assert IS_IN_NATIVE_IMAGE || !method.equals(intrinsic) || method.getAnnotation(MethodSubstitution.class) == null : "method and intrinsic must be different: " + method + " " + intrinsic;
+    }
+
+    /**
+     * A partial intrinsic exits by (effectively) calling the intrinsified method. Normally, this
+     * call must use exactly the same arguments as the call that is being intrinsified. This allows
+     * to override this behavior.
+     */
+    public boolean allowPartialIntrinsicArgumentMismatch() {
+        return allowPartialIntrinsicArgumentMismatch;
+    }
+
     /**
      * Gets the method being intrinsified.
      */
     public ResolvedJavaMethod getOriginalMethod() {
-        return method;
+        return originalMethod;
     }
 
     /**
      * Gets the method providing the intrinsic implementation.
      */
     public ResolvedJavaMethod getIntrinsicMethod() {
-        return intrinsic;
+        return intrinsicMethod;
     }
 
     /**
@@ -90,26 +128,30 @@ public class IntrinsicContext {
      * intrinsification falls back to the original method.
      */
     public boolean isCallToOriginal(ResolvedJavaMethod targetMethod) {
-        return method.equals(targetMethod) || intrinsic.equals(targetMethod);
+        return originalMethod.equals(targetMethod) || intrinsicMethod.equals(targetMethod);
     }
 
-    final CompilationContext compilationContext;
-
-    public IntrinsicContext(ResolvedJavaMethod method, ResolvedJavaMethod intrinsic, BytecodeProvider bytecodeProvider, CompilationContext compilationContext) {
-        this.method = method;
-        this.intrinsic = intrinsic;
-        this.bytecodeProvider = bytecodeProvider;
-        assert bytecodeProvider != null;
-        this.compilationContext = compilationContext;
-        assert !isCompilationRoot() || method.hasBytecodes() : "Cannot root compile intrinsic for native or abstract method " + method.format("%H.%n(%p)");
-    }
+    private NodeSourcePosition nodeSourcePosition;
 
     public boolean isPostParseInlined() {
         return compilationContext.equals(INLINE_AFTER_PARSING);
     }
 
     public boolean isCompilationRoot() {
-        return compilationContext.equals(ROOT_COMPILATION);
+        return compilationContext.equals(ROOT_COMPILATION) || compilationContext.equals(ROOT_COMPILATION_ENCODING);
+    }
+
+    public boolean isIntrinsicEncoding() {
+        return compilationContext.equals(ROOT_COMPILATION_ENCODING);
+    }
+
+    public NodeSourcePosition getNodeSourcePosition() {
+        return nodeSourcePosition;
+    }
+
+    public void setNodeSourcePosition(NodeSourcePosition position) {
+        assert nodeSourcePosition == null : "can only be set once";
+        this.nodeSourcePosition = position;
     }
 
     /**
@@ -130,7 +172,12 @@ public class IntrinsicContext {
         /**
          * An intrinsic is the root of compilation.
          */
-        ROOT_COMPILATION
+        ROOT_COMPILATION,
+
+        /**
+         * An intrinsic is the root of a compilation done for graph encoding.
+         */
+        ROOT_COMPILATION_ENCODING
     }
 
     /**
@@ -155,28 +202,57 @@ public class IntrinsicContext {
         void addSideEffect(StateSplit sideEffect);
     }
 
-    public FrameState createFrameState(StructuredGraph graph, SideEffectsState sideEffects, StateSplit forStateSplit) {
+    @SuppressWarnings("unused")
+    public boolean isDeferredInvoke(StateSplit stateSplit) {
+        return false;
+    }
+
+    public FrameState createFrameState(StructuredGraph graph, SideEffectsState sideEffects, StateSplit forStateSplit, NodeSourcePosition sourcePosition) {
         assert forStateSplit != graph.start();
         if (forStateSplit.hasSideEffect()) {
             if (sideEffects.isAfterSideEffect()) {
                 // Only the last side effect on any execution path in a replacement
                 // can inherit the stateAfter of the replaced node
                 FrameState invalid = graph.add(new FrameState(INVALID_FRAMESTATE_BCI));
+                if (graph.trackNodeSourcePosition()) {
+                    invalid.setNodeSourcePosition(sourcePosition);
+                }
                 for (StateSplit lastSideEffect : sideEffects.sideEffects()) {
                     lastSideEffect.setStateAfter(invalid);
                 }
             }
-            sideEffects.addSideEffect(forStateSplit);
-            return graph.add(new FrameState(AFTER_BCI));
+            FrameState frameState;
+            if (isDeferredInvoke(forStateSplit)) {
+                frameState = graph.add(new FrameState(INVALID_FRAMESTATE_BCI));
+            } else {
+                sideEffects.addSideEffect(forStateSplit);
+                if (forStateSplit instanceof ExceptionObjectNode) {
+                    frameState = graph.add(new FrameState(AFTER_EXCEPTION_BCI, (ExceptionObjectNode) forStateSplit));
+                } else {
+                    frameState = graph.add(new FrameState(AFTER_BCI));
+                }
+            }
+            if (graph.trackNodeSourcePosition()) {
+                frameState.setNodeSourcePosition(sourcePosition);
+            }
+            return frameState;
         } else {
-            if (forStateSplit instanceof AbstractMergeNode) {
+            if (forStateSplit instanceof AbstractMergeNode || forStateSplit instanceof LoopExitNode) {
                 // Merge nodes always need a frame state
                 if (sideEffects.isAfterSideEffect()) {
                     // A merge after one or more side effects
-                    return graph.add(new FrameState(AFTER_BCI));
+                    FrameState frameState = graph.add(new FrameState(AFTER_BCI));
+                    if (graph.trackNodeSourcePosition()) {
+                        frameState.setNodeSourcePosition(sourcePosition);
+                    }
+                    return frameState;
                 } else {
                     // A merge before any side effects
-                    return graph.add(new FrameState(BEFORE_BCI));
+                    FrameState frameState = graph.add(new FrameState(BEFORE_BCI));
+                    if (graph.trackNodeSourcePosition()) {
+                        frameState.setNodeSourcePosition(sourcePosition);
+                    }
+                    return frameState;
                 }
             } else {
                 // Other non-side-effects do not need a state
@@ -187,6 +263,7 @@ public class IntrinsicContext {
 
     @Override
     public String toString() {
-        return "Intrinsic{original: " + method.format("%H.%n(%p)") + ", intrinsic: " + intrinsic.format("%H.%n(%p)") + ", context: " + compilationContext + "}";
+        return "Intrinsic{original: " + originalMethod.format("%H.%n(%p)") + ", intrinsic: " + (intrinsicMethod != null ? intrinsicMethod.format("%H.%n(%p)") : "null") + ", context: " +
+                        compilationContext + "}";
     }
 }

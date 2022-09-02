@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -51,6 +51,7 @@ import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.memory.AbstractMemoryCheckpoint;
 import org.graalvm.compiler.nodes.memory.SingleMemoryKill;
 import org.graalvm.compiler.nodes.spi.LIRLowerable;
+import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.NodeLIRBuilderTool;
 import org.graalvm.compiler.nodes.spi.UncheckedInterfaceProvider;
 import org.graalvm.word.LocationIdentity;
@@ -110,6 +111,12 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
         this.polymorphic = invoke.polymorphic;
         this.useForInlining = invoke.useForInlining;
         this.identity = invoke.getKilledLocationIdentity();
+    }
+
+    @Override
+    public void replaceBci(int newBci) {
+        assert BytecodeFrame.isPlaceholderBci(bci) && !BytecodeFrame.isPlaceholderBci(newBci) : "can only replace placeholder with better bci";
+        bci = newBci;
     }
 
     @Override
@@ -182,6 +189,11 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     }
 
     @Override
+    public void lower(LoweringTool tool) {
+        tool.getLowerer().lower(this, tool);
+    }
+
+    @Override
     public void generate(NodeLIRBuilderTool gen) {
         gen.emitInvoke(this);
     }
@@ -200,12 +212,6 @@ public final class InvokeNode extends AbstractMemoryCheckpoint implements Invoke
     @Override
     public int bci() {
         return bci;
-    }
-
-    @Override
-    public void setBci(int newBci) {
-        assert BytecodeFrame.isPlaceholderBci(bci) && !BytecodeFrame.isPlaceholderBci(newBci) : "can only replace placeholder with better bci";
-        bci = newBci;
     }
 
     @Override

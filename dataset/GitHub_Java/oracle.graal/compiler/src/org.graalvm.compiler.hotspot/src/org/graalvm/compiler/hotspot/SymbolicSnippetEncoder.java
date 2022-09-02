@@ -254,7 +254,8 @@ public class SymbolicSnippetEncoder {
         copy.clearInlineInvokePlugins();
         copy.appendInlineInvokePlugin(new SnippetInlineInvokePlugin());
         copy.appendNodePlugin(new SnippetCounterPlugin());
-        HotSpotProviders providers = (HotSpotProviders) replacements.getProviders().copyWith(new HotSpotSubstrateConstantReflectionProvider(replacements.getProviders().getConstantReflection()));
+        HotSpotProviders providers = (HotSpotProviders) replacements.getProviders()
+                        .copyWith(new HotSpotSubstrateConstantReflectionProvider(replacements.getProviders().getConstantReflection()));
         this.snippetReplacements = new HotSpotSnippetReplacementsImpl(replacements, providers.copyWith(copy));
         this.snippetReplacements.setGraphBuilderPlugins(copy);
     }

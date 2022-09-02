@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -82,14 +82,6 @@ public class HotSpotReplacementsImpl extends ReplacementsImpl {
                 }
             }
         }
-    }
-
-    /**
-     * Returns true if this Replacements is being used for preparation of snippets and substitutions
-     * for libgraal.
-     */
-    public boolean isEncodingSnippets() {
-        return false;
     }
 
     @Override
