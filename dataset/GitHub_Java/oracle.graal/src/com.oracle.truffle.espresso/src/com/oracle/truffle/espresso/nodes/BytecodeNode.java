@@ -773,6 +773,13 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
                                 curBCI = targetBCI;
                                 continue loop;
                             }
+                            /*
+                             * Thread.suspend() is much more time constrained than Thread.stop(). It
+                             * is expected to suspend execution almost immediately when suspend is
+                             * called. This is the most lightweight hack I could find to avoid
+                             * checking at each BCI, while passing the JCK tests.
+                             */
+                            checkSynchronousSuspend(curBCI);
                             break;
 
                         case JSR: // fall through
@@ -1206,6 +1213,13 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
             }
         }
         return newTop;
+    }
+
+    private void checkSynchronousSuspend(int curBCI) {
+        if (getContext().shouldCheckSuspend()) {
+            int targetBCI = bs.readBranchDest(curBCI);
+            checkStopping(curBCI, targetBCI);
+        }
     }
 
     private void checkStopping(int curBCI, int targetBCI) {
