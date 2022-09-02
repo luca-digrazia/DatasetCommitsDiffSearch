@@ -54,10 +54,8 @@ public class BackgroundCompileQueue {
     private final AtomicLong idCounter;
     private volatile ExecutorService compilationExecutorService;
     private boolean shutdown = false;
-    protected final GraalTruffleRuntime runtime;
 
-    public BackgroundCompileQueue(GraalTruffleRuntime runtime) {
-        this.runtime = runtime;
+    public BackgroundCompileQueue() {
         this.idCounter = new AtomicLong();
     }
 
@@ -84,28 +82,20 @@ public class BackgroundCompileQueue {
             }
             threads = Math.max(1, threads);
 
-            ThreadFactory factory = newThreadFactory("TruffleCompilerThread", callTarget);
+            ThreadFactory factory = newThreadFactory("TruffleCompilerThread");
 
-            long compilerIdleDelay = runtime.getCompilerIdleDelay();
-            long keepAliveTime = compilerIdleDelay >= 0 ? compilerIdleDelay : 0;
-            ThreadPoolExecutor threadPoolExecutor = new ThreadPoolExecutor(threads, threads,
-                            keepAliveTime, TimeUnit.MILLISECONDS,
+            return compilationExecutorService = new ThreadPoolExecutor(threads, threads, 0, TimeUnit.MILLISECONDS,
                             new PriorityBlockingQueue<>(), factory) {
                 @Override
                 protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
                     return new RequestFutureTask<>((RequestImpl<T>) callable);
                 }
             };
-            if (compilerIdleDelay >= 0) {
-                threadPoolExecutor.allowCoreThreadTimeOut(true);
-            }
-            return compilationExecutorService = threadPoolExecutor;
         }
     }
 
-    @SuppressWarnings("unused")
-    protected ThreadFactory newThreadFactory(String threadNamePrefix, OptimizedCallTarget callTarget) {
-        return new TruffleCompilerThreadFactory(threadNamePrefix, runtime);
+    protected ThreadFactory newThreadFactory(String threadNamePrefix) {
+        return new TruffleCompilerThreadFactory(threadNamePrefix);
     }
 
     public CancellableCompileTask submitTask(Priority priority, OptimizedCallTarget target, Request request) {
@@ -225,25 +215,18 @@ public class BackgroundCompileQueue {
 
     private static final class TruffleCompilerThreadFactory implements ThreadFactory {
         private final String namePrefix;
-        private final GraalTruffleRuntime runtime;
 
-        TruffleCompilerThreadFactory(final String namePrefix, GraalTruffleRuntime runtime) {
+        TruffleCompilerThreadFactory(final String namePrefix) {
             this.namePrefix = namePrefix;
-            this.runtime = runtime;
         }
 
         @Override
         public Thread newThread(Runnable r) {
             final Thread t = new Thread(r) {
-                @SuppressWarnings("try")
                 @Override
                 public void run() {
                     setContextClassLoader(getClass().getClassLoader());
-                    try (AutoCloseable scope = runtime.openCompilerThreadScope()) {
-                        super.run();
-                    } catch (Exception e) {
-                        throw new InternalError(e);
-                    }
+                    super.run();
                 }
             };
             t.setName(namePrefix + "-" + t.getId());
