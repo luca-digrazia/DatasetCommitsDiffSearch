@@ -27,8 +27,6 @@ import static com.oracle.truffle.espresso.classfile.Constants.ACC_CALLER_SENSITI
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_LAMBDA_FORM_COMPILED;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_PUBLIC;
-import static com.oracle.truffle.espresso.jni.JniEnv.JNI_ERR;
-import static com.oracle.truffle.espresso.jni.JniEnv.JNI_EVERSION;
 import static com.oracle.truffle.espresso.jni.JniEnv.JNI_OK;
 import static com.oracle.truffle.espresso.meta.EspressoError.cat;
 import static com.oracle.truffle.espresso.runtime.Classpath.JAVA_BASE;
@@ -160,13 +158,20 @@ public final class VM extends NativeEnv implements ContextAccess {
     private final @Pointer TruffleObject initializeManagementContext;
     private final @Pointer TruffleObject disposeManagementContext;
     private final @Pointer TruffleObject getJavaVM;
-    private final @Pointer TruffleObject mokapotAttachThread;
     private final @Pointer TruffleObject getPackageAt;
 
     private final JniEnv jniEnv;
 
     private @Pointer TruffleObject managementPtr;
-    private @Pointer TruffleObject mokapotEnvPtr;
+    private @Pointer TruffleObject vmPtr;
+
+    // jvm.dll (Windows) or libjvm.so (Unixes) is the Espresso implementation of the VM
+    // interface (libjvm).
+    // Espresso loads all shared libraries in a private namespace (e.g. using dlmopen on Linux).
+    // Espresso's libjvm must be loaded strictly before any other library in the private namespace
+    // to avoid linking with HotSpot libjvm, then libjava is loaded and further system libraries,
+    // libzip, libnet, libnio ...
+    private final @Pointer TruffleObject mokapotLibrary;
 
     // libjava must be loaded after mokapot.
     private final @Pointer TruffleObject javaLibrary;
@@ -177,15 +182,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     protected InteropLibrary getUncached() {
         return uncached;
-    }
-
-    public void attachThread(Thread hostThread) {
-        assert hostThread == Thread.currentThread();
-        try {
-            getUncached().execute(mokapotAttachThread, mokapotEnvPtr);
-        } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-            throw EspressoError.shouldNotReachHere("mokapotAttachThread failed", e);
-        }
     }
 
     public static final class GlobalFrameIDs {
@@ -239,7 +235,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         try {
             // TODO(peterssen): Use JVM_FindLibraryEntry.
             TruffleObject jniOnLoad = NativeLibrary.lookupAndBind(libJava, "JNI_OnLoad", "(pointer, pointer): sint32");
-            getUncached().execute(jniOnLoad, mokapotEnvPtr, RawPointer.nullInstance());
+            getUncached().execute(jniOnLoad, vmPtr, RawPointer.nullInstance());
         } catch (UnknownIdentifierException e) {
             // ignore
         } catch (UnsupportedTypeException | UnsupportedMessageException | ArityException e) {
@@ -254,16 +250,8 @@ public final class VM extends NativeEnv implements ContextAccess {
         try {
             EspressoProperties props = getContext().getVmProperties();
 
-            // Load Espresso's libjvm:
-            /*
-             * jvm.dll (Windows) or libjvm.so (Unixes) is the Espresso implementation of the VM
-             * interface (libjvm). Espresso loads all shared libraries in a private namespace (e.g.
-             * using dlmopen on Linux). Espresso's libjvm must be loaded strictly before any other
-             * library in the private namespace to avoid linking with HotSpot libjvm, then libjava
-             * is loaded and further system libraries, libzip, libnet, libnio ...
-             */
-            @Pointer
-            TruffleObject mokapotLibrary = loadLibraryInternal(props.jvmLibraryPath(), "jvm");
+            // Load Espresso's libjvm.
+            mokapotLibrary = loadLibraryInternal(Collections.singletonList(props.espressoLibraryPath()), "jvm");
             assert mokapotLibrary != null;
 
             initializeMokapotContext = NativeLibrary.lookupAndBind(mokapotLibrary,
@@ -287,19 +275,15 @@ public final class VM extends NativeEnv implements ContextAccess {
 
             getJavaVM = NativeLibrary.lookupAndBind(mokapotLibrary,
                             "getJavaVM",
-                            "(pointer): pointer");
-
-            mokapotAttachThread = NativeLibrary.lookupAndBind(mokapotLibrary,
-                            "mokapotAttachThread",
-                            "(pointer): void");
+                            "(env): pointer");
 
             getPackageAt = NativeLibrary.lookupAndBind(mokapotLibrary,
                             "getPackageAt",
                             "(pointer, sint32): pointer");
 
-            this.mokapotEnvPtr = (TruffleObject) getUncached().execute(initializeMokapotContext, jniEnv.getNativePointer(), lookupVmImplCallback);
-            assert getUncached().isPointer(this.mokapotEnvPtr);
-            assert !getUncached().isNull(this.mokapotEnvPtr);
+            this.vmPtr = (TruffleObject) getUncached().execute(initializeMokapotContext, jniEnv.getNativePointer(), lookupVmImplCallback);
+            assert getUncached().isPointer(this.vmPtr);
+            assert !getUncached().isNull(this.vmPtr);
 
             javaLibrary = loadJavaLibrary(props.bootLibraryPath());
 
@@ -321,11 +305,11 @@ public final class VM extends NativeEnv implements ContextAccess {
     public @Pointer TruffleObject getJavaVM() {
         try {
             @Pointer
-            TruffleObject ptr = (TruffleObject) getUncached().execute(getJavaVM, mokapotEnvPtr);
+            TruffleObject ptr = (TruffleObject) getUncached().execute(getJavaVM);
             assert getUncached().isPointer(ptr);
             return ptr;
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
-            throw EspressoError.shouldNotReachHere("getJavaVM failed", e);
+            throw EspressoError.shouldNotReachHere("getJavaVM failed");
         }
     }
 
@@ -717,91 +701,24 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     // region JNI Invocation Interface
     @VmImpl
-    public int DestroyJavaVM() {
-        getContext().destroyVM();
+    public static int DestroyJavaVM() {
         return JNI_OK;
     }
-
-    /*
-    @formatter:off
-    struct JavaVMAttachArgs {
-        0      |     4     jint version;
-     XXX  4-byte hole
-        8      |     8     char *name;
-       16      |     8     jobject group;
-    }
-    total size (bytes):   24
-    @formatter:on
-     */
 
     @SuppressWarnings("unused")
     @VmImpl
     @TruffleBoundary
-    public int AttachCurrentThread(@Pointer TruffleObject penvPtr, @Pointer TruffleObject argsPtr) {
-        return attachCurrentThread(penvPtr, argsPtr, false);
-    }
-
-    private int attachCurrentThread(@SuppressWarnings("unused") @Pointer TruffleObject penvPtr, @Pointer TruffleObject argsPtr, boolean daemon) {
-        LongBuffer buf = directByteBuffer(argsPtr, 8, JavaKind.Long).asLongBuffer();
-        int version = (int) buf.get(0);
-        @SuppressWarnings("unused")
-        long namePtr = buf.get(1);
-        long groupHandle = buf.get(2);
-        StaticObject group = null;
-        String name = null;
-        if (JniVersion.isSupported(version, getContext().getJavaVersion())) {
-            group = getHandles().get(Math.toIntExact(groupHandle));
-            // TODO decode name string
-        }
-        StaticObject thread = getContext().createThread(Thread.currentThread(), group, name);
-        if (daemon) {
-            getMeta().java_lang_Thread_daemon.set(thread, true);
-        }
+    public int AttachCurrentThread(@Pointer TruffleObject penvPtr, @Pointer TruffleObject argsPtr, @InjectMeta Meta meta) {
+        getLogger().warning("Calling AttachCurrentThread! " + penvPtr + " " + Thread.currentThread());
+        meta.getContext().createThread(Thread.currentThread());
         return JNI_OK;
     }
 
     @VmImpl
     @TruffleBoundary
-    public int DetachCurrentThread() {
-        EspressoContext context = getContext();
-        StaticObject currentThread = context.getCurrentThread();
-        if (currentThread == null) {
-            return JNI_OK;
-        }
-        // HotSpot will wait forever if the current VM this thread was attached to has exited
-        // Should we reproduce this behaviour?
-
-        Method lastJavaMethod = Truffle.getRuntime().iterateFrames(
-                        new FrameInstanceVisitor<Method>() {
-                            @Override
-                            public Method visitFrame(FrameInstance frameInstance) {
-                                Method method = getMethodFromFrame(frameInstance);
-                                if (method != null && method.getContext() == context) {
-                                    return method;
-                                }
-                                return null;
-                            }
-                        });
-        if (lastJavaMethod != null) {
-            // this thread is executing
-            return JNI_ERR;
-        }
-        StaticObject pendingException = jniEnv.getPendingException();
-        jniEnv.clearPendingException();
-
-        Meta meta = context.getMeta();
-        if (pendingException != null) {
-            try {
-                meta.java_lang_Thread_dispatchUncaughtException.invokeDirect(currentThread, pendingException);
-            } catch (EspressoException e) {
-                String exception = e.getExceptionObject().getKlass().getExternalName();
-                String threadName = meta.toHostString((StaticObject) meta.java_lang_Thread_name.get(currentThread));
-                context.getLogger().warning(String.format("Exception: %s thrown from the UncaughtExceptionHandler in thread \"%s\"", exception, threadName));
-            }
-        }
-
-        Target_java_lang_Thread.terminate(currentThread, meta);
-
+    public int DetachCurrentThread(@InjectMeta Meta meta) {
+        getLogger().warning("DetachCurrentThread!!!" + Thread.currentThread());
+        meta.getContext().disposeThread(Thread.currentThread());
         return JNI_OK;
     }
 
@@ -813,10 +730,10 @@ public final class VM extends NativeEnv implements ContextAccess {
      *            will be placed.
      * @param version The requested JNI version.
      *
-     * @return If the current thread is not attached to the VM, sets *env to NULL, and returns
-     *         JNI_EDETACHED. If the specified version is not supported, sets *env to NULL, and
-     *         returns JNI_EVERSION. Otherwise, sets *env to the appropriate interface, and returns
-     *         JNI_OK.
+     * @returns If the current thread is not attached to the VM, sets *env to NULL, and returns
+     *          JNI_EDETACHED. If the specified version is not supported, sets *env to NULL, and
+     *          returns JNI_EVERSION. Otherwise, sets *env to the appropriate interface, and returns
+     *          JNI_OK.
      */
     @SuppressWarnings("unused")
     @VmImpl
@@ -824,19 +741,15 @@ public final class VM extends NativeEnv implements ContextAccess {
     public int GetEnv(@Pointer TruffleObject vmPtr_, @Pointer TruffleObject envPtr, int version) {
         // TODO(peterssen): Check the thread is attached, and that the VM pointer matches.
         assert interopAsPointer(getJavaVM()) == interopAsPointer(vmPtr_);
-        if (JniVersion.isSupported(version, getContext().getJavaVersion())) {
-            LongBuffer buf = directByteBuffer(envPtr, 1, JavaKind.Long).asLongBuffer();
-            buf.put(interopAsPointer(jniEnv.getNativePointer()));
-            return JNI_OK;
-        }
-        return JNI_EVERSION;
+        LongBuffer buf = directByteBuffer(envPtr, 1, JavaKind.Long).asLongBuffer();
+        buf.put(interopAsPointer(jniEnv.getNativePointer()));
+        return JNI_OK;
     }
 
     @SuppressWarnings("unused")
     @VmImpl
-    @TruffleBoundary
-    public int AttachCurrentThreadAsDaemon(@Pointer TruffleObject penvPtr, @Pointer TruffleObject argsPtr) {
-        return attachCurrentThread(penvPtr, argsPtr, true);
+    public static int AttachCurrentThreadAsDaemon(@Pointer TruffleObject penvPtr, @Pointer TruffleObject argsPtr) {
+        return JNI_OK;
     }
 
     // endregion JNI Invocation Interface
@@ -1146,7 +1059,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     public void dispose() {
-        assert !getUncached().isNull(mokapotEnvPtr) : "Mokapot already disposed";
+        assert !getUncached().isNull(vmPtr) : "Mokapot already disposed";
         try {
 
             if (getContext().EnableManagement) {
@@ -1159,12 +1072,12 @@ public final class VM extends NativeEnv implements ContextAccess {
                 assert managementPtr == null;
             }
 
-            getUncached().execute(disposeMokapotContext, mokapotEnvPtr);
-            this.mokapotEnvPtr = RawPointer.nullInstance();
+            getUncached().execute(disposeMokapotContext, vmPtr);
+            this.vmPtr = RawPointer.nullInstance();
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere("Cannot dispose Espresso libjvm (mokapot).");
         }
-        assert getUncached().isNull(mokapotEnvPtr);
+        assert getUncached().isNull(vmPtr);
     }
 
     @VmImpl
@@ -1354,8 +1267,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @TruffleBoundary
     public static Method getMethodFromFrame(FrameInstance frameInstance) {
-        // TODO this should take a context as argument and only return the method if the context
-        // matches
         EspressoRootNode root = getEspressoRootFromFrame(frameInstance);
         if (root != null) {
             return root.getMethod();
@@ -1574,7 +1485,8 @@ public final class VM extends NativeEnv implements ContextAccess {
             private static long getFrameId(FrameInstance frame) {
                 EspressoRootNode rootNode = getEspressoRootFromFrame(frame);
                 Frame readOnlyFrame = frame.getFrame(FrameInstance.FrameAccess.READ_ONLY);
-                return rootNode.readFrameIdOrZero(readOnlyFrame);
+                long frameIdOrZero = rootNode.readFrameIdOrZero(readOnlyFrame);
+                return frameIdOrZero;
             }
         }
     }
@@ -1614,7 +1526,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         stack.push(callerFrame, acc, caller);
 
         // Execute the action.
-        StaticObject result;
+        StaticObject result = StaticObject.NULL;
         try {
             result = (StaticObject) run.invokeDirect(action);
         } catch (EspressoException e) {
@@ -1645,7 +1557,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         StaticObject context = Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<StaticObject>() {
             StaticObject prevDomain = StaticObject.NULL;
 
-            @Override
             public StaticObject visitFrame(FrameInstance frameInstance) {
                 Method m = getMethodFromFrame(frameInstance);
                 if (m != null) {
@@ -1687,7 +1598,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     public @Host(Object.class) StaticObject JVM_LatestUserDefinedLoader(@InjectMeta Meta meta) {
         StaticObject result = Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<StaticObject>() {
-            @Override
             public StaticObject visitFrame(FrameInstance frameInstance) {
                 Method m = getMethodFromFrame(frameInstance);
                 if (m != null) {
@@ -1784,7 +1694,7 @@ public final class VM extends NativeEnv implements ContextAccess {
      * @throws IllegalArgumentException If the specified object is not an array
      * @throws ArrayIndexOutOfBoundsException If the specified {@code index} argument is negative,
      *             or if it is greater than or equal to the length of the specified array
-     * @return the (possibly wrapped) value of the indexed component in the specified array
+     * @returns the (possibly wrapped) value of the indexed component in the specified array
      */
     @VmImpl
     @JniImpl
@@ -1998,7 +1908,8 @@ public final class VM extends NativeEnv implements ContextAccess {
         for (int i = 0; i < packages.length; i++) {
             array[i] = getMeta().toGuestString(packages[i]);
         }
-        return StaticObject.createArray(getMeta().java_lang_String.getArrayClass(), array);
+        StaticObject result = StaticObject.createArray(getMeta().java_lang_String.getArrayClass(), array);
+        return result;
     }
 
     @VmImpl
@@ -2038,7 +1949,6 @@ public final class VM extends NativeEnv implements ContextAccess {
     public @Host(Class.class) StaticObject JVM_CurrentLoadedClass() {
         PrivilegedStack stack = getPrivilegedStack();
         StaticObject mirrorKlass = Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<StaticObject>() {
-            @Override
             public StaticObject visitFrame(FrameInstance frameInstance) {
                 Method m = getMethodFromFrame(frameInstance);
                 if (m != null) {
@@ -2079,7 +1989,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         Integer res = Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Integer>() {
             int depth = 0;
 
-            @Override
             public Integer visitFrame(FrameInstance frameInstance) {
                 Method m = getMethodFromFrame(frameInstance);
                 if (m != null) {
@@ -2111,7 +2020,6 @@ public final class VM extends NativeEnv implements ContextAccess {
         Integer res = Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Integer>() {
             int depth = 0;
 
-            @Override
             public Integer visitFrame(FrameInstance frameInstance) {
                 Method m = getMethodFromFrame(frameInstance);
                 if (m != null) {
@@ -2254,36 +2162,19 @@ public final class VM extends NativeEnv implements ContextAccess {
     public static final int JMM_VERSION_1_2 = 0x20010200; // JDK 7
     public static final int JMM_VERSION_1_2_1 = 0x20010201; // JDK 7 GA
     public static final int JMM_VERSION_1_2_2 = 0x20010202;
-    public static final int JMM_VERSION_1_2_3 = 0x20010203;
     public static final int JMM_VERSION_2 = 0x20020000; // JDK 10
-    public static final int JMM_VERSION_3 = 0x20030000; // JDK 11.7
+
+    public static final int JMM_VERSION = 0x20010203;
 
     @CompilerDirectives.CompilationFinal //
     private int managementVersion;
 
-    /**
-     * Procedure to support a new management version in Espresso:
-     * <ul>
-     * <li>Add the new version to support in this method.</li>
-     * <li>Add the version to the version enum in <code>jmm_common.h</code> in the mokapot include
-     * directory.</li>
-     * <li>Create and update accordingly with the new changes (most certainly a new function)
-     * <code>jmm_.h</code> and <code>management_.c</code> in the mokapot include and source
-     * directory</li>
-     * <li>Add to <code>management.h</code> the new <code>initializeManagementContext_</code> and
-     * <code>disposeManagementContext_</code> functions.</li>
-     * <li>Update <code>management.c</code> to select these new method depending on the requested
-     * version</li>
-     * <li>Ideally implement the method in this class.</li>
-     * </ul>
-     */
-    private static boolean isSupportedManagementVersion(int version) {
-        return version == JMM_VERSION_1 || version == JMM_VERSION_2 || version == JMM_VERSION_3;
-    }
-
     @VmImpl
     public synchronized @Pointer TruffleObject JVM_GetManagement(int version) {
-        if (!isSupportedManagementVersion(version)) {
+        if (version != JMM_VERSION_1_0 && getJavaVersion().java8OrEarlier()) {
+            return RawPointer.nullInstance();
+        }
+        if (version != JMM_VERSION_2 && getJavaVersion().java9OrLater()) {
             return RawPointer.nullInstance();
         }
         EspressoContext context = getContext();
@@ -2301,8 +2192,6 @@ public final class VM extends NativeEnv implements ContextAccess {
                 throw EspressoError.shouldNotReachHere(e);
             }
             assert managementPtr != null && !getUncached().isNull(managementPtr);
-        } else if (version != managementVersion) {
-            return RawPointer.nullInstance();
         }
         return managementPtr;
     }
@@ -2310,10 +2199,10 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     @VmImpl
     public int GetVersion() {
-        if (managementVersion <= JMM_VERSION_1_2_3) {
-            return JMM_VERSION_1_2_3;
+        if (getJavaVersion().java8OrEarlier()) {
+            return JMM_VERSION;
         } else {
-            return managementVersion;
+            return JMM_VERSION_2;
         }
     }
 
@@ -2664,28 +2553,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    public long GetOneThreadAllocatedMemory(
-                    long threadId,
-                    @InjectProfile SubstitutionProfiler profiler) {
-        StaticObject[] activeThreads = getContext().getActiveThreads();
-
-        StaticObject thread = StaticObject.NULL;
-
-        for (int j = 0; j < activeThreads.length; ++j) {
-            if ((long) getMeta().java_lang_Thread_tid.get(activeThreads[j]) == threadId) {
-                thread = activeThreads[j];
-                break;
-            }
-        }
-        if (StaticObject.isNull(thread)) {
-            return -1L;
-        } else {
-            return 0L;
-        }
-    }
-
-    @VmImpl
-    @JniImpl
     public void GetThreadAllocatedMemory(
                     @Host(long[].class) StaticObject ids,
                     @Host(long[].class) StaticObject sizeArray,
@@ -2985,7 +2852,8 @@ public final class VM extends NativeEnv implements ContextAccess {
         for (int i = 0; i < nestMembers.length; i++) {
             array[i] = nestMembers[i].mirror();
         }
-        return StaticObject.createArray(getMeta().java_lang_Class_array, array);
+        StaticObject result = StaticObject.createArray(getMeta().java_lang_Class_array, array);
+        return result;
     }
 
     @VmImpl
