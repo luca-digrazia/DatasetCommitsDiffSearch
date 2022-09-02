@@ -40,6 +40,8 @@
  */
 package com.oracle.truffle.api.benchmark;
 
+import java.util.function.Supplier;
+
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Source;
@@ -461,92 +463,92 @@ public class EngineBenchmark extends TruffleBenchmark {
         long longValue = 42L;
 
         @ExportMessage
-        protected final boolean hasMembers() {
+        final boolean hasMembers() {
             return true;
         }
 
         @ExportMessage
-        protected final boolean hasArrayElements() {
+        final boolean hasArrayElements() {
             return true;
         }
 
         @ExportMessage
-        protected final boolean isExecutable() {
+        final boolean isExecutable() {
             return true;
         }
 
         @ExportMessage
-        protected final Object getMembers(boolean includeInternal) {
+        final Object getMembers(boolean includeInternal) {
             return null;
         }
 
         @ExportMessage
-        protected final Object readArrayElement(long index) {
+        final Object readArrayElement(long index) {
             return value;
         }
 
         @ExportMessage
-        protected final void writeArrayElement(long index, Object value) {
+        final void writeArrayElement(long index, Object value) {
             this.value = value;
         }
 
         @ExportMessage
-        protected final boolean isArrayElementInsertable(long index) {
+        final boolean isArrayElementInsertable(long index) {
             return true;
         }
 
         @ExportMessage
-        protected final long getArraySize() {
+        final long getArraySize() {
             return 0L;
         }
 
         @ExportMessage
-        protected final boolean isArrayElementReadable(long index) {
+        final boolean isArrayElementReadable(long index) {
             return true;
         }
 
         @ExportMessage
-        protected final boolean isArrayElementModifiable(long index) {
+        final boolean isArrayElementModifiable(long index) {
             return true;
         }
 
         @ExportMessage
-        protected final Object execute(Object[] arguments) {
+        final Object execute(Object[] arguments) {
             return constant;
         }
 
         @ExportMessage
-        protected final boolean isMemberReadable(String member) {
+        final boolean isMemberReadable(String member) {
             return true;
         }
 
         @ExportMessage
-        protected final boolean isMemberModifiable(String member) {
+        final boolean isMemberModifiable(String member) {
             return true;
         }
 
         @ExportMessage
-        protected final boolean isMemberInsertable(String member) {
+        final boolean isMemberInsertable(String member) {
             return true;
         }
 
         @ExportMessage
-        protected final void writeMember(String member, Object value) {
+        final void writeMember(String member, Object value) {
             this.value = value;
         }
 
         @ExportMessage
-        protected final Object readMember(String member) {
+        final Object readMember(String member) {
             return value;
         }
 
         @ExportMessage
-        protected final boolean isPointer() {
+        final boolean isPointer() {
             return true;
         }
 
         @ExportMessage
-        protected final long asPointer() {
+        final long asPointer() {
             return longValue;
         }
 
