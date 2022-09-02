@@ -27,6 +27,7 @@ import static com.oracle.truffle.espresso.classfile.Constants.ACC_CALLER_SENSITI
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINAL;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_LAMBDA_FORM_COMPILED;
 import static com.oracle.truffle.espresso.classfile.Constants.ACC_PUBLIC;
+import static com.oracle.truffle.espresso.jni.JniEnv.JNI_EDETACHED;
 import static com.oracle.truffle.espresso.jni.JniEnv.JNI_ERR;
 import static com.oracle.truffle.espresso.jni.JniEnv.JNI_EVERSION;
 import static com.oracle.truffle.espresso.jni.JniEnv.JNI_OK;
@@ -59,6 +60,7 @@ import java.util.function.IntFunction;
 import java.util.function.Supplier;
 import java.util.logging.Level;
 
+import com.oracle.truffle.espresso.runtime.EspressoExitException;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -718,7 +720,11 @@ public final class VM extends NativeEnv implements ContextAccess {
     // region JNI Invocation Interface
     @VmImpl
     public int DestroyJavaVM() {
-        getContext().destroyVM();
+        try {
+            getContext().destroyVM();
+        } catch (EspressoExitException exit) {
+            // expected
+        }
         return JNI_OK;
     }
 
@@ -734,10 +740,10 @@ public final class VM extends NativeEnv implements ContextAccess {
     @formatter:on
      */
 
-    @SuppressWarnings("unused")
     @VmImpl
     @TruffleBoundary
-    public int AttachCurrentThread(@Pointer TruffleObject penvPtr, @Pointer TruffleObject argsPtr) {
+    public int AttachCurrentThread(@Pointer TruffleObject vmPtr_, @Pointer TruffleObject penvPtr, @Pointer TruffleObject argsPtr) {
+        assert interopAsPointer(getJavaVM()) == interopAsPointer(vmPtr_);
         return attachCurrentThread(penvPtr, argsPtr, false);
     }
 
@@ -751,7 +757,9 @@ public final class VM extends NativeEnv implements ContextAccess {
         String name = null;
         if (JniVersion.isSupported(version, getContext().getJavaVersion())) {
             group = getHandles().get(Math.toIntExact(groupHandle));
-            // TODO decode name string
+            name = fromUTF8Ptr(namePtr);
+        } else {
+            getLogger().warning(String.format("AttachCurrentThread with unsupported JavaVMAttachArgs version: 0x%08x", version));
         }
         StaticObject thread = getContext().createThread(Thread.currentThread(), group, name);
         if (daemon) {
@@ -818,12 +826,14 @@ public final class VM extends NativeEnv implements ContextAccess {
      *         returns JNI_EVERSION. Otherwise, sets *env to the appropriate interface, and returns
      *         JNI_OK.
      */
-    @SuppressWarnings("unused")
     @VmImpl
     @TruffleBoundary
     public int GetEnv(@Pointer TruffleObject vmPtr_, @Pointer TruffleObject envPtr, int version) {
-        // TODO(peterssen): Check the thread is attached, and that the VM pointer matches.
         assert interopAsPointer(getJavaVM()) == interopAsPointer(vmPtr_);
+        StaticObject currentThread = getContext().getGuestThreadFromHost(Thread.currentThread());
+        if (currentThread == null) {
+            return JNI_EDETACHED;
+        }
         if (JniVersion.isSupported(version, getContext().getJavaVersion())) {
             LongBuffer buf = directByteBuffer(envPtr, 1, JavaKind.Long).asLongBuffer();
             buf.put(interopAsPointer(jniEnv.getNativePointer()));
@@ -832,10 +842,10 @@ public final class VM extends NativeEnv implements ContextAccess {
         return JNI_EVERSION;
     }
 
-    @SuppressWarnings("unused")
     @VmImpl
     @TruffleBoundary
-    public int AttachCurrentThreadAsDaemon(@Pointer TruffleObject penvPtr, @Pointer TruffleObject argsPtr) {
+    public int AttachCurrentThreadAsDaemon(@Pointer TruffleObject vmPtr_, @Pointer TruffleObject penvPtr, @Pointer TruffleObject argsPtr) {
+        assert interopAsPointer(getJavaVM()) == interopAsPointer(vmPtr_);
         return attachCurrentThread(penvPtr, argsPtr, true);
     }
 
@@ -2254,36 +2264,19 @@ public final class VM extends NativeEnv implements ContextAccess {
     public static final int JMM_VERSION_1_2 = 0x20010200; // JDK 7
     public static final int JMM_VERSION_1_2_1 = 0x20010201; // JDK 7 GA
     public static final int JMM_VERSION_1_2_2 = 0x20010202;
-    public static final int JMM_VERSION_1_2_3 = 0x20010203;
     public static final int JMM_VERSION_2 = 0x20020000; // JDK 10
-    public static final int JMM_VERSION_3 = 0x20030000; // JDK 11.7
+
+    public static final int JMM_VERSION = 0x20010203;
 
     @CompilerDirectives.CompilationFinal //
     private int managementVersion;
 
-    /**
-     * Procedure to support a new management version in Espresso:
-     * <ul>
-     * <li>Add the new version to support in this method.</li>
-     * <li>Add the version to the version enum in <code>jmm_common.h</code> in the mokapot include
-     * directory.</li>
-     * <li>Create and update accordingly with the new changes (most certainly a new function)
-     * <code>jmm_.h</code> and <code>management_.c</code> in the mokapot include and source
-     * directory</li>
-     * <li>Add to <code>management.h</code> the new <code>initializeManagementContext_</code> and
-     * <code>disposeManagementContext_</code> functions.</li>
-     * <li>Update <code>management.c</code> to select these new method depending on the requested
-     * version</li>
-     * <li>Ideally implement the method in this class.</li>
-     * </ul>
-     */
-    private static boolean isSupportedManagementVersion(int version) {
-        return version == JMM_VERSION_1 || version == JMM_VERSION_2 || version == JMM_VERSION_3;
-    }
-
     @VmImpl
     public synchronized @Pointer TruffleObject JVM_GetManagement(int version) {
-        if (!isSupportedManagementVersion(version)) {
+        if (version != JMM_VERSION_1_0 && getJavaVersion().java8OrEarlier()) {
+            return RawPointer.nullInstance();
+        }
+        if (version != JMM_VERSION_2 && getJavaVersion().java9OrLater()) {
             return RawPointer.nullInstance();
         }
         EspressoContext context = getContext();
@@ -2301,11 +2294,6 @@ public final class VM extends NativeEnv implements ContextAccess {
                 throw EspressoError.shouldNotReachHere(e);
             }
             assert managementPtr != null && !getUncached().isNull(managementPtr);
-        } else if (version != managementVersion) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            context.getLogger().warning("Asking for a different management version that previously requested.\n" +
-                            "Previously requested: " + managementVersion + ", currently requested: " + version);
-            return RawPointer.nullInstance();
         }
         return managementPtr;
     }
@@ -2313,10 +2301,10 @@ public final class VM extends NativeEnv implements ContextAccess {
     @JniImpl
     @VmImpl
     public int GetVersion() {
-        if (managementVersion <= JMM_VERSION_1_2_3) {
-            return JMM_VERSION_1_2_3;
+        if (getJavaVersion().java8OrEarlier()) {
+            return JMM_VERSION;
         } else {
-            return managementVersion;
+            return JMM_VERSION_2;
         }
     }
 
@@ -2663,27 +2651,6 @@ public final class VM extends NativeEnv implements ContextAccess {
             return StaticObject.NULL;
         }
         return result;
-    }
-
-    @VmImpl
-    @JniImpl
-    public long GetOneThreadAllocatedMemory(
-                    long threadId) {
-        StaticObject[] activeThreads = getContext().getActiveThreads();
-
-        StaticObject thread = StaticObject.NULL;
-
-        for (int j = 0; j < activeThreads.length; ++j) {
-            if ((long) getMeta().java_lang_Thread_tid.get(activeThreads[j]) == threadId) {
-                thread = activeThreads[j];
-                break;
-            }
-        }
-        if (StaticObject.isNull(thread)) {
-            return -1L;
-        } else {
-            return 0L;
-        }
     }
 
     @VmImpl
