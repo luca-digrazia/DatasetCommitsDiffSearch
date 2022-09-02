@@ -31,9 +31,9 @@ import org.graalvm.nativeimage.c.struct.CStruct;
 import org.graalvm.nativeimage.c.type.WordPointer;
 import org.graalvm.word.PointerBase;
 
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.CallBooleanMethodAFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.CallLongMethodAFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.CallObjectMethodAFunctionPointer;
+import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.CallBooleanMethodFunctionPointer;
+import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.CallLongMethodFunctionPointer;
+import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.CallObjectMethodFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.DefineClassFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.DeleteGlobalRefFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ExceptionCheckFunctionPointer;
@@ -44,16 +44,14 @@ import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.FromReflectedFieldFu
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.FromReflectedMethodFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetArrayLengthFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetFieldIDFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetMethodIDFunctionPointer;
+import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetMemberIDFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetObjectArrayElementFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetObjectClassFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetStringUTFCharsFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.GetSuperclassFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.IsAssignableFromFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.NewGlobalRefFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.NewObjectAFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.NewObjectArrayFunctionPointer;
-import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.NewStringUTFFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.RegisterNativesFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.ReleaseStringUTFCharsFunctionPointer;
 import com.oracle.svm.jni.nativeapi.JNIFunctionPointerTypes.SetObjectArrayElementFunctionPointer;
@@ -223,7 +221,7 @@ public interface JNINativeInterface extends PointerBase {
     void setAllocObject(CFunctionPointer p);
 
     @CField
-    CFunctionPointer getNewObject();
+    <T extends CFunctionPointer> T getNewObject();
 
     @CField
     void setNewObject(CFunctionPointer p);
@@ -235,10 +233,10 @@ public interface JNINativeInterface extends PointerBase {
     void setNewObjectV(CFunctionPointer p);
 
     @CField
-    NewObjectAFunctionPointer getNewObjectA();
+    CFunctionPointer getNewObjectA();
 
     @CField
-    void setNewObjectA(NewObjectAFunctionPointer p);
+    void setNewObjectA(CFunctionPointer p);
 
     @CField
     GetObjectClassFunctionPointer getGetObjectClass();
@@ -253,16 +251,16 @@ public interface JNINativeInterface extends PointerBase {
     void setIsInstanceOf(CFunctionPointer p);
 
     @CField
-    GetMethodIDFunctionPointer getGetMethodID();
+    GetMemberIDFunctionPointer getGetMethodID();
 
     @CField
-    void setGetMethodID(GetMethodIDFunctionPointer p);
+    void setGetMethodID(GetMemberIDFunctionPointer p);
 
     @CField
-    CFunctionPointer getCallObjectMethod();
+    <T extends CallObjectMethodFunctionPointer> T getCallObjectMethod();
 
     @CField
-    void setCallObjectMethod(CFunctionPointer p);
+    void setCallObjectMethod(CallObjectMethodFunctionPointer p);
 
     @CField
     CFunctionPointer getCallObjectMethodV();
@@ -271,16 +269,16 @@ public interface JNINativeInterface extends PointerBase {
     void setCallObjectMethodV(CFunctionPointer p);
 
     @CField
-    CallObjectMethodAFunctionPointer getCallObjectMethodA();
+    CFunctionPointer getCallObjectMethodA();
 
     @CField
-    void setCallObjectMethodA(CallObjectMethodAFunctionPointer p);
+    void setCallObjectMethodA(CFunctionPointer p);
 
     @CField
-    CFunctionPointer getCallBooleanMethod();
+    <T extends CallBooleanMethodFunctionPointer> T getCallBooleanMethod();
 
     @CField
-    void setCallBooleanMethod(CFunctionPointer p);
+    void setCallBooleanMethod(CallBooleanMethodFunctionPointer p);
 
     @CField
     CFunctionPointer getCallBooleanMethodV();
@@ -289,10 +287,10 @@ public interface JNINativeInterface extends PointerBase {
     void setCallBooleanMethodV(CFunctionPointer p);
 
     @CField
-    CallBooleanMethodAFunctionPointer getCallBooleanMethodA();
+    CFunctionPointer getCallBooleanMethodA();
 
     @CField
-    void setCallBooleanMethodA(CallBooleanMethodAFunctionPointer p);
+    void setCallBooleanMethodA(CFunctionPointer p);
 
     @CField
     CFunctionPointer getCallByteMethod();
@@ -367,10 +365,10 @@ public interface JNINativeInterface extends PointerBase {
     void setCallIntMethodA(CFunctionPointer p);
 
     @CField
-    CFunctionPointer getCallLongMethod();
+    <T extends CallLongMethodFunctionPointer> T getCallLongMethod();
 
     @CField
-    void setCallLongMethod(CFunctionPointer p);
+    void setCallLongMethod(CallLongMethodFunctionPointer p);
 
     @CField
     CFunctionPointer getCallLongMethodV();
@@ -379,10 +377,10 @@ public interface JNINativeInterface extends PointerBase {
     void setCallLongMethodV(CFunctionPointer p);
 
     @CField
-    CallLongMethodAFunctionPointer getCallLongMethodA();
+    CFunctionPointer getCallLongMethodA();
 
     @CField
-    void setCallLongMethodA(CallLongMethodAFunctionPointer p);
+    void setCallLongMethodA(CFunctionPointer p);
 
     @CField
     CFunctionPointer getCallFloatMethod();
@@ -733,16 +731,16 @@ public interface JNINativeInterface extends PointerBase {
     void setSetDoubleField(CFunctionPointer p);
 
     @CField
-    GetMethodIDFunctionPointer getGetStaticMethodID();
+    GetMemberIDFunctionPointer getGetStaticMethodID();
 
     @CField
-    void setGetStaticMethodID(GetMethodIDFunctionPointer p);
+    void setGetStaticMethodID(GetMemberIDFunctionPointer p);
 
     @CField
-    CFunctionPointer getCallStaticObjectMethod();
+    <T extends CallObjectMethodFunctionPointer> T getCallStaticObjectMethod();
 
     @CField
-    void setCallStaticObjectMethod(CFunctionPointer p);
+    void setCallStaticObjectMethod(CallObjectMethodFunctionPointer p);
 
     @CField
     CFunctionPointer getCallStaticObjectMethodV();
@@ -751,10 +749,10 @@ public interface JNINativeInterface extends PointerBase {
     void setCallStaticObjectMethodV(CFunctionPointer p);
 
     @CField
-    CallObjectMethodAFunctionPointer getCallStaticObjectMethodA();
+    CFunctionPointer getCallStaticObjectMethodA();
 
     @CField
-    void setCallStaticObjectMethodA(CallObjectMethodAFunctionPointer p);
+    void setCallStaticObjectMethodA(CFunctionPointer p);
 
     @CField
     CFunctionPointer getCallStaticBooleanMethod();
@@ -769,10 +767,10 @@ public interface JNINativeInterface extends PointerBase {
     void setCallStaticBooleanMethodV(CFunctionPointer p);
 
     @CField
-    CallBooleanMethodAFunctionPointer getCallStaticBooleanMethodA();
+    CFunctionPointer getCallStaticBooleanMethodA();
 
     @CField
-    void setCallStaticBooleanMethodA(CallBooleanMethodAFunctionPointer p);
+    void setCallStaticBooleanMethodA(CFunctionPointer p);
 
     @CField
     CFunctionPointer getCallStaticByteMethod();
@@ -859,10 +857,10 @@ public interface JNINativeInterface extends PointerBase {
     void setCallStaticLongMethodV(CFunctionPointer p);
 
     @CField
-    CallLongMethodAFunctionPointer getCallStaticLongMethodA();
+    CFunctionPointer getCallStaticLongMethodA();
 
     @CField
-    void setCallStaticLongMethodA(CallLongMethodAFunctionPointer p);
+    void setCallStaticLongMethodA(CFunctionPointer p);
 
     @CField
     CFunctionPointer getCallStaticFloatMethod();
@@ -1057,10 +1055,10 @@ public interface JNINativeInterface extends PointerBase {
     void setReleaseStringChars(CFunctionPointer p);
 
     @CField
-    NewStringUTFFunctionPointer getNewStringUTF();
+    CFunctionPointer getNewStringUTF();
 
     @CField
-    void setNewStringUTF(NewStringUTFFunctionPointer p);
+    void setNewStringUTF(CFunctionPointer p);
 
     @CField
     CFunctionPointer getGetStringUTFLength();

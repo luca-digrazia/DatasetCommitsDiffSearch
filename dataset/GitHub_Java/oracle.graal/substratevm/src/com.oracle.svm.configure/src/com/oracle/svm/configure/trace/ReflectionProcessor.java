@@ -97,7 +97,6 @@ class ReflectionProcessor extends AbstractProcessor {
         boolean unsafeAccess = false;
         String clazzOrDeclaringClass = entry.containsKey("declaring_class") ? (String) entry.get("declaring_class") : clazz;
         switch (function) {
-            case "loadClass":
             case "forName": {
                 assert clazz.equals("java.lang.Class");
                 expectSize(args, 1);
