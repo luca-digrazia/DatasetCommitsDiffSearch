@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,9 +35,10 @@ import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.gen.NodeMatchRules;
 import org.graalvm.compiler.core.match.MatchRuleRegistry;
 import org.graalvm.compiler.core.match.MatchStatement;
+import org.graalvm.compiler.core.phases.CommunityCompilerConfiguration;
+import org.graalvm.compiler.core.phases.EconomyCompilerConfiguration;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.hotspot.CommunityCompilerConfigurationFactory;
-import org.graalvm.compiler.lir.phases.LIRSuites;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.spi.LoweringProvider;
 import org.graalvm.compiler.options.OptionValues;
@@ -53,7 +54,6 @@ import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.code.SubstrateBackend;
 import com.oracle.svm.core.graal.code.SubstrateBackendFactory;
 import com.oracle.svm.core.graal.code.SubstrateLoweringProviderFactory;
-import com.oracle.svm.core.graal.code.SubstrateSuitesCreatorProvider;
 import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.aarch64.AArch64;
@@ -80,19 +80,11 @@ public class GraalConfiguration {
     }
 
     public Suites createSuites(OptionValues options, @SuppressWarnings("unused") boolean hosted) {
-        return ImageSingletons.lookup(SubstrateSuitesCreatorProvider.class).getSuitesCreator().createSuites(options);
+        return Suites.createSuites(new CommunityCompilerConfiguration(), options);
     }
 
     public Suites createFirstTierSuites(OptionValues options, @SuppressWarnings("unused") boolean hosted) {
-        return ImageSingletons.lookup(SubstrateSuitesCreatorProvider.class).getFirstTierSuitesCreator().createSuites(options);
-    }
-
-    public LIRSuites createLIRSuites(OptionValues options) {
-        return ImageSingletons.lookup(SubstrateSuitesCreatorProvider.class).getSuitesCreator().createLIRSuites(options);
-    }
-
-    public LIRSuites createFirstTierLIRSuites(OptionValues options) {
-        return ImageSingletons.lookup(SubstrateSuitesCreatorProvider.class).getFirstTierSuitesCreator().createLIRSuites(options);
+        return Suites.createSuites(new EconomyCompilerConfiguration(), options);
     }
 
     public String getCompilerConfigurationName() {
@@ -129,7 +121,8 @@ public class GraalConfiguration {
      * Returns a {@link ListIterator} at the position of the last inlining phase or null if no
      * inlining phases were created.
      */
-    public ListIterator<BasePhase<? super HighTierContext>> createHostedInliners(@SuppressWarnings("unused") PhaseSuite<HighTierContext> highTier) {
+    public ListIterator<BasePhase<? super HighTierContext>> createHostedInliners(@SuppressWarnings("unused") PhaseSuite<HighTierContext> highTier,
+                    @SuppressWarnings("unused") boolean requiresPostParseCanonicalization) {
         return null;
     }
 }
