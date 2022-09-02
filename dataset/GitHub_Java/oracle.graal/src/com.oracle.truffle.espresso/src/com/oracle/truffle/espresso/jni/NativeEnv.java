@@ -137,7 +137,6 @@ public abstract class NativeEnv {
         return fromUTF8Ptr(interopAsPointer(interopPtr));
     }
 
-    @TruffleBoundary
     protected static ByteBuffer directByteBuffer(@Pointer TruffleObject addressPtr, long capacity) {
         ByteBuffer buffer = null;
         try {

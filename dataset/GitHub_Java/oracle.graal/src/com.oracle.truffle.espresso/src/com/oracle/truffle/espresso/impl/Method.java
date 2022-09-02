@@ -120,6 +120,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     private final ExceptionsAttribute exceptionsAttribute;
 
     @CompilationFinal private int refKind;
+    @CompilationFinal //
+    private volatile CallTarget callTarget;
 
     @CompilationFinal(dimensions = 1) //
     private ObjectKlass[] checkedExceptions;
