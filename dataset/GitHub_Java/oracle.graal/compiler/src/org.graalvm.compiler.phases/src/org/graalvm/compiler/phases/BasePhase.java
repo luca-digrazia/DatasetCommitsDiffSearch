@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,16 +24,18 @@
  */
 package org.graalvm.compiler.phases;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
-import org.graalvm.compiler.debug.Debug;
-import org.graalvm.compiler.debug.Debug.Scope;
+import org.graalvm.collections.EconomicMap;
+import org.graalvm.compiler.debug.CounterKey;
 import org.graalvm.compiler.debug.DebugCloseable;
-import org.graalvm.compiler.debug.DebugCounter;
-import org.graalvm.compiler.debug.DebugMemUseTracker;
-import org.graalvm.compiler.debug.DebugTimer;
-import org.graalvm.compiler.debug.Fingerprint;
-import org.graalvm.compiler.debug.GraalDebugConfig;
+import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugContext.CompilerPhaseScope;
+import org.graalvm.compiler.debug.DebugOptions;
+import org.graalvm.compiler.debug.MemUseTrackerKey;
+import org.graalvm.compiler.debug.MethodFilter;
+import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.graph.Graph;
 import org.graalvm.compiler.graph.Graph.Mark;
 import org.graalvm.compiler.graph.Graph.NodeEvent;
@@ -46,6 +50,8 @@ import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.contract.NodeCostUtil;
 import org.graalvm.compiler.phases.contract.PhaseSizeContract;
 
+import jdk.vm.ci.meta.JavaMethod;
+
 /**
  * Base class for all compiler phases. Subclasses should be stateless. There will be one global
  * instance for each compiler phase that is shared for all compilations. VM-, target- and
@@ -57,29 +63,31 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         // @formatter:off
         @Option(help = "Verify before - after relation of the relative, computed, code size of a graph", type = OptionType.Debug)
         public static final OptionKey<Boolean> VerifyGraalPhasesSize = new OptionKey<>(false);
+        @Option(help = "Exclude certain phases from compilation, either unconditionally or with a method filter", type = OptionType.Debug)
+        public static final OptionKey<String> CompilationExcludePhases = new OptionKey<>(null);
         // @formatter:on
     }
 
     /**
      * Records time spent in {@link #apply(StructuredGraph, Object, boolean)}.
      */
-    private final DebugTimer timer;
+    private final TimerKey timer;
 
     /**
      * Counts calls to {@link #apply(StructuredGraph, Object, boolean)}.
      */
-    private final DebugCounter executionCount;
+    private final CounterKey executionCount;
 
     /**
      * Accumulates the {@linkplain Graph#getNodeCount() live node count} of all graphs sent to
      * {@link #apply(StructuredGraph, Object, boolean)}.
      */
-    private final DebugCounter inputNodesCount;
+    private final CounterKey inputNodesCount;
 
     /**
      * Records memory usage within {@link #apply(StructuredGraph, Object, boolean)}.
      */
-    private final DebugMemUseTracker memUseTracker;
+    private final MemUseTrackerKey memUseTracker;
 
     /** Lazy initialization to create pattern only when assertions are enabled. */
     static class NamePatternHolder {
@@ -88,31 +96,31 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
 
     public static class BasePhaseStatistics {
         /**
-         * Records time spent in {@link #apply(StructuredGraph, Object, boolean)}.
+         * Records time spent in {@link BasePhase#apply(StructuredGraph, Object, boolean)}.
          */
-        private final DebugTimer timer;
+        private final TimerKey timer;
 
         /**
-         * Counts calls to {@link #apply(StructuredGraph, Object, boolean)}.
+         * Counts calls to {@link BasePhase#apply(StructuredGraph, Object, boolean)}.
          */
-        private final DebugCounter executionCount;
+        private final CounterKey executionCount;
 
         /**
          * Accumulates the {@linkplain Graph#getNodeCount() live node count} of all graphs sent to
-         * {@link #apply(StructuredGraph, Object, boolean)}.
+         * {@link BasePhase#apply(StructuredGraph, Object, boolean)}.
          */
-        private final DebugCounter inputNodesCount;
+        private final CounterKey inputNodesCount;
 
         /**
-         * Records memory usage within {@link #apply(StructuredGraph, Object, boolean)}.
+         * Records memory usage within {@link BasePhase#apply(StructuredGraph, Object, boolean)}.
          */
-        private final DebugMemUseTracker memUseTracker;
+        private final MemUseTrackerKey memUseTracker;
 
         public BasePhaseStatistics(Class<?> clazz) {
-            timer = Debug.timer("PhaseTime_%s", clazz);
-            executionCount = Debug.counter("PhaseCount_%s", clazz);
-            memUseTracker = Debug.memUseTracker("PhaseMemUse_%s", clazz);
-            inputNodesCount = Debug.counter("PhaseNodes_%s", clazz);
+            timer = DebugContext.timer("PhaseTime_%s", clazz).doc("Time spent in phase.");
+            executionCount = DebugContext.counter("PhaseCount_%s", clazz).doc("Number of phase executions.");
+            memUseTracker = DebugContext.memUseTracker("PhaseMemUse_%s", clazz).doc("Memory allocated in phase.");
+            inputNodesCount = DebugContext.counter("PhaseNodes_%s", clazz).doc("Number of nodes input to phase.");
         }
     }
 
@@ -139,8 +147,8 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         apply(graph, context, true);
     }
 
-    private BasePhase<?> getEnclosingPhase() {
-        for (Object c : Debug.context()) {
+    private BasePhase<?> getEnclosingPhase(DebugContext debug) {
+        for (Object c : debug.context()) {
             if (c != this && c instanceof BasePhase) {
                 if (!(c instanceof PhaseSuite)) {
                     return (BasePhase<?>) c;
@@ -151,25 +159,42 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     }
 
     private boolean dumpBefore(final StructuredGraph graph, final C context, boolean isTopLevel) {
-        if (isTopLevel && Debug.isDumpEnabled(Debug.VERBOSE_LEVEL)) {
-            Debug.dump(Debug.VERBOSE_LEVEL, graph, "Before phase %s", getName());
-        } else if (!isTopLevel && Debug.isDumpEnabled(Debug.VERBOSE_LEVEL + 1)) {
-            Debug.dump(Debug.VERBOSE_LEVEL + 1, graph, "Before subphase %s", getName());
-        } else if (Debug.isDumpEnabled(Debug.ENABLED_LEVEL) && shouldDump(graph, context)) {
-            Debug.dump(Debug.ENABLED_LEVEL, graph, "Before %s %s", isTopLevel ? "phase" : "subphase", getName());
+        DebugContext debug = graph.getDebug();
+        if (isTopLevel && (debug.isDumpEnabled(DebugContext.VERBOSE_LEVEL) || shouldDumpBeforeAtBasicLevel() && debug.isDumpEnabled(DebugContext.BASIC_LEVEL))) {
+            if (shouldDumpBeforeAtBasicLevel()) {
+                debug.dump(DebugContext.BASIC_LEVEL, graph, "Before phase %s", getName());
+            } else {
+                debug.dump(DebugContext.VERBOSE_LEVEL, graph, "Before phase %s", getName());
+            }
+        } else if (!isTopLevel && debug.isDumpEnabled(DebugContext.VERBOSE_LEVEL + 1)) {
+            debug.dump(DebugContext.VERBOSE_LEVEL + 1, graph, "Before subphase %s", getName());
+        } else if (debug.isDumpEnabled(DebugContext.ENABLED_LEVEL) && shouldDump(graph, context)) {
+            debug.dump(DebugContext.ENABLED_LEVEL, graph, "Before %s %s", isTopLevel ? "phase" : "subphase", getName());
             return true;
         }
         return false;
     }
 
-    protected boolean isInliningPhase() {
+    protected boolean shouldDumpBeforeAtBasicLevel() {
+        return false;
+    }
+
+    protected boolean shouldDumpAfterAtBasicLevel() {
         return false;
     }
 
     @SuppressWarnings("try")
     protected final void apply(final StructuredGraph graph, final C context, final boolean dumpGraph) {
-        graph.checkCancellation();
-        try (DebugCloseable a = timer.start(); Scope s = Debug.scope(getClass(), this); DebugCloseable c = memUseTracker.start()) {
+        if (ExcludePhaseFilter.exclude(graph.getOptions(), this, graph.asJavaMethod())) {
+            return;
+        }
+
+        DebugContext debug = graph.getDebug();
+        try (CompilerPhaseScope cps = getClass() != PhaseSuite.class ? debug.enterCompilerPhase(getName()) : null;
+                        DebugCloseable a = timer.start(debug);
+                        DebugContext.Scope s = debug.scope(getClass(), this);
+                        DebugCloseable c = memUseTracker.start(debug);) {
+
             int sizeBefore = 0;
             Mark before = null;
             OptionValues options = graph.getOptions();
@@ -178,14 +203,14 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
                 sizeBefore = NodeCostUtil.computeGraphSize(graph);
                 before = graph.getMark();
             }
-            boolean isTopLevel = getEnclosingPhase() == null;
+            boolean isTopLevel = getEnclosingPhase(graph.getDebug()) == null;
             boolean dumpedBefore = false;
-            if (dumpGraph && Debug.isEnabled()) {
+            if (dumpGraph && debug.areScopesEnabled()) {
                 dumpedBefore = dumpBefore(graph, context, isTopLevel);
             }
-            inputNodesCount.add(graph.getNodeCount());
+            inputNodesCount.add(debug, graph.getNodeCount());
             this.run(graph, context);
-            executionCount.increment();
+            executionCount.increment(debug);
             if (verifySizeContract) {
                 if (!before.isCurrent()) {
                     int sizeAfter = NodeCostUtil.computeGraphSize(graph);
@@ -193,58 +218,56 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
                 }
             }
 
-            if (dumpGraph && Debug.isEnabled()) {
+            if (dumpGraph && debug.areScopesEnabled()) {
                 dumpAfter(graph, isTopLevel, dumpedBefore);
             }
-            if (Fingerprint.ENABLED) {
-                String graphDesc = graph.method() == null ? graph.name : graph.method().format("%H.%n(%p)");
-                Fingerprint.submit("After phase %s nodes in %s are %s", getName(), graphDesc, graph.getNodes().snapshot());
-            }
-            if (Debug.isVerifyEnabled()) {
-                Debug.verify(graph, "%s", getName());
+            if (debug.isVerifyEnabled()) {
+                debug.verify(graph, "%s", getName());
             }
             assert graph.verify();
         } catch (Throwable t) {
-            throw Debug.handle(t);
+            throw debug.handle(t);
         }
     }
 
     private void dumpAfter(final StructuredGraph graph, boolean isTopLevel, boolean dumpedBefore) {
         boolean dumped = false;
+        DebugContext debug = graph.getDebug();
         if (isTopLevel) {
-            if (isInliningPhase()) {
-                if (Debug.isDumpEnabled(Debug.BASIC_LEVEL)) {
-                    Debug.dump(Debug.BASIC_LEVEL, graph, "After phase %s", getName());
+            if (shouldDumpAfterAtBasicLevel()) {
+                if (debug.isDumpEnabled(DebugContext.BASIC_LEVEL)) {
+                    debug.dump(DebugContext.BASIC_LEVEL, graph, "After phase %s", getName());
                     dumped = true;
                 }
             } else {
-                if (Debug.isDumpEnabled(Debug.INFO_LEVEL)) {
-                    Debug.dump(Debug.INFO_LEVEL, graph, "After phase %s", getName());
+                if (debug.isDumpEnabled(DebugContext.INFO_LEVEL)) {
+                    debug.dump(DebugContext.INFO_LEVEL, graph, "After phase %s", getName());
                     dumped = true;
                 }
             }
         } else {
-            if (Debug.isDumpEnabled(Debug.INFO_LEVEL + 1)) {
-                Debug.dump(Debug.INFO_LEVEL + 1, graph, "After phase %s", getName());
+            if (debug.isDumpEnabled(DebugContext.INFO_LEVEL + 1)) {
+                debug.dump(DebugContext.INFO_LEVEL + 1, graph, "After subphase %s", getName());
                 dumped = true;
             }
         }
-        if (!dumped && Debug.isDumpEnabled(Debug.ENABLED_LEVEL) && dumpedBefore) {
-            Debug.dump(Debug.ENABLED_LEVEL, graph, "After %s %s", isTopLevel ? "phase" : "subphase", getName());
+        if (!dumped && debug.isDumpEnabled(DebugContext.ENABLED_LEVEL) && dumpedBefore) {
+            debug.dump(DebugContext.ENABLED_LEVEL, graph, "After %s %s", isTopLevel ? "phase" : "subphase", getName());
         }
     }
 
     @SuppressWarnings("try")
     private boolean shouldDump(StructuredGraph graph, C context) {
-        String phaseChange = GraalDebugConfig.Options.DumpOnPhaseChange.getValue(graph.getOptions());
-        if (phaseChange != null && getClass().getSimpleName().contains(phaseChange)) {
-            StructuredGraph graphCopy = (StructuredGraph) graph.copy();
+        DebugContext debug = graph.getDebug();
+        String phaseChange = DebugOptions.DumpOnPhaseChange.getValue(graph.getOptions());
+        if (phaseChange != null && Pattern.matches(phaseChange, getClass().getSimpleName())) {
+            StructuredGraph graphCopy = (StructuredGraph) graph.copy(graph.getDebug());
             GraphChangeListener listener = new GraphChangeListener(graphCopy);
             try (NodeEventScope s = graphCopy.trackNodeEvents(listener)) {
-                try (Scope s2 = Debug.sandbox("GraphChangeListener", null)) {
+                try (DebugContext.Scope s2 = debug.sandbox("GraphChangeListener", null)) {
                     run(graphCopy, context);
                 } catch (Throwable t) {
-                    Debug.handle(t);
+                    debug.handle(t);
                 }
             }
             return listener.changed;
@@ -252,7 +275,7 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         return false;
     }
 
-    private final class GraphChangeListener implements NodeEventListener {
+    private static final class GraphChangeListener extends NodeEventListener {
         boolean changed;
         private StructuredGraph graph;
         private Mark mark;
@@ -263,7 +286,7 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
         }
 
         @Override
-        public void event(NodeEvent e, Node node) {
+        public void changed(NodeEvent e, Node node) {
             if (!graph.isNew(mark, node) && node.isAlive()) {
                 if (e == NodeEvent.INPUT_CHANGED || e == NodeEvent.ZERO_USAGES) {
                     changed = true;
@@ -273,28 +296,104 @@ public abstract class BasePhase<C> implements PhaseSizeContract {
     }
 
     protected CharSequence getName() {
-        String className = BasePhase.this.getClass().getName();
-        String s = className.substring(className.lastIndexOf(".") + 1); // strip the package name
-        int innerClassPos = s.indexOf('$');
-        if (innerClassPos > 0) {
-            /* Remove inner class name. */
-            s = s.substring(0, innerClassPos);
-        }
-        if (s.endsWith("Phase")) {
-            s = s.substring(0, s.length() - "Phase".length());
-        }
-        return s;
+        return new ClassTypeSequence(BasePhase.this.getClass());
     }
 
     protected abstract void run(StructuredGraph graph, C context);
 
     @Override
     public String contractorName() {
-        return (String) getName();
+        return getName().toString();
     }
 
     @Override
     public float codeSizeIncrease() {
         return 1.25f;
+    }
+
+    private static final class ExcludePhaseFilter {
+
+        /**
+         * Contains the excluded phases and the corresponding methods to exclude.
+         */
+        private EconomicMap<Pattern, MethodFilter> filters;
+
+        /**
+         * Cache instances of this class to avoid parsing the same option string more than once.
+         */
+        private static ConcurrentHashMap<String, ExcludePhaseFilter> instances;
+
+        static {
+            instances = new ConcurrentHashMap<>();
+        }
+
+        /**
+         * Determines whether the phase should be excluded from running on the given method based on
+         * the given option values.
+         */
+        protected static boolean exclude(OptionValues options, BasePhase<?> phase, JavaMethod method) {
+            String compilationExcludePhases = PhaseOptions.CompilationExcludePhases.getValue(options);
+            if (compilationExcludePhases == null) {
+                return false;
+            } else {
+                return getInstance(compilationExcludePhases).exclude(phase, method);
+            }
+        }
+
+        /**
+         * Gets an instance of this class for the given option values. This will typically be a
+         * cached instance.
+         */
+        private static ExcludePhaseFilter getInstance(String compilationExcludePhases) {
+            return instances.computeIfAbsent(compilationExcludePhases, excludePhases -> ExcludePhaseFilter.parse(excludePhases));
+        }
+
+        /**
+         * Determines whether the given phase should be excluded from running on the given method.
+         */
+        protected boolean exclude(BasePhase<?> phase, JavaMethod method) {
+            if (method == null) {
+                return false;
+            }
+            String phaseName = phase.getClass().getSimpleName();
+            for (Pattern excludedPhase : filters.getKeys()) {
+                if (excludedPhase.matcher(phaseName).matches()) {
+                    return filters.get(excludedPhase).matches(method);
+                }
+            }
+            return false;
+        }
+
+        /**
+         * Creates a phase filter based on a specification string. The string is a colon-separated
+         * list of phase names or {@code phase_name=filter} pairs. Phase names match any phase of
+         * which they are a substring. Filters follow {@link MethodFilter} syntax.
+         */
+        private static ExcludePhaseFilter parse(String compilationExcludePhases) {
+            EconomicMap<Pattern, MethodFilter> filters = EconomicMap.create();
+            String[] parts = compilationExcludePhases.trim().split(":");
+            for (String part : parts) {
+                String phaseName;
+                MethodFilter methodFilter;
+                if (part.contains("=")) {
+                    String[] pair = part.split("=");
+                    if (pair.length != 2) {
+                        throw new IllegalArgumentException("expected phase_name=filter pair in: " + part);
+                    }
+                    phaseName = pair[0];
+                    methodFilter = MethodFilter.parse(pair[1]);
+                } else {
+                    phaseName = part;
+                    methodFilter = MethodFilter.matchAll();
+                }
+                Pattern phasePattern = Pattern.compile(".*" + MethodFilter.createGlobString(phaseName) + ".*");
+                filters.put(phasePattern, methodFilter);
+            }
+            return new ExcludePhaseFilter(filters);
+        }
+
+        private ExcludePhaseFilter(EconomicMap<Pattern, MethodFilter> filters) {
+            this.filters = filters;
+        }
     }
 }
