@@ -29,6 +29,7 @@
  */
 package com.oracle.truffle.wasm.utils;
 
+import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -94,9 +95,9 @@ public final class WasmInitialization implements Consumer<WasmContext>, TruffleO
                 final long value = getValue(valueGlobal);
                 // The memory array writes are indexed with 64-bit words.
                 // Therefore, we need to divide the byte-based address index with 8.
-                memory.store_i64(address, value);
+                memory.writeArrayElement(address / 8, value);
             }
-        } catch (UnknownIdentifierException | UnsupportedMessageException e) {
+        } catch (UnknownIdentifierException | UnsupportedMessageException | InvalidArrayIndexException e) {
             throw new RuntimeException(e);
         }
     }
