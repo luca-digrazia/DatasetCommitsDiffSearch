@@ -47,7 +47,7 @@ public final class LLVMGlobal extends LLVMSymbol {
     private final boolean readOnly;
     public static final LLVMGlobal[] EMPTY = {};
 
-    private final String name;
+    @CompilationFinal private String name;
     @CompilationFinal private PointerType type;
     @CompilationFinal private boolean interopTypeCached;
     @CompilationFinal private LLVMInteropType interopType;

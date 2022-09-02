@@ -29,14 +29,9 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.api.Assumption;
-import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.Function;
-import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionCode.UnresolvedFunction;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
 /**
@@ -45,37 +40,18 @@ import com.oracle.truffle.llvm.runtime.types.FunctionType;
  */
 public final class LLVMFunction extends LLVMSymbol {
 
-    public static final LLVMFunction[] EMPTY = {};
-
     private final FunctionType type;
     private final Function function;
-    private final String path;
-    private LLVMSourceLocation sourceLocation;
+    public static final LLVMFunction[] EMPTY = {};
 
-    private final Assumption fixedCodeAssumption = Truffle.getRuntime().createAssumption();
-    @CompilationFinal private LLVMFunctionCode fixedCode;
-
-    public static LLVMFunction create(String name, Function function, FunctionType type, int bitcodeID, int symbolIndex, boolean exported, String path) {
-        return new LLVMFunction(name, function, type, bitcodeID, symbolIndex, exported, path);
+    public static LLVMFunction create(String name, ExternalLibrary library, Function function, FunctionType type, int bitcodeID, int symbolIndex, boolean exported) {
+        return new LLVMFunction(name, library, function, type, bitcodeID, symbolIndex, exported);
     }
 
-    public LLVMFunction(String name, Function function, FunctionType type, int bitcodeID, int symbolIndex, boolean exported, String path) {
-        super(name, bitcodeID, symbolIndex, exported);
+    public LLVMFunction(String name, ExternalLibrary library, Function function, FunctionType type, int bitcodeID, int symbolIndex, boolean exported) {
+        super(name, library, bitcodeID, symbolIndex, exported);
         this.type = type;
         this.function = function;
-        this.path = path;
-    }
-
-    public final LLVMSourceLocation getSourceLocation() {
-        return sourceLocation;
-    }
-
-    public final void setSourceLocation(LLVMSourceLocation sourceLocation) {
-        this.sourceLocation = sourceLocation;
-    }
-
-    public String getStringPath() {
-        return path;
     }
 
     public FunctionType getType() {
@@ -84,6 +60,11 @@ public final class LLVMFunction extends LLVMSymbol {
 
     public Function getFunction() {
         return function;
+    }
+
+    @Override
+    public boolean isDefined() {
+        return !(getFunction() instanceof UnresolvedFunction);
     }
 
     @Override
@@ -111,31 +92,4 @@ public final class LLVMFunction extends LLVMSymbol {
         throw new IllegalStateException("Function " + getName() + " is not a global variable.");
     }
 
-    public Assumption getFixedCodeAssumption() {
-        return fixedCodeAssumption;
-    }
-
-    public LLVMFunctionCode getFixedCode() {
-        return fixedCode;
-    }
-
-    public void setValue(LLVMPointer pointer) {
-        if (fixedCodeAssumption.isValid()) {
-            if (LLVMManagedPointer.isInstance(pointer)) {
-                Object value = LLVMManagedPointer.cast(pointer).getObject();
-                if (value instanceof LLVMFunctionDescriptor) {
-                    LLVMFunctionDescriptor descriptor = (LLVMFunctionDescriptor) value;
-                    LLVMFunctionCode code = descriptor.getFunctionCode();
-                    if (fixedCode == null) {
-                        fixedCode = code;
-                        return;
-                    } else if (fixedCode == code) {
-                        return;
-                    }
-                }
-            }
-            fixedCode = null;
-            fixedCodeAssumption.invalidate();
-        }
-    }
 }
