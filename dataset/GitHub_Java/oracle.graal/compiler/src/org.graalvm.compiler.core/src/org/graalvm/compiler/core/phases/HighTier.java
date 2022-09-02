@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,40 +25,40 @@
 package org.graalvm.compiler.core.phases;
 
 import static org.graalvm.compiler.core.common.GraalOptions.ConditionalElimination;
-import static org.graalvm.compiler.core.common.GraalOptions.FullUnroll;
-import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
 import static org.graalvm.compiler.core.common.GraalOptions.LoopPeeling;
 import static org.graalvm.compiler.core.common.GraalOptions.LoopUnswitch;
 import static org.graalvm.compiler.core.common.GraalOptions.OptConvertDeoptsToGuards;
-import static org.graalvm.compiler.core.common.GraalOptions.OptLoopTransform;
 import static org.graalvm.compiler.core.common.GraalOptions.OptReadElimination;
 import static org.graalvm.compiler.core.common.GraalOptions.PartialEscapeAnalysis;
 import static org.graalvm.compiler.phases.common.DeadCodeEliminationPhase.Optionality.Optional;
 
-import org.graalvm.compiler.loop.DefaultLoopPolicies;
-import org.graalvm.compiler.loop.LoopPolicies;
+import org.graalvm.compiler.loop.phases.ConvertDeoptimizeToGuardPhase;
 import org.graalvm.compiler.loop.phases.LoopFullUnrollPhase;
 import org.graalvm.compiler.loop.phases.LoopPeelingPhase;
 import org.graalvm.compiler.loop.phases.LoopUnswitchingPhase;
+import org.graalvm.compiler.nodes.loop.DefaultLoopPolicies;
+import org.graalvm.compiler.nodes.loop.LoopPolicies;
 import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.compiler.phases.PhaseSuite;
+import org.graalvm.compiler.phases.common.BoxNodeIdentityPhase;
+import org.graalvm.compiler.phases.common.BoxNodeOptimizationPhase;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
-import org.graalvm.compiler.phases.common.ConvertDeoptimizeToGuardPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
+import org.graalvm.compiler.phases.common.DisableOverflownCountedLoopsPhase;
 import org.graalvm.compiler.phases.common.IncrementalCanonicalizerPhase;
 import org.graalvm.compiler.phases.common.IterativeConditionalEliminationPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
-import org.graalvm.compiler.phases.common.RemoveValueProxyPhase;
+import org.graalvm.compiler.phases.common.NodeCounterPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningPhase;
+import org.graalvm.compiler.phases.common.inlining.policy.GreedyInliningPolicy;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
-import org.graalvm.compiler.virtual.phases.ea.EarlyReadEliminationPhase;
+import org.graalvm.compiler.virtual.phases.ea.ReadEliminationPhase;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
 
-public class HighTier extends PhaseSuite<HighTierContext> {
+public class HighTier extends BaseTier<HighTierContext> {
 
     public static class Options {
 
@@ -67,16 +69,22 @@ public class HighTier extends PhaseSuite<HighTierContext> {
     }
 
     public HighTier(OptionValues options) {
-        CanonicalizerPhase canonicalizer = new CanonicalizerPhase();
-        if (ImmutableCode.getValue(options)) {
-            canonicalizer.disableReadCanonicalization();
-        }
-
+        CanonicalizerPhase canonicalizer = createCanonicalizerPhase(options);
         appendPhase(canonicalizer);
 
+        if (NodeCounterPhase.Options.NodeCounters.getValue(options)) {
+            appendPhase(new NodeCounterPhase(NodeCounterPhase.Stage.INIT));
+        }
+
         if (Options.Inline.getValue(options)) {
-            appendPhase(new InliningPhase(canonicalizer));
+            appendPhase(new InliningPhase(new GreedyInliningPolicy(null), canonicalizer));
             appendPhase(new DeadCodeEliminationPhase(Optional));
+        }
+
+        appendPhase(new DisableOverflownCountedLoopsPhase());
+
+        if (NodeCounterPhase.Options.NodeCounters.getValue(options)) {
+            appendPhase(new NodeCounterPhase(NodeCounterPhase.Stage.EARLY));
         }
 
         if (OptConvertDeoptsToGuards.getValue(options)) {
@@ -87,36 +95,39 @@ public class HighTier extends PhaseSuite<HighTierContext> {
             appendPhase(new IterativeConditionalEliminationPhase(canonicalizer, false));
         }
 
-        LoopPolicies loopPolicies = createLoopPolicies();
-        if (FullUnroll.getValue(options)) {
-            appendPhase(new LoopFullUnrollPhase(canonicalizer, loopPolicies));
+        LoopPolicies loopPolicies = createLoopPolicies(options);
+        appendPhase(new LoopFullUnrollPhase(canonicalizer, loopPolicies));
+
+        if (LoopPeeling.getValue(options)) {
+            appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new LoopPeelingPhase(loopPolicies)));
         }
 
-        if (OptLoopTransform.getValue(options)) {
-            if (LoopPeeling.getValue(options)) {
-                appendPhase(new LoopPeelingPhase(loopPolicies));
-            }
-            if (LoopUnswitch.getValue(options)) {
-                appendPhase(new LoopUnswitchingPhase(loopPolicies));
-            }
+        if (LoopUnswitch.getValue(options)) {
+            appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new LoopUnswitchingPhase(loopPolicies)));
         }
 
-        appendPhase(canonicalizer);
+        // Must precede all phases that otherwise ignore the identity of boxes (e.g.
+        // PartialEscapePhase and BoxNodeOptimizationPhase).
+        appendPhase(new BoxNodeIdentityPhase());
 
         if (PartialEscapeAnalysis.getValue(options)) {
-            appendPhase(new PartialEscapePhase(true, canonicalizer, options));
+            appendPhase(new PartialEscapePhase(true, canonicalizer, options).setFinalPEA());
         }
 
         if (OptReadElimination.getValue(options)) {
-            appendPhase(new EarlyReadEliminationPhase(canonicalizer));
+            appendPhase(new ReadEliminationPhase(canonicalizer));
         }
 
-        appendPhase(new RemoveValueProxyPhase());
+        if (NodeCounterPhase.Options.NodeCounters.getValue(options)) {
+            appendPhase(new NodeCounterPhase(NodeCounterPhase.Stage.LATE));
+        }
 
-        appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER));
+        appendPhase(new IncrementalCanonicalizerPhase<>(canonicalizer, new BoxNodeOptimizationPhase()));
+        appendPhase(new LoweringPhase(canonicalizer, LoweringTool.StandardLoweringStage.HIGH_TIER, true));
     }
 
-    public LoopPolicies createLoopPolicies() {
+    @Override
+    public LoopPolicies createLoopPolicies(OptionValues options) {
         return new DefaultLoopPolicies();
     }
 }
