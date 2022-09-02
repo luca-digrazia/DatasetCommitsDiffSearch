@@ -2402,7 +2402,7 @@ public class FlatNodeGenFactory {
             builder.tree(createFastPathExecuteChild(builder, originalFrameState, frameState, currentType, group, execution));
         }
 
-        if (needsAOTReset() && node.needsRewrites(context)) {
+        if (needsAOTReset()) {
             builder.startIf();
             builder.startStaticCall(ElementUtils.findMethod(types.CompilerDirectives, "inInterpreter")).end();
             builder.string(" && ");
