@@ -58,6 +58,7 @@ import com.oracle.truffle.llvm.runtime.debug.value.LLVMDebugObjectBuilder;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 public final class LLVMParser {
     private final Source source;
@@ -85,7 +86,7 @@ public final class LLVMParser {
         defineFunctions(module, definedFunctions, externalFunctions, importedSymbols, targetDataLayout);
         defineAliases(module.getAliases(), importedSymbols);
 
-        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, StackManager.createRootFrame(), GetStackSpaceFactory.createAllocaFactory(), targetDataLayout, false);
+        LLVMSymbolReadResolver symbolResolver = new LLVMSymbolReadResolver(runtime, StackManager.createRootFrame(), GetStackSpaceFactory.createAllocaFactory(), targetDataLayout);
         createDebugInfo(module, symbolResolver);
         return new LLVMParserResult(runtime, definedFunctions, externalFunctions, definedGlobals, externalGlobals, importedSymbols, targetDataLayout);
     }
@@ -254,18 +255,20 @@ public final class LLVMParser {
     }
 
     private void createDebugInfo(ModelModule model, LLVMSymbolReadResolver symbolResolver) {
-        final LLVMSourceContext sourceContext = context.getSourceContext();
+        if (context.getEnv().getOptions().get(SulongEngineOption.ENABLE_LVI)) {
+            final LLVMSourceContext sourceContext = context.getSourceContext();
 
-        model.getSourceGlobals().forEach((symbol, irValue) -> {
-            final LLVMExpressionNode node = symbolResolver.resolve(irValue);
-            final LLVMDebugObjectBuilder value = CommonNodeFactory.createDebugStaticValue(context, node, irValue instanceof GlobalVariable);
-            sourceContext.registerStatic(symbol, value);
-        });
+            model.getSourceGlobals().forEach((symbol, irValue) -> {
+                final LLVMExpressionNode node = symbolResolver.resolve(irValue);
+                final LLVMDebugObjectBuilder value = CommonNodeFactory.createDebugStaticValue(context, node, irValue instanceof GlobalVariable);
+                sourceContext.registerStatic(symbol, value);
+            });
 
-        model.getSourceStaticMembers().forEach(((type, symbol) -> {
-            final LLVMExpressionNode node = symbolResolver.resolve(symbol);
-            final LLVMDebugObjectBuilder value = CommonNodeFactory.createDebugStaticValue(context, node, symbol instanceof GlobalVariable);
-            type.setValue(value);
-        }));
+            model.getSourceStaticMembers().forEach(((type, symbol) -> {
+                final LLVMExpressionNode node = symbolResolver.resolve(symbol);
+                final LLVMDebugObjectBuilder value = CommonNodeFactory.createDebugStaticValue(context, node, symbol instanceof GlobalVariable);
+                type.setValue(value);
+            }));
+        }
     }
 }
