@@ -1467,8 +1467,9 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                 if (match("?")) {
                     emitSnippet("?");
                 }
-                else if (ch != '{' && match("+")) {
+                if (match("+")) {
                     bailOut("possessive quantifiers not supported");
+                    // TODO: Possessive quantifiers should not be allowed after range quantification.
                 }
                 lastTerm = TermCategory.Quantifier;
         }
