@@ -172,10 +172,7 @@ class LCOVPrinter {
     }
 
     private void printSourceName(SourceCoverage sourceCoverage) {
-        final String name = sourceCoverage.getSource().getName();
-        if (name != null) {
-            out.println(SOURCE_NAME + name);
-        }
+        out.println(SOURCE_NAME + sourceCoverage.getSource().getName());
     }
 
     private void printSourceFile(SourceCoverage sourceCoverage) {
