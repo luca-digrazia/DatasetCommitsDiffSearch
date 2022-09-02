@@ -33,7 +33,6 @@ import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -42,8 +41,8 @@ import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.java.BytecodeParser.BytecodeParserError;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugin;
-import org.graalvm.util.GuardedAnnotationAccess;
 
+import org.graalvm.util.GuardedAnnotationAccess;
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.graal.pointsto.constraints.UnsupportedFeatureException;
 import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
@@ -73,7 +72,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
     private final int id;
     private final ExceptionHandler[] exceptionHandlers;
     private final LocalVariableTable localVariableTable;
-    private final String qualifiedName;
     private MethodTypeFlow typeFlow;
 
     private boolean isRootMethod;
@@ -147,11 +145,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
                 throw GraalError.shouldNotReachHere(ex);
             }
         }
-        this.qualifiedName = format("%H.%n(%P)");
-    }
-
-    public String getQualifiedName() {
-        return qualifiedName;
     }
 
     private JavaType getCatchType(ExceptionHandler handler) {
@@ -179,7 +172,7 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
         implementationInvokedBy = null;
     }
 
-    public void startTrackInvocations() {
+    private void startTrackInvocations() {
         if (invokedBy == null) {
             invokedBy = new ConcurrentHashMap<>();
         }
@@ -242,10 +235,6 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
             result.add((AnalysisMethod) invoke.getSource().graph().method());
         }
         return result;
-    }
-
-    public Set<InvokeTypeFlow> getInvokeTypeFlows() {
-        return implementationInvokedBy.keySet();
     }
 
     public boolean isEntryPoint() {
@@ -390,9 +379,8 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider {
     @Override
     public boolean canBeStaticallyBound() {
         boolean result = wrapped.canBeStaticallyBound();
-        assert !isStatic() || result : "static methods must always be statically bindable: " + format("%H.%n");
+        assert !isStatic() || result : "static methods must always be statically bindable";
         return result;
-
     }
 
     public AnalysisMethod[] getImplementations() {
