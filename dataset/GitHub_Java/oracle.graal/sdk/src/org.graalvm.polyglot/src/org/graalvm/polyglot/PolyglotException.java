@@ -42,9 +42,8 @@ package org.graalvm.polyglot;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
-import java.time.Duration;
 
-import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractExceptionDispatch;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractExceptionImpl;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractStackFrameImpl;
 
 /**
@@ -85,14 +84,12 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractStackFrameImpl;
 @SuppressWarnings("serial")
 public final class PolyglotException extends RuntimeException {
 
-    final AbstractExceptionDispatch dispatch;
-    final Object receiver;
+    final AbstractExceptionImpl impl;
 
-    PolyglotException(String message, AbstractExceptionDispatch dispatch, Object receiver) {
+    PolyglotException(String message, AbstractExceptionImpl impl) {
         super(message);
-        this.dispatch = dispatch;
-        this.receiver = receiver;
-        dispatch.onCreate(receiver, this);
+        this.impl = impl;
+        impl.onCreate(this);
         // we need to materialize the stack if this exception is printed as cause of another error.
         // unfortunately we cannot detect this easily
         super.setStackTrace(getStackTrace());
@@ -105,7 +102,7 @@ public final class PolyglotException extends RuntimeException {
      */
     @Override
     public void printStackTrace() {
-        dispatch.printStackTrace(receiver, System.err);
+        impl.printStackTrace(System.err);
     }
 
     /**
@@ -116,7 +113,7 @@ public final class PolyglotException extends RuntimeException {
 
     @Override
     public void printStackTrace(PrintStream s) {
-        dispatch.printStackTrace(receiver, s);
+        impl.printStackTrace(s);
     }
 
     /**
@@ -126,7 +123,7 @@ public final class PolyglotException extends RuntimeException {
      */
     @Override
     public void printStackTrace(PrintWriter s) {
-        dispatch.printStackTrace(receiver, s);
+        impl.printStackTrace(s);
     }
 
     /**
@@ -150,7 +147,7 @@ public final class PolyglotException extends RuntimeException {
      */
     @Override
     public StackTraceElement[] getStackTrace() {
-        return dispatch.getStackTrace(receiver);
+        return impl.getStackTrace();
     }
 
     /**
@@ -162,7 +159,7 @@ public final class PolyglotException extends RuntimeException {
      */
     @Override
     public String getMessage() {
-        return dispatch.getMessage(receiver);
+        return impl.getMessage();
     }
 
     /**
@@ -172,7 +169,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public SourceSection getSourceLocation() {
-        return dispatch.getSourceLocation(receiver);
+        return impl.getSourceLocation();
     }
 
     /**
@@ -183,7 +180,7 @@ public final class PolyglotException extends RuntimeException {
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof PolyglotException) {
-            return receiver.equals(((PolyglotException) obj).receiver);
+            return impl.equals(((PolyglotException) obj).impl);
         }
         return false;
     }
@@ -195,7 +192,7 @@ public final class PolyglotException extends RuntimeException {
      */
     @Override
     public int hashCode() {
-        return receiver.hashCode();
+        return impl.hashCode();
     }
 
     /**
@@ -227,7 +224,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public Iterable<StackFrame> getPolyglotStackTrace() {
-        return dispatch.getPolyglotStackTrace(receiver);
+        return impl.getPolyglotStackTrace();
     }
 
     /**
@@ -238,7 +235,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public boolean isHostException() {
-        return dispatch.isHostException(receiver);
+        return impl.isHostException();
     }
 
     /**
@@ -249,7 +246,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public boolean isGuestException() {
-        return !dispatch.isHostException(receiver);
+        return !impl.isHostException();
     }
 
     /**
@@ -263,7 +260,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public Throwable asHostException() {
-        return dispatch.asHostException(receiver);
+        return impl.asHostException();
     }
 
     /**
@@ -275,7 +272,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public boolean isInternalError() {
-        return dispatch.isInternalError(receiver);
+        return impl.isInternalError();
     }
 
     /**
@@ -300,7 +297,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 20.2
      */
     public boolean isResourceExhausted() {
-        return dispatch.isResourceExhausted(receiver);
+        return impl.isResourceExhausted();
     }
 
     /**
@@ -312,18 +309,18 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public boolean isCancelled() {
-        return dispatch.isCancelled(receiver);
+        return impl.isCancelled();
     }
 
     /**
      * Returns <code>true</code> if the current application thread was interrupted by an
-     * {@link InterruptedException}, or by calling {@link Context#interrupt(Duration)} from the
-     * host.
+     * {@link InterruptedException}. {@link InterruptedException} from the host return
+     * <code>true</code> for interrupted.
      *
      * @since 20.3
      */
     public boolean isInterrupted() {
-        return dispatch.isInterrupted(receiver);
+        return impl.isInterrupted();
     }
 
     /**
@@ -334,7 +331,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public boolean isExit() {
-        return dispatch.isExit(receiver);
+        return impl.isExit();
     }
 
     /**
@@ -344,7 +341,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public boolean isSyntaxError() {
-        return dispatch.isSyntaxError(receiver);
+        return impl.isSyntaxError();
     }
 
     /**
@@ -363,7 +360,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public boolean isIncompleteSource() {
-        return dispatch.isIncompleteSource(receiver);
+        return impl.isIncompleteSource();
     }
 
     /**
@@ -373,7 +370,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public Value getGuestObject() {
-        return dispatch.getGuestObject(receiver);
+        return impl.getGuestObject();
     }
 
     /**
@@ -384,7 +381,7 @@ public final class PolyglotException extends RuntimeException {
      * @since 19.0
      */
     public int getExitStatus() {
-        return dispatch.getExitStatus(receiver);
+        return impl.getExitStatus();
     }
 
     /**
