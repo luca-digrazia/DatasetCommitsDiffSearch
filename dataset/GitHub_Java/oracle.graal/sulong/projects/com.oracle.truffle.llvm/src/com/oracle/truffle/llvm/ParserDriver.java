@@ -31,6 +31,7 @@ package com.oracle.truffle.llvm;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.FrameDescriptor;
@@ -59,7 +60,7 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionCode;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.LibraryLocator;
-import com.oracle.truffle.llvm.runtime.NativeContextExtension;
+import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.NodeFactory;
 import com.oracle.truffle.llvm.runtime.PlatformCapability;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
@@ -147,7 +148,7 @@ final class ParserDriver {
             TruffleFile file = createNativeTruffleFile(source.getName(), source.getPath());
             // An empty call target is returned for native libraries.
             if (file == null) {
-                return LLVMLanguage.createCallTarget(RootNode.createConstantNode(0));
+                return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
             }
             return createNativeLibraryCallTarget(file);
         }
@@ -168,8 +169,8 @@ final class ParserDriver {
 
     @TruffleBoundary
     private TruffleFile createNativeTruffleFile(String libName, String libPath) {
-        NativeContextExtension nativeContextExtension = context.getContextExtensionOrNull(NativeContextExtension.class);
-        if (nativeContextExtension != null) {
+        NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
+        if (nfiContextExtension != null) {
             TruffleFile file = DefaultLibraryLocator.INSTANCE.locate(context, libName, "<native library>");
             if (file == null) {
                 // Unable to locate the library -> will go to native
@@ -499,12 +500,12 @@ final class ParserDriver {
      */
     private CallTarget createLibraryCallTarget(String name, LLVMParserResult parserResult, Source source) {
         if (context.getEnv().getOptions().get(SulongEngineOption.PARSE_ONLY)) {
-            return LLVMLanguage.createCallTarget(RootNode.createConstantNode(0));
+            return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
         } else {
             // check if the functions should be resolved eagerly or lazily.
             boolean lazyParsing = context.getEnv().getOptions().get(SulongEngineOption.LAZY_PARSING);
             LoadModulesNode loadModules = LoadModulesNode.create(name, parserResult, lazyParsing, context.isInternalLibraryFile(parserResult.getRuntime().getFile()), dependencies, source, language);
-            return LLVMLanguage.createCallTarget(loadModules);
+            return Truffle.getRuntime().createCallTarget(loadModules);
         }
     }
 
@@ -515,11 +516,11 @@ final class ParserDriver {
      */
     private CallTarget createNativeLibraryCallTarget(TruffleFile file) {
         if (context.getEnv().getOptions().get(SulongEngineOption.PARSE_ONLY)) {
-            return LLVMLanguage.createCallTarget(RootNode.createConstantNode(0));
+            return Truffle.getRuntime().createCallTarget(RootNode.createConstantNode(0));
         } else {
             // check if the functions should be resolved eagerly or lazyly.
             LoadNativeNode loadNative = LoadNativeNode.create(new FrameDescriptor(), language, file);
-            return LLVMLanguage.createCallTarget(loadNative);
+            return Truffle.getRuntime().createCallTarget(loadNative);
         }
     }
 }
