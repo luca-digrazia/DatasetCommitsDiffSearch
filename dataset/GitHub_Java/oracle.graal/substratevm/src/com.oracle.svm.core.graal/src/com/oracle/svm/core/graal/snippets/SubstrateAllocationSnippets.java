@@ -38,6 +38,7 @@ import org.graalvm.compiler.api.replacements.Snippet.ConstantParameter;
 import org.graalvm.compiler.api.replacements.Snippet.VarargsParameter;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.core.common.GraalOptions;
+import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.type.StampFactory;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
@@ -60,6 +61,7 @@ import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.AllocationSnippets;
+import org.graalvm.compiler.replacements.ReplacementsUtil;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.replacements.SnippetTemplate;
 import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
@@ -137,8 +139,8 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
                     @ConstantParameter boolean supportsBulkZeroing,
                     @ConstantParameter AllocationProfilingData profilingData) {
         DynamicHub checkedHub = checkHub(hub);
-        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedHub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, getFillStartOffset(), emitMemoryBarrier,
-                        maybeUnroll, supportsBulkZeroing, profilingData);
+        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedHub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, emitMemoryBarrier, maybeUnroll,
+                        supportsBulkZeroing, profilingData);
         return piArrayCastToSnippetReplaceeStamp(result, length);
     }
 
@@ -160,8 +162,8 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
         int headerSize = getArrayHeaderSize(layoutEncoding);
         int log2ElementSize = LayoutEncoding.getArrayIndexShift(layoutEncoding);
 
-        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedArrayHub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, getFillStartOffset(),
-                        emitMemoryBarrier, false, supportsBulkZeroing, profilingData);
+        Object result = allocateArrayImpl(encodeAsTLABObjectHeader(checkedArrayHub), WordFactory.nullPointer(), length, headerSize, log2ElementSize, fillContents, emitMemoryBarrier, false,
+                        supportsBulkZeroing, profilingData);
         return piArrayCastToSnippetReplaceeStamp(result, length);
     }
 
@@ -346,13 +348,9 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
     }
 
     protected static int getArrayHeaderSize(int layoutEncoding) {
-        return (int) LayoutEncoding.getArrayBaseOffset(layoutEncoding).rawValue();
-    }
-
-    @Fold
-    protected static int getFillStartOffset() {
-        // The array hashcode must be included in the zeroing.
-        return ConfigurationValues.getObjectLayout().getArrayHashCodeOffset();
+        long result = LayoutEncoding.getArrayBaseOffset(layoutEncoding).rawValue();
+        ReplacementsUtil.runtimeAssert(result > 0 && result <= Integer.MAX_VALUE, "Invalid instance size");
+        return (int) result;
     }
 
     private static Word encodeAsTLABObjectHeader(DynamicHub hub) {
@@ -508,7 +506,7 @@ public abstract class SubstrateAllocationSnippets extends AllocationSnippets {
                 SharedType type = (SharedType) node.elementType().getArrayClass();
                 DynamicHub hub = type.getHub();
                 int layoutEncoding = hub.getLayoutEncoding();
-                int headerSize = getArrayHeaderSize(layoutEncoding);
+                int headerSize = NumUtil.safeToInt(LayoutEncoding.getArrayBaseOffset(layoutEncoding).rawValue());
                 int log2ElementSize = LayoutEncoding.getArrayIndexShift(layoutEncoding);
                 ConstantNode hubConstant = ConstantNode.forConstant(SubstrateObjectConstant.forObject(hub), providers.getMetaAccess(), graph);
 
