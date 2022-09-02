@@ -969,31 +969,15 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     private void initializeProfiledArgumentTypes(Object[] args) {
         CompilerAsserts.neverPartOfCompilation();
         assert !callProfiled;
-        final Class<?>[] types;
-        final OptimizedAssumption assumption;
         if (args.length <= MAX_PROFILED_ARGUMENTS && engine.argumentTypeSpeculation) {
-            types = new Class<?>[args.length];
+            Class<?>[] result = new Class<?>[args.length];
             for (int i = 0; i < args.length; i++) {
-                types[i] = classOf(args[i]);
+                result[i] = classOf(args[i]);
             }
-            assumption = createValidAssumption(ARGUMENT_TYPES_ASSUMPTION_NAME);
+            profiledArgumentTypes = result;
+            profiledArgumentTypesAssumption = createValidAssumption(ARGUMENT_TYPES_ASSUMPTION_NAME);
         } else {
-            types = null;
-            assumption = INVALID_ARGUMENT_TYPES_ASSUMPTION;
-        }
-
-        boolean wasNull;
-        synchronized (this) {
-            wasNull = profiledArgumentTypesAssumption == null;
-            if (wasNull) {
-                profiledArgumentTypes = types;
-                profiledArgumentTypesAssumption = assumption;
-            }
-        }
-
-        if (!wasNull) {
-            // Another thread initialized the assumption, we need to check the profile
-            profileArguments(args);
+            profiledArgumentTypesAssumption = INVALID_ARGUMENT_TYPES_ASSUMPTION;
         }
     }
 
