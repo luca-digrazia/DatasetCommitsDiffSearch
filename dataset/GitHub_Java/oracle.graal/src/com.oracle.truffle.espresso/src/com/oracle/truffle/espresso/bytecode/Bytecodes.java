@@ -1,7 +1,5 @@
-package com.oracle.truffle.espresso.bytecode;
-
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2009, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,6 +21,8 @@ package com.oracle.truffle.espresso.bytecode;
  * questions.
  */
 
+package com.oracle.truffle.espresso.bytecode;
+
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.ASSOCIATIVE;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.BRANCH;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.COMMUTATIVE;
@@ -31,6 +31,9 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.FIELD_READ;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.FIELD_WRITE;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.INVOKE;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.LOAD;
+import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.PRODUCE_FOREIGN;
+import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.QUICKENED;
+import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.RECEIVE_FOREIGN;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.STOP;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.STORE;
 import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.TRAP;
@@ -38,12 +41,14 @@ import static com.oracle.truffle.espresso.bytecode.Bytecodes.Flags.TRAP;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+
 /**
  * Definitions of the standard Java bytecodes defined by
  * <a href= "http://java.sun.com/docs/books/jvms/second_edition/html/VMSpecTOC.doc.html"> Java
  * Virtual Machine Specification</a>.
  */
-public class Bytecodes {
+public final class Bytecodes {
 
     // @formatter:off
     public static final int NOP                  =   0; // 0x00
@@ -250,6 +255,10 @@ public class Bytecodes {
     public static final int JSR_W                = 201; // 0xC9
     public static final int BREAKPOINT           = 202; // 0xCA
 
+    // Espresso quickened bytecodes.
+    public static final int QUICK                = 203; // 0xCB
+    public static final int SLIM_QUICK           = 204; // 0xCC
+
     public static final int ILLEGAL = 255;
     public static final int END = 256;
     // @formatter:on
@@ -323,6 +332,29 @@ public class Bytecodes {
          * Denotes the 4 INVOKE* instructions.
          */
         static final int INVOKE = 0x00001000;
+
+        /**
+         * Denotes Espresso quickened bytecodes.
+         */
+        static final int QUICKENED = 0x00002000;
+
+        /**
+         * Denotes an instruction which might produce a foreign object.
+         */
+        static final int PRODUCE_FOREIGN = 0x00004000;
+
+        /**
+         * Denotes an instruction which
+         * <ol>
+         * <li>might receive a foreign object as input</li> AND
+         * <li>has special treatment of foreign objects.
+         * </ol>
+         * For instance, ASTORE might be storing (a reference to) a foreign object, but it is no
+         * different from storing an Espresso object. In contrast, GETFIELD might have to get a
+         * field of a foreign object, and would have to do so via interop (which is different from
+         * GETFIELD for an Espresso object).
+         */
+        static final int RECEIVE_FOREIGN = 0x00008000;
     }
 
     // Performs a sanity check that none of the flags overlap.
@@ -348,25 +380,25 @@ public class Bytecodes {
      * An array that maps from a bytecode value to a {@link String} for the corresponding
      * instruction mnemonic.
      */
-    private static final String[] nameArray = new String[256];
+    @CompilationFinal(dimensions = 1) private static final String[] nameArray = new String[256];
 
     /**
      * An array that maps from a bytecode value to the set of {@link Flags} for the corresponding
      * instruction.
      */
-    private static final int[] flagsArray = new int[256];
+    @CompilationFinal(dimensions = 1) private static final int[] flagsArray = new int[256];
 
     /**
      * An array that maps from a bytecode value to the length in bytes for the corresponding
      * instruction.
      */
-    private static final int[] lengthArray = new int[256];
+    @CompilationFinal(dimensions = 1) private static final int[] lengthArray = new int[256];
 
     /**
      * An array that maps from a bytecode value to the number of slots pushed on the stack by the
      * corresponding instruction.
      */
-    private static final int[] stackEffectArray = new int[256];
+    @CompilationFinal(dimensions = 1) private static final int[] stackEffectArray = new int[256];
 
     // Checkstyle: stop
     // @formatter:off
@@ -396,6 +428,7 @@ public class Bytecodes {
         def(LLOAD               , "lload"           , "bi"   ,  2, LOAD);
         def(FLOAD               , "fload"           , "bi"   ,  1, LOAD);
         def(DLOAD               , "dload"           , "bi"   ,  2, LOAD);
+        // The loaded value might be a reference to a foreign object, but it cannot be the first time we see it
         def(ALOAD               , "aload"           , "bi"   ,  1, LOAD);
         def(ILOAD_0             , "iload_0"         , "b"    ,  1, LOAD);
         def(ILOAD_1             , "iload_1"         , "b"    ,  1, LOAD);
@@ -413,22 +446,26 @@ public class Bytecodes {
         def(DLOAD_1             , "dload_1"         , "b"    ,  2, LOAD);
         def(DLOAD_2             , "dload_2"         , "b"    ,  2, LOAD);
         def(DLOAD_3             , "dload_3"         , "b"    ,  2, LOAD);
+        // The loaded value might be a reference to a foreign object, but it cannot be the first time we see it
         def(ALOAD_0             , "aload_0"         , "b"    ,  1, LOAD);
         def(ALOAD_1             , "aload_1"         , "b"    ,  1, LOAD);
         def(ALOAD_2             , "aload_2"         , "b"    ,  1, LOAD);
         def(ALOAD_3             , "aload_3"         , "b"    ,  1, LOAD);
-        def(IALOAD              , "iaload"          , "b"    , -1, TRAP);
-        def(LALOAD              , "laload"          , "b"    ,  0, TRAP);
-        def(FALOAD              , "faload"          , "b"    , -1, TRAP);
-        def(DALOAD              , "daload"          , "b"    ,  0, TRAP);
-        def(AALOAD              , "aaload"          , "b"    , -1, TRAP);
-        def(BALOAD              , "baload"          , "b"    , -1, TRAP);
-        def(CALOAD              , "caload"          , "b"    , -1, TRAP);
-        def(SALOAD              , "saload"          , "b"    , -1, TRAP);
+        // The array might be foreign
+        def(IALOAD              , "iaload"          , "b"    , -1, TRAP | RECEIVE_FOREIGN);
+        def(LALOAD              , "laload"          , "b"    ,  0, TRAP | RECEIVE_FOREIGN);
+        def(FALOAD              , "faload"          , "b"    , -1, TRAP | RECEIVE_FOREIGN);
+        def(DALOAD              , "daload"          , "b"    ,  0, TRAP | RECEIVE_FOREIGN);
+        // The reference read might be a foreign object & the array might be a foreign object
+        def(AALOAD              , "aaload"          , "b"    , -1, TRAP | RECEIVE_FOREIGN | PRODUCE_FOREIGN);
+        def(BALOAD              , "baload"          , "b"    , -1, TRAP | RECEIVE_FOREIGN);
+        def(CALOAD              , "caload"          , "b"    , -1, TRAP | RECEIVE_FOREIGN);
+        def(SALOAD              , "saload"          , "b"    , -1, TRAP | RECEIVE_FOREIGN);
         def(ISTORE              , "istore"          , "bi"   , -1, STORE);
         def(LSTORE              , "lstore"          , "bi"   , -2, STORE);
         def(FSTORE              , "fstore"          , "bi"   , -1, STORE);
         def(DSTORE              , "dstore"          , "bi"   , -2, STORE);
+        // We might be storing a foreign object, but it doesn't require special treatment and it cannot the first time we see this foreign object
         def(ASTORE              , "astore"          , "bi"   , -1, STORE);
         def(ISTORE_0            , "istore_0"        , "b"    , -1, STORE);
         def(ISTORE_1            , "istore_1"        , "b"    , -1, STORE);
@@ -446,18 +483,20 @@ public class Bytecodes {
         def(DSTORE_1            , "dstore_1"        , "b"    , -2, STORE);
         def(DSTORE_2            , "dstore_2"        , "b"    , -2, STORE);
         def(DSTORE_3            , "dstore_3"        , "b"    , -2, STORE);
+        // We might be storing a foreign object, but it doesn't require special treatment and it cannot the first time we see this foreign object
         def(ASTORE_0            , "astore_0"        , "b"    , -1, STORE);
         def(ASTORE_1            , "astore_1"        , "b"    , -1, STORE);
         def(ASTORE_2            , "astore_2"        , "b"    , -1, STORE);
         def(ASTORE_3            , "astore_3"        , "b"    , -1, STORE);
-        def(IASTORE             , "iastore"         , "b"    , -3, TRAP);
-        def(LASTORE             , "lastore"         , "b"    , -4, TRAP);
-        def(FASTORE             , "fastore"         , "b"    , -3, TRAP);
-        def(DASTORE             , "dastore"         , "b"    , -4, TRAP);
-        def(AASTORE             , "aastore"         , "b"    , -3, TRAP);
-        def(BASTORE             , "bastore"         , "b"    , -3, TRAP);
-        def(CASTORE             , "castore"         , "b"    , -3, TRAP);
-        def(SASTORE             , "sastore"         , "b"    , -3, TRAP);
+        // Can receive foreign array
+        def(IASTORE             , "iastore"         , "b"    , -3, TRAP | RECEIVE_FOREIGN);
+        def(LASTORE             , "lastore"         , "b"    , -4, TRAP | RECEIVE_FOREIGN);
+        def(FASTORE             , "fastore"         , "b"    , -3, TRAP | RECEIVE_FOREIGN);
+        def(DASTORE             , "dastore"         , "b"    , -4, TRAP | RECEIVE_FOREIGN);
+        def(AASTORE             , "aastore"         , "b"    , -3, TRAP | RECEIVE_FOREIGN);
+        def(BASTORE             , "bastore"         , "b"    , -3, TRAP | RECEIVE_FOREIGN);
+        def(CASTORE             , "castore"         , "b"    , -3, TRAP | RECEIVE_FOREIGN);
+        def(SASTORE             , "sastore"         , "b"    , -3, TRAP | RECEIVE_FOREIGN);
         def(POP                 , "pop"             , "b"    , -1);
         def(POP2                , "pop2"            , "b"    , -2);
         def(DUP                 , "dup"             , "b"    ,  1);
@@ -536,10 +575,11 @@ public class Bytecodes {
         def(IF_ICMPGE           , "if_icmpge"       , "boo"  , -2, FALL_THROUGH | BRANCH);
         def(IF_ICMPGT           , "if_icmpgt"       , "boo"  , -2, FALL_THROUGH | BRANCH);
         def(IF_ICMPLE           , "if_icmple"       , "boo"  , -2, FALL_THROUGH | BRANCH);
+        // TODO: references might be to foreign objects, but does it matter?
         def(IF_ACMPEQ           , "if_acmpeq"       , "boo"  , -2, COMMUTATIVE | FALL_THROUGH | BRANCH);
         def(IF_ACMPNE           , "if_acmpne"       , "boo"  , -2, COMMUTATIVE | FALL_THROUGH | BRANCH);
         def(GOTO                , "goto"            , "boo"  ,  0, STOP | BRANCH);
-        def(JSR                 , "jsr"             , "boo"  ,  0, STOP | BRANCH);
+        def(JSR                 , "jsr"             , "boo"  ,  1, STOP | BRANCH);
         def(RET                 , "ret"             , "bi"   ,  0, STOP);
         def(TABLESWITCH         , "tableswitch"     , ""     , -1, STOP);
         def(LOOKUPSWITCH        , "lookupswitch"    , ""     , -1, STOP);
@@ -549,19 +589,23 @@ public class Bytecodes {
         def(DRETURN             , "dreturn"         , "b"    , -2, TRAP | STOP);
         def(ARETURN             , "areturn"         , "b"    , -1, TRAP | STOP);
         def(RETURN              , "return"          , "b"    ,  0, TRAP | STOP);
-        def(GETSTATIC           , "getstatic"       , "bjj"  ,  1, TRAP | FIELD_READ);
-        def(PUTSTATIC           , "putstatic"       , "bjj"  , -1, TRAP | FIELD_WRITE);
-        def(GETFIELD            , "getfield"        , "bjj"  ,  0, TRAP | FIELD_READ);
-        def(PUTFIELD            , "putfield"        , "bjj"  , -2, TRAP | FIELD_WRITE);
-        def(INVOKEVIRTUAL       , "invokevirtual"   , "bjj"  , -1, TRAP | INVOKE);
-        def(INVOKESPECIAL       , "invokespecial"   , "bjj"  , -1, TRAP | INVOKE);
-        def(INVOKESTATIC        , "invokestatic"    , "bjj"  ,  0, TRAP | INVOKE);
-        def(INVOKEINTERFACE     , "invokeinterface" , "bjja_", -1, TRAP | INVOKE);
-        def(INVOKEDYNAMIC       , "invokedynamic"   , "bjjjj",  0, TRAP | INVOKE);
+
+        // The stack effect of put/get bytecodes encodes the the number of slots that are guarantee to be pusehd/popped by a full push/pop operation.
+        // e.g. getField pops the receiver (-1), but the result size depends on the field, so it's not included in the effect.
+        def(GETSTATIC           , "getstatic"       , "bjj"  ,  0, TRAP | FIELD_READ | PRODUCE_FOREIGN);
+        def(PUTSTATIC           , "putstatic"       , "bjj"  ,  0, TRAP | FIELD_WRITE);
+        def(GETFIELD            , "getfield"        , "bjj"  , -1, TRAP | FIELD_READ | RECEIVE_FOREIGN | PRODUCE_FOREIGN);
+        def(PUTFIELD            , "putfield"        , "bjj"  , -1, TRAP | FIELD_WRITE | RECEIVE_FOREIGN);
+
+        def(INVOKEVIRTUAL       , "invokevirtual"   , "bjj"  , -1, TRAP | INVOKE | PRODUCE_FOREIGN);
+        def(INVOKESPECIAL       , "invokespecial"   , "bjj"  , -1, TRAP | INVOKE | PRODUCE_FOREIGN);
+        def(INVOKESTATIC        , "invokestatic"    , "bjj"  ,  0, TRAP | INVOKE | PRODUCE_FOREIGN);
+        def(INVOKEINTERFACE     , "invokeinterface" , "bjja_", -1, TRAP | INVOKE | RECEIVE_FOREIGN | PRODUCE_FOREIGN);
+        def(INVOKEDYNAMIC       , "invokedynamic"   , "bjjjj",  0, TRAP | INVOKE | PRODUCE_FOREIGN);
         def(NEW                 , "new"             , "bii"  ,  1, TRAP);
         def(NEWARRAY            , "newarray"        , "bc"   ,  0, TRAP);
         def(ANEWARRAY           , "anewarray"       , "bii"  ,  0, TRAP);
-        def(ARRAYLENGTH         , "arraylength"     , "b"    ,  0, TRAP);
+        def(ARRAYLENGTH         , "arraylength"     , "b"    ,  0, TRAP | RECEIVE_FOREIGN);
         def(ATHROW              , "athrow"          , "b"    , -1, TRAP | STOP);
         def(CHECKCAST           , "checkcast"       , "bii"  ,  0, TRAP);
         def(INSTANCEOF          , "instanceof"      , "bii"  ,  0, TRAP);
@@ -572,8 +616,14 @@ public class Bytecodes {
         def(IFNULL              , "ifnull"          , "boo"  , -1, FALL_THROUGH | BRANCH);
         def(IFNONNULL           , "ifnonnull"       , "boo"  , -1, FALL_THROUGH | BRANCH);
         def(GOTO_W              , "goto_w"          , "boooo",  0, STOP | BRANCH);
-        def(JSR_W               , "jsr_w"           , "boooo",  0, STOP | BRANCH);
+        def(JSR_W               , "jsr_w"           , "boooo",  1, STOP | BRANCH);
         def(BREAKPOINT          , "breakpoint"      , "b"    ,  0, TRAP);
+        // Espresso quickened bytecodes.
+        // Quickening patches the BCI, replacing it by a QUICK(nodeIndex) bytecode and spawning a child node.
+        // Unlike standard bytecodes, stack effects are determined completely by the node, even if the semantics
+        // of patched bytecode is partially or completely known.
+        def(QUICK               , "quick"           , "bjj"  ,  0, TRAP | QUICKENED | PRODUCE_FOREIGN | RECEIVE_FOREIGN);
+        def(SLIM_QUICK          , "slimquick"       ,"b"     ,  0, TRAP | QUICKENED | PRODUCE_FOREIGN | RECEIVE_FOREIGN);
     }
     // @formatter:on
     // Checkstyle: resume
@@ -706,6 +756,46 @@ public class Bytecodes {
     }
 
     /**
+     * Determines if a given opcode denotes a quickened instruction.
+     *
+     * @param opcode an opcode to test
+     * @return {@code true} iff {@code opcode} is a quickened bytecode, {@code false} otherwise
+     */
+    public static boolean isQuickened(int opcode) {
+        return (flagsArray[opcode & 0xff] & QUICKENED) != 0;
+    }
+
+    /**
+     * Determines if a given opcode denotes an instruction that may produce a foreign object.
+     *
+     * @param opcode an opcode to test
+     * @return {@code true} iff {@code opcode} might produce a foreign object, {@code false}
+     *         otherwise
+     */
+    public static boolean canProduceForeignObject(int opcode) {
+        return (flagsArray[opcode & 0xff] & PRODUCE_FOREIGN) != 0;
+    }
+
+    /**
+     * Determines if a given opcode denotes an instruction which
+     * <ol>
+     * <li>might receive a foreign object as input</li> AND
+     * <li>has special treatment of foreign objects.
+     * </ol>
+     * For instance, ASTORE might be storing (a reference to) a foreign object, but it is no
+     * different from storing an Espresso object. In contrast, GETFIELD might have to get a field of
+     * a foreign object, and would have to do so via interop (which is different from GETFIELD for
+     * an Espresso object).
+     *
+     * @param opcode an opcode to test
+     * @return {@code true} iff {@code opcode} has special treatment for foreign objects,
+     *         {@code false} otherwise
+     */
+    public static boolean canReceiveForeignObject(int opcode) {
+        return (flagsArray[opcode & 0xff] & RECEIVE_FOREIGN) != 0;
+    }
+
+    /**
      * Determines if a given opcode denotes an instruction that stores a value to a local variable
      * after popping it from the operand stack.
      *
@@ -737,6 +827,14 @@ public class Bytecodes {
      */
     public static boolean isBranch(int opcode) {
         return (flagsArray[opcode & 0xff] & BRANCH) != 0;
+    }
+
+    public static boolean isReturn(byte opcode) {
+        return opcode >= (byte) IRETURN && opcode <= (byte) RETURN;
+    }
+
+    public static boolean isLoad1(byte opcode) {
+        return opcode == (byte) ALOAD_1 || opcode == (byte) ILOAD_1 || opcode == (byte) LLOAD_1 || opcode == (byte) FLOAD_1 || opcode == (byte) DLOAD_1;
     }
 
     /**
