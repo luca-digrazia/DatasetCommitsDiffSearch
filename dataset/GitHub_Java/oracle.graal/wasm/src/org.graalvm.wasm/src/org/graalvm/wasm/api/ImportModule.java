@@ -56,14 +56,10 @@ import java.util.Map;
 public class ImportModule extends BuiltinModule {
     private final HashMap<String, Pair<WasmFunction, Executable>> functions;
     private final HashMap<String, Memory> memories;
-    private final HashMap<String, Table> tables;
-    private final HashMap<String, Global> globals;
 
     public ImportModule() {
         this.functions = new HashMap<>();
-        this.memories = new HashMap<>();
-        this.tables = new HashMap<>();
-        this.globals = new HashMap<>();
+        memories = new HashMap<>();
     }
 
     @Override
@@ -82,16 +78,6 @@ public class ImportModule extends BuiltinModule {
             final Memory memory = entry.getValue();
             defineExternalMemory(instance, memoryName, memory.wasmMemory());
         }
-        for (Map.Entry<String, Table> entry : tables.entrySet()) {
-            final String tableName = entry.getKey();
-            final Table table = entry.getValue();
-            defineExternalTable(instance, tableName, table.wasmTable());
-        }
-        for (Map.Entry<String, Global> entry : globals.entrySet()) {
-            final String globalName = entry.getKey();
-            final Global global = entry.getValue();
-            defineExternalGlobal(instance, globalName, global);
-        }
         return instance;
     }
 
@@ -101,13 +87,5 @@ public class ImportModule extends BuiltinModule {
 
     public void addMemory(String name, Memory memory) {
         memories.put(name, memory);
-    }
-
-    public void addTable(String name, Table table) {
-        tables.put(name, table);
-    }
-
-    public void addGlobal(String name, Global global) {
-        globals.put(name, global);
     }
 }

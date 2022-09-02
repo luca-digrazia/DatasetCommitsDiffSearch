@@ -45,10 +45,10 @@ import com.oracle.truffle.api.library.ExportLibrary;
 
 @ExportLibrary(InteropLibrary.class)
 public class MemoryDescriptor extends Dictionary {
-    private final Integer initial;
-    private final Integer maximum;
+    private final Long initial;
+    private final Long maximum;
 
-    public MemoryDescriptor(Integer initial, Integer maximum) {
+    public MemoryDescriptor(Long initial, Long maximum) {
         this.initial = initial;
         this.maximum = maximum;
         addMembers(new Object[]{
@@ -57,11 +57,11 @@ public class MemoryDescriptor extends Dictionary {
         });
     }
 
-    public int initial() {
+    public long initial() {
         return initial;
     }
 
-    public int maximum() {
+    public long maximum() {
         return maximum;
     }
 }

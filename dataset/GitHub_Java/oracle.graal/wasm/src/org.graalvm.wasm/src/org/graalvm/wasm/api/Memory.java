@@ -42,11 +42,8 @@ package org.graalvm.wasm.api;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
 import org.graalvm.wasm.exception.WasmExecutionException;
-import org.graalvm.wasm.exception.WasmJsApiException;
 import org.graalvm.wasm.memory.UnsafeWasmMemory;
 import org.graalvm.wasm.memory.WasmMemory;
 
@@ -55,34 +52,14 @@ public class Memory extends Dictionary {
     private final MemoryDescriptor descriptor;
     private final WasmMemory memory;
 
-    public Memory(WasmMemory memory) {
-        this.descriptor = new MemoryDescriptor(memory.pageSize(), memory.maxPageSize());
-        this.memory = memory;
+    public Memory(MemoryDescriptor descriptor) {
+        this.descriptor = descriptor;
+        this.memory = new UnsafeWasmMemory(descriptor.initial(), descriptor.maximum());
         addMembers(new Object[]{
-                "descriptor", this.descriptor,
-                "grow", new Executable(args -> grow((Long) args[0])),
-                "buffer", new Executable(args -> new MemoryArrayBuffer(memory)),
+                        "descriptor", this.descriptor,
+                        "grow", new Executable(args -> grow((Long) args[0])),
+                        "buffer", new Executable(args -> new MemoryArrayBuffer(memory)),
         });
-    }
-
-    public Memory(Object descriptor) {
-        this(new UnsafeWasmMemory(initial(descriptor), maximum(descriptor)));
-    }
-
-    private static long initial(Object descriptor) {
-        try {
-            return (Long) InteropLibrary.getUncached().readMember(descriptor, "initial");
-        } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid memory descriptor " + descriptor);
-        }
-    }
-
-    private static long maximum(Object descriptor) {
-        try {
-            return (Long) InteropLibrary.getUncached().readMember(descriptor, "maximum");
-        } catch (UnsupportedMessageException | UnknownIdentifierException e) {
-            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid memory descriptor " + descriptor);
-        }
     }
 
     public WasmMemory wasmMemory() {
