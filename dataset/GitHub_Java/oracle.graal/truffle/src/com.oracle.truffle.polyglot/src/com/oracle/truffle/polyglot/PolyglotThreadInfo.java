@@ -59,7 +59,7 @@ final class PolyglotThreadInfo {
      * Only modify if Thread.currentThread() == thread.get().
      */
     private volatile int enteredCount;
-    final LinkedList<PolyglotContextImpl> explicitContextStack = new LinkedList<>();
+    final LinkedList<Object> explicitContextStack = new LinkedList<>();
     volatile boolean cancelled;
     private Object originalContextClassLoader = NULL_CLASS_LOADER;
     private ClassLoaderEntry prevContextClassLoader;
@@ -97,26 +97,16 @@ final class PolyglotThreadInfo {
     void enter(PolyglotEngineImpl engine, PolyglotContextImpl profiledContext) {
         assert Thread.currentThread() == getThread();
         enteredCount++;
-        if (CompilerDirectives.injectBranchProbability(CompilerDirectives.SLOWPATH_PROBABILITY, profiledContext.invalid)) {
+        if (CompilerDirectives.injectBranchProbability(CompilerDirectives.SLOWPATH_PROBABILITY, profiledContext.closed)) {
             /*
-             * PolyglotContextImpl#closeImpl can be called on another thread just before
-             * enteredCount is incremented. In that case, closeImpl can pass the check for other
-             * threads being active and proceed with close while this thread is entered and may try
-             * to access things that can be invalidated by the closing process at any time.
-             * Therefore, we do a standard checkClosed check to make sure the enter is still safe.
-             * Please note that this still does not guarantee 100% safety, because the closing
-             * process might be in a phase where closingThread is already set, but invalid (which is
-             * set automatically right after closed) is still not set to true. Therefore, always
-             * invalidate the context manually before closing a context that might still be active
-             * in other threads.
+             * This event should be very rare. The context was closed between the volatile read of
+             * the cached thread info read and the entered count increment. Maybe we should change
+             * this to an assumption check to speed it up.
              */
             CompilerDirectives.transferToInterpreter();
-            try {
-                profiledContext.checkClosed();
-            } catch (Throwable t) {
-                enteredCount--;
-                throw t;
-            }
+            enteredCount--;
+            profiledContext.checkClosed();
+            assert false : "checkClosed must throw";
         }
         if (!engine.customHostClassLoader.isValid()) {
             setContextClassLoader();
