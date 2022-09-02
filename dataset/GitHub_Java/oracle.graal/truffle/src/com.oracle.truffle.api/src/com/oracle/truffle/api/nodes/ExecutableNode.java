@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -64,10 +64,10 @@ import com.oracle.truffle.api.nodes.ExplodeLoop.LoopExplosionKind;
 public abstract class ExecutableNode extends Node {
     /*
      * Since languages were singletons in the past, we cannot use the Env instance stored in
-     * TruffleLanguage for languages that are not yet migrated. We use this polyglotEngine reference
+     * TruffleLanguage for languages that are not yet migrated. We use this sourceVM reference
      * instead for compatibility.
      */
-    @CompilationFinal Object polyglotEngine;
+    @CompilationFinal Object sourceVM;
     final TruffleLanguage<?> language;
     @CompilationFinal ReferenceCache referenceCache;
 
@@ -82,19 +82,19 @@ public abstract class ExecutableNode extends Node {
         CompilerAsserts.neverPartOfCompilation();
         this.language = language;
         if (this.language != null) {
-            this.polyglotEngine = NodeAccessor.ACCESSOR.engineSupport().getPolyglotEngine(NodeAccessor.ACCESSOR.languageSupport().getPolyglotLanguageInstance(this.language));
+            this.sourceVM = Node.ACCESSOR.engineSupport().getVMFromLanguageObject(Node.ACCESSOR.languageSupport().getVMObject(this.language));
         } else {
-            this.polyglotEngine = getCurrentPolyglotEngine();
+            this.sourceVM = getCurrentVM();
         }
         if (language != null && getLanguageInfo() == null) {
             throw new IllegalArgumentException("Truffle language instance is not initialized.");
         }
     }
 
-    private static Object getCurrentPolyglotEngine() {
-        EngineSupport engine = NodeAccessor.ACCESSOR.engineSupport();
+    private static Object getCurrentVM() {
+        EngineSupport engine = Node.ACCESSOR.engineSupport();
         if (engine != null) {
-            return engine.getCurrentPolyglotEngine();
+            return engine.getCurrentVM();
         } else {
             return null;
         }
@@ -119,7 +119,7 @@ public abstract class ExecutableNode extends Node {
      */
     public final LanguageInfo getLanguageInfo() {
         if (language != null) {
-            return NodeAccessor.ACCESSOR.languageSupport().getLanguageInfo(language);
+            return Node.ACCESSOR.languageSupport().getLanguageInfo(language);
         } else {
             return null;
         }
@@ -163,9 +163,9 @@ public abstract class ExecutableNode extends Node {
         ReferenceCache(ExecutableNode executableNode, @SuppressWarnings("rawtypes") Class<? extends TruffleLanguage> languageClass, ReferenceCache next) {
             this.languageClass = languageClass;
             if (languageClass != null) {
-                this.languageReference = NodeAccessor.ACCESSOR.engineSupport().lookupLanguageReference(executableNode.polyglotEngine,
+                this.languageReference = Node.ACCESSOR.engineSupport().lookupLanguageReference(executableNode.sourceVM,
                                 executableNode.language, languageClass);
-                this.contextReference = NodeAccessor.ACCESSOR.engineSupport().lookupContextReference(executableNode.polyglotEngine,
+                this.contextReference = Node.ACCESSOR.engineSupport().lookupContextReference(executableNode.sourceVM,
                                 executableNode.language, languageClass);
             } else {
                 this.languageReference = null;
@@ -206,7 +206,7 @@ public abstract class ExecutableNode extends Node {
             if (current == null) {
                 this.referenceCache = new ReferenceCache(this, languageClass, null);
             } else {
-                if (polyglotEngine == null) {
+                if (sourceVM == null) {
                     this.referenceCache = GENERIC;
                 } else {
                     int count = 0;
