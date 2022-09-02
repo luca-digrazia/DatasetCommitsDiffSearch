@@ -112,11 +112,7 @@ public class CreateExceptionStub extends SnippetStub {
 
     private static Object handleExceptionReturn(Word thread, int deoptimized) {
         Object clearPendingException = clearPendingException(thread);
-        // alwayDeoptimize is a testing option to force a deopt here but the code pattern should
-        // keep both the deopt and return paths, so include a test against the exception which we
-        // know should always succeed.
-        if ((alwayDeoptimize(INJECTED_OPTIONVALUES) && clearPendingException != null) ||
-                        (reportsDeoptimization(GraalHotSpotVMConfigBase.INJECTED_VMCONFIG) && deoptimized != 0)) {
+        if (alwayDeoptimize(INJECTED_OPTIONVALUES) || (reportsDeoptimization(GraalHotSpotVMConfigBase.INJECTED_VMCONFIG) && deoptimized != 0)) {
             DeoptimizeWithExceptionInCallerNode.deopt(clearPendingException);
         }
         return clearPendingException;
