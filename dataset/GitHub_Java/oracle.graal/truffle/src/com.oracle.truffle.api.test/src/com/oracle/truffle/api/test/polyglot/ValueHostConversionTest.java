@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,22 +40,21 @@
  */
 package com.oracle.truffle.api.test.polyglot;
 
-import static com.oracle.truffle.tck.tests.ValueAssert.assertUnsupported;
-import static com.oracle.truffle.tck.tests.ValueAssert.assertValue;
-import static com.oracle.truffle.tck.tests.ValueAssert.Trait.BOOLEAN;
-import static com.oracle.truffle.tck.tests.ValueAssert.Trait.HOST_OBJECT;
-import static com.oracle.truffle.tck.tests.ValueAssert.Trait.MEMBERS;
-import static com.oracle.truffle.tck.tests.ValueAssert.Trait.NULL;
-import static com.oracle.truffle.tck.tests.ValueAssert.Trait.NUMBER;
-import static com.oracle.truffle.tck.tests.ValueAssert.Trait.PROXY_OBJECT;
-import static com.oracle.truffle.tck.tests.ValueAssert.Trait.STRING;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.assertUnsupported;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.assertValue;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.BOOLEAN;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.HOST_OBJECT;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.MEMBERS;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.NULL;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.NUMBER;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.PROXY_OBJECT;
+import static com.oracle.truffle.api.test.polyglot.ValueAssert.Trait.STRING;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -68,7 +67,6 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.PolyglotException.StackFrame;
 import org.graalvm.polyglot.Value;
@@ -83,8 +81,9 @@ import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.api.test.examples.TargetMappings;
-import com.oracle.truffle.tck.tests.ValueAssert.Trait;
+import com.oracle.truffle.api.test.polyglot.ValueAssert.Trait;
+
+import sun.reflect.CallerSensitive;
 
 /**
  * Tests class for {@link Context#asValue(Object)}.
@@ -232,7 +231,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
         assertTrue(newInstance.getMetaObject().newInstance().asHostObject() instanceof JavaRecord);
         assertSame(JavaRecord.class, newInstance.getMetaObject().asHostObject());
 
-        assertValue(recordClass, Trait.INSTANTIABLE, Trait.MEMBERS, Trait.HOST_OBJECT, Trait.META);
+        assertValue(recordClass, Trait.INSTANTIABLE, Trait.MEMBERS, Trait.HOST_OBJECT);
     }
 
     @Test
@@ -257,7 +256,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
         assertTrue(newInstance.getMetaObject().newInstance().asHostObject() instanceof JavaRecord);
         assertSame(JavaRecord.class, newInstance.getMetaObject().asHostObject());
 
-        assertValue(recordClass, Trait.INSTANTIABLE, Trait.MEMBERS, Trait.HOST_OBJECT, Trait.META);
+        assertValue(recordClass, Trait.INSTANTIABLE, Trait.MEMBERS, Trait.HOST_OBJECT);
 
         Value bigIntegerStatic = getStaticClass(BigInteger.class);
         assertTrue(bigIntegerStatic.hasMember("ZERO"));
@@ -280,7 +279,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
                 return Truffle.getRuntime().createCallTarget(new RootNode(languageInstance) {
                     @Override
                     public Object execute(VirtualFrame frame) {
-                        return lookupContextReference(ProxyLanguage.class).get().env.lookupHostSymbol(clazz.getName());
+                        return getCurrentContext(ProxyLanguage.class).env.lookupHostSymbol(clazz.getName());
                     }
                 });
             }
@@ -306,7 +305,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
         assertTrue(record.hasMember("notifyAll"));
 
         assertValue(record, Trait.MEMBERS, Trait.HOST_OBJECT);
-        assertValue(record.getMetaObject(), Trait.INSTANTIABLE, Trait.MEMBERS, Trait.HOST_OBJECT, Trait.META);
+        assertValue(record.getMetaObject(), Trait.INSTANTIABLE, Trait.MEMBERS, Trait.HOST_OBJECT);
     }
 
     @Test
@@ -390,7 +389,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
                         -0f, Float.NaN, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, (float) (Byte.MIN_VALUE - 1), (float) (Byte.MAX_VALUE + 1),
         };
         for (Number number : cannotConvert) {
-            AbstractPolyglotTest.assertFails(() -> context.asValue(number).asByte(), ClassCastException.class);
+            ValueAssert.assertFails(() -> context.asValue(number).asByte(), ClassCastException.class);
         }
     }
 
@@ -471,7 +470,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
                         -0f, Float.NaN, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, (float) (Short.MIN_VALUE - 1), (float) (Short.MAX_VALUE + 1),
         };
         for (Number number : cannotConvert) {
-            AbstractPolyglotTest.assertFails(() -> context.asValue(number).asShort(), ClassCastException.class);
+            ValueAssert.assertFails(() -> context.asValue(number).asShort(), ClassCastException.class);
         }
     }
 
@@ -556,7 +555,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
                         -0f, Float.NaN, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, (float) -Math.pow(2, 24), (float) +Math.pow(2, 24),
         };
         for (Number number : cannotConvert) {
-            assertFails(() -> context.asValue(number).asInt(), ClassCastException.class);
+            ValueAssert.assertFails(() -> context.asValue(number).asInt(), ClassCastException.class);
         }
     }
 
@@ -656,7 +655,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
                         -0f, Float.NaN, Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, (float) -Math.pow(2, 24), (float) +Math.pow(2, 24), Float.MIN_VALUE, Float.MAX_VALUE,
         };
         for (Number number : cannotConvert) {
-            assertFails(() -> context.asValue(number).asLong(), ClassCastException.class);
+            ValueAssert.assertFails(() -> context.asValue(number).asLong(), ClassCastException.class);
         }
     }
 
@@ -733,12 +732,8 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
         Number[] canConvert = {
                         Byte.MIN_VALUE, Byte.MAX_VALUE,
                         Short.MIN_VALUE, Short.MAX_VALUE,
-                        Integer.MIN_VALUE, Integer.MAX_VALUE, -(1 << 24 - 1), 1 << 24 - 1,
-                        -(1 << 24), 1 << 24,
-                        -(1L << 24), 1L << 24,
+                        -(1 << 24 - 1), 1 << 24 - 1,
                         -(1L << 24 - 1), 1L << 24 - 1,
-                        Long.MIN_VALUE, Long.MAX_VALUE,
-                        0.5d, -0.5d,
                         0d, -0d, Double.NaN, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, -(Math.pow(2, 24) - 1), +(Math.pow(2, 24) - 1),
         };
         for (Number number : canConvert) {
@@ -748,12 +743,12 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
         }
 
         Number[] cannotConvert = {
-                        0.1d, -0.1d,
-                        0.2d, -0.2d,
+                        Integer.MIN_VALUE, Integer.MAX_VALUE, -(1 << 24), 1 << 24,
+                        Long.MIN_VALUE, Long.MAX_VALUE, -(1L << 24), 1L << 24,
                         Double.MIN_VALUE, Double.MAX_VALUE,
         };
         for (Number number : cannotConvert) {
-            assertFails(() -> context.asValue(number).asFloat(), ClassCastException.class);
+            ValueAssert.assertFails(() -> context.asValue(number).asFloat(), ClassCastException.class);
         }
     }
 
@@ -845,7 +840,7 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
                         Long.MIN_VALUE, Long.MAX_VALUE, -1L << 53, 1L << 53,
         };
         for (Number number : cannotConvert) {
-            assertFails(() -> context.asValue(number).asDouble(), ClassCastException.class);
+            ValueAssert.assertFails(() -> context.asValue(number).asDouble(), ClassCastException.class);
         }
     }
 
@@ -952,9 +947,6 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
 
     @Test
     public void testStringToPrimitive() {
-        HostAccess hostAccess = TargetMappings.enableStringCoercions(HostAccess.newBuilder().allowPublicAccess(true)).build();
-        setupEnv(Context.newBuilder().allowAllAccess(true).allowHostAccess(hostAccess).build());
-
         Value hierarchy = context.asValue(new PrimitiveHierarchy()).getMember("hierarchy");
 
         assertEquals("int", hierarchy.execute(String.valueOf(Integer.MIN_VALUE)).asString());
@@ -1202,30 +1194,29 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
     }
 
     public static class TestExceptionFramesCallerSensitive {
-        public int testField;
+
+        @CallerSensitive
+        public void foo() {
+            throw new RuntimeException("message");
+        }
+
     }
 
-    // Methods annotated with @CallerSensitive use reflection, even on JVM, so we test that case.
     @Test
-    public void testExceptionFramesCallerSensitive() throws NoSuchFieldException {
-        // We cannot easily mark a method as @CallerSensitive (the annotation moved between JDK 8
-        // and 9), so we use an existing method marked as @CallerSensitive, Field#get().
-        Field field = TestExceptionFramesCallerSensitive.class.getField("testField");
-        Value value = context.asValue(field);
+    public void testExceptionFramesCallerSensitive() {
+        Value value = context.asValue(new TestExceptionFramesCallerSensitive());
         try {
-            value.getMember("get").execute(new Object());
+            value.getMember("foo").execute();
             Assert.fail();
         } catch (PolyglotException e) {
             assertTrue(e.isHostException());
-            assertTrue(e.asHostException() instanceof IllegalArgumentException);
+            assertTrue(e.asHostException() instanceof RuntimeException);
+            assertEquals("message", e.getMessage());
             Iterator<StackFrame> frameIterator = e.getPolyglotStackTrace().iterator();
-            StackFrame frame = frameIterator.next();
-            while (!(frame.toHostFrame().getMethodName().equals("get") &&
-                            frame.toHostFrame().getClassName().equals(Field.class.getName()))) {
-                frame = frameIterator.next();
-            }
+            StackFrame frame;
+            frame = frameIterator.next();
             assertTrue(frame.isHostFrame());
-            assertEquals("get", frame.toHostFrame().getMethodName());
+            assertEquals("foo", frame.toHostFrame().getMethodName());
             frame = frameIterator.next();
             assertTrue(frame.isHostFrame());
             assertEquals("execute", frame.toHostFrame().getMethodName());
@@ -1255,17 +1246,17 @@ public class ValueHostConversionTest extends AbstractPolyglotTest {
         assertEquals(42, value.getMember("foo").execute((float) 42).asInt());
         assertEquals(42, value.getMember("foo").execute((double) 42).asInt());
 
-        assertFails(() -> value.getMember("foo").execute((Object) null),
+        ValueAssert.assertFails(() -> value.getMember("foo").execute((Object) null),
                         IllegalArgumentException.class);
-        assertFails(() -> value.getMember("foo").execute(""),
+        ValueAssert.assertFails(() -> value.getMember("foo").execute(""),
                         IllegalArgumentException.class);
-        assertFails(() -> value.getMember("foo").execute(42.2d),
+        ValueAssert.assertFails(() -> value.getMember("foo").execute(42.2d),
                         IllegalArgumentException.class);
-        assertFails(() -> value.getMember("foo").execute(42.2f),
+        ValueAssert.assertFails(() -> value.getMember("foo").execute(42.2f),
                         IllegalArgumentException.class);
-        assertFails(() -> value.getMember("foo").execute(Float.NaN),
+        ValueAssert.assertFails(() -> value.getMember("foo").execute(Float.NaN),
                         IllegalArgumentException.class);
-        assertFails(() -> value.getMember("foo").execute(Double.NaN),
+        ValueAssert.assertFails(() -> value.getMember("foo").execute(Double.NaN),
                         IllegalArgumentException.class);
     }
 
