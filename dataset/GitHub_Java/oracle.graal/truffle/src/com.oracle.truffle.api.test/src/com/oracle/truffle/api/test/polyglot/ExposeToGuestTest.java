@@ -68,13 +68,9 @@ public class ExposeToGuestTest {
                 + "}\n"
         );
         Assert.assertEquals(42, readValue.execute(new ExportedValue()).asInt());
-        assertPropertyUndefined("PublicValue isn't enough by default", readValue, new PublicValue());
-    }
-
-    private void assertPropertyUndefined(String msg, Value readValue, Object value) {
         try {
-            readValue.execute(value);
-            fail(msg);
+            readValue.execute(new PublicValue()).isNull();
+            fail("PublicValue isn't enough by default");
         } catch (PolyglotException ex) {
             assertEquals("Undefined property: value", ex.getMessage());
         }
@@ -117,8 +113,8 @@ public class ExposeToGuestTest {
                 + "}\n"
         );
         Assert.assertEquals(42, readValue.execute(new AccessibleValue()).asInt());
-        assertPropertyUndefined("Default annotation isn't enough", readValue, new ExportedValue());
-        assertPropertyUndefined("Public isn't enough by default", readValue, new PublicValue());
+        Assert.assertTrue("Default annotation isn't enough", readValue.execute(new ExportedValue()).isNull());
+        Assert.assertTrue("Public isn't enough by default", readValue.execute(new PublicValue()).isNull());
     }
 
     @Retention(RetentionPolicy.RUNTIME)
@@ -146,8 +142,8 @@ public class ExposeToGuestTest {
                 + "}\n"
         );
         Assert.assertEquals(42, readValue.execute(new AccessibleValue()).asInt());
-        assertPropertyUndefined("Default annotation isn't enough", readValue, new ExportedValue());
-        assertPropertyUndefined("Public isn't enough by default", readValue, new PublicValue());
+        Assert.assertTrue("Default annotation isn't enough", readValue.execute(new ExportedValue()).isNull());
+        Assert.assertTrue("Public isn't enough by default", readValue.execute(new PublicValue()).isNull());
     }
 
 }
