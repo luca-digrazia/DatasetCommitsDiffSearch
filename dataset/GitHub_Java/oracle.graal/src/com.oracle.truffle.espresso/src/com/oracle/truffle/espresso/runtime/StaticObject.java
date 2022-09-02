@@ -108,8 +108,7 @@ public final class StaticObject implements TruffleObject {
     @ExportMessage
     public static boolean isNull(StaticObject object) {
         assert object != null;
-        assert (object.getKlass() != null) || object == NULL ||
-                        (object.isInteropObject() && InteropLibrary.getUncached().isNull(object.rawInteropObject())) : "klass can only be null for Espresso null (NULL) and interop nulls";
+        // klass can only be null for Espresso null (NULL) and interop nulls
         return object.getKlass() == null;
     }
 
