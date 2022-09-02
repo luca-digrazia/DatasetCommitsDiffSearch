@@ -314,11 +314,11 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         return initialized;
     }
 
-    CallTarget parseCached(PolyglotLanguage accessingLanguage, Source source, String[] argumentNames, boolean forLanguage) throws AssertionError {
+    CallTarget parseCached(PolyglotLanguage accessingLanguage, Source source, String[] argumentNames) throws AssertionError {
         ensureInitialized(accessingLanguage);
         PolyglotSourceCache cache = lazy.sourceCache;
         assert cache != null;
-        return cache.parseCached(this, source, argumentNames, forLanguage);
+        return cache.parseCached(this, source, argumentNames);
     }
 
     Env requireEnv() {
@@ -761,12 +761,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
         Object receiver = guestValue;
         PolyglotValue cache = lazy.valueCache.get(receiver.getClass());
         if (cache == null) {
-            Object prev = context.enterIfNeeded();
-            try {
-                cache = lookupValueCache(guestValue);
-            } finally {
-                context.leaveIfNeeded(prev);
-            }
+            cache = lookupValueCache(guestValue);
         }
         return getAPIAccess().newValue(receiver, cache);
     }
@@ -805,23 +800,14 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             if (cachedClassLocal != Generic.class) {
                 if (cachedClassLocal == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    if (languageContext.context.engine.boundEngine) {
-                        cachedClass = receiver.getClass();
-                        cache = languageContext.lazy.valueCache.get(receiver.getClass());
-                        if (cache == null) {
-                            cache = languageContext.lookupValueCache(receiver);
-                        }
-                        cachedContext = languageContext;
-                        cachedValue = cache;
-                        return apiAccess.newValue(receiver, cache);
-                    } else {
-                        // TODO this needs to be rewritten to cache that uses
-                        // InteropCodeCache and does not store the context in a node directly
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        cachedClass = Generic.class; // switch to generic
-                        cachedContext = null;
-                        cachedValue = null;
+                    cachedClass = receiver.getClass();
+                    cache = languageContext.lazy.valueCache.get(receiver.getClass());
+                    if (cache == null) {
+                        cache = languageContext.lookupValueCache(receiver);
                     }
+                    cachedContext = languageContext;
+                    cachedValue = cache;
+                    return apiAccess.newValue(receiver, cache);
                 } else if (value.getClass() == cachedClassLocal && cachedContextLocal == languageContext) {
                     receiver = CompilerDirectives.inInterpreter() ? receiver : CompilerDirectives.castExact(receiver, cachedClassLocal);
                     cache = cachedValue;
