@@ -24,9 +24,6 @@
  */
 package com.oracle.svm.core.windows;
 
-import java.io.FileDescriptor;
-
-import com.oracle.svm.core.jdk.NativeLibrarySupport;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -37,14 +34,9 @@ import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.annotate.Alias;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.jdk.JNIPlatformNativeLibrarySupport;
 import com.oracle.svm.core.jdk.Jvm;
 import com.oracle.svm.core.jdk.PlatformNativeLibrarySupport;
-import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.windows.headers.FileAPI;
 import com.oracle.svm.core.windows.headers.WinBase;
 import com.oracle.svm.core.windows.headers.WinBase.HMODULE;
 import com.oracle.svm.core.windows.headers.WinSock;
@@ -58,7 +50,7 @@ class WindowsNativeLibraryFeature implements Feature {
     }
 }
 
-class WindowsNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
+class WindowsNativeLibrarySupport extends PlatformNativeLibrarySupport {
 
     static void initialize() {
         ImageSingletons.add(PlatformNativeLibrarySupport.class, new WindowsNativeLibrarySupport());
@@ -66,30 +58,21 @@ class WindowsNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
 
     @Override
     public boolean initializeBuiltinLibraries() {
-        try {
-            loadJavaLibrary();
-            loadZipLibrary();
-            loadNetLibrary();
-        } catch (UnsatisfiedLinkError e) {
-            Log.log().string("System.loadLibrary failed, " + e).newline();
+        if (!WindowsJavaIOSubstitutions.initIDs()) {
+            return false;
+        }
+        if (!loadZipLibrary()) {
             return false;
         }
         return true;
     }
 
     @Override
-    protected void loadJavaLibrary() {
-        super.loadJavaLibrary();
-        Target_java_io_WinNTFileSystem.initIDs();
-
-        /* Initialize the handles of standard FileDescriptors. */
-        WindowsUtils.setHandle(FileDescriptor.in, FileAPI.GetStdHandle(FileAPI.STD_INPUT_HANDLE()));
-        WindowsUtils.setHandle(FileDescriptor.out, FileAPI.GetStdHandle(FileAPI.STD_OUTPUT_HANDLE()));
-        WindowsUtils.setHandle(FileDescriptor.err, FileAPI.GetStdHandle(FileAPI.STD_ERROR_HANDLE()));
-    }
-
-    protected void loadNetLibrary() {
-        if (isFirstIsolate()) {
+    public boolean initializeSharedBuiltinLibrariesOnce() {
+        if (!super.initializeSharedBuiltinLibrariesOnce()) {
+            return false;
+        }
+        try {
             WinSock.init();
             System.loadLibrary("net");
             /*
@@ -97,9 +80,10 @@ class WindowsNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
              * value in process-wide shared native state, the property's value in the first launched
              * isolate applies to all subsequently launched isolates.
              */
-        } else {
-            NativeLibrarySupport.singleton().registerInitializedBuiltinLibrary("net");
+        } catch (UnsatisfiedLinkError e) {
+            return false;
         }
+        return true;
     }
 
     @Override
@@ -170,11 +154,4 @@ class WindowsNativeLibrarySupport extends JNIPlatformNativeLibrarySupport {
             }
         }
     }
-}
-
-@TargetClass(className = "java.io.WinNTFileSystem")
-@Platforms(Platform.WINDOWS.class)
-final class Target_java_io_WinNTFileSystem {
-    @Alias
-    static native void initIDs();
 }

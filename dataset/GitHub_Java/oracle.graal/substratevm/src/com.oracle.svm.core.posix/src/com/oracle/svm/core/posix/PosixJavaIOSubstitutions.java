@@ -90,24 +90,30 @@ import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
+import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
-import org.graalvm.nativeimage.impl.DeprecatedPlatform;
+import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.SignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Alias;
+import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
+import com.oracle.svm.core.jni.JNIRuntimeAccess;
+import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.posix.headers.Dirent.DIR;
 import com.oracle.svm.core.posix.headers.Dirent.dirent;
 import com.oracle.svm.core.posix.headers.Dirent.direntPointer;
@@ -121,13 +127,24 @@ import com.oracle.svm.core.posix.headers.Time.timeval;
 import com.oracle.svm.core.posix.headers.Unistd;
 import com.oracle.svm.core.util.VMError;
 
+@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
+@AutomaticFeature
+@CLibrary(value = "java", requireStatic = true)
+class PosixJavaIOSubstituteFeature implements Feature {
+
+    @Override
+    public void beforeAnalysis(BeforeAnalysisAccess access) {
+        JNIRuntimeAccess.register(access.findClassByName("java.io.UnixFileSystem"));
+    }
+}
+
 @TargetClass(className = "java.io.ExpiringCache")
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_io_ExpiringCache {
 }
 
 @TargetClass(className = "java.io.UnixFileSystem")
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 @SuppressWarnings("static-method")
 final class Target_java_io_UnixFileSystem {
 
@@ -447,7 +464,7 @@ final class Target_java_io_UnixFileSystem {
 }
 
 @TargetClass(java.io.FileInputStream.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_io_FileInputStream {
 
     @Alias private FileDescriptor fd;
@@ -548,7 +565,7 @@ final class Util_java_io_FileInputStream {
 }
 
 @TargetClass(java.io.FileOutputStream.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_io_FileOutputStream {
 
     @Substitute
@@ -574,7 +591,7 @@ final class Target_java_io_FileOutputStream {
 }
 
 @TargetClass(java.io.RandomAccessFile.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_io_RandomAccessFile {
 
     // Checkstyle: stop
@@ -691,7 +708,7 @@ final class Target_java_io_RandomAccessFile {
 }
 
 @TargetClass(java.io.Console.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class, DeprecatedPlatform.DARWIN_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class, Platform.DARWIN.class})
 final class Target_java_io_Console {
 
     @Alias //
@@ -818,6 +835,59 @@ class Util_java_io_Console_JDK8OrEarlier {
     }
 }
 
-/** Dummy class to have a class with the file's name. */
-final class PosixJavaIOSubstitutions {
+@TargetClass(java.io.FileInputStream.class)
+@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
+final class Target_java_io_FileInputStream_jni {
+
+    @Alias
+    static native void initIDs();
+}
+
+@TargetClass(java.io.FileDescriptor.class)
+@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
+final class Target_java_io_FileDescriptor_jni {
+
+    @Alias
+    static native void initIDs();
+}
+
+@TargetClass(java.io.FileOutputStream.class)
+@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
+final class Target_java_io_FileOutputStream_jni {
+
+    @Alias
+    static native void initIDs();
+}
+
+@TargetClass(className = "java.io.UnixFileSystem")
+@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
+final class Target_java_io_UnixFileSystem_jni {
+
+    @Alias
+    static native void initIDs();
+}
+
+@Platforms({Platform.LINUX.class, InternalPlatform.LINUX_JNI.class, Platform.DARWIN.class, InternalPlatform.DARWIN_JNI.class})
+public final class PosixJavaIOSubstitutions {
+
+    /** Private constructor: No instances. */
+    private PosixJavaIOSubstitutions() {
+    }
+
+    @Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
+    public static boolean initIDs() {
+        try {
+            System.loadLibrary("java");
+
+            Target_java_io_FileDescriptor_jni.initIDs();
+            Target_java_io_FileInputStream_jni.initIDs();
+            Target_java_io_FileOutputStream_jni.initIDs();
+            Target_java_io_UnixFileSystem_jni.initIDs();
+
+            return true;
+        } catch (UnsatisfiedLinkError e) {
+            Log.log().string("System.loadLibrary failed, " + e).newline();
+            return false;
+        }
+    }
 }
