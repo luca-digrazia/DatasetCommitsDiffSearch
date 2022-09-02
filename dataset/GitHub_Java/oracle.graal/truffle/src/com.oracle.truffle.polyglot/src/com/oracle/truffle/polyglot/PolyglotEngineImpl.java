@@ -118,7 +118,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     static final String OPTION_GROUP_ENGINE = "engine";
     static final String OPTION_GROUP_LOG = "log";
     static final String OPTION_GROUP_IMAGE_BUILD_TIME = "image-build-time";
-    private static final String PROP_ALLOW_EXPERIMENTAL_OPTIONS = OptionValuesImpl.SYSTEM_PROPERTY_PREFIX + OPTION_GROUP_ENGINE + ".AllowExperimentalOptions";
 
     // also update list in LanguageRegistrationProcessor
     private static final Set<String> RESERVED_IDS = new HashSet<>(
@@ -252,17 +251,16 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
         parseOptions(options, useSystemProperties, originalEngineOptions, languagesOptions, instrumentsOptions, logLevels);
 
-        boolean useAllowExperimentalOptions = allowExperimentalOptions || Boolean.parseBoolean(EngineAccessor.RUNTIME.getSystemProperty(PROP_ALLOW_EXPERIMENTAL_OPTIONS));
-        this.engineOptionValues.putAll(originalEngineOptions, useAllowExperimentalOptions);
+        this.engineOptionValues.putAll(originalEngineOptions, allowExperimentalOptions);
         this.conservativeContextReferences = engineOptionValues.get(PolyglotEngineOptions.UseConservativeContextReferences);
 
         for (PolyglotLanguage language : languagesOptions.keySet()) {
-            language.getOptionValues().putAll(languagesOptions.get(language), useAllowExperimentalOptions);
+            language.getOptionValues().putAll(languagesOptions.get(language), allowExperimentalOptions);
         }
 
         ENGINES.put(this, null);
         if (!preInitialization) {
-            createInstruments(instrumentsOptions, useAllowExperimentalOptions);
+            createInstruments(instrumentsOptions, allowExperimentalOptions);
             registerShutDownHook();
         }
     }
@@ -524,9 +522,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         Properties properties = System.getProperties();
         synchronized (properties) {
             for (Object systemKey : properties.keySet()) {
-                if (PROP_ALLOW_EXPERIMENTAL_OPTIONS.equals(systemKey)) {
-                    continue;
-                }
                 String key = (String) systemKey;
                 if (key.startsWith(OptionValuesImpl.SYSTEM_PROPERTY_PREFIX)) {
                     final String optionKey = key.substring(OptionValuesImpl.SYSTEM_PROPERTY_PREFIX.length());

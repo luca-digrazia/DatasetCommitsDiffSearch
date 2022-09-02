@@ -44,8 +44,8 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.nodes.EncapsulatingNodeReference;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.nodes.NodeUtil;
 import com.oracle.truffle.api.nodes.RootNode;
 
 abstract class GuestToHostRootNode extends RootNode {
@@ -57,6 +57,8 @@ abstract class GuestToHostRootNode extends RootNode {
     protected GuestToHostRootNode(Class<?> targetType, String methodName) {
         super(null);
         this.boundaryName = targetType.getName() + "." + methodName;
+        // this avoids a memory leak with the root node if it is shared globally
+        EngineAccessor.NODES.clearPolyglotEngine(this);
     }
 
     @Override
@@ -88,7 +90,7 @@ abstract class GuestToHostRootNode extends RootNode {
     }
 
     @SuppressWarnings({"unchecked", "unused"})
-    static <E extends Throwable> RuntimeException silenceException(Class<E> type, Throwable ex) throws E {
+    static <E extends Exception> RuntimeException silenceException(Class<E> type, Exception ex) throws E {
         throw (E) ex;
     }
 
@@ -103,7 +105,7 @@ abstract class GuestToHostRootNode extends RootNode {
         if (node.isAdoptable()) {
             encapsulatingNode = node;
         } else {
-            encapsulatingNode = EncapsulatingNodeReference.getCurrent().get();
+            encapsulatingNode = NodeUtil.getCurrentEncapsulatingNode();
         }
         return EngineAccessor.RUNTIME.callInlined(encapsulatingNode, target, arguments);
     }

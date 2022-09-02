@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2014, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,102 +24,23 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.options.OptionDescriptors;
-import org.graalvm.options.OptionValues;
-
-import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.frame.FrameDescriptor;
+import com.oracle.truffle.api.impl.Accessor.RuntimeSupport;
 import com.oracle.truffle.api.impl.TVMCI;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
-
-import java.util.function.Supplier;
 
 final class GraalTVMCI extends TVMCI {
 
     @Override
-    public void onLoopCount(Node source, int count) {
-        Node node = source;
-        Node parentNode = source != null ? source.getParent() : null;
-        while (node != null) {
-            if (node instanceof OptimizedOSRLoopNode) {
-                ((OptimizedOSRLoopNode) node).reportChildLoopCount(count);
-            }
-            parentNode = node;
-            node = node.getParent();
-        }
-        if (parentNode != null && parentNode instanceof RootNode) {
-            CallTarget target = ((RootNode) parentNode).getCallTarget();
-            if (target instanceof OptimizedCallTarget) {
-                ((OptimizedCallTarget) target).onLoopCount(count);
-            }
-        }
+    protected RuntimeSupport createRuntimeSupport(Object permission) {
+        return new GraalRuntimeSupport(permission);
     }
 
-    @Override
-    protected boolean isGuestCallStackFrame(StackTraceElement e) {
-        return e.getMethodName().equals(OptimizedCallTarget.CALL_BOUNDARY_METHOD_NAME) && e.getClassName().equals(OptimizedCallTarget.class.getName());
+    static EngineData getEngineData(RootNode rootNode) {
+        return getOrCreateRuntimeData(rootNode, EngineData.ENGINE_DATA_SUPPLIER);
     }
 
-    @Override
-    protected OptionDescriptors getCompilerOptionDescriptors() {
-        return PolyglotCompilerOptions.getDescriptors();
+    static void resetEngineData() {
+        TVMCI.resetFallbackEngineData();
     }
 
-    @Override
-    protected OptionValues getCompilerOptionValues(RootNode rootNode) {
-        return super.getCompilerOptionValues(rootNode);
-    }
-
-    void onFirstExecution(OptimizedCallTarget callTarget) {
-        super.onFirstExecution(callTarget.getRootNode());
-    }
-
-    @Override
-    protected void onLoad(RootNode rootNode) {
-        super.onLoad(rootNode);
-    }
-
-    @Override
-    protected void markFrameMaterializeCalled(FrameDescriptor descriptor) {
-        super.markFrameMaterializeCalled(descriptor);
-    }
-
-    @Override
-    protected void onThrowable(RootNode root, Throwable e) {
-        super.onThrowable(root, e);
-    }
-
-    @Override
-    protected boolean getFrameMaterializeCalled(FrameDescriptor descriptor) {
-        return super.getFrameMaterializeCalled(descriptor);
-    }
-
-    @Override
-    public RootNode cloneUninitialized(RootNode root) {
-        return super.cloneUninitialized(root);
-    }
-
-    @Override
-    public boolean isCloneUninitializedSupported(RootNode root) {
-        return super.isCloneUninitializedSupported(root);
-    }
-
-    @Override
-    protected <T> T getOrCreateRuntimeData(RootNode rootNode, Supplier<T> constructor) {
-        return super.getOrCreateRuntimeData(rootNode, constructor);
-    }
-
-    /**
-     * Class used to store data used by the compiler in the Engine. Enables "global" compiler state
-     * per engine.
-     */
-    static class EngineData {
-        int splitLimit;
-        int splitCount;
-    }
-
-    EngineData getEngineData(RootNode rootNode) {
-        return getOrCreateRuntimeData(rootNode, EngineData::new);
-    }
 }
