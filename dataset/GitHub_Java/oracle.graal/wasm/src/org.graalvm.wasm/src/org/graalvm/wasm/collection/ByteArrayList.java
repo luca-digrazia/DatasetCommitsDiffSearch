@@ -1,80 +1,113 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * All rights reserved.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * Redistribution and use in source and binary forms, with or without modification, are
- * permitted provided that the following conditions are met:
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * 1. Redistributions of source code must retain the above copyright notice, this list of
- * conditions and the following disclaimer.
+ * (a) the Software, and
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice, this list of
- * conditions and the following disclaimer in the documentation and/or other materials provided
- * with the distribution.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
  *
- * 3. Neither the name of the copyright holder nor the names of its contributors may be used to
- * endorse or promote products derived from this software without specific prior written
- * permission.
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package org.graalvm.wasm.collection;
 
 import java.util.Arrays;
+import java.util.NoSuchElementException;
 
 public final class ByteArrayList {
     private static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
     private byte[] array;
-    private int offset;
+    private int size;
 
     public ByteArrayList() {
         this.array = null;
-        this.offset = 0;
+        this.size = 0;
     }
 
     public void add(byte b) {
         ensureSize();
-        array[offset] = b;
-        offset++;
+        array[size] = b;
+        size++;
+    }
+
+    public void push(byte b) {
+        add(b);
     }
 
     public byte popBack() {
-        offset--;
-        return array[offset];
+        if (size() == 0) {
+            throw new NoSuchElementException("Cannot pop from an empty ByteArrayList.");
+        }
+        size--;
+        return array[size];
+    }
+
+    public byte top() {
+        return array[size - 1];
+    }
+
+    public void set(int index, byte b) {
+        if (index >= size()) {
+            throw new IndexOutOfBoundsException("Index " + index + " greater or equal to list size" + size() + ".");
+        }
+        array[index] = b;
     }
 
     public byte get(int index) {
+        if (index >= size()) {
+            throw new IndexOutOfBoundsException("Index " + index + " greater or equal to list size" + size() + ".");
+        }
         return array[index];
     }
 
     public int size() {
-        return offset;
+        return size;
     }
 
     private void ensureSize() {
         if (array == null) {
             array = new byte[4];
-        } else if (offset == array.length) {
+        } else if (size == array.length) {
             byte[] narray = new byte[array.length * 2];
-            System.arraycopy(array, 0, narray, 0, offset);
+            System.arraycopy(array, 0, narray, 0, size);
             array = narray;
         }
     }
 
     public byte[] toArray() {
-        byte[] result = new byte[offset];
+        byte[] result = new byte[size];
         if (array != null) {
-            System.arraycopy(array, 0, result, 0, offset);
+            System.arraycopy(array, 0, result, 0, size);
             return result;
         } else {
             return EMPTY_BYTE_ARRAY;
@@ -87,8 +120,8 @@ public final class ByteArrayList {
         int resultOffset = 0;
         for (ByteArrayList byteArrayList : byteArrayLists) {
             if (byteArrayList.array != null) {
-                System.arraycopy(byteArrayList.array, 0, result, resultOffset, byteArrayList.offset);
-                resultOffset += byteArrayList.offset;
+                System.arraycopy(byteArrayList.array, 0, result, resultOffset, byteArrayList.size);
+                resultOffset += byteArrayList.size;
             }
         }
         return result;
