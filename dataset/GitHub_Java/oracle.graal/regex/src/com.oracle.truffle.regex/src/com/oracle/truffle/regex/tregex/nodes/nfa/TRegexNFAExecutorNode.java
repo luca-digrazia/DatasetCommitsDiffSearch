@@ -1,31 +1,49 @@
 /*
- * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.  Oracle designates this
- * particular file as subject to the "Classpath" exception as provided
- * by Oracle in the LICENSE file that accompanied this code.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 package com.oracle.truffle.regex.tregex.nodes.nfa;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.nodes.LoopNode;
+import com.oracle.truffle.regex.RegexRootNode;
 import com.oracle.truffle.regex.tregex.TRegexOptions;
 import com.oracle.truffle.regex.tregex.nfa.NFA;
 import com.oracle.truffle.regex.tregex.nfa.NFAState;
@@ -37,19 +55,18 @@ import com.oracle.truffle.regex.tregex.nodes.dfa.TRegexDFAExecutorNode;
 /**
  * This regex executor matches a given expression by calculating DFA states from the NFA on the fly,
  * without any caching. It is used as a placeholder for {@link TRegexDFAExecutorNode} until the
- * expression is executed {@link TRegexOptions#TRegexGenerateDFAThreshold} times, in order to avoid
- * the costly DFA generation on all expressions that are not on any hot code paths.
+ * expression is executed {@link TRegexOptions#TRegexGenerateDFAThresholdCalls} times, in order to
+ * avoid the costly DFA generation on all expressions that are not on any hot code paths.
  */
-public class TRegexNFAExecutorNode extends TRegexExecutorNode {
+public final class TRegexNFAExecutorNode extends TRegexExecutorNode {
 
     private final NFA nfa;
-    private final int numberOfCaptureGroups;
     private final boolean searching;
+    private boolean dfaGeneratorBailedOut;
 
-    public TRegexNFAExecutorNode(NFA nfa, int numberOfCaptureGroups) {
+    public TRegexNFAExecutorNode(NFA nfa) {
         this.nfa = nfa;
         nfa.setInitialLoopBack(false);
-        this.numberOfCaptureGroups = numberOfCaptureGroups;
         this.searching = !nfa.getAst().getFlags().isSticky() && !nfa.getAst().getRoot().startsWithCaret();
         for (int i = 0; i < nfa.getNumberOfTransitions(); i++) {
             if (nfa.getTransitions()[i] != null) {
@@ -62,13 +79,23 @@ public class TRegexNFAExecutorNode extends TRegexExecutorNode {
         return nfa;
     }
 
-    public int getNumberOfCaptureGroups() {
-        return numberOfCaptureGroups;
+    public void notifyDfaGeneratorBailedOut() {
+        dfaGeneratorBailedOut = true;
+    }
+
+    @Override
+    public boolean isForward() {
+        return true;
+    }
+
+    @Override
+    public boolean writesCaptureGroups() {
+        return true;
     }
 
     @Override
     public TRegexExecutorLocals createLocals(Object input, int fromIndex, int index, int maxIndex) {
-        return new TRegexNFAExecutorLocals(input, fromIndex, index, maxIndex, numberOfCaptureGroups, nfa.getNumberOfStates());
+        return new TRegexNFAExecutorLocals(input, fromIndex, index, maxIndex, getNumberOfCaptureGroups(), nfa.getNumberOfStates());
     }
 
     @Override
@@ -76,11 +103,10 @@ public class TRegexNFAExecutorNode extends TRegexExecutorNode {
         TRegexNFAExecutorLocals locals = (TRegexNFAExecutorLocals) abstractLocals;
         CompilerDirectives.ensureVirtualized(locals);
 
-        final int offset = Math.min(locals.getIndex(), nfa.getAnchoredEntry().length - 1);
-        locals.setIndex(locals.getIndex() - offset);
+        final int offset = rewindUpTo(locals, 0, nfa.getAnchoredEntry().length - 1);
         int anchoredInitialState = nfa.getAnchoredEntry()[offset].getTarget().getId();
         int unAnchoredInitialState = nfa.getUnAnchoredEntry()[offset].getTarget().getId();
-        if (unAnchoredInitialState != anchoredInitialState && locals.getIndex() == 0) {
+        if (unAnchoredInitialState != anchoredInitialState && inputAtBegin(locals)) {
             locals.addInitialState(anchoredInitialState);
         }
         if (nfa.getState(unAnchoredInitialState) != null) {
@@ -90,8 +116,22 @@ public class TRegexNFAExecutorNode extends TRegexExecutorNode {
             return null;
         }
         while (true) {
-            if (locals.getIndex() < getInputLength(locals)) {
+            if (dfaGeneratorBailedOut) {
+                LoopNode.reportLoopCount(this, 1);
+            }
+            if (CompilerDirectives.inInterpreter()) {
+                RegexRootNode.checkThreadInterrupted();
+            }
+            if (inputHasNext(locals)) {
                 findNextStates(locals);
+                // If locals.successorsEmpty() is true, then all of our paths have either been
+                // finished, discarded due to priority or failed to match. If we managed to finish
+                // any path to a final state (i.e. locals.hasResult() is true), we can terminate
+                // the search now.
+                // We can also terminate the search now if we were interested only in matches at
+                // the very start of the string (i.e. searching is false). Such a search would
+                // only have walked through the rest of the string without considering any other
+                // paths.
                 if (locals.successorsEmpty() && (!searching || locals.hasResult())) {
                     return locals.getResult();
                 }
@@ -99,28 +139,40 @@ public class TRegexNFAExecutorNode extends TRegexExecutorNode {
                 findNextStatesAtEnd(locals);
                 return locals.getResult();
             }
-            locals.nextChar();
+            locals.nextState();
+            inputAdvance(locals);
         }
     }
 
     private void findNextStates(TRegexNFAExecutorLocals locals) {
-        char c = getChar(locals);
+        int c = inputReadAndDecode(locals);
         while (locals.hasNext()) {
             expandState(locals, locals.next(), c, false);
+            // If we have found a path to a final state, then we will trim all paths with lower
+            // priority (i.e. the rest of the elements in curStates).
             if (locals.isResultPushed()) {
                 return;
             }
         }
+        // We are supposed to find the first match of the regular expression. A match starting
+        // at a higher index has lower priority and so we give the lowest priority to the loopback
+        // transition.
+        // The loopback priority has to be lower than the priority of any path completed so far.
+        // Therefore, we only follow the loopback if no path has been completed so far
+        // (i.e. !locals.hasResult()).
         if (searching && !locals.hasResult() && locals.getIndex() >= locals.getFromIndex()) {
             expandState(locals, nfa.getInitialLoopBackTransition().getTarget().getId(), c, true);
         }
     }
 
-    private void expandState(TRegexNFAExecutorLocals locals, int stateId, char c, boolean isLoopBack) {
+    private void expandState(TRegexNFAExecutorLocals locals, int stateId, int c, boolean isLoopBack) {
         NFAState state = nfa.getState(stateId);
+        // If we manage to find a path to the (unanchored) final state, then we will trim all other
+        // paths leading from the current state as they all have lower priority. We do this by
+        // iterating through the transitions in priority order and stopping on the first transition
+        // to a final state.
         for (int i = 0; i < maxTransitionIndex(state); i++) {
-            NFAStateTransition t = state.getNext()[i];
-            NFAState target = t.getTarget();
+            NFAStateTransition t = state.getSuccessors()[i];
             int targetId = t.getTarget().getId();
             int markIndex = targetId >> 6;
             long markBit = 1L << targetId;
@@ -128,7 +180,7 @@ public class TRegexNFAExecutorNode extends TRegexExecutorNode {
                 locals.getMarks()[markIndex] |= markBit;
                 if (t.getTarget().isUnAnchoredFinalState(true)) {
                     locals.pushResult(t, !isLoopBack);
-                } else if (target.getCharSet().contains(c)) {
+                } else if (t.getCodePointSet().contains(c)) {
                     locals.pushSuccessor(t, !isLoopBack);
                 }
             }
@@ -136,7 +188,7 @@ public class TRegexNFAExecutorNode extends TRegexExecutorNode {
     }
 
     private static int maxTransitionIndex(NFAState state) {
-        return state.hasTransitionToUnAnchoredFinalState(true) ? state.getTransitionToUnAnchoredFinalStateId(true) + 1 : state.getNext().length;
+        return state.hasTransitionToUnAnchoredFinalState(true) ? state.getTransitionToUnAnchoredFinalStateId(true) + 1 : state.getSuccessors().length;
     }
 
     private void findNextStatesAtEnd(TRegexNFAExecutorLocals locals) {
