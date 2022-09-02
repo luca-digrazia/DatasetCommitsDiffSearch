@@ -210,7 +210,7 @@ public final class PolyglotLauncher extends LanguageLauncherBase {
         final Context.Builder contextBuilder = Context.newBuilder().options(polyglotOptions);
 
         contextBuilder.allowAllAccess(true);
-        setupContextBuilder(contextBuilder);
+        setupLogHandler(contextBuilder);
 
         if (version) {
             printVersion(Engine.newBuilder().options(polyglotOptions).build());

@@ -124,6 +124,8 @@ public abstract class Launcher {
      */
     private int optionIndent = LAUNCHER_OPTIONS_INDENT;
 
+    private VersionAction versionAction = VersionAction.None;
+
     /**
      * Accumulates help categories and their relevant options.
      * 
@@ -576,7 +578,17 @@ public abstract class Launcher {
      * @return {@code true} when execution should be terminated.
      * @since 20.0
      */
-    protected boolean runLauncherAction() {
+    protected final boolean runLauncherAction() {
+        switch (versionAction) {
+            case PrintAndExit:
+                printVersion();
+                return true;
+            case PrintAndContinue:
+                printVersion();
+                break;
+            case None:
+                break;
+        }
         boolean printDefaultHelp = help || ((helpExpert || helpInternal) && kindAndCategory.isEmpty() && !helpVM);
         OptionCategory hc = getHelpCategory();
         if (printDefaultHelp) {
@@ -623,6 +635,8 @@ public abstract class Launcher {
         launcherOption("--vm.[option]",                 "Pass options to the host VM. To see available options, use '--help:vm'.");
         launcherOption("--log.file=<String>",           "Redirect guest languages logging into a given file.");
         launcherOption("--log.[logger].level=<String>", "Set language log level to OFF, SEVERE, WARNING, INFO, CONFIG, FINE, FINER, FINEST or ALL.");
+        launcherOption("--version:graalvm",             "Print GraalVM version information and exit.");
+        launcherOption("--show-version:graalvm",        "Print GraalVM version information and continue execution.");
         launcherOption("--help",                        "Print this help message.");
         launcherOption("--help:vm",                     "Print options for the host VM.");
         // @formatter:on
@@ -750,6 +764,12 @@ public abstract class Launcher {
             case "--help:vm":
                 helpVM = true;
                 break;
+            case "--version:graalvm":
+                versionAction = VersionAction.PrintAndExit;
+                break;
+            case "--show-version:graalvm":
+                versionAction = VersionAction.PrintAndContinue;
+                break;
             case "--experimental-options":
             case "--experimental-options=true":
             case "--experimental-options=false":
@@ -856,6 +876,8 @@ public abstract class Launcher {
         options.add("--help:expert");
         options.add("--help:internal");
         options.add("--help:vm");
+        options.add("--version:graalvm");
+        options.add("--show-version:graalvm");
         return options;
     }
 
