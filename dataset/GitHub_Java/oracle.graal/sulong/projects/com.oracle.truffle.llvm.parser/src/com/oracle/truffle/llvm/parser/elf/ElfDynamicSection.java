@@ -116,16 +116,12 @@ public final class ElfDynamicSection {
         return getEntry(DT_NEEDED);
     }
 
-    private static Stream<String> splitPaths(String path) {
-        return Arrays.asList(path.split(":")).stream();
-    }
-
     public Stream<String> getDTRunPathStream() {
-        return getEntryStream(DT_RUNPATH).flatMap(ElfDynamicSection::splitPaths);
+        return getEntryStream(DT_RUNPATH);
     }
 
     public List<String> getDTRPath() {
-        return getEntryStream(DT_RPATH).flatMap(ElfDynamicSection::splitPaths).collect(Collectors.toList());
+        return getEntry(DT_RPATH);
     }
 
     private static ElfSectionHeaderTable.Entry getDynamiSHEntry(ElfSectionHeaderTable sht) {
