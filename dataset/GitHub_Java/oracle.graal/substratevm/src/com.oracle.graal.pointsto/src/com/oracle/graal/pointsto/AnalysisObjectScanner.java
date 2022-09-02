@@ -30,14 +30,13 @@ import com.oracle.graal.pointsto.flow.context.object.AnalysisObject;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.typestate.TypeState;
-import com.oracle.graal.pointsto.util.CompletionExecutor;
 
 import jdk.vm.ci.meta.JavaConstant;
 
 public class AnalysisObjectScanner extends ObjectScanner {
 
-    public AnalysisObjectScanner(BigBang bigbang, CompletionExecutor executor, ReusableSet scannedObjects) {
-        super(bigbang, executor, scannedObjects);
+    public AnalysisObjectScanner(BigBang bigbang, ReusableSet scannedObjects) {
+        super(bigbang, scannedObjects);
     }
 
     @Override
