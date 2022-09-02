@@ -27,13 +27,7 @@ package com.oracle.svm.core.jdk;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.util.GuardedAnnotationAccess;
-
-import com.oracle.svm.core.annotate.AutomaticFeature;
 
 /**
  * This class stores information about which packages need to be stored within each ClassLoader.
@@ -52,17 +46,9 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
  * updated to contain references to all appropriate packages.</li>
  * </ol>
  */
-@Platforms(Platform.HOSTED_ONLY.class)
-public final class ClassLoaderSupport {
+public class ClassLoaderSupport {
 
-    private static ClassLoaderSupport singleton() {
-        return ImageSingletons.lookup(ClassLoaderSupport.class);
-    }
-
-    ClassLoaderSupport() {
-    }
-
-    private final ConcurrentMap<ClassLoader, ConcurrentHashMap<String, Package>> registeredPackages = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<ClassLoader, ConcurrentHashMap<String, Package>> registeredPackages = new ConcurrentHashMap<>();
 
     public static void registerPackage(ClassLoader classLoader, String packageName, Package packageValue) {
         assert classLoader != null;
@@ -80,19 +66,11 @@ public final class ClassLoaderSupport {
          */
         GuardedAnnotationAccess.getAnnotations(packageValue);
 
-        ConcurrentMap<String, Package> classPackages = singleton().registeredPackages.computeIfAbsent(classLoader, k -> new ConcurrentHashMap<>());
+        ConcurrentMap<String, Package> classPackages = registeredPackages.computeIfAbsent(classLoader, k -> new ConcurrentHashMap<>());
         classPackages.putIfAbsent(packageName, packageValue);
     }
 
     public static ConcurrentHashMap<String, Package> getRegisteredPackages(ClassLoader classLoader) {
-        return singleton().registeredPackages.get(classLoader);
-    }
-}
-
-@AutomaticFeature
-final class ClassLoaderSupportFeature implements Feature {
-    @Override
-    public void afterRegistration(AfterRegistrationAccess access) {
-        ImageSingletons.add(ClassLoaderSupport.class, new ClassLoaderSupport());
+        return registeredPackages.get(classLoader);
     }
 }
