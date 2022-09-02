@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -182,8 +182,8 @@ public class StandardGraphBuilderPlugins {
         registerStringPlugins(plugins, replacements, snippetReflection, arrayEqualsSubstitution);
         registerCharacterPlugins(plugins);
         registerShortPlugins(plugins);
-        registerIntegerLongPlugins(plugins, JavaKind.Int);
-        registerIntegerLongPlugins(plugins, JavaKind.Long);
+        registerIntegerLongPlugins(plugins, JavaKind.Int, allowDeoptimization);
+        registerIntegerLongPlugins(plugins, JavaKind.Long, allowDeoptimization);
         registerFloatPlugins(plugins);
         registerDoublePlugins(plugins);
         if (arrayEqualsSubstitution) {
@@ -511,7 +511,7 @@ public class StandardGraphBuilderPlugins {
         r.register1("fullFence", Receiver.class, new UnsafeFencePlugin(LOAD_LOAD | STORE_STORE | LOAD_STORE | STORE_LOAD));
     }
 
-    private static void registerIntegerLongPlugins(InvocationPlugins plugins, JavaKind kind) {
+    private static void registerIntegerLongPlugins(InvocationPlugins plugins, JavaKind kind, boolean allowDeoptimization) {
         Class<?> declaringClass = kind.toBoxedJavaClass();
         Class<?> type = kind.toJavaClass();
         Registration r = new Registration(plugins, declaringClass);
@@ -525,7 +525,7 @@ public class StandardGraphBuilderPlugins {
         r.register2("divideUnsigned", type, type, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode dividend, ValueNode divisor) {
-                GuardingNode zeroCheck = b.maybeEmitExplicitDivisionByZeroCheck(divisor);
+                GuardingNode zeroCheck = maybeEmitDivisionByZeroCheck(b, divisor, allowDeoptimization);
                 b.push(kind, b.append(UnsignedDivNode.create(dividend, divisor, zeroCheck, NodeView.DEFAULT)));
                 return true;
             }
@@ -533,11 +533,20 @@ public class StandardGraphBuilderPlugins {
         r.register2("remainderUnsigned", type, type, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode dividend, ValueNode divisor) {
-                GuardingNode zeroCheck = b.maybeEmitExplicitDivisionByZeroCheck(divisor);
+                GuardingNode zeroCheck = maybeEmitDivisionByZeroCheck(b, divisor, allowDeoptimization);
                 b.push(kind, b.append(UnsignedRemNode.create(dividend, divisor, zeroCheck, NodeView.DEFAULT)));
                 return true;
             }
         });
+    }
+
+    private static GuardingNode maybeEmitDivisionByZeroCheck(GraphBuilderContext b, ValueNode divisor, boolean allowDeoptimization) {
+        if (allowDeoptimization || !((IntegerStamp) divisor.stamp(NodeView.DEFAULT)).contains(0)) {
+            return null;
+        }
+        ConstantNode zero = b.add(ConstantNode.defaultForKind(divisor.getStackKind()));
+        LogicNode condition = b.add(IntegerEqualsNode.create(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, divisor, zero, NodeView.DEFAULT));
+        return b.emitBytecodeExceptionCheck(condition, false, BytecodeExceptionKind.DIVISION_BY_ZERO);
     }
 
     private static void registerCharacterPlugins(InvocationPlugins plugins) {
@@ -1563,8 +1572,6 @@ public class StandardGraphBuilderPlugins {
                 return true;
             }
         };
-        // The purpose of this plugin is to help Blackhole.consume function mostly correctly even if
-        // it's been inlined.
         String[] names = {"org.openjdk.jmh.infra.Blackhole", "org.openjdk.jmh.logic.BlackHole"};
         for (String name : names) {
             Registration r = new Registration(plugins, name, replacements);
