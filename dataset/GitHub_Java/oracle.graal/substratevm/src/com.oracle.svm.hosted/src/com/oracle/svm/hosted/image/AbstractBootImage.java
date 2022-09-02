@@ -93,11 +93,11 @@ public abstract class AbstractBootImage {
         }
     }
 
-    protected final NativeImageKind imageKind;
+    protected final NativeImageKind kind;
 
     protected AbstractBootImage(NativeImageKind k, HostedUniverse universe, HostedMetaAccess metaAccess, NativeLibraries nativeLibs, NativeImageHeap heap, NativeImageCodeCache codeCache,
                     List<HostedMethod> entryPoints, ClassLoader imageClassLoader) {
-        this.imageKind = k;
+        this.kind = k;
         this.universe = universe;
         this.metaAccess = metaAccess;
         this.nativeLibs = nativeLibs;
@@ -107,8 +107,8 @@ public abstract class AbstractBootImage {
         this.imageClassLoader = imageClassLoader;
     }
 
-    public NativeImageKind getImageKind() {
-        return imageKind;
+    public NativeImageKind getBootImageKind() {
+        return kind;
     }
 
     public int getImageSize() {
@@ -163,5 +163,9 @@ public abstract class AbstractBootImage {
 
     public boolean requiresCustomDebugRelocation() {
         return false;
+    }
+
+    public AbstractBootImage.NativeImageKind getKind() {
+        return kind;
     }
 }

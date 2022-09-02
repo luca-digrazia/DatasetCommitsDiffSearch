@@ -332,14 +332,6 @@ public class SubstrateOptions {
     @Option(help = "Parse and consume standard options and system properties from the command line arguments when the VM is created.")//
     public static final HostedOptionKey<Boolean> ParseRuntimeOptions = new HostedOptionKey<>(true);
 
-    @Option(help = "Enable wildcard expansion in command line arguments on Windows.")//
-    public static final HostedOptionKey<Boolean> EnableWildcardExpansion = new HostedOptionKey<Boolean>(true) {
-        @Override
-        public Boolean getValue(OptionValues values) {
-            return super.getValue(values) && ParseRuntimeOptions.getValue(values);
-        }
-    };
-
     @Option(help = "Perform method inlining in the AOT compiled native image")//
     public static final HostedOptionKey<Boolean> AOTInline = new HostedOptionKey<>(true);
 
@@ -479,9 +471,6 @@ public class SubstrateOptions {
             throw UserError.abort("Invalid path provided for option DebugInfoSourceCacheRoot %s", DebugInfoSourceCacheRoot.getValue());
         }
     }
-
-    @Option(help = "Omit generation of DebugLineInfo originating from inlined methods") //
-    public static final HostedOptionKey<Boolean> OmitInlinedMethodDebugLineInfo = new HostedOptionKey<>(true);
 
     /** Command line option to disable image build server. */
     public static final String NO_SERVER = "--no-server";
