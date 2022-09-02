@@ -25,116 +25,19 @@ package com.oracle.truffle.espresso.substitutions;
 
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-// @formatter:off
-// Checkstyle: stop
-/**
- * Thread state manipulation:
- *
- * public static State toThreadState(int var0) {
- *         if ((var0 & 4) != 0) {
- *             return State.RUNNABLE;
- *         } else if ((var0 & 1024) != 0) {
- *             return State.BLOCKED;
- *         } else if ((var0 & 16) != 0) {
- *             return State.WAITING;
- *         } else if ((var0 & 32) != 0) {
- *             return State.TIMED_WAITING;
- *         } else if ((var0 & 2) != 0) {
- *             return State.TERMINATED;
- *         } else {
- *             return (var0 & 1) == 0 ? State.NEW : State.RUNNABLE;
- *         }
- *     }
- */
-// @formatter:on
-// Checkstyle: resume
-
 @EspressoSubstitutions
 public final class Target_java_lang_Thread {
 
-    private static int stateToInt(Thread.State state) {
-        switch (state) {
-            case NEW:
-                return 0;
-            case RUNNABLE:
-                return 4;
-            case BLOCKED:
-                return 1024;
-            case WAITING:
-                return 16;
-            case TIMED_WAITING:
-                return 32;
-            case TERMINATED:
-                return 2;
-            default:
-                throw EspressoError.shouldNotReachHere();
-        }
-    }
-
-    enum State {
-        NEW(0),
-        RUNNABLE(4),
-        BLOCKED(1024),
-        WAITING(16),
-        TIMED_WAITING(32),
-        TERMINATED(2);
-
-        final int value;
-
-        State(int value) {
-            this.value = value;
-        }
-
-    }
     // TODO(peterssen): Remove single thread shim, support real threads.
-
     @Substitution
     public static @Host(Thread.class) StaticObject currentThread() {
         return EspressoLanguage.getCurrentContext().getHost2Guest(Thread.currentThread());
-    }
-
-    @SuppressWarnings("unused")
-    @Substitution(hasReceiver = true)
-    public static void start0(@Host(Thread.class) StaticObject self) {
-        if (EspressoOptions.ENABLE_THREADS) {
-            // Thread.start() is synchronized.
-            EspressoContext context = self.getKlass().getContext();
-            Meta meta = context.getMeta();
-            Thread hostThread = context.getEnv().createThread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        // Execute the payload
-                        self.getKlass().vtableLookup(meta.Thread_run.getVTableIndex()).invokeDirect(self);
-                    } finally {
-                        self.setIntField(meta.Thread_state, State.TERMINATED.value);
-                        synchronized (self) {
-                            // Notify waiting threads you are done working
-                            self.notifyAll();
-                        }
-                        // Cleanup.
-                        meta.Thread_exit.invokeDirect(self);
-                    }
-                }
-            });
-
-            self.setHiddenField(meta.HIDDEN_HOST_THREAD, hostThread);
-            context.putHost2Guest(hostThread, self);
-            context.registerThread(hostThread);
-
-            System.err.println("Starting thread: " + self.getKlass());
-            hostThread.setDaemon((boolean) meta.Thread_daemon.get(self));
-            self.setIntField(meta.Thread_state, State.RUNNABLE.value);
-            hostThread.start();
-        } else {
-            System.err.println(
-                            "Thread.start() called on " + self.getKlass() + " but thread support is disabled. Use -Despresso.EnableThreads=true to enable experimental thread support.");
-        }
     }
 
     @Substitution
@@ -145,24 +48,22 @@ public final class Target_java_lang_Thread {
     @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
     public static void setPriority0(@Host(Thread.class) StaticObject self, int newPriority) {
-        Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        if (hostThread == null) {
-            return;
-        }
-        hostThread.setPriority(newPriority);
+        /* nop */
     }
 
+    @SuppressWarnings("unused")
+    @Substitution(hasReceiver = true)
+    public static void setDaemon(@Host(Thread.class) StaticObject self, boolean on) {
+        /* nop */ }
+
+    @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
     public static boolean isAlive(@Host(Thread.class) StaticObject self) {
-        int state = self.getIntField(self.getKlass().getMeta().Thread_state);
-        return state != State.NEW.value && state != State.TERMINATED.value;
-    }
-
-    @Substitution(hasReceiver = true)
-    public static @Host(Thread.State.class) StaticObject getState(@Host(Thread.class) StaticObject self) {
         Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        // If hostThread is null, start hasn't been called yet -> NEW state.
-        return (StaticObject) self.getKlass().getMeta().toThreadState.invokeDirect(null, hostThread == null ? State.NEW.value : stateToInt(hostThread.getState()));
+        if (hostThread == null) {
+            return false;
+        }
+        return hostThread.isAlive();
     }
 
     @SuppressWarnings("unused")
@@ -170,18 +71,36 @@ public final class Target_java_lang_Thread {
     public static void registerNatives() {
         /* nop */ }
 
+    @SuppressWarnings("unused")
     @Substitution(hasReceiver = true)
-    public static boolean isInterrupted(@Host(Thread.class) StaticObject self) {
-        Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        if (hostThread == null) {
-            return false;
+    public static void start0(@Host(Thread.class) StaticObject self) {
+        if (EspressoOptions.ENABLE_THREADS) {
+            EspressoContext context = self.getKlass().getContext();
+            Meta meta = context.getMeta();
+            Thread hostThread = EspressoLanguage.getCurrentContext().getEnv().createThread(new Runnable() {
+                @Override
+                public void run() {
+                    self.getKlass().lookupMethod(Name.run, Signature._void).invokeDirect(self);
+                }
+            });
+
+            self.setHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD, hostThread);
+            context.putHost2Guest(hostThread, self);
+            context.registerThread(hostThread);
+
+            System.err.println("Starting thread: " + self.getKlass());
+            hostThread.setDaemon((boolean) meta.Thread_daemon.get(self));
+            hostThread.start();
+        } else {
+            System.err.println(
+                            "Thread.start() called on " + self.getKlass() + " but thread support is disabled. Use -Despresso.EnableThreads=true to enable experimental thread support.");
         }
-        return hostThread.isInterrupted();
     }
 
-    @Substitution
-    public static boolean interrupted() {
-        return Thread.interrupted();
+    @SuppressWarnings("unused")
+    @Substitution(hasReceiver = true)
+    public static boolean isInterrupted(@Host(Thread.class) StaticObject self, boolean ClearInterrupted) {
+        return false;
     }
 
     @Substitution
@@ -212,23 +131,13 @@ public final class Target_java_lang_Thread {
         hostThread.interrupt();
     }
 
-    @SuppressWarnings("deprecation")
     @Substitution(hasReceiver = true)
-    public static void resume0(@Host(Object.class) StaticObject self) {
+    public static void join(@Host(Thread.class) StaticObject self, long millis)
+                    throws InterruptedException {
         Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
         if (hostThread == null) {
             return;
         }
-        hostThread.resume();
-    }
-
-    @SuppressWarnings("deprecation")
-    @Substitution(hasReceiver = true)
-    public static void suspend0(@Host(Object.class) StaticObject self) {
-        Thread hostThread = (Thread) self.getHiddenField(self.getKlass().getMeta().HIDDEN_HOST_THREAD);
-        if (hostThread == null) {
-            return;
-        }
-        hostThread.suspend();
+        hostThread.join(millis);
     }
 }
