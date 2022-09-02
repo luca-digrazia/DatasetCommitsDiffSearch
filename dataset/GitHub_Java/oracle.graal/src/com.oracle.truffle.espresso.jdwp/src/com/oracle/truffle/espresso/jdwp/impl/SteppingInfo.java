@@ -27,12 +27,10 @@ public final class SteppingInfo {
     private final int requestId;
     private final byte suspendPolicy;
     private long stepOutBCI = -1;
-    private final boolean isPopFrames;
 
-    public SteppingInfo(int requestId, byte suspendPolicy, boolean isPopFrames) {
+    public SteppingInfo(int requestId, byte suspendPolicy) {
         this.requestId = requestId;
         this.suspendPolicy = suspendPolicy;
-        this.isPopFrames = isPopFrames;
     }
 
     public int getRequestId() {
@@ -49,9 +47,5 @@ public final class SteppingInfo {
 
     public long getStepOutBCI() {
         return stepOutBCI;
-    }
-
-    public boolean isPopFrames() {
-        return isPopFrames;
     }
 }

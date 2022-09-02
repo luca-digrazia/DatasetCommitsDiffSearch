@@ -259,22 +259,22 @@ import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.BytecodeTableSwitch;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.bytecode.MapperBCI;
-import com.oracle.truffle.espresso.classfile.attributes.BootstrapMethodsAttribute;
-import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
-import com.oracle.truffle.espresso.classfile.constantpool.ClassConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.ConstantPool;
-import com.oracle.truffle.espresso.classfile.constantpool.DoubleConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.FloatConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.IntegerConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.InvokeDynamicConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.LongConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.MethodHandleConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.MethodRefConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.MethodTypeConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.NameAndTypeConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.PoolConstant;
-import com.oracle.truffle.espresso.classfile.constantpool.RuntimeConstantPool;
-import com.oracle.truffle.espresso.classfile.constantpool.StringConstant;
+import com.oracle.truffle.espresso.classfile.BootstrapMethodsAttribute;
+import com.oracle.truffle.espresso.classfile.ClassConstant;
+import com.oracle.truffle.espresso.classfile.ConstantPool;
+import com.oracle.truffle.espresso.classfile.DoubleConstant;
+import com.oracle.truffle.espresso.classfile.FloatConstant;
+import com.oracle.truffle.espresso.classfile.IntegerConstant;
+import com.oracle.truffle.espresso.classfile.InvokeDynamicConstant;
+import com.oracle.truffle.espresso.classfile.LineNumberTable;
+import com.oracle.truffle.espresso.classfile.LongConstant;
+import com.oracle.truffle.espresso.classfile.MethodHandleConstant;
+import com.oracle.truffle.espresso.classfile.MethodRefConstant;
+import com.oracle.truffle.espresso.classfile.MethodTypeConstant;
+import com.oracle.truffle.espresso.classfile.NameAndTypeConstant;
+import com.oracle.truffle.espresso.classfile.PoolConstant;
+import com.oracle.truffle.espresso.classfile.RuntimeConstantPool;
+import com.oracle.truffle.espresso.classfile.StringConstant;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
@@ -286,17 +286,6 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.meta.Meta;
-import com.oracle.truffle.espresso.nodes.quick.CheckCastNodeGen;
-import com.oracle.truffle.espresso.nodes.quick.InstanceOfNodeGen;
-import com.oracle.truffle.espresso.nodes.quick.QuickNode;
-import com.oracle.truffle.espresso.nodes.quick.invoke.InlinedGetterNode;
-import com.oracle.truffle.espresso.nodes.quick.invoke.InlinedSetterNode;
-import com.oracle.truffle.espresso.nodes.quick.invoke.InvokeDynamicCallSiteNode;
-import com.oracle.truffle.espresso.nodes.quick.invoke.InvokeHandleNode;
-import com.oracle.truffle.espresso.nodes.quick.invoke.InvokeInterfaceNodeGen;
-import com.oracle.truffle.espresso.nodes.quick.invoke.InvokeSpecialNode;
-import com.oracle.truffle.espresso.nodes.quick.invoke.InvokeStaticNode;
-import com.oracle.truffle.espresso.nodes.quick.invoke.InvokeVirtualNodeGen;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
@@ -321,6 +310,10 @@ import com.oracle.truffle.object.DebugCounter;
  * {@code top} of the stack index is adjusted depending on the bytecode stack offset.
  */
 public final class BytecodeNode extends EspressoMethodNode implements CustomNodeCount {
+
+    public static final boolean DEBUG_GENERAL = false;
+    public static final boolean DEBUG_THROWN = false;
+    public static final boolean DEBUG_CATCH = false;
 
     public static final DebugCounter bcCount = DebugCounter.create("Bytecodes executed");
 
@@ -379,8 +372,8 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         if (s == null) {
             return null;
         }
-        LineNumberTableAttribute table = getMethod().getLineNumberTable();
-        if (table == LineNumberTableAttribute.EMPTY) {
+        LineNumberTable table = getMethod().getLineNumberTable();
+        if (table == LineNumberTable.EMPTY) {
             return null;
         }
         int line = table.getLineNumber(bci);
@@ -441,12 +434,12 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         frame.setInt(bciSlot, bci);
     }
 
-    public int peekInt(VirtualFrame frame, int slot) {
+    int peekInt(VirtualFrame frame, int slot) {
         return (int) FrameUtil.getLongSafe(frame, stackSlots[slot]);
     }
 
     // Exposed to InstanceOfNode.
-    public StaticObject peekObject(VirtualFrame frame, int slot) {
+    StaticObject peekObject(VirtualFrame frame, int slot) {
         Object result = FrameUtil.getObjectSafe(frame, stackSlots[slot]);
         assert result instanceof StaticObject;
         return (StaticObject) result;
@@ -455,7 +448,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     /**
      * Read and clear the operand stack slot.
      */
-    public StaticObject peekAndReleaseObject(VirtualFrame frame, int slot) {
+    StaticObject peekAndReleaseObject(VirtualFrame frame, int slot) {
         Object result = FrameUtil.getObjectSafe(frame, stackSlots[slot]);
         // nulls-out the slot, use peekObject to read only
         putObject(frame, slot, null);
@@ -464,19 +457,19 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
     }
 
     // Boxed value.
-    public Object peekValue(VirtualFrame frame, int slot) {
+    Object peekValue(VirtualFrame frame, int slot) {
         return frame.getValue(stackSlots[slot]);
     }
 
-    public float peekFloat(VirtualFrame frame, int slot) {
+    float peekFloat(VirtualFrame frame, int slot) {
         return Float.intBitsToFloat((int) FrameUtil.getLongSafe(frame, stackSlots[slot]));
     }
 
-    public long peekLong(VirtualFrame frame, int slot) {
+    long peekLong(VirtualFrame frame, int slot) {
         return FrameUtil.getLongSafe(frame, stackSlots[slot]);
     }
 
-    public double peekDouble(VirtualFrame frame, int slot) {
+    double peekDouble(VirtualFrame frame, int slot) {
         return Double.longBitsToDouble(FrameUtil.getLongSafe(frame, stackSlots[slot]));
     }
 
@@ -494,7 +487,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         frame.setObject(stackSlots[slot], ReturnAddress.create(targetBCI));
     }
 
-    public void putObject(VirtualFrame frame, int slot, StaticObject value) {
+    void putObject(VirtualFrame frame, int slot, StaticObject value) {
         frame.setObject(stackSlots[slot], value);
     }
 
@@ -503,20 +496,20 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
         frame.setObject(stackSlots[slot], value);
     }
 
-    public void putInt(VirtualFrame frame, int slot, int value) {
+    void putInt(VirtualFrame frame, int slot, int value) {
         frame.setLong(stackSlots[slot], value);
     }
 
-    public void putFloat(VirtualFrame frame, int slot, float value) {
+    void putFloat(VirtualFrame frame, int slot, float value) {
         frame.setLong(stackSlots[slot], Float.floatToRawIntBits(value));
     }
 
-    public void putLong(VirtualFrame frame, int slot, long value) {
+    void putLong(VirtualFrame frame, int slot, long value) {
         // frame.setObject(stackSlots[slot], StaticObject.NULL);
         frame.setLong(stackSlots[slot + 1], value);
     }
 
-    public void putDouble(VirtualFrame frame, int slot, double value) {
+    void putDouble(VirtualFrame frame, int slot, double value) {
         // frame.setObject(stackSlots[slot], StaticObject.NULL);
         frame.setLong(stackSlots[slot + 1], Double.doubleToRawLongBits(value));
     }
@@ -1124,6 +1117,9 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                         nextStatementIndex = instrument.getStatementIndexAfterJump(statementIndex, curBCI, targetBCI);
                     }
                     curBCI = targetBCI;
+                    if (DEBUG_CATCH) {
+                        reportCatch(e, curBCI, this);
+                    }
                     continue loop; // skip bs.next()
                 } else {
                     throw e;
@@ -1331,6 +1327,44 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
                 Target_java_lang_Thread.checkDeprecatedState(getMeta(), getContext().getCurrentThread());
             }
         }
+    }
+
+    @TruffleBoundary
+    private static void reportThrow(int curBCI, Method method, StaticObject e) {
+        if (method.getName().toString().contains("refill") ||
+                        method.getName().toString().contains("loadClass") ||
+                        method.getName().toString().contains("findClass")) {
+            return;
+        }
+        System.err.println(e.getKlass().getType() + ": " + EspressoException.getMessage(e) + "\n\t" + method.report(curBCI));
+    }
+
+    @TruffleBoundary
+    private static void reportRuntimeException(RuntimeException e, int curBCI, BytecodeNode thisNode) {
+        Method m = thisNode.getMethod();
+        System.err.println("Internal error (caught in invocation): " + m.report(curBCI));
+        if (e.getCause() != null) {
+            e.getCause().printStackTrace();
+        }
+        e.printStackTrace();
+    }
+
+    @TruffleBoundary
+    private static void reportVMError(VirtualMachineError e, int curBCI, BytecodeNode thisNode) {
+        Method m = thisNode.getMethod();
+        System.err.println("Internal error (caught in invocation): " + m.report(curBCI));
+        e.printStackTrace();
+    }
+
+    @TruffleBoundary
+    private static void reportCatch(EspressoException e, int curBCI, BytecodeNode thisNode) {
+        if (thisNode.getMethod().getName().toString().contains("refill") ||
+                        thisNode.getMethod().getName().toString().contains("loadClass") ||
+                        thisNode.getMethod().getName().toString().contains("findClass")) {
+            return;
+        }
+        System.err.println("Caught: " + e.getExceptionObject().getKlass().getType() + ": " + e.getMessage() +
+                        "\n\t In: " + thisNode + " at line: " + thisNode.getMethod().bciToLineNumber(curBCI));
     }
 
     private JavaKind peekKind(VirtualFrame frame, int slot) {
@@ -1610,7 +1644,7 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
      * Revert speculative quickening e.g. revert inlined fields accessors to a normal invoke.
      * INVOKEVIRTUAL -> QUICK (InlinedGetter/SetterNode) -> QUICK (InvokeVirtualNode)
      */
-    public int reQuickenInvoke(final VirtualFrame frame, int top, int curBCI, int opCode, Method resolutionSeed) {
+    int reQuickenInvoke(final VirtualFrame frame, int top, int curBCI, int opCode, Method resolutionSeed) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         assert Bytecodes.isInvoke(opCode);
         QuickNode invoke = null;
@@ -2351,16 +2385,16 @@ public final class BytecodeNode extends EspressoMethodNode implements CustomNode
 
         InstrumentationSupport(Method method) {
             this.context = method.getContext();
-            LineNumberTableAttribute table = method.getLineNumberTable();
             this.method = method;
+            LineNumberTable table = method.getLineNumberTable();
 
-            if (table != LineNumberTableAttribute.EMPTY) {
-                LineNumberTableAttribute.Entry[] entries = table.getEntries();
+            if (table != LineNumberTable.EMPTY) {
+                LineNumberTable.Entry[] entries = table.getEntries();
                 this.statementNodes = new EspressoInstrumentableNode[entries.length];
                 this.hookBCIToNodeIndex = new MapperBCI(table);
 
                 for (int i = 0; i < entries.length; i++) {
-                    LineNumberTableAttribute.Entry entry = entries[i];
+                    LineNumberTable.Entry entry = entries[i];
                     statementNodes[hookBCIToNodeIndex.initIndex(i, entry.getBCI())] = new EspressoStatementNode(entry.getBCI(), entry.getLineNumber());
                 }
             } else {

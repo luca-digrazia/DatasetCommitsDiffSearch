@@ -149,7 +149,11 @@ public abstract class EspressoRootNode extends RootNode implements ContextAccess
 
         @Override
         public Object execute(VirtualFrame frame) {
-            return methodNode.execute(frame);
+            try {
+                return methodNode.execute(frame);
+            } catch (EspressoException e) {
+                throw e;
+            }
         }
     }
 }

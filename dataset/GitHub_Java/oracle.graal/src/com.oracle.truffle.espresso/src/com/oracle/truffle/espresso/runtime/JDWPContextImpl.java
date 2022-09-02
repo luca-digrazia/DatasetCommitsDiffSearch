@@ -34,7 +34,7 @@ import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
-import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
+import com.oracle.truffle.espresso.classfile.LineNumberTable;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
 import com.oracle.truffle.espresso.impl.Method;
@@ -105,7 +105,7 @@ public final class JDWPContextImpl implements JDWPContext {
     public boolean isValidThread(Object thread) {
         if (thread instanceof StaticObject) {
             StaticObject staticObject = (StaticObject) thread;
-            return context.getMeta().java_lang_Thread.isAssignableFrom(staticObject.getKlass());
+            return context.getMeta().Thread.isAssignableFrom(staticObject.getKlass());
         } else {
             return false;
         }
@@ -115,7 +115,7 @@ public final class JDWPContextImpl implements JDWPContext {
     public boolean isValidThreadGroup(Object threadGroup) {
         if (threadGroup instanceof StaticObject) {
             StaticObject staticObject = (StaticObject) threadGroup;
-            return context.getMeta().java_lang_ThreadGroup.isAssignableFrom(staticObject.getKlass());
+            return context.getMeta().ThreadGroup.isAssignableFrom(staticObject.getKlass());
         } else {
             return false;
         }
@@ -274,7 +274,7 @@ public final class JDWPContextImpl implements JDWPContext {
     public KlassRef getReflectedType(Object classObject) {
         if (classObject instanceof StaticObject) {
             StaticObject staticObject = (StaticObject) classObject;
-            if (staticObject.getKlass().getType() == Symbol.Type.java_lang_Class) {
+            if (staticObject.getKlass().getType() == Symbol.Type.Class) {
                 return (KlassRef) staticObject.getHiddenField(context.getMeta().HIDDEN_MIRROR_KLASS);
             }
         }
@@ -319,13 +319,13 @@ public final class JDWPContextImpl implements JDWPContext {
                     tag = TagConstants.STRING;
                 } else if (staticObject.getKlass().isArray()) {
                     tag = TagConstants.ARRAY;
-                } else if (context.getMeta().java_lang_Thread.isAssignableFrom(staticObject.getKlass())) {
+                } else if (context.getMeta().Thread.isAssignableFrom(staticObject.getKlass())) {
                     tag = TagConstants.THREAD;
-                } else if (context.getMeta().java_lang_ThreadGroup.isAssignableFrom(staticObject.getKlass())) {
+                } else if (context.getMeta().ThreadGroup.isAssignableFrom(staticObject.getKlass())) {
                     tag = TagConstants.THREAD_GROUP;
-                } else if (staticObject.getKlass() == context.getMeta().java_lang_Class) {
+                } else if (staticObject.getKlass() == context.getMeta().Class) {
                     tag = TagConstants.CLASS_OBJECT;
-                } else if (context.getMeta().java_lang_ClassLoader.isAssignableFrom(staticObject.getKlass())) {
+                } else if (context.getMeta().ClassLoader.isAssignableFrom(staticObject.getKlass())) {
                     tag = TagConstants.CLASS_LOADER;
                 }
             }
@@ -341,17 +341,17 @@ public final class JDWPContextImpl implements JDWPContext {
 
     @Override
     public String getThreadName(Object thread) {
-        return context.getMeta().java_lang_Thread_name.get(((StaticObject) thread)).toString();
+        return context.getMeta().Thread_name.get(((StaticObject) thread)).toString();
     }
 
     @Override
     public int getThreadStatus(Object thread) {
-        return (int) context.getMeta().java_lang_Thread_threadStatus.get((StaticObject) thread);
+        return (int) context.getMeta().Thread_threadStatus.get((StaticObject) thread);
     }
 
     @Override
     public Object getThreadGroup(Object thread) {
-        return context.getMeta().java_lang_Thread_group.get((StaticObject) thread);
+        return context.getMeta().Thread_group.get((StaticObject) thread);
     }
 
     @Override
@@ -551,8 +551,8 @@ public final class JDWPContextImpl implements JDWPContext {
             if (bci != -1) {
                 Method method = espressoRootNode.getMethod();
                 BytecodeStream bs = new BytecodeStream(method.getOriginalCode());
-                LineNumberTableAttribute lineNumberTable = method.getLineNumberTable();
-                if (lineNumberTable == LineNumberTableAttribute.EMPTY) {
+                LineNumberTable lineNumberTable = method.getLineNumberTable();
+                if (lineNumberTable == LineNumberTable.EMPTY) {
                     return false;
                 }
 

@@ -24,7 +24,6 @@ package com.oracle.truffle.espresso.jdwp.api;
 
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.espresso.jdwp.impl.MonitorInfo;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -366,6 +365,16 @@ public interface JDWPContext {
     void exit(int exitCode);
 
     /**
+     * This method is called when the VM should hold JDWP events.
+     */
+    void holdEvents();
+
+    /**
+     * This method is called when the VM should release all held JDWP events.
+     */
+    void releaseEvents();
+
+    /**
      * Returns the classpath.
      *
      * @return a list representation of each classpath entry
@@ -407,35 +416,4 @@ public interface JDWPContext {
      * @return the BCI or -1
      */
     long readBCIFromFrame(RootNode root, FrameInstance frameInstance);
-
-    /**
-     * Returns a {@link CallFrame} representation of the location of {@code Object.wait(long timeout)}.
-     *
-     * @return the {@link CallFrame} that represents the monitor wait method
-     */
-    CallFrame locateObjectWaitFrame();
-
-    /**
-     * Returns the owner thread of an object used as a monitor.
-     *
-     * @param monitor the monitor object
-     * @return the guest language thread object that currently owns the monitor
-     */
-    Object getMonitorOwnerThread(Object monitor);
-
-    /**
-     * Returns monitor information for the given monitor.
-     *
-     * @param monitor the monitor object
-     * @return the monitor info
-     */
-    MonitorInfo getMonitorInfo(Object monitor);
-
-    /**
-     * Returns all owned guest-language monitor object of the input guest thread.
-     *
-     * @param thread the guest thread
-     * @return the owned monitor objects
-     */
-    Object[] getOwnedMonitors(Object thread);
 }
