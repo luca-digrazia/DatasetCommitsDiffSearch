@@ -37,6 +37,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
+import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Shared;
@@ -101,7 +102,7 @@ public final class SulongLibrary implements TruffleObject {
             RootCallTarget startCallTarget = language.getStartFunctionCode().getLLVMIRFunctionSlowPath();
             Path applicationPath = Paths.get(mainFunction.getStringPath());
             RootNode rootNode = new LLVMGlobalRootNode(language, new FrameDescriptor(), mainFunction, startCallTarget, Objects.toString(applicationPath, ""));
-            return LLVMLanguage.createCallTarget(rootNode);
+            return Truffle.getRuntime().createCallTarget(rootNode);
         }
     }
 
