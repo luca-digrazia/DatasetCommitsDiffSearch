@@ -40,6 +40,25 @@
  */
 package com.oracle.truffle.polyglot;
 
+import java.lang.reflect.Array;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.ReadOnlyBufferException;
+import java.sql.Time;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -58,8 +77,8 @@ import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.InvalidBufferOffsetException;
 import com.oracle.truffle.api.interop.StopIterationException;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.interop.UnknownKeyException;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnknownKeyException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -70,24 +89,6 @@ import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.api.profiles.ValueProfile;
 import com.oracle.truffle.api.utilities.TriState;
 import com.oracle.truffle.polyglot.PolyglotLanguageContext.ToGuestValueNode;
-
-import java.lang.reflect.Array;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.ReadOnlyBufferException;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Objects;
 
 @ExportLibrary(InteropLibrary.class)
 @SuppressWarnings("unused")
@@ -453,15 +454,9 @@ final class HostObject implements TruffleObject {
 
         @Specialization(guards = "isList.execute(receiver)", limit = "1")
         static boolean doList(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList,
-                        @Shared("error") @Cached BranchProfile error) {
-            try {
-                long size = receiver.getListSize();
-                return index >= 0 && index < size;
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+                        @Shared("isList") @Cached IsListNode isList) {
+            long size = receiver.getListSize();
+            return index >= 0 && index < size;
         }
 
         @Specialization(guards = "isMapEntry.execute(receiver)", limit = "1")
@@ -491,15 +486,9 @@ final class HostObject implements TruffleObject {
 
         @Specialization(guards = "isList.execute(receiver)", limit = "1")
         static boolean doList(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList,
-                        @Shared("error") @Cached BranchProfile error) {
-            try {
-                long size = receiver.getListSize();
-                return index >= 0 && index < size;
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+                        @Shared("isList") @Cached IsListNode isList) {
+            long size = receiver.getListSize();
+            return index >= 0 && index < size;
         }
 
         @Specialization(guards = "isMapEntry.execute(receiver)", limit = "1")
@@ -518,14 +507,8 @@ final class HostObject implements TruffleObject {
     }
 
     @ExportMessage
-    boolean isArrayElementInsertable(long index, @Shared("isList") @Cached IsListNode isList,
-                    @Shared("error") @Cached BranchProfile error) {
-        try {
-            return isList.execute(this) && getListSize() == index;
-        } catch (Throwable t) {
-            error.enter();
-            throw PolyglotImpl.hostToGuestException(languageContext, t);
-        }
+    boolean isArrayElementInsertable(long index, @Shared("isList") @Cached IsListNode isList) {
+        return isList.execute(this) && getListSize() == index;
     }
 
     @ExportMessage
@@ -586,9 +569,6 @@ final class HostObject implements TruffleObject {
             } catch (IndexOutOfBoundsException e) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
             }
         }
 
@@ -615,12 +595,7 @@ final class HostObject implements TruffleObject {
                     error.enter();
                     throw UnsupportedTypeException.create(new Object[]{value}, getMessage(e));
                 }
-                try {
-                    setMapEntryValueImpl((Map.Entry<Object, Object>) receiver.obj, hostValue);
-                } catch (Throwable t) {
-                    error.enter();
-                    throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-                }
+                setMapEntryValueImpl((Map.Entry<Object, Object>) receiver.obj, hostValue);
             } else {
                 throw InvalidArrayIndexException.create(index);
             }
@@ -647,14 +622,13 @@ final class HostObject implements TruffleObject {
 
         @Specialization(guards = "isList.execute(receiver)", limit = "1")
         static boolean doList(HostObject receiver, long index,
-                        @Shared("isList") @Cached IsListNode isList,
-                        @Shared("error") @Cached BranchProfile error) {
-            try {
-                return index >= 0 && index < receiver.getListSize();
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+                        @Shared("isList") @Cached IsListNode isList) {
+            return index >= 0 && index < callSize(receiver);
+        }
+
+        @TruffleBoundary
+        private static int callSize(HostObject receiver) {
+            return ((List<?>) receiver.obj).size();
         }
 
         @Specialization(guards = "!isList.execute(receiver)", limit = "1")
@@ -680,9 +654,6 @@ final class HostObject implements TruffleObject {
             } catch (IndexOutOfBoundsException outOfBounds) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
             }
         }
 
@@ -736,21 +707,16 @@ final class HostObject implements TruffleObject {
                         @Shared("isList") @Cached IsListNode isList,
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || Integer.MAX_VALUE < index) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            Object hostValue;
             try {
-                hostValue = ((List<?>) receiver.obj).get((int) index);
+                if (index < 0 || Integer.MAX_VALUE < index) {
+                    error.enter();
+                    throw InvalidArrayIndexException.create(index);
+                }
+                return toGuest.execute(receiver.languageContext, ((List<?>) receiver.obj).get((int) index));
             } catch (IndexOutOfBoundsException e) {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
             }
-            return toGuest.execute(receiver.languageContext, hostValue);
         }
 
         @Specialization(guards = "isMapEntry.execute(receiver)", limit = "1")
@@ -760,19 +726,9 @@ final class HostObject implements TruffleObject {
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             Object hostResult;
             if (index == 0L) {
-                try {
-                    hostResult = getMapEntryKeyImpl((Map.Entry<?, ?>) receiver.obj);
-                } catch (Throwable t) {
-                    error.enter();
-                    throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-                }
+                hostResult = getMapEntryKeyImpl((Map.Entry<?, ?>) receiver.obj);
             } else if (index == 1L) {
-                try {
-                    hostResult = getMapEntryValueImpl((Map.Entry<?, ?>) receiver.obj);
-                } catch (Throwable t) {
-                    error.enter();
-                    throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-                }
+                hostResult = getMapEntryValueImpl((Map.Entry<?, ?>) receiver.obj);
             } else {
                 error.enter();
                 throw InvalidArrayIndexException.create(index);
@@ -812,14 +768,8 @@ final class HostObject implements TruffleObject {
 
         @Specialization(guards = {"isList.execute(receiver)"}, limit = "1")
         protected static long doList(HostObject receiver,
-                        @Shared("isList") @Cached IsListNode isList,
-                        @Shared("error") @Cached BranchProfile error) {
-            try {
-                return receiver.getListSize();
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+                        @Shared("isList") @Cached IsListNode isList) {
+            return receiver.getListSize();
         }
 
         @Specialization(guards = "isMapEntry.execute(receiver)", limit = "1")
@@ -1564,7 +1514,7 @@ final class HostObject implements TruffleObject {
 
     @ExportMessage
     boolean isDate() {
-        return obj instanceof LocalDate || obj instanceof LocalDateTime || obj instanceof Instant || obj instanceof ZonedDateTime || obj instanceof Date;
+        return obj instanceof LocalDate || obj instanceof LocalDateTime || obj instanceof Instant || obj instanceof ZonedDateTime || obj instanceof java.sql.Date || isInstantDate(obj);
     }
 
     @ExportMessage
@@ -1578,7 +1528,9 @@ final class HostObject implements TruffleObject {
             return ((Instant) obj).atZone(UTC).toLocalDate();
         } else if (obj instanceof ZonedDateTime) {
             return ((ZonedDateTime) obj).toLocalDate();
-        } else if (obj instanceof Date) {
+        } else if (obj instanceof java.sql.Date) {
+            return ((java.sql.Date) obj).toLocalDate();
+        } else if (isInstantDate(obj)) {
             return ((Date) obj).toInstant().atZone(UTC).toLocalDate();
         }
         throw UnsupportedMessageException.create();
@@ -1586,7 +1538,7 @@ final class HostObject implements TruffleObject {
 
     @ExportMessage
     boolean isTime() {
-        return obj instanceof LocalTime || obj instanceof LocalDateTime || obj instanceof Instant || obj instanceof ZonedDateTime || obj instanceof Date;
+        return obj instanceof LocalTime || obj instanceof LocalDateTime || obj instanceof Instant || obj instanceof ZonedDateTime || obj instanceof java.sql.Time || isInstantDate(obj);
     }
 
     @ExportMessage
@@ -1600,15 +1552,26 @@ final class HostObject implements TruffleObject {
             return ((ZonedDateTime) obj).toLocalTime();
         } else if (obj instanceof Instant) {
             return ((Instant) obj).atZone(UTC).toLocalTime();
-        } else if (obj instanceof Date) {
+        } else if (obj instanceof java.sql.Time) {
+            return ((java.sql.Time) obj).toLocalTime();
+        } else if (isInstantDate(obj)) {
             return ((Date) obj).toInstant().atZone(UTC).toLocalTime();
         }
         throw UnsupportedMessageException.create();
     }
 
+    /**
+     * Returns <code>true</code> if this date object can be reliably converted to an instant.
+     * Weirdly, despite the contract of the base class the two subclasses {@link Time} and
+     * {@link java.sql.Date} are not supported to be convertable to an instant.
+     */
+    private static boolean isInstantDate(Object v) {
+        return v instanceof Date && !(v instanceof Time) && !(v instanceof java.sql.Date);
+    }
+
     @ExportMessage
     boolean isTimeZone() {
-        return obj instanceof ZoneId || obj instanceof Instant || obj instanceof ZonedDateTime || obj instanceof Date;
+        return obj instanceof ZoneId || obj instanceof Instant || obj instanceof ZonedDateTime || isInstantDate(obj);
     }
 
     @ExportMessage
@@ -1619,7 +1582,7 @@ final class HostObject implements TruffleObject {
             return ((ZonedDateTime) obj).getZone();
         } else if (obj instanceof Instant) {
             return UTC;
-        } else if (obj instanceof Date) {
+        } else if (isInstantDate(obj)) {
             return UTC;
         }
         throw UnsupportedMessageException.create();
@@ -1632,7 +1595,7 @@ final class HostObject implements TruffleObject {
             return ((ZonedDateTime) obj).toInstant();
         } else if (obj instanceof Instant) {
             return (Instant) obj;
-        } else if (obj instanceof Date) {
+        } else if (isInstantDate(obj)) {
             return ((Date) obj).toInstant();
         }
         throw UnsupportedMessageException.create();
@@ -1833,16 +1796,8 @@ final class HostObject implements TruffleObject {
         @Specialization(guards = {"isIterable.execute(receiver)"}, limit = "1")
         protected static Object doIterable(HostObject receiver,
                         @Shared("isIterable") @Cached IsIterableNode isIterable,
-                        @Shared("toGuest") @Cached ToGuestValueNode toGuest,
-                        @Shared("error") @Cached BranchProfile error) {
-            Object hostValue;
-            try {
-                hostValue = iterableIteratorImpl((Iterable<?>) receiver.obj);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
-            return toGuest.execute(receiver.languageContext, hostValue);
+                        @Shared("toGuest") @Cached ToGuestValueNode toGuest) {
+            return toGuest.execute(receiver.languageContext, iterableIteratorImpl((Iterable<?>) receiver.obj));
         }
 
         @TruffleBoundary
@@ -1869,14 +1824,8 @@ final class HostObject implements TruffleObject {
 
         @Specialization(guards = {"isIterator.execute(receiver)"}, limit = "1")
         protected static boolean doIterator(HostObject receiver,
-                        @Shared("isIterator") @Cached IsIteratorNode isIterator,
-                        @Shared("error") @Cached BranchProfile error) {
-            try {
-                return hasNextImpl((Iterator<?>) receiver.obj);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+                        @Shared("isIterator") @Cached IsIteratorNode isIterator) {
+            return hasNextImpl((Iterator<?>) receiver.obj);
         }
 
         @TruffleBoundary
@@ -1899,7 +1848,6 @@ final class HostObject implements TruffleObject {
         protected static Object doIterator(HostObject receiver,
                         @Shared("isIterator") @Cached IsIteratorNode isIterator,
                         @Shared("toGuest") @Cached ToGuestValueNode toGuest,
-                        @Shared("error") @Cached BranchProfile error,
                         @Exclusive @Cached BranchProfile stopIteration) throws StopIterationException {
             Object next;
             try {
@@ -1907,9 +1855,6 @@ final class HostObject implements TruffleObject {
             } catch (NoSuchElementException e) {
                 stopIteration.enter();
                 throw StopIterationException.create();
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
             }
             return toGuest.execute(receiver.languageContext, next);
         }
@@ -1939,12 +1884,7 @@ final class HostObject implements TruffleObject {
         protected static long doMap(HostObject receiver,
                         @Shared("isMap") @Cached IsMapNode isMap,
                         @Shared("error") @Cached BranchProfile error) {
-            try {
-                return sizeImpl((Map<?, ?>) receiver.obj);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+            return sizeImpl((Map<?, ?>) receiver.obj);
         }
 
         @TruffleBoundary
@@ -1987,13 +1927,7 @@ final class HostObject implements TruffleObject {
                 error.enter();
                 throw UnknownKeyException.create(key);
             }
-            Object hostResult;
-            try {
-                hostResult = getImpl((Map<Object, Object>) receiver.obj, hostKey, UNDEFINED);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+            Object hostResult = getImpl((Map<Object, Object>) receiver.obj, hostKey, UNDEFINED);
             if (hostResult == UNDEFINED) {
                 error.enter();
                 throw UnknownKeyException.create(key);
@@ -2044,12 +1978,7 @@ final class HostObject implements TruffleObject {
                 error.enter();
                 throw UnsupportedTypeException.create(new Object[]{value}, getMessage(e));
             }
-            try {
-                putImpl((Map<Object, Object>) receiver.obj, hostKey, hostValue);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+            putImpl((Map<Object, Object>) receiver.obj, hostKey, hostValue);
         }
 
         @TruffleBoundary
@@ -2080,13 +2009,7 @@ final class HostObject implements TruffleObject {
                 error.enter();
                 throw UnknownKeyException.create(key);
             }
-            boolean removed;
-            try {
-                removed = removeImpl((Map<Object, Object>) receiver.obj, hostKey);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+            boolean removed = removeImpl((Map<Object, Object>) receiver.obj, hostKey);
             if (!removed) {
                 error.enter();
                 throw UnknownKeyException.create(key);
@@ -2117,16 +2040,8 @@ final class HostObject implements TruffleObject {
         @Specialization(guards = "isMap.execute(receiver)", limit = "1")
         protected static Object doMap(HostObject receiver,
                         @Shared("isMap") @Cached IsMapNode isMap,
-                        @Shared("toGuest") @Cached ToGuestValueNode toGuest,
-                        @Shared("error") @Cached BranchProfile error) {
-            Object hostValue;
-            try {
-                hostValue = iteratorImpl((Map<Object, Object>) receiver.obj);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
-            return toGuest.execute(receiver.languageContext, hostValue);
+                        @Shared("toGuest") @Cached ToGuestValueNode toGuest) {
+            return toGuest.execute(receiver.languageContext, iteratorImpl((Map<Object, Object>) receiver.obj));
         }
 
         @TruffleBoundary
@@ -2696,12 +2611,7 @@ final class HostObject implements TruffleObject {
                 error.enter();
                 return false;
             }
-            try {
-                return containsKeyImpl((Map<?, ?>) receiver.obj, hostKey);
-            } catch (Throwable t) {
-                error.enter();
-                throw PolyglotImpl.hostToGuestException(receiver.languageContext, t);
-            }
+            return containsKeyImpl((Map<?, ?>) receiver.obj, hostKey);
         }
 
         @TruffleBoundary
