@@ -1766,7 +1766,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             if (this.invalid) {
                 b.append(" invalid");
             }
-        } else if (cancelling) {
+        }
+        if (cancelling) {
             b.append("cancelling");
         } else {
             if (isActive()) {
