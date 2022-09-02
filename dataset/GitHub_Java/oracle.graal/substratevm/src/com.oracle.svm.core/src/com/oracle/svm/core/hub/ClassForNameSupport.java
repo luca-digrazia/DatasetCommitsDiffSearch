@@ -24,39 +24,27 @@
  */
 package com.oracle.svm.core.hub;
 
-import org.graalvm.collections.EconomicMap;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.util.ImageHeapMap;
 
 public final class ClassForNameSupport {
 
-    static ClassForNameSupport singleton() {
-        return ImageSingletons.lookup(ClassForNameSupport.class);
-    }
-
-    /** The map used to collect registered classes. */
-    private final EconomicMap<String, Class<?>> knownClasses = ImageHeapMap.create();
-    /** Store class name and checksum byte array as key-value pair. */
-    private final EconomicMap<String, byte[]> dynamicGeneratedClasses = ImageHeapMap.create();
+    private final Map<String, Class<?>> knownClasses = new HashMap<>();
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public static void registerClass(Class<?> clazz) {
-        singleton().knownClasses.put(clazz.getName(), clazz);
-    }
-
-    @Platforms(Platform.HOSTED_ONLY.class)
-    public static void registerDynamicGeneratedClass(Class<?> generatedClazz, String definedClassName, String checksum) {
-        registerClass(generatedClazz);
-        ImageSingletons.lookup(ClassForNameSupport.class).dynamicGeneratedClasses.put(definedClassName, checksum.getBytes());
+        ImageSingletons.lookup(ClassForNameSupport.class).knownClasses.put(clazz.getName(), clazz);
     }
 
     public static Class<?> forNameOrNull(String className, boolean initialize) {
-        Class<?> result = singleton().knownClasses.get(className);
+        Class<?> result = ImageSingletons.lookup(ClassForNameSupport.class).knownClasses.get(className);
         if (result == null) {
             return null;
         }
@@ -73,18 +61,10 @@ public final class ClassForNameSupport {
         }
         return result;
     }
-
-    public static String getDynamicClassChecksum(String className) throws ClassNotFoundException {
-        byte[] storedValue = ImageSingletons.lookup(ClassForNameSupport.class).dynamicGeneratedClasses.get(className);
-        if (storedValue == null) {
-            throw new ClassNotFoundException(className);
-        }
-        return new String(storedValue);
-    }
 }
 
 @AutomaticFeature
-final class ClassForNameFeature implements Feature {
+class ClassForNameFeature implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
         ImageSingletons.add(ClassForNameSupport.class, new ClassForNameSupport());
