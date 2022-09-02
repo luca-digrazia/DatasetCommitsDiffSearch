@@ -151,13 +151,7 @@ public abstract class Type {
         }
     }
 
-    /**
-     * Gets the raw type array stored in a {@link TypeArray}. This method "finalizes" the type
-     * array, i.e., the elements can no longer be {@linkplain TypeArray#get accessed} or
-     * {@linkplain TypeArray#set modified}. This method can only be called once for a give
-     * {@link TypeArray}.
-     */
-    public static Type[] getRawTypeArray(TypeArray types) {
+    protected static Type[] getRawTypeArray(TypeArray types) {
         return types.getRawArray();
     }
 

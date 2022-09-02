@@ -29,8 +29,6 @@
  */
 package com.oracle.truffle.llvm.asm.amd64;
 
-import static com.oracle.truffle.llvm.runtime.types.Type.TypeArrayBuilder;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -40,7 +38,6 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.llvm.runtime.CommonNodeFactory;
-import com.oracle.truffle.llvm.runtime.LLVMGetStackPointerFromFrameNode;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException;
 import com.oracle.truffle.llvm.runtime.LLVMUnsupportedException.UnsupportedReason;
@@ -251,6 +248,8 @@ import com.oracle.truffle.llvm.runtime.types.Type;
 import com.oracle.truffle.llvm.runtime.types.VectorType;
 import com.oracle.truffle.llvm.runtime.types.VoidType;
 
+import static com.oracle.truffle.llvm.runtime.types.Type.TypeArray;
+
 class AsmFactory {
     private static final int REG_START_INDEX = 1;
     private static final String TEMP_REGISTER_PREFIX = "__$$tmp_r_";
@@ -266,7 +265,7 @@ class AsmFactory {
     private LLVMExpressionNode result;
     private List<Argument> argInfo;
     private final String asmFlags;
-    private final TypeArrayBuilder argTypes;
+    private final TypeArray argTypes;
     private final Type retType;
     private final Type[] retTypes;
     private final long[] retOffsets;
@@ -275,7 +274,7 @@ class AsmFactory {
 
     private final LLVMLanguage language;
 
-    AsmFactory(LLVMLanguage language, TypeArrayBuilder argTypes, String asmFlags, Type retType, Type[] retTypes, long[] retOffsets) {
+    AsmFactory(LLVMLanguage language, TypeArray argTypes, String asmFlags, Type retType, Type[] retTypes, long[] retOffsets) {
         this.language = language;
         this.argTypes = argTypes;
         this.asmFlags = asmFlags;
@@ -1776,10 +1775,10 @@ class AsmFactory {
         arguments.add(LLVMWriteI1NodeGen.create(getFlagSlot(LLVMAMD64Flags.OF), zero));
 
         // copy stack pointer
+        LLVMExpressionNode stackPointer = LLVMArgNodeGen.create(0);
         FrameSlot stackSlot = frameDescriptor.addFrameSlot(LLVMStack.FRAME_ID);
-        LLVMExpressionNode stackPointer = LLVMGetStackPointerFromFrameNode.create(stackSlot);
         frameDescriptor.setFrameSlotKind(stackSlot, FrameSlotKind.Object);
-        arguments.add(LLVMWritePointerNodeGen.create(stackSlot, stackPointer));
+        arguments.add(LLVMWritePointerNodeGen.create(frameDescriptor.findFrameSlot(LLVMStack.FRAME_ID), stackPointer));
 
         arguments.add(LLVMWritePointerNodeGen.create(getRegisterSlot("rsp"), stackPointer));
 
