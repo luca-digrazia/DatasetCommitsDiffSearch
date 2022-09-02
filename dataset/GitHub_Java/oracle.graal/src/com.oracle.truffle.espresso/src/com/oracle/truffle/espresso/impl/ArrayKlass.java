@@ -73,13 +73,12 @@ public final class ArrayKlass extends Klass {
 
     @Override
     public boolean isInitialized() {
-        // Always initialized, independent of the elemental type initialization state.
-        return true;
+        return getElementalType().isInitialized();
     }
 
     @Override
     public void initialize() {
-        // Array class initialization does not trigger elemental type initialization.
+        getElementalType().initialize();
     }
 
     @Override
@@ -133,9 +132,9 @@ public final class ArrayKlass extends Klass {
     }
 
     @Override
-    public final Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass) {
+    public final Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature) {
         methodLookupCount.inc();
-        return getSuperKlass().lookupMethod(methodName, signature, accessingKlass);
+        return getSuperKlass().lookupMethod(methodName, signature);
     }
 
     @Override

@@ -37,11 +37,9 @@ import java.util.Comparator;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.Constants;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -85,8 +83,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
     private final JavaKind kind;
     private final EspressoContext context;
     private final ObjectKlass superKlass;
-
-    private final Assumption isLeaf;
 
     private final int ID;
 
@@ -134,15 +130,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         this.superInterfaces = superInterfaces;
         this.isArray = Types.isArray(type);
         this.ID = context.getNewId();
-        this.isLeaf = Truffle.getRuntime().createAssumption();
-    }
-
-    public boolean leafAssumption() {
-        return isLeaf.isValid();
-    }
-
-    public void invalidateLeaf() {
-        isLeaf.invalidate();
     }
 
     public abstract @Host(ClassLoader.class) StaticObject getDefiningClassLoader();
@@ -429,7 +416,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
             initialize();
         } catch (EspressoException e) {
             StaticObject cause = e.getException();
-            if (!InterpreterToVM.instanceOf(cause, getMeta().Error)) {
+            if (getMeta().Exception.isAssignableFrom(cause.getKlass())) {
                 throw getMeta().throwExWithCause(ExceptionInInitializerError.class, cause);
             } else {
                 throw e;
@@ -573,31 +560,23 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         return null;
     }
 
-    public Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature) {
-        return lookupMethod(methodName, signature, null);
-    }
-
-    /**
-     * Give the accessing klass if there is a chance the method to be resolved is a method handle
-     * intrinsics.
-     */
-    public abstract Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass);
+    public abstract Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature);
 
     public abstract Method vtableLookup(int vtableIndex);
 
-    public Method lookupPolysigMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass) {
+    public Method lookupPolysigMethod(Symbol<Name> methodName, Symbol<Signature> signature) {
         if (methodName == Name.invoke || methodName == Name.invokeExact) {
-            return findMethodHandleIntrinsic(methodName, signature, InvokeGeneric, accessingKlass);
+            return findMethodHandleIntrinsic(methodName, signature, InvokeGeneric);
         } else if (methodName == Name.invokeBasic) {
-            return findMethodHandleIntrinsic(methodName, signature, InvokeBasic, accessingKlass);
+            return findMethodHandleIntrinsic(methodName, signature, InvokeBasic);
         } else if (methodName == Name.linkToInterface) {
-            return findMethodHandleIntrinsic(methodName, signature, LinkToInterface, accessingKlass);
+            return findMethodHandleIntrinsic(methodName, signature, LinkToInterface);
         } else if (methodName == Name.linkToSpecial) {
-            return findMethodHandleIntrinsic(methodName, signature, LinkToSpecial, accessingKlass);
+            return findMethodHandleIntrinsic(methodName, signature, LinkToSpecial);
         } else if (methodName == Name.linkToStatic) {
-            return findMethodHandleIntrinsic(methodName, signature, LinkToStatic, accessingKlass);
+            return findMethodHandleIntrinsic(methodName, signature, LinkToStatic);
         } else if (methodName == Name.linkToVirtual) {
-            return findMethodHandleIntrinsic(methodName, signature, LinkToVirtual, accessingKlass);
+            return findMethodHandleIntrinsic(methodName, signature, LinkToVirtual);
         }
         for (Method m : getDeclaredMethods()) {
             if (m.isNative() && m.isVarargs() && m.getName() == methodName) {
@@ -608,17 +587,14 @@ public abstract class Klass implements ModifiersProvider, ContextAccess {
         return null;
     }
 
-    private Method findMethodHandleIntrinsic(Symbol<Name> methodName,
-                    Symbol<Signature> signature,
-                    MethodHandleIntrinsics.PolySigIntrinsics id,
-                    Klass accessingKlass) {
+    private Method findMethodHandleIntrinsic(@SuppressWarnings("unused") Symbol<Name> methodName, Symbol<Signature> signature, MethodHandleIntrinsics.PolySigIntrinsics id) {
         if (id == InvokeGeneric) {
             return (methodName == Name.invoke ? getMeta().invoke : getMeta().invokeExact).findIntrinsic(signature, new Function<Method, EspressoBaseNode>() {
                 // TODO(garcia) Create a whole new Node to handle MH invokes.
                 @Override
                 public EspressoBaseNode apply(Method method) {
                     // TODO(garcia) true access checks
-                    Klass callerKlass = accessingKlass == null ? getMeta().Object : accessingKlass;
+                    ObjectKlass callerKlass = getMeta().Object;
                     StaticObject appendixBox = StaticObject.createArray(getMeta().Object_array, new Object[1]);
                     StaticObject memberName = (StaticObject) getMeta().linkMethod.invokeDirect(
                                     null,
