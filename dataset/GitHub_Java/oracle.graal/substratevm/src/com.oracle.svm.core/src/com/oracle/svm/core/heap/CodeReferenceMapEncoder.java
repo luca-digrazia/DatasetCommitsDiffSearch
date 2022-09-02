@@ -67,7 +67,6 @@ public class CodeReferenceMapEncoder extends ReferenceMapEncoder {
         int run = 0;
         int gap = 0;
 
-        boolean firstRun = true;
         boolean expectedCompressed = false;
         int expectedOffset = 0;
         while (offsets.hasNext()) {
@@ -78,11 +77,10 @@ public class CodeReferenceMapEncoder extends ReferenceMapEncoder {
                 // An adjacent offset in this run.
                 run += 1;
             } else {
-                assert firstRun || offset >= expectedOffset : "values must be strictly increasing";
+                assert offset >= expectedOffset : "values must be strictly increasing";
                 if (run > 0) {
                     // The end of a run. Encode the *previous* gap and this run of offsets.
-                    encodeRun(firstRun, gap, run, expectedCompressed, false);
-                    firstRun = false;
+                    encodeRun(gap, run, expectedCompressed, false);
                 }
                 // Beginning of the next gap+run pair.
                 gap = offset - expectedOffset;
@@ -90,8 +88,7 @@ public class CodeReferenceMapEncoder extends ReferenceMapEncoder {
             }
             int size = (compressed ? compressedSize : uncompressedSize);
             if (derived) {
-                encodeDerivedRun(firstRun, gap, offset, offsets.getDerivedOffsets(offset), compressed, size);
-                firstRun = false;
+                encodeDerivedRun(gap, offset, offsets.getDerivedOffsets(offset), compressed, size);
                 run = 0;
                 gap = 0;
             }
@@ -99,33 +96,20 @@ public class CodeReferenceMapEncoder extends ReferenceMapEncoder {
             expectedCompressed = compressed;
         }
         if (run > 0) {
-            encodeRun(firstRun, gap, run, expectedCompressed, false);
+            encodeRun(gap, run, expectedCompressed, false);
         }
         encodeEndOfTable();
         return startIndex;
     }
 
-    private void encodeRun(boolean firstRun, int gap, int refsCount, boolean compressed, boolean derived) {
-        if (firstRun && derived) {
-            /*
-             * The first run cannot be derived: Derived entries are marked using a negative gap
-             * value. But the first entry is allowed to really have a negative gap so that negative
-             * offsets can be represented. The simple solution is to first record a 0-length
-             * non-derived run.
-             */
-            encodeRun(true, -1, 0, false, false);
-            encodeRun(false, gap + 1, refsCount, compressed, derived);
-            return;
-        }
-
-        assert firstRun || gap >= 0;
-        assert compressed ? refsCount > 0 : refsCount >= 0;
+    private void encodeRun(int gap, int refsCount, boolean compressed, boolean derived) {
+        assert gap >= 0 && refsCount >= 0;
         writeBuffer.putSV(derived ? -gap - 1 : gap);
         writeBuffer.putSV(compressed ? -refsCount : refsCount);
     }
 
-    private void encodeDerivedRun(boolean firstRun, int gap, int baseOffset, Set<Integer> derivedOffsets, boolean compressed, int size) {
-        encodeRun(firstRun, gap, derivedOffsets.size(), compressed, true);
+    private void encodeDerivedRun(int gap, int baseOffset, Set<Integer> derivedOffsets, boolean compressed, int size) {
+        encodeRun(gap, derivedOffsets.size(), compressed, true);
         for (int derivedOffset : derivedOffsets) {
             assert baseOffset % size == 0 && derivedOffset % size == 0 && derivedOffset != baseOffset;
             writeBuffer.putSV((derivedOffset - baseOffset) / size);
@@ -133,7 +117,6 @@ public class CodeReferenceMapEncoder extends ReferenceMapEncoder {
     }
 
     private void encodeEndOfTable() {
-        writeBuffer.putSV(0);
-        writeBuffer.putSV(0);
+        encodeRun(0, 0, false, false);
     }
 }

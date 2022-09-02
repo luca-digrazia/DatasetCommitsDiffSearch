@@ -32,8 +32,6 @@ import static org.graalvm.compiler.core.common.util.TypeConversion.asU2;
 import static org.graalvm.compiler.core.common.util.TypeConversion.asU4;
 import static org.graalvm.compiler.serviceprovider.GraalUnsafeAccess.getUnsafe;
 
-import java.nio.ByteBuffer;
-
 import org.graalvm.compiler.core.common.calc.UnsignedMath;
 
 import sun.misc.Unsafe;
@@ -103,22 +101,6 @@ public abstract class UnsafeArrayTypeWriter implements TypeWriter {
         }
         assert resultIdx == totalSize;
         return result;
-    }
-
-    /** Copies the buffer into the provided ByteBuffer at its current position. */
-    public final ByteBuffer toByteBuffer(ByteBuffer buffer) {
-        assert buffer.remaining() <= totalSize;
-        int initialPos = buffer.position();
-        for (Chunk cur = firstChunk; cur != null; cur = cur.next) {
-            buffer.put(cur.data, 0, cur.size);
-        }
-        assert buffer.position() - initialPos == totalSize;
-        return buffer;
-    }
-
-    public final byte[] toArray() {
-        byte[] result = new byte[TypeConversion.asS4(getBytesWritten())];
-        return toArray(result);
     }
 
     @Override
@@ -261,14 +243,12 @@ final class AlignedUnsafeArrayTypeWriter extends UnsafeArrayTypeWriter {
 
     @Override
     protected void putS2(long value, Chunk chunk, long offset) {
-        assert TypeConversion.isS2(value);
         UNSAFE.putByte(chunk.data, offset + 0, (byte) (value >> 0));
         UNSAFE.putByte(chunk.data, offset + 1, (byte) (value >> 8));
     }
 
     @Override
     protected void putS4(long value, Chunk chunk, long offset) {
-        assert TypeConversion.isS4(value);
         UNSAFE.putByte(chunk.data, offset + 0, (byte) (value >> 0));
         UNSAFE.putByte(chunk.data, offset + 1, (byte) (value >> 8));
         UNSAFE.putByte(chunk.data, offset + 2, (byte) (value >> 16));

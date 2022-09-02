@@ -37,11 +37,9 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registratio
 import org.graalvm.compiler.nodes.memory.HeapAccess.BarrierType;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.nativeimage.IsolateThread;
-import org.graalvm.util.GuardedAnnotationAccess;
 
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.annotate.ForceFixedRegisterReads;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.graal.nodes.ReadRegisterFixedNode;
 import com.oracle.svm.core.graal.nodes.ReadRegisterFloatingNode;
@@ -192,16 +190,7 @@ public class VMThreadMTFeature implements GraalFeature {
          * must not directly reference a fixed register).
          */
         boolean isDeoptTarget = b.getMethod() instanceof SharedMethod && ((SharedMethod) b.getMethod()).isDeoptTarget();
-
-        /*
-         * Due to the fact that the LLVM backend handles reading the thread pointer in entry point
-         * methods as a stack slot load instead of a direct register access, a ReadRegisterFixedNode
-         * should be emitted in those cases so that the register read doesn't get hoisted above
-         * where the thread pointer gets stored in the stack slot.
-         */
-        boolean isLLVM = SubstrateOptions.CompilerBackend.getValue().equals("llvm");
-        boolean forceFixedReads = GuardedAnnotationAccess.isAnnotationPresent(b.getMethod(), ForceFixedRegisterReads.class);
-        if (isDeoptTarget || usedForAddress || (isLLVM && forceFixedReads)) {
+        if (isDeoptTarget || usedForAddress) {
             return b.add(ReadRegisterFixedNode.forIsolateThread());
         } else {
             return b.add(ReadRegisterFloatingNode.forIsolateThread());
@@ -285,9 +274,5 @@ public class VMThreadMTFeature implements GraalFeature {
 
         /* Remember the final sorted list. */
         VMThreadLocalInfos.setInfos(sortedThreadLocalInfos);
-    }
-
-    public int offsetOf(FastThreadLocal threadLocal) {
-        return threadLocalCollector.getInfo(threadLocal).offset;
     }
 }
