@@ -395,7 +395,7 @@ public class MatchContext {
             builder.setMatchResult(node, ComplexMatchValue.INTERIOR_MATCH);
             return;
         }
-        builder.incrementSharedMatchCount(node);
+        builder.setSharedMatchResult(node);
     }
 
     /**

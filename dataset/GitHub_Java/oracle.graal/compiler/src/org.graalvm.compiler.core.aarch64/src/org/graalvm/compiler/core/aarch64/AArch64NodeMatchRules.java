@@ -93,9 +93,9 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
         binaryOpMap.put(AndNode.class, AArch64ArithmeticOp.AND);
         binaryOpMap.put(OrNode.class, AArch64ArithmeticOp.OR);
         binaryOpMap.put(XorNode.class, AArch64ArithmeticOp.XOR);
-        binaryOpMap.put(LeftShiftNode.class, AArch64ArithmeticOp.LSL);
-        binaryOpMap.put(RightShiftNode.class, AArch64ArithmeticOp.ASR);
-        binaryOpMap.put(UnsignedRightShiftNode.class, AArch64ArithmeticOp.LSR);
+        binaryOpMap.put(LeftShiftNode.class, AArch64ArithmeticOp.SHL);
+        binaryOpMap.put(RightShiftNode.class, AArch64ArithmeticOp.ASHR);
+        binaryOpMap.put(UnsignedRightShiftNode.class, AArch64ArithmeticOp.LSHR);
 
         bitFieldOpMap = EconomicMap.create(Equivalence.IDENTITY, 2);
         bitFieldOpMap.put(UnsignedRightShiftNode.class, BitFieldOpCode.UBFX);
@@ -163,7 +163,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
         return getLIRGeneratorTool().moveSp(value);
     }
 
-    protected ComplexMatchResult emitBinaryShift(AArch64ArithmeticOp op, ValueNode value, BinaryNode shift) {
+    private ComplexMatchResult emitBinaryShift(AArch64ArithmeticOp op, ValueNode value, BinaryNode shift) {
         AArch64MacroAssembler.ShiftType shiftType = shiftTypeMap.get(shift.getClass());
         assert shiftType != null;
         assert value.getStackKind().isNumericInteger();
@@ -687,7 +687,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
         JavaKind kindA = a.getStackKind();
         JavaKind kindB = b.getStackKind();
         JavaKind kindC = c.getStackKind();
-        if (!(kindA.isNumericInteger() && kindB.isNumericInteger() && kindC.isNumericInteger())) {
+        if (!kindA.isNumericInteger() || !kindB.isNumericInteger() || !kindC.isNumericInteger()) {
             return null;
         }
 
