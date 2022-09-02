@@ -42,7 +42,6 @@ package org.graalvm.polyglot;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.time.ZoneId;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -286,9 +285,8 @@ import org.graalvm.polyglot.proxy.Proxy;
  * native compilation.
  * <p>
  * The context pre-initialization is enabled by setting the system property
- * {@code polyglot.image-build-time.PreinitializeContexts} to a comma separated list of language ids
- * which should be pre-initialized, for example:
- * {@code -Dpolyglot.image-build-time.PreinitializeContexts=js,python}
+ * {@code polyglot.engine.PreinitializeContexts} to a comma separated list of language ids which
+ * should be pre-initialized, for example: {@code -Dpolyglot.engine.PreinitializeContexts=js,python}
  * <p>
  * See
  * {@code com.oracle.truffle.api.TruffleLanguage.patchContext(java.lang.Object, com.oracle.truffle.api.TruffleLanguage.Env)}
@@ -767,7 +765,6 @@ public final class Context implements AutoCloseable {
         private ProcessHandler processHandler;
         private EnvironmentAccess environmentAccess;
         private Map<String, String> environment;
-        private ZoneId zone;
 
         Builder(String... onlyLanguages) {
             Objects.requireNonNull(onlyLanguages);
@@ -1206,20 +1203,6 @@ public final class Context implements AutoCloseable {
         }
 
         /**
-         * Sets the default time zone to be used for this context. If not set, or explicitly set to
-         * <code>null</code> then the {@link ZoneId#systemDefault() system default} zone will be
-         * used.
-         *
-         * @return the {@link Builder}
-         * @see ZoneId#systemDefault()
-         * @since 20.0.0 beta 2
-         */
-        public Builder timeZone(final ZoneId zone) {
-            this.zone = zone;
-            return this;
-        }
-
-        /**
          * Installs a new logging {@link Handler} using given {@link OutputStream}. The logger's
          * {@link Level} configuration is done using the {@link #options(java.util.Map) Context's
          * options}. The level option key has the following format:
@@ -1258,7 +1241,7 @@ public final class Context implements AutoCloseable {
          * <code>true</code>, then process creation is enabled if not denied explicitly.
          *
          * @param enabled {@code true} to enable external process creation
-         * @since 19.1.0
+         * @since 20.0.0 beta 2
          */
         public Builder allowCreateProcess(boolean enabled) {
             this.allowCreateProcess = enabled;
@@ -1269,7 +1252,7 @@ public final class Context implements AutoCloseable {
          * Installs a {@link ProcessHandler} responsible for external process creation.
          *
          * @param handler the handler to be installed
-         * @since 19.1.0
+         * @since 20.0.0 beta 2
          */
         public Builder processHandler(ProcessHandler handler) {
             Objects.requireNonNull(handler, "Handler must be non null.");
@@ -1284,7 +1267,7 @@ public final class Context implements AutoCloseable {
          * access policy must not be {@code null}.
          *
          * @param accessPolicy the {@link EnvironmentAccess environment access policy}
-         * @since 19.1.0
+         * @since 20.0.0 beta 2
          */
         public Builder allowEnvironmentAccess(EnvironmentAccess accessPolicy) {
             Objects.requireNonNull(accessPolicy, "AccessPolicy must be non null.");
@@ -1297,7 +1280,7 @@ public final class Context implements AutoCloseable {
          *
          * @param name the environment variable name
          * @param value the environment variable value
-         * @since 19.1.0
+         * @since 20.0.0 beta 2
          */
         public Builder environment(String name, String value) {
             Objects.requireNonNull(name, "Name must be non null.");
@@ -1315,7 +1298,7 @@ public final class Context implements AutoCloseable {
          *
          * @param env environment variables
          * @see #environment(String, String) To set a single environment variable.
-         * @since 19.1.0
+         * @since 20.0.0 beta 2
          */
         public Builder environment(Map<String, String> env) {
             Objects.requireNonNull(env, "Env must be non null.");
@@ -1402,17 +1385,12 @@ public final class Context implements AutoCloseable {
                     engineBuilder.logHandler((OutputStream) customLogHandler);
                 }
                 engineBuilder.allowExperimentalOptions(experimentalOptions);
-                Runnable[] finishInitializationWhenContextIsReady = {null};
-                engineBuilder.setBoundEngine(finishInitializationWhenContextIsReady);
+                engineBuilder.setBoundEngine(true);
                 engine = engineBuilder.build();
-                Context ctx = engine.impl.createContext(null, null, null, hostClassLookupEnabled, hostAccess, polyglotAccess, nativeAccess, createThread,
+                return engine.impl.createContext(null, null, null, hostClassLookupEnabled, hostAccess, polyglotAccess, nativeAccess, createThread,
                                 io, hostClassLoading, experimentalOptions,
                                 localHostLookupFilter, Collections.emptyMap(), arguments == null ? Collections.emptyMap() : arguments,
-                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, environmentAccess, environment, zone);
-                if (finishInitializationWhenContextIsReady[0] != null) {
-                    finishInitializationWhenContextIsReady[0].run();
-                }
-                return ctx;
+                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, environmentAccess, environment);
             } else {
                 if (messageTransport != null) {
                     throw new IllegalStateException("Cannot use MessageTransport in a context that shares an Engine.");
@@ -1420,7 +1398,7 @@ public final class Context implements AutoCloseable {
                 return engine.impl.createContext(out, err, in, hostClassLookupEnabled, hostAccess, polyglotAccess, nativeAccess, createThread,
                                 io, hostClassLoading, experimentalOptions,
                                 localHostLookupFilter, options == null ? Collections.emptyMap() : options, arguments == null ? Collections.emptyMap() : arguments,
-                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, environmentAccess, environment, zone);
+                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, environmentAccess, environment);
             }
         }
 
