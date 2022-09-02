@@ -24,7 +24,6 @@
  */
 package com.oracle.svm.core.snippets;
 
-import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.StackValue;
@@ -171,7 +170,6 @@ public abstract class ExceptionUnwind {
      * using a normal Java catch-all exception handler.
      */
     private static void reportUnhandledException(Throwable exception) {
-        Log.log().string("Isolate: ").hex(CurrentIsolate.getIsolate()).newline();
         Log.log().exception(exception);
         ImageSingletons.lookup(LogHandler.class).fatalError();
     }
