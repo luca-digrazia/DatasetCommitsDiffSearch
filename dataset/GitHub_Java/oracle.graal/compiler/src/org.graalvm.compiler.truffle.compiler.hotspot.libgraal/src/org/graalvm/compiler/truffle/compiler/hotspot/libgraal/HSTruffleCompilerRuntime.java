@@ -307,10 +307,10 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
 
     @SVMToHotSpot(Log)
     @Override
-    public void log(CompilableTruffleAST compilable, String message) {
+    public void log(String message) {
         JNIEnv env = env();
         JString jniMessage = JNIUtil.createHSString(env, message);
-        callLog(env, getHandle(), ((HSCompilableTruffleAST)compilable).getHandle(), jniMessage);
+        callLog(env, getHandle(), jniMessage);
     }
 
     @Override
@@ -353,8 +353,13 @@ final class HSTruffleCompilerRuntime extends HSObject implements HotSpotTruffleC
     }
 
     @Override
-    public TruffleCompiler getTruffleCompiler(CompilableTruffleAST compilable) {
+    public TruffleCompiler getTruffleCompiler() {
         throw new UnsupportedOperationException("Should never be called in the compiler.");
+    }
+
+    @Override
+    public TruffleCompiler getTruffleCompilerIfAvailable() {
+        return null;
     }
 
     private static class HSConsumer extends HSObject implements Consumer<OptimizedAssumptionDependency> {
