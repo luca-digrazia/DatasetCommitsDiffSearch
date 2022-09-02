@@ -27,7 +27,7 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.reflect.InvocationTargetException;
 import java.security.ProtectionDomain;
 
-import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -120,7 +120,7 @@ public class Target_java_lang_ref_Reference {
         }
         if (ref != null) {
             // Weak/Soft/Final/Phantom reference.
-            meta.HIDDEN_HOST_REFERENCE.setHiddenObject(self, ref);
+            self.setHiddenField(meta.HIDDEN_HOST_REFERENCE, ref);
         } else {
             // Strong reference.
             meta.java_lang_ref_Reference_referent.set(self, referent);
@@ -143,7 +143,7 @@ public class Target_java_lang_ref_Reference {
                         || InterpreterToVM.instanceOf(self, meta.java_lang_ref_SoftReference) //
                         || InterpreterToVM.instanceOf(self, meta.java_lang_ref_FinalReference)) {
             // Ignore guest referent field.
-            EspressoReference ref = (EspressoReference) meta.HIDDEN_HOST_REFERENCE.getHiddenObject(self);
+            EspressoReference ref = (EspressoReference) self.getHiddenField(meta.HIDDEN_HOST_REFERENCE);
             if (ref == null) {
                 return StaticObject.NULL;
             }
@@ -151,7 +151,7 @@ public class Target_java_lang_ref_Reference {
             StaticObject obj = (StaticObject) ref.get();
             return obj == null ? StaticObject.NULL : obj;
         } else {
-            return meta.java_lang_ref_Reference_referent.getObject(self);
+            return (StaticObject) meta.java_lang_ref_Reference_referent.get(self);
         }
     }
 
@@ -163,12 +163,12 @@ public class Target_java_lang_ref_Reference {
                         || InterpreterToVM.instanceOf(self, meta.java_lang_ref_SoftReference) //
                         || InterpreterToVM.instanceOf(self, meta.java_lang_ref_PhantomReference) //
                         || InterpreterToVM.instanceOf(self, meta.java_lang_ref_FinalReference)) {
-            EspressoReference ref = (EspressoReference) meta.HIDDEN_HOST_REFERENCE.getHiddenObject(self);
+            EspressoReference ref = (EspressoReference) self.getHiddenField(meta.HIDDEN_HOST_REFERENCE);
             if (ref != null) {
                 assert ref instanceof Reference;
                 ref.clear();
                 // Also remove host reference.
-                meta.HIDDEN_HOST_REFERENCE.setHiddenObject(self, null);
+                self.setHiddenField(meta.HIDDEN_HOST_REFERENCE, null);
             }
         } else {
             meta.java_lang_ref_Reference_referent.set(self, StaticObject.NULL);
@@ -178,6 +178,9 @@ public class Target_java_lang_ref_Reference {
     @SuppressWarnings("rawtypes")
     @Substitution(hasReceiver = true)
     public static boolean enqueue(@Host(java.lang.ref.Reference.class) StaticObject self,
+                    // Checkstyle: stop
+                    @GuestCall(target = "java_lang_ref_Reference_enqueue", original = true) DirectCallNode enqueue,
+                    // Checkstyle: resume
                     @InjectMeta Meta meta) {
         if (meta.getJavaVersion().java9OrLater()) {
             /*
@@ -188,22 +191,13 @@ public class Target_java_lang_ref_Reference {
                             || InterpreterToVM.instanceOf(self, meta.java_lang_ref_SoftReference) //
                             || InterpreterToVM.instanceOf(self, meta.java_lang_ref_PhantomReference) //
                             || InterpreterToVM.instanceOf(self, meta.java_lang_ref_FinalReference)) {
-                EspressoReference ref = (EspressoReference) meta.HIDDEN_HOST_REFERENCE.getHiddenObject(self);
+                EspressoReference ref = (EspressoReference) self.getHiddenField(meta.HIDDEN_HOST_REFERENCE);
                 if (ref != null) {
                     ref.clear();
                 }
             }
         }
 
-        // TODO(garcia): Give substitutions the power of calling the original method they
-        // substitute.
-
-        // Replicates the behavior of guest Reference.enqueue()
-        if (meta.getJavaVersion().java9OrLater()) {
-            meta.java_lang_ref_Reference_referent.set(self, StaticObject.NULL);
-        }
-        StaticObject queue = meta.java_lang_ref_Reference_queue.getObject(self);
-        Method m = queue.getKlass().vtableLookup(meta.java_lang_ref_ReferenceQueue_enqueue.getVTableIndex());
-        return (boolean) m.invokeDirect(queue, self);
+        return (boolean) enqueue.call(self);
     }
 }
