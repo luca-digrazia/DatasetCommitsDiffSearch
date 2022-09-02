@@ -66,9 +66,8 @@ public class WindowsLogHandler implements LogHandler {
     }
 
     @Override
-    @SuppressWarnings("unused")
-    public boolean fatalContext(CCharPointer context, UnsignedWord length) {
-        return true; /* unconditionally dump details */
+    public void fatalContext() {
+        /* Unused */
     }
 
     @Override
