@@ -40,10 +40,6 @@ public interface RegisterDumper {
         return ImageSingletons.lookup(RegisterDumper.class);
     }
 
-    static void dumpReg(Log log, String label, long value) {
-        log.string(label).zhex(value).newline();
-    }
-
     interface Context extends PointerBase {
     }
 
