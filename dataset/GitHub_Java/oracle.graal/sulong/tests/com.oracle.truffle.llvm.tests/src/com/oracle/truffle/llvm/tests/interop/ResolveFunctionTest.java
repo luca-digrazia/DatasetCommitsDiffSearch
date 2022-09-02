@@ -33,6 +33,7 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.tck.TruffleRunner;
 import com.oracle.truffle.tck.TruffleRunner.Inject;
@@ -68,11 +69,14 @@ public class ResolveFunctionTest extends InteropTestBase {
     @Test
     public void testFunctionFortyTwo(@Inject(FortyTwoFunctionNode.class) CallTarget function) throws InteropException {
         Object ret = function.call();
-        Assert.assertTrue(LLVMManagedPointer.isInstance(ret));
-        LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
-        String name = retFunction.getLLVMFunction().getName();
-        Assert.assertEquals("fortytwo", name);
-        Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction));
+        if (LLVMManagedPointer.isInstance(ret)) {
+            LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
+            String name = retFunction.getLLVMFunction().getName();
+            Assert.assertEquals("fortytwo", name);
+            Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction));
+        } else {
+            Assert.fail("Resolving a native function must return a LLVMManagedPointer");
+        }
     }
 
     public class ResolveFunctionNode extends SulongTestNode {
@@ -84,9 +88,12 @@ public class ResolveFunctionTest extends InteropTestBase {
     @Test
     public void testResolveFunctionFortytwo(@Inject(ResolveFunctionNode.class) CallTarget function) throws InteropException {
         Object ret = function.call(fortyTwoFunction);
-        Assert.assertTrue(LLVMManagedPointer.isInstance(ret));
-        LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
-        Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction));
+        if (LLVMManagedPointer.isInstance(ret)) {
+            LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
+            Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction));
+        } else {
+            Assert.fail("Resolving a native function must return a LLVMManagedPointer");
+        }
     }
 
     @Test
@@ -94,9 +101,12 @@ public class ResolveFunctionTest extends InteropTestBase {
         InteropLibrary.getUncached().toNative(fortyTwoFunction);
         long pointer = InteropLibrary.getUncached().asPointer(fortyTwoFunction);
         Object ret = function.call(pointer);
-        Assert.assertTrue(LLVMManagedPointer.isInstance(ret));
-        LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
-        Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction));
+        if (LLVMManagedPointer.isInstance(ret)) {
+            LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
+            Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction));
+        } else {
+            Assert.fail("Resolving a native function must return a LLVMManagedPointer");
+        }
     }
 
     @Test
@@ -104,16 +114,22 @@ public class ResolveFunctionTest extends InteropTestBase {
         InteropLibrary.getUncached().toNative(maxFunction);
         long pointer = InteropLibrary.getUncached().asPointer(maxFunction);
         Object ret = function.call(pointer);
-        Assert.assertTrue(LLVMManagedPointer.isInstance(ret));
-        LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
-        Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction, 1, 42));
+        if (LLVMManagedPointer.isInstance(ret)) {
+            LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
+            Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction, 1, 42));
+        } else {
+            Assert.fail("Resolving a native function must return a LLVMManagedPointer");
+        }
     }
 
     @Test
     public void testResolveFunctionMax(@Inject(ResolveFunctionNode.class) CallTarget function) throws InteropException {
         Object ret = function.call(maxFunction);
-        Assert.assertTrue(LLVMManagedPointer.isInstance(ret));
-        LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
-        Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction, 1, 42));
+        if (LLVMManagedPointer.isInstance(ret)) {
+            LLVMFunctionDescriptor retFunction = (LLVMFunctionDescriptor) LLVMManagedPointer.cast(ret).getObject();
+            Assert.assertEquals(42, InteropLibrary.getUncached().execute(retFunction, 1, 42));
+        } else {
+            Assert.fail("Resolving a native function must return a LLVMManagedPointer");
+        }
     }
 }
