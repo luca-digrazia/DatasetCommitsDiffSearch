@@ -117,7 +117,10 @@ public class SignedRemNode extends IntegerDivRemNode implements LIRLowerable {
             return false;
         }
 
-        for (Node usage : self.usages()) {
+        int compareAgainstZero = 0;
+        int usageCount = self.getUsageCount();
+        for (int i = 0; i < usageCount; i++) {
+            Node usage = self.getUsageAt(i);
             if (usage instanceof IntegerEqualsNode) {
                 IntegerEqualsNode equalsNode = (IntegerEqualsNode) usage;
                 ValueNode node = equalsNode.getY();
@@ -128,13 +131,12 @@ public class SignedRemNode extends IntegerDivRemNode implements LIRLowerable {
                     ConstantNode constantNode = (ConstantNode) node;
                     Constant constant = constantNode.asConstant();
                     if (constant instanceof PrimitiveConstant && ((PrimitiveConstant) constant).asLong() == 0) {
-                        continue;
+                        compareAgainstZero++;
                     }
                 }
             }
-            return false;
         }
-        return true;
+        return compareAgainstZero == usageCount;
     }
 
     @Override
