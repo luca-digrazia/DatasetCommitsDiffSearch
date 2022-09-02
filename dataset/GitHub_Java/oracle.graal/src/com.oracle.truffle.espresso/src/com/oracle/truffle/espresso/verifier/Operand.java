@@ -63,10 +63,6 @@ abstract class Operand {
         return false;
     }
 
-    boolean isUninitThis() {
-        return false;
-    }
-
     boolean isNull() {
         return false;
     }
@@ -419,7 +415,6 @@ class UninitReferenceOperand extends ReferenceOperand {
         }
     }
 
-    @Override
     boolean isUninitThis() {
         return newBCI == -1;
     }
