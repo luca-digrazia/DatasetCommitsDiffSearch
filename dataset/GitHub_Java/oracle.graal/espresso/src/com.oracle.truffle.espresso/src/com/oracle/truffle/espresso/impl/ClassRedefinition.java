@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,9 +22,18 @@
  */
 package com.oracle.truffle.espresso.impl;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
@@ -40,19 +49,12 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
 import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
 
 public final class ClassRedefinition {
 
@@ -85,10 +87,19 @@ public final class ClassRedefinition {
     }
 
     public static void begin() {
-        // the redefine thread is privileged
-        redefineThread = Thread.currentThread();
-        locked = true;
-        current.assumption.invalidate();
+        synchronized (redefineLock) {
+            while (locked) {
+                try {
+                    redefineLock.wait();
+                } catch (InterruptedException e) {
+                    Thread.interrupted();
+                }
+            }
+            // the redefine thread is privileged
+            redefineThread = Thread.currentThread();
+            locked = true;
+            current.assumption.invalidate();
+        }
     }
 
     public static void end() {
@@ -604,5 +615,25 @@ public final class ClassRedefinition {
         }
         oldKlass.redefineClass(packet, refreshSubClasses, ids);
         return 0;
+    }
+
+    @TruffleBoundary
+    public static Method handleRemovedMethod(Method resolutionSeed, Klass accessingKlass, StaticObject receiver) {
+        // wait for potential ongoing redefinition to complete
+        check();
+        Klass lookupKlass = receiver != null ? receiver.getKlass() : resolutionSeed.getDeclaringKlass();
+        Method replacementMethod = lookupKlass.lookupMethod(resolutionSeed.getName(), resolutionSeed.getRawSignature(), accessingKlass);
+        Meta meta = resolutionSeed.getMeta();
+        if (replacementMethod == null) {
+            throw meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError,
+                            meta.toGuestString(resolutionSeed.getDeclaringKlass().getNameAsString() + "." + resolutionSeed.getName() + resolutionSeed.getRawSignature()) +
+                                            " was removed by class redefinition");
+        } else if (resolutionSeed.isStatic() != replacementMethod.isStatic()) {
+            String message = resolutionSeed.isStatic() ? "expected static method: " : "expected non-static method:" + replacementMethod.getName();
+            throw meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, message);
+        } else {
+            // Update to the latest version of the replacement method
+            return replacementMethod;
+        }
     }
 }
