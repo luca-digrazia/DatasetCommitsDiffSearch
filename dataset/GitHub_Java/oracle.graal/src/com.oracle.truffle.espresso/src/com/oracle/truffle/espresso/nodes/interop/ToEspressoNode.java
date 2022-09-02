@@ -110,7 +110,7 @@ public abstract class ToEspressoNode extends Node {
         return doPrimitive(value, primitiveKlass, InteropLibrary.getFactory().getUncached(value), primitiveKlass, BranchProfile.getUncached());
     }
 
-    @Specialization(guards = "!klass.isPrimitive()")
+    @Specialization(guards = "!klass.isPrimitive()" /* && isStaticObject(value) */)
     Object doEspresso(StaticObject value,
                     Klass klass,
                     @Cached BranchProfile exceptionProfile) throws UnsupportedTypeException {
@@ -134,7 +134,7 @@ public abstract class ToEspressoNode extends Node {
         return klass.getMeta().java_lang_String.array().equals(klass);
     }
 
-    // TODO(goltsova): remove this when array bytecodes support foreign arrays
+    // TODO(peterssen): Remove, temporary workaround to call main.
     @SuppressWarnings("unused")
     @Specialization(guards = {"!isStaticObject(value)", "isStringArray(klass)"})
     Object doArray(Object value,
@@ -182,13 +182,17 @@ public abstract class ToEspressoNode extends Node {
         throw UnsupportedTypeException.create(new Object[]{value}, klass.getTypeAsString());
     }
 
-    // TODO(goltsova): remove !isStringArray(klass) once array bytecodes support foreign arrays
-    @Specialization(guards = {"!isStaticObject(klass)", "!klass.isPrimitive()", "!isString(klass)", "!isStringArray(klass)"})
-    Object doForeignClass(Object value, Klass klass, @CachedLibrary(limit = "LIMIT") InteropLibrary interop) {
+    @Specialization(guards = {"!isStaticObject(klass)", "!isString(klass)", "!isStringArray(klass)", "!klass.isPrimitive()"})
+    Object doNullOrUnsupported(Object value,
+                    Klass klass,
+                    @CachedLibrary(limit = "LIMIT") InteropLibrary interop,
+                    @Cached BranchProfile exceptionProfile)
+                    throws UnsupportedTypeException {
         if (interop.isNull(value)) {
             return StaticObject.createForeignNull(value);
         }
-        return StaticObject.createForeign(klass, value, interop);
+        exceptionProfile.enter();
+        throw UnsupportedTypeException.create(new Object[]{value}, klass.getTypeAsString());
     }
 
     @SuppressWarnings("unchecked")
