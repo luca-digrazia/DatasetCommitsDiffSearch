@@ -152,7 +152,7 @@ public class WasmRootNode extends RootNode implements WasmNodeInterface {
                 return Double.longBitsToDouble(returnValue);
             }
             default:
-                throw WasmException.format(Failure.UNSPECIFIED_INTERNAL, this, "Unknown return type id: %d", body.returnTypeId());
+                throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, this, "Unknown return type id: " + body.returnTypeId());
         }
     }
 
