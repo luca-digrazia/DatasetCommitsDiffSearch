@@ -41,16 +41,11 @@
 package org.graalvm.wasm.test;
 
 import com.oracle.truffle.api.Truffle;
-import junit.framework.AssertionFailedError;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
-import org.graalvm.wasm.GlobalRegistry;
-import org.graalvm.wasm.WasmContext;
-import org.graalvm.wasm.WasmFunctionInstance;
-import org.graalvm.wasm.WasmInstance;
-import org.graalvm.wasm.memory.WasmMemory;
+import org.graalvm.wasm.predefined.testutil.TestutilModule;
 import org.graalvm.wasm.test.options.WasmTestOptions;
 import org.graalvm.wasm.utils.cases.WasmCase;
 import org.graalvm.wasm.utils.cases.WasmCaseData;
@@ -137,26 +132,18 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
         return inCI() || inWindows();
     }
 
-    private static Value findMain(WasmContext wasmContext) {
-        for (final WasmInstance instance : wasmContext.moduleInstances().values()) {
-            final WasmFunctionInstance function = instance.getMainFunction();
-            if (function != null) {
-                return Value.asValue(function);
-            }
-        }
-        throw new AssertionFailedError("No start function exported.");
-    }
-
     private static void runInContext(WasmCase testCase, Context context, List<Source> sources, int iterations, String phaseIcon, String phaseLabel) {
         boolean requiresZeroMemory = Boolean.parseBoolean(testCase.options().getProperty("zero-memory", "false"));
 
-        context.enter();
         final PrintStream oldOut = System.out;
         try {
             resetStatus(oldOut, PHASE_PARSE_ICON, "parsing");
+            final Value[] instances = new Value[sources.size()];
 
             try {
-                sources.forEach(context::eval);
+                for (int i = 0; i < instances.length; ++i) {
+                    instances[i] = context.eval(sources.get(i));
+                }
             } catch (PolyglotException e) {
                 validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
                 return;
@@ -167,12 +154,18 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
             // Execute the main function (exported as "_main").
             // Then, optionally save memory and globals, and compare them.
             // Execute a special function, which resets memory and globals to their default values.
-            final WasmContext wasmContext = WasmContext.getCurrent();
-            Value mainFunction = findMain(wasmContext);
+            Value mainFunction = context.getBindings("wasm").getMember("_start");
+            if (mainFunction == null) {
+                mainFunction = context.getBindings("wasm").getMember("_main");
+            }
+            Value resetMemories = context.getBindings("wasm").getMember(TestutilModule.Names.RESET_MEMORIES);
+            Value reinitInstance = context.getBindings("wasm").getMember(TestutilModule.Names.REINIT_INSTANCE);
+            Value saveContext = context.getBindings("wasm").getMember(TestutilModule.Names.SAVE_CONTEXT);
+            Value compareContexts = context.getBindings("wasm").getMember(TestutilModule.Names.COMPARE_CONTEXTS);
 
             resetStatus(oldOut, phaseIcon, phaseLabel);
             ByteArrayOutputStream capturedStdout;
-            ContextState firstIterationContextState = null;
+            Object firstIterationContextState = null;
 
             for (int i = 0; i != iterations; ++i) {
                 try {
@@ -186,25 +179,21 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
 
                     // Save context state, and check that it's consistent with the previous one.
                     if (iterationNeedsStateCheck(i)) {
-                        final ContextState contextState = saveContext(wasmContext);
+                        Object contextState = saveContext.execute();
                         if (firstIterationContextState == null) {
                             firstIterationContextState = contextState;
                         } else {
-                            assertContextEqual(firstIterationContextState, contextState);
+                            compareContexts.execute(firstIterationContextState, contextState);
                         }
                     }
 
                     // Reset context state.
-                    final boolean reinitMemory = requiresZeroMemory || iterationNeedsStateCheck(i + 1);
+                    boolean reinitMemory = requiresZeroMemory || iterationNeedsStateCheck(i + 1);
                     if (reinitMemory) {
-                        for (int j = 0; j < wasmContext.memories().count(); ++j) {
-                            wasmContext.memories().memory(j).clear();
-                        }
+                        resetMemories.execute();
                     }
-                    for (final WasmInstance instance : wasmContext.moduleInstances().values()) {
-                        if (!instance.isBuiltin()) {
-                            wasmContext.reinitInstance(instance, reinitMemory);
-                        }
+                    for (final Value instance : instances) {
+                        reinitInstance.execute(instance, reinitMemory);
                     }
 
                     validateResult(testCase.data().resultValidator(), result, capturedStdout);
@@ -442,57 +431,5 @@ public abstract class WasmFileSuite extends AbstractWasmSuite {
 
     protected String suiteName() {
         return getClass().getSimpleName();
-    }
-
-    private static ContextState saveContext(WasmContext context) {
-        Assert.assertTrue("Currently, only 0 or 1 memories can be saved.", context.memories().count() <= 1);
-        final WasmMemory currentMemory = context.memories().count() == 1 ? context.memories().memory(0).duplicate() : null;
-        final GlobalRegistry globals = context.globals().duplicate();
-        return new ContextState(currentMemory, globals);
-    }
-
-    private static void assertContextEqual(ContextState expectedState, ContextState actualState) {
-        // Compare memories
-        final WasmMemory expectedMemory = expectedState.memory();
-        final WasmMemory actualMemory = actualState.memory();
-        if (expectedMemory == null) {
-            Assert.assertNull("Memory should be null", actualMemory);
-        } else {
-            Assert.assertNotNull("Memory should not be null", actualMemory);
-            Assert.assertEquals("Mismatch in memory lengths", expectedMemory.byteSize(), actualMemory.byteSize());
-            for (int ptr = 0; ptr < expectedMemory.byteSize(); ptr++) {
-                byte expectedByte = (byte) expectedMemory.load_i32_8s(null, ptr);
-                byte actualByte = (byte) actualMemory.load_i32_8s(null, ptr);
-                Assert.assertEquals("Memory mismatch", expectedByte, actualByte);
-            }
-        }
-
-        // Compare globals
-        final GlobalRegistry firstGlobals = expectedState.globals();
-        final GlobalRegistry lastGlobals = actualState.globals();
-        Assert.assertEquals("Mismatch in global counts.", firstGlobals.count(), lastGlobals.count());
-        for (int address = 0; address < firstGlobals.count(); address++) {
-            long first = firstGlobals.loadAsLong(address);
-            long last = lastGlobals.loadAsLong(address);
-            Assert.assertEquals("Mismatch in global at " + address + ". ", first, last);
-        }
-    }
-
-    private static final class ContextState {
-        private final WasmMemory memory;
-        private final GlobalRegistry globals;
-
-        private ContextState(WasmMemory memory, GlobalRegistry globals) {
-            this.memory = memory;
-            this.globals = globals;
-        }
-
-        public WasmMemory memory() {
-            return memory;
-        }
-
-        public GlobalRegistry globals() {
-            return globals;
-        }
     }
 }

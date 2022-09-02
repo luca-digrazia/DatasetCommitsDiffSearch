@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,11 +40,14 @@
  */
 package org.graalvm.wasm;
 
+import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.TruffleLanguage.Env;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
+import com.oracle.truffle.api.source.Source;
+import org.graalvm.wasm.exception.WasmExecutionException;
+import org.graalvm.wasm.exception.WasmValidationException;
 import org.graalvm.wasm.predefined.BuiltinModule;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -74,6 +77,11 @@ public final class WasmContext {
         instantiateBuiltinInstances();
     }
 
+    public CallTarget parse(Source source) {
+        // TODO: Not used -- can we remove this?
+        return env.parsePublic(source);
+    }
+
     public Env environment() {
         return env;
     }
@@ -98,9 +106,15 @@ public final class WasmContext {
         return linker;
     }
 
-    @SuppressWarnings("unused")
-    public Object getScope() {
-        return new WasmScope(moduleInstances);
+    @SuppressWarnings("deprecation")
+    public Iterable<com.oracle.truffle.api.Scope> getTopScopes() {
+        // Go through all WasmModules parsed with this context, and create a Scope for each of them.
+        ArrayList<com.oracle.truffle.api.Scope> scopes = new ArrayList<>();
+        for (Map.Entry<String, WasmInstance> entry : moduleInstances.entrySet()) {
+            com.oracle.truffle.api.Scope scope = com.oracle.truffle.api.Scope.newBuilder(entry.getKey(), entry.getValue()).build();
+            scopes.add(scope);
+        }
+        return scopes;
     }
 
     /**
@@ -112,7 +126,7 @@ public final class WasmContext {
 
     public void register(WasmInstance instance) {
         if (moduleInstances.containsKey(instance.name())) {
-            throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Context already contains an instance named '" + instance.name() + "'.");
+            throw new WasmExecutionException(null, "Context already contains an instance named '" + instance.name() + "'.");
         }
         moduleInstances.put(instance.name(), instance);
     }
@@ -126,7 +140,7 @@ public final class WasmContext {
         for (String moduleSpec : moduleSpecs) {
             final String[] parts = moduleSpec.split(":");
             if (parts.length > 2) {
-                throw WasmException.create(Failure.UNSPECIFIED_INVALID, "Module specification '" + moduleSpec + "' is not valid.");
+                throw new WasmValidationException("Module specification '" + moduleSpec + "' is not valid.");
             }
             final String name = parts[0];
             final String key = parts.length == 2 ? parts[1] : parts[0];
@@ -152,9 +166,6 @@ public final class WasmContext {
     }
 
     public WasmInstance readInstance(WasmModule module) {
-        if (moduleInstances.containsKey(module.name())) {
-            throw WasmException.create(Failure.UNSPECIFIED_INVALID, null, "Module " + module.name() + " is already instantiated in this context.");
-        }
         final WasmInstance instance = new WasmInstance(module, module.storeConstantsPolicy());
         final BinaryParser reader = new BinaryParser(language, module);
         reader.readInstance(this, instance);
