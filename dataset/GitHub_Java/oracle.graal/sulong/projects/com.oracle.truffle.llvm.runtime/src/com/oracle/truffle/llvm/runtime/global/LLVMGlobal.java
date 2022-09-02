@@ -52,14 +52,14 @@ public final class LLVMGlobal implements LLVMSymbol {
     @CompilationFinal private boolean interopTypeCached;
     @CompilationFinal private LLVMInteropType interopType;
 
-    private final int index;
-    private final int id;
+    @CompilationFinal private int index;
+    @CompilationFinal private int id;
 
-    public static LLVMGlobal create(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int index, int id) {
-        return new LLVMGlobal(name, type, sourceSymbol, readOnly, index, id);
+    public static LLVMGlobal create(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly) {
+        return new LLVMGlobal(name, type, sourceSymbol, readOnly);
     }
 
-    private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly, int index, int id) {
+    private LLVMGlobal(String name, PointerType type, LLVMSourceSymbol sourceSymbol, boolean readOnly) {
         this.name = name;
         this.type = type;
         this.sourceSymbol = sourceSymbol;
@@ -68,18 +68,26 @@ public final class LLVMGlobal implements LLVMSymbol {
         this.library = null;
         this.interopTypeCached = false;
         this.interopType = null;
-        this.index = index;
-        this.id = id;
+        this.index = -1;
+        this.id = -1;
     }
 
     public int getIndex() {
-        assert index >= 0;
+        assert index != -1;
         return index;
     }
 
+    public void setIndex(int index) {
+        this.index = index;
+    }
+
     public int getID() {
-        assert id >= 0;
+        assert id != -1;
         return id;
+    }
+
+    public void setID(int id) {
+        this.id = id;
     }
 
     @Override
