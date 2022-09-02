@@ -74,6 +74,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registratio
 import org.graalvm.compiler.nodes.graphbuilderconf.NodePlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.ParameterPlugin;
 import org.graalvm.compiler.nodes.java.AccessFieldNode;
+import org.graalvm.compiler.nodes.java.DynamicNewInstanceNode;
 import org.graalvm.compiler.nodes.java.InstanceOfNode;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
@@ -467,13 +468,16 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
 
                 } else if (guard.condition() instanceof InstanceOfNode && guard.getReason() == DeoptimizationReason.ClassCastException && classCastStamp == null) {
                     InstanceOfNode condition = (InstanceOfNode) guard.condition();
-                    if (condition.getValue() instanceof Invoke || condition.getValue() instanceof LoadFieldNode) {
+                    if (condition.getValue() instanceof Invoke || condition.getValue() instanceof LoadFieldNode ||
+                                    condition.getValue() instanceof DynamicNewInstanceNode) {
                         /*
                          * The method handle chain can contain a cast of the returned value. We
                          * remove the cast here to simplify the graph, remember the type that needs
                          * to be checked, and then re-add the check in the target method.
                          */
-                        classCastStamp = lookup(condition.getCheckedStamp());
+                        if (!(condition.getValue() instanceof DynamicNewInstanceNode)) {
+                            classCastStamp = lookup(condition.getCheckedStamp());
+                        }
                         GraphUtil.removeFixedWithUnusedInputs(guard);
                     }
                 }
@@ -492,6 +496,8 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
             for (Node node : graph.getNodes()) {
                 if (node == graph.start() || node instanceof ParameterNode || node instanceof ConstantNode || node instanceof FrameState) {
                     /* Ignore the allowed framework around the nodes we care about. */
+                } else if (node instanceof DynamicNewInstanceNode && singleNewInstance == null && ((DynamicNewInstanceNode) node).getInstanceType().isConstant()) {
+                    singleNewInstance = (DynamicNewInstanceNode) node;
                 } else if (node instanceof NewInstanceNode && singleNewInstance == null) {
                     singleNewInstance = (NewInstanceNode) node;
                 } else if (node instanceof MethodCallTargetNode) {
@@ -523,7 +529,13 @@ public class IntrinsifyMethodHandlesInvocationPlugin implements NodePlugin {
             ValueNode transplantedNewInstance = null;
 
             if (singleNewInstance != null) {
-                ResolvedJavaType type = lookup(((NewInstanceNode) singleNewInstance).instanceClass());
+                ResolvedJavaType type = null;
+                if (singleNewInstance instanceof DynamicNewInstanceNode) {
+                    type = lookup(originalProviders.getConstantReflection().asJavaType(((DynamicNewInstanceNode) singleNewInstance).getInstanceType().asConstant()));
+                }
+                if (singleNewInstance instanceof NewInstanceNode) {
+                    type = lookup(((NewInstanceNode) singleNewInstance).instanceClass());
+                }
                 maybeEmitClassInitialization(b, true, type);
                 transplantedNewInstance = b.add(new NewInstanceNode(type, true));
             }
