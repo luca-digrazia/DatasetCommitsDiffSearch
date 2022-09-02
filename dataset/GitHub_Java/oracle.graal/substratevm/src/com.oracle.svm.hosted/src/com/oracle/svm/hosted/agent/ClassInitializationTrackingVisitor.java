@@ -40,7 +40,7 @@ import java.util.Set;
 import org.graalvm.nativeimage.impl.clinit.ClassInitializationTracking;
 
 import com.oracle.svm.core.util.VMError;
-import com.oracle.svm.hosted.NativeImageSystemClassLoader;
+import com.oracle.svm.hosted.NativeImageClassLoader;
 
 import jdk.internal.org.objectweb.asm.ClassVisitor;
 import jdk.internal.org.objectweb.asm.ClassWriter;
@@ -125,7 +125,7 @@ public class ClassInitializationTrackingVisitor extends ClassVisitor {
         }
 
         /* We track all user classes and JDK classes that must not end up in the image heap. */
-        if (NativeImageSystemClassLoader.singleton().isNativeImageClassLoader(loader)) {
+        if (loader instanceof NativeImageClassLoader) {
             return true;
         } else {
             if (trackedJDKClasses.contains(className)) {
