@@ -107,12 +107,10 @@ final class Target_java_util_ServiceLoader_LazyClassPathLookupIterator {
                     return false;
                 }
 
-                /*-
-                 * if (clazz.getModule().isNamed()) {
-                 *   // ignore class if in named module
-                 *  continue;
-                 *  }
-                 */
+// if (clazz.getModule().isNamed()) {
+// ignore class if in named module
+// continue;
+// }
 
                 if (outer.service.isAssignableFrom(clazz)) {
                     Constructor<?> ctor = outer.getConstructor(clazz);
