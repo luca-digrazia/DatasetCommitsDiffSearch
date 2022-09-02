@@ -229,12 +229,6 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         return new InstrumentContext(env, initSource, runInitAfterExec);
     }
 
-    private CallTarget lastParsed;
-
-    public static CallTarget getLastParsedCalltarget() {
-        return getCurrentLanguage(InstrumentationTestLanguage.class).lastParsed;
-    }
-
     @Override
     protected void initializeContext(InstrumentContext context) throws Exception {
         super.initializeContext(context);
@@ -265,8 +259,8 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         } catch (LanguageError e) {
             throw new IOException(e);
         }
-        RootCallTarget afterTarget = getCurrentContext(getClass()).afterTarget;
-        return lastParsed = Truffle.getRuntime().createCallTarget(new InstrumentationTestRootNode(this, "", outer, afterTarget, node));
+        RootCallTarget afterTarget = getContextReference().get().afterTarget;
+        return Truffle.getRuntime().createCallTarget(new InstrumentationTestRootNode(this, "", outer, afterTarget, node));
     }
 
     public static RootNode parse(String code) {
@@ -493,7 +487,7 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
                 case "CONSTANT":
                     return new ConstantNode(idents[0], childArray);
                 case "VARIABLE":
-                    return new VariableNode(idents[0], idents[1], childArray, currentEnv().lookup(AllocationReporter.class));
+                    return new VariableNode(idents[0], idents[1], childArray, lang.getContextReference());
                 case "PRINT":
                     return new PrintNode(idents[0], idents[1], childArray);
                 case "ALLOCATION":
@@ -1518,11 +1512,11 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         @CompilationFinal private FrameSlot slot;
         final AllocationReporter allocationReporter;
 
-        private VariableNode(String name, String identifier, BaseNode[] children, AllocationReporter allocationReporter) {
+        private VariableNode(String name, String identifier, BaseNode[] children, ContextReference<InstrumentContext> contextRef) {
             super(children);
             this.name = name;
             this.value = parseIdent(identifier);
-            this.allocationReporter = allocationReporter;
+            this.allocationReporter = contextRef.get().allocationReporter;
         }
 
         @Override

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -390,7 +390,8 @@ public final class DebuggerSession implements Closeable {
      * Suspends the current or the next execution of a given thread. Will throw an
      * {@link IllegalStateException} if the session is already closed.
      */
-    public void suspend(Thread t) {
+    // TODO make part of public API as soon as PolyglotEngine is thread-safe
+    void suspend(Thread t) {
         if (Debugger.TRACE) {
             trace("suspend thread %s ", t);
         }
@@ -406,7 +407,8 @@ public final class DebuggerSession implements Closeable {
      * start suspended until {@link #resumeAll()} is called or the session is closed. Will throw an
      * {@link IllegalStateException} if the session is already closed.
      */
-    public synchronized void suspendAll() {
+    // TODO make part of public API as soon as PolyglotEngine is thread-safe
+    synchronized void suspendAll() {
         if (Debugger.TRACE) {
             trace("suspend all threads");
         }
@@ -447,7 +449,8 @@ public final class DebuggerSession implements Closeable {
      *
      * @param t the thread to resume
      */
-    public synchronized void resume(Thread t) {
+    // TODO make part of public API as soon as PolyglotEngine is thread-safe
+    synchronized void resume(Thread t) {
         if (Debugger.TRACE) {
             trace("resume threads", t);
         }
