@@ -302,15 +302,12 @@ final class PolyglotThreadLocalActions {
 
     void notifyLastDone(AbstractTLHandshake handshake) {
         assert Thread.holdsLock(context);
-        if (activeEvents.remove(handshake, null)) {
-            // this might actually be called multiple times due to a race condition.
-            // in onDone notification in ThreadLocalHandshake.
-            if (traceActions) {
-                if (handshake.future.isCancelled()) {
-                    log("cancelled", handshake, "");
-                } else {
-                    log("done", handshake, "");
-                }
+        activeEvents.remove(handshake);
+        if (traceActions) {
+            if (handshake.future.isCancelled()) {
+                log("cancelled", handshake, "");
+            } else {
+                log("done", handshake, "");
             }
         }
     }
