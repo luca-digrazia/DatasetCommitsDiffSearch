@@ -733,6 +733,7 @@ public class MergeExplodeProxyTest extends PartialEvaluationTest {
             return res;
         }
 
+        @Ignore("Merge explode partial evaluation cannot proxy nodes that are not alive in the framestate of inner loop begins")
         @Override
         @ExplodeLoop(kind = LoopExplosionKind.MERGE_EXPLODE)
         public Object execute(VirtualFrame frame) {
@@ -853,7 +854,6 @@ public class MergeExplodeProxyTest extends PartialEvaluationTest {
 
     }
 
-    @Ignore("Merge explode partial evaluation cannot proxy nodes that are not alive in the framestate of inner loop begins")
     @Test
     public void testNoneLiveLoopExitProxy() {
         byte[] bytecodes = new byte[]{
