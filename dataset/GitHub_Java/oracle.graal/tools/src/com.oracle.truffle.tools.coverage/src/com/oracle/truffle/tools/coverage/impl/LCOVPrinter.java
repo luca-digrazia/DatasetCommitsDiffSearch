@@ -34,16 +34,6 @@ import com.oracle.truffle.tools.coverage.SourceCoverage;
 
 class LCOVPrinter {
 
-    private static final String END_OF_RECORD = "end_of_record";
-    private static final String TEST_NAME = "TN:";
-    private static final String SOURCE_FILE = "SF:";
-    private static final String FUNCTION = "FN:";
-    private static final String FUNCTION_DATA = "FNDA:";
-    private static final String FUNCTIONS_FOUND = "FNF:";
-    private static final String FUNCTIONS_COVERED = "FNH:";
-    private static final String LINES_FOUND = "LF:";
-    private static final String LINES_COVERED = "LH:";
-    private static final String LINE_DATA = "DA:";
     private final PrintStream out;
     private final SourceCoverage[] coverage;
     private final boolean strictLines;
@@ -52,6 +42,18 @@ class LCOVPrinter {
         this.out = out;
         this.coverage = coverage;
         this.strictLines = strictLines;
+    }
+
+    private HashMap<Integer, Long> linesToCount(SourceCoverage coverage) {
+        final HashMap<Integer, Long> linesToCount = new HashMap<>();
+        for (RootCoverage root : coverage.getRoots()) {
+            final SectionCoverage[] sectionCoverage = root.getSectionCoverage();
+            addCoverageCounts(linesToCount, sectionCoverage);
+            if (strictLines) {
+                removeIncidentalCoverage(linesToCount, sectionCoverage);
+            }
+        }
+        return linesToCount;
     }
 
     private static void addCoverageCounts(HashMap<Integer, Long> linesToCount, SectionCoverage[] sectionCoverage) {
@@ -89,18 +91,6 @@ class LCOVPrinter {
         }
     }
 
-    private HashMap<Integer, Long> linesToCount(SourceCoverage coverage) {
-        final HashMap<Integer, Long> linesToCount = new HashMap<>();
-        for (RootCoverage root : coverage.getRoots()) {
-            final SectionCoverage[] sectionCoverage = root.getSectionCoverage();
-            addCoverageCounts(linesToCount, sectionCoverage);
-            if (strictLines) {
-                removeIncidentalCoverage(linesToCount, sectionCoverage);
-            }
-        }
-        return linesToCount;
-    }
-
     void print() {
         for (SourceCoverage sourceCoverage : coverage) {
             printSourceCoverage(sourceCoverage);
@@ -112,7 +102,7 @@ class LCOVPrinter {
         printSourceFile(sourceCoverage);
         printRootData(sourceCoverage);
         printLineData(sourceCoverage);
-        out.println(END_OF_RECORD);
+        out.println("end_of_record");
 
     }
 
@@ -127,11 +117,11 @@ class LCOVPrinter {
                 if (executionCount > 0) {
                     coveredLines++;
                 }
-                out.println(LINE_DATA + i + "," + executionCount);
+                out.println("DA:" + i + "," + executionCount);
             }
         }
-        out.println(LINES_FOUND + consideredLines);
-        out.println(LINES_COVERED + coveredLines);
+        out.println("LF:" + consideredLines);
+        out.println("LH:" + coveredLines);
     }
 
     private void printRootData(SourceCoverage sourceCoverage) {
@@ -151,27 +141,27 @@ class LCOVPrinter {
     }
 
     private void printCoveredRootCount(int coveredRoots) {
-        out.println(FUNCTIONS_COVERED + coveredRoots);
+        out.println("FNH:" + coveredRoots);
     }
 
     private void printRootCount(RootCoverage[] roots) {
-        out.println(FUNCTIONS_FOUND + roots.length);
+        out.println("FNF:" + roots.length);
     }
 
     private void printRootCoverage(RootCoverage root) {
         final long count = (root.isCovered() && root.getCount() == -1) ? 1 : root.getCount();
-        out.println(FUNCTION_DATA + count + "," + root.getName());
+        out.println("FNDA:" + count + "," + root.getName());
     }
 
     private void printRoot(RootCoverage root) {
-        out.println(FUNCTION + root.getSourceSection().getStartLine() + "," + root.getName());
+        out.println("FN:" + root.getSourceSection().getStartLine() + "," + root.getName());
     }
 
     private void printSourceFile(SourceCoverage sourceCoverage) {
-        out.println(SOURCE_FILE + sourceCoverage.getSource().getPath());
+        out.println("SF:" + sourceCoverage.getSource().getPath());
     }
 
     private void printTestName() {
-        out.println(TEST_NAME);
+        out.println("TN:");
     }
 }
