@@ -213,11 +213,15 @@ public final class MethodSubstitutionPlugin implements InvocationPlugin {
     }
 
     @Override
-    public String getSourceLocation() {
+    public StackTraceElement getApplySourceLocation(MetaAccessProvider metaAccess) {
         Class<?> c = getClass();
+        if (IS_IN_NATIVE_IMAGE) {
+            // Provide a dummy result so exceptions can be properly thrown
+            return new StackTraceElement(c.getName(), "execute", null, -1);
+        }
         for (Method m : c.getDeclaredMethods()) {
             if (m.getName().equals("execute")) {
-                return String.format("%s.%s()", m.getClass().getName(), m.getName());
+                return metaAccess.lookupJavaMethod(m).asStackTraceElement(0);
             }
         }
         throw new GraalError("could not find method named \"execute\" in " + c.getName());

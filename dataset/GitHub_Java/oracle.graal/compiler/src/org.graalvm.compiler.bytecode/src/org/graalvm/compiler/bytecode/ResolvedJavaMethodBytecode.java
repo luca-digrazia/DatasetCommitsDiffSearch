@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,6 +24,8 @@
  */
 package org.graalvm.compiler.bytecode;
 
+import java.util.Objects;
+
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.ExceptionHandler;
 import jdk.vm.ci.meta.LineNumberTable;
@@ -36,9 +40,20 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 public class ResolvedJavaMethodBytecode implements Bytecode {
 
     private final ResolvedJavaMethod method;
+    private final BytecodeProvider origin;
 
     public ResolvedJavaMethodBytecode(ResolvedJavaMethod method) {
+        this(method, ResolvedJavaMethodBytecodeProvider.INSTANCE);
+    }
+
+    public ResolvedJavaMethodBytecode(ResolvedJavaMethod method, BytecodeProvider origin) {
         this.method = method;
+        this.origin = origin;
+    }
+
+    @Override
+    public BytecodeProvider getOrigin() {
+        return origin;
     }
 
     @Override
@@ -99,5 +114,22 @@ public class ResolvedJavaMethodBytecode implements Bytecode {
     @Override
     public String toString() {
         return getClass().getSimpleName() + method.format("<%h.%n(%p)>");
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        ResolvedJavaMethodBytecode that = (ResolvedJavaMethodBytecode) o;
+        return Objects.equals(method, that.method) && Objects.equals(origin, that.origin);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(method, origin);
     }
 }

@@ -60,7 +60,7 @@ public final class SnippetResolvedJavaMethod implements ResolvedJavaMethod {
 
     @Override
     public byte[] getCode() {
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     @Override

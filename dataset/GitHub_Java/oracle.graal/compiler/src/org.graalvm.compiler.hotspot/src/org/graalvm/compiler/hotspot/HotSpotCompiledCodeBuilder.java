@@ -79,7 +79,18 @@ public class HotSpotCompiledCodeBuilder {
         int targetCodeSize = compResult.getTargetCodeSize();
 
         Site[] sites = getSortedSites(compResult, options, codeCache.shouldDebugNonSafepoints() && method != null);
-        assert verifySiteMethods(sites);
+        for (Site site : sites) {
+            if (site instanceof Infopoint) {
+                Infopoint infopoint = (Infopoint) site;
+                if (infopoint.debugInfo != null) {
+                    BytecodeFrame frame = infopoint.debugInfo.frame();
+                    while (frame != null) {
+                        assert frame.getMethod() instanceof HotSpotResolvedJavaMethod;
+                        frame = frame.caller();
+                    }
+                }
+            }
+        }
 
         Assumption[] assumptions = compResult.getAssumptions();
 
@@ -140,26 +151,6 @@ public class HotSpotCompiledCodeBuilder {
             return new HotSpotCompiledCode(name, targetCode, targetCodeSize, sites, assumptions, methods, comments, dataSection, dataSectionAlignment, dataSectionPatches, isImmutablePIC,
                             totalFrameSize, customStackArea);
         }
-    }
-
-    /**
-     * Ensure that only real {@link HotSpotResolvedJavaMethod HotSpotResolvedJavaMethods} appear in
-     * debug info.
-     */
-    private static boolean verifySiteMethods(Site[] sites) {
-        for (Site site : sites) {
-            if (site instanceof Infopoint) {
-                Infopoint infopoint = (Infopoint) site;
-                if (infopoint.debugInfo != null) {
-                    BytecodeFrame frame = infopoint.debugInfo.frame();
-                    while (frame != null) {
-                        assert frame.getMethod() instanceof HotSpotResolvedJavaMethod;
-                        frame = frame.caller();
-                    }
-                }
-            }
-        }
-        return true;
     }
 
     private static ResolvedJavaMethod[] filterMethods(ResolvedJavaMethod[] methods) {

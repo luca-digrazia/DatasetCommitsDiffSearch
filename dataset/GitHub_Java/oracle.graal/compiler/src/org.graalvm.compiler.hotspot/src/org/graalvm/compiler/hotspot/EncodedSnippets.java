@@ -30,7 +30,6 @@ import static org.graalvm.compiler.core.common.GraalOptions.UseEncodedGraphs;
 import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_AFTER_PARSING;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -177,7 +176,9 @@ public class EncodedSnippets {
     }
 
     ResolvedJavaType lookupSnippetType(Class<?> clazz) {
-        return Objects.requireNonNull(snippetTypes.get(clazz));
+        ResolvedJavaType type = snippetTypes.get(clazz);
+        assert type != null;
+        return type;
     }
 
     public void visitImmutable(Consumer<Object> visitor) {
@@ -466,7 +467,11 @@ public class EncodedSnippets {
             if (replacement != null) {
                 objects[i] = o = replacement;
             } else {
-                throw new GraalError(error, "Can't resolve %s", o);
+                if (error != null) {
+                    throw new GraalError(error, "Can't resolve " + o);
+                } else {
+                    throw new GraalError("Can't resolve " + o);
+                }
             }
             return o;
         }
@@ -609,23 +614,23 @@ public class EncodedSnippets {
 
     static class SymbolicStampPair implements SymbolicJVMCIReference<StampPair> {
         final Object trustedStamp;
-        final Object uncheckedStamp;
+        final Object uncheckdStamp;
 
-        SymbolicStampPair(Object trustedStamp, Object uncheckedStamp) {
+        SymbolicStampPair(Object trustedStamp, Object uncheckdStamp) {
             this.trustedStamp = trustedStamp;
-            this.uncheckedStamp = uncheckedStamp;
+            this.uncheckdStamp = uncheckdStamp;
         }
 
         @Override
         public StampPair resolve(ResolvedJavaType accessingClass) {
-            return StampPair.create(resolveStamp(accessingClass, trustedStamp), resolveStamp(accessingClass, uncheckedStamp));
+            return StampPair.create(resolveStamp(accessingClass, trustedStamp), resolveStamp(accessingClass, uncheckdStamp));
         }
 
         @Override
         public String toString() {
             return "SymbolicStampPair{" +
                             "trustedStamp=" + trustedStamp +
-                            ", uncheckedStamp=" + uncheckedStamp +
+                            ", uncheckdStamp=" + uncheckdStamp +
                             '}';
         }
 

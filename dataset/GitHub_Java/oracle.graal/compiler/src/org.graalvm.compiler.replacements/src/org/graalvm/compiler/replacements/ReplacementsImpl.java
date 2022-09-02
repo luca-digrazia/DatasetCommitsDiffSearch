@@ -402,7 +402,6 @@ public class ReplacementsImpl implements Replacements, InlineInvokePlugin {
     public StructuredGraph getIntrinsicGraph(ResolvedJavaMethod method, CompilationIdentifier compilationId, DebugContext debug, AllowAssumptions allowAssumptions, Cancellable cancellable) {
         InvocationPlugin plugin = graphBuilderPlugins.getInvocationPlugins().lookupInvocation(method);
         if (plugin != null && !plugin.inlineOnly()) {
-            assert !plugin.isDecorator() : "lookupInvocation shouldn't return decorator plugins";
             if (plugin instanceof MethodSubstitutionPlugin) {
                 MethodSubstitutionPlugin msPlugin = (MethodSubstitutionPlugin) plugin;
                 ResolvedJavaMethod substMethod = msPlugin.getSubstitute(providers.getMetaAccess());
