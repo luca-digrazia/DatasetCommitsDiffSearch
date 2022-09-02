@@ -22,9 +22,13 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-public class JDWPLogger {
+import com.oracle.truffle.api.TruffleLogger;
 
-    public static final LogLevel LEVEL = LogLevel.ALL;
+public final class JDWPLogger {
+
+    private static final TruffleLogger logger = TruffleLogger.getLogger(JDWPInstrument.ID);
+
+    private static LogLevel LEVEL;
 
     public enum LogLevel {
         ALL,
@@ -35,25 +39,37 @@ public class JDWPLogger {
         NONE
     }
 
-    public static boolean shouldLog(LogLevel level) {
+    public static void setupLogLevel(String level) {
+        LEVEL = level != null ? LogLevel.valueOf(level) : LogLevel.NONE;
+    }
+
+    private static boolean shouldLog(LogLevel level) {
         switch (level) {
-            case NONE: return false;
-            case THREAD: return level == LogLevel.THREAD || level == LogLevel.ALL;
-            case PACKET: return level == LogLevel.PACKET || level == LogLevel.ALL;
-            case STEPPING: return level == LogLevel.STEPPING || level == LogLevel.ALL;
+            case NONE:
+                return false;
+            case THREAD:
+                return LEVEL == LogLevel.THREAD || LEVEL == LogLevel.ALL;
+            case PACKET:
+                return LEVEL == LogLevel.PACKET || LEVEL == LogLevel.ALL;
+            case STEPPING:
+                return LEVEL == LogLevel.STEPPING || LEVEL == LogLevel.ALL;
+            case IDS:
+                return LEVEL == LogLevel.IDS || LEVEL == LogLevel.ALL;
             case ALL:
-                return  level == LogLevel.ALL ||
-                        level == LogLevel.THREAD ||
-                        level == LogLevel.PACKET ||
-                        level == LogLevel.STEPPING ||
-                        level == LogLevel.IDS;
-            default: return false;
+                return LEVEL == LogLevel.ALL ||
+                                LEVEL == LogLevel.THREAD ||
+                                LEVEL == LogLevel.PACKET ||
+                                LEVEL == LogLevel.STEPPING ||
+                                LEVEL == LogLevel.IDS;
+            default:
+                return false;
         }
     }
 
-    public static void log(String msg, LogLevel level) {
+    public static void log(String msg, LogLevel level, Object... args) {
         if (shouldLog(level)) {
-            System.out.println(msg);
+            String logRecord = String.format(msg, args);
+            logger.info(logRecord);
         }
     }
 }
