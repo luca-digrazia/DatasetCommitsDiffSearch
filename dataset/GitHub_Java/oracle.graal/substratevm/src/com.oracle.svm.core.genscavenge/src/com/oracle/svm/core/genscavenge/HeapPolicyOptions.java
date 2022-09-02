@@ -4,7 +4,9 @@
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,64 +24,58 @@
  */
 package com.oracle.svm.core.genscavenge;
 
+import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.options.Option;
-import org.graalvm.word.UnsignedWord;
-import org.graalvm.word.WordFactory;
+import org.graalvm.compiler.options.OptionKey;
 
-import com.oracle.svm.core.genscavenge.HeapPolicy.AlwaysCollectCompletely;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionKey;
+import com.oracle.svm.core.util.UserError;
 
-public class HeapPolicyOptions {
-    /* Memory configuration */
+public final class HeapPolicyOptions {
+    @Option(help = "The maximum heap size as percent of physical memory") //
+    public static final RuntimeOptionKey<Integer> MaximumHeapSizePercent = new RuntimeOptionKey<>(80);
 
-    @Option(help = "How big is the young generation?") //
-    public static final RuntimeOptionKey<Long> YoungGenerationSize = new RuntimeOptionKey<>(256L * 1024L * 1024L);
+    @Option(help = "The maximum size of the young generation as a percentage of the maximum heap size") //
+    public static final RuntimeOptionKey<Integer> MaximumYoungGenerationSizePercent = new RuntimeOptionKey<>(10);
 
-    /** The YoungGenerationSize option as an Unsigned. */
-    public static UnsignedWord getYoungGenerationSize() {
-        return WordFactory.unsigned(YoungGenerationSize.getValue());
-    }
-
-    @Option(help = "How big is the old generation?") //
-    public static final RuntimeOptionKey<Long> OldGenerationSize = new RuntimeOptionKey<>(512L * 1024L * 1024L);
-
-    @Option(help = "Old generation size as percent of physical memory, has priority over OldGenerationSize unless set to a negative value") //
-    public static final RuntimeOptionKey<Integer> OldGenerationSizePercent = new RuntimeOptionKey<>(-1);
-
-    /* For good performance, this should be somewhat larger than the young generation size. */
-    @Option(help = "How many bytes should be kept as free space?  0 implies (YoungGenerationSize + OldGenerationSize).") //
-    static final RuntimeOptionKey<Long> FreeSpaceSize = new RuntimeOptionKey<>(0L);
+    @Option(help = "Bytes that can be allocated before (re-)querying the physical memory size") //
+    public static final HostedOptionKey<Long> AllocationBeforePhysicalMemorySize = new HostedOptionKey<>(1L * 1024L * 1024L);
 
     @Option(help = "The size of an aligned chunk.") //
-    public static final HostedOptionKey<Long> AlignedHeapChunkSize = new HostedOptionKey<>(1L * 1024L * 1024L);
+    public static final HostedOptionKey<Long> AlignedHeapChunkSize = new HostedOptionKey<Long>(1L * 1024L * 1024L) {
+        @Override
+        protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Long oldValue, Long newValue) {
+            int multiple = 4096;
+            UserError.guarantee(newValue > 0 && newValue % multiple == 0, "%s value must be a multiple of %d.", getName(), multiple);
+        }
+    };
 
     /*
      * This should be a fraction of the size of an aligned chunk, else large small arrays will not
      * fit in an aligned chunk.
      */
-    @Option(help = "How many bytes is enough to allocate an unaligned chunk for an array?  0 implies (AlignedHeapChunkSize / 8).") //
+    @Option(help = "The size at or above which an array will be allocated in its own unaligned chunk.  0 implies (AlignedHeapChunkSize / 8).") //
     public static final HostedOptionKey<Long> LargeArrayThreshold = new HostedOptionKey<>(HeapPolicy.LARGE_ARRAY_THRESHOLD_SENTINEL_VALUE);
 
-    /* Zapping */
-
-    /* - Should chunks be zapped? */
-    @Option(help = "Zap memory chunks") //
+    @Option(help = "Fill unused memory chunks with a sentinel value.") //
     public static final HostedOptionKey<Boolean> ZapChunks = new HostedOptionKey<>(false);
-    /* - Should chunks be zapped when they are produced? */
-    @Option(help = "Zap produced memory chunks") //
+
+    @Option(help = "Before use, fill memory chunks with a sentinel value.") //
     public static final HostedOptionKey<Boolean> ZapProducedHeapChunks = new HostedOptionKey<>(false);
-    /* - Should chunks be zapped when they are consumed? */
-    @Option(help = "Zap consumed memory chunks") //
+
+    @Option(help = "After use, Fill memory chunks with a sentinel value.") //
     public static final HostedOptionKey<Boolean> ZapConsumedHeapChunks = new HostedOptionKey<>(false);
 
-    /* Should heap chunks be traced during collections? */
-    @Option(help = "Trace heap chunks during collections") //
+    @Option(help = "Trace heap chunks during collections, if +VerboseGC and +PrintHeapShape.") //
     public static final RuntimeOptionKey<Boolean> TraceHeapChunks = new RuntimeOptionKey<>(false);
 
-    @Option(help = "Policy used when users request garbage collection.")//
-    public static final HostedOptionKey<String> UserRequestedGCPolicy = new HostedOptionKey<>(AlwaysCollectCompletely.class.getName());
+    @Option(help = "Maximum number of survivor spaces.") //
+    public static final HostedOptionKey<Integer> MaxSurvivorSpaces = new HostedOptionKey<>(0);
 
-    @Option(help = "Defines the upper bound for the number of remaining bytes in the young generation that cause a collection when `System.gc` is called.") //
-    public static final RuntimeOptionKey<Long> UserRequestedGCThreshold = new RuntimeOptionKey<>(16L * 1024L * 1024L);
+    @Option(help = "Determines if a full GC collects the young generation separately or together with the old generation.") //
+    public static final RuntimeOptionKey<Boolean> CollectYoungGenerationSeparately = new RuntimeOptionKey<>(false);
+
+    private HeapPolicyOptions() {
+    }
 }
