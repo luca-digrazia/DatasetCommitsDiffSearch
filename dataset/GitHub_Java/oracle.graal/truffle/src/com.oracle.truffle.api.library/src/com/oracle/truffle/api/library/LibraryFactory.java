@@ -40,27 +40,21 @@
  */
 package com.oracle.truffle.api.library;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.dsl.GeneratedBy;
-import com.oracle.truffle.api.library.LibraryExport.DelegateExport;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.utilities.FinalBitSet;
 
 /**
  * Library factories allow to create instances of libraries used to call library messages. A library
@@ -104,7 +98,6 @@ import com.oracle.truffle.api.utilities.FinalBitSet;
 public abstract class LibraryFactory<T extends Library> {
 
     private static final ConcurrentHashMap<Class<?>, LibraryFactory<?>> LIBRARIES;
-    private static final DefaultExportProvider[] EMPTY_DEFAULT_EXPORT_ARRAY = new DefaultExportProvider[0];
 
     static {
         LIBRARIES = new ConcurrentHashMap<>();
@@ -143,9 +136,6 @@ public abstract class LibraryFactory<T extends Library> {
 
     final DynamicDispatchLibrary dispatchLibrary;
 
-    final DefaultExportProvider[] beforeBuiltinDefaultExports;
-    final DefaultExportProvider[] afterBuiltinDefaultExports;
-
     /**
      * Constructor for generated subclasses. Do not sub-class {@link LibraryFactory} manually.
      *
@@ -168,46 +158,7 @@ public abstract class LibraryFactory<T extends Library> {
         if (libraryClass == DynamicDispatchLibrary.class) {
             this.dispatchLibrary = null;
         } else {
-            GenerateLibrary annotation = libraryClass.getAnnotation(GenerateLibrary.class);
-            boolean dynamicDispatchEnabled = annotation == null || libraryClass.getAnnotation(GenerateLibrary.class).dynamicDispatchEnabled();
-            if (dynamicDispatchEnabled) {
-                this.dispatchLibrary = LibraryFactory.resolve(DynamicDispatchLibrary.class).getUncached();
-            } else {
-                this.dispatchLibrary = null;
-            }
-        }
-
-        List<DefaultExportProvider> providers = getExternalDefaultProviders().get(libraryClass.getName());
-        List<DefaultExportProvider> beforeBuiltin = null;
-        List<DefaultExportProvider> afterBuiltin = null;
-        if (providers != null && !providers.isEmpty()) {
-            for (DefaultExportProvider provider : providers) {
-                List<DefaultExportProvider> providerList = new ArrayList<>();
-                if (provider.getPriority() > 0) {
-                    if (beforeBuiltin == null) {
-                        beforeBuiltin = new ArrayList<>();
-                    }
-                    providerList = beforeBuiltin;
-                } else {
-                    if (afterBuiltin == null) {
-                        afterBuiltin = new ArrayList<>();
-                    }
-                    providerList = afterBuiltin;
-                }
-                providerList.add(provider);
-            }
-        }
-
-        if (beforeBuiltin != null) {
-            beforeBuiltinDefaultExports = beforeBuiltin.toArray(new DefaultExportProvider[beforeBuiltin.size()]);
-        } else {
-            beforeBuiltinDefaultExports = EMPTY_DEFAULT_EXPORT_ARRAY;
-        }
-
-        if (afterBuiltin != null) {
-            afterBuiltinDefaultExports = afterBuiltin.toArray(new DefaultExportProvider[afterBuiltin.size()]);
-        } else {
-            afterBuiltinDefaultExports = EMPTY_DEFAULT_EXPORT_ARRAY;
+            this.dispatchLibrary = LibraryFactory.resolve(DynamicDispatchLibrary.class).getUncached();
         }
     }
 
@@ -316,43 +267,6 @@ public abstract class LibraryFactory<T extends Library> {
         }
     }
 
-    private static volatile Map<String, List<DefaultExportProvider>> externalDefaultProviders;
-
-    private static Map<String, List<DefaultExportProvider>> getExternalDefaultProviders() {
-        Map<String, List<DefaultExportProvider>> providers = externalDefaultProviders;
-        if (providers == null) {
-            synchronized (LibraryFactory.class) {
-                providers = externalDefaultProviders;
-                if (providers == null) {
-                    providers = loadExternalDefaultProviders();
-                }
-            }
-        }
-        return providers;
-    }
-
-    private static Map<String, List<DefaultExportProvider>> loadExternalDefaultProviders() {
-        Map<String, List<DefaultExportProvider>> providers;
-        providers = new LinkedHashMap<>();
-        for (DefaultExportProvider provider : ServiceLoader.load(DefaultExportProvider.class)) {
-            String libraryClassName = provider.getLibraryClassName();
-            List<DefaultExportProvider> providerList = providers.get(libraryClassName);
-            if (providerList == null) {
-                providerList = new ArrayList<>();
-                providers.put(libraryClassName, providerList);
-            }
-            providerList.add(provider);
-        }
-        for (List<DefaultExportProvider> providerList : providers.values()) {
-            Collections.sort(providerList, new Comparator<DefaultExportProvider>() {
-                public int compare(DefaultExportProvider o1, DefaultExportProvider o2) {
-                    return Integer.compare(o2.getPriority(), o1.getPriority());
-                }
-            });
-        }
-        return providers;
-    }
-
     final Class<T> getLibraryClass() {
         return libraryClass;
     }
@@ -427,16 +341,6 @@ public abstract class LibraryFactory<T extends Library> {
     protected abstract T createProxy(ReflectionLibrary lib);
 
     /**
-     * Creates a delegate version of a library. May be used for cached or uncached versions of a
-     * library. Intended to be used by generated code only, do not use manually.
-     *
-     * @since 20.0
-     */
-    protected T createDelegate(T original) {
-        return original;
-    }
-
-    /**
      * Creates an assertion version of this library. An implementation for this method is generated,
      * do not implement manually.
      *
@@ -454,27 +358,6 @@ public abstract class LibraryFactory<T extends Library> {
      */
     protected abstract Class<?> getDefaultClass(Object receiver);
 
-    private Class<?> getDefaultClassImpl(Object receiver) {
-        for (DefaultExportProvider defaultExport : beforeBuiltinDefaultExports) {
-            if (defaultExport.getReceiverClass().isInstance(receiver)) {
-                return defaultExport.getDefaultExport();
-            }
-        }
-
-        Class<?> defaultClass = getDefaultClass(receiver);
-        if (defaultClass != getLibraryClass()) {
-            return defaultClass;
-        }
-
-        for (DefaultExportProvider defaultExport : afterBuiltinDefaultExports) {
-            if (defaultExport.getReceiverClass().isInstance(receiver)) {
-                return defaultExport.getDefaultExport();
-            }
-        }
-
-        return defaultClass;
-    }
-
     /**
      * Performs a generic dispatch for this library. An implementation for this method is generated,
      * do not implement manually.
@@ -482,49 +365,6 @@ public abstract class LibraryFactory<T extends Library> {
      * @since 19.0
      */
     protected abstract Object genericDispatch(Library library, Object receiver, Message message, Object[] arguments, int parameterOffset) throws Exception;
-
-    /**
-     * Creates a final bitset of the given messages. Uses an internal index for the messages. An
-     * implementation for this method is generated, do not implement manually.
-     *
-     * @since 20.0
-     */
-    protected FinalBitSet createMessageBitSet(@SuppressWarnings({"unused", "hiding"}) Message... enabledMessages) {
-        throw new AssertionError("should be generated");
-    }
-
-    /**
-     * Returns <code>true</code> if a message is delegated, otherwise <code>false</code>. Intended
-     * to be used by generated code only, do not use manually.
-     *
-     * @since 20.0
-     */
-    protected static boolean isDelegated(Library lib, int index) {
-        boolean result = ((DelegateExport) lib).getDelegateExportMessages().get(index);
-        CompilerAsserts.partialEvaluationConstant(result);
-        return !result;
-    }
-
-    /**
-     * Reads the delegate for a receiver. Intended to be used by generated code only, do not use
-     * manually.
-     *
-     * @since 20.0
-     */
-    protected static Object readDelegate(Library lib, Object receiver) {
-        return ((DelegateExport) lib).readDelegateExport(receiver);
-    }
-
-    /**
-     * Returns the delegated library to use when messages are delegated. Intended to be used by
-     * generated code only, do not use manually.
-     *
-     * @since 20.0
-     */
-    @SuppressWarnings("unchecked")
-    protected static <T extends Library> T getDelegateLibrary(T lib, Object delegate) {
-        return (T) ((DelegateExport) lib).getDelegateExportLibrary(delegate);
-    }
 
     final LibraryExport<T> lookupExport(Object receiver, Class<?> dispatchedClass) {
         LibraryExport<T> lib = this.exportCache.get(dispatchedClass);
@@ -539,7 +379,7 @@ public abstract class LibraryFactory<T extends Library> {
             if (libraryClass != DynamicDispatchLibrary.class && resolvedLibrary.getLibrary(ReflectionLibrary.class) != null) {
                 lib = proxyExports;
             } else {
-                Class<?> defaultClass = getDefaultClassImpl(receiver);
+                Class<?> defaultClass = getDefaultClass(receiver);
                 lib = ResolvedDispatch.lookup(defaultClass).getLibrary(libraryClass);
             }
         } else {
@@ -662,7 +502,7 @@ public abstract class LibraryFactory<T extends Library> {
         }
 
         @Override
-        protected T createCached(Object receiver) {
+        public T createCached(Object receiver) {
             return createProxy(ReflectionLibrary.getFactory().create(receiver));
         }
     }
