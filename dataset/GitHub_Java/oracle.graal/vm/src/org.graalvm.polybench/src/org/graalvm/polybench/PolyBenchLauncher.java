@@ -24,34 +24,33 @@
  */
 package org.graalvm.polybench;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.function.BiConsumer;
-
 import org.graalvm.launcher.AbstractLanguageLauncher;
 import org.graalvm.options.OptionCategory;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 
-public final class PolyBenchLauncher extends AbstractLanguageLauncher {
-    static class ArgumentConsumer {
-        private final String prefix;
-        private final BiConsumer<String, Config> action;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.function.BiConsumer;
 
-        ArgumentConsumer(String prefix, BiConsumer<String, Config> action) {
+public final class PolyBenchLauncher extends AbstractLanguageLauncher {
+    class ArgumentConsumer {
+        private final String prefix;
+        private final BiConsumer<String, Map<String, String>> action;
+
+        ArgumentConsumer(String prefix, BiConsumer<String, Map<String, String>> action) {
             this.prefix = prefix;
             this.action = action;
         }
 
-        boolean consume(String argument, Iterator<String> args, Config options) {
+        boolean consume(String argument, Iterator<String> remaining, Map<String, String> options) {
             if (!argument.startsWith(prefix)) {
                 return false;
             }
@@ -64,33 +63,43 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
                 if (!argument.equals(prefix)) {
                     return false;
                 }
-                try {
-                    value = args.next();
-                } catch (NoSuchElementException e) {
-                    throw new IllegalArgumentException("Premature end of arguments for prefix " + prefix + ".");
-                }
+                value = remaining.next();
             }
+
             action.accept(value, options);
             return true;
         }
     }
 
-    RuntimeException abortLaunch(String message) {
-        throw abort(message);
-    }
-
-    static class ArgumentParser {
+    class ArgumentParser {
         private final List<ArgumentConsumer> consumers;
 
         ArgumentParser() {
             this.consumers = new ArrayList<>();
-            this.consumers.add(new ArgumentConsumer("--path", (value, config) -> {
+            this.consumers.add(new ArgumentConsumer("--path", (value, options) -> {
                 config.path = value;
+                final File file = new File(value);
+                try {
+                    sourceContent = Source.newBuilder(Source.findLanguage(file), file);
+                } catch (IOException e) {
+                    throw abort("Error while examining source file '" + file + "': " + e.getMessage());
+                }
             }));
-            this.consumers.add(new ArgumentConsumer("--mode", (value, config) -> {
-                config.mode = Config.Mode.parse(value);
+            this.consumers.add(new ArgumentConsumer("--mode", (value, options) -> {
+                switch (value) {
+                    case "interpreter":
+                        config.mode = "interpreter";
+                        setInterpreterOnly(options);
+                        break;
+                    case "default":
+                        config.mode = "default";
+                        setDefault(options);
+                        break;
+                    default:
+                        throw abort("Unknown execution-mode: " + value);
+                }
             }));
-            this.consumers.add(new ArgumentConsumer("--metric", (value, config) -> {
+            this.consumers.add(new ArgumentConsumer("--metric", (value, options) -> {
                 switch (value) {
                     case "peak-time":
                         config.metric = new PeakTimeMetric();
@@ -99,51 +108,62 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
                         config.metric = new NoMetric();
                         break;
                     default:
-                        throw new IllegalArgumentException("Unknown metric: " + value);
+                        throw abort("Unknown metric: " + value);
                 }
             }));
-            this.consumers.add(new ArgumentConsumer("-w", (value, config) -> {
+            this.consumers.add(new ArgumentConsumer("-w", (value, options) -> {
                 config.warmupIterations = Integer.parseInt(value);
             }));
-            this.consumers.add(new ArgumentConsumer("-i", (value, config) -> {
+            this.consumers.add(new ArgumentConsumer("-i", (value, options) -> {
                 config.iterations = Integer.parseInt(value);
             }));
         }
 
-        Config parse(List<String> arguments) {
-            Config config = new Config();
-            final ListIterator<String> iterator = arguments.listIterator();
-            outer: while (iterator.hasNext()) {
-                final String argument = iterator.next();
-                for (ArgumentConsumer consumer : consumers) {
-                    if (consumer.consume(argument, iterator, config)) {
-                        continue outer;
+        List<String> parse(List<String> arguments, Map<String, String> polyglotOptions) {
+            try {
+                List<String> unrecognizedArguments = new ArrayList<>();
+                final Iterator<String> iterator = arguments.iterator();
+                outer: while (iterator.hasNext()) {
+                    final String argument = iterator.next();
+                    for (ArgumentConsumer consumer : consumers) {
+                        if (consumer.consume(argument, iterator, polyglotOptions)) {
+                            continue outer;
+                        }
                     }
+                    unrecognizedArguments.add(argument);
                 }
-                config.unrecognizedArguments.add(argument);
+                return unrecognizedArguments;
+            } catch (NoSuchElementException e) {
+                throw abort("Premature end of arguments.");
             }
-            return config;
         }
     }
 
-    private static final ArgumentParser PARSER = new ArgumentParser();
+    private Source.Builder sourceContent;
     private Config config;
 
     public PolyBenchLauncher() {
+        this.sourceContent = null;
+        this.config = new Config();
     }
 
     public static void main(String[] args) {
-        new PolyBenchLauncher().launch(args);
+        PolyBenchLauncher launcher = new PolyBenchLauncher();
+        launcher.launch(args);
+    }
+
+    private static void setInterpreterOnly(Map<String, String> options) {
+        options.put("engine.Compilation", "false");
+    }
+
+    private static void setDefault(Map<String, String> options) {
+        options.put("engine.Compilation", "true");
     }
 
     @Override
     protected List<String> preprocessArguments(List<String> arguments, Map<String, String> polyglotOptions) {
-        try {
-            this.config = PARSER.parse(arguments);
-        } catch (IllegalArgumentException e) {
-            throw abort(e.getMessage());
-        }
-        return this.config.unrecognizedArguments;
+        final ArgumentParser parser = new ArgumentParser();
+        return parser.parse(arguments, polyglotOptions);
     }
 
     @Override
@@ -171,7 +191,7 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
     }
 
     private void validateArguments() {
-        if (config.path == null) {
+        if (sourceContent == null) {
             throw abort("Must specify path to the source file with --path.");
         }
     }
@@ -181,51 +201,28 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
         log(config.toString());
         log("");
 
-        switch (config.mode) {
-            case interpreter:
-                contextBuilder.option("engine.Compilation", "false");
-                break;
-            case standard:
-                contextBuilder.option("engine.Compilation", "true");
-                break;
-            default:
-                throw new AssertionError("Unknown execution-mode: " + config.mode);
-        }
-
         try (Context context = contextBuilder.build()) {
-            log("::: Initializing :::");
-
-            final File file = new File(config.path);
-            Source source;
-            String language;
             try {
-                language = Source.findLanguage(file);
-                if (language == null) {
-                    throw abort("Could not determine the language for file " + file);
-                }
-                source = Source.newBuilder(language, file).build();
-            } catch (IOException e) {
-                throw abort("Error while examining source file '" + file + "': " + e.getMessage());
+                log("::: Parsing :::");
+                final Source source = sourceContent.build();
+                context.eval(source);
+                log("language: " + source.getLanguage());
+                log("type:     " + (source.hasBytes() ? "binary" : "source code"));
+                log("length:   " + source.getLength() + (source.hasBytes() ? " bytes" : " characters"));
+                log("Parsing completed.");
+                log("");
+
+                log("::: Running warmup :::");
+                repeatIterations(context, source.getLanguage(), source.getName(), true, config.warmupIterations);
+                log("");
+
+                log("::: Running :::");
+                config.metric.reset();
+                repeatIterations(context, source.getLanguage(), source.getName(), false, config.iterations);
+                log("");
+            } catch (Throwable t) {
+                throw abort(t);
             }
-
-            context.eval(source);
-
-            log("language: " + source.getLanguage());
-            log("type:     " + (source.hasBytes() ? "binary" : "source code"));
-            log("length:   " + source.getLength() + (source.hasBytes() ? " bytes" : " characters"));
-            log("Initialization completed.");
-            log("");
-
-            log("::: Running warmup :::");
-            repeatIterations(context, language, source.getName(), true, config.warmupIterations);
-            log("");
-
-            log("::: Running :::");
-            config.metric.reset();
-            repeatIterations(context, language, source.getName(), false, config.iterations);
-            log("");
-        } catch (Throwable t) {
-            throw abort(t);
         }
     }
 
@@ -239,30 +236,24 @@ public final class PolyBenchLauncher extends AbstractLanguageLauncher {
 
     private void repeatIterations(Context context, String languageId, String name, boolean warmup, int iterations) {
         Value run = lookup(context, languageId, "run");
-        // Enter explicitly to avoid context switches for each iteration.
-        context.enter();
-        try {
-            for (int i = 0; i < iterations; i++) {
-                config.metric.beforeIteration(warmup, i, config);
 
-                // The executeVoid method is the fastest way to do the transition to guest.
-                run.executeVoid();
+        for (int i = 0; i < iterations; i++) {
+            config.metric.beforeIteration(warmup, i, config);
 
-                config.metric.afterIteration(warmup, i, config);
+            run.execute();
 
-                final Optional<Double> value = config.metric.reportAfterIteration(config);
-                if (value.isPresent()) {
-                    log("[" + name + "] iteration " + i + ": " + round(value.get()) + " " + config.metric.unit());
-                }
-            }
+            config.metric.afterIteration(warmup, i, config);
 
-            final Optional<Double> value = config.metric.reportAfterAll();
+            final Optional<Double> value = config.metric.reportAfterIteration(config);
             if (value.isPresent()) {
-                log("------");
-                log("[" + name + "] " + (warmup ? "after warmup: " : "after run: ") + round(value.get()) + " " + config.metric.unit());
+                log("[" + name + "] iteration " + i + ": " + round(value.get()) + " " + config.metric.unit());
             }
-        } finally {
-            context.leave();
+        }
+
+        final Optional<Double> value = config.metric.reportAfterAll();
+        if (value.isPresent()) {
+            log("------");
+            log("[" + name + "] " + (warmup ? "after warmup: " : "after run: ") + round(value.get()) + " " + config.metric.unit());
         }
     }
 

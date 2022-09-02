@@ -24,24 +24,18 @@
  */
 package org.graalvm.polybench;
 
-import java.util.ArrayList;
-import java.util.List;
-
 class Config {
     String path;
-    String className;
     int warmupIterations;
     int iterations;
-    Mode mode;
+    String mode;
     Metric metric;
-    List<String> unrecognizedArguments = new ArrayList<>();
 
     Config() {
         this.path = null;
-        this.className = null;
-        this.warmupIterations = 20;
-        this.iterations = 30;
-        this.mode = Mode.standard;
+        this.warmupIterations = 10;
+        this.iterations = 10;
+        this.mode = "default";
         this.metric = new PeakTimeMetric();
     }
 
@@ -52,20 +46,4 @@ class Config {
                         "warmup-iterations: " + warmupIterations + "\n" +
                         "iterations:        " + iterations;
     }
-
-    enum Mode {
-        interpreter,
-        standard;
-
-        static Mode parse(String name) throws IllegalArgumentException {
-            for (Mode mode : Mode.values()) {
-                if (name.equals(mode.name())) {
-                    return mode;
-                }
-            }
-            throw new IllegalArgumentException("Unknown execution-mode: " + name);
-        }
-
-    }
-
 }
