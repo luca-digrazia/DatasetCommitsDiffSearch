@@ -30,6 +30,8 @@ import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.alloc.RegisterAllocationConfig;
 import org.graalvm.compiler.core.target.Backend;
+import org.graalvm.compiler.nodes.CallTargetNode;
+import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.phases.Phase;
 import org.graalvm.compiler.phases.tiers.SuitesProvider;
 import org.graalvm.compiler.phases.util.Providers;
@@ -37,6 +39,9 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
+import com.oracle.svm.core.graal.snippets.CFunctionSnippets;
+import com.oracle.svm.core.nodes.CFunctionPrologueDataNode;
+import com.oracle.svm.core.thread.VMThreads.StatusSupport;
 
 import jdk.vm.ci.code.CodeCacheProvider;
 import jdk.vm.ci.code.RegisterConfig;
@@ -84,7 +89,34 @@ public abstract class SubstrateBackend extends Backend {
         return new RegisterAllocationConfig(registerConfigNonNull, allocationRestrictedTo);
     }
 
+    public static boolean hasJavaFrameAnchor(CallTargetNode callTarget) {
+        return getPrologueData(callTarget) != null;
+    }
+
+    public static ValueNode getJavaFrameAnchor(CallTargetNode callTarget) {
+        ValueNode frameAnchor = getPrologueData(callTarget).frameAnchor();
+        assert frameAnchor != null;
+        return frameAnchor;
+    }
+
+    /**
+     * We are re-using the field {InvokeNode#classInit()} to store the prologue data, see
+     * {@link CFunctionSnippets#matchCallStructure}.
+     */
+    private static CFunctionPrologueDataNode getPrologueData(CallTargetNode callTarget) {
+        return (CFunctionPrologueDataNode) callTarget.invoke().classInit();
+    }
+
+    public static int getNewThreadStatus(CallTargetNode callTarget) {
+        CFunctionPrologueDataNode prologueData = getPrologueData(callTarget);
+        if (prologueData != null) {
+            return prologueData.getNewThreadStatus();
+        }
+        return StatusSupport.STATUS_ILLEGAL;
+    }
+
     public abstract Phase newAddressLoweringPhase(CodeCacheProvider codeCache);
 
-    public abstract CompilationResult createJNITrampolineMethod(ResolvedJavaMethod method, CompilationIdentifier identifier, RegisterValue methodIdArg, int offset);
+    public abstract CompilationResult createJNITrampolineMethod(ResolvedJavaMethod method, CompilationIdentifier identifier,
+                    RegisterValue threadArg, int threadIsolateOffset, RegisterValue methodIdArg, int methodObjEntryPointOffset);
 }
