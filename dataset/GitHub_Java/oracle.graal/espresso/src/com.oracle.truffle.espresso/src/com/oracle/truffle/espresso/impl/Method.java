@@ -131,15 +131,15 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     private final Method proxy;
     private String genericSignature;
 
-    // always null unless the raw signature exposed for this method should be
-    // different from the one in the linkedKlass
-    private final Symbol<Signature> rawSignature;
-
     // the parts of the method that can change when it's redefined
     // are encapsulated within the methodVersion
     @CompilationFinal private volatile MethodVersion methodVersion;
 
     private final Assumption removedByRedefinition = Truffle.getRuntime().createAssumption();
+
+    public Method identity() {
+        return proxy == null ? this : proxy;
+    }
 
     // Multiple maximally-specific interface methods. Fail on call.
     @CompilationFinal private boolean poisonPill = false;
@@ -147,16 +147,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     // Whether we need to use an additional frame slot for monitor unlock on kill.
     @CompilationFinal private byte usesMonitors = -1;
 
-    public Method identity() {
-        return proxy == null ? this : proxy;
-    }
-
-    @Override
-    public Symbol<Name> getName() {
-        return getLinkedMethod().getName();
-    }
-
     // can have a different constant pool than it's declaring class
+
     public ConstantPool getConstantPool() {
         return getRuntimeConstantPool();
     }
@@ -179,10 +171,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     public Symbol<Signature> getRawSignature() {
-        if (rawSignature != null) {
-            return rawSignature;
-        }
-        return getLinkedMethod().getRawSignature();
+        return descriptor;
     }
 
     public Symbol<Type>[] getParsedSignature() {
@@ -193,7 +182,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     private Source source;
 
     Method(Method method) {
-        this.rawSignature = method.rawSignature;
+        super(method.getRawSignature(), method.getName());
         this.declaringKlass = method.declaringKlass;
         this.methodVersion = new MethodVersion(method.getRuntimeConstantPool(), method.getLinkedMethod(), method.getCodeAttribute());
 
@@ -216,7 +205,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     private Method(Method method, CodeAttribute split) {
-        this.rawSignature = method.rawSignature;
+        super(method.getRawSignature(), method.getName());
         this.declaringKlass = method.declaringKlass;
         this.methodVersion = new MethodVersion(method.getRuntimeConstantPool(), method.getLinkedMethod(), split);
 
@@ -242,9 +231,9 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     Method(ObjectKlass declaringKlass, LinkedMethod linkedMethod, Symbol<Signature> rawSignature, RuntimeConstantPool pool) {
+        super(rawSignature, linkedMethod.getName());
         this.methodVersion = new MethodVersion(pool, linkedMethod, (CodeAttribute) linkedMethod.getAttribute(CodeAttribute.NAME));
         this.declaringKlass = declaringKlass;
-        this.rawSignature = rawSignature;
 
         try {
             this.parsedSignature = getSignatures().parsed(this.getRawSignature());
