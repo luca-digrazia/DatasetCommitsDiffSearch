@@ -29,13 +29,13 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
-import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.IntValueProfile;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
@@ -44,15 +44,20 @@ public abstract class LLVMI32LoadNode extends LLVMAbstractLoadNode {
     private final IntValueProfile profile = IntValueProfile.createIdentityProfile();
 
     @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected int doI32Native(LLVMNativePointer addr,
-                    @CachedLanguage LLVMLanguage language) {
-        return profile.profile(language.getCapability(LLVMMemory.class).getI32(addr));
+    protected int doI32Native(LLVMNativePointer addr) {
+        return profile.profile(getLLVMMemoryCached().getI32(addr));
     }
 
     @Specialization(guards = "isAutoDerefHandle(addr)")
     protected int doI32DerefHandle(LLVMNativePointer addr,
                     @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
         return doI32Managed(getDerefHandleGetReceiverNode().execute(addr), nativeRead);
+    }
+
+    @Specialization
+    protected int doI32(LLVMVirtualAllocationAddress address,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        return address.getI32(memory);
     }
 
     @Specialization(limit = "3")

@@ -29,14 +29,14 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
-import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.api.profiles.LongValueProfile;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
@@ -45,9 +45,8 @@ public abstract class LLVMI64LoadNode extends LLVMAbstractLoadNode {
     private final LongValueProfile profile = LongValueProfile.createIdentityProfile();
 
     @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected long doI64Native(LLVMNativePointer addr,
-                    @CachedLanguage LLVMLanguage language) {
-        return profile.profile(language.getCapability(LLVMMemory.class).getI64(addr));
+    protected long doI64Native(LLVMNativePointer addr) {
+        return profile.profile(getLLVMMemoryCached().getI64(addr));
     }
 
     @Specialization(guards = "isAutoDerefHandle(addr)", rewriteOn = UnexpectedResultException.class)
@@ -60,6 +59,12 @@ public abstract class LLVMI64LoadNode extends LLVMAbstractLoadNode {
     protected Object doGenericI64DerefHandle(LLVMNativePointer addr,
                     @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
         return doGenericI64Managed(getDerefHandleGetReceiverNode().execute(addr), nativeRead);
+    }
+
+    @Specialization
+    protected long doI64(LLVMVirtualAllocationAddress address,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        return address.getI64(memory);
     }
 
     @Specialization(limit = "3", rewriteOn = UnexpectedResultException.class)

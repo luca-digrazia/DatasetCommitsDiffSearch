@@ -29,13 +29,13 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
-import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.DoubleValueProfile;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 
@@ -43,10 +43,15 @@ public abstract class LLVMDoubleLoadNode extends LLVMAbstractLoadNode {
 
     private final DoubleValueProfile profile = DoubleValueProfile.createRawIdentityProfile();
 
+    @Specialization
+    protected double doDouble(LLVMVirtualAllocationAddress address,
+                    @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+        return address.getDouble(memory);
+    }
+
     @Specialization(guards = "!isAutoDerefHandle(addr)")
-    protected double doDoubleNative(LLVMNativePointer addr,
-                    @CachedLanguage LLVMLanguage language) {
-        return profile.profile(language.getCapability(LLVMMemory.class).getDouble(addr));
+    protected double doDoubleNative(LLVMNativePointer addr) {
+        return profile.profile(getLLVMMemoryCached().getDouble(addr));
     }
 
     @Specialization(guards = "isAutoDerefHandle(addr)")

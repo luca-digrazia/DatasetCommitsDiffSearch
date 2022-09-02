@@ -30,16 +30,15 @@
 package com.oracle.truffle.llvm.runtime.nodes.memory.load;
 
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CachedLanguage;
 import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMVirtualAllocationAddress;
 import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
 import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
-import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
+import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVM80BitFloatDirectLoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMIVarBitDirectLoadNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
@@ -56,9 +55,8 @@ public abstract class LLVMDirectLoadNode {
         public abstract int getBitWidth();
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMIVarBit doIVarBitNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            return language.getCapability(LLVMMemory.class).getIVarBit(addr, getBitWidth());
+        protected LLVMIVarBit doIVarBitNative(LLVMNativePointer addr) {
+            return getLLVMMemoryCached().getIVarBit(addr, getBitWidth());
         }
 
         LLVMIVarBitDirectLoadNode createRecursive() {
@@ -98,9 +96,8 @@ public abstract class LLVMDirectLoadNode {
         protected abstract LLVM80BitFloat executeManaged(LLVMManagedPointer addr);
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVM80BitFloat do80BitFloatNative(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            return language.getCapability(LLVMMemory.class).get80BitFloat(addr);
+        protected LLVM80BitFloat do80BitFloatNative(LLVMNativePointer addr) {
+            return getLLVMMemoryCached().get80BitFloat(addr);
         }
 
         @Specialization(guards = "isAutoDerefHandle(addr)")
@@ -126,15 +123,20 @@ public abstract class LLVMDirectLoadNode {
     public abstract static class LLVMPointerDirectLoadNode extends LLVMAbstractLoadNode {
 
         @Specialization(guards = "!isAutoDerefHandle(addr)")
-        protected LLVMNativePointer doNativePointer(LLVMNativePointer addr,
-                        @CachedLanguage LLVMLanguage language) {
-            return language.getCapability(LLVMMemory.class).getPointer(addr);
+        protected LLVMNativePointer doNativePointer(LLVMNativePointer addr) {
+            return getLLVMMemoryCached().getPointer(addr);
         }
 
         @Specialization(guards = "isAutoDerefHandle(addr)")
         protected LLVMPointer doDerefHandle(LLVMNativePointer addr,
                         @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
             return doIndirectedForeign(getDerefHandleGetReceiverNode().execute(addr), nativeRead);
+        }
+
+        @Specialization
+        protected LLVMNativePointer doLLVMByteArrayAddress(LLVMVirtualAllocationAddress address,
+                        @Cached("getUnsafeArrayAccess()") UnsafeArrayAccess memory) {
+            return LLVMNativePointer.create(address.getI64(memory));
         }
 
         @Specialization(limit = "3")

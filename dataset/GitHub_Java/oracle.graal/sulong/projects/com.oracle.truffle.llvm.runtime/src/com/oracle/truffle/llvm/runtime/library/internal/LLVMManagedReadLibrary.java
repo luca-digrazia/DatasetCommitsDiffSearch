@@ -33,7 +33,6 @@ import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
 import com.oracle.truffle.api.library.Library;
-import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMTypesGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
@@ -42,7 +41,6 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
  * Library for container objects that behave like raw memory that can be read.
  */
 @GenerateLibrary
-@DefaultExport(LLVMManagedAccessDefaults.VirtualAlloc.class)
 @DefaultExport(LLVMManagedAccessDefaults.FallbackRead.class)
 public abstract class LLVMManagedReadLibrary extends Library {
 
@@ -102,10 +100,4 @@ public abstract class LLVMManagedReadLibrary extends Library {
      * Read eight bytes. The return value can be either a primitive or a pointer.
      */
     public abstract Object readGenericI64(Object receiver, long offset);
-
-    private static final LibraryFactory<LLVMManagedReadLibrary> FACTORY = LibraryFactory.resolve(LLVMManagedReadLibrary.class);
-
-    public static LibraryFactory<LLVMManagedReadLibrary> getFactory() {
-        return FACTORY;
-    }
 }
