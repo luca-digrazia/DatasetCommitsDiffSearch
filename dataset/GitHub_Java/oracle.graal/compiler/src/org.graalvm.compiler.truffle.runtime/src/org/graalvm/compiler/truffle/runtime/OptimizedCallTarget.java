@@ -164,13 +164,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     @CompilationFinal private volatile ReturnProfile returnProfile;
     @CompilationFinal private Class<? extends Throwable> profiledExceptionType;
 
-    /**
-     * Was the target already dequeued due to inlining. We keep track of this to prevent
-     * continuously dequeuing the target for single caller when the single caller itself has
-     * multiple callers.
-     */
-    private volatile boolean dequeueInlined = false;
-
     public static final class ArgumentsProfile {
         private static final String ARGUMENT_TYPES_ASSUMPTION_NAME = "Profiled Argument Types";
         private static final Class<?>[] EMPTY_ARGUMENT_TYPES = new Class<?>[0];
@@ -334,17 +327,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     @Override
     public boolean isTrivial() {
         return GraalRuntimeAccessor.NODES.isTrivial(rootNode);
-    }
-
-    /**
-     * We intentionally do not synchronize here since as it's not worth the sync costs.
-     */
-    @Override
-    public void dequeueInlined() {
-        if (!dequeueInlined) {
-            dequeueInlined = true;
-            cancelCompilation("Target inlined into only caller");
-        }
     }
 
     /**
@@ -592,18 +574,6 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     }
 
     /**
-     * Returns <code>true</code> if this target can be compiled in principle, else
-     * <code>false</code>.
-     */
-    final boolean acceptForCompilation() {
-        return engine.acceptForCompilation(getRootNode());
-    }
-
-    final boolean isCompilationFailed() {
-        return compilationFailed;
-    }
-
-    /**
      * Returns <code>true</code> if the call target was already compiled or was compiled
      * synchronously. Returns <code>false</code> if compilation was not scheduled or is happening in
      * the background. Use {@link #isSubmittedForCompilation()} to find out whether it is submitted
@@ -676,9 +646,15 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     public abstract long getCodeAddress();
 
     /**
-     * Determines if this call target has valid machine code attached to it.
+     * Determines if this call target has valid machine code that can be entered attached to it.
      */
     public abstract boolean isValid();
+
+    /**
+     * Determines if this call target has machine code that might still have live activations
+     * attached to it.
+     */
+    public abstract boolean isAlive();
 
     /**
      * Determines if this call target has valid machine code attached to it, and that this code was
@@ -696,7 +672,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
      */
     public final void invalidate(Object source, CharSequence reason) {
         cachedNonTrivialNodeCount = -1;
-        if (isValid()) {
+        if (isAlive()) {
             invalidateCode();
             runtime().getListener().onCompilationInvalidated(this, source, reason);
         }
@@ -1469,5 +1445,4 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     final void setNonTrivialNodeCount(int nonTrivialNodeCount) {
         this.cachedNonTrivialNodeCount = nonTrivialNodeCount;
     }
-
 }
