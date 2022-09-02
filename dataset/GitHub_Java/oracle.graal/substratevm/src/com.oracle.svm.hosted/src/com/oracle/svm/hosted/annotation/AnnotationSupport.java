@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -121,23 +121,13 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
      * annotations is that at run time there can be two proxy types for the same annotation type and
      * an equality check between them would fail.
      */
-    public static final Class<?> constantAnnotationMarkerInterface = java.lang.Override.class;
+    static final Class<?> constantAnnotationMarkerInterface = java.lang.Override.class;
 
     private final SnippetReflectionProvider snippetReflection;
 
     private final ResolvedJavaType javaLangAnnotationAnnotation;
     private final ResolvedJavaType javaLangReflectProxy;
-    private final ResolvedJavaType constantAnnotationMarkerOriginalType;
-
-    /**
-     * Because {@link #constantAnnotationMarkerInterface} is injected into
-     * {@link AnnotationSubstitutionType}s, a substitution type is needed to correct the behavior of
-     * calls to {@link ResolvedJavaType#isAssignableFrom(ResolvedJavaType)}. Otherwise, all
-     * AnnotationSubstitutionTypes will be considered assignable from the
-     * constantAnnotationMarkerInterface. {@link ConstantAnnotationMarkerSubstitutionType} catches
-     * and corrects this issue.
-     */
-    private final ResolvedJavaType constantAnnotationMarkerSubstitutionType;
+    private final ResolvedJavaType constantAnnotationMarker;
 
     public AnnotationSupport(MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection) {
         super(metaAccess);
@@ -145,8 +135,7 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
 
         javaLangAnnotationAnnotation = metaAccess.lookupJavaType(java.lang.annotation.Annotation.class);
         javaLangReflectProxy = metaAccess.lookupJavaType(java.lang.reflect.Proxy.class);
-        constantAnnotationMarkerOriginalType = metaAccess.lookupJavaType(constantAnnotationMarkerInterface);
-        constantAnnotationMarkerSubstitutionType = new ConstantAnnotationMarkerSubstitutionType(constantAnnotationMarkerOriginalType, this);
+        constantAnnotationMarker = metaAccess.lookupJavaType(constantAnnotationMarkerInterface);
 
         AnnotationSupportConfig.initialize();
     }
@@ -162,15 +151,13 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
          * replaced.
          */
         return javaLangAnnotationAnnotation.isAssignableFrom(type) && javaLangReflectProxy.isAssignableFrom(type) &&
-                        constantAnnotationMarkerOriginalType.isAssignableFrom(type);
+                        constantAnnotationMarker.isAssignableFrom(type);
     }
 
     @Override
     public ResolvedJavaType lookup(ResolvedJavaType type) {
         if (isConstantAnnotationType(type)) {
             return getSubstitution(type);
-        } else if (type.equals(constantAnnotationMarkerOriginalType)) {
-            return constantAnnotationMarkerSubstitutionType;
         }
         return type;
     }
@@ -179,8 +166,6 @@ public class AnnotationSupport extends CustomSubstitution<AnnotationSubstitution
     public ResolvedJavaType resolve(ResolvedJavaType type) {
         if (type instanceof AnnotationSubstitutionType) {
             return ((AnnotationSubstitutionType) type).original;
-        } else if (type.equals(constantAnnotationMarkerSubstitutionType)) {
-            return constantAnnotationMarkerOriginalType;
         }
         return type;
     }
