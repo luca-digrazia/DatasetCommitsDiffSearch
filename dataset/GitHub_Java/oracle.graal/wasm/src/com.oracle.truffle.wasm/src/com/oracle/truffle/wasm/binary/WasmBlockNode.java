@@ -293,7 +293,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     logger.finest("block ENTER");
                     TargetOffset unwindCounter = block.execute(context, frame);
                     logger.finest(() -> String.format("block EXIT, target = %d", unwindCounter.value));
-                    if (unwindCounter.isGreaterThanZero()) {
+                    if (unwindCounter.greaterThanZero()) {
                         return unwindCounter.decrement();
                     }
 
@@ -320,11 +320,10 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     logger.finest("loop ENTER");
                     TargetOffset unwindCounter = loopNode.execute(context, frame);
                     logger.finest(() -> String.format("loop EXIT, target = %d", unwindCounter.value));
-                    if (unwindCounter.isGreaterThanZero()) {
+                    if (unwindCounter.greaterThanZero()) {
                         return unwindCounter.decrement();
                     }
-                    // The unwind counter cannot be 0 at this point, because that corresponds to CONTINUE_LOOP_STATUS.
-                    assert unwindCounter.isMinusOne() : "Unwind counter after loop exit: " + unwindCounter.value;
+                    assert unwindCounter.isMinusOne();
 
                     nestedControlOffset++;
                     offset += loopNode.byteLength();
@@ -341,7 +340,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     logger.finest("if ENTER");
                     TargetOffset unwindCounter = ifNode.execute(context, frame);
                     logger.finest(() -> String.format("if EXIT, target = %d", unwindCounter.value));
-                    if (unwindCounter.isGreaterThanZero()) {
+                    if (unwindCounter.greaterThanZero()) {
                         return unwindCounter.decrement();
                     }
                     nestedControlOffset++;
@@ -2314,14 +2313,7 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     @Override
     public Object executeRepeatingWithValue(VirtualFrame frame) {
-        final TargetOffset offset = execute(contextReference().get(), frame);
-        if (offset.isZero()) {
-            // This is necessary, since the zero offset has a special meaning
-            // of jumping back to the loop header.
-            return CONTINUE_LOOP_STATUS;
-        } else {
-            return offset;
-        }
+        return execute(contextReference().get(), frame);
     }
 
     @Override

@@ -29,8 +29,7 @@
  */
 package com.oracle.truffle.wasm.collection;
 
-// TODO: Remove this class, there is no good reason to have it.
-public final class IntArrayArrayList {
+public class IntArrayArrayList {
     private static final int[][] EMPTY_INT_ARRAY_ARRAY = new int[0][];
 
     private int[][] array;

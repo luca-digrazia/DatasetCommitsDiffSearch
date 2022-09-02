@@ -57,10 +57,10 @@ public class WasmIfNode extends WasmNode {
     public TargetOffset execute(WasmContext context, VirtualFrame frame) {
         int stackPointer = initialStackPointer - 1;
         if (condition.profile(popInt(frame, stackPointer) != 0)) {
-            trace("taking if branch");
+            logger.finest("taking if branch");
             return trueBranch.execute(context, frame);
         } else {
-            trace("taking else branch");
+            logger.finest("taking else branch");
             return falseBranch.execute(context, frame);
         }
     }

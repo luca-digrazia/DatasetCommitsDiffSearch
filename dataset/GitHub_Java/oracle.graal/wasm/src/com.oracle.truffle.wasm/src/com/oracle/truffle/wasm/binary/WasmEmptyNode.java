@@ -29,18 +29,22 @@
  */
 package com.oracle.truffle.wasm.binary;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
-
 import static com.oracle.truffle.wasm.binary.ValueTypes.VOID_TYPE;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.wasm.binary.constants.TargetOffset;
+
+// TODO: Make this a singleton instance.
 public class WasmEmptyNode extends WasmNode {
 
-    public WasmEmptyNode(WasmCodeEntry codeEntry, int byteLength) {
-        super(codeEntry, byteLength);
+    public WasmEmptyNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int byteLength) {
+        super(wasmModule, codeEntry, byteLength, 0, 0);
     }
 
     @Override
-    public void execute(VirtualFrame frame) {
+    public TargetOffset execute(WasmContext context, VirtualFrame frame) {
+        // A return value of -1 means no branch to be taken.
+        return TargetOffset.MINUS_ONE;
     }
 
     @Override
