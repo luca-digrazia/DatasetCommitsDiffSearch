@@ -27,7 +27,6 @@ import static com.oracle.truffle.espresso.impl.LoadingConstraints.INVALID_LOADER
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -49,8 +48,6 @@ public final class ClassRegistries {
     private final ClassRegistry bootClassRegistry;
     private final LoadingConstraints constraints;
     private final EspressoContext context;
-
-    private List<Klass> fixupModuleList = new ArrayList<>();
 
     private final Set<StaticObject> weakClassLoaderSet = Collections.newSetFromMap(new WeakHashMap<>());
 
@@ -109,7 +106,7 @@ public final class ClassRegistries {
     }
 
     public boolean javaBaseDefined() {
-        return javaBaseModule != null && !StaticObject.isNull(javaBaseModule.module());
+        return javaBaseModule != null && javaBaseModule.module() != null;
     }
 
     @TruffleBoundary
@@ -236,20 +233,6 @@ public final class ClassRegistries {
             }
         }
         return false;
-    }
-
-    public void addToFixupList(Klass k) {
-        fixupModuleList.add(k);
-    }
-
-    public void processFixupList(StaticObject javaBase) {
-        for (PrimitiveKlass k : context.getMeta().PRIMITIVE_KLASSES) {
-            k.mirror().setField(context.getMeta().java_lang_class_module, javaBase);
-        }
-        for (Klass k : fixupModuleList) {
-            k.mirror().setField(context.getMeta().java_lang_class_module, javaBase);
-        }
-        fixupModuleList = null;
     }
 
     /**
