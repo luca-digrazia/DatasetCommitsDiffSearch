@@ -54,6 +54,7 @@ import com.oracle.truffle.espresso.substitutions.Host;
  */
 public final class Meta implements ContextAccess {
 
+
     private final EspressoContext context;
 
     public Meta(EspressoContext context) {
@@ -174,6 +175,7 @@ public final class Meta implements ContextAccess {
 
         Field = knownKlass(Type.Field);
         Field_root = Field.lookupDeclaredField(Name.root, Field.getType());
+
 
         Shutdown = knownKlass(Type.Shutdown);
         Shutdown_shutdown = Shutdown.lookupDeclaredMethod(Name.shutdown, Signature._void);

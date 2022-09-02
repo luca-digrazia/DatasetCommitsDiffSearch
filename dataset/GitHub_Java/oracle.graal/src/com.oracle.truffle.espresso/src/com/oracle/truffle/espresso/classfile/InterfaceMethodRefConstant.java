@@ -157,8 +157,7 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
             }
 
             if (!MemberRefConstant.checkAccess(accessingKlass, holderInterface, method)) {
-                System.err.println(EspressoOptions.INCEPTION_NAME + " Interface method access check of: " + method.getName() + " in " + holderInterface.getType() + " from " +
-                                accessingKlass.getType() + " throws IllegalAccessError");
+                System.err.println(EspressoOptions.INCEPTION_NAME + " Interface method access check of: " + method.getName() + " in " + holderInterface.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
                 throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(name));
             }
 

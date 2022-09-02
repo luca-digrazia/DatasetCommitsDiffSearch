@@ -76,10 +76,6 @@ public interface MemberRefConstant extends PoolConstant {
             return pool.classAt(classIndex).getName(pool);
         }
 
-        protected Klass getResolvedHolderKlass(Klass accessingKlass, RuntimeConstantPool pool) {
-            return pool.resolvedKlassAt(accessingKlass, classIndex);
-        }
-
         @Override
         public Symbol<Name> getName(ConstantPool pool) {
             return pool.nameAndTypeAt(nameAndTypeIndex).getName(pool);
@@ -135,10 +131,6 @@ public interface MemberRefConstant extends PoolConstant {
         if (accessingKlass.getMeta().MagicAccessorImpl.isAssignableFrom(accessingKlass)) {
             return true;
         }
-
-        if (accessingKlass.getHostClass() != null) {
-            return checkAccess(accessingKlass.getHostClass(), resolvedKlass, f);
-        }
         return false;
     }
 
@@ -180,11 +172,6 @@ public interface MemberRefConstant extends PoolConstant {
         if (accessingKlass.getMeta().MagicAccessorImpl.isAssignableFrom(accessingKlass)) {
             return true;
         }
-
-        if (accessingKlass.getHostClass() != null) {
-            return checkAccess(accessingKlass.getHostClass(), resolvedKlass, m);
-        }
-
         return false;
     }
 
