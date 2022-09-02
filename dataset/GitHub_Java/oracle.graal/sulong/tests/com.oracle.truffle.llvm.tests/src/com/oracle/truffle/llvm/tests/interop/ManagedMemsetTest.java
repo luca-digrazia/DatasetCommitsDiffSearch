@@ -83,7 +83,7 @@ public final class ManagedMemsetTest extends ManagedMemAccessTestBase {
             // float or double
             double[] dst = new double[arrayLength];
             dstArray = dst;
-            dstObject = new DoubleArrayObject(dstType, dst);
+            dstObject = new DoubleArrayObject(dst, dstType);
         } else {
             // integer
             long[] dst = new long[arrayLength];
