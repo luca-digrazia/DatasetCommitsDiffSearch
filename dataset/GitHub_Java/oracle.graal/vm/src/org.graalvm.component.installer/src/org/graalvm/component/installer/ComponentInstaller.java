@@ -35,6 +35,7 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.text.MessageFormat;
@@ -51,8 +52,8 @@ import java.util.ServiceLoader;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.graalvm.component.installer.CommandInput.CatalogFactory;
 import static org.graalvm.component.installer.CommonConstants.PATH_COMPONENT_STORAGE;
+import org.graalvm.component.installer.SystemUtils.OS;
 import org.graalvm.component.installer.commands.AvailableCommand;
 import org.graalvm.component.installer.commands.InfoCommand;
 import org.graalvm.component.installer.commands.InstallCommand;
@@ -88,27 +89,13 @@ public final class ComponentInstaller {
     private String catalogURL;
 
     static final Map<String, InstallerCommand> commands = new HashMap<>();
-    public static final Map<String, String> globalOptions = new HashMap<>();
-    public static final Map<String, String> componentOptions = new HashMap<>();
+    static final Map<String, String> globalOptions = new HashMap<>();
 
     @SuppressWarnings("deprecation")
     static void initCommands() {
         // not necessary except for tests to cleanup extra items
         commands.clear();
         globalOptions.clear();
-
-        // options for commands working with component sources:
-        componentOptions.put(Commands.OPTION_CATALOG, "");
-        componentOptions.put(Commands.OPTION_FILES, "");
-        componentOptions.put(Commands.OPTION_URLS, "");
-        componentOptions.put(Commands.OPTION_FOREIGN_CATALOG, "s");
-        componentOptions.put(Commands.OPTION_FILES_OLD, "=L");
-
-        componentOptions.put(Commands.LONG_OPTION_FILES, Commands.OPTION_FILES);
-        componentOptions.put(Commands.LONG_OPTION_CATALOG, Commands.OPTION_CATALOG);
-        componentOptions.put(Commands.LONG_OPTION_URLS, Commands.OPTION_URLS);
-        componentOptions.put(Commands.LONG_OPTION_FOREIGN_CATALOG, Commands.OPTION_FOREIGN_CATALOG);
-        componentOptions.put(Commands.LONG_OPTION_FILES_OLD, Commands.OPTION_FILES);
 
         commands.put("install", new InstallCommand()); // NOI18N
         commands.put("remove", new UninstallCommand()); // NOI18N
@@ -126,20 +113,28 @@ public final class ComponentInstaller {
         globalOptions.put(Commands.OPTION_VERBOSE, "");
         globalOptions.put(Commands.OPTION_DEBUG, "");
         globalOptions.put(Commands.OPTION_HELP, "");
+        globalOptions.put(Commands.OPTION_CATALOG, "");
+        globalOptions.put(Commands.OPTION_FILES, "");
+        globalOptions.put(Commands.OPTION_FILES_OLD, "=L");
+        globalOptions.put(Commands.OPTION_FOREIGN_CATALOG, "s");
+        globalOptions.put(Commands.OPTION_URLS, "");
+        globalOptions.put(Commands.OPTION_NO_DOWNLOAD_PROGRESS, "");
 
         globalOptions.put(Commands.LONG_OPTION_VERBOSE, Commands.OPTION_VERBOSE);
         globalOptions.put(Commands.LONG_OPTION_DEBUG, Commands.OPTION_DEBUG);
         globalOptions.put(Commands.LONG_OPTION_HELP, Commands.OPTION_HELP);
+        globalOptions.put(Commands.LONG_OPTION_FILES_OLD, Commands.OPTION_FILES);
+        globalOptions.put(Commands.LONG_OPTION_FILES, Commands.OPTION_FILES);
+        globalOptions.put(Commands.LONG_OPTION_CATALOG, Commands.OPTION_CATALOG);
+        globalOptions.put(Commands.LONG_OPTION_FOREIGN_CATALOG, Commands.OPTION_FOREIGN_CATALOG);
+        globalOptions.put(Commands.LONG_OPTION_URLS, Commands.OPTION_URLS);
+        globalOptions.put(Commands.LONG_OPTION_NO_DOWNLOAD_PROGRESS, Commands.OPTION_NO_DOWNLOAD_PROGRESS);
 
         globalOptions.put(Commands.OPTION_AUTO_YES, "");
         globalOptions.put(Commands.LONG_OPTION_AUTO_YES, Commands.OPTION_AUTO_YES);
 
         globalOptions.put(Commands.OPTION_NON_INTERACTIVE, "");
-
-        // for simplicity, these options are global, but still commands that use them should
-        // declare them explicitly.
-        globalOptions.putAll(componentOptions);
-
+        globalOptions.put(Commands.LONG_OPTION_NON_INTERACTIVE, Commands.OPTION_NON_INTERACTIVE);
     }
 
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle(
@@ -267,48 +262,20 @@ public final class ComponentInstaller {
             if (env.hasOption(Commands.OPTION_NON_INTERACTIVE)) {
                 env.setNonInteractive(true);
             }
-
-            catalogURL = optValues.get(Commands.OPTION_FOREIGN_CATALOG);
-            RemoteCatalogDownloader downloader = new RemoteCatalogDownloader(
-                            env,
-                            env,
-                            getCatalogURL());
-            downloader.setDefaultCatalog(env.l10n("Installer_BuiltingCatalogURL")); // NOI18N
-            CatalogFactory cFactory = (CommandInput input, ComponentRegistry lreg) -> {
-                RemoteCatalogDownloader nDownloader = new RemoteCatalogDownloader(downloader, input, env);
-                CatalogContents col = new CatalogContents(env, nDownloader.getStorage(), lreg);
-                return col;
-            };
-            env.setCatalogFactory(cFactory);
-
-            boolean setIterable = true;
             if (optValues.containsKey(Commands.OPTION_FILES)) {
-                FileIterable fi = new FileIterable(env, env);
-                fi.setCatalogFactory(cFactory);
-                env.setFileIterable(fi);
-                while (env.hasParameter()) {
-                    String s = env.nextParameter();
-                    Path p = SystemUtils.fromUserString(s);
-                    if (p != null) {
-                        Path parent = p.getParent();
-                        if (parent != null && Files.isDirectory(parent)) {
-                            downloader.addLocalChannelSource(
-                                            new SoftwareChannelSource(parent.toUri().toString(), null));
-                        }
-                    }
-                }
-                setIterable = false;
+                env.setFileIterable(new FileIterable(env, env));
             } else if (optValues.containsKey(Commands.OPTION_URLS)) {
-                DownloadURLIterable dit = new DownloadURLIterable(env, env);
-                dit.setCatalogFactory(cFactory);
-                env.setFileIterable(dit);
-                setIterable = false;
+                env.setFileIterable(new DownloadURLIterable(env, env));
+            } else {
+                catalogURL = optValues.get(Commands.OPTION_FOREIGN_CATALOG);
+                RemoteCatalogDownloader downloader = new RemoteCatalogDownloader(
+                                env,
+                                env,
+                                getCatalogURL(env));
+                ComponentCollection col = new CatalogContents(env, downloader.getStorage(), env.getLocalRegistry());
+                env.setComponentRegistry(() -> col);
+                env.setFileIterable(new CatalogIterable(env, env, col, downloader));
             }
-
-            if (setIterable) {
-                env.setFileIterable(new CatalogIterable(env, env));
-            }
-
             cmdHandler.init(env, env.withBundle(cmdHandler.getClass()));
             retcode = cmdHandler.execute();
         } catch (FileAlreadyExistsException ex) {
@@ -407,11 +374,23 @@ public final class ComponentInstaller {
         String libpath = System.getProperty("java.library.path"); // NOI18N
         if (libpath == null || libpath.isEmpty()) {
             // SVM mode: libpath is not define, define it to the JRE:
-            Path newLibPath = SystemUtils.getRuntimeLibDir(graalPath, true);
-            if (newLibPath == null) {
-                throw SIMPLE_ENV.failure("ERROR_UnknownSystem", null, System.getProperty("os.name")); // NOI18N
+            String newLibPath = "";
+            switch (OS.get()) {
+                case LINUX:
+                    String arch = System.getProperty("os.arch");
+                    newLibPath = graalHomePath.resolve(Paths.get("jre/lib", arch)).toString();
+                    break;
+                case MAC:
+                    newLibPath = graalHomePath.resolve(Paths.get("jre/lib")).toString();
+                    break;
+                case WINDOWS:
+                    newLibPath = graalHomePath.resolve(Paths.get("jre/bin")).toString();
+                    break;
+                case UNKNOWN:
+                default:
+                    throw SIMPLE_ENV.failure("ERROR_UnknownSystem", null, System.getProperty("os.name"));
             }
-            System.setProperty("java.library.path", newLibPath.toString()); // NOI18N
+            System.setProperty("java.library.path", newLibPath);
         }
         return graalPath;
     }
@@ -433,8 +412,8 @@ public final class ComponentInstaller {
         }
     }
 
-    private String getCatalogURL() {
-        String def = null;
+    private String getCatalogURL(Feedback f) {
+        String def;
         if (catalogURL != null) {
             def = catalogURL;
         } else {
@@ -443,7 +422,9 @@ public final class ComponentInstaller {
                 def = envVar;
             } else {
                 String releaseCatalog = env.getLocalRegistry().getGraalCapabilities().get(CommonConstants.RELEASE_CATALOG_KEY);
-                if (releaseCatalog != null) {
+                if (releaseCatalog == null) {
+                    def = f.l10n("Installer_BuiltingCatalogURL"); // NOI18N
+                } else {
                     def = releaseCatalog;
                 }
             }
