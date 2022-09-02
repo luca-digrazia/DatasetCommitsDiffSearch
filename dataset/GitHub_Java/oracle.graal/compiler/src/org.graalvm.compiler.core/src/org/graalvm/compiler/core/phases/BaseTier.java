@@ -34,7 +34,7 @@ import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 
 public class BaseTier<C> extends PhaseSuite<C> {
 
-    public LoopPolicies createLoopPolicies(@SuppressWarnings("unused") OptionValues options) {
+    public LoopPolicies createLoopPolicies() {
         return new DefaultLoopPolicies();
     }
 
