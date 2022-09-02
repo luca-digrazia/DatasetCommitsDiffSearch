@@ -62,10 +62,6 @@ public final class RuntimeCodeCacheCleaner implements CodeInfoVisitor {
 
     @Override
     public <T extends CodeInfo> boolean visitCode(T codeInfo) {
-        if (RuntimeCodeInfoAccess.areAllObjectsOnImageHeap(codeInfo)) {
-            return true;
-        }
-
         int state = CodeInfoAccess.getState(codeInfo);
         if (state == CodeInfo.STATE_UNREACHABLE) {
             freeMemory(codeInfo);

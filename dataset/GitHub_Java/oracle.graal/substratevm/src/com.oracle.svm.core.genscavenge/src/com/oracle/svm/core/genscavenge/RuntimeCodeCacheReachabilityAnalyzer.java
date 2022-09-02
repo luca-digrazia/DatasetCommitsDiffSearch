@@ -29,14 +29,14 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 
-import com.oracle.svm.core.graal.meta.SharedRuntimeMethod;
+import com.oracle.svm.core.annotate.DuplicatedInNativeCode;
 import com.oracle.svm.core.heap.ObjectReferenceVisitor;
 import com.oracle.svm.core.heap.ReferenceAccess;
+import com.oracle.svm.core.heap.RuntimeCodeCacheCleaner;
 import com.oracle.svm.core.hub.DynamicHub;
 
-import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
-
-class RuntimeCodeCacheReachabilityAnalyzer implements ObjectReferenceVisitor {
+@DuplicatedInNativeCode
+final class RuntimeCodeCacheReachabilityAnalyzer implements ObjectReferenceVisitor {
     private boolean unreachableObjects;
 
     @Platforms(Platform.HOSTED_ONLY.class)
@@ -64,41 +64,32 @@ class RuntimeCodeCacheReachabilityAnalyzer implements ObjectReferenceVisitor {
 
     public static boolean isReachable(Pointer ptrToObj) {
         assert ptrToObj.isNonNull();
+        if (HeapImpl.getHeapImpl().isInImageHeap(ptrToObj)) {
+            return true;
+        }
+
         UnsignedWord header = ObjectHeaderImpl.readHeaderFromPointer(ptrToObj);
+        if (ObjectHeaderImpl.isForwardedHeader(header)) {
+            return true;
+        }
+
+        Space space = HeapChunk.getSpace(HeapChunk.getEnclosingHeapChunk(ptrToObj, header));
+        if (!space.isFromSpace()) {
+            return true;
+        }
+
         ObjectHeaderImpl ohi = ObjectHeaderImpl.getObjectHeaderImpl();
-        if (ohi.isForwardedHeader(header) || ohi.isBootImageHeader(header)) {
-            return true;
-        }
-
-        Space space = getSpace(ptrToObj, header);
-        if (space == HeapImpl.getHeapImpl().getOldGeneration().getToSpace()) {
-            return true;
-        }
-
-        Class<?> clazz = DynamicHub.toClass(ObjectHeaderImpl.dynamicHubFromObjectHeader(header));
-        return isWhitelistedClass(clazz);
+        Class<?> clazz = DynamicHub.toClass(ohi.dynamicHubFromObjectHeader(header));
+        return isAssumedReachable(clazz);
     }
 
-    private static Space getSpace(Pointer ptrToObj, UnsignedWord header) {
-        if (ObjectHeaderImpl.getObjectHeaderImpl().isAlignedHeader(header)) {
-            AlignedHeapChunk.AlignedHeader chunk = AlignedHeapChunk.getEnclosingAlignedHeapChunkFromPointer(ptrToObj);
-            return chunk.getSpace();
-        } else {
-            UnalignedHeapChunk.UnalignedHeader chunk = UnalignedHeapChunk.getEnclosingUnalignedHeapChunkFromPointer(ptrToObj);
-            return chunk.getSpace();
+    private static boolean isAssumedReachable(Class<?> clazz) {
+        Class<?>[] classesAssumedReachable = RuntimeCodeCacheCleaner.CLASSES_ASSUMED_REACHABLE;
+        for (int i = 0; i < classesAssumedReachable.length; i++) {
+            if (classesAssumedReachable[i].isAssignableFrom(clazz)) {
+                return true;
+            }
         }
-    }
-
-    /**
-     * Checks if the unreachable object is one of the following whitelisted classes:
-     * <ul>
-     * <li>{@link SpeculationReason} objects are embedded in the code and only needed when a
-     * deoptimization is triggered.</li>
-     * <li>{@link SharedRuntimeMethod} objects are sometimes used as artifical methods (e.g., for
-     * adapter code) and are located in the frame info object constants.</li>
-     * </ul>
-     */
-    private static boolean isWhitelistedClass(Class<?> clazz) {
-        return SpeculationReason.class.isAssignableFrom(clazz) || SharedRuntimeMethod.class.isAssignableFrom(clazz);
+        return false;
     }
 }
