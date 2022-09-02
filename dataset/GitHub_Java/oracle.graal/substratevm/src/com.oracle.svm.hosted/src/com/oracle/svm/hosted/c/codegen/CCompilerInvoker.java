@@ -417,8 +417,10 @@ public abstract class CCompilerInvoker {
                         .command(createCompilerCommand(options, target.normalize(), source.normalize()))
                         .directory(tempDirectory.toFile());
         Process compilingProcess = null;
-        try (DebugContext.Scope s = debug.scope("InvokeCC")) {
-            debug.log("Using CompilerCommand: %s", SubstrateUtil.getShellCommandString(pb.command(), false));
+        try {
+            try (DebugContext.Scope s = debug.scope("InvokeCC")) {
+                debug.log("Using CompilerCommand: %s", SubstrateUtil.getShellCommandString(pb.command(), false));
+            }
             compilingProcess = pb.start();
 
             List<String> lines;
@@ -427,16 +429,11 @@ public abstract class CCompilerInvoker {
             }
             boolean errorReported = false;
             for (String line : lines) {
-                if (debug.isLogEnabled(DebugContext.VERBOSE_LEVEL)) {
-                    debug.log(DebugContext.VERBOSE_LEVEL, "%s", line);
-                    errorReported = true;
-                } else {
-                    if (detectError(line)) {
-                        if (handler != null) {
-                            handler.handle(pb, source, line);
-                        }
-                        errorReported = true;
+                if (detectError(line)) {
+                    if (handler != null) {
+                        handler.handle(pb, source, line);
                     }
+                    errorReported = true;
                 }
             }
 
