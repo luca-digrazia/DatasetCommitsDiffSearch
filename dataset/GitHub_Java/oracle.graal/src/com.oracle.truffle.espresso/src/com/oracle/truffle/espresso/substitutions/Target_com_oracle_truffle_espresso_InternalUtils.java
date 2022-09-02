@@ -44,7 +44,7 @@ public class Target_com_oracle_truffle_espresso_InternalUtils {
         Klass k = clazz.getMirrorKlass();
         int maxLen;
         if (k instanceof ObjectKlass) {
-            maxLen = ((ObjectKlass) k).getLinkedKlass().getPrimitiveInstanceFieldLastOffset();
+            maxLen = ((ObjectKlass) k).getLinkedKlass().getPrimitiveFieldTotalByteCount();
         } else {
             return StaticObject.createArray(k.getMeta().java_lang_String.getArrayClass(), StaticObject.EMPTY_ARRAY);
         }
@@ -72,7 +72,7 @@ public class Target_com_oracle_truffle_espresso_InternalUtils {
     public static int getPrimitiveFieldByteCount(@Host(Class.class) StaticObject clazz) {
         Klass k = clazz.getMirrorKlass();
         if (k instanceof ObjectKlass) {
-            return ((ObjectKlass) k).getLinkedKlass().getPrimitiveInstanceFieldLastOffset();
+            return ((ObjectKlass) k).getLinkedKlass().getPrimitiveFieldTotalByteCount();
         } else {
             return 0;
         }
@@ -98,7 +98,7 @@ public class Target_com_oracle_truffle_espresso_InternalUtils {
         } else {
             LinkedKlass lk = ((ObjectKlass) k).getLinkedKlass();
             // Bytes used by the primitive fields
-            total += lk.getPrimitiveInstanceFieldLastOffset();
+            total += lk.getPrimitiveFieldTotalByteCount();
             // Bytes used by the Object fields
             total += lk.getObjectFieldsCount() * JavaKind.Int.getByteCount();
             // Header of the primitive field array + storing its reference
