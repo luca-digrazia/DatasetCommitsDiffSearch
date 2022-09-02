@@ -85,6 +85,7 @@ class PrimitiveOperand extends Operand {
     @Override
     boolean compliesWith(Operand other) {
         return (other == Invalid) || other == this;
+        // (other.isPrimitive() && other.getKind() == this.kind);
     }
 
     @Override
