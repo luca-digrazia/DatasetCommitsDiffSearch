@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -243,9 +243,6 @@ public abstract class CompilationWrapper<T> {
                 String message;
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 try (PrintStream ps = new PrintStream(baos)) {
-                    // This output is used by external tools to detect compilation failures.
-                    ps.println("[[[Graal compilation failure]]]");
-
                     ps.printf("%s: Compilation of %s failed:%n", Thread.currentThread(), this);
                     cause.printStackTrace(ps);
                     ps.printf("To disable compilation failure notifications, set %s to %s (e.g., -Dgraal.%s=%s).%n",
