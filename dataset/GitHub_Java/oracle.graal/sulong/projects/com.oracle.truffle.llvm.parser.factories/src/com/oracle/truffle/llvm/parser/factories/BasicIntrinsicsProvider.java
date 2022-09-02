@@ -86,6 +86,7 @@ import com.oracle.truffle.llvm.runtime.nodes.intrinsics.handles.GraalVMCreateHan
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.handles.GraalVMIsHandleNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.handles.GraalVMPointsToHandleSpaceNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.handles.GraalVMReleaseHandleNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.handles.GraalVMResolveFunctionNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.handles.GraalVMResolveHandleNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.handles.LLVMTruffleCannotBeHandle;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMPolyglotAsPrimitive;
@@ -181,13 +182,13 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider {
     }
 
     @Override
-    public final LLVMExpressionNode generateIntrinsicNode(String name, LLVMExpressionNode[] arguments, Type[] argTypes, NodeFactory nodeFactory) {
+    public final LLVMExpressionNode generateIntrinsicNode(String name, LLVMExpressionNode[] arguments, Type.TypeArrayBuilder argTypes, NodeFactory nodeFactory) {
         CompilerAsserts.neverPartOfCompilation();
         LLVMTypedIntrinsicFactory factory = getFactory(name);
         if (factory == null) {
             return null;
         }
-        return factory.generate(Arrays.asList(arguments), nodeFactory, language, argTypes);
+        return factory.generate(Arrays.asList(arguments), nodeFactory, language, Type.getRawTypeArray(argTypes));
     }
 
     private LLVMTypedIntrinsicFactory getFactory(String name) {
@@ -455,6 +456,7 @@ public class BasicIntrinsicsProvider implements LLVMIntrinsicProvider {
         add("_graalvm_llvm_create_deref_handle", "truffle_deref_handle_for_managed", (args, nodeFactory) -> GraalVMCreateDerefHandleNodeGen.create(args.get(1)));
         add("_graalvm_llvm_is_handle", "truffle_is_handle_to_managed", (args, nodeFactory) -> GraalVMIsHandleNodeGen.create(args.get(1)));
         add("_graalvm_llvm_points_to_handle_space", (args, nodeFactory) -> GraalVMPointsToHandleSpaceNodeGen.create(args.get(1)));
+        add("_graalvm_llvm_resolve_function", (args, nodeFactory) -> GraalVMResolveFunctionNodeGen.create(args.get(1)));
 
         // deprecated
         add("truffle_cannot_be_handle", (args, nodeFactory) -> LLVMTruffleCannotBeHandle.create(args.get(1)));
