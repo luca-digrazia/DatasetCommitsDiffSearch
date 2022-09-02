@@ -47,7 +47,7 @@ class ProcFSSupport {
      * buffer is dual-purpose and used to return the file's path name if requested via the
      * {@code needName} parameter. As such the buffer should be large enough to accommodate a path.
      * If not enough buffer capacity is available, and needName is true, false will be returned. If
-     * a mapping is not found, or an error has occurred, false will be returned.
+     * a mapping is not found, or an error has occured, false will be returned.
      *
      * @param fd a file descriptor pointing to /proc/self/maps
      * @param buffer a buffer for reading operations, and optionally for returning the path name of
@@ -57,13 +57,14 @@ class ProcFSSupport {
      * @param endAddress the end address of the address range to find within a mapping
      * @param startAddrPtr the start address range for a found mapping
      * @param fileOffsetPtr the file offset of the found mapping in its backing file
+     * @param inodePtr the inode of the matching mapping's backing file
      * @param needName whether the matching path name is required and should be returned in buffer
      * @return true if a mapping is found and no errors occurred, false otherwise.
      */
     @Uninterruptible(reason = "Called during isolate initialization.")
     @SuppressWarnings("fallthrough")
-    static boolean findMapping(int fd, CCharPointer buffer, int bufferLen, WordBase beginAddress, WordBase endAddress,
-                    CLongPointer startAddrPtr, CLongPointer fileOffsetPtr, boolean needName) {
+    static boolean findMapping(int fd, CCharPointer buffer, int bufferLen, WordBase beginAddress, WordBase endAddress, CLongPointer startAddrPtr,
+                    CLongPointer fileOffsetPtr, CLongPointer inodePtr, boolean needName) {
         int readOffset = 0;
         int endOffset = 0;
         int position = 0;
@@ -73,6 +74,7 @@ class ProcFSSupport {
         long start = 0;
         long end = 0;
         long fileOffset = 0;
+        long inode = 0;
         OUT: for (;;) {
             while (position == endOffset) { // fill buffer
                 int readBytes = PosixUtils.readBytes(fd, buffer, bufferLen, readOffset);
@@ -129,6 +131,7 @@ class ProcFSSupport {
                 }
                 case ST_DEV: {
                     if (b == ' ') {
+                        inode = 0;
                         state = ST_INODE;
                     } // ignore anything else
                     break;
@@ -141,7 +144,11 @@ class ProcFSSupport {
                             break OUT;
                         }
                         state = ST_SPACE;
-                    } // ignore anything else
+                    } else if ('0' <= b && b <= '9') {
+                        inode = (inode << 3) + (inode << 1) + (b - '0');
+                    } else {
+                        return false; // garbage == not matched
+                    }
                     break;
                 }
                 case ST_SPACE: {
@@ -180,6 +187,9 @@ class ProcFSSupport {
         }
         if (fileOffsetPtr.isNonNull()) {
             fileOffsetPtr.write(fileOffset);
+        }
+        if (inodePtr.isNonNull()) {
+            inodePtr.write(inode);
         }
         return true;
     }
