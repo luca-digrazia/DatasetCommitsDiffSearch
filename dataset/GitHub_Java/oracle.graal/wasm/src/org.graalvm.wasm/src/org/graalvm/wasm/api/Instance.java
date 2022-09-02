@@ -40,9 +40,7 @@
  */
 package org.graalvm.wasm.api;
 
-import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
@@ -60,33 +58,29 @@ import java.util.Map;
 
 @ExportLibrary(InteropLibrary.class)
 public class Instance extends Dictionary {
-    private final TruffleContext truffleContext;
     private final Module module;
-    private final WasmInstance instance;
     private final Dictionary importObject;
-    private final Dictionary exportObject;
 
     @CompilerDirectives.TruffleBoundary
-    public Instance(TruffleContext truffleContext, Module module, Dictionary importObject) {
-        this.truffleContext = truffleContext;
+    public Instance(WasmContext context, Module module, Dictionary importObject) {
         this.module = module;
         this.importObject = importObject;
-        this.instance = instantiateModule(WasmContext.getCurrent());
-        this.exportObject = initializeExports();
+        instantiateModule(context, importObject);
         addMembers(new Object[]{
                         "module", this.module,
                         "importObject", this.importObject,
-                        "exports", this.exportObject,
+                        // TODO: Return a sequence of exported functions.
+                        "exports", new Executable(args -> null),
         });
     }
 
-    private WasmInstance instantiateModule(WasmContext context) {
-        final HashMap<String, ImportModule> importModules = readImportModules();
-        final WasmInstance wasmInstance = instantiateCore(context, importModules);
-        return wasmInstance;
+    private void instantiateModule(WasmContext context, Dictionary importObject) {
+        final HashMap<String, ImportModule> importModules = readImportModules(importObject);
+        instantiateCore(context, importModules);
+        initialize();
     }
 
-    private HashMap<String, ImportModule> readImportModules() {
+    private HashMap<String, ImportModule> readImportModules(Dictionary importObject) {
         final Sequence<ModuleImportDescriptor> imports = module.imports();
         if (imports.getArraySize() != 0 && importObject != null) {
             throw new WasmJsApiException(Kind.TypeError, "Module requires imports, but import object is undefined.");
@@ -121,35 +115,20 @@ public class Instance extends Dictionary {
         return importModules;
     }
 
-    private WasmInstance instantiateCore(WasmContext context, HashMap<String, ImportModule> importModules) {
+    private void instantiateCore(WasmContext context, HashMap<String, ImportModule> importModules) {
         for (Map.Entry<String, ImportModule> entry : importModules.entrySet()) {
             final String name = entry.getKey();
             final ImportModule importModule = entry.getValue();
-            final WasmInstance importedInstance = importModule.createInstance(context.language(), context, name);
-            context.register(importedInstance);
+            final WasmInstance instance = importModule.createInstance(context.language(), context, name);
+            context.register(instance);
         }
-        return context.readInstance(module.wasmModule());
+        // TODO: Create WasmInstance.
     }
 
-    private Dictionary initializeExports() {
-        Dictionary e = new Dictionary();
-        for (Map.Entry<String, WasmFunction> entry : instance.symbolTable().exportedFunctions().entrySet()) {
-            String name = entry.getKey();
-            WasmFunction function = entry.getValue();
-            final CallTarget target = instance.target(function.index());
-            e.addMember(name, new Executable(args -> {
-                final Object prev = truffleContext.enter();
-                try {
-                    return target.call(args);
-                } finally {
-                    truffleContext.leave(prev);
-                }
-            }));
-        }
-        return e;
+    private void initialize() {
     }
 
-    private static ImportModule ensureImportModule(HashMap<String, ImportModule> importModules, String name) {
+    private ImportModule ensureImportModule(HashMap<String, ImportModule> importModules, String name) {
         ImportModule importModule = importModules.get(name);
         if (importModule == null) {
             importModule = new ImportModule();
@@ -158,7 +137,7 @@ public class Instance extends Dictionary {
         return importModule;
     }
 
-    private static Object getMember(Dictionary object, String name) throws UnknownIdentifierException {
+    private Object getMember(Dictionary object, String name) throws UnknownIdentifierException {
         if (!object.isMemberReadable(name)) {
             throw new WasmJsApiException(Kind.TypeError, "Object does not contain member " + name + ".");
         }

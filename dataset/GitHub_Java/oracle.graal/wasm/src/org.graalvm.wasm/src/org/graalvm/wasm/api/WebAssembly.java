@@ -40,14 +40,13 @@
  */
 package org.graalvm.wasm.api;
 
-import com.oracle.truffle.api.TruffleContext;
 import org.graalvm.wasm.WasmContext;
 
 public class WebAssembly extends Dictionary {
-    private final WasmContext currentContext;
+    private final WasmContext context;
 
-    public WebAssembly(WasmContext currentContext) {
-        this.currentContext = currentContext;
+    public WebAssembly(WasmContext context) {
+        this.context = context;
     }
 
     public WebAssemblyInstantiatedSource instantiate(byte[] source, Dictionary importObject) {
@@ -57,13 +56,7 @@ public class WebAssembly extends Dictionary {
     }
 
     public Instance instantiate(Module module, Dictionary importObject) {
-        final TruffleContext innerTruffleContext = currentContext.environment().newContextBuilder().build();
-        final Object prev = innerTruffleContext.enter();
-        try {
-            return new Instance(innerTruffleContext, module, importObject);
-        } finally {
-            innerTruffleContext.leave(prev);
-        }
+        return new Instance(context, module, importObject);
     }
 
     public WebAssemblyInstantiatedSource instantiateStreaming(byte[] source, Dictionary importObject) {
@@ -72,7 +65,7 @@ public class WebAssembly extends Dictionary {
 
     @SuppressWarnings("unused")
     public Module compile(byte[] source) {
-        return new Module(currentContext, source);
+        return new Module(context, source);
     }
 
     public Module compileStreaming(byte[] source) {
