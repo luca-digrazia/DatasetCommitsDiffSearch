@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,7 +24,6 @@
  */
 package com.oracle.truffle.regex.tregex.nodes.input;
 
-import com.oracle.truffle.api.ArrayUtils;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
@@ -36,41 +35,24 @@ public abstract class InputEndsWithNode extends Node {
         return InputEndsWithNodeGen.create();
     }
 
-    public abstract boolean execute(Object input, String suffix, String mask);
+    public abstract boolean execute(Object input, String suffix);
 
-    @Specialization(guards = "mask == null")
-    public boolean endsWith(String input, String suffix, @SuppressWarnings("unused") String mask) {
+    @Specialization
+    public boolean endsWith(String input, String suffix) {
         return input.endsWith(suffix);
     }
 
-    @Specialization(guards = "mask != null")
-    public boolean endsWithWithMask(String input, String suffix, String mask) {
-        return ArrayUtils.regionEqualsWithOrMask(input, input.length() - suffix.length(), suffix, 0, mask.length(), mask);
-    }
-
-    @Specialization(guards = "mask == null")
-    public boolean endsWithTruffleObjNoMask(TruffleObject input, String suffix, String mask,
+    @Specialization
+    public boolean endsWith(TruffleObject input, String suffix,
                     @Cached("create()") InputLengthNode lengthNode,
                     @Cached("create()") InputCharAtNode charAtNode) {
-        return endsWithTruffleObj(input, suffix, mask, lengthNode, charAtNode);
-    }
-
-    @Specialization(guards = "mask != null")
-    public boolean endsWithTruffleObjWithMask(TruffleObject input, String suffix, String mask,
-                    @Cached("create()") InputLengthNode lengthNode,
-                    @Cached("create()") InputCharAtNode charAtNode) {
-        assert mask.length() == suffix.length();
-        return endsWithTruffleObj(input, suffix, mask, lengthNode, charAtNode);
-    }
-
-    private static boolean endsWithTruffleObj(TruffleObject input, String suffix, String mask, InputLengthNode lengthNode, InputCharAtNode charAtNode) {
         final int inputLength = lengthNode.execute(input);
-        if (inputLength < suffix.length()) {
+        if (lengthNode.execute(input) < suffix.length()) {
             return false;
         }
         final int offset = inputLength - suffix.length();
         for (int i = 0; i < suffix.length(); i++) {
-            if (InputCharAtNode.charAtWithMask(input, offset + i, mask, i, charAtNode) != suffix.charAt(i)) {
+            if (charAtNode.execute(input, offset + i) != suffix.charAt(i)) {
                 return false;
             }
         }

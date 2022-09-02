@@ -28,32 +28,33 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.regex.tregex.util.Boundaries;
 
-public abstract class InputStartsWithNode extends Node {
+public abstract class InputLastIndexOfNode extends Node {
 
-    public static InputStartsWithNode create() {
-        return InputStartsWithNodeGen.create();
+    public static InputLastIndexOfNode create() {
+        return InputLastIndexOfNodeGen.create();
     }
 
-    public abstract boolean execute(Object input, String prefix);
+    public abstract int execute(Object input, char c, int fromIndex, int maxIndex);
 
     @Specialization
-    public boolean startsWith(String input, String prefix) {
-        return input.startsWith(prefix);
-    }
-
-    @Specialization
-    public boolean startsWith(TruffleObject input, String prefix,
-                    @Cached("create()") InputLengthNode lengthNode,
-                    @Cached("create()") InputCharAtNode charAtNode) {
-        if (lengthNode.execute(input) < prefix.length()) {
-            return false;
+    public int lastIndexOf(String input, char c, int fromIndex, int maxIndex) {
+        int index = Boundaries.stringLastIndexOf(input, c, fromIndex);
+        if (index < maxIndex) {
+            return -1;
         }
-        for (int i = 0; i < prefix.length(); i++) {
-            if (charAtNode.execute(input, i) != prefix.charAt(i)) {
-                return false;
+        return index;
+    }
+
+    @Specialization
+    public int lastIndexOf(TruffleObject input, char c, int fromIndex, int maxIndex,
+                    @Cached("create()") InputCharAtNode charAtNode) {
+        for (int i = fromIndex; i >= maxIndex; i--) {
+            if (charAtNode.execute(input, i) == c) {
+                return i;
             }
         }
-        return true;
+        return -1;
     }
 }
