@@ -80,7 +80,6 @@ import com.oracle.svm.core.headers.Errno;
 import com.oracle.svm.core.jdk.JDK11OrEarlier;
 import com.oracle.svm.core.jdk.JDK11OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
-import com.oracle.svm.core.jni.JNIRuntimeAccess;
 import com.oracle.svm.core.os.IsDefined;
 import com.oracle.svm.core.posix.JavaNetNetworkInterface.PlatformSupport;
 import com.oracle.svm.core.posix.headers.Fcntl;
@@ -95,6 +94,7 @@ import com.oracle.svm.core.posix.headers.Socket;
 import com.oracle.svm.core.posix.headers.Unistd;
 import com.oracle.svm.core.util.Utf8;
 import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.hosted.jni.JNIRuntimeAccess;
 
 @Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
 @AutomaticFeature
@@ -4021,22 +4021,6 @@ final class Target_java_net_NetworkInterface {
         //   406      freeif(ifs);
         //   407
         return obj;
-    }
-
-    //   477  /*
-    //   478   * Class:     java_net_NetworkInterface
-    //   479   * Method:    isLoopback0
-    //   480   * Signature: (Ljava/lang/String;I)Z
-    //   481   */
-    //   482  JNIEXPORT jboolean JNICALL Java_java_net_NetworkInterface_isLoopback0(JNIEnv *env, jclass cls, jstring name, jint index) {
-    //   483      int ret = getFlags0(env, name);
-    //   484      return (ret & IFF_LOOPBACK) ? JNI_TRUE :  JNI_FALSE;
-    //   485  }
-    @Substitute
-    @SuppressWarnings({"unused"})
-    private static boolean isLoopback0(String name, int index) {
-        int ret = JavaNetNetworkInterface.getFlags0(name);
-        return ((ret & NetIf.IFF_LOOPBACK()) != 0) ? true : false;
     }
 
     /*
