@@ -36,6 +36,8 @@ import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.perf.DebugCloseable;
+import com.oracle.truffle.espresso.perf.DebugTimer;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -48,6 +50,10 @@ import com.oracle.truffle.espresso.substitutions.Host;
  * This class is analogous to the ClassLoaderData C++ class in HotSpot.
  */
 public abstract class ClassRegistry implements ContextAccess {
+
+    private static final DebugTimer KLASS_PROBE = DebugTimer.create("klass probe");
+    private static final DebugTimer KLASS_DEFINE = DebugTimer.create("klass define");
+    private static final DebugTimer KLASS_PARSE = DebugTimer.create("klass parse");
 
     /**
      * Traces the classes being initialized by this thread. Its only use is to be able to detect
@@ -161,12 +167,13 @@ public abstract class ClassRegistry implements ContextAccess {
 
     /**
      * Queries a registry to load a Klass for us.
-     * 
+     *
      * @param type the symbolic reference to the Klass we want to load
      * @param protectionDomain The protection domain extracted from the guest class, or
      *            {@link StaticObject#NULL} if trusted.
      * @return The Klass corresponding to given type
      */
+    @SuppressWarnings("try")
     Klass loadKlass(Symbol<Type> type, StaticObject protectionDomain) {
         if (Types.isArray(type)) {
             Klass elemental = loadKlass(getTypes().getElementalType(type), protectionDomain);
@@ -179,7 +186,10 @@ public abstract class ClassRegistry implements ContextAccess {
         loadKlassCountInc();
 
         // Double-checked locking on the symbol (globally unique).
-        ClassRegistries.RegistryEntry entry = classes.get(type);
+        ClassRegistries.RegistryEntry entry;
+        try (DebugCloseable probe = KLASS_PROBE.scope(getContext().getTimers())) {
+            entry = classes.get(type);
+        }
         if (entry == null) {
             synchronized (type) {
                 entry = classes.get(type);
@@ -208,12 +218,7 @@ public abstract class ClassRegistry implements ContextAccess {
     public abstract @Host(ClassLoader.class) StaticObject getClassLoader();
 
     public Klass[] getLoadedKlasses() {
-        ClassRegistries.RegistryEntry[] values = classes.values().toArray(new ClassRegistries.RegistryEntry[0]);
-        Klass[] result = new Klass[values.length];
-        for (int i = 0; i < values.length; i++) {
-            result[i] = values[i].klass();
-        }
-        return result;
+        return classes.values().toArray(Klass.EMPTY_ARRAY);
     }
 
     public Klass findLoadedKlass(Symbol<Type> type) {
@@ -232,10 +237,14 @@ public abstract class ClassRegistry implements ContextAccess {
         return entry.klass();
     }
 
+    @SuppressWarnings("try")
     public ObjectKlass defineKlass(Symbol<Type> typeOrNull, final byte[] bytes) {
         Meta meta = getMeta();
         String strType = typeOrNull == null ? null : typeOrNull.toString();
-        ParserKlass parserKlass = getParserKlass(bytes, strType);
+        ParserKlass parserKlass;
+        try (DebugCloseable parse = KLASS_PARSE.scope(getContext().getTimers())) {
+            parserKlass = getParserKlass(bytes, strType);
+        }
         Symbol<Type> type = typeOrNull == null ? parserKlass.getType() : typeOrNull;
 
         Klass maybeLoaded = findLoadedKlass(type);
@@ -262,6 +271,7 @@ public abstract class ClassRegistry implements ContextAccess {
                         (meta.getJavaVersion().java9OrLater() && meta.jdk_internal_loader_ClassLoaders$PlatformClassLoader.isAssignableFrom(loader.getKlass()));
     }
 
+    @SuppressWarnings("try")
     private ObjectKlass createAndPutKlass(Meta meta, ParserKlass parserKlass, Symbol<Type> type, Symbol<Type> superKlassType) {
         TypeStack chain = stack.get();
 
@@ -300,11 +310,13 @@ public abstract class ClassRegistry implements ContextAccess {
         } finally {
             chain.pop();
         }
+        ObjectKlass klass;
 
-        // FIXME(peterssen): Do NOT create a LinkedKlass every time, use a global cache.
-        LinkedKlass linkedKlass = new LinkedKlass(parserKlass, superKlass == null ? null : superKlass.getLinkedKlass(), linkedInterfaces);
-
-        ObjectKlass klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, getClassLoader());
+        try (DebugCloseable define = KLASS_DEFINE.scope(getContext().getTimers())) {
+            // FIXME(peterssen): Do NOT create a LinkedKlass every time, use a global cache.
+            LinkedKlass linkedKlass = new LinkedKlass(parserKlass, superKlass == null ? null : superKlass.getLinkedKlass(), linkedInterfaces);
+            klass = new ObjectKlass(context, linkedKlass, superKlass, superInterfaces, getClassLoader());
+        }
 
         if (superKlass != null && !Klass.checkAccess(superKlass, klass)) {
             throw Meta.throwExceptionWithMessage(meta.java_lang_IllegalAccessError, "class " + type + " cannot access its superclass " + superKlassType);
@@ -342,19 +354,5 @@ public abstract class ClassRegistry implements ContextAccess {
             throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "Super interface of " + type + " is in fact not an interface.");
         }
         return (ObjectKlass) klass;
-    }
-
-    public void onClassRenamed(ObjectKlass oldKlass, String newName) {
-        Symbol<Symbol.Type> newType = context.getTypes().fromClassGetName(newName);
-        classes.put(newType, new ClassRegistries.RegistryEntry(oldKlass));
-    }
-
-    public void onInnerClassRemoved(Symbol<Symbol.Type> type) {
-        // "unload" the class by removing from classes
-        ClassRegistries.RegistryEntry removed = classes.remove(type);
-        // purge class loader constraint for this type
-        if (removed != null && removed.klass() != null) {
-            getRegistries().removeUnloadedKlassConstraint(removed.klass(), type);
-        }
     }
 }
