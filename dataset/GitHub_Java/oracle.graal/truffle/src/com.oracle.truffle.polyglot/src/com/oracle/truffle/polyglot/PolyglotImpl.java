@@ -295,7 +295,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
         try {
             engine.preInitialize();
         } finally {
-            // Reset language homes from native-image compilation time, will be recomputed in
+            // Reset language homes from native-image compilatio time, will be recomputed in
             // image execution time
             LanguageCache.resetNativeImageCacheLanguageHomes();
             // Clear logger settings
@@ -430,7 +430,7 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
 
     @Override
     public AbstractHostAccess createHostAccess() {
-        return new PolyglotHostAccess(this);
+        return new PolyglotHostEngine(this);
     }
 
     static org.graalvm.polyglot.Source getOrCreatePolyglotSource(AbstractPolyglotImpl polyglot, Source source) {
