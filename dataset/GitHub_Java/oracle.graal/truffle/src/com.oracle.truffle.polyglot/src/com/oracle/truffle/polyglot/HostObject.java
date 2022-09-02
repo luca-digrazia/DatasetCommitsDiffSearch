@@ -193,7 +193,7 @@ final class HostObject implements TruffleObject {
     }
 
     @ExportLibrary(InteropLibrary.class)
-    static final class KeysArray implements TruffleObject {
+    final class KeysArray implements TruffleObject {
 
         @CompilationFinal(dimensions = 1) private final String[] keys;
 
