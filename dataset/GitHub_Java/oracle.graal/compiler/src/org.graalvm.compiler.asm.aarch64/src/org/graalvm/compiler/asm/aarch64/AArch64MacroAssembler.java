@@ -1664,12 +1664,11 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      */
     @Override
     public void fmov(int size, Register dst, Register src) {
-        assert size == 32 || size == 64;
         assert !(dst.getRegisterCategory().equals(CPU) && src.getRegisterCategory().equals(CPU)) : "src and dst cannot both be integer registers.";
         if (dst.getRegisterCategory().equals(CPU)) {
-            fmovFpu2Cpu(size, dst, src);
+            super.fmovFpu2Cpu(size, dst, src);
         } else if (src.getRegisterCategory().equals(CPU)) {
-            fmovCpu2Fpu(size, dst, src);
+            super.fmovCpu2Fpu(size, dst, src);
         } else {
             super.fmov(size, dst, src);
         }
@@ -1686,10 +1685,9 @@ public class AArch64MacroAssembler extends AArch64Assembler {
      */
     @Override
     public void fmov(int size, Register dst, double imm) {
-        assert size == 32 || size == 64;
         if (imm == 0.0) {
             assert Double.doubleToRawLongBits(imm) == 0L : "-0.0 is no valid immediate.";
-            fmovCpu2Fpu(size, dst, zr);
+            super.fmovCpu2Fpu(size, dst, zr);
         } else {
             super.fmov(size, dst, imm);
         }
