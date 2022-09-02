@@ -95,11 +95,11 @@ import com.oracle.truffle.api.io.TruffleProcessBuilder;
 import com.oracle.truffle.api.nodes.BlockNode;
 import com.oracle.truffle.api.nodes.BlockNode.ElementExecutor;
 import com.oracle.truffle.api.nodes.ExecutableNode;
-import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeInterface;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.nodes.ExecutionSignature;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.Source.SourceBuilder;
 import com.oracle.truffle.api.source.SourceSection;
@@ -513,11 +513,6 @@ public abstract class Accessor {
 
         public abstract boolean isContextClosed(Object polyglotContext);
 
-        public abstract <T, G> Iterator<T> mergeHostGuestFrames(StackTraceElement[] hostStack, Iterator<G> guestFrames, boolean inHostLanguage, Function<StackTraceElement, T> hostFrameConvertor,
-                        Function<G, T> guestFrameConvertor);
-
-        public abstract Object createHostAdapterClass(Object polyglotLanguageContext, Class<?>[] types, Object classOverrides);
-
         public abstract Iterable<com.oracle.truffle.api.Scope> findLibraryLocalScopesToLegacy(Node node, Frame frame);
 
         public abstract Iterable<com.oracle.truffle.api.Scope> topScopesToLegacy(Object scope);
@@ -531,8 +526,6 @@ public abstract class Accessor {
         public abstract Collection<? extends CallTarget> findCallTargets(Object polyglotEngine);
 
         public abstract void preinitializeContext(Object polyglotEngine);
-
-        public abstract void finalizeStore(Object polyglotEngine);
 
         public abstract Object getEngineLock(Object polyglotEngine);
     }
@@ -904,7 +897,6 @@ public abstract class Accessor {
 
         public abstract void onEngineClosed(Object runtimeData);
 
-        public abstract boolean isOSRRootNode(RootNode rootNode);
     }
 
     public static final class JDKSupport {
