@@ -1,42 +1,26 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * The Universal Permissive License (UPL), Version 1.0
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
- * Subject to the condition set forth below, permission is hereby granted to any
- * person obtaining a copy of this software, associated documentation and/or
- * data (collectively the "Software"), free of charge and under any and all
- * copyright rights in the Software, and any and all patent rights owned or
- * freely licensable by each licensor hereunder covering either (i) the
- * unmodified Software as contributed to or provided by such licensor, or (ii)
- * the Larger Works (as defined below), to deal in both
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
  *
- * (a) the Software, and
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
- * one is included with the Software each a "Larger Work" to which the Software
- * is contributed by such licensors),
- *
- * without restriction, including without limitation the rights to copy, create
- * derivative works of, display, perform, and distribute the Software and make,
- * use, sell, offer for sale, import, export, have made, and have sold the
- * Software and the Larger Work(s), and to sublicense the foregoing rights on
- * either these or other terms.
- *
- * This license is subject to the following condition:
- *
- * The above copyright notice and either this complete permission notice or at a
- * minimum a reference to the UPL must be included in all copies or substantial
- * portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
  */
 package com.oracle.truffle.regex.charset;
 
@@ -45,12 +29,11 @@ import java.util.Arrays;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
 import com.oracle.truffle.regex.tregex.buffer.IntRangesBuffer;
-import com.oracle.truffle.regex.tregex.matchers.CharMatcher;
 import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonConvertible;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 
-public final class CodePointSet implements ImmutableSortedListOfRanges, Comparable<CodePointSet>, JsonConvertible {
+public final class CodePointSet implements ImmutableSortedListOfRanges, JsonConvertible {
 
     private static final CodePointSet CONSTANT_EMPTY = new CodePointSet(new int[0]);
     private static final CodePointSet CONSTANT_FULL = new CodePointSet(new int[]{Character.MIN_CODE_POINT, Character.MAX_CODE_POINT});
@@ -283,42 +266,6 @@ public final class CodePointSet implements ImmutableSortedListOfRanges, Comparab
     }
 
     @Override
-    public int compareTo(CodePointSet o) {
-        if (this == o) {
-            return 0;
-        }
-        if (matchesEverything()) {
-            if (o.matchesEverything()) {
-                return 0;
-            }
-            return 1;
-        }
-        if (matchesNothing()) {
-            if (o.matchesNothing()) {
-                return 0;
-            }
-            return -1;
-        }
-        if (o.matchesEverything()) {
-            return -1;
-        }
-        if (o.matchesNothing()) {
-            return 1;
-        }
-        int cmp = size() - o.size();
-        if (cmp != 0) {
-            return cmp;
-        }
-        for (int i = 0; i < size(); i++) {
-            cmp = getLo(i) - o.getLo(i);
-            if (cmp != 0) {
-                return cmp;
-            }
-        }
-        return cmp;
-    }
-
-    @Override
     public boolean equals(Object obj) {
         if (this == obj) {
             return true;
@@ -344,12 +291,6 @@ public final class CodePointSet implements ImmutableSortedListOfRanges, Comparab
     }
 
     @TruffleBoundary
-    @Override
-    public String toString() {
-        return defaultToString();
-    }
-
-    @TruffleBoundary
     public String dumpRaw() {
         StringBuilder sb = new StringBuilder(size() * 20);
         for (int i = 0; i < size(); i++) {
@@ -359,25 +300,5 @@ public final class CodePointSet implements ImmutableSortedListOfRanges, Comparab
             sb.append(String.format("0x%06x, 0x%06x", getLo(i), getHi(i)));
         }
         return sb.toString();
-    }
-
-    public CharMatcher createMatcher(CompilationBuffer compilationBuffer) {
-        return CharSet.fromSortedRanges(this).createMatcher(compilationBuffer);
-    }
-
-    public char[] inverseToCharArray() {
-        char[] array = new char[inverseValueCount()];
-        int index = 0;
-        int lastHi = -1;
-        for (int i = 0; i < size(); i++) {
-            for (int j = lastHi + 1; j < getLo(i); j++) {
-                array[index++] = (char) j;
-            }
-            lastHi = getHi(i);
-        }
-        for (int j = lastHi + 1; j <= getMaxValue(); j++) {
-            array[index++] = (char) j;
-        }
-        return array;
     }
 }
