@@ -612,9 +612,9 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
         return !isStatic() && !isConstructor() && !isPrivate() && !getDeclaringKlass().isInterface();
     }
 
-    public Method createIntrinsic(Symbol<Signature> polymorphicRawSignature, Function<Method, EspressoBaseNode> baseNodeFactory) {
-        assert (declaringKlass == getMeta().MethodHandle);
-        Method method = new Method(declaringKlass, linkedMethod, polymorphicRawSignature);
+    public static Method createIntrinsic(Method m, Symbol<Signature> rawSignature, Function<Method, EspressoBaseNode> baseNodeFactory) {
+        assert (m.declaringKlass == m.getMeta().MethodHandle);
+        Method method = new Method(m.declaringKlass, m.linkedMethod, rawSignature);
         EspressoRootNode rootNode = new EspressoRootNode(method, baseNodeFactory.apply(method));
         method.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
         return method;

@@ -72,7 +72,6 @@ public final class Meta implements ContextAccess {
         String = knownKlass(Type.String);
         Class_Array = Class.array();
         Class_forName_String = Class.lookupDeclaredMethod(Name.forName, Signature.Class_String);
-        Class_forName_String_boolean_ClassLoader = Class.lookupDeclaredMethod(Name.forName, Signature.Class_String_boolean_ClassLoader);
         HIDDEN_PROTECTION_DOMAIN = Class.lookupHiddenField(Name.HIDDEN_PROTECTION_DOMAIN);
 
         Object_array = Object.array();
@@ -156,7 +155,6 @@ public final class Meta implements ContextAccess {
         IllegalArgumentException = knownKlass(Type.IllegalArgumentException);
         NullPointerException = knownKlass(Type.NullPointerException);
         ClassNotFoundException = knownKlass(Type.ClassNotFoundException);
-        NoClassDefFoundError = knownKlass(Type.NoClassDefFoundError);
         InterruptedException = knownKlass(Type.InterruptedException);
         RuntimeException = knownKlass(Type.RuntimeException);
 
@@ -212,11 +210,6 @@ public final class Meta implements ContextAccess {
 
         Shutdown = knownKlass(Type.Shutdown);
         Shutdown_shutdown = Shutdown.lookupDeclaredMethod(Name.shutdown, Signature._void);
-
-        Buffer = knownKlass(Type.Buffer);
-        sun_nio_ch_DirectBuffer = knownKlass(Type.sun_nio_ch_DirectBuffer);
-        Buffer_address = Buffer.lookupDeclaredField(Name.address, Type._long);
-        Buffer_capacity = Buffer.lookupDeclaredField(Name.capacity, Type._int);
 
         ByteBuffer = knownKlass(Type.ByteBuffer);
         ByteBuffer_wrap = ByteBuffer.lookupDeclaredMethod(Name.wrap, Signature.ByteBuffer_byte_array);
@@ -288,13 +281,6 @@ public final class Meta implements ContextAccess {
         linkCallSite = MethodHandleNatives.lookupDeclaredMethod(Name.linkCallSite, Signature.linkCallSite_signature);
         linkMethodHandleConstant = MethodHandleNatives.lookupDeclaredMethod(Name.linkMethodHandleConstant, Signature.linkMethodHandleConstant_signature);
         findMethodHandleType = MethodHandleNatives.lookupDeclaredMethod(Name.findMethodHandleType, Signature.MethodType_cons);
-
-        AssertionStatusDirectives = knownKlass(Type.AssertionStatusDirectives);
-        AssertionStatusDirectives_classes = AssertionStatusDirectives.lookupField(Name.classes, Type.String_array);
-        AssertionStatusDirectives_classEnabled = AssertionStatusDirectives.lookupField(Name.classEnabled, Type._boolean_array);
-        AssertionStatusDirectives_packages = AssertionStatusDirectives.lookupField(Name.packages, Type.String_array);
-        AssertionStatusDirectives_packageEnabled = AssertionStatusDirectives.lookupField(Name.packageEnabled, Type._boolean_array);
-        AssertionStatusDirectives_deflt = AssertionStatusDirectives.lookupField(Name.deflt, Type._boolean);
     }
 
     public final ObjectKlass Object;
@@ -307,7 +293,6 @@ public final class Meta implements ContextAccess {
     public final Field HIDDEN_SIGNERS;
     public final ArrayKlass Class_Array;
     public final Method Class_forName_String;
-    public final Method Class_forName_String_boolean_ClassLoader;
 
     // Primitives.
     public final PrimitiveKlass _boolean;
@@ -369,13 +354,6 @@ public final class Meta implements ContextAccess {
     public final Method ClassLoader_findNative;
     public final Method ClassLoader_getSystemClassLoader;
 
-    public final ObjectKlass AssertionStatusDirectives;
-    public final Field AssertionStatusDirectives_classes;
-    public final Field AssertionStatusDirectives_classEnabled;
-    public final Field AssertionStatusDirectives_packages;
-    public final Field AssertionStatusDirectives_packageEnabled;
-    public final Field AssertionStatusDirectives_deflt;
-
     public final ObjectKlass Executable;
 
     public final ObjectKlass Constructor;
@@ -417,7 +395,6 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass IllegalArgumentException;
     public final ObjectKlass NullPointerException;
     public final ObjectKlass ClassNotFoundException;
-    public final ObjectKlass NoClassDefFoundError;
     public final ObjectKlass InterruptedException;
     public final ObjectKlass RuntimeException;
     public final ObjectKlass StackOverflowError;
@@ -445,11 +422,6 @@ public final class Meta implements ContextAccess {
     // Array support.
     public final ObjectKlass Cloneable;
     public final ObjectKlass Serializable;
-
-    public final ObjectKlass sun_nio_ch_DirectBuffer;
-    public final ObjectKlass Buffer;
-    public final Field Buffer_address;
-    public final Field Buffer_capacity;
 
     public final ObjectKlass ByteBuffer;
     public final Method ByteBuffer_wrap;
