@@ -366,8 +366,6 @@ public final class Meta implements ContextAccess {
         java_lang_ref_Finalizer = knownKlass(Type.java_lang_ref_Finalizer);
         java_lang_ref_Finalizer_register = java_lang_ref_Finalizer.lookupDeclaredMethod(Name.register, Signature._void_Object);
 
-        java_lang_Object_wait = java_lang_Object.lookupDeclaredMethod(Name.wait, Signature._void_long);
-
         // References
         java_lang_ref_Reference = knownKlass(Type.java_lang_ref_Reference);
         java_lang_ref_Reference_referent = java_lang_ref_Reference.lookupDeclaredField(Name.referent, Type.java_lang_Object);
@@ -696,8 +694,6 @@ public final class Meta implements ContextAccess {
     public final Method java_lang_invoke_MethodHandleNatives_findMethodHandleType;
     public final Method java_lang_invoke_MethodHandleNatives_linkCallSite;
 
-    public final Method java_lang_Object_wait;
-
     // References
     public final ObjectKlass java_lang_ref_Finalizer;
     public final Method java_lang_ref_Finalizer_register;
@@ -997,7 +993,7 @@ public final class Meta implements ContextAccess {
         final char[] value = HostJava.getStringValue(hostString);
         final int hash = HostJava.getStringHash(hostString);
         StaticObject guestString = java_lang_String.allocateInstance();
-        java_lang_String_value.set(guestString, StaticObject.wrap(value, this));
+        java_lang_String_value.set(guestString, StaticObject.wrap(value));
         java_lang_String_hash.set(guestString, hash);
         // String.hashCode must be equivalent for host and guest.
         assert hostString.hashCode() == (int) java_lang_String_hashCode.invokeDirect(guestString);
@@ -1031,7 +1027,7 @@ public final class Meta implements ContextAccess {
             return hostObject;
         }
         if (hostObject instanceof StaticObject[]) {
-            return StaticObject.wrap((StaticObject[]) hostObject, this);
+            return StaticObject.wrap((StaticObject[]) hostObject);
         }
 
         if (hostObject instanceof Boolean ||
