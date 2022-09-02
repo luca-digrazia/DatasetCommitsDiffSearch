@@ -382,8 +382,14 @@ public final class PolyglotCompilerOptions {
     @Option(help = "Enable automatic inlining of guest language call targets.", category = OptionCategory.EXPERT)
     public static final OptionKey<Boolean> Inlining = new OptionKey<>(true);
 
+    @Option(help = "Maximum number of inlined non-trivial AST nodes per compilation unit.", category = OptionCategory.EXPERT)
+    public static final OptionKey<Integer> InliningNodeBudget = new OptionKey<>(2250);
+
     @Option(help = "Maximum depth for recursive inlining.", category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> InliningRecursionDepth = new OptionKey<>(2);
+
+    @Option(help = "Use language-agnostic inlining (overrides the TruffleFunctionInlining setting, option is experimental).", category = OptionCategory.EXPERT)
+    public static final OptionKey<Boolean> LanguageAgnosticInlining = new OptionKey<>(true);
 
     // Splitting
 
@@ -425,9 +431,6 @@ public final class PolyglotCompilerOptions {
 
     @Option(help = "Sets the target non-trivial Truffle node size for partial compilation of BlockNode nodes.", category = OptionCategory.EXPERT)
     public static final OptionKey<Integer> PartialBlockCompilationSize = new OptionKey<>(3000);
-
-    @Option(help = "Sets the maximum non-trivial Truffle node size for partial compilation of BlockNode nodes.", category = OptionCategory.EXPERT)
-    public static final OptionKey<Integer> PartialBlockMaximumSize = new OptionKey<>(10000);
 
     /*
      * TODO planned options (GR-13444):
