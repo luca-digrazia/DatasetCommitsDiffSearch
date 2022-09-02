@@ -156,10 +156,9 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
 
         JavaConstant slotArrayList = constantReflection.readFieldValue(types.fieldFrameDescriptorSlots, frameDescriptor);
         JavaConstant slotArray = constantReflection.readFieldValue(types.fieldArrayListElementData, slotArrayList);
-        final int slotsArrayLength = constantReflection.readArrayLength(slotArray);
-        final int frameLength = constantReflection.readFieldValue(types.fieldFrameDescriptorSize, frameDescriptor).asInt();
+        int slotsArrayLength = constantReflection.readArrayLength(slotArray);
 
-        JavaKind[] frameSlotKindsCandidate = new JavaKind[frameLength];
+        frameSlotKinds = new JavaKind[slotsArrayLength];
         int limit = -1;
         for (int i = 0; i < slotsArrayLength; i++) {
             JavaConstant slot = constantReflection.readArrayElement(slotArray, i);
@@ -169,23 +168,11 @@ public final class NewFrameNode extends FixedWithNextNode implements IterableNod
                 if (slotKind.isNonNull() && slotIndex.isNonNull()) {
                     final JavaKind kind = asJavaKind(constantReflection.readFieldValue(types.fieldFrameSlotKindTag, slotKind));
                     final int index = slotIndex.asInt();
-                    limit = Math.max(index, limit);
-                    if (index >= frameLength) {
-                        /*
-                         * Since the size and slotArrayList of the FrameDescriptor are read
-                         * asynchronously we have to defensively check that we did not get old size
-                         * not matching the slot's index. If we did the frameSlotKinds array has to
-                         * be expanded.
-                         */
-                        final JavaKind[] newArray = new JavaKind[index + 1];
-                        System.arraycopy(frameSlotKindsCandidate, 0, newArray, 0, frameSlotKindsCandidate.length);
-                        frameSlotKindsCandidate = newArray;
-                    }
-                    frameSlotKindsCandidate[index] = kind;
+                    limit = index > limit ? index : limit;
+                    frameSlotKinds[index] = kind;
                 }
             }
         }
-        this.frameSlotKinds = frameSlotKindsCandidate;
         this.frameSize = limit + 1;
 
         ResolvedJavaType frameType = types.classFrameClass;

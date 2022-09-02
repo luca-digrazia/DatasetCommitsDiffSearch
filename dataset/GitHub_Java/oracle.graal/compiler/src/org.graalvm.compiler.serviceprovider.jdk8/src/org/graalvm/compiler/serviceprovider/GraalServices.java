@@ -28,22 +28,13 @@ import static java.lang.Thread.currentThread;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ServiceConfigurationError;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
 
-import org.graalvm.compiler.serviceprovider.SpeculationReasonGroup.SpeculationContextObject;
-
-import jdk.vm.ci.code.BytecodePosition;
-import jdk.vm.ci.meta.ResolvedJavaField;
-import jdk.vm.ci.meta.ResolvedJavaMethod;
-import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.meta.SpeculationLog.SpeculationReason;
-import jdk.vm.ci.meta.SpeculationLog.SpeculationReasonEncoding;
 import jdk.vm.ci.services.JVMCIPermission;
 import jdk.vm.ci.services.Services;
 
@@ -134,7 +125,6 @@ public final class GraalServices {
         final int groupId;
         final String groupName;
         final Object[] context;
-        private SpeculationReasonEncoding encoding;
 
         DirectSpeculationReason(int groupId, String groupName, Object[] context) {
             this.groupId = groupId;
@@ -159,123 +149,6 @@ public final class GraalServices {
         @Override
         public String toString() {
             return String.format("%s@%d%s", groupName, groupId, Arrays.toString(context));
-        }
-
-        @Override
-        public SpeculationReasonEncoding encode(Supplier<SpeculationReasonEncoding> encodingSupplier) {
-            if (encoding == null) {
-                encoding = encodingSupplier.get();
-                encoding.addInt(groupId);
-                for (Object o : context) {
-                    if (o == null) {
-                        encoding.addInt(0);
-                    } else {
-                        addNonNullObject(encoding, o);
-                    }
-                }
-            }
-            return encoding;
-        }
-
-        static void addNonNullObject(SpeculationReasonEncoding encoding, Object o) {
-            Class<? extends Object> c = o.getClass();
-            if (c == String.class) {
-                encoding.addString((String) o);
-            } else if (c == Byte.class) {
-                encoding.addByte((Byte) o);
-            } else if (c == Short.class) {
-                encoding.addShort((Short) o);
-            } else if (c == Character.class) {
-                encoding.addShort((Character) o);
-            } else if (c == Integer.class) {
-                encoding.addInt((Integer) o);
-            } else if (c == Long.class) {
-                encoding.addLong((Long) o);
-            } else if (c == Float.class) {
-                encoding.addInt(Float.floatToRawIntBits((Float) o));
-            } else if (c == Double.class) {
-                encoding.addLong(Double.doubleToRawLongBits((Double) o));
-            } else if (o instanceof Enum) {
-                encoding.addInt(((Enum<?>) o).ordinal());
-            } else if (o instanceof ResolvedJavaMethod) {
-                encoding.addMethod((ResolvedJavaMethod) o);
-            } else if (o instanceof ResolvedJavaType) {
-                encoding.addType((ResolvedJavaType) o);
-            } else if (o instanceof ResolvedJavaField) {
-                encoding.addField((ResolvedJavaField) o);
-            } else if (o instanceof SpeculationContextObject) {
-                SpeculationContextObject sco = (SpeculationContextObject) o;
-                // These are compiler objects which all have the same class
-                // loader so the class name uniquely identifies the class.
-                encoding.addString(o.getClass().getName());
-                sco.accept(new EncodingAdapter(encoding));
-            } else if (o.getClass() == BytecodePosition.class) {
-                BytecodePosition p = (BytecodePosition) o;
-                while (p != null) {
-                    encoding.addInt(p.getBCI());
-                    encoding.addMethod(p.getMethod());
-                    p = p.getCaller();
-                }
-            } else {
-                throw new IllegalArgumentException("Unsupported type for encoding: " + c.getName());
-            }
-        }
-    }
-
-    static class EncodingAdapter implements SpeculationContextObject.Visitor {
-        private final SpeculationReasonEncoding encoding;
-
-        EncodingAdapter(SpeculationReasonEncoding encoding) {
-            this.encoding = encoding;
-        }
-
-        @Override
-        public void visitBoolean(boolean v) {
-            encoding.addByte(v ? 1 : 0);
-        }
-
-        @Override
-        public void visitByte(byte v) {
-            encoding.addByte(v);
-        }
-
-        @Override
-        public void visitChar(char v) {
-            encoding.addShort(v);
-        }
-
-        @Override
-        public void visitShort(short v) {
-            encoding.addInt(v);
-        }
-
-        @Override
-        public void visitInt(int v) {
-            encoding.addInt(v);
-        }
-
-        @Override
-        public void visitLong(long v) {
-            encoding.addLong(v);
-        }
-
-        @Override
-        public void visitFloat(float v) {
-            encoding.addInt(Float.floatToRawIntBits(v));
-        }
-
-        @Override
-        public void visitDouble(double v) {
-            encoding.addLong(Double.doubleToRawLongBits(v));
-        }
-
-        @Override
-        public void visitObject(Object v) {
-            if (v == null) {
-                encoding.addInt(0);
-            } else {
-                DirectSpeculationReason.addNonNullObject(encoding, v);
-            }
         }
     }
 
@@ -408,59 +281,5 @@ public final class GraalServices {
      */
     public static List<String> getInputArguments() {
         return java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments();
-    }
-
-    /**
-     * Returns the fused multiply add of the three arguments; that is, returns the exact product of
-     * the first two arguments summed with the third argument and then rounded once to the nearest
-     * {@code float}.
-     */
-    public static float fma(float a, float b, float c) {
-        // Copy from JDK 9
-        float result = (float) (((double) a * (double) b) + c);
-        return result;
-    }
-
-    /**
-     * Returns the fused multiply add of the three arguments; that is, returns the exact product of
-     * the first two arguments summed with the third argument and then rounded once to the nearest
-     * {@code double}.
-     */
-    public static double fma(double a, double b, double c) {
-        // Copy from JDK 9
-        if (Double.isNaN(a) || Double.isNaN(b) || Double.isNaN(c)) {
-            return Double.NaN;
-        } else { // All inputs non-NaN
-            boolean infiniteA = Double.isInfinite(a);
-            boolean infiniteB = Double.isInfinite(b);
-            boolean infiniteC = Double.isInfinite(c);
-            double result;
-
-            if (infiniteA || infiniteB || infiniteC) {
-                if (infiniteA && b == 0.0 || infiniteB && a == 0.0) {
-                    return Double.NaN;
-                }
-                double product = a * b;
-                if (Double.isInfinite(product) && !infiniteA && !infiniteB) {
-                    assert Double.isInfinite(c);
-                    return c;
-                } else {
-                    result = product + c;
-                    assert !Double.isFinite(result);
-                    return result;
-                }
-            } else { // All inputs finite
-                BigDecimal product = (new BigDecimal(a)).multiply(new BigDecimal(b));
-                if (c == 0.0) {
-                    if (a == 0.0 || b == 0.0) {
-                        return a * b + c;
-                    } else {
-                        return product.doubleValue();
-                    }
-                } else {
-                    return product.add(new BigDecimal(c)).doubleValue();
-                }
-            }
-        }
     }
 }
