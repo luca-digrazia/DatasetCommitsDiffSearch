@@ -49,7 +49,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -294,9 +293,10 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     private final StringBuilder outPattern;
 
     /**
-     * The global flags are the flags given when compiling the regular expression.
+     * The global flags are the flags given when compiling the regular expression. Note that these
+     * flags <em>can</em> be changed inline, in the pattern.
      */
-    private final RubyFlags globalFlags;
+    private RubyFlags globalFlags;
     /**
      * A stack of the locally enabled flags. Python enables the setting and unsetting of the flags
      * for subexpressions of the regex.
@@ -376,7 +376,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
 
     @Override
     public TruffleObject getFlags() {
-        return globalFlags;
+        return getGlobalFlags();
     }
 
     @Override
@@ -406,16 +406,15 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         // actually want to match on the individual code points of the Unicode string. In 'bytes'
         // patterns, all characters are in the range 0-255 and so the Unicode flag does not
         // interfere with the matching (no surrogates).
-        return new RegexSource(outPattern.toString(), globalFlags.isSticky() ? "suy" : "su", inSource.getEncoding());
+        return new RegexSource(outPattern.toString(), getGlobalFlags().isSticky() ? "suy" : "su", inSource.getEncoding());
     }
 
     private RubyFlags getLocalFlags() {
-        return flagsStack.peek();
+        return flagsStack.isEmpty() ? globalFlags : flagsStack.peek();
     }
 
-    private void setLocalFlags(RubyFlags newLocalFlags) {
-        flagsStack.pop();
-        flagsStack.push(newLocalFlags);
+    private RubyFlags getGlobalFlags() {
+        return globalFlags;
     }
 
     /// Input scanning
@@ -673,9 +672,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
     // The parser
 
     private void parse() {
-        flagsStack.push(globalFlags);
         disjunction();
-        flagsStack.pop();
 
         if (!atEnd()) {
             assert curChar() == ')';
@@ -703,11 +700,9 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
      * An alternative is a sequence of Terms.
      */
     private void alternative() {
-        flagsStack.push(getLocalFlags());
         while (!atEnd() && curChar() != '|' && curChar() != ')') {
             term();
         }
-        flagsStack.pop();
     }
 
     /**
@@ -1636,7 +1631,8 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
         }
         switch (ch) {
             case ')':
-                setLocalFlags(getLocalFlags().addFlags(positiveFlags));
+                // This should update the flags that are currently in scope instead of the global flags.
+                globalFlags = globalFlags.addFlags(positiveFlags);
                 break;
             case ':':
                 localFlags(positiveFlags, RubyFlags.EMPTY_INSTANCE, start);
@@ -1655,7 +1651,7 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                     ch = consumeChar();
                 }
                 if (ch == ')') {
-                    setLocalFlags(getLocalFlags().addFlags(positiveFlags).delFlags(negativeFlags));
+                    globalFlags = globalFlags.addFlags(positiveFlags).delFlags(negativeFlags);
                 } else if (ch == ':') {
                     localFlags(positiveFlags, negativeFlags, start);
                 } else if (Character.isAlphabetic(ch)) {
