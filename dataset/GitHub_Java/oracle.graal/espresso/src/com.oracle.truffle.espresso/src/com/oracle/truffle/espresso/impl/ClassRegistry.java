@@ -40,7 +40,6 @@ import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.perf.DebugCloseable;
 import com.oracle.truffle.espresso.perf.DebugTimer;
-import com.oracle.truffle.espresso.redefinition.DefineKlassListener;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -348,7 +347,6 @@ public abstract class ClassRegistry implements ContextAccess {
         EspressoError.guarantee(previous == null, "Class " + type + " is already defined");
 
         getRegistries().recordConstraint(type, klass, getClassLoader());
-        getRegistries().onKlassDefined(klass);
         if (defineKlassListener != null) {
             defineKlassListener.onKlassDefined(klass);
         }
@@ -374,11 +372,9 @@ public abstract class ClassRegistry implements ContextAccess {
         return (ObjectKlass) klass;
     }
 
-    public void onClassRenamed(ObjectKlass oldKlass, Symbol<Symbol.Name> newName, Symbol<Type> type) {
+    public void onClassRenamed(ObjectKlass oldKlass, Symbol<Symbol.Name> newName) {
         Symbol<Symbol.Type> newType = context.getTypes().fromName(newName);
         classes.put(newType, new ClassRegistries.RegistryEntry(oldKlass));
-        // record the new loading constraint
-        context.getRegistries().recordConstraint(type, oldKlass, oldKlass.getDefiningClassLoader());
     }
 
     public void onInnerClassRemoved(Symbol<Symbol.Type> type) {
