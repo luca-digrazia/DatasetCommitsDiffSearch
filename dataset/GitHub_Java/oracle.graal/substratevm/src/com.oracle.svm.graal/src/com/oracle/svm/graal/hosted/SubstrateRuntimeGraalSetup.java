@@ -48,23 +48,23 @@ import jdk.vm.ci.meta.MetaAccessProvider;
 
 public class SubstrateRuntimeGraalSetup implements RuntimeGraalSetup {
 
-    protected final SubstrateMetaAccess sMetaAccess;
+    protected final SubstrateMetaAccess metaAccess;
 
     public SubstrateRuntimeGraalSetup() {
         if (SubstrateOptions.supportCompileInIsolates()) {
-            sMetaAccess = new IsolateAwareMetaAccess();
+            metaAccess = new IsolateAwareMetaAccess();
         } else {
-            sMetaAccess = new SubstrateMetaAccess();
+            metaAccess = new SubstrateMetaAccess();
         }
     }
 
     @Override
     public GraalProviderObjectReplacements getProviderObjectReplacements(AnalysisMetaAccess aMetaAccess) {
         if (SubstrateOptions.supportCompileInIsolates()) {
-            assert sMetaAccess instanceof IsolateAwareMetaAccess;
-            return new IsolateAwareProviderObjectReplacements(aMetaAccess, (IsolateAwareMetaAccess) sMetaAccess);
+            assert metaAccess instanceof IsolateAwareMetaAccess;
+            return new IsolateAwareProviderObjectReplacements(aMetaAccess, (IsolateAwareMetaAccess) metaAccess);
         } else {
-            return new GraalProviderObjectReplacements(aMetaAccess, sMetaAccess);
+            return new GraalProviderObjectReplacements(aMetaAccess, metaAccess);
         }
     }
 
