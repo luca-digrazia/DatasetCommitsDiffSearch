@@ -203,8 +203,7 @@ public class QueryCodeWriter extends InfoTreeVisitor {
             registerElementForCurrentLine(fieldInfo.getParent().getAnnotatedElement());
             writer.indents().appendln("{");
             writer.indent();
-            String init = " = { 0 }";
-            writer.indents().appendln(fieldInfo.getParent().getName() + " " + tempVar + init + ";");
+            writer.indents().appendln(fieldInfo.getParent().getName() + " " + tempVar + ";");
             printIsUnsigned(fieldInfo.getSignednessInfo(), isUnsigned(tempVar + "." + fieldInfo.getName()));
             writer.outdent();
             writer.indents().appendln("}");
@@ -234,8 +233,7 @@ public class QueryCodeWriter extends InfoTreeVisitor {
         writer.indents().appendln("memset(&w, 0x0, sizeof(w));");
         /* Fill the actual bitfield with 1 bits. Maximum size is 64 bits. */
         registerElementForCurrentLine(bitfieldInfo.getAnnotatedElement());
-        writer.indents().appendln("unsigned long one_bits64 = 0xffffffffffffffff;");
-        writer.indents().appendln("w.s." + bitfieldName + " = one_bits64;");
+        writer.indents().appendln("w.s." + bitfieldName + " = 0xffffffffffffffff;");
         /* All bits are set, so signed bitfields are < 0; */
         writer.indents().appendln("is_unsigned =  (w.s." + bitfieldName + " >= 0);");
         /* Find the first byte that is used by the bitfield, i.e., the first byte with a bit set. */
@@ -281,8 +279,7 @@ public class QueryCodeWriter extends InfoTreeVisitor {
             registerElementForCurrentLine(pointerToInfo.getAnnotatedElement());
             writer.indents().appendln("{");
             writer.indent();
-            String init = " = 0";
-            writer.indents().appendln(pointerToInfo.getName() + " " + tempVar + init + ";");
+            writer.indents().appendln(pointerToInfo.getName() + " " + tempVar + ";");
             printIsUnsigned(pointerToInfo.getSignednessInfo(), isUnsigned(tempVar));
             writer.outdent();
             writer.indents().appendln("}");
@@ -302,23 +299,19 @@ public class QueryCodeWriter extends InfoTreeVisitor {
         writer.indents().printf(info.getUniqueID() + DELIMINATOR + FORMATOR_STRING, arg).semicolon();
     }
 
-    private static String cast(String targetType, String value) {
-        return "((" + targetType + ")" + value + ")";
-    }
-
     private void printLongHex(ElementInfo info, String arg) {
         registerElementForCurrentLine(info.getAnnotatedElement());
-        writer.indents().printf(info.getUniqueID() + DELIMINATOR + FORMATOR_LONG_HEX, cast("long unsigned int", arg)).semicolon();
+        writer.indents().printf(info.getUniqueID() + DELIMINATOR + FORMATOR_LONG_HEX, arg).semicolon();
     }
 
     private void printSignedLong(ElementInfo info, String arg) {
         registerElementForCurrentLine(info.getAnnotatedElement());
-        writer.indents().printf(info.getUniqueID() + DELIMINATOR + FORMATOR_SIGNED_LONG, cast("long int", arg)).semicolon();
+        writer.indents().printf(info.getUniqueID() + DELIMINATOR + FORMATOR_SIGNED_LONG, arg).semicolon();
     }
 
     private void printUnsignedLong(ElementInfo info, String arg) {
         registerElementForCurrentLine(info.getAnnotatedElement());
-        writer.indents().printf(info.getUniqueID() + DELIMINATOR + FORMATOR_UNSIGNED_LONG, cast("long unsigned int", arg)).semicolon();
+        writer.indents().printf(info.getUniqueID() + DELIMINATOR + FORMATOR_UNSIGNED_LONG, arg).semicolon();
     }
 
     private void printFloat(ElementInfo info, String arg) {
