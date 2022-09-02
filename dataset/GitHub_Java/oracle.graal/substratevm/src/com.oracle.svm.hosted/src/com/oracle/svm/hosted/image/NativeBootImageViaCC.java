@@ -42,8 +42,6 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.impl.InternalPlatform;
-
 import com.oracle.objectfile.ObjectFile;
 import com.oracle.objectfile.macho.MachOSymtab;
 import com.oracle.svm.core.LinkerInvocation;
@@ -190,7 +188,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                     throw UserError.abort(OS.getCurrent().name() + " does not support building static executable images.");
                 case SHARED_LIBRARY:
                     cmd.add("-shared");
-                    if (Platform.includedIn(InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class)) {
+                    if (Platform.includedIn(Platform.DARWIN.class)) {
                         cmd.add("-undefined");
                         cmd.add("dynamic_lookup");
                     }
@@ -228,24 +226,19 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             // Add debugging info
             cmd.add("/Zi");
 
+            if (removeUnusedSymbols()) {
+                cmd.add("/OPT:REF");
+            }
+
+            if (SubstrateOptions.DeleteLocalSymbols.getValue()) {
+                cmd.add("/PDBSTRIPPED");
+            }
+
             for (Path staticLibrary : nativeLibs.getStaticLibraries()) {
                 cmd.add(staticLibrary.toString());
             }
 
-            cmd.add("/link");
-            cmd.add("/INCREMENTAL:NO");
-            cmd.add("/NODEFAULTLIB:LIBCMT");
-
-            if (SubstrateOptions.DeleteLocalSymbols.getValue()) {
-                String outputFileString = getOutputFile().toString();
-                String outputFileSuffix = getOutputKind().getFilenameSuffix();
-                String pdbFile = outputFileString.substring(0, outputFileString.length() - outputFileSuffix.length()) + ".stripped.pdb";
-                cmd.add("/PDBSTRIPPED:" + pdbFile);
-            }
-
-            if (removeUnusedSymbols()) {
-                cmd.add("/OPT:REF");
-            }
+            cmd.add("/link /INCREMENTAL:NO /NODEFAULTLIB:LIBCMT");
 
             // Add clibrary paths to command
             for (String libraryPath : nativeLibs.getLibraryPaths()) {
@@ -334,21 +327,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
     public LinkerInvocation write(DebugContext debug, Path outputDirectory, Path tempDirectory, String imageName, BeforeImageWriteAccessImpl config) {
         try (Indent indent = debug.logAndIndent("Writing native image")) {
             // 1. write the relocatable file
-
-            // Since we're using FileChannel.map, and we can't unmap the file,
-            // we have to copy the file or the linker will fail to open it.
-            if (OS.getCurrent() == OS.WINDOWS) {
-                Path tempFile = tempDirectory.resolve(imageName + ".tmp");
-                write(tempFile);
-                try {
-                    Files.copy(tempFile, tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
-                    // Files.delete(tempFile);
-                } catch (IOException e) {
-                    throw new RuntimeException("Failed to create Object file " + e);
-                }
-            } else {
-                write(tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
-            }
+            write(tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix()));
             if (NativeImageOptions.ExitAfterRelocatableImageWrite.getValue()) {
                 return null;
             }
