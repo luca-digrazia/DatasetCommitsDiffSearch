@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -62,7 +62,7 @@ import org.java_websocket.handshake.ServerHandshake;
 /**
  * Test handling of multiple engines by the Inspector.
  */
-public class MultiEngineTest extends EnginesGCedTest {
+public class MultiEngineTest {
 
     private static final int PORT = 9229;
 
@@ -263,13 +263,12 @@ public class MultiEngineTest extends EnginesGCedTest {
         }).start();
     }
 
-    private String runEngine(Source src, OutputStream out, CountDownLatch isUp) {
+    private static String runEngine(Source src, OutputStream out, CountDownLatch isUp) {
         return runEngine(src, src.getName() + "." + SecureInspectorPathGenerator.getToken(), out, isUp);
     }
 
-    private String runEngine(Source src, String path, OutputStream out, CountDownLatch isUp) {
+    private static String runEngine(Source src, String path, OutputStream out, CountDownLatch isUp) {
         try (Engine e = Engine.newBuilder().option("inspect.Path", path).err(out).build()) {
-            addEngineReference(e);
             Context c = Context.newBuilder().engine(e).allowAllAccess(true).build();
             isUp.countDown();
             Value result = c.eval(src);
