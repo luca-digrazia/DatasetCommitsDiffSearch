@@ -45,7 +45,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.lang.ref.WeakReference;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -158,24 +157,13 @@ public abstract class Source {
     private static final int BUFFER_SIZE = 8192;
     static final Class<?> BYTE_SEQUENCE_CLASS = ByteSequence.create(new byte[0]).getClass();
 
-    static final InternedSources SOURCES = new InternedSources();
+    private static final InternedSources SOURCES = new InternedSources();
 
     private volatile TextMap textMap;
     private volatile URI computedURI;
-    /*
-     * We use the original polyglot source as an e polyglot embedding API indicato whether we should
-     * continue to hold on to caches(ASTs, code) related to this source. If this reference is strong
-     * it would keep that polyglot reference potentially always alive, because Truffle sources are
-     * interned.
-     *
-     * If no one is referencing the polyglot source anymore we can assume that no one relies on the
-     * identity of the original polyglot source. So we can just as well free it.
-     */
-    volatile WeakReference<org.graalvm.polyglot.Source> cachedPolyglotSource;
+    volatile org.graalvm.polyglot.Source polyglotSource;
 
     abstract Object getSourceId();
-
-    abstract Object getSourceKey();
 
     Source() {
     }
@@ -271,10 +259,7 @@ public abstract class Source {
         if (!(obj instanceof Source)) {
             return false;
         }
-
-        boolean result = getSourceId().equals(((Source) obj).getSourceId());
-        assert result == getSourceKey().equals(((Source) obj).getSourceKey());
-        return result;
+        return getSourceId().equals(((Source) obj).getSourceId());
     }
 
     /**
@@ -1073,17 +1058,11 @@ public abstract class Source {
         SourceImpl.Key key = null;
         String relativePathInLanguageHome = null;
         if (useTruffleFile != null) {
-            // The relativePathInLanguageHome has to be calculated also for Sources created in the
-            // image execution time. They have to have the same hash code as sources created during
-            // the context pre-initialization.
-            relativePathInLanguageHome = SourceAccessor.ACCESSOR.engineSupport().getRelativePathInLanguageHome(useTruffleFile);
+            relativePathInLanguageHome = SourceAccessor.ACCESSOR.engineSupport().getPreinitializedRelativePathInLanguageHome(useTruffleFile);
             if (relativePathInLanguageHome != null) {
-                Object fsEngineObject = SourceAccessor.ACCESSOR.languageSupport().getFileSystemEngineObject(SourceAccessor.ACCESSOR.languageSupport().getFileSystemContext(useTruffleFile));
-                if (SourceAccessor.ACCESSOR.engineSupport().inContextPreInitialization(fsEngineObject)) {
-                    key = new SourceImpl.ReinitializableKey(useTruffleFile, useContent, useMimeType, language,
-                                    useUrl, useUri, useName, usePath, internal, interactive, cached,
-                                    relativePathInLanguageHome);
-                }
+                key = new SourceImpl.ReinitializableKey(useTruffleFile, useContent, useMimeType, language,
+                                useUrl, useUri, useName, usePath, internal, interactive, cached,
+                                relativePathInLanguageHome);
             }
         }
         if (key == null) {

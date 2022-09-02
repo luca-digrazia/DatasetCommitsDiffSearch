@@ -316,7 +316,7 @@ class PolyglotSource extends AbstractSourceImpl {
             synchronized (this) {
                 res = defaultFileSystemContext;
                 if (res == null) {
-                    EmbedderFileSystemContext context = new EmbedderFileSystemContext();
+                    EmbedderFileSystem context = new EmbedderFileSystem();
                     res = EngineAccessor.LANGUAGE.createFileSystemContext(context, context.fileSystem);
                     defaultFileSystemContext = res;
                 }
@@ -325,7 +325,7 @@ class PolyglotSource extends AbstractSourceImpl {
         return res;
     }
 
-    static final class EmbedderFileSystemContext {
+    static final class EmbedderFileSystem {
 
         final FileSystem fileSystem = FileSystems.newDefaultFileSystem();
         final Map<String, LanguageCache> cachedLanguages = LanguageCache.languages();

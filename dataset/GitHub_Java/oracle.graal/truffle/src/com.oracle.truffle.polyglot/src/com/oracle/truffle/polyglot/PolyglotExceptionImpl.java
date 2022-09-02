@@ -363,16 +363,15 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
         return guestObject;
     }
 
-    Object getFileSystemContext(PolyglotLanguage language) {
+    Object getFileSystemContext() {
         if (context == null) {
             return null;
         }
-
-        PolyglotLanguageContext languageContext = context.getContext(language);
-        if (!languageContext.isCreated()) {
+        PolyglotLanguageContext hostContext = context.getHostContext();
+        if (!hostContext.isCreated()) {
             return null;
         }
-        return languageContext.getInternalFileSystemContext();
+        return hostContext.getInternalFileSystemContext();
     }
 
     /**

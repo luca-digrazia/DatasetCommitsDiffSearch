@@ -294,21 +294,13 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
     }
 
     Object getPublicFileSystemContext() {
-        Lazy l = lazy;
-        if (l != null) {
-            return l.publicFileSystemContext;
-        } else {
-            return null;
-        }
+        assert lazy != null;
+        return lazy.publicFileSystemContext;
     }
 
     Object getInternalFileSystemContext() {
-        Lazy l = lazy;
-        if (l != null) {
-            return l.internalFileSystemContext;
-        } else {
-            return null;
-        }
+        assert lazy != null;
+        return lazy.internalFileSystemContext;
     }
 
     Value getHostBindings() {
