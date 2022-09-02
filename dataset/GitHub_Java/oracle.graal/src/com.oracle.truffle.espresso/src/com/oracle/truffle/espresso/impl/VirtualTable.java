@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.impl;
 
-import com.oracle.truffle.espresso.descriptors.Symbol;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 
@@ -39,51 +37,35 @@ public class VirtualTable {
     // Mirandas are already in the Klass, there is not much left to do.
     public static Method[] create(ObjectKlass superKlass, Method[] declaredMethods, ObjectKlass thisKlass) {
         ArrayList<Method> tmp;
-        ArrayList<Method> overrides = new ArrayList<>();
-        String runtimePackage = thisKlass.getRuntimePackage();
         if (superKlass != null) {
             tmp = new ArrayList<>(Arrays.asList(superKlass.getVTable()));
         } else {
             tmp = new ArrayList<>();
         }
         for (Method m : declaredMethods) {
-            if (m.getName() != Symbol.Name.CLINIT && m.getName() != Symbol.Name.INIT) {
-                // Do not bloat the vtable with these two methods that cannot be called through
-                // virtual invocation.
-                checkOverride(superKlass, m, tmp, runtimePackage, overrides);
-            }
+            checkOverride(superKlass, m, tmp);
         }
         for (Method m : thisKlass.getMirandaMethods()) {
-            m.setVTableIndex(tmp.size());
-            tmp.add(m);
-            // checkOverride(superKlass, m, tmp);
+            checkOverride(superKlass, m, tmp);
         }
         return tmp.toArray(Method.EMPTY_ARRAY);
     }
 
-    private static void checkOverride(ObjectKlass superKlass, Method m, ArrayList<Method> tmp, String runtimePackage, ArrayList<Method> overrides) {
-        if (!overrides.isEmpty()) {
-            overrides.clear();
-        }
+    private static void checkOverride(ObjectKlass superKlass, Method m, ArrayList<Method> tmp) {
+        Method override;
         if (superKlass != null) {
-            superKlass.lookupVirtualMethodOverrides(m.getName(), m.getRawSignature(), runtimePackage, overrides);
+            override = superKlass.lookupVirtualMethodOverride(m.getName(), m.getRawSignature());
+        } else {
+            override = null;
         }
-        Method toSet = m;
-        if (!overrides.isEmpty()) {
-            int count = 1;
-            for (Method override : overrides) {
-                int pos = override.getVTableIndex();
-                if (count > 1) {
-                    toSet = new Method(m);
-                }
-                toSet.setVTableIndex(pos);
-                tmp.set(pos, toSet);
-                count++;
-            }
+        if (override != null) {
+            int pos = override.getVTableIndex();
+            m.setVTableIndex(pos);
+            tmp.set(pos, m);
         } else {
             int pos = tmp.size();
-            toSet.setVTableIndex(pos);
-            tmp.add(toSet);
+            m.setVTableIndex(pos);
+            tmp.add(m);
         }
     }
 }

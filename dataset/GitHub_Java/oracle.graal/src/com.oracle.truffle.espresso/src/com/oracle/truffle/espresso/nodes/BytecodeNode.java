@@ -895,8 +895,7 @@ public class BytecodeNode extends EspressoBaseNode implements CustomNodeCount {
                     // should be handled one way or another by espresso itself.
                     CompilerDirectives.transferToInterpreterAndInvalidate();
                     e.printStackTrace();
-                    throw EspressoError.shouldNotReachHere("Shouldn't see host exceptions here");
-                    // throw getMeta().throwExWithMessage(e.getClass(), e.getMessage())
+                    throw getMeta().throwExWithMessage(e.getClass(), e.getMessage());
                 }
             } catch (EspressoException e) {
                 CompilerDirectives.transferToInterpreter();

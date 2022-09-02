@@ -23,10 +23,6 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
-import java.lang.reflect.Array;
-import java.security.ProtectionDomain;
-import java.util.Arrays;
-
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
@@ -44,8 +40,11 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-
 import sun.misc.Unsafe;
+
+import java.lang.reflect.Array;
+import java.security.ProtectionDomain;
+import java.util.Arrays;
 
 @EspressoSubstitutions
 public final class Target_sun_misc_Unsafe {

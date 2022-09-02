@@ -23,9 +23,6 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.classfile.CodeAttribute;
@@ -43,6 +40,9 @@ import com.oracle.truffle.espresso.runtime.Attribute;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Resolved non-primitive, non-array types in Espresso.
@@ -139,18 +139,17 @@ public final class ObjectKlass extends Klass {
 
         this.declaredMethods = methods;
         if (this.isInterface()) {
-            this.itable = null;
+            InterfaceTables.CreationResult methodCR = InterfaceTables.create(this, superInterfaces, declaredMethods);
+            this.itable = methodCR.getItable();
+            this.iKlassTable = methodCR.getiKlass();
             this.vtable = null;
-            this.iKlassTable = InterfaceTables.getiKlassTable(this, declaredMethods);
         } else {
-            InterfaceTables.CreationResult methodCR = InterfaceTables.create(this, superKlass, superInterfaces);
-            this.iKlassTable = methodCR.klassTable;
-            this.mirandaMethods = methodCR.mirandas;
+            InterfaceTables.CreationResult methodCR = InterfaceTables.create(superKlass, superInterfaces, this);
+            this.itable = methodCR.getItable();
+            this.iKlassTable = methodCR.getiKlass();
             this.vtable = VirtualTable.create(superKlass, declaredMethods, this);
-            this.itable = InterfaceTables.fixTables(this, methodCR.tables, iKlassTable);
         }
         this.itableLength = iKlassTable.length;
-
     }
 
     @Override
@@ -276,6 +275,16 @@ public final class ObjectKlass extends Klass {
     // Need to carefully synchronize, as the work of other threads can erase our own work.
     @Override
     public void initialize() {
+        // // For some reason, doing the reentrant lock this way sometimes solves the memory issue
+        // // in DaCapo lusearch...
+        // // I have no explanation...
+        // if (isPrepared()) {
+        // CompilerDirectives.transferToInterpreterAndInvalidate();
+        // if (!Thread.holdsLock(this)) {
+        // synchronized (this) {
+        // }
+        // }
+        // }
         if (!isInitialized()) { // Skip synchronization and locks if already init.
             CompilerDirectives.transferToInterpreterAndInvalidate();
             actualInit();
@@ -448,9 +457,8 @@ public final class ObjectKlass extends Klass {
     }
 
     public final Method lookupInterfaceMethod(Symbol<Name> name, Symbol<Signature> signature) {
-        assert isInterface();
-        for (Klass k : iKlassTable) {
-            for (Method m : k.getDeclaredMethods()) {
+        for (Method[] table : itable) {
+            for (Method m : table) {
                 if (name == m.getName() && signature == m.getRawSignature()) {
                     return m;
                 }
@@ -486,6 +494,16 @@ public final class ObjectKlass extends Klass {
 
     public final Field[] getStaticFieldTable() {
         return staticFieldTable;
+    }
+
+    final void setMirandas(ArrayList<InterfaceTables.Miranda> mirandas) {
+        Method[] declaredAndMirandaMethods = new Method[mirandas.size()];
+        int pos = 0;
+        for (InterfaceTables.Miranda miranda : mirandas) {
+            miranda.setDeclaredMethodPos(pos);
+            declaredAndMirandaMethods[pos++] = new Method(miranda.method);
+        }
+        this.mirandaMethods = declaredAndMirandaMethods;
     }
 
     private Method lookupMirandas(Symbol<Name> methodName, Symbol<Signature> signature) {
