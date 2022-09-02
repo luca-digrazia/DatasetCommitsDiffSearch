@@ -183,19 +183,11 @@ public class CompilationTask {
 
     }
 
-    public CompilationTask(HotSpotJVMCIRuntime jvmciRuntime,
-                    HotSpotGraalCompiler compiler,
-                    HotSpotCompilationRequest request,
-                    boolean useProfilingInfo,
-                    boolean installAsDefault) {
+    public CompilationTask(HotSpotJVMCIRuntime jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean useProfilingInfo, boolean installAsDefault) {
         this(jvmciRuntime, compiler, request, useProfilingInfo, false, installAsDefault);
     }
 
-    public CompilationTask(HotSpotJVMCIRuntime jvmciRuntime,
-                    HotSpotGraalCompiler compiler,
-                    HotSpotCompilationRequest request,
-                    boolean useProfilingInfo,
-                    boolean shouldRetainLocalVariables,
+    public CompilationTask(HotSpotJVMCIRuntime jvmciRuntime, HotSpotGraalCompiler compiler, HotSpotCompilationRequest request, boolean useProfilingInfo, boolean shouldRetainLocalVariables,
                     boolean installAsDefault) {
         this.jvmciRuntime = jvmciRuntime;
         this.compiler = compiler;
