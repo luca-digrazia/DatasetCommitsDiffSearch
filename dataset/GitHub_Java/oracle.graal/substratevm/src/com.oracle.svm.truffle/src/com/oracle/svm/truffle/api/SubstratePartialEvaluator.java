@@ -25,6 +25,7 @@
 package com.oracle.svm.truffle.api;
 
 import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.graph.SourceLanguagePositionProvider;
 import org.graalvm.compiler.nodes.EncodedGraph;
@@ -40,7 +41,6 @@ import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.PEGraphDecoder;
 import org.graalvm.compiler.replacements.PEGraphDecoder.SpecialCallTargetCacheKey;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
-import org.graalvm.compiler.truffle.compiler.TruffleConstantFieldProvider;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
@@ -49,18 +49,16 @@ import com.oracle.svm.core.graal.phases.DeadStoreRemovalPhase;
 import jdk.vm.ci.code.Architecture;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-import java.util.concurrent.ConcurrentHashMap;
-
 public class SubstratePartialEvaluator extends PartialEvaluator {
 
-    private final ConcurrentHashMap<ResolvedJavaMethod, Object> invocationPluginsCache;
-    private final ConcurrentHashMap<SpecialCallTargetCacheKey, Object> specialCallTargetCache;
+    private final EconomicMap<ResolvedJavaMethod, Object> invocationPluginsCache;
+    private final EconomicMap<SpecialCallTargetCacheKey, Object> specialCallTargetCache;
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public SubstratePartialEvaluator(Providers providers, GraphBuilderConfiguration configForRoot, SnippetReflectionProvider snippetReflection, Architecture architecture) {
         super(providers, configForRoot, snippetReflection, architecture, new SubstrateKnownTruffleTypes(providers.getMetaAccess()));
-        this.invocationPluginsCache = new ConcurrentHashMap<>();
-        this.specialCallTargetCache = new ConcurrentHashMap<>();
+        this.invocationPluginsCache = EconomicMap.create(Equivalence.DEFAULT);
+        this.specialCallTargetCache = EconomicMap.create(Equivalence.DEFAULT);
     }
 
     @Override
@@ -68,7 +66,6 @@ public class SubstratePartialEvaluator extends PartialEvaluator {
                     InvocationPlugins invocationPlugins,
                     InlineInvokePlugin[] inlineInvokePlugins, ParameterPlugin parameterPlugin, NodePlugin[] nodePlugins, SourceLanguagePositionProvider sourceLanguagePositionProvider,
                     EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
-        TruffleConstantFieldProvider compilationLocalConstantProvider = new TruffleConstantFieldProvider(providers.getConstantFieldProvider(), providers.getMetaAccess());
         return new SubstratePEGraphDecoder(architecture, request.graph, providers.copyWith(compilationLocalConstantProvider), loopExplosionPlugin, invocationPlugins, inlineInvokePlugins,
                         parameterPlugin, nodePlugins, callInlined, sourceLanguagePositionProvider,
                         specialCallTargetCache, invocationPluginsCache);

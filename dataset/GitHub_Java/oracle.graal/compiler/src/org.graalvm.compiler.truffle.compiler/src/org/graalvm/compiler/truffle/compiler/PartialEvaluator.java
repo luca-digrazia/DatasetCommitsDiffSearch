@@ -75,7 +75,6 @@ import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.ConditionalEliminationPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
-import org.graalvm.compiler.phases.util.GraphOrder;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.replacements.CachingPEGraphDecoder;
 import org.graalvm.compiler.replacements.InlineDuringParsingPlugin;
@@ -89,6 +88,7 @@ import org.graalvm.compiler.truffle.common.TruffleCompilerRuntime.InlineKind;
 import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
 import org.graalvm.compiler.truffle.common.TruffleSourceLanguagePosition;
 import org.graalvm.compiler.truffle.compiler.TruffleCompilerImpl.CancellableTruffleCompilationTask;
+import org.graalvm.compiler.truffle.compiler.debug.HistogramInlineInvokePlugin;
 import org.graalvm.compiler.truffle.compiler.nodes.TruffleAssumption;
 import org.graalvm.compiler.truffle.compiler.nodes.asserts.NeverPartOfCompilationNode;
 import org.graalvm.compiler.truffle.compiler.nodes.frame.AllowMaterializeNode;
@@ -312,7 +312,7 @@ public abstract class PartialEvaluator {
             this.log = log;
             this.cancellable = cancellable;
             // @formatter:off
-            StructuredGraph.Builder builder = new StructuredGraph.Builder(this.debug.getOptions(), this.debug, AllowAssumptions.YES).
+            StructuredGraph.Builder builder = new StructuredGraph.Builder(TruffleCompilerOptions.getOptions(), this.debug, AllowAssumptions.YES).
                     name(this.compilable.toString()).
                     method(method).
                     speculationLog(this.log).
@@ -336,12 +336,11 @@ public abstract class PartialEvaluator {
     }
 
     @SuppressWarnings("try")
-    public final StructuredGraph evaluate(Request request) {
+    public StructuredGraph evaluate(Request request) {
         try (PerformanceInformationHandler handler = PerformanceInformationHandler.install(request.options)) {
             try (DebugContext.Scope s = request.debug.scope("CreateGraph", request.graph);
                             Indent indent = request.debug.logAndIndent("evaluate %s", request.graph);) {
                 inliningGraphPE(request);
-		assert GraphOrder.assertSchedulableGraph(request.graph) : "PE result must be schedulable in order to apply subsequent phases";
                 try (DebugCloseable a = TruffleConvertDeoptimizeTimer.start(request.debug)) {
                     new ConvertDeoptimizeToGuardPhase().apply(request.graph, request.highTierContext);
                 }
@@ -368,7 +367,6 @@ public abstract class PartialEvaluator {
                 TruffleCompilerRuntime rt = TruffleCompilerRuntime.getRuntime();
                 setIdentityForValueTypes(request, rt);
                 handleInliningAcrossTruffleBoundary(request, rt);
-
             } catch (Throwable e) {
                 throw request.debug.handle(e);
             }
@@ -546,14 +544,25 @@ public abstract class PartialEvaluator {
 
         ReplacementsImpl replacements = (ReplacementsImpl) providers.getReplacements();
         InlineInvokePlugin[] inlineInvokePlugins;
+        HistogramInlineInvokePlugin histogramPlugin = null;
         NodeLimitControlPlugin nodeLimitControlPlugin = new NodeLimitControlPlugin(request.options.get(MaximumGraalNodeCount));
-        inlineInvokePlugins = new InlineInvokePlugin[]{replacements, nodeLimitControlPlugin, inlineInvokePlugin};
+        Boolean printTruffleExpansionHistogram = getPolyglotOptionValue(request.options, PrintExpansionHistogram);
+        if (printTruffleExpansionHistogram) {
+            histogramPlugin = new HistogramInlineInvokePlugin(request.graph);
+            inlineInvokePlugins = new InlineInvokePlugin[]{replacements, nodeLimitControlPlugin, inlineInvokePlugin, histogramPlugin};
+        } else {
+            inlineInvokePlugins = new InlineInvokePlugin[]{replacements, nodeLimitControlPlugin, inlineInvokePlugin};
+        }
 
         SourceLanguagePositionProvider sourceLanguagePosition = new TruffleSourceLanguagePositionProvider(request.inliningPlan);
         PEGraphDecoder decoder = createGraphDecoder(request, loopExplosionPlugin, decodingInvocationPlugins, inlineInvokePlugins, parameterPlugin,
                         nodePlugins,
                         sourceLanguagePosition, graphCache);
         decoder.decode(request.graph.method(), request.graph.isSubstitution(), request.graph.trackNodeSourcePosition());
+
+        if (printTruffleExpansionHistogram) {
+            histogramPlugin.print(request.compilable);
+        }
     }
 
     protected GraphBuilderConfiguration createGraphBuilderConfig(GraphBuilderConfiguration config, boolean canDelayIntrinsification) {
@@ -650,17 +659,6 @@ public abstract class PartialEvaluator {
         public String getLanguage() {
             return delegate.getLanguage();
         }
-
-        @Override
-        public int getNodeId() {
-            return delegate.getNodeId();
-        }
-
-        @Override
-        public String getNodeClassName() {
-            return delegate.getNodeClassName();
-        }
-
     }
 
     private static final class NodeLimitControlPlugin implements InlineInvokePlugin {
