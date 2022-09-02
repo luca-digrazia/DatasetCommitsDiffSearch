@@ -177,13 +177,19 @@ public final class GraphEffectList extends EffectList {
      * @param node The fixed node that should be deleted.
      */
     public void deleteNode(Node node) {
-        add("delete fixed node", new Effect() {
+        add("delete fixed node", (graph, obsoleteNodes) -> {
+            if (node instanceof FixedWithNextNode) {
+                GraphUtil.unlinkFixedNode((FixedWithNextNode) node);
+            }
+            obsoleteNodes.add(node);
+        });
+    }
+
+    public void deleteAndKillExceptionEdge(WithExceptionNode withExceptionNode) {
+        add("delete and kill exception edge", new Effect() {
             @Override
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                if (node instanceof FixedWithNextNode) {
-                    GraphUtil.unlinkFixedNode((FixedWithNextNode) node);
-                } else if (node instanceof WithExceptionNode && node.isAlive()) {
-                    WithExceptionNode withExceptionNode = (WithExceptionNode) node;
+                if (withExceptionNode.isAlive()) {
                     AbstractBeginNode next = withExceptionNode.next();
                     GraphUtil.unlinkAndKillExceptionEdge(withExceptionNode);
                     if (next.hasNoUsages() && next instanceof MemoryKill) {
@@ -192,12 +198,11 @@ public final class GraphEffectList extends EffectList {
                     }
                     obsoleteNodes.add(withExceptionNode);
                 }
-                obsoleteNodes.add(node);
             }
 
             @Override
             public boolean isCfgKill() {
-                return node instanceof WithExceptionNode;
+                return true;
             }
         });
     }
