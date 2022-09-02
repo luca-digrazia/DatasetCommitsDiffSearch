@@ -72,7 +72,6 @@ import com.oracle.truffle.api.nodes.Node;
  * {@link CallTarget call target}, or that the stack trace will not be used.
  *
  * @see #getStackTrace() getStackTrace() to retrieve the stacktrace from a {@link Throwable}.
- * @since 1.0
  */
 @SuppressWarnings("serial")
 public final class TruffleStackTrace extends Exception {
@@ -103,9 +102,6 @@ public final class TruffleStackTrace extends Exception {
         }
     }
 
-    /**
-     * @since 1.0
-     */
     @SuppressWarnings("sync-override")
     @Override
     public Throwable fillInStackTrace() {
@@ -127,9 +123,6 @@ public final class TruffleStackTrace extends Exception {
         }
     }
 
-    /**
-     * @since 1.0
-     */
     @Override
     public String toString() {
         return "Attached Guest Language Frames (" + frames.size() + ")";
@@ -144,11 +137,11 @@ public final class TruffleStackTrace extends Exception {
      * {@link TruffleException#getStackTraceElementLimit()}.
      *
      * @param throwable the throwable instance to look for guest language frames
-     * @since 1.0
+     * @since 0.27
      */
     @TruffleBoundary
-    public static List<TruffleStackTraceElement> getStacktrace(Throwable throwable) {
-        TruffleStackTrace stack = fillIn(throwable);
+    public static List<TruffleStackTraceElement> getStacktrace(Throwable t) {
+        TruffleStackTrace stack = fillIn(t);
         if (stack != null) {
             return stack.frames;
         }
@@ -210,14 +203,14 @@ public final class TruffleStackTrace extends Exception {
      * @since 1.0
      */
     @TruffleBoundary
-    public static TruffleStackTrace fillIn(Throwable throwable) {
-        if (throwable instanceof ControlFlowException) {
+    public static TruffleStackTrace fillIn(Throwable t) {
+        if (t instanceof ControlFlowException) {
             return EMPTY;
         }
 
-        LazyStackTrace lazy = findImpl(throwable);
+        LazyStackTrace lazy = findImpl(t);
         if (lazy == null) {
-            Throwable insertCause = findInsertCause(throwable);
+            Throwable insertCause = findInsertCause(t);
             if (insertCause == null) {
                 return null;
             }
@@ -230,8 +223,8 @@ public final class TruffleStackTrace extends Exception {
 
         int stackFrameLimit;
         Node topCallSite;
-        if (throwable instanceof TruffleException) {
-            TruffleException te = (TruffleException) throwable;
+        if (t instanceof TruffleException) {
+            TruffleException te = (TruffleException) t;
             topCallSite = te.getLocation();
             stackFrameLimit = te.getStackTraceElementLimit();
         } else {
