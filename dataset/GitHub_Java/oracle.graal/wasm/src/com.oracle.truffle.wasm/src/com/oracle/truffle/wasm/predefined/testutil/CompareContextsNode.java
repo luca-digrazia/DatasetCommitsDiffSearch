@@ -31,15 +31,14 @@ package com.oracle.truffle.wasm.predefined.testutil;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.wasm.binary.Globals;
-import com.oracle.truffle.wasm.binary.WasmCodeEntry;
-import com.oracle.truffle.wasm.binary.WasmLanguage;
-import com.oracle.truffle.wasm.binary.WasmVoidResult;
-import com.oracle.truffle.wasm.binary.exception.WasmExecutionException;
-import com.oracle.truffle.wasm.binary.memory.WasmMemory;
+import com.oracle.truffle.wasm.Globals;
+import com.oracle.truffle.wasm.WasmCodeEntry;
+import com.oracle.truffle.wasm.WasmLanguage;
+import com.oracle.truffle.wasm.WasmVoidResult;
+import com.oracle.truffle.wasm.exception.WasmExecutionException;
+import com.oracle.truffle.wasm.memory.WasmMemory;
 import com.oracle.truffle.wasm.predefined.WasmPredefinedRootNode;
-
-import static com.oracle.truffle.wasm.predefined.testutil.SaveContextNode.*;
+import com.oracle.truffle.wasm.predefined.testutil.SaveContextNode.ContextState;
 
 /**
  * Records the context state (memory and global variables) into a custom object.
@@ -79,7 +78,7 @@ public class CompareContextsNode extends WasmPredefinedRootNode {
             long last = lastGlobals.loadAsLong(address);
             if (first != last) {
                 throw new WasmExecutionException(this, "Mismatch in global at " + address + ". " +
-                        "Reference " + first + ", actual " + last);
+                                "Reference " + first + ", actual " + last);
             }
         }
     }
@@ -90,9 +89,12 @@ public class CompareContextsNode extends WasmPredefinedRootNode {
         if (firstMemory == null && lastMemory == null) {
             return;
         }
+        if (firstMemory == null || lastMemory == null) {
+            throw new WasmExecutionException(this, "One of the memories is null.");
+        }
         if (firstMemory.byteSize() != lastMemory.byteSize()) {
             throw new WasmExecutionException(this, "Mismatch in memory lengths: " + firstMemory.byteSize() + " vs " +
-                    lastMemory.byteSize());
+                            lastMemory.byteSize());
         }
         for (int ptr = 0; ptr < firstMemory.byteSize(); ptr++) {
             byte first = (byte) firstMemory.load_i32_8s(ptr);
@@ -100,8 +102,8 @@ public class CompareContextsNode extends WasmPredefinedRootNode {
             if (first != last) {
                 long from = (ptr - 100) / 8 * 8;
                 throw new WasmExecutionException(this, "Memory mismatch.\n" +
-                        "-- Reference --\n" + firstMemory.hexView(from, 200) + "\n" +
-                        "-- Actual --\n" + firstMemory.hexView(from, 200) + "\n");
+                                "-- Reference --\n" + firstMemory.hexView(from, 200) + "\n" +
+                                "-- Actual --\n" + firstMemory.hexView(from, 200) + "\n");
             }
         }
     }

@@ -285,7 +285,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
 
     private ContextReference<WasmContext> contextReference() {
         if (rawContextReference == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             rawContextReference = lookupContextReference(WasmLanguage.class);
         }
         return rawContextReference;

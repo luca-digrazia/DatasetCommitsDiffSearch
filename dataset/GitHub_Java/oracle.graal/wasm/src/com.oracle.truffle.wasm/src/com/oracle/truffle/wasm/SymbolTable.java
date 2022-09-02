@@ -328,7 +328,7 @@ public class SymbolTable {
         return numArgs;
     }
 
-    public byte getFunctionTypeReturnType(int typeIndex) {
+    byte getFunctionTypeReturnType(int typeIndex) {
         int typeOffset = offsets[typeIndex];
         int numArgTypes = typeData[typeOffset + 0];
         int numReturnTypes = typeData[typeOffset + 1];
