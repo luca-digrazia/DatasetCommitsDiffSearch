@@ -60,7 +60,6 @@ import com.oracle.svm.core.stack.SubstrateStackIntrospection;
 import com.oracle.svm.hosted.c.GraalAccess;
 import com.oracle.svm.truffle.TruffleFeature;
 import com.oracle.truffle.api.CompilerAsserts;
-import com.oracle.truffle.api.impl.ThreadLocalHandshake;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.utilities.TriState;
 import java.util.function.Supplier;
@@ -116,11 +115,6 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
     @Platforms(Platform.HOSTED_ONLY.class)
     public void resetHosted() {
         truffleCompiler = null;
-    }
-
-    @Override
-    public ThreadLocalHandshake getThreadLocalHandshake() {
-        return SubstrateThreadLocalHandshake.INSTANCE;
     }
 
     private void initializeAtRuntime(OptimizedCallTarget callTarget) {
