@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime.library.internal;
 
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary.Abstract;
 import com.oracle.truffle.api.library.GenerateLibrary.DefaultExport;
@@ -43,7 +42,6 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
  * Library for container objects that behave like raw memory that can be read.
  */
 @GenerateLibrary
-@GenerateAOT
 @DefaultExport(LLVMManagedAccessDefaults.VirtualAlloc.class)
 @DefaultExport(LLVMManagedAccessDefaults.FallbackRead.class)
 public abstract class LLVMManagedReadLibrary extends Library {
