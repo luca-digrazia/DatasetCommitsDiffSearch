@@ -28,16 +28,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import org.graalvm.compiler.phases.common.LazyValue;
-
 import com.oracle.svm.configure.config.ConfigurationMemberKind;
 import com.oracle.svm.configure.config.ConfigurationMethod;
 import com.oracle.svm.configure.config.ProxyConfiguration;
 import com.oracle.svm.configure.config.ResourceConfiguration;
 import com.oracle.svm.configure.config.SignatureUtil;
 import com.oracle.svm.configure.config.TypeConfiguration;
-
-import jdk.vm.ci.meta.MetaUtil;
+import org.graalvm.compiler.phases.common.LazyValue;
 
 class ReflectionProcessor extends AbstractProcessor {
     private final AccessAdvisor advisor;
@@ -185,12 +182,7 @@ class ReflectionProcessor extends AbstractProcessor {
             }
 
             case "newInstance": {
-                if (clazz.equals("java.lang.reflect.Array")) { // reflective array instantiation
-                    String qualifiedJavaName = MetaUtil.internalNameToJava((String) args.get(0), true, false);
-                    configuration.getOrCreateType(qualifiedJavaName);
-                } else {
-                    configuration.getOrCreateType(clazz).addMethod(ConfigurationMethod.CONSTRUCTOR_NAME, "()V", ConfigurationMemberKind.DECLARED);
-                }
+                configuration.getOrCreateType(clazz).addMethod(ConfigurationMethod.CONSTRUCTOR_NAME, "()V", ConfigurationMemberKind.DECLARED);
                 break;
             }
         }
