@@ -59,8 +59,6 @@ import com.oracle.truffle.regex.charset.CodePointSetAccumulator;
 import com.oracle.truffle.regex.charset.Range;
 import com.oracle.truffle.regex.charset.UnicodeProperties;
 import com.oracle.truffle.regex.tregex.parser.CaseFoldTable;
-import com.oracle.truffle.regex.tregex.string.Encodings;
-import com.oracle.truffle.regex.tregex.util.Exceptions;
 import com.oracle.truffle.regex.util.CompilationFinalBitSet;
 
 /**
@@ -120,7 +118,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
 
         // \d and \D as CodePointSets (currently not needed, included for consistency)
         UNICODE_CHAR_CLASS_SETS.put('d', UnicodeProperties.getProperty("General_Category=Decimal_Number"));
-        UNICODE_CHAR_CLASS_SETS.put('D', UnicodeProperties.getProperty("General_Category=Decimal_Number").createInverse(Encodings.UTF_32));
+        UNICODE_CHAR_CLASS_SETS.put('D', UnicodeProperties.getProperty("General_Category=Decimal_Number").createInverse());
 
         // Spaces: \s
         // Python accepts characters with either the Space_Separator General Category
@@ -138,7 +136,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         // contents of the resulting set.
         CodePointSet unicodeSpaces = UnicodeProperties.getProperty("White_Space");
         CodePointSet spaces = unicodeSpaces.union(CodePointSet.createNoDedup('\u001c', '\u001f'));
-        CodePointSet nonSpaces = spaces.createInverse(Encodings.UTF_32);
+        CodePointSet nonSpaces = spaces.createInverse();
         UNICODE_CHAR_CLASS_SETS.put('s', spaces);
         UNICODE_CHAR_CLASS_SETS.put('S', nonSpaces);
 
@@ -168,7 +166,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
         CodePointSet numericExtras = CodePointSet.createNoDedup(0xf96b, 0xf973, 0xf978, 0xf9b2, 0xf9d1, 0xf9d3, 0xf9fd, 0x2f890);
         CodePointSet numeric = UnicodeProperties.getProperty("General_Category=Number").union(numericExtras);
         CodePointSet wordChars = alpha.union(numeric).union(CodePointSet.create('_'));
-        CodePointSet nonWordChars = wordChars.createInverse(Encodings.UTF_32);
+        CodePointSet nonWordChars = wordChars.createInverse();
         UNICODE_CHAR_CLASS_SETS.put('w', wordChars);
         UNICODE_CHAR_CLASS_SETS.put('W', nonWordChars);
 
@@ -397,7 +395,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
             case Bytes:
                 return inPattern.charAt(position);
             default:
-                throw Exceptions.shouldNotReachHere();
+                throw new IllegalStateException();
         }
     }
 
@@ -1021,7 +1019,7 @@ public final class PythonFlavorProcessor implements RegexFlavorProcessor {
                             escapeLength = 8;
                             break;
                         default:
-                            throw Exceptions.shouldNotReachHere();
+                            throw new IllegalStateException();
                     }
                     String code = getUpTo(escapeLength, PythonFlavorProcessor::isHexDigit);
                     if (code.length() < escapeLength) {
