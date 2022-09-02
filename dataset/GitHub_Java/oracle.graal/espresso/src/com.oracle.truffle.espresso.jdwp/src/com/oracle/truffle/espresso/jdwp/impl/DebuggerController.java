@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -281,17 +281,6 @@ public final class DebuggerController implements ContextsListener {
         SuspendedInfo susp = suspendedInfos.get(guestThread);
         if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
             susp.getEvent().prepareUnwindFrame(frameToPop.getDebugStackFrame());
-            setCommandRequestId(guestThread, packetId, SuspendStrategy.NONE, true);
-            resume(guestThread, false);
-            return true;
-        }
-        return false;
-    }
-
-    public boolean forceEarlyReturn(Object guestThread, CallFrame frameToPop, Object returnValue, int packetId) {
-        SuspendedInfo susp = suspendedInfos.get(guestThread);
-        if (susp != null && !(susp instanceof UnknownSuspendedInfo)) {
-            susp.getEvent().prepareUnwindFrame(frameToPop.getDebugStackFrame(), returnValue);
             setCommandRequestId(guestThread, packetId, SuspendStrategy.NONE, true);
             resume(guestThread, false);
             return true;
@@ -681,14 +670,13 @@ public final class DebuggerController implements ContextsListener {
         }
     }
 
-    public ThreadJob<?> postJobForThread(ThreadJob<?> job) {
-        threadJobs.put(job.getThread(), job);
+    public void postJobForThread(ThreadJob<?> job) {
         SimpleLock lock = getSuspendLock(job.getThread());
         synchronized (lock) {
+            threadJobs.put(job.getThread(), job);
             lock.release();
             lock.notifyAll();
         }
-        return job;
     }
 
     public CallFrame[] captureCallFramesBeforeBlocking(Object guestThread) {

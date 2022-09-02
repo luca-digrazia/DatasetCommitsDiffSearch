@@ -23,7 +23,6 @@
 package com.oracle.truffle.espresso.nodes.quick.invoke;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -52,7 +51,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
     @Specialization(limit = "INLINE_CACHE_SIZE_LIMIT", guards = "receiver.getKlass() == cachedKlass", assumptions = "resolvedMethod.getAssumption()")
     Object callVirtualDirect(StaticObject receiver, Object[] args,
                     @Cached("receiver.getKlass()") Klass cachedKlass,
-                    @Cached("methodLookup(receiver)") MethodVersion resolvedMethod,
+                    @Cached("methodLookup(receiver, resolutionSeed)") MethodVersion resolvedMethod,
                     @Cached("create(resolvedMethod.getCallTargetNoInit())") DirectCallNode directCallNode) {
         // getCallTarget doesn't ensure declaring class is initialized
         // so we need the below check prior to executing the method
@@ -67,7 +66,7 @@ public abstract class InvokeVirtualNode extends QuickNode {
     Object callVirtualIndirect(StaticObject receiver, Object[] arguments,
                     @Cached("create()") IndirectCallNode indirectCallNode) {
         // vtable lookup.
-        MethodVersion target = methodLookup(receiver);
+        MethodVersion target = methodLookup(receiver, resolutionSeed);
         if (!target.getMethod().hasCode()) {
             enterExceptionProfile();
             Meta meta = receiver.getKlass().getMeta();
@@ -83,45 +82,39 @@ public abstract class InvokeVirtualNode extends QuickNode {
         this.resultAt = top - Signatures.slotsForParameters(resolutionSeed.getParsedSignature()) - 1; // -receiver;
     }
 
-    MethodVersion methodLookup(StaticObject receiver) {
+    static MethodVersion methodLookup(StaticObject receiver, Method resolutionSeed) {
         // Suprisingly, invokeVirtuals can try to invoke interface methods, even non-default
         // ones.
         // Good thing is, miranda methods are taken care of at vtable creation !
         if (resolutionSeed.isRemovedByRedefition()) {
-            // accept a slow path once the method has been removed
-            // put method behind a boundary to avoid a deopt loop
-            return handleRemovedMethod(receiver, resolutionSeed);
-        }
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            // do not run while a redefinition is in progress
+            try {
+                ClassRedefinition.lock();
 
+                // first check to see if there's a compatible new method before
+                // bailing out with a NoSuchMethodError
+                Klass receiverKlass = receiver.getKlass();
+                Method method = receiverKlass.lookupMethod(resolutionSeed.getName(), resolutionSeed.getRawSignature(), receiverKlass);
+                Meta meta = resolutionSeed.getMeta();
+                if (method == null) {
+                    throw Meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError,
+                                    meta.toGuestString(resolutionSeed.getDeclaringKlass().getNameAsString() + "." + resolutionSeed.getName() + resolutionSeed.getRawSignature()));
+                } else if (method.isStatic()) {
+                    throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "expected non-static method: " + method.getName());
+                } else {
+                    return method.getMethodVersion();
+                }
+            } finally {
+                ClassRedefinition.unlock();
+            }
+        }
         Klass receiverKlass = receiver.getKlass();
         int vtableIndex = resolutionSeed.getVTableIndex();
         if (receiverKlass.isArray()) {
             return receiverKlass.getSuperKlass().vtableLookup(vtableIndex).getMethodVersion();
         }
         return receiverKlass.vtableLookup(vtableIndex).getMethodVersion();
-    }
-
-    @TruffleBoundary
-    private static Method.MethodVersion handleRemovedMethod(StaticObject receiver, Method resolutionSeed) {
-        // do not run while a redefinition is in progress
-        try {
-            ClassRedefinition.lock();
-            // first check to see if there's a compatible new method before
-            // bailing out with a NoSuchMethodError
-            Klass receiverKlass = receiver.getKlass();
-            Method method = receiverKlass.lookupMethod(resolutionSeed.getName(), resolutionSeed.getRawSignature(), receiverKlass);
-            Meta meta = resolutionSeed.getMeta();
-            if (method == null) {
-                throw Meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError,
-                        meta.toGuestString(resolutionSeed.getDeclaringKlass().getNameAsString() + "." + resolutionSeed.getName() + resolutionSeed.getRawSignature()));
-            } else if (method.isStatic()) {
-                throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "expected non-static method: " + method.getName());
-            } else {
-                return method.getMethodVersion();
-            }
-        } finally {
-            ClassRedefinition.unlock();
-        }
     }
 
     @Override
