@@ -25,8 +25,6 @@ package com.oracle.truffle.espresso.substitutions;
 
 import java.nio.ByteBuffer;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
@@ -58,7 +56,6 @@ public final class Target_sun_misc_Perf {
     public static final int U_Last = U_Hertz;
     // };
 
-    @TruffleBoundary
     private static byte[] longToBytes(long x) {
         ByteBuffer buffer = ByteBuffer.wrap(new byte[8]);
         buffer.putLong(0, x);
