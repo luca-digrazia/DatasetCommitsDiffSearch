@@ -37,6 +37,7 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.phases.util.Providers;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import org.graalvm.options.OptionValues;
 
@@ -61,7 +62,7 @@ public final class HotSpotPartialEvaluator extends PartialEvaluator {
     @Override
     protected void initialize(OptionValues options) {
         super.initialize(options);
-        encodedGraphCacheCapacity = options.get(PolyglotCompilerOptions.EncodedGraphCacheCapacity);
+        encodedGraphCacheCapacity = TruffleCompilerOptions.getPolyglotOptionValue(options, PolyglotCompilerOptions.EncodedGraphCacheCapacity);
     }
 
     @Override

@@ -29,16 +29,12 @@ import org.graalvm.word.Pointer;
 
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.annotate.UnknownObjectField;
-import com.oracle.svm.core.annotate.UnknownPrimitiveField;
 
 /**
  * Information on the multiple partitions that make up the image heap, which don't necessarily form
  * a contiguous block of memory (there can be holes in between), and their boundaries.
  */
 public final class ImageHeapInfo {
-    /** Indicates no chunk with {@link #initialize} chunk offset parameters. */
-    public static final long NO_CHUNK = -1;
-
     @UnknownObjectField(types = Object.class) public Object firstReadOnlyPrimitiveObject;
     @UnknownObjectField(types = Object.class) public Object lastReadOnlyPrimitiveObject;
 
@@ -63,9 +59,6 @@ public final class ImageHeapInfo {
     @UnknownObjectField(types = Object.class) public Object firstObject;
     @UnknownObjectField(types = Object.class) public Object lastObject;
 
-    @UnknownPrimitiveField public long offsetOfFirstAlignedChunkWithRememberedSet;
-    @UnknownPrimitiveField public long offsetOfFirstUnalignedChunkWithRememberedSet;
-
     public ImageHeapInfo() {
     }
 
@@ -73,10 +66,7 @@ public final class ImageHeapInfo {
     public void initialize(Object firstReadOnlyPrimitiveObject, Object lastReadOnlyPrimitiveObject, Object firstReadOnlyReferenceObject, Object lastReadOnlyReferenceObject,
                     Object firstReadOnlyRelocatableObject, Object lastReadOnlyRelocatableObject, Object firstWritablePrimitiveObject, Object lastWritablePrimitiveObject,
                     Object firstWritableReferenceObject, Object lastWritableReferenceObject, Object firstWritableHugeObject, Object lastWritableHugeObject,
-                    Object firstReadOnlyHugeObject, Object lastReadOnlyHugeObject, long offsetOfFirstAlignedChunkWithRememberedSet, long offsetOfFirstUnalignedChunkWithRememberedSet) {
-        assert offsetOfFirstAlignedChunkWithRememberedSet == NO_CHUNK || offsetOfFirstAlignedChunkWithRememberedSet >= 0;
-        assert offsetOfFirstUnalignedChunkWithRememberedSet == NO_CHUNK || offsetOfFirstUnalignedChunkWithRememberedSet >= 0;
-
+                    Object firstReadOnlyHugeObject, Object lastReadOnlyHugeObject) {
         this.firstReadOnlyPrimitiveObject = firstReadOnlyPrimitiveObject;
         this.lastReadOnlyPrimitiveObject = lastReadOnlyPrimitiveObject;
         this.firstReadOnlyReferenceObject = firstReadOnlyReferenceObject;
@@ -91,8 +81,6 @@ public final class ImageHeapInfo {
         this.lastWritableHugeObject = lastWritableHugeObject;
         this.firstReadOnlyHugeObject = firstReadOnlyHugeObject;
         this.lastReadOnlyHugeObject = lastReadOnlyHugeObject;
-        this.offsetOfFirstAlignedChunkWithRememberedSet = offsetOfFirstAlignedChunkWithRememberedSet;
-        this.offsetOfFirstUnalignedChunkWithRememberedSet = offsetOfFirstUnalignedChunkWithRememberedSet;
 
         // Compute boundaries for checks considering partitions can be empty (first == last == null)
         Object firstReadOnlyObject = (firstReadOnlyPrimitiveObject != null) ? firstReadOnlyPrimitiveObject

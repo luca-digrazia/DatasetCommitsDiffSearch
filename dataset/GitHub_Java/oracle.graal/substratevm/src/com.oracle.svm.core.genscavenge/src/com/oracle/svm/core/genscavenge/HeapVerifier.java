@@ -415,18 +415,18 @@ public final class HeapVerifier {
         AlignedHeapChunk.AlignedHeader aChunk = space.getFirstAlignedHeapChunk();
         while (aChunk.isNonNull()) {
             Pointer start = AlignedHeapChunk.getObjectsStart(aChunk);
-            if (start.belowOrEqual(p) && p.belowThan(HeapChunk.getTopPointer(aChunk))) {
+            if (start.belowOrEqual(p) && p.belowThan(aChunk.getTop())) {
                 return true;
             }
-            aChunk = HeapChunk.getNext(aChunk);
+            aChunk = aChunk.getNext();
         }
         UnalignedHeapChunk.UnalignedHeader uChunk = space.getFirstUnalignedHeapChunk();
         while (uChunk.isNonNull()) {
             Pointer start = UnalignedHeapChunk.getObjectStart(uChunk);
-            if (start.belowOrEqual(p) && p.belowThan(HeapChunk.getTopPointer(uChunk))) {
+            if (start.belowOrEqual(p) && p.belowThan(uChunk.getTop())) {
                 return true;
             }
-            uChunk = HeapChunk.getNext(uChunk);
+            uChunk = uChunk.getNext();
         }
         return false;
     }

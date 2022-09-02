@@ -374,7 +374,6 @@ public final class HotSpotTruffleCompilerImpl extends TruffleCompilerImpl implem
         getPartialEvaluator().purgeEncodedGraphCache();
     }
 
-    @SuppressWarnings("try")
     @Override
     protected void handleBailout(DebugContext debug, StructuredGraph graph, BailoutException bailout) {
         /*
