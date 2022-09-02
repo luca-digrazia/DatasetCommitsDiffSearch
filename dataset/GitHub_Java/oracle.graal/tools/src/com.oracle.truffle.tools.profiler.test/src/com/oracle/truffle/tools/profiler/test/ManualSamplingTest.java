@@ -35,8 +35,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
 import org.graalvm.polyglot.Context;
@@ -60,6 +60,7 @@ import com.oracle.truffle.api.test.ReflectionUtils;
 import com.oracle.truffle.api.test.polyglot.AbstractPolyglotTest;
 import com.oracle.truffle.api.test.polyglot.ProxyLanguage;
 import com.oracle.truffle.tools.profiler.CPUSampler;
+import com.oracle.truffle.tools.profiler.CPUSampler.Mode;
 import com.oracle.truffle.tools.profiler.StackTraceEntry;
 
 @Ignore("Needs to rewritten")
@@ -122,6 +123,7 @@ public class ManualSamplingTest extends AbstractPolyglotTest {
 
         sampler = CPUSampler.find(context.getEngine());
         sampler.setFilter(DEFAULT_FILTER);
+        sampler.setMode(Mode.ROOTS);
     }
 
     @Test
@@ -143,6 +145,7 @@ public class ManualSamplingTest extends AbstractPolyglotTest {
     @Test
     @Ignore("We don't do statements anymore")
     public void testLazySingleThreadStatements() throws InterruptedException {
+        sampler.setMode(Mode.STATEMENTS);
         testSampling(new String[]{"ROOT(STATEMENT(CALL(sample)))"
         }, (samples) -> {
             assertEquals(1, samples.size());
@@ -182,6 +185,7 @@ public class ManualSamplingTest extends AbstractPolyglotTest {
 
     @Test
     public void testSingleThreadStatements() throws InterruptedException {
+        sampler.setMode(Mode.STATEMENTS);
         testSampling(new String[]{"ROOT(" +
                         "DEFINE(bar,ROOT(STATEMENT(CALL(sample))))," +
                         "DEFINE(baz,ROOT(STATEMENT(CALL(bar))))," +

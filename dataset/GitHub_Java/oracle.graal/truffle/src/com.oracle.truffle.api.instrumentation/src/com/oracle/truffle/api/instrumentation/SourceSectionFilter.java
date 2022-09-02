@@ -139,7 +139,6 @@ public final class SourceSectionFilter {
 
     /**
      * TODO: javadoc.
-     * 
      * @param node
      * @param sourceSection
      * @return todo
