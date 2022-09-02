@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -57,7 +57,7 @@ public final class LLVMSuite extends BaseSuiteHarness {
     @Parameters(name = "{1}")
     public static Collection<Object[]> data() {
         Set<String> blacklist = getBlacklist();
-        Collection<Object[]> testlist = BaseTestHarness.collectTestCases(LLVM_CONFIG_DIR, LLVM_SUITE_DIR, LLVM_SOURCE_DIR);
+        Collection<Object[]> testlist = collectTestCases(LLVM_CONFIG_DIR, LLVM_SUITE_DIR, LLVM_SOURCE_DIR);
         testlist.removeIf(t -> blacklist.contains(t[1]));
         return testlist;
     }
