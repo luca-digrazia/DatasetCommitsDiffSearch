@@ -5,15 +5,13 @@ import com.oracle.truffle.espresso.substitutions.Target_java_lang_invoke_MethodH
 import java.util.ArrayList;
 import java.util.Arrays;
 
-/**
- * Helper for creating virtual tables in ObjectKlass
- */
+// Helper for creating virtual tables
 public class VirtualTable {
 
     private VirtualTable() {
     }
 
-    public static Method[] create(ObjectKlass superKlass, Method[] declaredMethods, ArrayList<Method> mirandas) {
+    public static Method[] create(ObjectKlass superKlass, Method[] declaredMethods) {
         ArrayList<Method> tmp;
         if (superKlass != null) {
             tmp = new ArrayList<>(Arrays.asList(superKlass.getVTable()));
@@ -25,7 +23,7 @@ public class VirtualTable {
         for (Method m : declaredMethods) {
             if (m.getRefKind() == Target_java_lang_invoke_MethodHandleNatives.REF_invokeVirtual) {
                 if (superKlass != null) {
-                    override = superKlass.lookupVirtualMethod(m.getName(), m.getRawSignature());
+                    override = superKlass.lookupMethod(m.getName(), m.getRawSignature());
                 } else {
                     override = null;
                 }
@@ -38,13 +36,6 @@ public class VirtualTable {
                     m.setVTableIndex(pos);
                     tmp.add(m);
                 }
-            }
-        }
-        if (!mirandas.isEmpty()) {
-            pos = tmp.size();
-            tmp.addAll(mirandas);
-            for (Method m : mirandas) {
-                m.setVTableIndex(pos++);
             }
         }
         return tmp.toArray(Method.EMPTY_ARRAY);

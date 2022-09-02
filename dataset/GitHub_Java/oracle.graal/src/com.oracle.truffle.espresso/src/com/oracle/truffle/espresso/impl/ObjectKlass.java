@@ -24,7 +24,6 @@
 package com.oracle.truffle.espresso.impl;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -71,8 +70,7 @@ public final class ObjectKlass extends Klass {
     private final Klass hostKlass;
 
     private final Method[] vtable;
-    private final Method[][] itable;
-    private final Klass[] iKlassTable;
+    private final InterfaceTables itable;
 
     private int initState = LINKED;
 
@@ -119,20 +117,11 @@ public final class ObjectKlass extends Klass {
         this.declaredMethods = methods;
 
         if (this.isInterface()) {
-            InterfaceTables.CreationResult cr = InterfaceTables.create(this, superInterfaces, declaredMethods);
-            this.itable = cr.getItable();
-            this.iKlassTable = cr.getiKlass();
+            this.itable = new InterfaceTables(this, superInterfaces, declaredMethods);
             this.vtable = null;
         } else {
-            InterfaceTables.CreationResult cr = InterfaceTables.create(superKlass, superInterfaces, this);
-            this.itable = cr.getItable();
-            this.iKlassTable = cr.getiKlass();
-            this.vtable = VirtualTable.create(superKlass, declaredMethods, cr.getMirandas());
-            if (!cr.getMirandas().isEmpty()) {
-                ArrayList<Method> declaredMethodAndMirandas = new ArrayList<>(Arrays.asList(methods));
-                declaredMethodAndMirandas.addAll(cr.getMirandas());
-                this.declaredMethods = declaredMethodAndMirandas.toArray(Method.EMPTY_ARRAY);
-            }
+            this.vtable = VirtualTable.create(superKlass, declaredMethods);
+            this.itable = new InterfaceTables(superKlass, superInterfaces, this);
         }
     }
 
@@ -342,31 +331,11 @@ public final class ObjectKlass extends Klass {
 
     @Override
     public final Method lookupMethod(Klass interfKlass, int index) {
-        assert (index >= 0) : "Undeclared interface method";
-        int i = 0;
-        for (Klass k : iKlassTable) {
-            if (k == interfKlass) {
-                return itable[i][index];
-            }
-            i++;
-        }
-        return null;
+        assert (index >= 0) : "Undeclared interface method"; // At this point, we should be sure to
+        return itable.lookupMethod(interfKlass, index);
     }
 
-    Method[][] getItable() {
+    InterfaceTables getItable() {
         return itable;
-    }
-
-    Klass[] getiKlassTable() {
-        return iKlassTable;
-    }
-
-    final Method lookupVirtualMethod(Symbol<Name> name, Symbol<Symbol.Signature> signature) {
-        for (Method m : vtable) {
-            if (m.getName() == name && m.getRawSignature() == signature) {
-                return m;
-            }
-        }
-        return null;
     }
 }

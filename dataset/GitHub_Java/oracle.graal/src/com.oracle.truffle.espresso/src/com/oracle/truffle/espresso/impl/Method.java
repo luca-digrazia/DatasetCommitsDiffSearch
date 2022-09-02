@@ -123,10 +123,6 @@ public final class Method implements ModifiersProvider, ContextAccess {
         return parsedSignature;
     }
 
-    Method(ObjectKlass declaringKlass, Method method) {
-        this(declaringKlass, method.linkedMethod, method.rawSignature);
-    }
-
     Method(ObjectKlass declaringKlass, LinkedMethod linkedMethod) {
         this(declaringKlass, linkedMethod, linkedMethod.getRawSignature());
     }
