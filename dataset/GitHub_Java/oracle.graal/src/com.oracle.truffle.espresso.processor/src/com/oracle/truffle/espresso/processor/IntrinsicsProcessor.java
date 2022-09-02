@@ -37,14 +37,12 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
         }
     }
 
-    void getEspressoTypes(ExecutableElement inner, List<String> parameterTypeNames, List<Boolean> referenceTypes) {
+    static void getEspressoTypes(ExecutableElement inner, List<String> parameterTypeNames, List<Boolean> referenceTypes) {
         for (VariableElement parameter : inner.getParameters()) {
-            if (getAnnotation(parameter.asType(), guestCall) == null) {
-                String arg = parameter.asType().toString();
-                String result = extractSimpleType(arg);
-                parameterTypeNames.add(result);
-                referenceTypes.add((parameter.asType() instanceof ReferenceType));
-            }
+            String arg = parameter.asType().toString();
+            String result = extractSimpleType(arg);
+            parameterTypeNames.add(result);
+            referenceTypes.add((parameter.asType() instanceof ReferenceType));
         }
     }
 
@@ -96,19 +94,22 @@ public abstract class IntrinsicsProcessor extends EspressoProcessor {
         }
     }
 
-    String extractInvocation(String className, String methodName, int nParameters, boolean isStatic, List<String> guestCalls) {
+    String extractInvocation(String className, String methodName, int nParameters, boolean isStatic) {
         StringBuilder str = new StringBuilder();
         if (isStatic) {
             str.append(className).append(".").append(methodName).append("(");
         } else {
             str.append(ENV_NAME).append(".").append(methodName).append("(");
         }
-        boolean first = true;
+        boolean notFirst = false;
         for (int i = 0; i < nParameters; i++) {
-            first = checkFirst(str, first);
+            if (notFirst) {
+                str.append(", ");
+            } else {
+                notFirst = true;
+            }
             str.append(ARG_NAME).append(i);
         }
-        str.append(getGuestCallsForInvoke(guestCalls, first));
         str.append(");\n");
         return str.toString();
     }

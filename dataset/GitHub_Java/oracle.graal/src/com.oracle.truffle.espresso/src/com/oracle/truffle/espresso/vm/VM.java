@@ -45,8 +45,6 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 
-import com.oracle.truffle.api.nodes.DirectCallNode;
-import com.oracle.truffle.espresso.substitutions.GuestCall;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
@@ -183,16 +181,16 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
     }
 
-    private static Map<String, VMSubstitutor.Factory> buildVmMethods() {
-        Map<String, VMSubstitutor.Factory> map = new HashMap<>();
-        for (VMSubstitutor.Factory method : VMCollector.getCollector()) {
+    private static Map<String, VMSubstitutor> buildVmMethods() {
+        Map<String, VMSubstitutor> map = new HashMap<>();
+        for (VMSubstitutor method : VMCollector.getInstance()) {
             assert !map.containsKey(method.methodName()) : "VmImpl for " + method + " already exists";
             map.put(method.methodName(), method);
         }
         return Collections.unmodifiableMap(map);
     }
 
-    private static final Map<String, VMSubstitutor.Factory> vmMethods = buildVmMethods();
+    private static final Map<String, VMSubstitutor> vmMethods = buildVmMethods();
 
     public static VM create(JniEnv jniEnv) {
         return new VM(jniEnv);
@@ -203,7 +201,7 @@ public final class VM extends NativeEnv implements ContextAccess {
     public static final int LOOKUP_VM_IMPL_PARAMETER_COUNT = 1;
 
     public TruffleObject lookupVmImpl(String methodName) {
-        VMSubstitutor.Factory m = vmMethods.get(methodName);
+        VMSubstitutor m = vmMethods.get(methodName);
         try {
             // Dummy placeholder for unimplemented/unknown methods.
             if (m == null) {
@@ -285,11 +283,10 @@ public final class VM extends NativeEnv implements ContextAccess {
         return self.copy();
     }
 
-    public Callback vmMethodWrapper(VMSubstitutor.Factory m) {
+    public Callback vmMethodWrapper(VMSubstitutor m) {
         int extraArg = (m.isJni()) ? 1 : 0;
-        return new Callback(m.parameterCount() + extraArg, new Callback.Function() {
-            @CompilerDirectives.CompilationFinal private VMSubstitutor subst = null;
 
+        return new Callback(m.parameterCount() + extraArg, new Callback.Function() {
             @Override
             @CompilerDirectives.TruffleBoundary
             public Object call(Object... args) {
@@ -299,11 +296,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                     // Substitute raw pointer by proper `this` reference.
                     // System.err.print("Call DEFINED method: " + m.getName() +
                     // Arrays.toString(shiftedArgs));
-                    if (subst == null) {
-                        CompilerDirectives.transferToInterpreterAndInvalidate();
-                        subst = m.create(getMeta());
-                    }
-                    return subst.invoke(VM.this, args);
+                    return m.invoke(VM.this, args);
                 } catch (EspressoException e) {
                     if (isJni) {
                         jniEnv.getThreadLocalPendingException().set(e.getException());
@@ -485,8 +478,7 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    public @Host(StackTraceElement.class) StaticObject JVM_GetStackTraceElement(@Host(Throwable.class) StaticObject self, int index,
-                    @GuestCall DirectCallNode StackTraceElement_init) {
+    public @Host(StackTraceElement.class) StaticObject JVM_GetStackTraceElement(@Host(Throwable.class) StaticObject self, int index) {
         Meta meta = getMeta();
         StaticObject ste = meta.StackTraceElement.allocateInstance();
         StaticObject backtrace = (StaticObject) meta.Throwable_backtrace.get(self);
@@ -496,7 +488,7 @@ public final class VM extends NativeEnv implements ContextAccess {
             return StaticObject.NULL;
         }
 
-        StackTraceElement_init.call(
+        meta.StackTraceElement_init.invokeDirect(
                         /* this */ ste,
                         /* declaringClass */ meta.toGuestString(MetaUtil.internalNameToJava(caller.getDeclaringKlass().getType().toString(), true, true)),
                         /* methodName */ meta.toGuestString(caller.getName()),
@@ -994,35 +986,27 @@ public final class VM extends NativeEnv implements ContextAccess {
     private StaticObject guestBox(Object elem) {
         if (elem instanceof Integer) {
             return (StaticObject) getMeta().Integer_valueOf.invokeDirect(null, (int) elem);
-// return (StaticObject) getMeta().Integer_valueOf_CallTarget.call((int) elem);
         }
         if (elem instanceof Boolean) {
             return (StaticObject) getMeta().Boolean_valueOf.invokeDirect(null, (boolean) elem);
-// return (StaticObject) getMeta().Boolean_valueOf_CallTarget.call((boolean) elem);
         }
         if (elem instanceof Byte) {
             return (StaticObject) getMeta().Byte_valueOf.invokeDirect(null, (byte) elem);
-// return (StaticObject) getMeta().Byte_valueOf_CallTarget.call((byte) elem);
         }
         if (elem instanceof Character) {
             return (StaticObject) getMeta().Character_valueOf.invokeDirect(null, (char) elem);
-// return (StaticObject) getMeta().Character_valueOf_CallTarget.call((char) elem);
         }
         if (elem instanceof Short) {
             return (StaticObject) getMeta().Short_valueOf.invokeDirect(null, (short) elem);
-// return (StaticObject) getMeta().Short_valueOf_CallTarget.call((short) elem);
         }
         if (elem instanceof Float) {
             return (StaticObject) getMeta().Float_valueOf.invokeDirect(null, (float) elem);
-// return (StaticObject) getMeta().Float_valueOf_CallTarget.call((float) elem);
         }
         if (elem instanceof Double) {
             return (StaticObject) getMeta().Double_valueOf.invokeDirect(null, (double) elem);
-// return (StaticObject) getMeta().Double_valueOf_CallTarget.call((double) elem);
         }
         if (elem instanceof Long) {
             return (StaticObject) getMeta().Long_valueOf.invokeDirect(null, (long) elem);
-// return (StaticObject) getMeta().Long_valueOf_CallTarget.call((long) elem);
         }
 
         throw EspressoError.shouldNotReachHere("Not a boxed type " + elem);
