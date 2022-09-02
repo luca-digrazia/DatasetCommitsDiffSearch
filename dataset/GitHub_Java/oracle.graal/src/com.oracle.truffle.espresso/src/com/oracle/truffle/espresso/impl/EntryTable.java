@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 
@@ -49,12 +50,14 @@ public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
             this.lock = lock;
         }
 
+        @TruffleBoundary
         private BlockLock enter() {
             lock.lock();
             return this;
         }
 
         @Override
+        @TruffleBoundary
         public void close() {
             lock.unlock();
         }
@@ -101,6 +104,7 @@ public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
      * otherwise.
      */
     @SuppressWarnings("try")
+    @TruffleBoundary
     public T lookup(Symbol<Name> name) {
         try (BlockLock block = read()) {
             return entries.get(name);
@@ -112,6 +116,7 @@ public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
      * is created and added into the table. This entry is then returned.
      */
     @SuppressWarnings("try")
+    @TruffleBoundary
     public T lookupOrCreate(Symbol<Name> name, K data) {
         T entry = lookup(name);
         if (entry != null) {
@@ -131,6 +136,7 @@ public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
      * returns null
      */
     @SuppressWarnings("try")
+    @TruffleBoundary
     public T createAndAddEntry(Symbol<Name> name, K data) {
         try (BlockLock block = write()) {
             if (lookup(name) != null) {

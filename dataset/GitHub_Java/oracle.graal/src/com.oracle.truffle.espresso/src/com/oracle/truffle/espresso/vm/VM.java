@@ -2342,7 +2342,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
     public void JVM_AddModuleExports(@Host(typeName = "Ljava/lang/Module") StaticObject from_module,
                     @Pointer TruffleObject pkgName,
                     @Host(typeName = "Ljava/lang/Module") StaticObject to_module,
@@ -2356,7 +2355,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
     public void JVM_AddModuleExportsToAllUnnamed(@Host(typeName = "Ljava/lang/Module") StaticObject from_module, @Pointer TruffleObject pkgName,
                     @InjectProfile SubstitutionProfiler profiler) {
         if (getUncached().isNull(pkgName)) {
@@ -2372,7 +2370,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
     public void JVM_AddModuleExportsToAll(@Host(typeName = "Ljava/lang/Module") StaticObject from_module, @Pointer TruffleObject pkgName,
                     @InjectProfile SubstitutionProfiler profiler) {
         ModulesHelperVM.addModuleExports(from_module, pkgName, StaticObject.NULL, getMeta(), getUncached(), profiler);
@@ -2380,7 +2377,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
     public void JVM_AddReadsModule(@Host(typeName = "Ljava/lang/Module") StaticObject from_module, @Host(typeName = "Ljava/lang/Module") StaticObject source_module,
                     @InjectProfile SubstitutionProfiler profiler) {
         ModuleEntry fromEntry = ModulesHelperVM.extractFromModuleEntry(from_module, getMeta(), profiler);
@@ -2394,7 +2390,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
     public void JVM_DefineModule(@Host(typeName = "Ljava/lang/Module") StaticObject module,
                     boolean is_open,
                     @SuppressWarnings("unused") @Host(String.class) StaticObject version,
@@ -2501,6 +2496,7 @@ public final class VM extends NativeEnv implements ContextAccess {
         }
     }
 
+    @TruffleBoundary
     void prependModuleClasspath(String moduleName) {
         Path path = getContext().getVmProperties().javaHome().resolve(MODULES).resolve(moduleName);
         Classpath.Entry newEntry = Classpath.createEntry(path.toString());
@@ -2558,7 +2554,6 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    @TruffleBoundary
     public void JVM_SetBootLoaderUnnamedModule(@Host(typeName = "Ljava/lang/Module") StaticObject module) {
         if (StaticObject.isNull(module)) {
             throw getMeta().throwNullPointerException();
