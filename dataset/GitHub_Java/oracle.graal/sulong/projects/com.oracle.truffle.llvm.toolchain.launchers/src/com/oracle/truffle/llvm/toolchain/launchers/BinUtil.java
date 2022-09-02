@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -34,8 +34,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-
-import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.truffle.llvm.toolchain.launchers.common.Driver;
 
@@ -83,7 +81,7 @@ public final class BinUtil {
         String binPathName = System.getProperty("org.graalvm.launcher.executablename");
 
         if (binPathName == null) {
-            binPathName = ProcessProperties.getArgumentVectorProgramName();
+            binPathName = (String) java.lang.Compiler.command(new Object[]{"com.oracle.svm.core.JavaMainWrapper.getCRuntimeArgument0()String"});
 
             if (binPathName == null) {
                 return null;
