@@ -98,6 +98,7 @@ public final class GCImpl implements GC {
     private final RememberedSetConstructor rememberedSetConstructor = new RememberedSetConstructor();
     private final GreyToBlackObjRefVisitor greyToBlackObjRefVisitor = new GreyToBlackObjRefVisitor();
     private final GreyToBlackObjectVisitor greyToBlackObjectVisitor = new GreyToBlackObjectVisitor(greyToBlackObjRefVisitor);
+    private final CollectionPolicy collectOnlyCompletelyPolicy = new CollectionPolicy.OnlyCompletely();
     private final BlackenImageHeapRootsVisitor blackenImageHeapRootsVisitor = new BlackenImageHeapRootsVisitor();
     private final RuntimeCodeCacheWalker runtimeCodeCacheWalker = new RuntimeCodeCacheWalker(greyToBlackObjRefVisitor);
     private final RuntimeCodeCacheCleaner runtimeCodeCacheCleaner = new RuntimeCodeCacheCleaner();
@@ -124,25 +125,20 @@ public final class GCImpl implements GC {
 
     @Override
     public void collect(GCCause cause) {
-        collect(cause, false);
-    }
-
-    private void collect(GCCause cause, boolean forceFullGC) {
         UnsignedWord requestingEpoch = possibleCollectionPrologue();
-        collectWithoutAllocating(cause, forceFullGC);
+        collectWithoutAllocating(cause);
         possibleCollectionEpilogue(requestingEpoch);
     }
 
     @Uninterruptible(reason = "Avoid races with other threads that also try to trigger a GC")
     @RestrictHeapAccess(access = RestrictHeapAccess.Access.NO_ALLOCATION, reason = "Must not allocate in the implementation of garbage collection.")
-    void collectWithoutAllocating(GCCause cause, boolean forceFullGC) {
+    void collectWithoutAllocating(GCCause cause) {
         int size = SizeOf.get(CollectionVMOperationData.class);
         CollectionVMOperationData data = StackValue.get(size);
         MemoryUtil.fillToMemoryAtomic((Pointer) data, WordFactory.unsigned(size), (byte) 0);
         data.setNativeVMOperation(collectOperation);
         data.setCauseId(cause.getId());
         data.setRequestingEpoch(getCollectionEpoch());
-        data.setForceFullGC(forceFullGC);
         enqueueCollectOperation(data);
         if (data.getOutOfMemory()) {
             throw oldGenerationSizeExceeded;
@@ -155,7 +151,7 @@ public final class GCImpl implements GC {
     }
 
     /** The body of the VMOperation to do the collection. */
-    private boolean collectOperation(GCCause cause, UnsignedWord requestingEpoch, boolean forceFullGC) {
+    private boolean collectOperation(GCCause cause, UnsignedWord requestingEpoch) {
         Log trace = Log.noopLog().string("[GCImpl.collectOperation:").newline()
                         .string("  epoch: ").unsigned(getCollectionEpoch())
                         .string("  cause: ").string(cause.getName())
@@ -174,7 +170,7 @@ public final class GCImpl implements GC {
         ThreadLocalAllocation.disableAndFlushForAllThreads();
 
         printGCBefore(cause.getName());
-        boolean outOfMemory = collectImpl(cause.getName(), forceFullGC);
+        boolean outOfMemory = collectImpl(cause.getName());
         HeapPolicy.setEdenAndYoungGenBytes(WordFactory.unsigned(0), accounting.getYoungChunkBytesAfter());
         printGCAfter(cause.getName());
 
@@ -186,7 +182,7 @@ public final class GCImpl implements GC {
     }
 
     @SuppressWarnings("try")
-    private boolean collectImpl(String cause, boolean forceFullGC) {
+    private boolean collectImpl(String cause) {
         Log trace = Log.noopLog().string("[GCImpl.collectImpl:").newline().string("  epoch: ").unsigned(getCollectionEpoch()).string("  cause: ").string(cause).newline();
         boolean outOfMemory;
 
@@ -198,12 +194,12 @@ public final class GCImpl implements GC {
             try (Timer vbt = timers.verifyBefore.open()) {
                 HeapImpl.getHeapImpl().verifyBeforeGC(cause, getCollectionEpoch());
             }
-            outOfMemory = doCollectImpl(forceFullGC);
+            outOfMemory = doCollectImpl(getPolicy());
             if (outOfMemory) {
                 // Avoid running out of memory with a full GC that reclaims softly reachable objects
                 ReferenceObjectProcessing.setSoftReferencesAreWeak(true);
                 try {
-                    outOfMemory = doCollectImpl(true);
+                    outOfMemory = doCollectImpl(collectOnlyCompletelyPolicy);
                 } finally {
                     ReferenceObjectProcessing.setSoftReferencesAreWeak(false);
                 }
@@ -221,16 +217,19 @@ public final class GCImpl implements GC {
     }
 
     @SuppressWarnings("try")
-    private boolean doCollectImpl(boolean forceFullGC) {
+    private boolean doCollectImpl(CollectionPolicy appliedPolicy) {
         CommittedMemoryProvider.get().beforeGarbageCollection();
 
         accounting.beforeCollection();
 
         try (Timer ct = timers.collection.open()) {
-            completeCollection = forceFullGC || policy.collectCompletely();
+            completeCollection = appliedPolicy.collectCompletely();
             if (completeCollection) {
+                if (HeapPolicyOptions.CollectYoungGenerationSeparately.getValue()) {
+                    scavenge(true);
+                }
                 scavenge(false);
-            } else if (policy.collectIncrementally()) {
+            } else if (appliedPolicy.collectIncrementally()) {
                 scavenge(true);
             }
         }
@@ -419,7 +418,13 @@ public final class GCImpl implements GC {
 
     @Override
     public void collectCompletely(GCCause cause) {
-        collect(cause, true);
+        CollectionPolicy oldPolicy = getPolicy();
+        try {
+            setPolicy(collectOnlyCompletelyPolicy);
+            collect(cause);
+        } finally {
+            setPolicy(oldPolicy);
+        }
     }
 
     boolean isCompleteCollection() {
@@ -972,6 +977,10 @@ public final class GCImpl implements GC {
         return policy;
     }
 
+    private void setPolicy(CollectionPolicy newPolicy) {
+        policy = newPolicy;
+    }
+
     GreyToBlackObjectVisitor getGreyToBlackObjectVisitor() {
         return greyToBlackObjectVisitor;
     }
@@ -1054,7 +1063,7 @@ public final class GCImpl implements GC {
             ImplicitExceptions.activateImplicitExceptionsAreFatal();
             try {
                 CollectionVMOperationData d = (CollectionVMOperationData) data;
-                boolean outOfMemory = HeapImpl.getHeapImpl().getGCImpl().collectOperation(GCCause.fromId(d.getCauseId()), d.getRequestingEpoch(), d.getForceFullGC());
+                boolean outOfMemory = HeapImpl.getHeapImpl().getGCImpl().collectOperation(GCCause.fromId(d.getCauseId()), d.getRequestingEpoch());
                 d.setOutOfMemory(outOfMemory);
             } catch (Throwable t) {
                 throw VMError.shouldNotReachHere(t);
@@ -1083,12 +1092,6 @@ public final class GCImpl implements GC {
 
         @RawField
         void setRequestingEpoch(UnsignedWord value);
-
-        @RawField
-        boolean getForceFullGC();
-
-        @RawField
-        void setForceFullGC(boolean value);
 
         @RawField
         boolean getOutOfMemory();
