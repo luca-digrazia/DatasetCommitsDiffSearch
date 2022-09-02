@@ -31,6 +31,7 @@ import static com.oracle.svm.agent.jvmti.JvmtiEvent.JVMTI_EVENT_THREAD_END;
 import static com.oracle.svm.agent.jvmti.JvmtiEvent.JVMTI_EVENT_VM_INIT;
 import static com.oracle.svm.agent.jvmti.JvmtiEvent.JVMTI_EVENT_VM_START;
 import static com.oracle.svm.agent.jvmti.JvmtiEventMode.JVMTI_ENABLE;
+import static com.oracle.svm.hosted.config.ConfigurationDirectories.FileNames;
 import static com.oracle.svm.jni.JNIObjectHandles.nullHandle;
 import static org.graalvm.word.WordFactory.nullPointer;
 
@@ -49,7 +50,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -83,16 +83,20 @@ import com.oracle.svm.configure.json.JsonWriter;
 import com.oracle.svm.configure.trace.AccessAdvisor;
 import com.oracle.svm.configure.trace.TraceProcessor;
 import com.oracle.svm.core.FallbackExecutor;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.c.function.CEntryPointSetup;
-import com.oracle.svm.core.configure.ConfigurationFiles;
 import com.oracle.svm.driver.NativeImage;
+import com.oracle.svm.hosted.ResourcesFeature;
+import com.oracle.svm.hosted.config.ConfigurationDirectories;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIErrors;
 import com.oracle.svm.jni.nativeapi.JNIJavaVM;
 import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
 import com.oracle.svm.jni.nativeapi.JNIVersion;
+import com.oracle.svm.reflect.hosted.ReflectionFeature;
+import com.oracle.svm.reflect.proxy.hosted.DynamicProxyFeature;
 
 public final class Agent {
     public static final String AGENT_NAME = "native-image-agent";
@@ -103,11 +107,11 @@ public final class Agent {
         return NativeImage.oH + option.getName();
     }
 
-    private static final String oHJNIConfigurationResources = oH(ConfigurationFiles.Options.JNIConfigurationResources);
-    private static final String oHReflectionConfigurationResources = oH(ConfigurationFiles.Options.ReflectionConfigurationResources);
-    private static final String oHDynamicProxyConfigurationResources = oH(ConfigurationFiles.Options.DynamicProxyConfigurationResources);
-    private static final String oHResourceConfigurationResources = oH(ConfigurationFiles.Options.ResourceConfigurationResources);
-    private static final String oHConfigurationResourceRoots = oH(ConfigurationFiles.Options.ConfigurationResourceRoots);
+    private static final String oHJNIConfigurationResources = oH(SubstrateOptions.JNIConfigurationResources);
+    private static final String oHReflectionConfigurationResources = oH(ReflectionFeature.Options.ReflectionConfigurationResources);
+    private static final String oHDynamicProxyConfigurationResources = oH(DynamicProxyFeature.Options.DynamicProxyConfigurationResources);
+    private static final String oHResourceConfigurationResources = oH(ResourcesFeature.Options.ResourceConfigurationResources);
+    private static final String oHConfigurationResourceRoots = oH(ConfigurationDirectories.Options.ConfigurationResourceRoots);
 
     private static TraceWriter traceWriter;
 
@@ -222,7 +226,7 @@ public final class Agent {
             System.exit(status);
         }
 
-        Map<URI, FileSystem> temporaryFileSystems = new HashMap<>();
+        List<FileSystem> temporaryFileSystems = new ArrayList<>();
         if (restrict && !addRestrictConfigs(jvmti, restrictConfigs, temporaryFileSystems)) {
             return 2;
         }
@@ -265,7 +269,7 @@ public final class Agent {
             return 4;
         }
 
-        for (FileSystem fileSystem : temporaryFileSystems.values()) {
+        for (FileSystem fileSystem : temporaryFileSystems) {
             try {
                 fileSystem.close();
             } catch (IOException e) {
@@ -287,7 +291,7 @@ public final class Agent {
         void add(Set<URI> uris, Path classpathEntry, String resourceLocation);
     }
 
-    private static boolean addRestrictConfigs(JvmtiEnv jvmti, ConfigurationSet restrictConfigs, Map<URI, FileSystem> temporaryFileSystems) {
+    private static boolean addRestrictConfigs(JvmtiEnv jvmti, ConfigurationSet restrictConfigs, List<FileSystem> temporaryFileSystems) {
         Path workDir = Paths.get(".").toAbsolutePath().normalize();
         AddURI addURI = (target, classpathEntry, resourceLocation) -> {
             boolean added = false;
@@ -299,18 +303,15 @@ public final class Agent {
             } else {
                 URI jarFileURI = URI.create("jar:" + classpathEntry.toUri());
                 try {
-                    FileSystem prevJarFS = temporaryFileSystems.get(jarFileURI);
-                    FileSystem jarFS = prevJarFS == null ? FileSystems.newFileSystem(jarFileURI, Collections.emptyMap()) : prevJarFS;
+                    FileSystem jarFS = FileSystems.newFileSystem(jarFileURI, Collections.emptyMap());
                     Path resourcePath = jarFS.getPath("/" + resourceLocation);
                     if (Files.isReadable(resourcePath)) {
                         added = target.add(resourcePath.toUri());
                     }
-                    if (prevJarFS == null) {
-                        if (added) {
-                            temporaryFileSystems.put(jarFileURI, jarFS);
-                        } else {
-                            jarFS.close();
-                        }
+                    if (added) {
+                        temporaryFileSystems.add(jarFS);
+                    } else {
+                        jarFS.close();
                     }
                 } catch (IOException e) {
                     System.err.println(MESSAGE_PREFIX + "restrict mode could not access " + classpathEntry + " as a jar file");
@@ -341,10 +342,10 @@ public final class Agent {
                         addURI.add(restrictConfigs.getResourceConfigPaths(), cpEntry, optionParts[1]);
                     } else if (oHConfigurationResourceRoots.equals(argName)) {
                         String resourceLocation = optionParts[1];
-                        addURI.add(restrictConfigs.getJniConfigPaths(), cpEntry, resourceLocation + "/" + ConfigurationFiles.JNI_NAME);
-                        addURI.add(restrictConfigs.getReflectConfigPaths(), cpEntry, resourceLocation + "/" + ConfigurationFiles.REFLECTION_NAME);
-                        addURI.add(restrictConfigs.getProxyConfigPaths(), cpEntry, resourceLocation + "/" + ConfigurationFiles.DYNAMIC_PROXY_NAME);
-                        addURI.add(restrictConfigs.getResourceConfigPaths(), cpEntry, resourceLocation + "/" + ConfigurationFiles.RESOURCES_NAME);
+                        addURI.add(restrictConfigs.getJniConfigPaths(), cpEntry, resourceLocation + "/" + FileNames.JNI_NAME);
+                        addURI.add(restrictConfigs.getReflectConfigPaths(), cpEntry, resourceLocation + "/" + FileNames.REFLECTION_NAME);
+                        addURI.add(restrictConfigs.getProxyConfigPaths(), cpEntry, resourceLocation + "/" + FileNames.DYNAMIC_PROXY_NAME);
+                        addURI.add(restrictConfigs.getResourceConfigPaths(), cpEntry, resourceLocation + "/" + FileNames.RESOURCES_NAME);
                     }
                 }
             });
@@ -447,16 +448,16 @@ public final class Agent {
             if (configOutputDirPath != null) {
                 TraceProcessor p = ((TraceProcessorWriterAdapter) traceWriter).getProcessor();
                 try {
-                    try (JsonWriter writer = new JsonWriter(configOutputDirPath.resolve(ConfigurationFiles.REFLECTION_NAME))) {
+                    try (JsonWriter writer = new JsonWriter(configOutputDirPath.resolve(FileNames.REFLECTION_NAME))) {
                         p.getReflectionConfiguration().printJson(writer);
                     }
-                    try (JsonWriter writer = new JsonWriter(configOutputDirPath.resolve(ConfigurationFiles.JNI_NAME))) {
+                    try (JsonWriter writer = new JsonWriter(configOutputDirPath.resolve(FileNames.JNI_NAME))) {
                         p.getJniConfiguration().printJson(writer);
                     }
-                    try (JsonWriter writer = new JsonWriter(configOutputDirPath.resolve(ConfigurationFiles.DYNAMIC_PROXY_NAME))) {
+                    try (JsonWriter writer = new JsonWriter(configOutputDirPath.resolve(FileNames.DYNAMIC_PROXY_NAME))) {
                         p.getProxyConfiguration().printJson(writer);
                     }
-                    try (JsonWriter writer = new JsonWriter(configOutputDirPath.resolve(ConfigurationFiles.RESOURCES_NAME))) {
+                    try (JsonWriter writer = new JsonWriter(configOutputDirPath.resolve(FileNames.RESOURCES_NAME))) {
                         p.getResourceConfiguration().printJson(writer);
                     }
                 } catch (IOException e) {
