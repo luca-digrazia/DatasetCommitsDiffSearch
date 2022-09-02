@@ -113,6 +113,10 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
             this.provider = provider;
         }
 
+        public RootCallTarget generateCallTarget(FunctionType type) {
+            return generateTarget(type);
+        }
+
         public RootCallTarget cachedCallTarget(FunctionType type) {
             if (exists(type)) {
                 return get(type);
@@ -418,6 +422,10 @@ public final class LLVMFunctionDescriptor implements LLVMSymbol, LLVMInternalTru
     @Override
     public int compareTo(LLVMFunctionDescriptor o) {
         return Long.compare(functionId, o.functionId);
+    }
+
+    public static boolean isInstance(TruffleObject object) {
+        return object instanceof LLVMFunctionDescriptor;
     }
 
     public LLVMContext getContext() {
