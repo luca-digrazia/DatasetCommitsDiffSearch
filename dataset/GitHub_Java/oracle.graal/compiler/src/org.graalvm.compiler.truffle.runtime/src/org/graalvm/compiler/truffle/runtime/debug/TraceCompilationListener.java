@@ -27,7 +27,6 @@ package org.graalvm.compiler.truffle.runtime.debug;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import com.oracle.truffle.api.nodes.NodeVisitor;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.GraphInfo;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
@@ -142,9 +141,13 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
         int calls = 0;
         int inlinedCalls;
         if (inliningDecision == null) {
-            TraceCompilationListener.CallCountVisitor visitor = new TraceCompilationListener.CallCountVisitor();
-            target.accept(visitor);
-            calls = visitor.calls;
+
+            for (Node node : target.nodeIterable()) {
+                if (node instanceof OptimizedDirectCallNode) {
+                    calls++;
+                }
+            }
+
             inlinedCalls = 0;
         } else {
             calls = inliningDecision.countCalls();
@@ -204,18 +207,5 @@ public final class TraceCompilationListener extends AbstractGraalTruffleRuntimeL
         final long timeCompilationStarted = System.nanoTime();
         long timePartialEvaluationFinished;
         long nodeCountPartialEval;
-    }
-
-    static final class CallCountVisitor implements NodeVisitor {
-
-        int calls = 0;
-
-        @Override
-        public boolean visit(Node node) {
-            if (node instanceof OptimizedDirectCallNode) {
-                calls++;
-            }
-            return true;
-        }
     }
 }

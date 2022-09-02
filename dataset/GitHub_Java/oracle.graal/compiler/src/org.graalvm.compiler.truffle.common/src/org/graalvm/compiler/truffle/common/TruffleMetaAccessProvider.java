@@ -62,11 +62,6 @@ public interface TruffleMetaAccessProvider {
     void setInlinedCallCount(int count);
 
     /**
-     * @return How many calls were inlined.
-     */
-    int countInlinedCalls();
-
-    /**
      * To be used from the compiler side.
      *
      * @param target register this target as inlined.

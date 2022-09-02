@@ -37,11 +37,13 @@ import org.graalvm.compiler.truffle.jfr.InvalidationEvent;
 import org.graalvm.compiler.truffle.runtime.AbstractGraalTruffleRuntimeListener;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
+import org.graalvm.compiler.truffle.runtime.OptimizedDirectCallNode;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.serviceprovider.TruffleRuntimeServices;
 import org.graalvm.nativeimage.ImageInfo;
 
 import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.nodes.Node;
 
 /**
  * Traces Truffle Compilations using Java Flight Recorder events.
@@ -141,9 +143,11 @@ public final class JFRListener extends AbstractGraalTruffleRuntimeListener {
             int calls = 0;
             int inlinedCalls;
             if (inliningDecision == null) {
-                TraceCompilationListener.CallCountVisitor visitor = new TraceCompilationListener.CallCountVisitor();
-                target.accept(visitor);
-                calls = visitor.calls;
+                for (Node node : target.nodeIterable()) {
+                    if (node instanceof OptimizedDirectCallNode) {
+                        calls++;
+                    }
+                }
                 inlinedCalls = 0;
             } else {
                 calls = inliningDecision.countCalls();

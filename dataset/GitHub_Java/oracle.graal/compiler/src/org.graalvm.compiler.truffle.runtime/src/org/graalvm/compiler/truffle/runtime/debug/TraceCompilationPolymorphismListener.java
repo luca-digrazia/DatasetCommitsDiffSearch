@@ -38,7 +38,6 @@ import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.nodes.NodeUtil;
-import com.oracle.truffle.api.nodes.NodeVisitor;
 
 public final class TraceCompilationPolymorphismListener extends AbstractGraalTruffleRuntimeListener {
 
@@ -53,20 +52,16 @@ public final class TraceCompilationPolymorphismListener extends AbstractGraalTru
     @Override
     public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
         if (target.getOptionValue(PolyglotCompilerOptions.TraceCompilationPolymorphism)) {
-            target.accept(new NodeVisitor() {
-                @Override
-                public boolean visit(Node node) {
-                    if (node != null && (node.getCost() == NodeCost.MEGAMORPHIC || node.getCost() == NodeCost.POLYMORPHIC)) {
-                        NodeCost cost = node.getCost();
-                        Map<String, Object> props = new LinkedHashMap<>();
-                        props.put("simpleName", node.getClass().getSimpleName());
-                        props.put("subtree", "\n" + NodeUtil.printCompactTreeToString(node));
-                        String msg = cost == NodeCost.MEGAMORPHIC ? "megamorphic" : "polymorphic";
-                        runtime.logEvent(target, 0, msg, node.toString(), props, null);
-                    }
-                    return true;
+            for (Node node : target.nodeIterable()) {
+                if (node != null && (node.getCost() == NodeCost.MEGAMORPHIC || node.getCost() == NodeCost.POLYMORPHIC)) {
+                    NodeCost cost = node.getCost();
+                    Map<String, Object> props = new LinkedHashMap<>();
+                    props.put("simpleName", node.getClass().getSimpleName());
+                    props.put("subtree", "\n" + NodeUtil.printCompactTreeToString(node));
+                    String msg = cost == NodeCost.MEGAMORPHIC ? "megamorphic" : "polymorphic";
+                    runtime.logEvent(target, 0, msg, node.toString(), props, null);
                 }
-            });
+            }
         }
     }
 
