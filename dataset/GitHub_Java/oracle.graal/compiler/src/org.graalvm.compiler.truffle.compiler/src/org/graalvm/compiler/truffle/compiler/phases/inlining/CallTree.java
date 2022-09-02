@@ -66,22 +66,21 @@ public class CallTree extends Graph {
     }
 
     public void trace() {
-        final Boolean details = TruffleCompilerOptions.getValue(SharedTruffleCompilerOptions.TraceTruffleInliningDetails);
-        if (TruffleCompilerOptions.getValue(SharedTruffleCompilerOptions.TraceTruffleInlining) || details) {
+        if (TruffleCompilerOptions.getValue(SharedTruffleCompilerOptions.TraceTruffleInlining)) {
             runtime.logEvent(0, "inline start", root.getName(), root.getStringProperties());
-            traceRecursive(root, details, 0);
+            traceRecursive(root, 0);
             runtime.logEvent(0, "inline done", root.getName(), root.getStringProperties());
         }
     }
 
-    private void traceRecursive(CallNode node, boolean details, int depth) {
+    private void traceRecursive(CallNode node, int depth) {
         if (depth != 0) {
             runtime.logEvent(depth, node.getState().toString(), node.getName(), node.getStringProperties());
         }
-        if (node.getState() == CallNode.State.Inlined || details) {
-            for (CallNode child : node.getChildren()) {
-                traceRecursive(child, details, depth + 1);
-            }
+        // TODO: This for loop should be guarded with:
+        //  if (node.getState() == CallNode.State.Inlined) {
+        for (CallNode child : node.getChildren()) {
+            traceRecursive(child, depth + 1);
         }
     }
 
