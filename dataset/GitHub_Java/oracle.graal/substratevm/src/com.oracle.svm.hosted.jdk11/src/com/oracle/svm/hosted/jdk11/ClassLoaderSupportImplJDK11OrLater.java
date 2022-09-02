@@ -80,6 +80,9 @@ public final class ClassLoaderSupportImplJDK11OrLater extends ClassLoaderSupport
             bundleName = specParts[0];
         }
         String packageName = packageName(bundleName);
+        if (packageName == null) {
+            throw new MissingResourceException("ResourceBundle does not seem to be a fully qualified class name.", bundleName, locale.toLanguageTag());
+        }
         Set<Module> modules;
         if (moduleName != null) {
             modules = classLoaderSupport.findModule(moduleName).stream().collect(Collectors.toSet());
@@ -104,7 +107,8 @@ public final class ClassLoaderSupportImplJDK11OrLater extends ClassLoaderSupport
     private static String packageName(String bundleName) {
         int classSep = bundleName.replace('/', '.').lastIndexOf('.');
         if (classSep == -1) {
-            return ""; /* unnamed package */
+            /* The bundle is not specified via a java.class or java.properties format. */
+            return null;
         }
         return bundleName.substring(0, classSep);
     }
