@@ -44,7 +44,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.regex.AbstractConstantKeysObject;
 import com.oracle.truffle.regex.RegexSyntaxException;
-import com.oracle.truffle.regex.tregex.util.Exceptions;
 import com.oracle.truffle.regex.util.TruffleReadOnlyKeysArray;
 
 /**
@@ -166,7 +165,7 @@ public final class PythonFlags extends AbstractConstantKeysObject {
                 }
                 return this;
             default:
-                throw Exceptions.shouldNotReachHere();
+                throw new IllegalStateException();
         }
     }
 

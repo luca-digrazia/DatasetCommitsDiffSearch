@@ -47,7 +47,6 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.regex.tregex.util.Exceptions;
 
 @GenerateUncached
 public abstract class InputLengthNode extends Node {
@@ -59,27 +58,25 @@ public abstract class InputLengthNode extends Node {
     public abstract int execute(Object input);
 
     @Specialization
-    static int doBytes(byte[] input) {
-        return input.length;
-    }
-
-    @Specialization
-    static int doString(String input) {
+    static int getLength(String input) {
         return input.length();
     }
 
     @Specialization(guards = "inputs.hasArrayElements(input)", limit = "2")
-    static int doTruffleObj(Object input,
+    static int doBoxedCharArray(Object input,
                     @CachedLibrary("input") InteropLibrary inputs) {
         try {
             long length = inputs.getArraySize(input);
             if (length > Integer.MAX_VALUE) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                throw Exceptions.shouldNotReachHere();
+                // should never be reached
+                throw new RuntimeException("should not reach here");
             }
             return (int) length;
         } catch (UnsupportedMessageException e) {
-            throw Exceptions.shouldNotReachHere();
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            // should never be reached
+            throw new RuntimeException(e);
         }
     }
 }

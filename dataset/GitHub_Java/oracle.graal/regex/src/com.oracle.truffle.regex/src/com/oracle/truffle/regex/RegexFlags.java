@@ -60,14 +60,14 @@ public final class RegexFlags extends AbstractConstantKeysObject implements Json
     private static final int UNICODE = 1 << 4;
     private static final int DOT_ALL = 1 << 5;
 
-    public static final RegexFlags DEFAULT = new RegexFlags("", NONE);
+    public static final RegexFlags DEFAULT = new RegexFlags("", false, false, false, false, false, false);
 
     private final String source;
     private final int value;
 
-    private RegexFlags(String source, int value) {
+    private RegexFlags(String source, boolean ignoreCase, boolean multiline, boolean global, boolean sticky, boolean unicode, boolean dotAll) {
         this.source = source;
-        this.value = value;
+        this.value = (ignoreCase ? IGNORE_CASE : NONE) | (multiline ? MULTILINE : NONE) | (sticky ? STICKY : NONE) | (global ? GLOBAL : NONE) | (unicode ? UNICODE : NONE) | (dotAll ? DOT_ALL : NONE);
     }
 
     @TruffleBoundary
@@ -75,43 +75,49 @@ public final class RegexFlags extends AbstractConstantKeysObject implements Json
         if (source.isEmpty()) {
             return DEFAULT;
         }
-        int flags = NONE;
+        boolean ignoreCase = false;
+        boolean multiline = false;
+        boolean global = false;
+        boolean sticky = false;
+        boolean unicode = false;
+        boolean dotAll = false;
+
         for (int i = 0; i < source.length(); i++) {
             char ch = source.charAt(i);
-            int repeated = NONE;
+            boolean repeated;
             switch (ch) {
                 case 'i':
-                    repeated = flags & IGNORE_CASE;
-                    flags |= IGNORE_CASE;
+                    repeated = ignoreCase;
+                    ignoreCase = true;
                     break;
                 case 'm':
-                    repeated = flags & MULTILINE;
-                    flags |= MULTILINE;
+                    repeated = multiline;
+                    multiline = true;
                     break;
                 case 'g':
-                    repeated = flags & GLOBAL;
-                    flags |= GLOBAL;
+                    repeated = global;
+                    global = true;
                     break;
                 case 'y':
-                    repeated = flags & STICKY;
-                    flags |= STICKY;
+                    repeated = sticky;
+                    sticky = true;
                     break;
                 case 'u':
-                    repeated = flags & UNICODE;
-                    flags |= UNICODE;
+                    repeated = unicode;
+                    unicode = true;
                     break;
                 case 's':
-                    repeated = flags & DOT_ALL;
-                    flags |= DOT_ALL;
+                    repeated = dotAll;
+                    dotAll = true;
                     break;
                 default:
                     throw new RegexSyntaxException(source, "unsupported regex flag: " + ch);
             }
-            if (repeated != 0) {
+            if (repeated) {
                 throw new RegexSyntaxException(source, "repeated regex flag: " + ch);
             }
         }
-        return new RegexFlags(source, flags);
+        return new RegexFlags(source, ignoreCase, multiline, global, sticky, unicode, dotAll);
     }
 
     public String getSource() {

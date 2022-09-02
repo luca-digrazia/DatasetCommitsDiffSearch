@@ -148,14 +148,14 @@ public final class RegexObject extends AbstractConstantKeysObject {
 
     public Object getCompiledRegexObject() {
         if (compiledRegexObject == null) {
-            compiledRegexObject = compileRegex(source);
+            compiledRegexObject = compileRegex();
         }
         return compiledRegexObject;
     }
 
     @TruffleBoundary
-    private Object compileRegex(RegexSource src) {
-        return compiler.compile(src);
+    private Object compileRegex() {
+        return compiler.compile(source);
     }
 
     public void setCompiledRegexObject(TruffleObject compiledRegexObject) {
