@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -255,19 +255,16 @@ public class AArch64GraphBuilderPlugins implements TargetGraphBuilderPlugins {
 
         @Override
         public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode value, ValueNode other) {
-            ValueNode nonNullValue = b.nullCheckedValue(value);
-            ValueNode nonNullOther = b.nullCheckedValue(other);
-
-            ValueNode valueLength = b.add(new ArrayLengthNode(nonNullValue));
-            ValueNode otherLength = b.add(new ArrayLengthNode(nonNullOther));
+            ValueNode valueLength = b.add(new ArrayLengthNode(value));
+            ValueNode otherLength = b.add(new ArrayLengthNode(other));
             if (swapped) {
                 /*
                  * Swapping array arguments because intrinsic expects order to be byte[]/char[] but
                  * kind arguments stay in original order.
                  */
-                b.addPush(JavaKind.Int, new ArrayCompareToNode(nonNullOther, nonNullValue, otherLength, valueLength, valueKind, otherKind));
+                b.addPush(JavaKind.Int, new ArrayCompareToNode(other, value, otherLength, valueLength, valueKind, otherKind));
             } else {
-                b.addPush(JavaKind.Int, new ArrayCompareToNode(nonNullValue, nonNullOther, valueLength, otherLength, valueKind, otherKind));
+                b.addPush(JavaKind.Int, new ArrayCompareToNode(value, other, valueLength, otherLength, valueKind, otherKind));
             }
             return true;
         }
