@@ -423,10 +423,10 @@ public final class MethodVerifier implements ContextAccess {
     // Regular BCI states
 
     // Indicates that a particular BCI should never be reached by normal control flow (e.g.: the
-    // bytecode of a WIDE instruction, or any BCI between two successive instructions)
+    // bytecode of a WIDE instruction)
     static private final byte UNREACHABLE = 0;
     // Indicates a BCI that has not yet been reached by control flow. After verification, if such a
-    // BCI still exists, it means that this BCI will never be reached during execution.
+    // BCI still exists, it means that control flow never did reach it.
     static private final byte UNSEEN = 1;
     // Indicates previous iteration of a verification successfully verified this particular BCI.
     // Further verification can therefore stop their execution if merging its state into the state
@@ -447,25 +447,6 @@ public final class MethodVerifier implements ContextAccess {
     // This state is accompanied by the BCI of the RET instruction that caused it.
     // It is of the form (ret_bci << 16) | RETURNED_TO
     static private final byte RETURNED_TO = 64;
-
-    static private final int RETURN_MASK = 0xFFFF0000;
-
-    static private boolean checkStatus(int status, byte toCheck) {
-        return (status & toCheck) != 0;
-    }
-
-    static private int setStatus(int status, byte toSet) {
-        return (status & RETURN_MASK) | toSet;
-    }
-
-    private void checkAndSetReturnedTo(int target, int retBCI) {
-        if ((BCIstates[target] & RETURNED_TO) == RETURNED_TO) {
-            if ((BCIstates[target] >>> 16) != retBCI) {
-                throw new VerifyError("Multiple returns to single jsr ");
-            }
-        }
-        BCIstates[target] = RETURNED_TO | (retBCI << 16);
-    }
 
     /**
      * Construct the data structure to perform verification
@@ -536,7 +517,7 @@ public final class MethodVerifier implements ContextAccess {
             if (opcode > QUICK) {
                 throw new VerifyError("invalid bytecode: " + opcode);
             }
-            BCIstates[bci] = setStatus(BCIstates[bci], UNSEEN);
+            BCIstates[bci] = UNSEEN;
             bci = code.nextBCI(bci);
             // Check instruction has enough bytes after it
             if (bci - 1 >= code.endBCI()) {
@@ -555,7 +536,7 @@ public final class MethodVerifier implements ContextAccess {
                     if (BCIstates[target] == UNREACHABLE) {
                         throw new VerifyError("Jump to the middle of an instruction: " + target);
                     }
-                    BCIstates[target] = setStatus(BCIstates[bci], JUMP_TARGET);
+                    BCIstates[target] = JUMP_TARGET;
                 }
                 if (opcode == TABLESWITCH || opcode == LOOKUPSWITCH) {
                     initSwitch(bci, opcode);
@@ -586,13 +567,13 @@ public final class MethodVerifier implements ContextAccess {
                     if (BCIstates[target] == UNREACHABLE) {
                         throw new VerifyError("Jump to the middle of an instruction: " + target);
                     }
-                    BCIstates[target] = setStatus(BCIstates[bci], JUMP_TARGET);
+                    BCIstates[target] = JUMP_TARGET;
                 }
                 target = switchHelper.defaultTarget(bci);
                 if (BCIstates[target] == UNREACHABLE) {
                     throw new VerifyError("Jump to the middle of an instruction: " + target);
                 }
-                BCIstates[target] = setStatus(BCIstates[bci], JUMP_TARGET);
+                BCIstates[target] = JUMP_TARGET;
             }
                 return;
             case TABLESWITCH: {
@@ -607,13 +588,13 @@ public final class MethodVerifier implements ContextAccess {
                     if (BCIstates[target] == UNREACHABLE) {
                         throw new VerifyError("Jump to the middle of an instruction: " + target);
                     }
-                    BCIstates[target] = setStatus(BCIstates[bci], JUMP_TARGET);
+                    BCIstates[target] = JUMP_TARGET;
                 }
                 target = switchHelper.defaultTarget(bci);
                 if (BCIstates[target] == UNREACHABLE) {
                     throw new VerifyError("Jump to the middle of an instruction: " + target);
                 }
-                BCIstates[target] = setStatus(BCIstates[bci], JUMP_TARGET);
+                BCIstates[target] = JUMP_TARGET;
             }
                 return;
             default:
@@ -828,7 +809,6 @@ public final class MethodVerifier implements ContextAccess {
                     last = first;
                 } else {
                     last.next = elem;
-                    elem.prev = last;
                     last = last.next;
                 }
             } else {
@@ -849,20 +829,17 @@ public final class MethodVerifier implements ContextAccess {
         }
 
         void replace(QueueElement oldElem, QueueElement newElem) {
+            assert oldElem.subroutineModifs == newElem.subroutineModifs;
             if (first == oldElem) {
                 first = newElem;
             }
             if (last == oldElem) {
                 last = newElem;
             }
-            newElem.next = oldElem.next;
             newElem.prev = oldElem.prev;
-            if (oldElem.prev != null) {
-                oldElem.prev.next = newElem;
-            }
-            if (oldElem.next != null) {
-                oldElem.next.prev = newElem;
-            }
+            newElem.next = oldElem.next;
+            oldElem.prev.next = newElem;
+            oldElem.next.prev = newElem;
         }
 
         QueueElement lookup(int BCI) {
@@ -916,16 +893,15 @@ public final class MethodVerifier implements ContextAccess {
         Locals locals = new Locals(this);
         startVerify(0, stack, locals);
         while (!queue.isEmpty()) {
-            while (!queue.isEmpty()) {
-                QueueElement toVerify = queue.pop();
-                calledConstructor = toVerify.constructorCalled;
-                locals = toVerify.frame.extractLocals();
-                locals.subRoutineModifications = toVerify.subroutineModifs;
-                startVerify(toVerify.BCI, toVerify.frame.extractStack(maxStack), locals);
-            }
-            // Performs verification of reachable handlers
-            verifyExceptionHandlers();
+            QueueElement toVerify = queue.pop();
+            calledConstructor = toVerify.constructorCalled;
+            locals = toVerify.frame.extractLocals();
+            locals.subRoutineModifications = toVerify.subroutineModifs;
+            startVerify(toVerify.BCI, toVerify.frame.extractStack(maxStack), locals);
         }
+
+        // Performs verification of reachable handlers
+        verifyExceptionHandlers();
 
         // Verifies that each bytecode is reachable by control flow.
         verifyReachability();
@@ -1014,7 +990,7 @@ public final class MethodVerifier implements ContextAccess {
         Stack stack;
         StackFrame frame = stackFrames[handlerBCI];
         if (frame == null) {
-            // If there is no stack map when verifying a handler, all locals are illegal.
+            // If there is no frameMap when verifying a handler, all locals are illegal.
             Operand[] registers = new Operand[maxLocals];
             Arrays.fill(registers, Invalid);
             locals = new Locals(registers);
@@ -1043,15 +1019,16 @@ public final class MethodVerifier implements ContextAccess {
 
     private void branch(int BCI, Stack stack, Locals locals) {
         validateBCI(BCI);
-        // Try merge
-        StackFrame frame = mergeFrames(stack, locals, stackFrames[BCI]);
-        if (frame != stackFrames[BCI] || !checkStatus(BCIstates[BCI], DONE)) {
-            // merge failed or not yet verified BCI. mark the BCI as not yet verified since
-            // state can change.
-            BCIstates[BCI] = setStatus(BCIstates[BCI], JUMP_TARGET);
-            stackFrames[BCI] = frame;
-            QueueElement toPush = new QueueElement(BCI, frame, locals.subRoutineModifications, calledConstructor);
-            queue.push(BCI, toPush);
+        if (stackFrames[BCI] != null || BCIstates[BCI] == JUMP_TARGET) {
+            // Try merge
+            StackFrame frame = mergeFrames(stack, locals, stackFrames[BCI]);
+            if (!(frame == stackFrames[BCI])) {
+                // merge failed, mark the BCI as not yet verified as state changed
+                BCIstates[BCI] = JUMP_TARGET;
+                stackFrames[BCI] = frame;
+                QueueElement toPush = new QueueElement(BCI, frame, locals.subRoutineModifications, calledConstructor);
+                queue.push(BCI, toPush);
+            }
         }
     }
 
@@ -1105,12 +1082,12 @@ public final class MethodVerifier implements ContextAccess {
         boolean constructorCalledStatus = calledConstructor;
         do {
             previousBCI = nextBCI;
-            if (stackFrames[nextBCI] != null || checkStatus(BCIstates[nextBCI], JUMP_TARGET)) {
+            if (stackFrames[nextBCI] != null || BCIstates[nextBCI] == JUMP_TARGET) {
                 // Try merge
                 StackFrame frame = mergeFrames(stack, locals, stackFrames[nextBCI]);
                 if (!(frame == stackFrames[nextBCI])) {
                     // merge failed, mark the BCI as not yet verified as state changed
-                    BCIstates[nextBCI] = setStatus(BCIstates[BCI], JUMP_TARGET);
+                    BCIstates[nextBCI] = JUMP_TARGET;
                     stackFrames[nextBCI] = frame;
                 }
                 // Always use the stack frame state
@@ -1120,7 +1097,7 @@ public final class MethodVerifier implements ContextAccess {
                 locals.subRoutineModifications = locals_.subRoutineModifications;
             }
             // Return condition: a successful merge into an already verified branch target.
-            if (stackFrames[nextBCI] != null && checkStatus(BCIstates[nextBCI], DONE)) {
+            if (stackFrames[nextBCI] != null && BCIstates[nextBCI] == DONE) {
                 // Reset constructor status.
                 calledConstructor = constructorCalledStatus;
                 return;
@@ -1209,7 +1186,7 @@ public final class MethodVerifier implements ContextAccess {
         if (BCIstates[BCI] == UNREACHABLE) {
             throw new VerifyError("Jump to the middle of an instruction: " + BCI);
         }
-        BCIstates[BCI] = setStatus(BCIstates[BCI], DONE);
+        BCIstates[BCI] = DONE;
         int curOpcode;
         curOpcode = code.opcode(BCI);
         if (!(curOpcode <= QUICK)) {
@@ -1502,7 +1479,7 @@ public final class MethodVerifier implements ContextAccess {
                     int targetBCI = code.readBranchDest(BCI);
                     locals.subRoutineModifications = new SubroutineModificationStack(locals.subRoutineModifications, new boolean[maxLocals], targetBCI);
                     branch(targetBCI, stack, locals);
-                    BCIstates[BCI] = setStatus(BCIstates[BCI], DONE);
+                    BCIstates[BCI] = DONE;
                     return BCI;
                 }
                 case RET: {
@@ -1515,7 +1492,12 @@ public final class MethodVerifier implements ContextAccess {
                     while (pos < ra.targetBCIs.size()) {
                         prev = ra;
                         int target = ra.targetBCIs.get(pos++);
-                        checkAndSetReturnedTo(target, BCI);
+                        if ((BCIstates[target] & RETURNED_TO) == RETURNED_TO) {
+                            if ((BCIstates[target] >>> 16) != BCI) {
+                                throw new VerifyError("Multiple returns to single jsr ");
+                            }
+                        }
+                        BCIstates[target] = RETURNED_TO | (BCI << 16);
                         Locals toMerge = getSubroutineReturnLocals(target, locals);
                         branch(code.nextBCI(target), stack, toMerge);
 
