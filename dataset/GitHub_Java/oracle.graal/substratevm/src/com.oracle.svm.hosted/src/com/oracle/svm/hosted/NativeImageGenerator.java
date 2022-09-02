@@ -152,7 +152,6 @@ import com.oracle.graal.pointsto.typestate.PointsToStats;
 import com.oracle.graal.pointsto.typestate.TypeState;
 import com.oracle.graal.pointsto.util.Timer;
 import com.oracle.graal.pointsto.util.Timer.StopTimer;
-import com.oracle.svm.core.ClassLoaderQuery;
 import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.JavaMainWrapper.JavaMainSupport;
 import com.oracle.svm.core.LinkerInvocation;
@@ -293,7 +292,7 @@ public class NativeImageGenerator {
     private final ImageClassLoader loader;
     private final HostedOptionProvider optionProvider;
 
-    private ForkJoinPool buildExecutor;
+    private ForkJoinPool imageBuildPool;
     private DeadlockWatchdog watchdog;
     private AnalysisUniverse aUniverse;
     private HostedUniverse hUniverse;
@@ -460,10 +459,9 @@ public class NativeImageGenerator {
             setSystemPropertiesForImageLate(k);
 
             int maxConcurrentThreads = NativeImageOptions.getMaximumNumberOfConcurrentThreads(new OptionValues(optionProvider.getHostedValues()));
-            this.buildExecutor = createForkJoinPool(maxConcurrentThreads);
-            buildExecutor.submit(() -> {
+            this.imageBuildPool = createForkJoinPool(loader, maxConcurrentThreads);
+            imageBuildPool.submit(() -> {
 
-                ImageSingletons.add(ClassLoaderQuery.class, new ClassLoaderQueryImpl(loader.getClassLoader()));
                 ImageSingletons.add(HostedOptionValues.class, new HostedOptionValues(optionProvider.getHostedValues()));
                 ImageSingletons.add(RuntimeOptionValues.class, new RuntimeOptionValues(optionProvider.getRuntimeValues(), allOptionNames));
                 watchdog = new DeadlockWatchdog();
@@ -493,7 +491,7 @@ public class NativeImageGenerator {
                 throw (Error) e.getCause();
             }
         } finally {
-            shutdownBuildExecutor();
+            shutdownPoolSafe();
         }
     }
 
@@ -522,9 +520,19 @@ public class NativeImageGenerator {
         System.clearProperty(ImageInfo.PROPERTY_IMAGE_KIND_KEY);
     }
 
-    private ForkJoinPool createForkJoinPool(int maxConcurrentThreads) {
+    private static ForkJoinPool createForkJoinPool(ImageClassLoader loader, int maxConcurrentThreads) {
         ImageSingletonsSupportImpl.HostedManagement vmConfig = new ImageSingletonsSupportImpl.HostedManagement();
         ImageSingletonsSupportImpl.HostedManagement.installInThread(vmConfig);
+        return createForkJoinPool(loader, maxConcurrentThreads, vmConfig);
+    }
+
+    private static ForkJoinPool createForkJoinPool(OptionValues options, ImageClassLoader loader) {
+        int maxConcurrentThreads = NativeImageOptions.getMaximumNumberOfConcurrentThreads(options);
+        ImageSingletonsSupportImpl.HostedManagement vmConfig = ImageSingletonsSupportImpl.HostedManagement.getAndAssertExists();
+        return createForkJoinPool(loader, maxConcurrentThreads, vmConfig);
+    }
+
+    private static ForkJoinPool createForkJoinPool(ImageClassLoader loader, int maxConcurrentThreads, ImageSingletonsSupportImpl.HostedManagement vmConfig) {
         return new ForkJoinPool(
                         maxConcurrentThreads,
                         pool -> new ForkJoinWorkerThread(pool) {
@@ -857,7 +865,7 @@ public class NativeImageGenerator {
                 AnnotationSubstitutionProcessor annotationSubstitutions = createDeclarativeSubstitutionProcessor(originalMetaAccess, loader, classInitializationSupport);
                 CEnumCallWrapperSubstitutionProcessor cEnumProcessor = new CEnumCallWrapperSubstitutionProcessor();
                 aUniverse = createAnalysisUniverse(options, target, loader, originalMetaAccess, originalSnippetReflection, annotationSubstitutions, cEnumProcessor,
-                                classInitializationSupport, Collections.singletonList(harnessSubstitutions), buildExecutor);
+                                classInitializationSupport, Collections.singletonList(harnessSubstitutions));
 
                 AnalysisMetaAccess aMetaAccess = new SVMAnalysisMetaAccess(aUniverse, originalMetaAccess);
                 AnalysisConstantReflectionProvider aConstantReflection = new AnalysisConstantReflectionProvider(aUniverse, originalProviders.getConstantReflection(), classInitializationSupport);
@@ -904,12 +912,12 @@ public class NativeImageGenerator {
 
     public static AnalysisUniverse createAnalysisUniverse(OptionValues options, TargetDescription target, ImageClassLoader loader, MetaAccessProvider originalMetaAccess,
                     SnippetReflectionProvider originalSnippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions, SubstitutionProcessor cEnumProcessor,
-                    ClassInitializationSupport classInitializationSupport, List<SubstitutionProcessor> additionalSubstitutions, ForkJoinPool buildExecutor) {
+                    ClassInitializationSupport classInitializationSupport, List<SubstitutionProcessor> additionalSubstitutions) {
         UnsafeAutomaticSubstitutionProcessor automaticSubstitutions = createAutomaticUnsafeSubstitutions(originalSnippetReflection, annotationSubstitutions);
         SubstitutionProcessor aSubstitutions = createAnalysisSubstitutionProcessor(originalMetaAccess, originalSnippetReflection, cEnumProcessor, automaticSubstitutions,
                         annotationSubstitutions, additionalSubstitutions);
 
-        SVMHost hostVM = new SVMHost(options, buildExecutor, loader.getClassLoader(), classInitializationSupport, automaticSubstitutions);
+        SVMHost hostVM = new SVMHost(options, createForkJoinPool(options, loader), loader.getClassLoader(), classInitializationSupport, automaticSubstitutions);
         automaticSubstitutions.init(loader, originalMetaAccess, hostVM);
         AnalysisPolicy analysisPolicy = PointstoOptions.AllocationSiteSensitiveHeap.getValue(options) ? new BytecodeSensitiveAnalysisPolicy(options)
                         : new DefaultAnalysisPolicy(options);
@@ -1098,12 +1106,12 @@ public class NativeImageGenerator {
     }
 
     public void interruptBuild() {
-        shutdownBuildExecutor();
+        shutdownPoolSafe();
     }
 
-    private void shutdownBuildExecutor() {
-        if (buildExecutor != null) {
-            buildExecutor.shutdownNow();
+    private void shutdownPoolSafe() {
+        if (imageBuildPool != null) {
+            imageBuildPool.shutdownNow();
         }
     }
 
@@ -1149,7 +1157,7 @@ public class NativeImageGenerator {
             ResolvedJavaField field = providers.getMetaAccess().lookupJavaField(ReflectionUtil.lookupField(ClassInitializationTracking.class, "IS_IMAGE_BUILD_TIME"));
             ((AnalysisField) field).registerAsAccessed();
         }
-        plugins.appendNodePlugin(new EarlyConstantFoldLoadFieldPlugin(providers.getMetaAccess(), providers.getSnippetReflection()));
+        plugins.appendNodePlugin(new EarlyConstantFoldLoadFieldPlugin(providers.getMetaAccess()));
         plugins.appendNodePlugin(new ConstantFoldLoadFieldPlugin(classInitializationSupport));
         plugins.appendNodePlugin(new CInterfaceInvocationPlugin(providers.getMetaAccess(), providers.getWordTypes(), nativeLibs));
         plugins.appendNodePlugin(new LocalizationFeature.CharsetNodePlugin());
