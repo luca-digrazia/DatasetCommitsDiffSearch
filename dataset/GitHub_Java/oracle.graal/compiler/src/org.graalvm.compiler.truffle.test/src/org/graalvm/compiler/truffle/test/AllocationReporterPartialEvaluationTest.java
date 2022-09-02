@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -107,7 +107,7 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
             assertEquals(expectedCounters, tester.getReturnCount());
 
             // Deoptimize enter:
-            enterTarget.invalidate("test");
+            enterTarget.invalidate(this, "test");
             assertNotCompiled(enterTarget);
             enterTarget.call();
             assertCompiled(returnTarget);
@@ -119,7 +119,7 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
             assertCompiled(returnTarget);
 
             // Deoptimize return:
-            returnTarget.invalidate("test");
+            returnTarget.invalidate(this, "test");
             assertCompiled(enterTarget);
             enterTarget.call();
             assertNotCompiled(returnTarget);
@@ -131,8 +131,8 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
             assertCompiled(returnTarget);
 
             // Deoptimize both:
-            enterTarget.invalidate("test");
-            returnTarget.invalidate("test");
+            enterTarget.invalidate(this, "test");
+            returnTarget.invalidate(this, "test");
             assertNotCompiled(enterTarget);
             enterTarget.call();
             assertNotCompiled(returnTarget);
@@ -154,7 +154,7 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
         value[0] = null;
         boolean expectedFailure = true;
         // Deoptimize for assertions to be active
-        enterTarget.invalidate("test");
+        enterTarget.invalidate(this, "test");
         try {
             enterTarget.call();
             expectedFailure = false;
@@ -164,7 +164,7 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
         assertTrue("onEnter(null) did not fail!", expectedFailure);
 
         // Deoptimize for assertions to be active
-        returnTarget.invalidate("test");
+        returnTarget.invalidate(this, "test");
 
         value[0] = Long.MIN_VALUE;
         try {
@@ -191,6 +191,11 @@ public class AllocationReporterPartialEvaluationTest extends TestWithSynchronous
             AllocationReporter reporter = env.lookup(AllocationReporter.class);
             env.exportSymbol(AllocationReporter.class.getSimpleName(), env.asGuestValue(reporter));
             return reporter;
+        }
+
+        @Override
+        protected boolean isObjectOfLanguage(Object object) {
+            return false;
         }
 
     }
