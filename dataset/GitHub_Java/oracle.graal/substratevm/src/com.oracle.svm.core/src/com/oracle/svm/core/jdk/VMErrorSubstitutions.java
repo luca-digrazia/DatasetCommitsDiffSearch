@@ -97,6 +97,7 @@ final class Target_com_oracle_svm_core_util_VMError {
     }
 
     @Substitute
+    @NeverInline("avoid corner cases in error reporting: when we have a call to this method, we have a proper stack trace that includes the caller")
     private static RuntimeException unsupportedFeature(String msg) {
         throw new UnsupportedFeatureError(msg);
     }
@@ -111,7 +112,6 @@ public class VMErrorSubstitutions {
         doShutdown(msg, ex);
     }
 
-    @NeverInline("Starting a stack walk in the caller frame")
     private static void doShutdown(String msg, Throwable ex) {
         try {
             Log log = Log.log();
