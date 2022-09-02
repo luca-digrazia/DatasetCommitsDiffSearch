@@ -23,6 +23,8 @@
 
 package com.oracle.truffle.espresso.impl;
 
+import static com.oracle.truffle.espresso.impl.ModuleTable.moduleLock;
+
 import java.util.ArrayList;
 
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -30,17 +32,19 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
 
 public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEntry> {
+    private static final Object packageLock = moduleLock;
+
     @Override
     public Object getLock() {
-        return this;
+        return packageLock;
     }
 
     @Override
-    protected PackageEntry createEntry(Symbol<Name> name, ModuleEntry appendix) {
+    public PackageEntry createEntry(Symbol<Name> name, ModuleEntry appendix) {
         return new PackageEntry(name, appendix);
     }
 
-    public static class PackageEntry extends EntryTable.NamedEntry {
+    public static class PackageEntry implements EntryTable.NamedEntry {
 
         @Override
         public Symbol<Name> getName() {
@@ -48,28 +52,29 @@ public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEn
         }
 
         public PackageEntry(Symbol<Name> name, ModuleEntry module) {
-            super(name);
+            this.name = name;
             this.module = module;
         }
 
+        private final Symbol<Name> name;
         private final ModuleEntry module;
         private ArrayList<ModuleEntry> exports = null;
         private boolean isUnqualifiedExports = false;
         private boolean isExportedAllUnnamed = false;
 
-        public void addExports(ModuleEntry m) {
+        public void addExports(ModuleEntry module) {
             if (isUnqualifiedExports()) {
                 return;
             }
-            synchronized (this) {
-                if (m == null) {
+            synchronized (packageLock) {
+                if (module == null) {
                     setUnqualifiedExports();
                 }
                 if (exports == null) {
                     exports = new ArrayList<>();
                 }
-                if (!exports.contains(m)) {
-                    exports.add(m);
+                if (!exports.contains(module)) {
+                    exports.add(module);
                 }
             }
         }
@@ -105,13 +110,22 @@ public class PackageTable extends EntryTable<PackageTable.PackageEntry, ModuleEn
             if (isExportedAllUnnamed()) {
                 return;
             }
-            synchronized (this) {
+            synchronized (packageLock) {
                 isExportedAllUnnamed = true;
             }
         }
 
         public ModuleEntry module() {
             return module;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof PackageEntry)) {
+                return false;
+            }
+            PackageEntry pkg = (PackageEntry) obj;
+            return this.name == pkg.name;
         }
     }
 }

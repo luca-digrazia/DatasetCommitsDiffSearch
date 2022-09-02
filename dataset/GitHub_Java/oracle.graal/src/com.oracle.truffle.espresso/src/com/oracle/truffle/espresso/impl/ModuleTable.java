@@ -38,17 +38,8 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
     }
 
     @Override
-    protected ModuleEntry createEntry(Symbol<Name> name, ClassRegistry registry) {
+    public ModuleEntry createEntry(Symbol<Name> name, ClassRegistry registry) {
         return new ModuleEntry(name, registry);
-    }
-
-    public ModuleEntry createAndAddEntry(Symbol<Name> name, ClassRegistry registry, StaticObject module) {
-        ModuleEntry moduleEntry = createAndAddEntry(name, registry);
-        if (moduleEntry == null) {
-            return null;
-        }
-        moduleEntry.setModule(module);
-        return moduleEntry;
     }
 
     public static class ModuleEntry implements EntryTable.NamedEntry {
@@ -85,43 +76,39 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
             return registry;
         }
 
-        public void addReads(ModuleEntry from) {
+        public void addReads(ModuleEntry module) {
             if (!isNamed()) {
                 return;
             }
             synchronized (moduleLock) {
-                if (from == null) {
+                if (module == null) {
                     setCanReadAllUnnamed();
                     return;
                 }
                 if (reads == null) {
                     reads = new ArrayList<>();
                 }
-                if (!reads.contains(from)) {
-                    reads.add(from);
+                if (!reads.contains(module)) {
+                    reads.add(module);
                 }
             }
         }
 
-        public boolean canRead(ModuleEntry from) {
-            if (!from.isNamed() || from.isJavaBase()) {
+        public boolean canRead(ModuleEntry module) {
+            if (!module.isNamed() || module.isJavaBase()) {
                 return true;
             }
             synchronized (moduleLock) {
                 if (!hasReads()) {
                     return false;
                 } else {
-                    return reads.contains(from);
+                    return reads.contains(module);
                 }
             }
         }
 
         public void setModule(StaticObject module) {
             this.module = module;
-        }
-
-        public StaticObject module() {
-            return module;
         }
 
         public void setCanReadAllUnnamed() {
@@ -144,5 +131,13 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
             return reads != null && !reads.isEmpty();
         }
 
+        @Override
+        public boolean equals(Object obj) {
+            if (!(obj instanceof ModuleEntry)) {
+                return false;
+            }
+            ModuleEntry module = (ModuleEntry) obj;
+            return this.name == module.name;
+        }
     }
 }

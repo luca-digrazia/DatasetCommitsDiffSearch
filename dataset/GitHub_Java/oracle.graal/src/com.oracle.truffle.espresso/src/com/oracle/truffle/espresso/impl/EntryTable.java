@@ -31,7 +31,7 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
     public abstract Object getLock();
 
-    protected abstract T createEntry(Symbol<Name> name, K data);
+    public abstract T createEntry(Symbol<Name> name, K appendix);
 
     private final ArrayList<T> entries = new ArrayList<>();
 
@@ -48,31 +48,31 @@ public abstract class EntryTable<T extends EntryTable.NamedEntry, K> {
         return null;
     }
 
-    public T lookupOrCreate(Symbol<Name> name, K data) {
-        T entry = lookup(name);
-        if (entry != null) {
-            return entry;
+    public T lookupOrCreate(Symbol<Name> name, K appendix) {
+        T pkg = lookup(name);
+        if (pkg != null) {
+            return pkg;
         }
         synchronized (getLock()) {
-            entry = lookup(name);
-            if (entry != null) {
-                return entry;
+            pkg = lookup(name);
+            if (pkg != null) {
+                return pkg;
             }
-            return addEntry(name, data);
+            return addEntry(name, appendix);
         }
     }
 
-    public T createAndAddEntry(Symbol<Name> name, K data) {
+    public T createAndAddEntry(Symbol<Name> pkg, K appendix) {
         synchronized (getLock()) {
-            if (lookup(name) != null) {
+            if (lookup(pkg) != null) {
                 return null;
             }
-            return addEntry(name, data);
+            return addEntry(pkg, appendix);
         }
     }
 
-    private T addEntry(Symbol<Name> pkg, K data) {
-        T entry = createEntry(pkg, data);
+    public T addEntry(Symbol<Name> pkg, K appendix) {
+        T entry = createEntry(pkg, appendix);
         entries.add(entry);
         return entry;
     }
