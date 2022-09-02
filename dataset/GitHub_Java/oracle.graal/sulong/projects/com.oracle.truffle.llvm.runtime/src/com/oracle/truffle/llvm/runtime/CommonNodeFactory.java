@@ -19,7 +19,6 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.base.LLVMBasicBlockNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugBuilder;
-import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugInitNodeFactory;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMDebugSimpleObjectBuilder;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMFrameValueAccessImpl;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.debug.LLVMToDebugDeclarationNodeGen;
@@ -47,7 +46,7 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMVector;
 
 public class CommonNodeFactory {
 
-    public CommonNodeFactory() {
+    public CommonNodeFactory(){
     }
 
     public static LLVMLoadNode createLoadNode(LLVMInteropType.ValueKind kind) {
@@ -142,7 +141,7 @@ public class CommonNodeFactory {
     }
 
     public static LLVMStatementNode createBasicBlockNode(LLVMStatementNode[] statementNodes, LLVMControlFlowNode terminatorNode, int blockId,
-                    String blockName, LLVMContext context) {
+                                                  String blockName, LLVMContext context) {
         return LLVMBasicBlockNode.createBasicBlockNode(context, statementNodes, terminatorNode, blockId, blockName);
     }
 
@@ -189,14 +188,6 @@ public class CommonNodeFactory {
             return LLVMDebugSimpleObjectBuilder.create(toDebugNode, value);
         } else {
             return LLVMDebugObjectBuilder.UNAVAILABLE;
-        }
-    }
-
-    public static LLVMStatementNode createDebugValueInit(FrameSlot targetSlot, int[] offsets, int[] lengths) {
-        if (offsets == null || lengths == null) {
-            return null;
-        } else {
-            return LLVMDebugInitNodeFactory.AggregateInitNodeGen.create(targetSlot, offsets, lengths);
         }
     }
 

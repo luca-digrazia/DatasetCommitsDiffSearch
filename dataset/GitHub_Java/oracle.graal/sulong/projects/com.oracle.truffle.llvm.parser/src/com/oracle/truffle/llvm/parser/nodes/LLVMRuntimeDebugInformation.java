@@ -246,7 +246,7 @@ public final class LLVMRuntimeDebugInformation {
             }
         }
 
-        return CommonNodeFactory.createDebugValueInit(targetSlot, offsets, lengths);
+        return context.getLanguage().getNodeFactory().createDebugValueInit(targetSlot, offsets, lengths);
     }
 
     private static final int[] CLEAR_NONE = new int[0];
