@@ -34,27 +34,29 @@ import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 
-@NodeInfo(shortName = "[]")
 public class DebugExprArrayElementNode extends LLVMExpressionNode {
 
-    @Child private LLVMExpressionNode baseNode;
-    @Child private LLVMExpressionNode indexNode;
-    final DebugExprType type;
+    private LLVMExpressionNode indexNode;
+    private DebugExprType type;
+    private Object member;
+    private Object baseMember;
 
-    public DebugExprArrayElementNode(DebugExpressionPair basePair, LLVMExpressionNode indexNode) {
+    public DebugExprArrayElementNode(Object baseMember, LLVMExpressionNode indexNode, DebugExprType type) {
         this.indexNode = indexNode;
-        this.baseNode = basePair.getNode();
-        this.type = basePair.getType();
+        this.baseMember = baseMember;
+        this.type = type;
     }
 
     public DebugExprType getType() {
         return type;
+    }
+
+    public Object getMember() {
+        return member;
     }
 
     @Override
@@ -68,10 +70,9 @@ public class DebugExprArrayElementNode extends LLVMExpressionNode {
                 // index (=e.getResult()) is no Integer but a LLVMDebugObject$Primitive instead
                 idx = Integer.parseInt(e.getResult().toString());
             } catch (NumberFormatException e1) {
-                throw DebugExprException.typeError(this, e.getResult());
+                return DebugExprNodeFactory.errorObjNode.executeGeneric(frame);
             }
         }
-        Object baseMember = baseNode.executeGeneric(frame);
         InteropLibrary library = InteropLibrary.getFactory().getUncached();
         if (library.hasMembers(baseMember)) {
             Object getmembers;
@@ -84,13 +85,16 @@ public class DebugExprArrayElementNode extends LLVMExpressionNode {
                     }
                 }
             } catch (UnsupportedMessageException e) {
-                throw DebugExprException.create(this, "Array access of " + baseMember + " not possible");
+                // TODO Auto-generated catch block
+                e.printStackTrace();
             } catch (InvalidArrayIndexException e) {
-                throw DebugExprException.create(this, "Invalid array index: " + e.getInvalidIndex());
+                // TODO Auto-generated catch block
+                e.printStackTrace();
             } catch (UnknownIdentifierException e) {
-                throw DebugExprException.symbolNotFound(this, e.getUnknownIdentifier(), baseMember);
+                // TODO Auto-generated catch block
+                e.printStackTrace();
             }
         }
-        throw DebugExprException.create(this, "Array access of " + baseMember + " not possible");
+        return DebugExprNodeFactory.errorObjNode.executeGeneric(frame);
     }
 }
