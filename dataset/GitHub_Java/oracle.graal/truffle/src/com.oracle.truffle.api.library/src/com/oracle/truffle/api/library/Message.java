@@ -76,7 +76,7 @@ public abstract class Message {
     private final Class<?> returnType;
     private final Class<? extends Library> libraryClass;
     private final List<Class<?>> parameterTypes;
-    @CompilationFinal LibraryFactory<Library> library;
+    @CompilationFinal ResolvedLibrary<Library> library;
 
     @SuppressWarnings("unchecked")
     protected Message(Class<? extends Library> libraryClass, String messageName, Class<?> returnType, Class<?>... parameterTypes) {
@@ -173,7 +173,7 @@ public abstract class Message {
         return libraryClass;
     }
 
-    public final LibraryFactory<?> getFactory() {
+    final ResolvedLibrary<?> getResolvedLibrary() {
         return library;
     }
 
@@ -233,61 +233,31 @@ public abstract class Message {
      * Resolves a message globally for a given library name and message name. The library name
      * corresponds to the {@link Class#getName() name} of the library class and the message name
      * corresponds to the method name of the library message. The returned message always returns
-     * the same instance for a combination of library name and message. The provided library and
-     * message name must not be <code>null</code>. If the library or message is invalid or not found
-     * an {@link IllegalArgumentException} is thrown.
+     * the same instance for a combination of library name and message. If the library or message is
+     * invalid or not found an {@link IllegalArgumentException} is thrown. The provided library and
+     * message name must not be <code>null</code>.
      *
      * @param libraryName the name of the library this message is contained in.
      * @param messageName the simple name of this message.
+     * @since {@link #exists(String, String)} To verify the existence of a message.
      */
     public static Message resolve(String libraryName, String messageName) {
-        return LibraryFactory.resolveMessage(libraryName, messageName, true);
-    }
-
-    /**
-     * Resolves a message globally for a given library name and message name. The library name
-     * corresponds to the {@link Class#getName() name} of the library class and the message name
-     * corresponds to the method name of the library message. The returned message always returns
-     * the same instance for a combination of library name and message. If the library or message is
-     * invalid or not found <code>null</code> is returned.
-     *
-     * @param libraryName the name of the library this message is contained in.
-     * @param messageName the simple name of this message.
-     * @param fail whether to fail with an {@link IllegalArgumentException} or return
-     *            <code>null</code> if the message was not found.
-     *
-     */
-    public static Message resolve(String libraryName, String messageName, boolean fail) {
-        return LibraryFactory.resolveMessage(libraryName, messageName, fail);
+        return ResolvedLibrary.resolveMessage(libraryName, messageName, true);
     }
 
     /**
      * Resolves a message globally for a given library class and message name. The message name
      * corresponds to the method name of the library message. The returned message always returns
-     * the same instance for a combination of library class and message. The provided library class
-     * and message name must not be <code>null</code>. If the library or message is invalid or not
-     * found an {@link IllegalArgumentException} is thrown.
+     * the same instance for a combination of library class and message. If the library or message
+     * is invalid or not found an {@link IllegalArgumentException} is thrown. The provided library
+     * class and message name must not be <code>null</code>.
      *
      * @param libraryClass the class of the library this message is contained in.
      * @param messageName the simple name of this message.
+     * @since {@link #exists(String, String)} To verify the existence of a message.
      */
     public static Message resolve(Class<? extends Library> libraryClass, String messageName) {
-        return LibraryFactory.resolveMessage(libraryClass, messageName, true);
-    }
-
-    /**
-     * Resolves a message globally for a given library class and message name. The message name
-     * corresponds to the method name of the library message. The returned message always returns
-     * the same instance for a combination of library class and message. The provided library class
-     * and message name must not be <code>null</code>.
-     *
-     * @param libraryClass the class of the library this message is contained in.
-     * @param messageName the simple name of this message.
-     * @param fail whether to fail with an {@link IllegalArgumentException} or return
-     *            <code>null</code> if the message was not found.
-     */
-    public static Message resolve(Class<? extends Library> libraryClass, String messageName, boolean fail) {
-        return LibraryFactory.resolveMessage(libraryClass, messageName, fail);
+        return ResolvedLibrary.resolveMessage(libraryClass, messageName, true);
     }
 
 }
