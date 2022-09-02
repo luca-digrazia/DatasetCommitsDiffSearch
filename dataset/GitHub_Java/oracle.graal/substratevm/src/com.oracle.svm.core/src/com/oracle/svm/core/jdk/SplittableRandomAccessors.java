@@ -54,11 +54,6 @@ public class SplittableRandomAccessors extends RandomAccessors {
         return SINGLETON.getOrInitializeSeeder();
     }
 
-    /** The setter is necessary if SplittableRandom is initilized at run time. */
-    public static void setDefaultGen(AtomicLong value) {
-        SINGLETON.seeder = value;
-    }
-
     @Override
     long mix64(long l) {
         return Target_java_util_SplittableRandom.mix64(l);
