@@ -84,8 +84,8 @@ public class SubstratePartialEvaluator extends PartialEvaluator {
     }
 
     @Override
-    public void truffleTier(Request request) {
-        super.truffleTier(request);
+    public void doGraphPE(Request request, InlineInvokePlugin inlineInvokePlugin, EconomicMap<ResolvedJavaMethod, EncodedGraph> graphCache) {
+        super.doGraphPE(request, inlineInvokePlugin, graphCache);
         new DeadStoreRemovalPhase().apply(request.graph);
         new TruffleBoundaryPhase().apply(request.graph);
     }
