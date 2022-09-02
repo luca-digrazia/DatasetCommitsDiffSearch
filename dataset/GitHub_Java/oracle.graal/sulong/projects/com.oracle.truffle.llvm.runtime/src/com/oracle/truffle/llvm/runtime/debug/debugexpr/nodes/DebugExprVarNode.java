@@ -29,65 +29,72 @@
  */
 package com.oracle.truffle.llvm.runtime.debug.debugexpr.nodes;
 
+import java.util.Collection;
+import java.util.List;
+
+import org.graalvm.collections.Pair;
+
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.NodeLibrary;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.debug.LLVMDebuggerValue;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprException;
 import com.oracle.truffle.llvm.runtime.debug.debugexpr.parser.DebugExprType;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import org.graalvm.collections.Pair;
-
-import java.util.List;
 
 public abstract class DebugExprVarNode extends LLVMExpressionNode implements MemberAccessible {
 
-    private final String name;
-    private final Node location;
+    static final Scope[] NO_SCOPES = {};
 
-    DebugExprVarNode(String name, Node location) {
+    private final String name;
+    @CompilationFinal(dimensions = 1) private final Scope[] scopes;
+
+    DebugExprVarNode(String name, Collection<Scope> scopes) {
         this.name = name;
-        this.location = location;
+        this.scopes = scopes.toArray(NO_SCOPES);
     }
 
-    private Pair<Object, DebugExprType> findMemberAndType(VirtualFrame frameValue) {
-        NodeLibrary nodeLibrary = NodeLibrary.getUncached();
-        InteropLibrary interopLibrary = InteropLibrary.getUncached();
-        try {
-            LLVMDebuggerValue entries = (LLVMDebuggerValue) nodeLibrary.getScope(location, frameValue, true);
-            if (interopLibrary.isMemberReadable(entries, name)) {
-                Object member = interopLibrary.readMember(entries, name);
-                LLVMDebuggerValue ldv = (LLVMDebuggerValue) member;
-                Object metaObj = ldv.resolveMetaObject();
-                DebugExprType type = DebugExprType.getTypeFromSymbolTableMetaObject(metaObj);
-                return Pair.create(member, type);
+    @TruffleBoundary
+    private Pair<Object, DebugExprType> findMemberAndType() {
+        InteropLibrary library = InteropLibrary.getFactory().getUncached();
+        for (Scope scope : scopes) {
+            Object vars = scope.getVariables();
+            try {
+                if (library.isMemberReadable(vars, name)) {
+                    Object member = library.readMember(vars, name);
+                    LLVMDebuggerValue ldv = (LLVMDebuggerValue) member;
+                    Object metaObj = ldv.resolveMetaObject();
+                    DebugExprType type = DebugExprType.getTypeFromSymbolTableMetaObject(metaObj);
+                    return Pair.create(member, type);
+                }
+
+            } catch (ClassCastException e) {
+                // member has no value, e.g. if the compiler has eliminated unused symbols
+                // OR metaObj is no primitive type
+                throw DebugExprException.create(this, "\"%s\" cannot be casted to a LLVMDebuggerValue", name);
+            } catch (UnsupportedMessageException e) {
+                // should only happen if hasMembers == false
+                throw DebugExprException.symbolNotFound(this, name, null);
+            } catch (UnknownIdentifierException e) {
+                throw DebugExprException.symbolNotFound(this, e.getUnknownIdentifier(), null);
             }
-        } catch (ClassCastException e) {
-            // member has no value, e.g. if the compiler has eliminated unused symbols
-            // OR metaObj is no primitive type
-            throw DebugExprException.create(this, "\"%s\" cannot be casted to a LLVMDebuggerValue", name);
-        } catch (UnsupportedMessageException e) {
-            // should only happen if hasMembers == false
-            throw DebugExprException.symbolNotFound(this, name, null);
-        } catch (UnknownIdentifierException e) {
-            throw DebugExprException.symbolNotFound(this, e.getUnknownIdentifier(), null);
         }
         // not found: no exception is thrown as this node might be a function name
         return Pair.create(null, DebugExprType.getVoidType());
     }
 
     @Override
-    public DebugExprType getType(VirtualFrame frame) {
-        return findMemberAndType(frame).getRight();
+    public DebugExprType getType() {
+        return findMemberAndType().getRight();
     }
 
     @Override
-    public Object getMember(VirtualFrame frame) {
-        return findMemberAndType(frame).getLeft();
+    public Object getMember() {
+        return findMemberAndType().getLeft();
     }
 
     public String getName() {
@@ -95,8 +102,8 @@ public abstract class DebugExprVarNode extends LLVMExpressionNode implements Mem
     }
 
     @Specialization
-    public Object doVariable(VirtualFrame frame) {
-        Pair<Object, DebugExprType> pair = findMemberAndType(frame);
+    public Object doVariable() {
+        Pair<Object, DebugExprType> pair = findMemberAndType();
         if (pair.getLeft() == null) {
             throw DebugExprException.symbolNotFound(this, name, null);
         }
@@ -111,7 +118,7 @@ public abstract class DebugExprVarNode extends LLVMExpressionNode implements Mem
         throw DebugExprException.symbolNotFound(this, name, null);
     }
 
-    public DebugExprFunctionCallNode createFunctionCall(List<DebugExpressionPair> arguments, Object globalScope) {
-        return DebugExprFunctionCallNodeGen.create(name, arguments, globalScope);
+    public DebugExprFunctionCallNode createFunctionCall(List<DebugExpressionPair> arguments, Collection<Scope> globalScopes) {
+        return DebugExprFunctionCallNodeGen.create(name, arguments, globalScopes.toArray(NO_SCOPES));
     }
 }
