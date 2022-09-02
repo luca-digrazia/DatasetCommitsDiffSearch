@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -30,14 +30,12 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.WithExceptionNode;
 import org.graalvm.compiler.nodes.java.MonitorIdNode;
 import org.graalvm.compiler.nodes.virtual.VirtualObjectNode;
 import org.graalvm.compiler.options.OptionValues;
 
-import jdk.vm.ci.meta.ConstantReflectionProvider;
-import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.MetaAccessProvider;
 
 /**
  * This tool can be used to query the current state (normal/virtualized/re-materialized) of values
@@ -45,18 +43,7 @@ import jdk.vm.ci.meta.MetaAccessProvider;
  *
  * See also {@link Virtualizable}.
  */
-public interface VirtualizerTool {
-
-    /**
-     * @return the {@link MetaAccessProvider} associated with the current compilation.
-     */
-    MetaAccessProvider getMetaAccess();
-
-    /**
-     * @return the {@link ConstantReflectionProvider} associated with the current compilation, which
-     *         can be used to access {@link JavaConstant}s.
-     */
-    ConstantReflectionProvider getConstantReflection();
+public interface VirtualizerTool extends CoreProviders {
 
     /**
      * This method should be used to query the maximum size of virtualized objects before attempting
@@ -95,7 +82,7 @@ public interface VirtualizerTool {
      * @param index the index to be set.
      * @param value the new value for the given index.
      * @param accessKind the kind of the store which might be different than
-     *            {@link VirtualObjectNode#entryKind(int)}.
+     *            {@link VirtualObjectNode#entryKind}.
      * @return true if the operation was permitted
      */
     boolean setVirtualEntry(VirtualObjectNode virtualObject, int index, ValueNode value, JavaKind accessKind, long offset);
@@ -119,7 +106,8 @@ public interface VirtualizerTool {
     // operations on the current node
 
     /**
-     * Deletes the current node and replaces it with the given virtualized object.
+     * Deletes the current node and replaces it with the given virtualized object. If the current
+     * node is a {@link WithExceptionNode}, kills the exception edge.
      *
      * @param virtualObject the virtualized object that should replace the current node.
      */
@@ -133,7 +121,8 @@ public interface VirtualizerTool {
     void replaceWithValue(ValueNode replacement);
 
     /**
-     * Deletes the current node.
+     * Deletes the current node. If the current node is a {@link WithExceptionNode}, kills the
+     * exception edge.
      */
     void delete();
 
@@ -168,6 +157,15 @@ public interface VirtualizerTool {
      * @return true if materialization happened, false if not.
      */
     boolean ensureMaterialized(VirtualObjectNode virtualObject);
+
+    /**
+     *
+     * Returns whether deoptimization can recover from virtualizing large unsafe accesses to a byte
+     * array.
+     *
+     * @return true if deoptimization can recover, false if not.
+     */
+    boolean canVirtualizeLargeByteArrayUnsafeAccess();
 
     OptionValues getOptions();
 
