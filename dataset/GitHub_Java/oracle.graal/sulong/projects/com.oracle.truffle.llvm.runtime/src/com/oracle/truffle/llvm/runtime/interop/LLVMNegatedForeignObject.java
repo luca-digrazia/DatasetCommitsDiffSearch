@@ -38,7 +38,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 
 @ValueType
 @ExportLibrary(InteropLibrary.class)
-public final class LLVMNegatedForeignObject extends LLVMInternalTruffleObject {
+public final class LLVMNegatedForeignObject implements LLVMInternalTruffleObject {
 
     final Object foreign;
 
@@ -91,5 +91,4 @@ public final class LLVMNegatedForeignObject extends LLVMInternalTruffleObject {
     void toNative(@CachedLibrary("this.foreign") InteropLibrary interop) {
         interop.toNative(getForeign());
     }
-
 }
