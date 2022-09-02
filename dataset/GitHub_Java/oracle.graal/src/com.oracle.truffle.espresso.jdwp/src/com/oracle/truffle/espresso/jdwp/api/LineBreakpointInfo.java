@@ -35,17 +35,13 @@ public class LineBreakpointInfo extends AbstractBreakpointInfo {
     private final long classId;
     private final long methodId;
     private final long bci;
-    private final String slashName;
-    private final long line;
 
-    public LineBreakpointInfo(RequestFilter filter, byte tag, long classId, long methodId, long bci, String slashName, long line) {
+    public LineBreakpointInfo(RequestFilter filter, byte tag, long classId, long methodId, long bci) {
         super(filter);
         this.typeTag = tag;
         this.classId = classId;
         this.methodId = methodId;
         this.bci = bci;
-        this.slashName = slashName;
-        this.line = line;
     }
 
     public Object getThread() {
@@ -66,14 +62,6 @@ public class LineBreakpointInfo extends AbstractBreakpointInfo {
 
     public long getBci() {
         return bci;
-    }
-
-    public String getSlashName() {
-        return slashName;
-    }
-
-    public long getLine() {
-        return line;
     }
 
     @Override

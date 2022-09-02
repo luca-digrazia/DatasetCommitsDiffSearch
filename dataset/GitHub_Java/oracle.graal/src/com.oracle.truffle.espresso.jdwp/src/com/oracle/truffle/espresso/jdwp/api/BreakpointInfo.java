@@ -32,8 +32,4 @@ public interface BreakpointInfo {
     boolean isLineBreakpoint();
 
     boolean isExceptionBreakpoint();
-
-    void addSuspendPolicy(byte suspendPolicy);
-
-    byte getSuspendPolicy();
 }
