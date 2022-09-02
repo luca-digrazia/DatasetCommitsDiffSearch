@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.runtime;
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -64,6 +65,7 @@ import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.EspressoReference;
+import com.oracle.truffle.espresso.substitutions.Host;
 import com.oracle.truffle.espresso.substitutions.JavaVersionUtil;
 import com.oracle.truffle.espresso.substitutions.SubstitutionProfiler;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
@@ -287,7 +289,6 @@ public final class EspressoContext {
         }
         try {
             synchronized (pendingLock) {
-                // Wait until the reference drain updates the list.
                 while (!hasReferencePendingList()) {
                     waitBoundary(pendingLock);
                 }
@@ -337,7 +338,11 @@ public final class EspressoContext {
                         }
 
                         meta.java_lang_ref_Reference_discovered.set(prev.getGuestReference(), prev.getGuestReference());
-                        updateReferencePendingList(prev, lock);
+                        StaticObject obj = getAndSetReferencePendingList(head.getGuestReference());
+
+                        meta.java_lang_ref_Reference_discovered.set(prev.getGuestReference(), obj);
+
+                        getVM().JVM_MonitorNotify(lock, profiler);
                     } finally {
                         lock.getLock().unlock();
                     }
@@ -348,8 +353,7 @@ public final class EspressoContext {
             }
         }
 
-        @SuppressWarnings("rawtypes")
-        protected abstract void updateReferencePendingList(EspressoReference prev, StaticObject lock);
+        protected abstract StaticObject getAndSetReferencePendingList(@Host(Reference.class) StaticObject ref);
     }
 
     private void spawnVM() {
@@ -392,13 +396,9 @@ public final class EspressoContext {
         if (getJavaVersion().java8OrEarlier()) {
             // Initialize reference queue
             this.hostToGuestReferenceDrainThread = getEnv().createThread(new ReferenceDrain() {
-                @SuppressWarnings("rawtypes")
                 @Override
-                protected void updateReferencePendingList(EspressoReference prev, StaticObject lock) {
-                    StaticObject obj = meta.java_lang_ref_Reference_pending.getAndSetObject(meta.java_lang_ref_Reference.getStatics(), prev.getGuestReference());
-                    meta.java_lang_ref_Reference_discovered.set(prev.getGuestReference(), obj);
-                    getVM().JVM_MonitorNotify(lock, profiler);
-
+                protected StaticObject getAndSetReferencePendingList(@Host(Reference.class) StaticObject ref) {
+                    return meta.java_lang_ref_Reference_pending.getAndSetObject(meta.java_lang_ref_Reference.getStatics(), ref);
                 }
             });
             meta.java_lang_System_initializeSystemClass.invokeDirect(null);
@@ -406,15 +406,12 @@ public final class EspressoContext {
         if (getJavaVersion().java9OrLater()) {
             // Initialize reference queue
             this.hostToGuestReferenceDrainThread = getEnv().createThread(new ReferenceDrain() {
-                @SuppressWarnings("rawtypes")
                 @Override
-                protected void updateReferencePendingList(EspressoReference prev, StaticObject lock) {
+                protected StaticObject getAndSetReferencePendingList(@Host(Reference.class) StaticObject ref) {
                     synchronized (pendingLock) {
-                        StaticObject obj = referencePendingList;
-                        referencePendingList = prev.getGuestReference();
-                        meta.java_lang_ref_Reference_discovered.set(prev.getGuestReference(), obj);
-                        getVM().JVM_MonitorNotify(lock, profiler);
-                        pendingLock.notifyAll();
+                        StaticObject res = referencePendingList;
+                        referencePendingList = ref;
+                        return res;
                     }
                 }
             });
@@ -560,10 +557,9 @@ public final class EspressoContext {
                         Target_java_lang_Thread.killThread(guest);
                         Target_java_lang_Thread.interrupt0(guest);
                         t.join(10);
-                        while (t.isAlive()) {
+                        if (t.isAlive()) {
                             Target_java_lang_Thread.setThreadStop(guest, Target_java_lang_Thread.KillStatus.DISSIDENT);
-                            Target_java_lang_Thread.interrupt0(guest);
-                            t.join(10);
+                            t.join();
                         }
                     } else {
                         Target_java_lang_Thread.interrupt0(guest);
