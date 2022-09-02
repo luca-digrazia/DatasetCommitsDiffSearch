@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -37,14 +39,23 @@ import jdk.vm.ci.meta.Value;
 
 public final class LIRValueUtil {
 
+    /**
+     * Determine if the value, after removing an optional {@link CastValue cast}, is a variable.
+     * This method should always be used instead of an {@code instanceof Variable} check.
+     */
     public static boolean isVariable(Value value) {
         assert value != null;
-        return value instanceof Variable;
+        return stripCast(value) instanceof Variable;
     }
 
+    /**
+     * Return the value as a {@link Variable}, removing an optional {@link CastValue cast} from it.
+     * {@link #isVariable(Value)} must have returned {@code true} on this value. This method should
+     * always be used instead of a cast to {@link Variable}.
+     */
     public static Variable asVariable(Value value) {
         assert value != null;
-        return (Variable) value;
+        return (Variable) stripCast(value);
     }
 
     public static boolean isConstantValue(Value value) {
@@ -69,6 +80,21 @@ public final class LIRValueUtil {
         return asConstantValue(value).getJavaConstant();
     }
 
+    public static boolean isNullConstant(Value value) {
+        assert value != null;
+        return isJavaConstant(value) && asJavaConstant(value).isNull();
+    }
+
+    public static boolean isIntConstant(Value value, long expected) {
+        if (isJavaConstant(value)) {
+            JavaConstant javaConstant = asJavaConstant(value);
+            if (javaConstant != null && javaConstant.getJavaKind().isNumericInteger()) {
+                return javaConstant.asLong() == expected;
+            }
+        }
+        return false;
+    }
+
     public static boolean isStackSlotValue(Value value) {
         assert value != null;
         return value instanceof StackSlot || value instanceof VirtualStackSlot;
@@ -90,6 +116,15 @@ public final class LIRValueUtil {
 
     public static boolean sameRegister(Value v1, Value v2, Value v3) {
         return sameRegister(v1, v2) && sameRegister(v1, v3);
+    }
+
+    public static boolean isCast(Value value) {
+        assert value != null;
+        return value instanceof CastValue;
+    }
+
+    public static Value stripCast(Value value) {
+        return isCast(value) ? ((CastValue) value).underlyingValue() : value;
     }
 
     /**

@@ -152,24 +152,21 @@ public abstract class AArch64LIRGenerator extends LIRGenerator {
     }
 
     @Override
-    public Variable emitLogicCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue, boolean useBarriers) {
-        emitCompareAndSwap(address, expectedValue, newValue, useBarriers);
+    public Variable emitLogicCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, Value trueValue, Value falseValue) {
+        Variable prevValue = newVariable(expectedValue.getValueKind());
+        Variable scratch = newVariable(LIRKind.value(AArch64Kind.DWORD));
+        append(new CompareAndSwapOp(prevValue, loadReg(expectedValue), loadReg(newValue), asAllocatable(address), scratch));
         assert trueValue.getValueKind().equals(falseValue.getValueKind());
-        assert isIntConstant(trueValue, 1) && isIntConstant(falseValue, 0);
         Variable result = newVariable(trueValue.getValueKind());
-        append(new CondSetOp(result, ConditionFlag.EQ));
+        append(new CondMoveOp(result, ConditionFlag.EQ, asAllocatable(trueValue), asAllocatable(falseValue)));
         return result;
     }
 
     @Override
-    public Variable emitValueCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue, boolean useBarriers) {
-        return emitCompareAndSwap(address, expectedValue, newValue, useBarriers);
-    }
-
-    private Variable emitCompareAndSwap(Value address, Value expectedValue, Value newValue, boolean useBarriers) {
-        Variable result = newVariable(expectedValue.getValueKind());
-        Variable scratch = newVariable(LIRKind.value(AArch64Kind.DWORD));
-        append(new CompareAndSwapOp(result, loadReg(expectedValue), loadReg(newValue), asAllocatable(address), scratch, useBarriers));
+    public Variable emitValueCompareAndSwap(LIRKind accessKind, Value address, Value expectedValue, Value newValue) {
+        Variable result = newVariable(newValue.getValueKind());
+        Variable scratch = newVariable(LIRKind.value(AArch64Kind.WORD));
+        append(new CompareAndSwapOp(result, loadReg(expectedValue), loadReg(newValue), asAllocatable(address), scratch));
         return result;
     }
 
