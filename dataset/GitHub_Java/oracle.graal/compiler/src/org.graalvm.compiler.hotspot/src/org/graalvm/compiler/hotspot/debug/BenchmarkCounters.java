@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -98,8 +98,6 @@ public class BenchmarkCounters {
         public static final OptionKey<Boolean> BenchmarkCountersDumpStatic = new OptionKey<>(false);
         @Option(help = "file:doc-files/AbortOnBenchmarkCounterOverflowHelp.txt", type = OptionType.Debug)
         public static final OptionKey<Boolean> AbortOnBenchmarkCounterOverflow = new OptionKey<>(false);
-        @Option(help = "Turn off to print all counters > 0", type = OptionType.Debug)
-        public static final OptionKey<Boolean> BenchmarkCounterPrintingCutoff = new OptionKey<>(true);
         //@formatter:on
     }
 
@@ -261,37 +259,23 @@ public class BenchmarkCounters {
                 int index = counter.index;
                 if (counter.group.equals(group)) {
                     sum += array[index];
-                    // remark: array[index] * array.length + index yields unique keys for treeset
-                    // despite possibly equal counter values and when integer-dividing by
-                    // array.length the index is removed and the counter restored
                     sorted.put(array[index] * array.length + index, getName(entry.getKey(), group));
                 }
             }
 
             if (sum > 0) {
-                if (Options.BenchmarkCounterPrintingCutoff.getValue(options)) {
-                    long cutoff = sorted.size() < 10 ? 1 : Math.max(1, sum / 100);
-                    int cnt = sorted.size();
+                long cutoff = sorted.size() < 10 ? 1 : Math.max(1, sum / 100);
+                int cnt = sorted.size();
 
-                    // remove everything below cutoff and keep at most maxRows
-                    Iterator<Map.Entry<Long, String>> iter = sorted.entrySet().iterator();
-                    while (iter.hasNext()) {
-                        Map.Entry<Long, String> entry = iter.next();
-                        long counter = entry.getKey() / array.length;
-                        if (counter < cutoff || cnt > maxRows) {
-                            iter.remove();
-                        }
-                        cnt--;
+                // remove everything below cutoff and keep at most maxRows
+                Iterator<Map.Entry<Long, String>> iter = sorted.entrySet().iterator();
+                while (iter.hasNext()) {
+                    Map.Entry<Long, String> entry = iter.next();
+                    long counter = entry.getKey() / array.length;
+                    if (counter < cutoff || cnt > maxRows) {
+                        iter.remove();
                     }
-                } else {
-                    Iterator<Map.Entry<Long, String>> iter = sorted.entrySet().iterator();
-                    while (iter.hasNext()) {
-                        Map.Entry<Long, String> entry = iter.next();
-                        long counter = entry.getKey() / array.length;
-                        if (counter == 0) {
-                            iter.remove();
-                        }
-                    }
+                    cnt--;
                 }
 
                 String numFmt = Options.DynamicCountersPrintGroupSeparator.getValue(options) ? "%,19d" : "%19d";

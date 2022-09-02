@@ -50,6 +50,7 @@ import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.MapCursor;
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
+import org.graalvm.compiler.core.GraalServiceThread;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.GraalError;
@@ -482,7 +483,7 @@ public final class HotSpotGraalLibraryFeature implements com.oracle.svm.core.gra
         }
 
         public Annotation[] getClassAnnotations(String className) {
-            return classAnnotationMap.getOrDefault(className, NO_ANNOTATIONS);
+            return classAnnotationMap.get(className);
         }
 
         public Annotation[][] getParameterAnnotations(String className, String methodName) {
@@ -492,7 +493,7 @@ public final class HotSpotGraalLibraryFeature implements com.oracle.svm.core.gra
 
         public Annotation[] getMethodAnnotations(ResolvedJavaMethod javaMethod) {
             String name = javaMethod.format("%R %H.%n%P");
-            return methodAnnotationMap.getOrDefault(name, NO_ANNOTATIONS);
+            return methodAnnotationMap.get(name);
 
         }
     }
@@ -589,4 +590,21 @@ final class Target_org_graalvm_compiler_truffle_common_TruffleCompilerRuntimeIns
     @Alias @RecomputeFieldValue(kind = Kind.Reset, isFinal = true) static Object TRUFFLE_RUNTIME;
     // Checkstyle: resume
     @Alias @RecomputeFieldValue(kind = Kind.Reset) static TruffleCompilerRuntime truffleCompilerRuntime;
+}
+
+@TargetClass(className = "org.graalvm.compiler.core.GraalServiceThread", onlyWith = HotSpotGraalLibraryFeature.IsEnabled.class)
+final class Target_org_graalvm_compiler_core_GraalServiceThread {
+    @Substitute()
+    void beforeRun() {
+        GraalServiceThread thread = KnownIntrinsics.convertUnknownValue(this, GraalServiceThread.class);
+        if (!HotSpotJVMCIRuntime.runtime().attachCurrentThread(thread.isDaemon())) {
+            throw new InternalError("Couldn't attach to HotSpot runtime");
+        }
+    }
+
+    @Substitute
+    @SuppressWarnings("static-method")
+    void afterRun() {
+        HotSpotJVMCIRuntime.runtime().detachCurrentThread();
+    }
 }
