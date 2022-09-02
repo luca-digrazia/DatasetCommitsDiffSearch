@@ -417,8 +417,9 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         }
     }
 
+    @Override
     @SuppressWarnings("try")
-    public void matchBlock(Block block, StructuredGraph.ScheduleResult schedule) {
+    public void matchBlock(Block block, StructuredGraph graph, StructuredGraph.ScheduleResult schedule) {
         try (DebugCloseable matchScope = gen.getMatchScope(block)) {
             // Allow NodeLIRBuilder subclass to specialize code generation of any interesting groups
             // of instructions
@@ -624,6 +625,7 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
 
     protected abstract void emitIndirectCall(IndirectCallTargetNode callTarget, Value result, Value[] parameters, Value[] temps, LIRFrameState callState);
 
+    @Override
     public Value[] visitInvokeArguments(CallingConvention invokeCc, Collection<ValueNode> arguments) {
         // for each argument, load it into the correct location
         Value[] result = new Value[arguments.size()];
@@ -750,18 +752,19 @@ public abstract class NodeLIRBuilder implements NodeLIRBuilderTool, LIRGeneratio
         append(new FullInfopointOp(stateFor(i, i.getState()), i.getReason()));
     }
 
-    private void setSourcePosition(NodeSourcePosition position) {
+    @Override
+    public void setSourcePosition(NodeSourcePosition position) {
         gen.setSourcePosition(position);
     }
 
     @Override
-    public LIRGenerator getLIRGeneratorTool() {
+    public LIRGeneratorTool getLIRGeneratorTool() {
         return gen;
     }
 
     @Override
     public void emitReadExceptionObject(ValueNode node) {
-        LIRGenerator lirGenTool = getLIRGeneratorTool();
+        LIRGeneratorTool lirGenTool = getLIRGeneratorTool();
         Value returnRegister = lirGenTool.getRegisterConfig().getReturnRegister(node.getStackKind()).asValue(
                         LIRKind.fromJavaKind(lirGenTool.target().arch, node.getStackKind()));
         lirGenTool.emitIncomingValues(new Value[]{returnRegister});
