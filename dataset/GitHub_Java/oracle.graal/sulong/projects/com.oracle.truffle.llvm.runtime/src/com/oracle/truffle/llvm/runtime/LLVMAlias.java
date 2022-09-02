@@ -106,14 +106,4 @@ public class LLVMAlias extends LLVMSymbol {
         }
         return tmp;
     }
-
-    @Override
-    public boolean isElemPtrExpression() {
-        return target.isElemPtrExpression();
-    }
-
-    @Override
-    public LLVMElemPtrSymbol asElemPtrExpression() {
-        return target.asElemPtrExpression();
-    }
 }

@@ -31,7 +31,6 @@ package com.oracle.truffle.llvm.parser;
 
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.llvm.runtime.IDGenerater.BitcodeID;
-import com.oracle.truffle.llvm.runtime.LLVMElemPtrSymbol;
 import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.LLVMScope;
 import com.oracle.truffle.llvm.runtime.LLVMSymbol;
@@ -104,14 +103,6 @@ public final class LLVMParserRuntime {
             return symbol.asGlobalVariable();
         }
         throw new IllegalStateException("Retrieving unknown global symbol in LLVMParserRuntime: " + name);
-    }
-
-    public LLVMElemPtrSymbol lookUpElemPtrExpression(String name) {
-        LLVMSymbol symbol = fileScope.get(name);
-        if (symbol != null && symbol.isElemPtrExpression()) {
-            return symbol.asElemPtrExpression();
-        }
-        throw new IllegalStateException("Retrieving unknown getElementPointer symbol in LLVMParserRuntime: " + name);
     }
 
     public LLVMSymbol lookupSymbol(String name) {
