@@ -35,6 +35,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.file.spi.FileTypeDetector;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -93,9 +94,10 @@ import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RecomputeFieldValue;
 import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.TargetClass;
-import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.deopt.Deoptimizer;
 import com.oracle.svm.core.heap.Heap;
+import com.oracle.svm.core.jdk.FilesFeature;
+import com.oracle.svm.core.jdk.FilesSupport;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.HostedOptionValues;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
@@ -105,6 +107,7 @@ import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.graal.hosted.GraalFeature;
 import com.oracle.svm.graal.hosted.GraalFeature.CallTreeNode;
 import com.oracle.svm.graal.hosted.GraalFeature.RuntimeBytecodeParser;
+import com.oracle.svm.hosted.FeatureImpl.AfterRegistrationAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
 import com.oracle.svm.hosted.FeatureImpl.BeforeCompilationAccessImpl;
 import com.oracle.svm.hosted.code.InliningUtilities;
@@ -201,7 +204,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
 
     @Override
     public List<Class<? extends Feature>> getRequiredFeatures() {
-        return Arrays.asList(GraalFeature.class, NodeClassFeature.class);
+        return Arrays.asList(GraalFeature.class, NodeClassFeature.class, FilesFeature.class);
     }
 
     private static void initializeTruffleReflectively(ClassLoader imageClassLoader) {
@@ -255,7 +258,20 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             truffleRuntime.resetHosted();
         }
 
+        /* sun.nio.fs.GnomeFileTypeDetector is currently not supported (GR-4863) */
+        AfterRegistrationAccessImpl access = (AfterRegistrationAccessImpl) a;
+        access.findSubclasses(FileTypeDetector.class).stream().filter(detector -> !detector.getClass().getName().equals("sun.nio.fs.GnomeFileTypeDetector")).filter(
+                        detector -> !Modifier.isAbstract(detector.getModifiers())).forEach(this::safeLoadFileDetector);
+
         initializeTruffleReflectively(Thread.currentThread().getContextClassLoader());
+    }
+
+    private void safeLoadFileDetector(Class<? extends FileTypeDetector> detector) {
+        try {
+            ImageSingletons.lookup(FilesSupport.class).addFileTypeDetector(detector.getDeclaredConstructor().newInstance());
+        } catch (Exception ex) {
+            throw VMError.shouldNotReachHere(ex);
+        }
     }
 
     @Override
@@ -497,9 +513,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         } else if (implementationMethod.getAnnotation(NeverInline.class) != null) {
             /* Ensure that NeverInline methods are also never inlined during Truffle compilation. */
             return false;
-        } else if (implementationMethod.getAnnotation(Uninterruptible.class) != null) {
-            /* The semantics of Uninterruptible would get lost during partial evaluation. */
-            return false;
         } else if (implementationMethod.getAnnotation(TruffleCallBoundary.class) != null) {
             return false;
         } else if (calleeNode != null && implementationMethods.size() > 4 && isBlacklisted(calleeNode.getTargetMethod())) {
@@ -522,10 +535,6 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
     }
 
     private boolean isBlacklisted(ResolvedJavaMethod method) {
-        if (!((AnalysisMethod) method).allowRuntimeCompilation()) {
-            return true;
-        }
-
         if (method.isSynchronized() && method.getName().equals("fillInStackTrace")) {
             /*
              * We do not want anything related to Throwable.fillInStackTrace in the image. For
@@ -543,7 +552,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             return false;
         }
         CompilerDirectives.TruffleBoundary truffleBoundary = method.getAnnotation(CompilerDirectives.TruffleBoundary.class);
-        return truffleBoundary != null && truffleBoundary.transferToInterpreterOnException();
+        return truffleBoundary != null && (!truffleBoundary.throwsControlFlowException() && truffleBoundary.transferToInterpreterOnException());
     }
 
     private void initializeMethodBlacklist(MetaAccessProvider metaAccess) {
