@@ -32,6 +32,7 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.UnsignedWord;
 
 import com.oracle.svm.core.annotate.AlwaysInline;
+import com.oracle.svm.core.heap.ObjectHeader;
 import com.oracle.svm.core.heap.ObjectReferenceVisitor;
 import com.oracle.svm.core.heap.ReferenceAccess;
 import com.oracle.svm.core.hub.LayoutEncoding;
@@ -91,8 +92,8 @@ public class GreyToBlackObjRefVisitor implements ObjectReferenceVisitor {
             trace.string(" null").string("]").newline();
             return true;
         }
-        final ObjectHeaderImpl ohi = HeapImpl.getHeapImpl().getObjectHeaderImpl();
-        final UnsignedWord header = ObjectHeaderImpl.readHeaderFromPointer(p);
+        final UnsignedWord header = ObjectHeader.readHeaderFromPointer(p);
+        final ObjectHeader ohi = HeapImpl.getHeapImpl().getObjectHeader();
         // It might be a forwarding pointer.
         if (ohi.isForwardedHeader(header)) {
             getCounters().noteForwardedReferent();
@@ -126,7 +127,7 @@ public class GreyToBlackObjRefVisitor implements ObjectReferenceVisitor {
             trace.string("  objectHeader: ").string(ohi.toStringFromObject(obj)).newline();
         }
         // Promote the Object if necessary, making it at least grey, and ...
-        final Object copy = HeapImpl.getHeapImpl().promoteObject(obj);
+        final Object copy = HeapImpl.getHeapImpl().promoteObject(obj, objRef, innerOffset, compressed);
         trace.string("  copy: ").object(copy);
         if (trace.isEnabled()) {
             trace.string("  objectHeader: ").string(ohi.toStringFromObject(copy));
