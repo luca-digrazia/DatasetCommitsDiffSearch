@@ -36,7 +36,6 @@ import org.graalvm.polyglot.Context;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
@@ -66,9 +65,11 @@ public class LegacySplittingStrategyTest extends AbstractSplittingStrategyTest {
 
     @Test
     @SuppressWarnings("try")
-    @Ignore("Does not work with per engine cache.")
     public void testDefaultStrategyStabilises() {
-        try (TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope s = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleSplittingMaxNumberOfSplitNodes, 1000)) {
+
+        FallbackSplitInfo fallbackSplitInfo = new FallbackSplitInfo();
+        try (TruffleRuntimeOptions.TruffleRuntimeOptionsOverrideScope s = TruffleRuntimeOptions.overrideOptions(SharedTruffleRuntimeOptions.TruffleSplittingMaxNumberOfSplitNodes,
+                        fallbackSplitInfo.getSplitLimit() + 1000)) {
             createDummyTargetsToBoostGrowingSplitLimit();
             class InnerRootNode extends SplittableRootNode {
                 OptimizedCallTarget target;
@@ -254,7 +255,6 @@ public class LegacySplittingStrategyTest extends AbstractSplittingStrategyTest {
     }
 
     @Test
-    @Ignore("Does not work with per engine cache.")
     @SuppressWarnings("try")
     public void testMaxLimitForTargetsOutsideEngine() {
         FallbackSplitInfo fallbackSplitInfo = new FallbackSplitInfo();
@@ -280,7 +280,6 @@ public class LegacySplittingStrategyTest extends AbstractSplittingStrategyTest {
 
     @Test
     @SuppressWarnings("try")
-    @Ignore("Does not work with per engine cache.")
     public void testGrowingLimitForTargetsOutsideEngine() {
         FallbackSplitInfo fallbackSplitInfo = new FallbackSplitInfo();
         final int expectedGrowingSplits = (int) (2 * TruffleRuntimeOptions.getValue(SharedTruffleRuntimeOptions.TruffleSplittingGrowthLimit));
@@ -324,7 +323,7 @@ public class LegacySplittingStrategyTest extends AbstractSplittingStrategyTest {
         @Override
         protected CallTarget parse(ParsingRequest request) throws Exception {
             if (request.getSource().getCharacters().equals("exec")) {
-                return runtime.createCallTarget(new CallsInnerAndSwapsCallNode(runtime.createCallTarget(new DummyRootNode())));
+                return callTarget;
             } else if (request.getSource().getCharacters().toString().startsWith("new")) {
                 return runtime.createCallTarget(new DummyRootNode());
             } else {
