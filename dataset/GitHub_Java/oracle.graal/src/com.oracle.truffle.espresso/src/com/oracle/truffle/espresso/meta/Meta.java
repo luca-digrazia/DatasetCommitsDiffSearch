@@ -54,7 +54,6 @@ import com.oracle.truffle.espresso.substitutions.Host;
  */
 public final class Meta implements ContextAccess {
 
-
     private final EspressoContext context;
 
     public Meta(EspressoContext context) {
@@ -143,7 +142,6 @@ public final class Meta implements ContextAccess {
         ClassNotFoundException = knownKlass(Type.ClassNotFoundException);
         StackOverflowError = knownKlass(Type.StackOverflowError);
         OutOfMemoryError = knownKlass(Type.OutOfMemoryError);
-        ClassCastException = knownKlass(Type.ClassCastException);
 
         NoSuchFieldError = knownKlass(Type.NoSuchFieldError);
         NoSuchMethodError = knownKlass(Type.NoSuchMethodError);
@@ -274,8 +272,6 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass ClassNotFoundException;
     public final ObjectKlass StackOverflowError;
     public final ObjectKlass OutOfMemoryError;
-    public final ObjectKlass ClassCastException;
-
     public final ObjectKlass Throwable;
     public final Field Throwable_backtrace;
 

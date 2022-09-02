@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
@@ -35,16 +34,13 @@ public final class InvokeStaticNode extends QuickNode {
     public InvokeStaticNode(Method method) {
         assert method.isStatic();
         this.method = method;
+        this.directCallNode = DirectCallNode.create(method.getCallTarget());
     }
 
     @Override
     public int invoke(final VirtualFrame frame, int top) {
         // TODO(peterssen): Constant fold this check.
-        if (directCallNode == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            method.getDeclaringKlass().initialize();
-            directCallNode = DirectCallNode.create(method.getCallTarget());
-        }
+        method.getDeclaringKlass().initialize();
         BytecodeNode root = (BytecodeNode) getParent();
         Object[] args = root.peekArguments(frame, top, false, method.getParsedSignature());
         Object result = directCallNode.call(args);

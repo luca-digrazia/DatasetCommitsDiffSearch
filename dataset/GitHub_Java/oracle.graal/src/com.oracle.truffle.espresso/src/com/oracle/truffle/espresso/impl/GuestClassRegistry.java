@@ -81,8 +81,9 @@ public final class GuestClassRegistry extends ClassRegistry {
         assert StaticObject.notNull(classLoader);
         StaticObjectClass guestClass = (StaticObjectClass) ClassLoader_loadClass.invokeDirect(classLoader, getMeta().toGuestString(Types.binaryName(type)), false);
         klass = guestClass.getMirrorKlass();
-        Klass previous = classes.putIfAbsent(type, klass);
-        assert previous == null || previous == klass;
+
+        classes.putIfAbsent(type, klass);
+
         return klass;
     }
 

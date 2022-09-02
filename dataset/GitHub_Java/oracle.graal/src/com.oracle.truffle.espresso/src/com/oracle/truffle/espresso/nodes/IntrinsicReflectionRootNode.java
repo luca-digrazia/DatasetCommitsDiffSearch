@@ -31,7 +31,7 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 
-public class IntrinsicReflectionRootNode extends EspressoBaseNode {
+public class IntrinsicReflectionRootNode extends EspressoRootNode {
 
     private final java.lang.reflect.Method reflectMethod;
 
@@ -62,18 +62,6 @@ public class IntrinsicReflectionRootNode extends EspressoBaseNode {
 
     @TruffleBoundary
     private Object callIntrinsic(Object... args) throws InvocationTargetException, IllegalAccessException {
-        if (getMethod().isSynchronized()) {
-            if (getMethod().isStatic()) {
-                synchronized (getMethod().getDeclaringKlass().mirror()) {
-                    return reflectMethod.invoke(null, args);
-                }
-            } else {
-                synchronized (/* this */ args[0]) { // synchronize on receiver
-                    return reflectMethod.invoke(null, args);
-                }
-            }
-        } else {
-            return reflectMethod.invoke(null, args);
-        }
+        return reflectMethod.invoke(null, args);
     }
 }

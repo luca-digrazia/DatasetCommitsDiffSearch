@@ -22,14 +22,17 @@
  */
 package com.oracle.truffle.espresso.jni;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.library.ExportLibrary;
-import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.runtime.EspressoException;
 
-@ExportLibrary(InteropLibrary.class)
 public class Callback implements TruffleObject {
 
     private final int arity;
@@ -40,23 +43,66 @@ public class Callback implements TruffleObject {
         this.function = function;
     }
 
-    @ExportMessage
-    public boolean isExecutable() {
-        return true;
-    }
-
-    @ExportMessage
-    public Object execute(Object... arguments) throws ArityException {
-        if (arguments.length == arity) {
-            Object ret = function.call(arguments);
+    @CompilerDirectives.TruffleBoundary
+    Object call(Object... args) {
+        if (args.length == arity) {
+            Object ret = function.call(args);
             return ret;
         } else {
-            CompilerDirectives.transferToInterpreter();
-            throw ArityException.create(arity, arguments.length);
+            throw ArityException.raise(arity, args.length);
         }
+    }
+
+    @Override
+    public ForeignAccess getForeignAccess() {
+        return CallbackMessageResolutionForeign.ACCESS;
     }
 
     public interface Function {
         Object call(Object... args);
+    }
+
+    private static Callback wrap(Object receiver, Method m) {
+        assert m != null;
+        return new Callback(m.getParameterCount(), new Function() {
+            @Override
+            public Object call(Object... args) {
+                try {
+                    return m.invoke(receiver, args);
+                } catch (IllegalAccessException e) {
+                    throw EspressoError.shouldNotReachHere(e);
+                } catch (InvocationTargetException e) {
+                    Throwable targetEx = e.getTargetException();
+                    if (targetEx instanceof EspressoException) {
+                        throw (EspressoException) targetEx;
+                    }
+                    if (targetEx instanceof RuntimeException) {
+                        throw (RuntimeException) targetEx;
+                    }
+                    throw EspressoError.shouldNotReachHere(e);
+                }
+            }
+        });
+    }
+
+    static Callback wrapStaticMethod(Class<?> clazz, String methodName, Class<?> parameterTypes) {
+        Method m;
+        try {
+            m = clazz.getDeclaredMethod(methodName, parameterTypes);
+            assert Modifier.isStatic(m.getModifiers());
+        } catch (NoSuchMethodException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
+        return wrap(clazz, m);
+    }
+
+    public static Callback wrapInstanceMethod(Object receiver, String methodName, Class<?> parameterTypes) {
+        Method m;
+        try {
+            m = receiver.getClass().getDeclaredMethod(methodName, parameterTypes);
+        } catch (NoSuchMethodException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
+        return wrap(receiver, m);
     }
 }

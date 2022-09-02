@@ -23,9 +23,6 @@
 
 package com.oracle.truffle.espresso.impl;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.descriptors.Types;
@@ -46,8 +43,6 @@ public final class BootClassRegistry extends ClassRegistry {
     static final DebugCounter loadKlassCount = DebugCounter.create("BCL loadKlassCount");
     static final DebugCounter loadKlassCacheHits = DebugCounter.create("BCL loadKlassCacheHits");
 
-    private final Map<String, String> packageMap = new HashMap<>();
-
     public BootClassRegistry(EspressoContext context) {
         super(context);
         // Primitive classes do not have a .class definition, inject them directly in the BCL.
@@ -59,7 +54,7 @@ public final class BootClassRegistry extends ClassRegistry {
     }
 
     @Override
-    public Klass loadKlass(Symbol<Type> type, Symbol<Type> instigator) {
+    public Klass loadKlass(Symbol<Type> type) {
         if (Types.isArray(type)) {
             Symbol<Type> elemental = getTypes().getElementalType(type);
             Klass elementalKlass = loadKlass(elemental);
@@ -86,15 +81,7 @@ public final class BootClassRegistry extends ClassRegistry {
 
         // Defining a class also loads the superclass and the superinterfaces which excludes the
         // use of computeIfAbsent to insert the class since the map is modified.
-        ObjectKlass result = defineKlass(type, classpathFile.contents, instigator);
-        packageMap.put(result.getRuntimePackage(), classpathFile.classpathEntry.path());
-
-        return result;
-    }
-
-    public String getPackagePath(String pkgName) {
-        String result = packageMap.get(pkgName);
-        return result;
+        return defineKlass(type, classpathFile.contents);
     }
 
     @Override

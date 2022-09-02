@@ -26,7 +26,6 @@ import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
 
 import java.util.Objects;
 
-import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
@@ -169,14 +168,11 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
             // of C for the name and descriptor specified by the method reference include exactly
             // one method that does not have its ACC_ABSTRACT flag set, then this method is chosen
             // and method lookup succeeds.
-            while (klass != null) {
-                for (ObjectKlass i : klass.getSuperInterfaces()) {
-                    method = lookupInterfaceMethod(i, name, signature);
-                    if (method != null) {
-                        return method;
-                    }
+            for (ObjectKlass i : klass.getSuperInterfaces()) {
+                method = lookupInterfaceMethod(i, name, signature);
+                if (method != null) {
+                    return method;
                 }
-                klass = klass.getSuperKlass();
             }
             return null;
         }
@@ -229,7 +225,6 @@ public interface ClassMethodRefConstant extends MethodRefConstant {
             }
 
             if (!MemberRefConstant.checkAccess(accessingKlass, holderKlass, method)) {
-                System.err.println(EspressoOptions.INCEPTION_NAME + " Method access check of: " + method.getName() + " in " + holderKlass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
                 throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(getName(pool)));
             }
 

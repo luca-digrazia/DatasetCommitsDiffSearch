@@ -26,7 +26,6 @@ import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveMethodCount;
 
 import java.util.Objects;
 
-import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Descriptor;
@@ -157,7 +156,6 @@ public interface InterfaceMethodRefConstant extends MethodRefConstant {
             }
 
             if (!MemberRefConstant.checkAccess(accessingKlass, holderInterface, method)) {
-                System.err.println(EspressoOptions.INCEPTION_NAME + " Interface method access check of: " + method.getName() + " in " + holderInterface.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
                 throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(name));
             }
 

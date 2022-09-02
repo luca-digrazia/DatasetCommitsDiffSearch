@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.ForeignAccess;
@@ -31,6 +30,7 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.JniEnv;
@@ -94,21 +94,16 @@ public abstract class NativeRootNode extends EspressoRootNode {
         }
     }
 
-    @TruffleBoundary
-    private static void maybeThrowAndClearPendingException(JniEnv jniEnv) {
-        StaticObject ex = jniEnv.getPendingException();
-        if (ex != null) {
-            jniEnv.clearPendingException();
-            throw new EspressoException(ex);
-        }
-    }
-
     public Object processResult(Object result) {
-        JniEnv jniEnv = getMethod().getContext().getJNI();
+        JniEnv jniEnv = EspressoLanguage.getCurrentContext().getJNI();
         assert jniEnv.getNativePointer() != 0;
 
         // JNI exception handling.
-        maybeThrowAndClearPendingException(jniEnv);
+        StaticObject ex = jniEnv.getThreadLocalPendingException().get();
+        if (ex != null) {
+            jniEnv.getThreadLocalPendingException().clear();
+            throw new EspressoException(ex);
+        }
 
         switch (getMethod().getReturnKind()) {
             case Boolean:

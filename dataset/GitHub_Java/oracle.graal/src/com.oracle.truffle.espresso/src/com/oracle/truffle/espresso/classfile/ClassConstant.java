@@ -27,7 +27,6 @@ import static com.oracle.truffle.espresso.nodes.BytecodeNode.resolveKlassCount;
 import java.util.Objects;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.espresso.EspressoOptions;
 import com.oracle.truffle.espresso.classfile.ConstantPool.Tag;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -102,9 +101,8 @@ public interface ClassConstant extends PoolConstant {
                 Klass klass = context.getRegistries().loadKlass(
                                 context.getTypes().fromName(name), accessingKlass.getDefiningClassLoader());
 
-                if (!checkAccess(klass.getElementalType(), accessingKlass)) {
+                if (!checkAccess(klass, accessingKlass)) {
                     Meta meta = context.getMeta();
-                    System.err.println(EspressoOptions.INCEPTION_NAME + " Access check of: " + klass.getType() + " from " + accessingKlass.getType() + " throws IllegalAccessError");
                     throw meta.throwExWithMessage(meta.IllegalAccessError, meta.toGuestString(name));
                 }
 
@@ -129,13 +127,7 @@ public interface ClassConstant extends PoolConstant {
          * </ul>
          */
         private static boolean checkAccess(Klass klass, Klass accessingKlass) {
-            if (klass.isPublic() || klass.getRuntimePackage().equals(accessingKlass.getRuntimePackage())) {
-                return true;
-            }
-            if (klass.getMeta().MagicAccessorImpl.isAssignableFrom(accessingKlass)) {
-                return true;
-            }
-            return false;
+            return klass.isPublic() || klass.getRuntimePackage().equals(accessingKlass.getRuntimePackage());
         }
     }
 
