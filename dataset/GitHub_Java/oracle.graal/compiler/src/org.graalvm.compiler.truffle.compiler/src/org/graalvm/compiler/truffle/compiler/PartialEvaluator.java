@@ -325,6 +325,14 @@ public abstract class PartialEvaluator {
         }
     }
 
+    private static final TimerKey TruffleEscapeAnalysisTimer = DebugContext.timer("PartialEvaluation-EscapeAnalysis");
+
+    private static final TimerKey TruffleConditionalEliminationTimer = DebugContext.timer("PartialEvaluation-ConditionalElimination");
+
+    private static final TimerKey TruffleCanonicalizerTimer = DebugContext.timer("PartialEvaluation-Canonicalizer");
+
+    private static final TimerKey TruffleLoopFrequenciesTimer = DebugContext.timer("PartialEvaluation-LoopFrequencies");
+
     @SuppressWarnings("try")
     public StructuredGraph evaluate(Request request) {
         try (PerformanceInformationHandler handler = PerformanceInformationHandler.install(request.options)) {
@@ -332,9 +340,7 @@ public abstract class PartialEvaluator {
                             Indent indent = request.debug.logAndIndent("evaluate %s", request.graph);) {
                 inliningGraphPE(request);
                 new ConvertDeoptimizeToGuardPhase().apply(request.graph, request.highTierContext);
-                try (DebugCloseable a = TruffleInlineReplacementsTimer.start(request.debug)) {
-                    inlineReplacements(request);
-                }
+                inlineReplacements(request);
                 try (DebugCloseable a = TruffleConditionalEliminationTimer.start(request.debug)) {
                     new ConditionalEliminationPhase(false).apply(request.graph, request.highTierContext);
                 }
@@ -345,7 +351,9 @@ public abstract class PartialEvaluator {
                     partialEscape(request);
                 }
                 // recompute loop frequencies now that BranchProbabilities have been canonicalized
-                ComputeLoopFrequenciesClosure.compute(request.graph);
+                try (DebugCloseable a = TruffleLoopFrequenciesTimer.start(request.debug)) {
+                    ComputeLoopFrequenciesClosure.compute(request.graph);
+                }
                 applyInstrumentationPhases(request);
                 handler.reportPerformanceWarnings(request.compilable, request.graph);
                 if (request.cancellable != null && request.cancellable.isCancelled()) {
@@ -581,15 +589,7 @@ public abstract class PartialEvaluator {
         return decodingInvocationPlugins;
     }
 
-    private static final TimerKey PartialEvaluationTimer = DebugContext.timer("PartialEvaluation-Decoding").doc("Time spent in partial evaluation.");
-
-    private static final TimerKey TruffleEscapeAnalysisTimer = DebugContext.timer("PartialEvaluation-EscapeAnalysis");
-
-    private static final TimerKey TruffleConditionalEliminationTimer = DebugContext.timer("PartialEvaluation-ConditionalElimination");
-
-    private static final TimerKey TruffleCanonicalizerTimer = DebugContext.timer("PartialEvaluation-Canonicalizer");
-
-    private static final TimerKey TruffleInlineReplacementsTimer = DebugContext.timer("PartialEvaluation-LoopFrequencies");
+    private static final TimerKey PartialEvaluationTimer = DebugContext.timer("PartialEvaluation").doc("Time spent in partial evaluation.");
 
     @SuppressWarnings({"unused", "try"})
     private void inliningGraphPE(Request request) {
