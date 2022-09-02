@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -35,6 +35,7 @@ import java.util.Set;
 import com.oracle.truffle.llvm.parser.metadata.MDAttachment;
 import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
 import com.oracle.truffle.llvm.parser.metadata.MDBasicType;
+import com.oracle.truffle.llvm.parser.metadata.MDCommonBlock;
 import com.oracle.truffle.llvm.parser.metadata.MDCompileUnit;
 import com.oracle.truffle.llvm.parser.metadata.MDCompositeType;
 import com.oracle.truffle.llvm.parser.metadata.MDDerivedType;
@@ -46,6 +47,7 @@ import com.oracle.truffle.llvm.parser.metadata.MDGlobalVariable;
 import com.oracle.truffle.llvm.parser.metadata.MDGlobalVariableExpression;
 import com.oracle.truffle.llvm.parser.metadata.MDImportedEntity;
 import com.oracle.truffle.llvm.parser.metadata.MDKind;
+import com.oracle.truffle.llvm.parser.metadata.MDLabel;
 import com.oracle.truffle.llvm.parser.metadata.MDLexicalBlock;
 import com.oracle.truffle.llvm.parser.metadata.MDLexicalBlockFile;
 import com.oracle.truffle.llvm.parser.metadata.MDLocalVariable;
@@ -69,10 +71,53 @@ import com.oracle.truffle.llvm.parser.metadata.MetadataValueList;
 import com.oracle.truffle.llvm.parser.metadata.ParseUtil;
 import com.oracle.truffle.llvm.parser.model.IRScope;
 import com.oracle.truffle.llvm.parser.records.DwTagRecord;
-import com.oracle.truffle.llvm.parser.records.MetadataRecord;
+import com.oracle.truffle.llvm.parser.scanner.RecordBuffer;
+import com.oracle.truffle.llvm.runtime.except.LLVMParserException;
 import com.oracle.truffle.llvm.runtime.types.Type;
 
-public final class Metadata implements ParserListener {
+public class Metadata implements ParserListener {
+
+    private static final int METADATA_STRING = 1;
+    private static final int METADATA_VALUE = 2;
+    private static final int METADATA_NODE = 3;
+    private static final int METADATA_NAME = 4;
+    private static final int METADATA_DISTINCT_NODE = 5;
+    private static final int METADATA_KIND = 6;
+    private static final int METADATA_LOCATION = 7;
+    private static final int METADATA_OLD_NODE = 8;
+    private static final int METADATA_OLD_FN_NODE = 9;
+    private static final int METADATA_NAMED_NODE = 10;
+    private static final int METADATA_ATTACHMENT = 11;
+    private static final int METADATA_GENERIC_DEBUG = 12;
+    private static final int METADATA_SUBRANGE = 13;
+    private static final int METADATA_ENUMERATOR = 14;
+    private static final int METADATA_BASIC_TYPE = 15;
+    private static final int METADATA_FILE = 16;
+    private static final int METADATA_DERIVED_TYPE = 17;
+    private static final int METADATA_COMPOSITE_TYPE = 18;
+    private static final int METADATA_SUBROUTINE_TYPE = 19;
+    private static final int METADATA_COMPILE_UNIT = 20;
+    protected static final int METADATA_SUBPROGRAM = 21;
+    private static final int METADATA_LEXICAL_BLOCK = 22;
+    private static final int METADATA_LEXICAL_BLOCK_FILE = 23;
+    private static final int METADATA_NAMESPACE = 24;
+    private static final int METADATA_TEMPLATE_TYPE = 25;
+    private static final int METADATA_TEMPLATE_VALUE = 26;
+    private static final int METADATA_GLOBAL_VAR = 27;
+    private static final int METADATA_LOCAL_VAR = 28;
+    private static final int METADATA_EXPRESSION = 29;
+    private static final int METADATA_OBJC_PROPERTY = 30;
+    private static final int METADATA_IMPORTED_ENTITY = 31;
+    private static final int METADATA_MODULE = 32;
+    private static final int METADATA_MACRO = 33;
+    private static final int METADATA_MACRO_FILE = 34;
+    private static final int METADATA_STRINGS = 35;
+    private static final int METADATA_GLOBAL_DECL_ATTACHMENT = 36;
+    private static final int METADATA_GLOBAL_VAR_EXPR = 37;
+    private static final int METADATA_INDEX_OFFSET = 38;
+    private static final int METADATA_INDEX = 39;
+    private static final int METADATA_LABEL = 40;
+    private static final int METADATA_COMMON_BLOCK = 44;
 
     public Type getTypeById(long id) {
         return types.get(id);
@@ -82,7 +127,7 @@ public final class Metadata implements ParserListener {
         return scope;
     }
 
-    private final IRScope scope;
+    protected final IRScope scope;
 
     private final Set<MDCompositeType> compositeTypes;
 
@@ -101,157 +146,164 @@ public final class Metadata implements ParserListener {
 
     // https://github.com/llvm-mirror/llvm/blob/release_38/include/llvm/Bitcode/LLVMBitCodes.h#L191
     @Override
-    public void record(long id, long[] args) {
-        MetadataRecord record = MetadataRecord.decode(id);
-        switch (record) {
-            case STRING:
-                metadata.add(MDString.create(args));
+    public void record(RecordBuffer buffer) {
+        long[] args = buffer.dumpArray();
+        final int opCode = buffer.getId();
+        parseOpcode(buffer, args, opCode);
+    }
+
+    protected void parseOpcode(RecordBuffer buffer, long[] args, final int opCode) {
+        switch (opCode) {
+            case METADATA_STRING:
+                metadata.add(MDString.create(buffer));
                 break;
 
-            case VALUE:
-                metadata.add(MDValue.create(args, scope));
+            case METADATA_VALUE:
+                buffer.skip();
+                metadata.add(MDValue.create(buffer.read(), scope));
                 break;
 
-            case DISTINCT_NODE:
+            case METADATA_DISTINCT_NODE:
                 // we would only care if a node is distinct or not if we wanted to modify the ast
-            case NODE:
-                metadata.add(MDNode.create38(args, metadata));
+            case METADATA_NODE:
+                metadata.add(MDNode.create38(buffer, metadata));
                 break;
 
-            case NAME:
+            case METADATA_NAME:
                 // read the name, this must be followed by a NAMED_NODE which will remove it again
-                lastParsedName = ParseUtil.longArrayToString(0, args);
+                lastParsedName = buffer.readUnicodeString();
                 break;
 
-            case KIND:
-                metadata.addKind(MDKind.create(args));
+            case METADATA_KIND:
+                metadata.addKind(MDKind.create(buffer.read(), buffer.readUnicodeString()));
                 break;
 
-            case LOCATION:
-                metadata.add(MDLocation.create38(args, metadata));
+            case METADATA_LOCATION:
+                metadata.add(MDLocation.create38(buffer, metadata));
                 break;
 
-            case OLD_NODE:
-                createOldNode(args);
+            case METADATA_OLD_NODE:
+                createOldNode(buffer);
                 break;
 
-            case OLD_FN_NODE:
-                metadata.add(MDValue.create(args, scope));
+            case METADATA_OLD_FN_NODE:
+                buffer.skip();
+                metadata.add(MDValue.create(buffer.read(), scope));
                 break;
 
-            case NAMED_NODE:
-                createNamedNode(args);
+            case METADATA_NAMED_NODE:
+                createNamedNode(buffer);
                 break;
 
-            case ATTACHMENT:
-                createAttachment(args, false);
+            case METADATA_ATTACHMENT:
+                createAttachment(buffer, false);
                 break;
 
-            case GENERIC_DEBUG:
-                metadata.add(MDGenericDebug.create38(args, metadata));
+            case METADATA_GENERIC_DEBUG:
+                metadata.add(MDGenericDebug.create38(buffer, metadata));
                 break;
 
-            case SUBRANGE:
-                metadata.add(MDSubrange.createNewFormat(args, metadata));
+            case METADATA_SUBRANGE:
+                metadata.add(MDSubrange.createNewFormat(buffer, metadata));
                 break;
 
-            case ENUMERATOR:
+            case METADATA_ENUMERATOR:
                 metadata.add(MDEnumerator.create38(args, metadata));
                 break;
 
-            case BASIC_TYPE:
+            case METADATA_BASIC_TYPE:
                 metadata.add(MDBasicType.create38(args, metadata));
                 break;
 
-            case FILE:
+            case METADATA_FILE:
                 metadata.add(MDFile.create38(args, metadata));
                 break;
 
-            case SUBPROGRAM:
-                metadata.add(MDSubprogram.create38(args, metadata));
+            case METADATA_SUBPROGRAM:
+                metadata.add(MDSubprogram.createNewFormat(args, metadata));
                 break;
 
-            case SUBROUTINE_TYPE:
+            case METADATA_SUBROUTINE_TYPE:
                 metadata.add(MDSubroutine.create38(args, metadata));
                 break;
 
-            case LEXICAL_BLOCK:
+            case METADATA_LEXICAL_BLOCK:
                 metadata.add(MDLexicalBlock.create38(args, metadata));
                 break;
 
-            case LEXICAL_BLOCK_FILE:
+            case METADATA_LEXICAL_BLOCK_FILE:
                 metadata.add(MDLexicalBlockFile.create38(args, metadata));
                 break;
 
-            case LOCAL_VAR: {
+            case METADATA_LOCAL_VAR: {
                 final MDLocalVariable md = MDLocalVariable.create38(args, metadata);
                 metadata.add(md);
                 metadata.registerLocal(md);
                 break;
             }
 
-            case NAMESPACE: {
+            case METADATA_NAMESPACE: {
                 final MDNamespace namespace = MDNamespace.create38(args, metadata);
                 metadata.registerExportedScope(namespace);
                 metadata.add(namespace);
                 break;
             }
 
-            case GLOBAL_VAR:
+            case METADATA_GLOBAL_VAR:
                 metadata.add(MDGlobalVariable.create38(args, metadata));
                 break;
 
-            case DERIVED_TYPE:
+            case METADATA_DERIVED_TYPE:
                 metadata.add(MDDerivedType.create38(args, metadata));
                 break;
 
-            case COMPOSITE_TYPE: {
+            case METADATA_COMPOSITE_TYPE: {
                 final MDCompositeType type = MDCompositeType.create38(args, metadata);
                 metadata.add(type);
                 compositeTypes.add(type);
                 break;
             }
 
-            case COMPILE_UNIT:
+            case METADATA_COMPILE_UNIT:
                 metadata.add(MDCompileUnit.create38(args, metadata));
                 break;
 
-            case TEMPLATE_TYPE:
+            case METADATA_TEMPLATE_TYPE:
                 metadata.add(MDTemplateType.create38(args, metadata));
                 break;
 
-            case TEMPLATE_VALUE:
+            case METADATA_TEMPLATE_VALUE:
                 metadata.add(MDTemplateValue.create38(args, metadata));
                 break;
 
-            case EXPRESSION:
+            case METADATA_EXPRESSION:
                 metadata.add(MDExpression.create(args));
                 break;
 
-            case OBJC_PROPERTY:
+            case METADATA_OBJC_PROPERTY:
                 metadata.add(MDObjCProperty.create38(args, metadata));
                 break;
 
-            case IMPORTED_ENTITY:
+            case METADATA_IMPORTED_ENTITY:
                 metadata.add(MDImportedEntity.create38(args, metadata));
                 break;
 
-            case MODULE: {
+            case METADATA_MODULE: {
                 final MDModule module = MDModule.create38(args, metadata);
                 metadata.registerExportedScope(module);
                 metadata.add(module);
                 break;
             }
 
-            case MACRO:
+            case METADATA_MACRO:
                 metadata.add(MDMacro.create38(args, metadata));
                 break;
 
-            case MACRO_FILE:
+            case METADATA_MACRO_FILE:
                 metadata.add(MDMacroFile.create38(args, metadata));
                 break;
 
-            case STRINGS: {
+            case METADATA_STRINGS: {
                 // since llvm 3.9 all metadata strings are emitted as a single blob
                 final MDString[] strings = MDString.createFromBlob(args);
                 for (final MDString string : strings) {
@@ -260,34 +312,43 @@ public final class Metadata implements ParserListener {
                 break;
             }
 
-            case GLOBAL_VAR_EXPR:
+            case METADATA_GLOBAL_VAR_EXPR:
                 metadata.add(MDGlobalVariableExpression.create(args, metadata));
                 break;
 
-            case GLOBAL_DECL_ATTACHMENT: {
-                createAttachment(args, true);
+            case METADATA_GLOBAL_DECL_ATTACHMENT: {
+                createAttachment(buffer, true);
                 break;
             }
 
-            case INDEX_OFFSET:
-            case INDEX:
+            case METADATA_COMMON_BLOCK:
+                metadata.add(MDCommonBlock.create(args, metadata));
+                break;
+
+            case METADATA_LABEL:
+                metadata.add(MDLabel.create(args, metadata));
+                break;
+
+            case METADATA_INDEX_OFFSET:
+            case METADATA_INDEX:
                 // llvm uses these to implement lazy loading, we can safely ignore them
                 break;
 
             default:
                 metadata.add(null);
-                throw new UnsupportedOperationException("Unsupported Metadata Record: " + record);
+                throw new LLVMParserException("Unsupported opCode in metadata block: " + opCode);
         }
     }
 
-    private void createNamedNode(long[] args) {
+    private void createNamedNode(RecordBuffer buffer) {
         if (lastParsedName != null) {
-            metadata.addNamedNode(MDNamedNode.create(lastParsedName, args, metadata));
+            metadata.addNamedNode(MDNamedNode.create(lastParsedName, buffer.dumpArray(), metadata));
             lastParsedName = null;
         }
     }
 
-    private void createAttachment(long[] args, boolean isGlobal) {
+    private void createAttachment(RecordBuffer buffer, boolean isGlobal) {
+        long[] args = buffer.dumpArray();
         if (args.length > 0) {
             final int offset = args.length % 2;
             final int targetIndex = (int) args[0];
@@ -308,7 +369,8 @@ public final class Metadata implements ParserListener {
 
     private static final int ARGINDEX_IDENT = 0;
 
-    private void createOldNode(long[] args) {
+    private void createOldNode(RecordBuffer buffer) {
+        long[] args = buffer.dumpArray();
         if (ParseUtil.isInteger(args, ARGINDEX_IDENT, this) && DwTagRecord.isDwarfDescriptor(ParseUtil.asLong(args, ARGINDEX_IDENT, this))) {
             // this is a debug information descriptor as described in
             // http://releases.llvm.org/3.2/docs/SourceLevelDebugging.html#debug_info_descriptors

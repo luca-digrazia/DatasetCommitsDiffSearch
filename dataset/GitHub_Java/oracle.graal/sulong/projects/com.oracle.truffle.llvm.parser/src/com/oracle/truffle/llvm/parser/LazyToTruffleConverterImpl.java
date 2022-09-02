@@ -476,6 +476,8 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         NodeFactory nodeFactory = runtime.getNodeFactory();
         List<FunctionParameter> parameters = method.getParameters();
         List<LLVMStatementNode> formalParamInits = new ArrayList<>();
+        LLVMExpressionNode stackPointerNode = nodeFactory.createFunctionArgNode(0, PrimitiveType.I64);
+        formalParamInits.add(nodeFactory.createFrameWrite(PointerType.VOID, stackPointerNode, frame.findFrameSlot(LLVMStack.FRAME_ID)));
 
         // There's a struct return type.
         int argIndex = 1;
@@ -505,5 +507,9 @@ public class LazyToTruffleConverterImpl implements LazyToTruffleConverter {
         }
 
         return formalParamInits;
+    }
+
+    public void resolveLinkageName() {
+        parser.parseLinkageName(runtime);
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -40,7 +40,6 @@ import com.oracle.truffle.llvm.parser.metadata.debuginfo.DebugInfoFunctionProces
 import com.oracle.truffle.llvm.parser.model.IRScope;
 import com.oracle.truffle.llvm.parser.scanner.LLVMScanner;
 import com.oracle.truffle.llvm.parser.text.LLSourceBuilder;
-import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 
 public final class LazyFunctionParser {
@@ -66,15 +65,15 @@ public final class LazyFunctionParser {
         this.isParsed = false;
     }
 
-    public void parse(DebugInfoFunctionProcessor diProcessor, Source bitcodeSource, LLVMParserRuntime runtime, LLVMContext context) {
+    public void parse(DebugInfoFunctionProcessor diProcessor, Source bitcodeSource, LLVMParserRuntime runtime) {
         if (!isParsed) {
             synchronized (scope) {
                 Function parser = new Function(scope, types, function, mode, paramAttributes);
                 parser.setupScope();
                 scanner.scanBlock(parser);
-                diProcessor.process(parser.getFunction(), parser.getScope(), bitcodeSource);
-                if (context.getEnv().getOptions().get(SulongEngineOption.LL_DEBUG)) {
-                    llSource.applySourceLocations(parser.getFunction(), runtime, context);
+                diProcessor.process(parser.getFunction(), parser.getScope(), bitcodeSource, runtime.getContext());
+                if (runtime.getContext().getEnv().getOptions().get(SulongEngineOption.LL_DEBUG)) {
+                    llSource.applySourceLocations(parser.getFunction(), runtime);
                 }
                 isParsed = true;
             }
@@ -88,10 +87,8 @@ public final class LazyFunctionParser {
                 parser.setupScope();
                 scanner.scanBlock(parser);
             } catch (MDSubprogramParsedException e) {
-                /*
-                 * If linkageName/displayName is found, an exception is thrown (such that
-                 * parsing/searching does not have to be continued).
-                 */
+                // if linkageName/displayName is found, an exception is thrown (s.t.
+                // parsing/searching does not have to be continued)
                 final String displayName = e.displayName;
                 final String linkageName = e.linkageName;
 

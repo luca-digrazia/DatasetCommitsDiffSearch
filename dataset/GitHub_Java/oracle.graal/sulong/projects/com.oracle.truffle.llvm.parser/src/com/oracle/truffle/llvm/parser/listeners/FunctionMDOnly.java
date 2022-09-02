@@ -29,48 +29,51 @@
  */
 package com.oracle.truffle.llvm.parser.listeners;
 
-import com.oracle.truffle.llvm.parser.metadata.MDBaseNode;
-import com.oracle.truffle.llvm.parser.metadata.MDString;
-import com.oracle.truffle.llvm.parser.metadata.MDSubprogram;
 import com.oracle.truffle.llvm.parser.model.IRScope;
+import com.oracle.truffle.llvm.parser.model.functions.FunctionDefinition;
+import com.oracle.truffle.llvm.parser.scanner.Block;
 import com.oracle.truffle.llvm.parser.scanner.RecordBuffer;
 
-public class MetadataSubprogramOnly extends Metadata {
+public final class FunctionMDOnly implements ParserListener {
 
-    MetadataSubprogramOnly(Types types, IRScope scope) {
-        super(types, scope);
+    private final FunctionDefinition function;
+
+    private final Types types;
+
+    private final IRScope scope;
+
+    public FunctionMDOnly(IRScope scope, Types types, FunctionDefinition function) {
+        this.scope = scope;
+        this.types = types;
+        this.function = function;
+    }
+
+    public void setupScope() {
+        scope.startLocalScope(function);
+
     }
 
     @Override
-    protected void parseOpcode(RecordBuffer buffer, long[] args, int opCode) {
-        super.parseOpcode(buffer, args, opCode);
-        if (opCode == METADATA_SUBPROGRAM) {
-            MDBaseNode mdBaseNode = metadata.getOrNull(metadata.size() - 1);
-            if (mdBaseNode instanceof MDSubprogram) {
-                MDSubprogram mdSubprogram = (MDSubprogram) mdBaseNode;
-                String linkageName = MDString.getIfInstance(mdSubprogram.getLinkageName());
-                String displayName = MDString.getIfInstance(mdSubprogram.getName());
-                scope.exitLocalScope();
-                throw new MDSubprogramParsedException(linkageName, displayName);
-            }
+    public ParserListener enter(Block block) {
+        switch (block) {
+            case METADATA:
+            case METADATA_ATTACHMENT:
+            case METADATA_KIND:
+                return new MetadataSubprogramOnly(types, scope);
+
+            default:
+                return ParserListener.DEFAULT;
         }
     }
 
-    public static class MDSubprogramParsedException extends RuntimeException {
+    @Override
+    public void exit() {
+        // no linkageName found
+        scope.exitLocalScope();
+    }
 
-        private static final long serialVersionUID = 1L;
-        public final String linkageName;
-        public final String displayName;
-
-        public MDSubprogramParsedException(String linkageName, String displayName) {
-            this.linkageName = linkageName;
-            this.displayName = displayName;
-        }
-
-        @Override
-        public synchronized Throwable fillInStackTrace() {
-            return this;
-        }
+    @Override
+    public void record(RecordBuffer buffer) {
 
     }
 
