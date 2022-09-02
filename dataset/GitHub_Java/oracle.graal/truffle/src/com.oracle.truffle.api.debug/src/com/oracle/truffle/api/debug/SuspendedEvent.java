@@ -675,17 +675,17 @@ public final class SuspendedEvent {
 
     /**
      * Prepare to unwind a frame. This frame and all frames above it are unwound off the execution
-     * stack and the frame will return immediately with <code>immediateReturnValue</code>. If the
-     * return value is <code>null</code>, the unwound frame will instead be reentered upon thread
+     * stack and the frame will return immediately with <code>immediateReturnValue</code>. If the return
+     * value is <code>null</code>, the unwound frame will instead be reentered upon thread
      * resumption. The frame needs to be on the {@link #getStackFrames() execution stack of this
      * event}.
      *
      * @param frame the frame to unwind
-     * @param immediateReturnValue the value to return
+     * @param immediateReturnValue an Interop value to return
      * @throws IllegalArgumentException when the frame is not on the execution stack of this event
      * @since 21.1.0
      */
-    public void prepareUnwindFrame(DebugStackFrame frame, DebugValue immediateReturnValue) throws IllegalArgumentException {
+    public void prepareUnwindFrame(DebugStackFrame frame, Object immediateReturnValue) throws IllegalArgumentException {
         if (frame.event != this) {
             throw new IllegalArgumentException("The stack frame is not in the scope of this event.");
         }
