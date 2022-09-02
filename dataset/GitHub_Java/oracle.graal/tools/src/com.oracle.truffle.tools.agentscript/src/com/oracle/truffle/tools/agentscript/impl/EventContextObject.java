@@ -37,10 +37,6 @@ import com.oracle.truffle.api.library.ExportMessage;
 @SuppressWarnings("unused")
 @ExportLibrary(InteropLibrary.class)
 final class EventContextObject implements TruffleObject {
-    private static final ArrayObject MEMBERS = ArrayObject.array(
-                    "name", "source", "characters",
-                    "line", "startLine", "endLine",
-                    "column", "startColumn", "endColumn");
     private final EventContext context;
     @CompilerDirectives.CompilationFinal private String name;
 
@@ -70,32 +66,18 @@ final class EventContextObject implements TruffleObject {
 
     @ExportMessage
     static Object getMembers(EventContextObject obj, boolean includeInternal) {
-        return MEMBERS;
+        return ArrayObject.array("name");
     }
 
     @ExportMessage
-    Object readMember(String member) throws UnknownIdentifierException {
+    static Object readMember(EventContextObject obj, String member) throws UnknownIdentifierException {
         switch (member) {
             case "name":
-                if (name == null) {
+                if (obj.name == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    name = context.getInstrumentedNode().getRootNode().getName();
+                    obj.name = obj.context.getInstrumentedNode().getRootNode().getName();
                 }
-                return name;
-            case "characters":
-                return context.getInstrumentedSourceSection().getCharacters().toString();
-            case "source":
-                return new SourceEventObject(context.getInstrumentedSourceSection().getSource());
-            case "line":
-            case "startLine":
-                return context.getInstrumentedSourceSection().getStartLine();
-            case "endLine":
-                return context.getInstrumentedSourceSection().getEndLine();
-            case "column":
-            case "startColumn":
-                return context.getInstrumentedSourceSection().getStartColumn();
-            case "endColumn":
-                return context.getInstrumentedSourceSection().getEndColumn();
+                return obj.name;
             default:
                 throw UnknownIdentifierException.create(member);
         }
@@ -103,7 +85,7 @@ final class EventContextObject implements TruffleObject {
 
     @ExportMessage
     static boolean isMemberReadable(EventContextObject obj, String member) {
-        return MEMBERS.contains(member);
+        return "name".equals(member);
     }
 
 }
