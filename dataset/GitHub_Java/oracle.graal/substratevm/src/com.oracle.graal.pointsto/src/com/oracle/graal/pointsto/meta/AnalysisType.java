@@ -97,8 +97,6 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
      */
     private volatile ConcurrentHashMap<UnsafePartitionKind, Collection<AnalysisField>> unsafeAccessedFields;
 
-    private static final AnalysisType[] EMPTY_ARRAY = {};
-
     AnalysisType[] subTypes;
     AnalysisType superClass;
 
@@ -181,7 +179,6 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
              */
         }
 
-        subTypes = EMPTY_ARRAY;
         /* Ensure the super types as well as the component type (for arrays) is created too. */
         superClass = universe.lookup(wrapped.getSuperclass());
         interfaces = convertTypes(wrapped.getInterfaces());
