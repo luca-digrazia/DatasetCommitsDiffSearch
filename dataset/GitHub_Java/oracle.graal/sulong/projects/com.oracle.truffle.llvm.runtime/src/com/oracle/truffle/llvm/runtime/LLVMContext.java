@@ -665,7 +665,7 @@ public final class LLVMContext {
         BitcodeID bitcodeID = symbol.getBitcodeID(false);
         int id = bitcodeID.getId();
         int index = symbol.getSymbolIndex(false);
-        if (CompilerDirectives.inCompiledCode() && CompilerDirectives.isPartialEvaluationConstant(this) && CompilerDirectives.isPartialEvaluationConstant(symbol)) {
+        if (CompilerDirectives.inCompiledCode() && CompilerDirectives.isPartialEvaluationConstant(this)) {
             if (!symbolAssumptions[id][index].isValid()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
             }
