@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,8 +24,6 @@
  */
 package org.graalvm.compiler.truffle.runtime;
 
-import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 import static org.graalvm.compiler.truffle.runtime.OptimizedCallTarget.runtime;
 
 import java.net.URI;
@@ -55,8 +53,6 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision>, Truff
 
     private final List<TruffleInliningDecision> callSites;
 
-    private final List<CompilableTruffleAST> targets = new ArrayList<>();
-
     protected TruffleInlining(List<TruffleInliningDecision> callSites) {
         this.callSites = callSites;
     }
@@ -67,7 +63,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision>, Truff
     }
 
     private static List<TruffleInliningDecision> createDecisions(OptimizedCallTarget sourceTarget, TruffleInliningPolicy policy, CompilerOptions options) {
-        if (!sourceTarget.engine.inlining || sourceTarget.getOptionValue(PolyglotCompilerOptions.LanguageAgnosticInlining)) {
+        if (!sourceTarget.getOptionValue(PolyglotCompilerOptions.Inlining) || sourceTarget.getOptionValue(PolyglotCompilerOptions.Mode) == PolyglotCompilerOptions.EngineModeEnum.LATENCY) {
             return Collections.emptyList();
         }
         int[] visitedNodes = {0};
@@ -166,7 +162,7 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision>, Truff
     }
 
     private static double calculateFrequency(OptimizedCallTarget target, OptimizedDirectCallNode ocn) {
-        return (double) Math.max(1, ocn.getCallCount()) / (double) Math.max(1, target.getCallCount());
+        return (double) Math.max(1, ocn.getCallCount()) / (double) Math.max(1, target.getCompilationProfile().getCallCount());
     }
 
     private static int countRecursions(List<OptimizedCallTarget> stack) {
@@ -240,13 +236,8 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision>, Truff
 
     @Override
     public Decision findDecision(JavaConstant callNodeConstant) {
-        OptimizedDirectCallNode callNode = findCallNode(callNodeConstant);
+        OptimizedDirectCallNode callNode = runtime().asObject(OptimizedDirectCallNode.class, callNodeConstant);
         return findByCall(callNode);
-    }
-
-    @Override
-    public OptimizedDirectCallNode findCallNode(JavaConstant callNodeConstant) {
-        return runtime().asObject(OptimizedDirectCallNode.class, callNodeConstant);
     }
 
     static class TruffleSourceLanguagePosition implements org.graalvm.compiler.truffle.common.TruffleSourceLanguagePosition {
@@ -285,18 +276,6 @@ public class TruffleInlining implements Iterable<TruffleInliningDecision>, Truff
         @Override
         public String getLanguage() {
             return sourceSection.getSource().getLanguage();
-        }
-    }
-
-    @Override
-    public void addTargetToDequeue(CompilableTruffleAST target) {
-        targets.add(target);
-    }
-
-    @Override
-    public void dequeueTargets() {
-        for (CompilableTruffleAST target : targets) {
-            target.cancelInstalledTask();
         }
     }
 
