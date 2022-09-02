@@ -46,6 +46,7 @@ import org.graalvm.compiler.replacements.SnippetTemplate.Arguments;
 import org.graalvm.compiler.replacements.SnippetTemplate.SnippetInfo;
 import org.graalvm.compiler.replacements.Snippets;
 
+import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.graal.snippets.SubstrateTemplates;
@@ -61,7 +62,9 @@ public final class SubstrateArraysCopyOfSnippets extends SubstrateTemplates impl
     private static final SubstrateForeignCallDescriptor[] FOREIGN_CALLS = new SubstrateForeignCallDescriptor[]{ARRAYS_COPY_OF};
 
     public static void registerForeignCalls(Providers providers, SubstrateForeignCallsProvider foreignCalls) {
-        foreignCalls.register(providers, FOREIGN_CALLS);
+        for (SubstrateForeignCallDescriptor descriptor : FOREIGN_CALLS) {
+            foreignCalls.register(new SubstrateForeignCallLinkage(providers, descriptor));
+        }
     }
 
     @SuppressWarnings("unused")

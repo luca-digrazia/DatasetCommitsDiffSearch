@@ -51,6 +51,7 @@ import com.oracle.svm.core.genscavenge.ThreadLocalAllocation;
 import com.oracle.svm.core.genscavenge.ThreadLocalAllocation.Descriptor;
 import com.oracle.svm.core.genscavenge.graal.nodes.FormatArrayNode;
 import com.oracle.svm.core.genscavenge.graal.nodes.FormatObjectNode;
+import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.graal.snippets.SubstrateAllocationSnippets;
@@ -66,7 +67,10 @@ final class GenScavengeAllocationSnippets extends SubstrateAllocationSnippets {
 
     public static void registerForeignCalls(Providers providers, SubstrateForeignCallsProvider foreignCalls) {
         SubstrateAllocationSnippets.registerForeignCalls(providers, foreignCalls);
-        foreignCalls.register(providers, FOREIGN_CALLS);
+
+        for (SubstrateForeignCallDescriptor descriptor : FOREIGN_CALLS) {
+            foreignCalls.register(new SubstrateForeignCallLinkage(providers, descriptor));
+        }
     }
 
     public static void registerLowering(OptionValues options, Iterable<DebugHandlersFactory> factories, Providers providers, SnippetReflectionProvider snippetReflection,

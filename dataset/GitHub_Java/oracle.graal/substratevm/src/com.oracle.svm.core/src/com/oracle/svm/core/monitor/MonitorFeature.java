@@ -37,8 +37,10 @@ import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
+import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
+import com.oracle.svm.core.snippets.SnippetRuntime;
 
 @AutomaticFeature
 public class MonitorFeature implements GraalFeature {
@@ -59,9 +61,13 @@ public class MonitorFeature implements GraalFeature {
     }
 
     @Override
-    public void registerForeignCalls(RuntimeConfiguration runtimeConfig, Providers providers, SnippetReflectionProvider snippetReflection, SubstrateForeignCallsProvider foreignCalls, boolean hosted) {
+    public void registerForeignCalls(RuntimeConfiguration runtimeConfig, Providers providers, SnippetReflectionProvider snippetReflection,
+                    SubstrateForeignCallsProvider foreignCalls, boolean hosted) {
+
         if (SubstrateOptions.MultiThreaded.getValue()) {
-            foreignCalls.register(providers, MonitorSnippets.FOREIGN_CALLS);
+            for (SnippetRuntime.SubstrateForeignCallDescriptor descriptor : MonitorSnippets.FOREIGN_CALLS) {
+                foreignCalls.register(new SubstrateForeignCallLinkage(providers, descriptor));
+            }
         }
     }
 }

@@ -24,8 +24,6 @@
  */
 package org.graalvm.compiler.core.common.spi;
 
-import java.util.Arrays;
-
 import org.graalvm.word.LocationIdentity;
 
 /**
@@ -44,11 +42,11 @@ import org.graalvm.word.LocationIdentity;
  */
 public class ForeignCallDescriptor {
 
-    protected final ForeignCallSignature signature;
-    protected final boolean isReexecutable;
-    protected final boolean canDeoptimize;
-    protected final boolean isGuaranteedSafepoint;
-    protected final LocationIdentity[] killedLocations;
+    private final ForeignCallSignature signature;
+    private final boolean isReexecutable;
+    private final LocationIdentity[] killedLocations;
+    private final boolean canDeoptimize;
+    private final boolean isGuaranteedSafepoint;
 
     public ForeignCallDescriptor(String name, Class<?> resultType, Class<?>[] argumentTypes, boolean isReexecutable, LocationIdentity[] killedLocations, boolean canDeoptimize,
                     boolean isGuaranteedSafepoint) {
@@ -115,15 +113,5 @@ public class ForeignCallDescriptor {
      */
     public boolean isGuaranteedSafepoint() {
         return isGuaranteedSafepoint;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" + signature +
-                        ", isReexecutable=" + isReexecutable +
-                        ", canDeoptimize=" + canDeoptimize +
-                        ", isGuaranteedSafepoint=" + isGuaranteedSafepoint +
-                        ", killedLocations=" + Arrays.toString(killedLocations) +
-                        '}';
     }
 }

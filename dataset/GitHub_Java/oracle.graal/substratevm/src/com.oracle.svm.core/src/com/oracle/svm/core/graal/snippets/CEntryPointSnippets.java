@@ -79,6 +79,8 @@ import com.oracle.svm.core.c.function.CEntryPointErrors;
 import com.oracle.svm.core.c.function.CEntryPointNativeFunctions;
 import com.oracle.svm.core.c.function.CEntryPointSetup;
 import com.oracle.svm.core.code.CodeInfoTable;
+import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
+import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.nodes.CEntryPointEnterNode;
 import com.oracle.svm.core.graal.nodes.CEntryPointLeaveNode;
@@ -558,8 +560,13 @@ public final class CEntryPointSnippets extends SubstrateTemplates implements Sni
         VMThreads.singleton().failFatally(code, message);
     }
 
-    public static void registerForeignCalls(Providers providers, SubstrateForeignCallsProvider foreignCalls) {
-        foreignCalls.register(providers, FOREIGN_CALLS);
+    @SuppressWarnings("unused")
+    public static void registerForeignCalls(RuntimeConfiguration runtimeConfig, Providers providers, SnippetReflectionProvider snippetReflection,
+                    SubstrateForeignCallsProvider foreignCalls, boolean hosted) {
+
+        for (SubstrateForeignCallDescriptor descriptor : FOREIGN_CALLS) {
+            foreignCalls.register(new SubstrateForeignCallLinkage(providers, descriptor));
+        }
     }
 
     @SuppressWarnings("unused")

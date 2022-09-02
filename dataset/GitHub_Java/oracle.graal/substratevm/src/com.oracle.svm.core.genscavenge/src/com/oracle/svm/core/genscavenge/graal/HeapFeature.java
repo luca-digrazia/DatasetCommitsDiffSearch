@@ -92,7 +92,8 @@ class HeapFeature implements GraalFeature {
     }
 
     @Override
-    public void registerForeignCalls(RuntimeConfiguration runtimeConfig, Providers providers, SnippetReflectionProvider snippetReflection, SubstrateForeignCallsProvider foreignCalls, boolean hosted) {
+    public void registerForeignCalls(RuntimeConfiguration runtimeConfig, Providers providers, SnippetReflectionProvider snippetReflection,
+                    SubstrateForeignCallsProvider foreignCalls, boolean hosted) {
         GenScavengeAllocationSnippets.registerForeignCalls(providers, foreignCalls);
     }
 }

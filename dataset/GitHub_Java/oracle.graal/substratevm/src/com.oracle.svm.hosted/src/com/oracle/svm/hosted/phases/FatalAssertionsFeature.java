@@ -42,6 +42,7 @@ import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.graal.GraalFeature;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
+import com.oracle.svm.core.graal.meta.SubstrateForeignCallLinkage;
 import com.oracle.svm.core.graal.meta.SubstrateForeignCallsProvider;
 import com.oracle.svm.core.graal.nodes.DeadEndNode;
 import com.oracle.svm.core.heap.RestrictHeapAccessCallees;
@@ -128,9 +129,11 @@ final class FatalAssertionsFeature implements GraalFeature {
     }
 
     @Override
-    public void registerForeignCalls(RuntimeConfiguration runtimeConfig, Providers providers, SnippetReflectionProvider snippetReflection, SubstrateForeignCallsProvider foreignCalls, boolean hosted) {
+    public void registerForeignCalls(RuntimeConfiguration runtimeConfig, Providers providers, SnippetReflectionProvider snippetReflection,
+                    SubstrateForeignCallsProvider foreignCalls, boolean hosted) {
+
         for (SubstrateForeignCallDescriptor descriptor : FatalAssertions.FOREIGN_CALLS.values()) {
-            foreignCalls.register(providers, descriptor);
+            foreignCalls.register(new SubstrateForeignCallLinkage(providers, descriptor));
         }
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,21 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.replacements.arraycopy;
+package org.graalvm.compiler.nodes.java;
 
-import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.spi.ForeignCallSignature;
-import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
-import org.graalvm.compiler.word.Word;
 
-import jdk.vm.ci.meta.JavaKind;
+/**
+ * The foreign call descriptors used by nodes in this package.
+ * <p>
+ * Using a separate class for such descriptors prevents an access from triggering unwanted class
+ * initialization during runtime initialization.
+ */
+public class ForeignCallDescriptors {
 
-public interface ArrayCopyForeignCalls extends ForeignCallsProvider {
+    /**
+     * @see RegisterFinalizerNode
+     */
+    public static final ForeignCallSignature REGISTER_FINALIZER = new ForeignCallSignature("registerFinalizer", void.class, Object.class);
 
-    ForeignCallSignature UNSAFE_ARRAYCOPY = new ForeignCallSignature("unsafe_arraycopy", void.class, Word.class, Word.class, Word.class);
-    ForeignCallSignature GENERIC_ARRAYCOPY = new ForeignCallSignature("generic_arraycopy", int.class, Word.class, int.class, Word.class, int.class, int.class);
-
-    ForeignCallDescriptor lookupCheckcastArraycopyDescriptor(boolean uninit);
-
-    ForeignCallDescriptor lookupArraycopyDescriptor(JavaKind kind, boolean aligned, boolean disjoint, boolean uninit, boolean killAny);
 }

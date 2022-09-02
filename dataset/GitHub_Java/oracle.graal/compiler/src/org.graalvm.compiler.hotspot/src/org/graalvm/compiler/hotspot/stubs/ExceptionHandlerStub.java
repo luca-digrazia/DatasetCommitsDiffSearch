@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -23,6 +25,8 @@
 package org.graalvm.compiler.hotspot.stubs;
 
 import static org.graalvm.compiler.hotspot.GraalHotSpotVMConfig.INJECTED_VMCONFIG;
+import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Reexecutability.REEXECUTABLE;
+import static org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor.Transition.SAFEPOINT;
 import static org.graalvm.compiler.hotspot.nodes.JumpToExceptionHandlerNode.jumpToExceptionHandler;
 import static org.graalvm.compiler.hotspot.nodes.PatchReturnAddressNode.patchReturnAddress;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.readExceptionOop;
@@ -35,6 +39,7 @@ import static org.graalvm.compiler.hotspot.stubs.StubUtil.decipher;
 import static org.graalvm.compiler.hotspot.stubs.StubUtil.fatal;
 import static org.graalvm.compiler.hotspot.stubs.StubUtil.newDescriptor;
 import static org.graalvm.compiler.hotspot.stubs.StubUtil.printf;
+import static org.graalvm.word.LocationIdentity.any;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.api.replacements.Fold.InjectedParameter;
@@ -47,6 +52,7 @@ import org.graalvm.compiler.graph.Node.NodeIntrinsic;
 import org.graalvm.compiler.hotspot.GraalHotSpotVMConfig;
 import org.graalvm.compiler.hotspot.HotSpotBackend;
 import org.graalvm.compiler.hotspot.HotSpotForeignCallLinkage;
+import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.hotspot.nodes.StubForeignCallNode;
 import org.graalvm.compiler.options.OptionValues;
@@ -69,33 +75,23 @@ public class ExceptionHandlerStub extends SnippetStub {
         super("exceptionHandler", options, providers, linkage);
     }
 
-    /**
-     * This stub is called when returning to a method to handle an exception thrown by a callee. It
-     * is not used for routing implicit exceptions. Therefore, it does not need to save any
-     * registers as HotSpot uses a caller save convention.
-     */
-    @Override
-    public boolean preservesRegisters() {
-        return false;
-    }
-
     @Override
     protected Object getConstantParameterValue(int index, String name) {
         if (index == 2) {
             return providers.getRegisters().getThreadRegister();
         }
         assert index == 3;
-        return options;
+        return StubOptions.TraceExceptionHandlerStub.getValue(options);
     }
 
     @Snippet
-    private static void exceptionHandler(Object exception, Word exceptionPc, @ConstantParameter Register threadRegister, @ConstantParameter OptionValues options) {
+    private static void exceptionHandler(Object exception, Word exceptionPc, @ConstantParameter Register threadRegister, @ConstantParameter boolean logging) {
         Word thread = registerAsWord(threadRegister);
         checkNoExceptionInThread(thread, assertionsEnabled(INJECTED_VMCONFIG));
         checkExceptionNotNull(assertionsEnabled(INJECTED_VMCONFIG), exception);
         writeExceptionOop(thread, exception);
         writeExceptionPc(thread, exceptionPc);
-        if (logging(options)) {
+        if (logging) {
             printf("handling exception %p (", Word.objectToTrackedPointer(exception).rawValue());
             decipher(Word.objectToTrackedPointer(exception).rawValue());
             printf(") at %p (", exceptionPc.rawValue());
@@ -108,7 +104,7 @@ public class ExceptionHandlerStub extends SnippetStub {
 
         Word handlerPc = exceptionHandlerForPc(EXCEPTION_HANDLER_FOR_PC, thread);
 
-        if (logging(options)) {
+        if (logging) {
             printf("handler for exception %p at %p is at %p (", Word.objectToTrackedPointer(exception).rawValue(), exceptionPc.rawValue(), handlerPc.rawValue());
             decipher(handlerPc.rawValue());
             printf(")\n");
@@ -141,11 +137,6 @@ public class ExceptionHandlerStub extends SnippetStub {
         }
     }
 
-    @Fold
-    static boolean logging(OptionValues options) {
-        return StubOptions.TraceExceptionHandlerStub.getValue(options);
-    }
-
     /**
      * Determines if either Java assertions are enabled for Graal or if this is a HotSpot build
      * where the ASSERT mechanism is enabled.
@@ -153,10 +144,11 @@ public class ExceptionHandlerStub extends SnippetStub {
     @Fold
     @SuppressWarnings("all")
     static boolean assertionsEnabled(@InjectedParameter GraalHotSpotVMConfig config) {
-        return Assertions.ENABLED || cAssertionsEnabled(config);
+        return Assertions.assertionsEnabled() || cAssertionsEnabled(config);
     }
 
-    public static final ForeignCallDescriptor EXCEPTION_HANDLER_FOR_PC = newDescriptor(ExceptionHandlerStub.class, "exceptionHandlerForPc", Word.class, Word.class);
+    public static final HotSpotForeignCallDescriptor EXCEPTION_HANDLER_FOR_PC = newDescriptor(SAFEPOINT, REEXECUTABLE, any(), ExceptionHandlerStub.class, "exceptionHandlerForPc", Word.class,
+                    Word.class);
 
     @NodeIntrinsic(value = StubForeignCallNode.class)
     public static native Word exceptionHandlerForPc(@ConstantNodeParameter ForeignCallDescriptor exceptionHandlerForPc, Word thread);

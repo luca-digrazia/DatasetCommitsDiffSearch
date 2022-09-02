@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,12 +24,12 @@
  */
 package org.graalvm.compiler.hotspot;
 
-import jdk.vm.ci.meta.InvokeTarget;
-
 import org.graalvm.compiler.core.common.spi.ForeignCallLinkage;
 import org.graalvm.compiler.core.target.Backend;
+import org.graalvm.compiler.hotspot.meta.HotSpotForeignCallDescriptor;
 import org.graalvm.compiler.hotspot.stubs.Stub;
-import org.graalvm.word.LocationIdentity;
+
+import jdk.vm.ci.meta.InvokeTarget;
 
 /**
  * The details required to link a HotSpot runtime or stub call.
@@ -42,56 +42,21 @@ public interface HotSpotForeignCallLinkage extends ForeignCallLinkage, InvokeTar
      * {@linkplain ForeignCallLinkage#getTemporaries() temporary} registers.
      */
     enum RegisterEffect {
-        DESTROYS_REGISTERS,
-        PRESERVES_REGISTERS
+        DESTROYS_ALL_CALLER_SAVE_REGISTERS,
+        COMPUTES_REGISTERS_KILLED
     }
 
-    /**
-     * Constants for specifying whether a call is a leaf or not and whether a
-     * {@code JavaFrameAnchor} prologue and epilogue is required around the call. A leaf function
-     * does not lock, GC or throw exceptions.
-     */
-    enum Transition {
-        /**
-         * A call to a leaf function that is guaranteed to not use floating point registers and will
-         * never have its caller stack inspected by the VM. That is, {@code JavaFrameAnchor}
-         * management around the call can be omitted.
-         */
-        LEAF_NOFP,
-
-        /**
-         * A call to a leaf function that might use floating point registers but will never have its
-         * caller stack inspected. That is, {@code JavaFrameAnchor} management around the call can
-         * be omitted.
-         */
-        LEAF,
-
-        /**
-         * A call to a leaf function that might use floating point registers and may have its caller
-         * stack inspected. That is, {@code JavaFrameAnchor} management code around the call is
-         * required.
-         */
-        STACK_INSPECTABLE_LEAF,
-
-        /**
-         * A function that may lock, GC or raise an exception and thus requires debug info to be
-         * associated with a call site to the function. The execution stack may be inspected while
-         * in the called function. That is, {@code JavaFrameAnchor} management code around the call
-         * is required.
-         */
-        SAFEPOINT,
-    }
+    @Override
+    HotSpotForeignCallDescriptor getDescriptor();
 
     /**
      * Sentinel marker for a computed jump address.
      */
     long JUMP_ADDRESS = 0xDEADDEADBEEFBEEFL;
 
-    boolean isReexecutable();
-
-    LocationIdentity[] getKilledLocations();
-
     void setCompiledStub(Stub stub);
+
+    RegisterEffect getEffect();
 
     /**
      * Determines if this is a call to a compiled {@linkplain Stub stub}.
@@ -122,9 +87,4 @@ public interface HotSpotForeignCallLinkage extends ForeignCallLinkage, InvokeTar
      * Gets the VM symbol associated with the target {@linkplain #getAddress() address} of the call.
      */
     String getSymbol();
-
-    /**
-     * Identifies foreign calls which are guaranteed to include a safepoint check.
-     */
-    boolean isGuaranteedSafepoint();
 }

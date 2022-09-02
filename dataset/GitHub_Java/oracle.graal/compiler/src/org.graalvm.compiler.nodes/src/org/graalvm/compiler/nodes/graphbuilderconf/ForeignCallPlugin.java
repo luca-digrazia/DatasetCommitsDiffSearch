@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,29 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package org.graalvm.compiler.replacements.arraycopy;
+package org.graalvm.compiler.nodes.graphbuilderconf;
 
 import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
-import org.graalvm.compiler.core.common.spi.ForeignCallSignature;
-import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
-import org.graalvm.compiler.word.Word;
+import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 
-import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
 
-public interface ArrayCopyForeignCalls extends ForeignCallsProvider {
+/**
+ * {@link InvocationPlugin} for converting a method call directly to a foreign call.
+ */
+public final class ForeignCallPlugin implements InvocationPlugin {
+    private final ForeignCallDescriptor descriptor;
 
-    ForeignCallSignature UNSAFE_ARRAYCOPY = new ForeignCallSignature("unsafe_arraycopy", void.class, Word.class, Word.class, Word.class);
-    ForeignCallSignature GENERIC_ARRAYCOPY = new ForeignCallSignature("generic_arraycopy", int.class, Word.class, int.class, Word.class, int.class, int.class);
+    public ForeignCallPlugin(ForeignCallDescriptor descriptor) {
+        this.descriptor = descriptor;
+    }
 
-    ForeignCallDescriptor lookupCheckcastArraycopyDescriptor(boolean uninit);
-
-    ForeignCallDescriptor lookupArraycopyDescriptor(JavaKind kind, boolean aligned, boolean disjoint, boolean uninit, boolean killAny);
+    @Override
+    public boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode[] args) {
+        ForeignCallNode foreignCall = new ForeignCallNode(descriptor, args);
+        foreignCall.setBci(b.bci());
+        b.addPush(targetMethod.getSignature().getReturnKind(), foreignCall);
+        return true;
+    }
 }
