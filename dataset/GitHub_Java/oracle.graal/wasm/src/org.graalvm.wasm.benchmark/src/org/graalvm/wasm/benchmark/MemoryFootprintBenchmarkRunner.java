@@ -69,8 +69,8 @@ import static org.graalvm.wasm.utils.cases.WasmCase.collectFileCase;
  * </p>
  *
  * <pre>
- * go-hello: warmup iteration[0]: 50.863 MB
- * go-hello: warmup iteration[1]: 12.708 MB
+ * go-hello: warmup_iteration[0]: 50.863 MB
+ * go-hello: warmup_iteration[1]: 12.708 MB
  * ...
  * go-hello: iteration[0]: 16.902 MB
  * go-hello: iteration[1]: 17.161 MB
@@ -121,10 +121,10 @@ public class MemoryFootprintBenchmarkRunner {
                 final double heapSizeAfter = getHeapSize();
                 final double result = heapSizeAfter - heapSizeBefore;
                 if (i < WARMUP_ITERATIONS) {
-                    System.out.format("%s: warmup iteration[%d]: %.3f MB%n", caseSpec, i, result);
+                    System.out.format("%s: warmup_iteration[%d]: %.3f MB%n", caseSpec, i, result);
                 } else {
                     results.add(result);
-                    System.out.format("%s: iteration[%d]: %.3f MB%n", caseSpec, i, result);
+                    System.out.format("%s: iteration[%d]: %.3f MB%n", caseSpec, i - WARMUP_ITERATIONS, result);
                 }
 
                 context.close();
@@ -133,8 +133,8 @@ public class MemoryFootprintBenchmarkRunner {
             Collections.sort(results);
 
             System.out.format("%s: median: %.3f MB%n", caseSpec, median(results));
-            System.out.format("%s: min: %.3f MB%n", caseSpec, results.get(0));
-            System.out.format("%s: max: %.3f MB%n", caseSpec, results.get(results.size() - 1));
+            System.out.format("%s: min: %.3f MB%n", caseSpec, results.get(results.size() - 1));
+            System.out.format("%s: max: %.3f MB%n", caseSpec, results.get(0));
             System.out.format("%s: average: %.3f MB%n", caseSpec, average(results));
         }
     }
