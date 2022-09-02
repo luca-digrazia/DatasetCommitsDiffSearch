@@ -39,11 +39,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Properties;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.Map;
 
-import com.oracle.truffle.wasm.utils.SystemProperties;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
@@ -52,7 +50,6 @@ import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 
 import com.oracle.truffle.wasm.predefined.testutil.TestutilModule;
@@ -64,7 +61,7 @@ import com.oracle.truffle.wasm.utils.WasmResource;
 @Warmup(iterations = WARMUP_ITERATIONS)
 @Measurement(iterations = MEASUREMENT_ITERATIONS)
 @Fork(FORKS)
-public abstract class WasmBenchmark {
+public class WasmBenchmark {
     public static class Defaults {
         public static final int MEASUREMENT_ITERATIONS = 10;
         public static final int WARMUP_ITERATIONS = 10;
@@ -72,103 +69,81 @@ public abstract class WasmBenchmark {
     }
 
     public abstract static class WasmBenchmarkState {
-        private Value mainFunction;
-        private Value resetContext;
-        private Value customInitializer;
-        private WasmInitialization initialization;
+        Map<String, Value> mainFunctions = new HashMap<>();
+        Map<String, Value> resetContexts = new HashMap<>();
+        Map<String, Value> customInitializers = new HashMap<>();
+        Map<String, WasmInitialization> initializations = new HashMap<>();
 
-        @Setup(Level.Trial)
+        @Setup
         public void setup() throws IOException, InterruptedException {
-            WasmBenchCase benchCase = getBenchCase(benchmarkName());
-
-            Assert.assertNotNull(String.format("Benchmark %s not found", benchmarkName()), benchCase);
+            Collection<? extends WasmBenchCase> benchCases = collectBenchCases();
 
             Context.Builder contextBuilder = Context.newBuilder("wasm");
             contextBuilder.option("wasm.PredefinedModules", "testutil:testutil,env:emscripten");
 
-            byte[] binary = benchCase.createBinary();
-            Context context = contextBuilder.build();
-            Source source = Source.newBuilder("wasm", ByteSequence.create(binary), "test").build();
+            for (WasmBenchCase benchCase : benchCases) {
+                byte[] binary = benchCase.createBinary();
+                Context context = contextBuilder.build();
+                Source source = Source.newBuilder("wasm", ByteSequence.create(binary), "test").build();
 
-            context.eval(source);
+                context.eval(source);
 
-            Value wasmBindings = context.getBindings("wasm");
-            mainFunction = wasmBindings.getMember("_main");
-            resetContext = wasmBindings.getMember(TestutilModule.Names.RESET_CONTEXT);
-            customInitializer = wasmBindings.getMember(TestutilModule.Names.RUN_CUSTOM_INITIALIZATION);
-            initialization = benchCase.initialization;
-        }
-
-        @Setup(Level.Iteration)
-        public void setupIteration() {
-            if (initialization != null) {
-                customInitializer.execute(initialization);
+                mainFunctions.put(benchCase.name, context.getBindings("wasm").getMember("_main"));
+                resetContexts.put(benchCase.name, context.getBindings("wasm").getMember(TestutilModule.Names.RESET_CONTEXT));
+                customInitializers.put(benchCase.name, context.getBindings("wasm").getMember(TestutilModule.Names.RUN_CUSTOM_INITIALIZATION));
+                initializations.put(benchCase.name, benchCase.initialization);
             }
         }
-
-        @TearDown(Level.Iteration)
-        public void teardownIteration() {
-            // Reset context and zero out memory.
-            resetContext.execute(true);
-        }
-
-        public Value mainFunction() {
-            return mainFunction;
-        }
-
-        protected abstract String benchmarkName();
     }
 
     // TODO: should we split the bench cases into bundles, like the test cases?
-    private static WasmBenchCase getBenchCase(String wantedBenchmarkName) throws IOException {
+    private static Collection<? extends WasmBenchCase> collectBenchCases() throws IOException {
         Collection<WasmBenchCase> collectedCases = new ArrayList<>();
 
         // Open the wasm_bench_index file of the bench bundle.
         // The wasm_bench_index file contains the available benchmarks for that bundle.
         InputStream index = WasmBenchmark.class.getResourceAsStream("/bench/wasm_test_index");
-        Assert.assertNotNull("Could not find resource: wasm_test_index", index);
         BufferedReader indexReader = new BufferedReader(new InputStreamReader(index));
 
-        Set<String> allBenchNames = indexReader.lines().filter(name -> !name.equals("") && !name.startsWith("#")).collect(Collectors.toSet());
+        // Iterate through the available test of the bundle.
+        while (indexReader.ready()) {
+            String benchName = indexReader.readLine().trim();
+            if (benchName.equals("") || benchName.startsWith("#")) {
+                // Skip empty lines or lines starting with a hash (treat as a comment).
+                continue;
+            }
 
-        if (!allBenchNames.contains(wantedBenchmarkName)) {
-            return null;
+            Object mainContent = WasmResource.getResourceAsTest(String.format("/bench/%s", benchName), true);
+            String initContent = WasmResource.getResourceAsString(String.format("/bench/%s.init", benchName), false);
+            WasmInitialization initializer = WasmInitialization.create(initContent);
+
+            if (mainContent instanceof String) {
+                collectedCases.add(benchCase(benchName, (String) mainContent, initializer));
+            } else if (mainContent instanceof byte[]) {
+                collectedCases.add(benchCase(benchName, (byte[]) mainContent, initializer));
+            } else {
+                Assert.fail("Unknown content type: " + mainContent.getClass());
+            }
         }
 
-        Object mainContent = WasmResource.getResourceAsTest(String.format("/bench/%s", wantedBenchmarkName), true);
-        String initContent = WasmResource.getResourceAsString(String.format("/bench/%s.init", wantedBenchmarkName), false);
-        String optsContent = WasmResource.getResourceAsString(String.format("/bench/%s.opts", wantedBenchmarkName), false);
-        WasmInitialization initializer = WasmInitialization.create(initContent);
-        Properties options = SystemProperties.createFromOptions(optsContent);
-
-        if (mainContent instanceof String) {
-            return benchCase(wantedBenchmarkName, (String) mainContent, initializer, options);
-        } else if (mainContent instanceof byte[]) {
-            return benchCase(wantedBenchmarkName, (byte[]) mainContent, initializer, options);
-        } else {
-            Assert.fail("Unknown content type: " + mainContent.getClass());
-        }
-
-        return null;
+        return collectedCases;
     }
 
-    private static WasmStringBenchCase benchCase(String name, String program, WasmInitialization initialization, Properties options) {
-        return new WasmStringBenchCase(name, program, initialization, options);
+    private static WasmStringBenchCase benchCase(String name, String program, WasmInitialization initialization) {
+        return new WasmStringBenchCase(name, program, initialization);
     }
 
-    private static WasmBinaryBenchCase benchCase(String name, byte[] program, WasmInitialization initialization, Properties options) {
-        return new WasmBinaryBenchCase(name, program, initialization, options);
+    private static WasmBinaryBenchCase benchCase(String name, byte[] program, WasmInitialization initialization) {
+        return new WasmBinaryBenchCase(name, program, initialization);
     }
 
     private abstract static class WasmBenchCase {
         private final String name;
         private final WasmInitialization initialization;
-        private final Properties options;
 
-        WasmBenchCase(String name, WasmInitialization initialization, Properties options) {
+        WasmBenchCase(String name, WasmInitialization initialization) {
             this.name = name;
             this.initialization = initialization;
-            this.options = options;
         }
 
         public abstract byte[] createBinary() throws IOException, InterruptedException;
@@ -181,8 +156,8 @@ public abstract class WasmBenchmark {
     private static class WasmStringBenchCase extends WasmBenchCase {
         private final String program;
 
-        WasmStringBenchCase(String name, String program, WasmInitialization initialization, Properties options) {
-            super(name, initialization, options);
+        WasmStringBenchCase(String name, String program, WasmInitialization initialization) {
+            super(name, initialization);
             this.program = program;
         }
 
@@ -195,8 +170,8 @@ public abstract class WasmBenchmark {
     private static class WasmBinaryBenchCase extends WasmBenchCase {
         private final byte[] binary;
 
-        WasmBinaryBenchCase(String name, byte[] binary, WasmInitialization initialization, Properties options) {
-            super(name, initialization, options);
+        WasmBinaryBenchCase(String name, byte[] binary, WasmInitialization initialization) {
+            super(name, initialization);
             this.binary = binary;
         }
 
