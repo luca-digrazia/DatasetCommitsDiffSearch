@@ -113,7 +113,7 @@ final class GraalRuntimeSupport extends RuntimeSupport {
     }
 
     @Override
-    public String getSavedProperty(String key) {
+    public String getSystemProperty(String key) {
         return Services.getSavedProperties().get(key);
     }
 
@@ -133,7 +133,7 @@ final class GraalRuntimeSupport extends RuntimeSupport {
     @Override
     public Object callInlined(Node callNode, CallTarget target, Object... arguments) {
         try {
-            return ((OptimizedCallTarget) target).inlinedExecRootNode(arguments);
+            return ((OptimizedCallTarget) target).inlinedPERoot(arguments);
         } catch (Throwable t) {
             GraalRuntimeAccessor.LANGUAGE.onThrowable(callNode, ((OptimizedCallTarget) target), t, null);
             throw OptimizedCallTarget.rethrow(t);

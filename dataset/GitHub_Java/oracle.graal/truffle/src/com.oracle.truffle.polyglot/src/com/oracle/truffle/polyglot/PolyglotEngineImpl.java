@@ -252,7 +252,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
 
         parseOptions(options, useSystemProperties, originalEngineOptions, languagesOptions, instrumentsOptions, logLevels);
 
-        boolean useAllowExperimentalOptions = allowExperimentalOptions || Boolean.parseBoolean(EngineAccessor.RUNTIME.getSavedProperty(PROP_ALLOW_EXPERIMENTAL_OPTIONS));
+        boolean useAllowExperimentalOptions = allowExperimentalOptions || Boolean.parseBoolean(EngineAccessor.RUNTIME.getSystemProperty(PROP_ALLOW_EXPERIMENTAL_OPTIONS));
         this.engineOptionValues.putAll(originalEngineOptions, useAllowExperimentalOptions);
         this.conservativeContextReferences = engineOptionValues.get(PolyglotEngineOptions.UseConservativeContextReferences);
 
@@ -754,6 +754,11 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                                         duplicateId, className1, className2));
     }
 
+    /*
+     * Do not call this when exception wrapping is done in one of the callees. It is expected to be
+     * thrown directly to the embedder. Save to call this from within a language as the engine is
+     * never closed there.
+     */
     void checkState() {
         if (closed) {
             throw PolyglotEngineException.illegalState("Engine is already closed.");
@@ -1084,10 +1089,10 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     List<OptionDescriptors> allDescriptors = new ArrayList<>();
                     allDescriptors.add(engineOptions);
                     for (PolyglotLanguage language : idToLanguage.values()) {
-                        allDescriptors.add(language.getOptionsInternal());
+                        allDescriptors.add(language.getOptions());
                     }
                     for (PolyglotInstrument instrument : idToInstrument.values()) {
-                        allDescriptors.add(instrument.getOptionsInternal());
+                        allDescriptors.add(instrument.getOptions());
                     }
                     allOptions = OptionDescriptors.createUnion(allDescriptors.toArray(new OptionDescriptors[0]));
                 }
