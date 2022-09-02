@@ -82,13 +82,12 @@ import com.oracle.graal.pointsto.util.CompletionExecutor;
 import com.oracle.graal.pointsto.util.CompletionExecutor.DebugContextRunnable;
 import com.oracle.graal.pointsto.util.Timer;
 import com.oracle.graal.pointsto.util.Timer.StopTimer;
-import com.oracle.svm.util.ImageGeneratorThreadMarker;
 
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import jdk.vm.ci.meta.JavaType;
+import com.oracle.svm.util.ImageGeneratorThreadMarker;
 
 public abstract class BigBang {
 
@@ -299,10 +298,6 @@ public abstract class BigBang {
 
     public UnsupportedFeatures getUnsupportedFeatures() {
         return unsupportedFeatures;
-    }
-
-    public AnalysisType lookup(JavaType type) {
-        return universe.lookup(type);
     }
 
     public AnalysisType getObjectType() {
