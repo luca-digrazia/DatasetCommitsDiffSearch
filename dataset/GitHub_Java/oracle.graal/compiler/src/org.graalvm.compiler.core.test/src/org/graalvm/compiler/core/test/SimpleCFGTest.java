@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,7 +34,6 @@ import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.ReturnNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
@@ -64,7 +63,7 @@ public class SimpleCFGTest extends GraalCompilerTest {
         AbstractBeginNode falseBegin = graph.add(new BeginNode());
         falseBegin.setNext(falseEnd);
 
-        IfNode ifNode = graph.add(new IfNode(null, trueBegin, falseBegin, 0.5, ProfileSource.UNKNOWN));
+        IfNode ifNode = graph.add(new IfNode(null, trueBegin, falseBegin, 0.5));
         graph.start().setNext(ifNode);
 
         AbstractMergeNode merge = graph.add(new MergeNode());

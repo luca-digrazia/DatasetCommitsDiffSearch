@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -161,7 +161,7 @@ public abstract class Stub {
 
     @Override
     public String toString() {
-        return "Stub<" + linkage.getDescriptor().getSignature() + ">";
+        return "Stub<" + linkage.getDescriptor() + ">";
     }
 
     /**
@@ -281,7 +281,7 @@ public abstract class Stub {
                 }
             }
 
-            checkSafeDataReference(data);
+            assert !(data.reference instanceof ConstantReference) : this + " cannot have embedded object or metadata constant: " + data.reference;
         }
         for (Infopoint infopoint : compResult.getInfopoints()) {
             assert infopoint instanceof Call : this + " cannot have non-call infopoint: " + infopoint;
@@ -291,10 +291,6 @@ public abstract class Stub {
             assert !callLinkage.isCompiledStub() || callLinkage.getDescriptor().equals(DEOPT_BLOB_UNCOMMON_TRAP) : this + " cannot call compiled stub " + callLinkage;
         }
         return true;
-    }
-
-    protected void checkSafeDataReference(DataPatch data) {
-        assert !(data.reference instanceof ConstantReference) : this + " cannot have embedded object or metadata constant: " + data.reference;
     }
 
     protected Suites createSuites() {

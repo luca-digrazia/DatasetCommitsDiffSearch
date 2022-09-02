@@ -21,7 +21,9 @@
  * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
  * or visit www.oracle.com if you need additional information or have any
  * questions.
- */package org.graalvm.compiler.hotspot.test;
+ */
+
+package org.graalvm.compiler.hotspot.test;
 
 import java.math.BigInteger;
 import java.util.Collections;
@@ -29,6 +31,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
 import jdk.vm.ci.runtime.JVMCI;
 import org.graalvm.compiler.api.runtime.GraalJVMCICompiler;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.hotspot.meta.HotSpotJITClassInitializationPlugin;
 import org.graalvm.compiler.java.LambdaUtils;
 import org.graalvm.compiler.options.OptionValues;
@@ -43,7 +46,7 @@ import org.junit.Test;
 public class LambdaStableNameTest {
     private String findStableLambdaName(ResolvedJavaType type) {
         OptionValues options = new OptionValues(OptionValues.newOptionMap());
-        DebugContext debug = DebugContext.create(options, Collections.emptyList());
+        DebugContext debug = new Builder(options, Collections.emptyList()).build();
         GraalJVMCICompiler compiler = (GraalJVMCICompiler) JVMCI.getRuntime().getCompiler();
         Providers providers = compiler.getGraalRuntime().getCapability(RuntimeProvider.class).getHostBackend().getProviders();
         final HotSpotJITClassInitializationPlugin initializationPlugin = new HotSpotJITClassInitializationPlugin();
@@ -62,13 +65,15 @@ public class LambdaStableNameTest {
         ResolvedJavaType acType = JVMCI.getRuntime().getHostJVMCIBackend().getMetaAccess().lookupJavaType(ac.getClass());
         String acName = findStableLambdaName(acType);
         assertEquals("Both stable lambda names are the same as they reference the same method", name, acName);
+
+        assertEquals("The name known in 19.3 version is computed", "Lorg/graalvm/compiler/hotspot/test/LambdaStableNameTest$$Lambda$3b571858be38d19370199ac2c3ec212a511e6f55;", name);
     }
 
-    private void assertLambdaName(String name) {
-        String expName = "L" + LambdaStableNameTest.class.getCanonicalName().replace('.', '/') +
+    private static void assertLambdaName(String name) {
+        String expectedPrefix = "L" + LambdaStableNameTest.class.getCanonicalName().replace('.', '/') +
                         "$$Lambda$";
-        if (!name.startsWith(expName)) {
-            fail("Expecting " + expName + " as prefix in lambda class name: " + name);
+        if (!name.startsWith(expectedPrefix)) {
+            fail("Expecting " + expectedPrefix + " as prefix in lambda class name: " + name);
         }
         assertTrue("semicolon at the end", name.endsWith(";"));
 
@@ -77,6 +82,6 @@ public class LambdaStableNameTest {
         String hash = name.substring(last + 1, name.length() - 1);
 
         BigInteger aValue = new BigInteger(hash, 16);
-        assertNotNull("Hash can be parsed as a hex number: " + hash);
+        assertNotNull("Hash can be parsed as a hex number: " + hash, aValue);
     }
 }

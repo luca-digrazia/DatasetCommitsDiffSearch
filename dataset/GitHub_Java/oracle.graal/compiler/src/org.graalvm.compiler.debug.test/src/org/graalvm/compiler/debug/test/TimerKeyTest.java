@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, 2015, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,34 +24,40 @@
  */
 package org.graalvm.compiler.debug.test;
 
-import static org.graalvm.compiler.debug.DebugContext.DEFAULT_LOG_STREAM;
 import static org.graalvm.compiler.debug.DebugContext.NO_CONFIG_CUSTOMIZERS;
-import static org.graalvm.compiler.debug.DebugContext.NO_DESCRIPTION;
-import static org.graalvm.compiler.debug.DebugContext.NO_GLOBAL_METRIC_VALUES;
 import static org.junit.Assert.assertEquals;
 
-import java.lang.management.ThreadMXBean;
-
+import org.graalvm.collections.EconomicMap;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.GraalDebugConfig;
-import org.graalvm.compiler.debug.Management;
+import org.graalvm.compiler.debug.DebugContext.Builder;
+import org.graalvm.compiler.debug.DebugOptions;
 import org.graalvm.compiler.debug.TimerKey;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
-import org.graalvm.util.EconomicMap;
+import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.junit.Assume;
+import org.junit.AssumptionViolatedException;
 import org.junit.Before;
 import org.junit.Test;
 
 @SuppressWarnings("try")
 public class TimerKeyTest {
 
-    private static final ThreadMXBean threadMXBean = Management.getThreadMXBean();
-
     @Before
     public void checkCapabilities() {
-        Assume.assumeTrue("skipping management interface test", threadMXBean.isCurrentThreadCpuTimeSupported());
+        assumeManagementLibraryIsLoadable();
+        Assume.assumeTrue("skipping management interface test", GraalServices.isCurrentThreadCpuTimeSupported());
+    }
+
+    /** @see <a href="https://bugs.openjdk.java.net/browse/JDK-8076557">JDK-8076557</a> */
+    static void assumeManagementLibraryIsLoadable() {
+        try {
+            /* Trigger loading of the management library using the bootstrap class loader. */
+            GraalServices.getCurrentThreadAllocatedBytes();
+        } catch (UnsatisfiedLinkError | NoClassDefFoundError | UnsupportedOperationException e) {
+            throw new AssumptionViolatedException("Management interface is unavailable: " + e);
+        }
     }
 
     /**
@@ -60,9 +68,9 @@ public class TimerKeyTest {
      *         {@code ms}
      */
     private static long spin(long ms) {
-        long start = threadMXBean.getCurrentThreadCpuTime();
+        long start = GraalServices.getCurrentThreadCpuTime();
         do {
-            long durationMS = (threadMXBean.getCurrentThreadCpuTime() - start) / 1000;
+            long durationMS = (GraalServices.getCurrentThreadCpuTime() - start) / 1000;
             if (durationMS >= ms) {
                 return durationMS;
             }
@@ -76,9 +84,9 @@ public class TimerKeyTest {
     @Test
     public void test2() {
         EconomicMap<OptionKey<?>, Object> map = EconomicMap.create();
-        map.put(GraalDebugConfig.Options.Time, "");
+        map.put(DebugOptions.Time, "");
         OptionValues options = new OptionValues(map);
-        DebugContext debug = DebugContext.create(options, NO_DESCRIPTION, NO_GLOBAL_METRIC_VALUES, DEFAULT_LOG_STREAM, NO_CONFIG_CUSTOMIZERS);
+        DebugContext debug = new Builder(options, NO_CONFIG_CUSTOMIZERS).build();
 
         TimerKey timerC = DebugContext.timer("TimerC");
         try (DebugCloseable c1 = timerC.start(debug)) {

@@ -36,6 +36,8 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Compi
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.ExcludeAssertions;
 
 import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.util.ArrayList;
@@ -43,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.code.CompilationResult;
@@ -53,6 +56,7 @@ import org.graalvm.compiler.core.GraalCompiler;
 import org.graalvm.compiler.core.common.CancellationBailoutException;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.core.common.CompilationIdentifier.Verbosity;
+import org.graalvm.compiler.core.common.jfr.JFRContext;
 import org.graalvm.compiler.core.common.RetryableBailoutException;
 import org.graalvm.compiler.core.common.util.CompilationAlarm;
 import org.graalvm.compiler.core.target.Backend;
@@ -60,6 +64,7 @@ import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.debug.DebugContext.Scope;
+import org.graalvm.compiler.debug.DebugHandlersFactory;
 import org.graalvm.compiler.debug.DiagnosticsOutputDirectory;
 import org.graalvm.compiler.debug.MemUseTrackerKey;
 import org.graalvm.compiler.debug.TimerKey;
@@ -67,6 +72,7 @@ import org.graalvm.compiler.lir.asm.CompilationResultBuilderFactory;
 import org.graalvm.compiler.lir.phases.LIRSuites;
 import org.graalvm.compiler.nodes.Cancellable;
 import org.graalvm.compiler.nodes.StructuredGraph;
+import org.graalvm.compiler.nodes.StructuredGraph.AllowAssumptions;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.BytecodeExceptionMode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
@@ -249,7 +255,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
             final DebugContext callerDebug = ((TruffleDebugContextImpl) truffleDebug).debugContext;
 
             try (DebugContext.Scope s = maybeOpenTruffleScope(compilable, callerDebug)) {
-                actuallyCompile(options, inliningPlan, task, inListener, compilationId, compilable, callerDebug);
+                actuallyCompile(options, inliningPlan, task, inListener, compilationId, compilable, callerDebug, JFRContext.DISABLED_JFR);
             } catch (Throwable e) {
                 notifyCompilableOfFailure(compilable, e);
             }
@@ -257,7 +263,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
             final OptionValues debugContextOptionValues = TruffleCompilerOptions.getOptions();
             try (DebugContext graalDebug = createDebugContext(debugContextOptionValues, compilationId, compilable, DebugContext.getDefaultLogStream());
                             DebugContext.Scope s = maybeOpenTruffleScope(compilable, graalDebug)) {
-                actuallyCompile(options, inliningPlan, task, inListener, compilationId, compilable, graalDebug);
+                actuallyCompile(options, inliningPlan, task, inListener, compilationId, compilable, graalDebug, JFRContext.DISABLED_JFR);
             } catch (Throwable e) {
                 notifyCompilableOfFailure(compilable, e);
             }
@@ -281,7 +287,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
 
     private void actuallyCompile(org.graalvm.options.OptionValues options, TruffleInliningPlan inliningPlan, TruffleCompilationTask task, TruffleCompilerListener listener,
                     TruffleCompilationIdentifier compilationId,
-                    CompilableTruffleAST compilable, DebugContext graalDebug) {
+                    CompilableTruffleAST compilable, DebugContext graalDebug, JFRContext jfr) {
         final TruffleCompilationWrapper truffleCompilationWrapper = new TruffleCompilationWrapper(
                         options,
                         getDebugOutputDirectory(),
@@ -291,7 +297,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
                         inliningPlan,
                         compilationId,
                         listener);
-        truffleCompilationWrapper.run(graalDebug);
+        truffleCompilationWrapper.run(graalDebug, jfr);
     }
 
     /**
@@ -312,7 +318,16 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
     private static void notifyCompilableOfFailure(CompilableTruffleAST compilable, Throwable e) {
         BailoutException bailout = e instanceof BailoutException ? (BailoutException) e : null;
         boolean permanentBailout = bailout != null ? bailout.isPermanent() : false;
-        compilable.onCompilationFailed(() -> CompilableTruffleAST.serializeException(e), bailout != null, permanentBailout);
+        final Supplier<String> reasonAndStackTrace = new Supplier<String>() {
+
+            @Override
+            public String get() {
+                StringWriter sw = new StringWriter();
+                e.printStackTrace(new PrintWriter(sw));
+                return sw.toString();
+            }
+        };
+        compilable.onCompilationFailed(reasonAndStackTrace, bailout != null, permanentBailout);
     }
 
     @Override
@@ -441,7 +456,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
             }
 
             try (DebugCloseable a = PartialEvaluationTime.start(debug); DebugCloseable c = PartialEvaluationMemUse.start(debug)) {
-                PartialEvaluator.Request request = partialEvaluator.new Request(options, debug, compilable, partialEvaluator.rootForCallTarget(compilable), inliningPlan,
+                PartialEvaluator.Request request = partialEvaluator.new Request(options, debug, compilable, partialEvaluator.rootForCallTarget(compilable), inliningPlan, AllowAssumptions.YES,
                                 compilationId, speculationLog, task);
                 graph = partialEvaluator.evaluate(request);
             }
@@ -636,7 +651,7 @@ public abstract class TruffleCompilerImpl implements TruffleCompilerBase {
         }
 
         @Override
-        protected Void performCompilation(DebugContext debug) {
+        protected Void performCompilation(DebugContext debug, JFRContext jfr) {
             compileAST(options, debug, compilable, inliningPlan, compilationId, task, listener);
             return null;
         }

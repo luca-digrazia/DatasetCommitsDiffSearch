@@ -759,7 +759,13 @@ public class NativeImageGenerator {
             throw new InterruptImageBuilding();
         } finally {
             OnAnalysisExitAccess onExitConfig = new OnAnalysisExitAccessImpl(featureHandler, loader, bigbang, debug);
-            featureHandler.forEachFeature(feature -> feature.onAnalysisExit(onExitConfig));
+            featureHandler.forEachFeature(feature -> {
+                try {
+                    feature.onAnalysisExit(onExitConfig);
+                } catch (Exception ex) {
+                    System.err.println("Exception during " + feature.getClass().getName() + ".onAnalysisExit()");
+                }
+            });
 
             /*
              * Execute analysis reporting here. This code is executed even if unsupported features

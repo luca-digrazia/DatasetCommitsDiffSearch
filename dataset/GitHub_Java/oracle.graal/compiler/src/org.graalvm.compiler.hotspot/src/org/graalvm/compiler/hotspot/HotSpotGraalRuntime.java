@@ -46,9 +46,8 @@ import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.api.runtime.GraalRuntime;
 import org.graalvm.compiler.core.CompilationWrapper.ExceptionAction;
 import org.graalvm.compiler.core.common.CompilationIdentifier;
-import org.graalvm.compiler.core.common.CompilationListenerProfiler;
-import org.graalvm.compiler.core.common.CompilerProfiler;
 import org.graalvm.compiler.core.common.GraalOptions;
+import org.graalvm.compiler.core.common.jfr.JFRProvider;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.target.Backend;
 import org.graalvm.compiler.debug.Assertions;
@@ -103,10 +102,8 @@ import jdk.vm.ci.services.Services;
 public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
 
     private static final boolean IS_AOT = Boolean.parseBoolean(Services.getSavedProperties().get("com.oracle.graalvm.isaot"));
-
     /**
-     * A factory for a {@link HotSpotGraalManagementRegistration} injected by
-     * {@code Target_org_graalvm_compiler_hotspot_HotSpotGraalRuntime}.
+     * A factory for {@link HotSpotGraalManagementRegistration} injected by {@code LibGraalFeature}.
      */
     private static final Supplier<HotSpotGraalManagementRegistration> AOT_INJECTED_MANAGEMENT = null;
 
@@ -149,7 +146,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     private final DiagnosticsOutputDirectory outputDirectory;
     private final Map<ExceptionAction, Integer> compilationProblemsPerAction;
 
-    private final CompilerProfiler compilerProfiler;
+    private final JFRProvider jfrProvider;
 
     /**
      * @param nameQualifier a qualifier to be added to this runtime's {@linkplain #getName() name}
@@ -240,7 +237,7 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         runtimeStartTime = System.nanoTime();
         bootstrapJVMCI = config.getFlag("BootstrapJVMCI", Boolean.class);
 
-        this.compilerProfiler = GraalServices.loadSingle(CompilerProfiler.class, false);
+        this.jfrProvider = GraalServices.loadSingle(JFRProvider.class, false);
     }
 
     /**
@@ -327,6 +324,11 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     }
 
     @Override
+    public JFRProvider getJfrProvider() {
+        return jfrProvider;
+    }
+
+    @Override
     public GraalHotSpotVMConfig getVMConfig() {
         return config;
     }
@@ -351,18 +353,8 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
                 }
             }
         }
-
         Description description = new Description(compilable, compilationId.toString(CompilationIdentifier.Verbosity.ID));
-        Builder builder = new Builder(compilationOptions, factories).//
-                        globalMetrics(metricValues).//
-                        description(description).//
-                        logStream(logStream);
-        if (compilerProfiler != null) {
-            int compileId = ((HotSpotCompilationIdentifier) compilationId).getRequest().getId();
-            builder.compilationListener(new CompilationListenerProfiler(compilerProfiler, compileId));
-        }
-        return builder.build();
-
+        return new Builder(compilationOptions, factories).globalMetrics(metricValues).description(description).logStream(logStream).build();
     }
 
     @Override
@@ -435,11 +427,6 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
     private volatile boolean shutdown;
 
     /**
-     * Shutdown hooks that should be run on the same thread doing the shutdown.
-     */
-    private List<Runnable> shutdownHooks = new ArrayList<>();
-
-    /**
      * Take action related to entering a new execution phase.
      *
      * @param phase the execution phase being entered
@@ -450,29 +437,8 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         }
     }
 
-    /**
-     * Adds a {@link Runnable} that will be run when this runtime is {@link #shutdown()}. The
-     * runnable will be run on the same thread doing the shutdown. All the advice for regular
-     * {@linkplain Runtime#addShutdownHook(Thread) shutdown hooks} also applies here but even more
-     * so since the hook runs on the shutdown thread.
-     */
-    public synchronized void addShutdownHook(Runnable hook) {
-        if (!shutdown) {
-            shutdownHooks.add(hook);
-        }
-    }
-
-    synchronized void shutdown() {
+    void shutdown() {
         shutdown = true;
-
-        for (Runnable r : shutdownHooks) {
-            try {
-                r.run();
-            } catch (Throwable e) {
-                e.printStackTrace(TTY.out);
-            }
-        }
-
         metricValues.print(optionsRef.get());
 
         phaseTransition("final");

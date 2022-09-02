@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,8 +32,9 @@ import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.GraalCompilerOptions;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.debug.DebugContext.Activation;
+import org.graalvm.compiler.debug.DebugContext.Builder;
+import org.graalvm.compiler.debug.TTY;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 import org.graalvm.compiler.serviceprovider.GraalServices;
@@ -116,7 +119,7 @@ final class AOTCompilationTask implements Runnable, Comparable<Object> {
         CompilationResult compResult = null;
         final long startTime = System.currentTimeMillis();
         SnippetReflectionProvider snippetReflection = aotBackend.getProviders().getSnippetReflection();
-        try (DebugContext debug = DebugContext.create(graalOptions, new GraalDebugHandlersFactory(snippetReflection)); Activation a = debug.activate()) {
+        try (DebugContext debug = new Builder(graalOptions, new GraalDebugHandlersFactory(snippetReflection)).build(); Activation a = debug.activate()) {
             compResult = aotBackend.compileMethod(method, debug);
         }
         final long endTime = System.currentTimeMillis();
@@ -141,7 +144,7 @@ final class AOTCompilationTask implements Runnable, Comparable<Object> {
             aotBackend.printCompiledMethod((HotSpotResolvedJavaMethod) method, compResult);
         }
 
-        result = new CompiledMethodInfo(compResult, new AOTHotSpotResolvedJavaMethod((HotSpotResolvedJavaMethod) method, aotBackend.getBackend()));
+        result = new CompiledMethodInfo(compResult, new AOTHotSpotResolvedJavaMethod((HotSpotResolvedJavaMethod) method, aotBackend.getBackend(), graalOptions));
     }
 
     private String getMethodDescription() {
@@ -187,12 +190,15 @@ final class AOTCompilationTask implements Runnable, Comparable<Object> {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
-        if (obj == null)
+        }
+        if (obj == null) {
             return false;
-        if (getClass() != obj.getClass())
+        }
+        if (getClass() != obj.getClass()) {
             return false;
+        }
         AOTCompilationTask other = (AOTCompilationTask) obj;
         return (this.id == other.id);
     }

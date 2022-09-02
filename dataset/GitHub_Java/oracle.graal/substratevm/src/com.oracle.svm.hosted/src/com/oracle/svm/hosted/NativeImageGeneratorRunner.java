@@ -28,11 +28,14 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TimerTask;
@@ -111,7 +114,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         int exitStatus;
         try {
             NativeImageClassLoader nativeImageClassLoader = installNativeImageClassLoader(classpath);
-            exitStatus = new NativeImageGeneratorRunner().build(arguments.toArray(new String[0]), nativeImageClassLoader);
+            exitStatus = new NativeImageGeneratorRunner().build(arguments.toArray(new String[0]), classpath, nativeImageClassLoader);
         } finally {
             unhookCustomClassLoaders();
             if (timerTask != null) {
@@ -153,7 +156,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
 
         // To avoid class loading cycles we make the parent of NativeImageClass the default class
         // loader
-        NativeImageClassLoader nativeImageClassLoader = new NativeImageClassLoader(classpath,
+        NativeImageClassLoader nativeImageClassLoader = new NativeImageClassLoader(verifyClassPathAndConvertToURLs(classpath),
                         customSystemClassLoader.getDefaultSystemClassLoader());
         Thread.currentThread().setContextClassLoader(nativeImageClassLoader);
         /*
@@ -195,6 +198,16 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         return -1;
     }
 
+    private static URL[] verifyClassPathAndConvertToURLs(String[] classpath) {
+        return new LinkedHashSet<>(Arrays.asList(classpath)).stream().flatMap(ImageClassLoader::toClassPathEntries).map(v -> {
+            try {
+                return v.toAbsolutePath().toUri().toURL();
+            } catch (MalformedURLException e) {
+                throw UserError.abort("Invalid classpath element '" + v + "'. Make sure that all paths provided with '" + SubstrateOptions.IMAGE_CLASSPATH_PREFIX + "' are correct.");
+            }
+        }).toArray(URL[]::new);
+    }
+
     /** Unless the check should be ignored, check that I am running on JDK-8. */
     public static boolean isValidJavaVersion() {
         return (Boolean.getBoolean("substratevm.IgnoreGraalVersionCheck") || JavaVersionUtil.JAVA_SPEC <= 8);
@@ -215,7 +228,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     @SuppressWarnings("try")
-    private int buildImage(String[] arguments, NativeImageClassLoader classLoader) {
+    private int buildImage(String[] arguments, String[] classpath, NativeImageClassLoader classLoader) {
         if (!verifyValidJavaVersionAndPlatform()) {
             return 1;
         }
@@ -227,7 +240,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             ImageClassLoader imageClassLoader;
             Timer classlistTimer = new Timer("classlist", false);
             try (StopTimer ignored1 = classlistTimer.start()) {
-                imageClassLoader = ImageClassLoader.create(NativeImageGenerator.defaultPlatform(classLoader), classLoader);
+                imageClassLoader = ImageClassLoader.create(NativeImageGenerator.defaultPlatform(classLoader), classpath, classLoader);
             }
 
             HostedOptionParser optionParser = new HostedOptionParser(imageClassLoader);
@@ -501,8 +514,8 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
     }
 
     @Override
-    public int build(String[] args, NativeImageClassLoader imageClassLoader) {
-        return buildImage(args, imageClassLoader);
+    public int build(String[] args, String[] classpath, NativeImageClassLoader imageClassLoader) {
+        return buildImage(args, classpath, imageClassLoader);
     }
 
     @Override

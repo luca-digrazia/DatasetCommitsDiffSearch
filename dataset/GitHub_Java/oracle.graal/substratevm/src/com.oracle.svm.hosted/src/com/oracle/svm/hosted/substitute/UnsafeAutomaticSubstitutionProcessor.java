@@ -47,8 +47,8 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugContext.Builder;
 import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
+import org.graalvm.compiler.java.BytecodeParser;
 import org.graalvm.compiler.java.GraphBuilderPhase;
-import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -60,10 +60,12 @@ import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration.Plugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InlineInvokePlugin;
+import org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.java.LoadFieldNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 import org.graalvm.compiler.nodes.java.StoreFieldNode;
+import org.graalvm.compiler.nodes.spi.CoreProviders;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.OptimisticOptimizations;
@@ -83,8 +85,9 @@ import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
 import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.SVMHost;
 import com.oracle.svm.hosted.c.GraalAccess;
-import com.oracle.svm.hosted.classinitialization.ClassInitializerGraphBuilderPhase;
 import com.oracle.svm.hosted.phases.NoClassInitializationPlugin;
+import com.oracle.svm.hosted.phases.SharedGraphBuilderPhase;
+import com.oracle.svm.hosted.phases.SharedGraphBuilderPhase.SharedBytecodeParser;
 import com.oracle.svm.hosted.snippets.ReflectionPlugins;
 
 import jdk.vm.ci.meta.JavaKind;
@@ -126,8 +129,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
     private final Map<ResolvedJavaField, ComputedValueField> fieldSubstitutions;
 
     private final List<ResolvedJavaType> suppressWarnings;
-
-    private static ResolvedJavaType resolvedUnsafeClass;
 
     private ResolvedJavaMethod unsafeObjectFieldOffsetFieldMethod;
     private ResolvedJavaMethod unsafeObjectFieldOffsetClassStringMethod;
@@ -190,8 +191,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
             } catch (ClassNotFoundException cnfe) {
                 throw VMError.shouldNotReachHere(cnfe);
             }
-
-            resolvedUnsafeClass = originalMetaAccess.lookupJavaType(unsafeClass);
 
             Method unsafeObjectFieldOffset = unsafeClass.getMethod("objectFieldOffset", java.lang.reflect.Field.class);
             unsafeObjectFieldOffsetFieldMethod = originalMetaAccess.lookupJavaMethod(unsafeObjectFieldOffset);
@@ -263,6 +262,9 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
          */
         try {
             suppressWarnings.add(originalMetaAccess.lookupJavaType(Class.forName("sun.security.provider.ByteArrayAccess")));
+            if (JavaVersionUtil.JAVA_SPEC >= 11) {
+                suppressWarnings.add(originalMetaAccess.lookupJavaType(Class.forName("jdk.internal.misc.InnocuousThread")));
+            }
         } catch (ClassNotFoundException e) {
             throw VMError.shouldNotReachHere(e);
         }
@@ -328,12 +330,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
              * perform the unsafe access registration. And if not, the user needs to provide a
              * proper manual configuration file.
              */
-            return;
-        }
-
-        if (annotationSubstitutions.findSubstitution(hostType).isPresent()) {
-            /* If the class is substituted clinit will be eliminated, so bail early. */
-            reportSkippedSubstitution(hostType);
             return;
         }
 
@@ -449,14 +445,8 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
          * If the value returned by the call to Unsafe.objectFieldOffset() is stored into a field
          * then that must be the offset field.
          */
-        SearchResult result = extractValueStoreField(unsafeObjectFieldOffsetInvoke.asNode(), FieldOffset, unsuccessfulReasons);
+        ResolvedJavaField offsetField = extractValueStoreField(unsafeObjectFieldOffsetInvoke.asNode(), FieldOffset, unsuccessfulReasons);
 
-        /* No field, but the value doesn't have illegal usages, ignore. */
-        if (result.valueStoreField == null && !result.illegalUseFound) {
-            return;
-        }
-
-        ResolvedJavaField offsetField = result.valueStoreField;
         /*
          * If the target field holder and name, and the offset field were found try to register a
          * substitution.
@@ -497,9 +487,8 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
          * If the value returned by the call to Unsafe.arrayBaseOffset() is stored into a field then
          * that must be the offset field.
          */
-        SearchResult result = extractValueStoreField(unsafeArrayBaseOffsetInvoke.asNode(), ArrayBaseOffset, unsuccessfulReasons);
+        ResolvedJavaField offsetField = extractValueStoreField(unsafeArrayBaseOffsetInvoke.asNode(), ArrayBaseOffset, unsuccessfulReasons);
 
-        ResolvedJavaField offsetField = result.valueStoreField;
         if (arrayClass != null && offsetField != null) {
             Class<?> finalArrayClass = arrayClass;
             Supplier<ComputedValueField> supplier = () -> new ComputedValueField(offsetField, null, ArrayBaseOffset, finalArrayClass, null, true);
@@ -507,10 +496,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                 reportSuccessfulAutomaticRecomputation(ArrayBaseOffset, offsetField, arrayClass.getCanonicalName());
             }
         } else {
-            /* Don't report a failure if the value doesn't have illegal usages. */
-            if (result.illegalUseFound) {
-                reportUnsuccessfulAutomaticRecomputation(type, offsetField, unsafeArrayBaseOffsetInvoke, ArrayBaseOffset, unsuccessfulReasons);
-            }
+            reportUnsuccessfulAutomaticRecomputation(type, offsetField, unsafeArrayBaseOffsetInvoke, ArrayBaseOffset, unsuccessfulReasons);
         }
     }
 
@@ -538,9 +524,8 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
          * If the value returned by the call to Unsafe.unsafeArrayIndexScale() is stored into a
          * field then that must be the offset field.
          */
-        SearchResult result = extractValueStoreField(unsafeArrayIndexScale.asNode(), ArrayIndexScale, unsuccessfulReasons);
+        ResolvedJavaField indexScaleField = extractValueStoreField(unsafeArrayIndexScale.asNode(), ArrayIndexScale, unsuccessfulReasons);
 
-        ResolvedJavaField indexScaleField = result.valueStoreField;
         boolean indexScaleComputed = false;
         boolean indexShiftComputed = false;
 
@@ -563,10 +548,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
             }
         }
         if (!indexScaleComputed && !indexShiftComputed) {
-            /* Don't report a failure if the value doesn't have illegal usages. */
-            if (result.illegalUseFound) {
-                reportUnsuccessfulAutomaticRecomputation(type, indexScaleField, unsafeArrayIndexScale, ArrayIndexScale, unsuccessfulReasons);
-            }
+            reportUnsuccessfulAutomaticRecomputation(type, indexScaleField, unsafeArrayIndexScale, ArrayIndexScale, unsuccessfulReasons);
         }
     }
 
@@ -640,7 +622,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                  * array index scale.
                  */
 
-                SearchResult result = null;
                 ResolvedJavaField indexShiftField = null;
                 List<String> unsuccessfulReasons = new ArrayList<>();
                 Invoke numberOfLeadingZerosInvoke = methodCallTarget.invoke();
@@ -652,8 +633,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                      */
                     SubNode subNode = numberOfLeadingZerosInvokeSubUsages.first();
                     if (subNodeComputesLog2(subNode, numberOfLeadingZerosInvoke)) {
-                        result = extractValueStoreField(subNode, ArrayIndexShift, unsuccessfulReasons);
-                        indexShiftField = result.valueStoreField;
+                        indexShiftField = extractValueStoreField(subNode, ArrayIndexShift, unsuccessfulReasons);
                     } else {
                         unsuccessfulReasons.add("The index array scale value provided by " + indexScaleValue + " is not used to calculate the array index shift.");
                     }
@@ -675,9 +655,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                          * that we can refer to in the error, and we check for null inside the
                          * method.
                          */
-                        if (result != null && result.illegalUseFound || !unsuccessfulReasons.isEmpty()) {
-                            reportUnsuccessfulAutomaticRecomputation(type, null, numberOfLeadingZerosInvoke, ArrayIndexShift, unsuccessfulReasons);
-                        }
+                        reportUnsuccessfulAutomaticRecomputation(type, null, numberOfLeadingZerosInvoke, ArrayIndexShift, unsuccessfulReasons);
                     }
                 }
             }
@@ -696,7 +674,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         if (xValueNode.isJavaConstant() && xValueNode.asJavaConstant().getJavaKind() == JavaKind.Int) {
             PrimitiveConstant xValueConstant = (PrimitiveConstant) xValueNode.asJavaConstant();
             if (xValueConstant.asInt() == 31) {
-                assert yValueNode.equals(numberOfLeadingZerosInvokeNode.asNode());
+                assert yValueNode.equals(numberOfLeadingZerosInvokeNode);
                 return true;
             }
         }
@@ -704,7 +682,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         if (yValueNode.isJavaConstant() && yValueNode.asJavaConstant().getJavaKind() == JavaKind.Int) {
             PrimitiveConstant yValueConstant = (PrimitiveConstant) yValueNode.asJavaConstant();
             if (yValueConstant.asInt() == 31) {
-                assert xValueNode.equals(numberOfLeadingZerosInvokeNode.asNode());
+                assert xValueNode.equals(numberOfLeadingZerosInvokeNode);
                 return true;
             }
         }
@@ -713,87 +691,36 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
     }
 
     /**
-     * Encodes the result of the left-hand-side analysis of an unsafe call, i.e., the search for a
-     * static final field where the unsafe value may be stored.
-     */
-    static final class SearchResult {
-        /** The field where the value is stored, if found. */
-        final ResolvedJavaField valueStoreField;
-        /**
-         * Uses that can lead to the unsafe value having side effects that we didn't account for are
-         * considered illegal.
-         */
-        final boolean illegalUseFound;
-
-        private SearchResult(ResolvedJavaField valueStoreField, boolean illegalUseFound) {
-            this.valueStoreField = valueStoreField;
-            this.illegalUseFound = illegalUseFound;
-        }
-
-        static SearchResult foundField(ResolvedJavaField offsetField) {
-            return new SearchResult(offsetField, false);
-        }
-
-        static SearchResult foundIllegalUse() {
-            return new SearchResult(null, true);
-        }
-
-        static SearchResult didNotFindIllegalUse() {
-            return new SearchResult(null, false);
-        }
-    }
-
-    /**
      * If the value produced by valueNode is stored into a static final field then that field is
      * returned. If the field is either not static or not final the method returns null and the
      * reason is recorded in the unsuccessfulReasons parameter.
      */
-    private static SearchResult extractValueStoreField(ValueNode valueNode, Kind substitutionKind, List<String> unsuccessfulReasons) {
+    private static ResolvedJavaField extractValueStoreField(ValueNode valueNode, Kind substitutionKind, List<String> unsuccessfulReasons) {
         ResolvedJavaField offsetField = null;
-        boolean illegalUseFound = false;
 
-        /*
-         * Cycle through all usages looking for the field where the value may be stored. The search
-         * continues until all usages are exhausted or an illegal use is found.
-         */
-        outer: for (Node valueNodeUsage : valueNode.usages()) {
-            if (valueNodeUsage instanceof StoreFieldNode && offsetField == null) {
-                offsetField = ((StoreFieldNode) valueNodeUsage).field();
-            } else if (valueNodeUsage instanceof SignExtendNode && offsetField == null) {
-                SignExtendNode signExtendNode = (SignExtendNode) valueNodeUsage;
-                for (Node signExtendNodeUsage : signExtendNode.usages()) {
-                    if (signExtendNodeUsage instanceof StoreFieldNode && offsetField == null) {
-                        offsetField = ((StoreFieldNode) signExtendNodeUsage).field();
-                    } else if (isAllowedUnsafeValueSink(valueNodeUsage)) {
-                        continue;
-                    } else {
-                        illegalUseFound = true;
-                        break outer;
-                    }
-                }
-            } else if (isAllowedUnsafeValueSink(valueNodeUsage)) {
-                continue;
-            } else {
-                illegalUseFound = true;
-                break;
+        NodeIterable<Node> valueNodeUsages = valueNode.usages();
+        NodeIterable<StoreFieldNode> valueNodeStoreFieldUsages = valueNodeUsages.filter(StoreFieldNode.class);
+        NodeIterable<SignExtendNode> valueNodeSignExtendUsages = valueNodeUsages.filter(SignExtendNode.class);
+
+        if (valueNodeStoreFieldUsages.count() == 1) {
+            offsetField = valueNodeStoreFieldUsages.first().field();
+        } else if (valueNodeSignExtendUsages.count() == 1) {
+            SignExtendNode signExtendNode = valueNodeSignExtendUsages.first();
+            NodeIterable<StoreFieldNode> signExtendFieldStoreUsages = signExtendNode.usages().filter(StoreFieldNode.class);
+            if (signExtendFieldStoreUsages.count() == 1) {
+                offsetField = signExtendFieldStoreUsages.first().field();
             }
         }
 
-        if (offsetField != null && !illegalUseFound) {
+        if (offsetField != null) {
             if (offsetField.isStatic() && offsetField.isFinal()) {
-                /* Success! We found the static final field where this value is stored. */
-                return SearchResult.foundField(offsetField);
+                return offsetField;
             } else {
                 String message = "The field " + offsetField.format("%H.%n") + ", where the value produced by the " + kindAsString(substitutionKind) +
                                 " computation is stored, is not" + (!offsetField.isStatic() ? " static" : "") + (!offsetField.isFinal() ? " final" : "") + ".";
                 unsuccessfulReasons.add(message);
-                /* Value is stored to a non static final field. */
-                return SearchResult.foundIllegalUse();
             }
-        }
-
-        if (illegalUseFound) {
-            /* No static final store field was found and the value has illegal usages. */
+        } else {
             String producer;
             String operation;
             if (valueNode instanceof Invoke) {
@@ -810,40 +737,8 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                             " for the " + kindAsString(substitutionKind) + " computation is stored. The " + operation +
                             " is not directly followed by a field store or by a sign extend node followed directly by a field store. ";
             unsuccessfulReasons.add(message);
-            return SearchResult.foundIllegalUse();
         }
-
-        /* No static final store field was found but value does have any illegal usages. */
-        return SearchResult.didNotFindIllegalUse();
-    }
-
-    /**
-     * Determine if the valueNodeUsage parameter is an allowed usage of an offset, indexScale or
-     * indexShift unsafe value.
-     */
-    private static boolean isAllowedUnsafeValueSink(Node valueNodeUsage) {
-        if (valueNodeUsage instanceof FrameState) {
-            /*
-             * The frame state keeps track of the local variables and operand stack at a particular
-             * point in the abstract interpretation. This usage can be ignored for the purpose of
-             * this analysis.
-             */
-            return true;
-        }
-        if (valueNodeUsage instanceof MethodCallTargetNode) {
-            /*
-             * Passing the value as a parameter to certain methods, like Unsafe methods that read
-             * and write memory based on it, is allowed. Passing an unsafe value as a parameter is
-             * sound as long as the called method doesn't propagate the value to a dissalowed usage,
-             * e.g., like a store to a field that we would then miss.
-             */
-            MethodCallTargetNode methodCallTarget = (MethodCallTargetNode) valueNodeUsage;
-            ResolvedJavaMethod targetMethod = methodCallTarget.targetMethod();
-            if (targetMethod.getDeclaringClass().equals(resolvedUnsafeClass)) {
-                return true;
-            }
-        }
-        return false;
+        return null;
     }
 
     /**
@@ -896,14 +791,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                 addSubstitutionField(field, substitutionSupplier.get());
                 return true;
             }
-        }
-    }
-
-    private static void reportSkippedSubstitution(ResolvedJavaType type) {
-        if (Options.UnsafeAutomaticSubstitutionsLogLevel.getValue() >= DEBUG_LEVEL) {
-            String msg = "Warning: Skipped automatic unsafe substitutions analysis for type " + type.getName() +
-                            ". The entire type is substituted, therefore its class initializer is eliminated.";
-            System.out.println(msg);
         }
     }
 
@@ -1090,6 +977,29 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
             }
 
             return null;
+        }
+    }
+
+    static class ClassInitializerGraphBuilderPhase extends SharedGraphBuilderPhase {
+        ClassInitializerGraphBuilderPhase(CoreProviders providers, GraphBuilderConfiguration graphBuilderConfig, OptimisticOptimizations optimisticOpts) {
+            /*
+             * We do not want any word-type checking when parsing the class initializers, because we
+             * do not have the graph builder plugins for word types installed either. Passing null
+             * as the WordTypes disables the word type checks in the bytecode parser.
+             */
+            super(providers, graphBuilderConfig, optimisticOpts, null, null);
+        }
+
+        @Override
+        protected BytecodeParser createBytecodeParser(StructuredGraph graph, BytecodeParser parent, ResolvedJavaMethod method, int entryBCI, IntrinsicContext intrinsicContext) {
+            return new ClassInitializerBytecodeParser(this, graph, parent, method, entryBCI, intrinsicContext);
+        }
+    }
+
+    static class ClassInitializerBytecodeParser extends SharedBytecodeParser {
+        ClassInitializerBytecodeParser(GraphBuilderPhase.Instance graphBuilderInstance, StructuredGraph graph, BytecodeParser parent, ResolvedJavaMethod method, int entryBCI,
+                        IntrinsicContext intrinsicContext) {
+            super(graphBuilderInstance, graph, parent, method, entryBCI, intrinsicContext, true, true);
         }
     }
 }
