@@ -624,7 +624,6 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     static class IntrinsicScope extends InliningScope {
-        StateSplit returnStateSplit;
         ArrayList<StateSplit> invalidStateUsers;
 
         IntrinsicScope(BytecodeParser parser) {
@@ -635,6 +634,7 @@ public class BytecodeParser implements GraphBuilderContext {
             super(parser, callee, args);
         }
 
+        @SuppressWarnings("unlikely-arg-type")
         @Override
         public void close() {
             IntrinsicContext intrinsic = parser.intrinsicContext;
@@ -1405,7 +1405,7 @@ public class BytecodeParser implements GraphBuilderContext {
         if (profile == null || profile.getNotRecordedProbability() > 0.0) {
             return null;
         } else {
-            return BeginNode.prevBegin(lastInstr);
+            return append(new ValueAnchorNode(null));
         }
     }
 
