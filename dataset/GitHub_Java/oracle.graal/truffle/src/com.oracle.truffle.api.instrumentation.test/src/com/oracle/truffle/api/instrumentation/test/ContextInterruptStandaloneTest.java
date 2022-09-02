@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -85,7 +85,7 @@ public class ContextInterruptStandaloneTest extends AbstractPolyglotTest {
     @Test
     public void testCancelDuringHostSleep() throws ExecutionException, InterruptedException {
         CountDownLatch beforeSleep = new CountDownLatch(1);
-        setupEnv(Context.newBuilder(ProxyLanguage.ID).allowHostClassLookup((s) -> true).allowHostAccess(HostAccess.ALL),
+        setupEnv(Context.newBuilder(ProxyLanguage.ID).allowHostClassLoading(true).allowHostClassLookup((s) -> true).allowHostAccess(HostAccess.ALL),
                         new ProxyLanguage() {
                             @Override
                             protected CallTarget parse(TruffleLanguage.ParsingRequest request) throws Exception {

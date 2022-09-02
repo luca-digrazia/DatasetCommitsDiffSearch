@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.polyglot;
 
-import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.util.ArrayList;
@@ -65,11 +64,9 @@ import org.graalvm.polyglot.proxy.Proxy;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.TruffleStackTrace;
 import com.oracle.truffle.api.TruffleStackTraceElement;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.ExceptionType;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.polyglot.PolyglotEngineImpl.CancelExecution;
 
 final class PolyglotExceptionImpl extends AbstractExceptionImpl {
@@ -450,24 +447,6 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
         return guestObject;
     }
 
-    static String printStackToString(PolyglotLanguageContext context, Node node) {
-        StackTraceException stack = new StackTraceException(node);
-        TruffleStackTrace.fillIn(stack);
-        PolyglotException e = PolyglotImpl.guestToHostException(context, stack, true);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        e.printStackTrace(new PrintStream(out));
-        return new String(out.toByteArray());
-    }
-
-    @SuppressWarnings("serial")
-    static class StackTraceException extends AbstractTruffleException {
-
-        StackTraceException(Node location) {
-            super(location);
-        }
-
-    }
-
     Object getFileSystemContext(PolyglotLanguage language) {
         if (context == null) {
             return null;
@@ -789,8 +768,6 @@ final class PolyglotExceptionImpl extends AbstractExceptionImpl {
                     return element.getMethodName().equals("invokeHandle");
                 case "com.oracle.truffle.polyglot.HostMethodDesc$SingleMethod$MethodReflectImpl":
                     return element.getMethodName().equals("reflectInvoke");
-                case "com.oracle.truffle.polyglot.HostObject$GuestToHostCalls":
-                    return true;
                 default:
                     return element.getClassName().startsWith("com.oracle.truffle.polyglot.HostToGuestCodeCache$") && element.getMethodName().equals("executeImpl");
             }

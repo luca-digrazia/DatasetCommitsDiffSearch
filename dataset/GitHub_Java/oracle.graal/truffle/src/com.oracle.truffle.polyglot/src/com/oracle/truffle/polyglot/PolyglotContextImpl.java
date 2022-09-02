@@ -220,7 +220,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     final AtomicLong volatileStatementCounter = new AtomicLong();
     long statementCounter;
     final long statementLimit;
-    private volatile Object contextBoundLoggers;
 
     /*
      * Initialized once per context.
@@ -284,7 +283,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
          * done after instruments are created.
          */
         if (!config.logLevels.isEmpty()) {
-            EngineAccessor.LANGUAGE.configureLoggers(this, config.logLevels, getAllLoggers());
+            EngineAccessor.LANGUAGE.configureLoggers(this, config.logLevels, getAllLoggers(engine));
         }
 
         notifyContextCreated();
@@ -313,9 +312,8 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         this.invalid = this.parent.invalid;
         this.invalidMessage = this.parent.invalidMessage;
         this.cancelling = this.parent.cancelling;
-        this.contextBoundLoggers = this.parent.contextBoundLoggers;
         if (!parent.config.logLevels.isEmpty()) {
-            EngineAccessor.LANGUAGE.configureLoggers(this, parent.config.logLevels, getAllLoggers());
+            EngineAccessor.LANGUAGE.configureLoggers(this, parent.config.logLevels, getAllLoggers(engine));
         }
         this.contextImpls = new Object[engine.contextLength];
         this.contexts = createContextArray();
@@ -1594,7 +1592,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             }
             if (parent == null) {
                 if (!this.config.logLevels.isEmpty()) {
-                    EngineAccessor.LANGUAGE.configureLoggers(this, null, getAllLoggers());
+                    EngineAccessor.LANGUAGE.configureLoggers(this, null, getAllLoggers(engine));
                 }
                 if (this.config.logHandler != null && !PolyglotLoggers.isSameLogSink(this.config.logHandler, engine.logHandler)) {
                     this.config.logHandler.close();
@@ -1930,7 +1928,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         this.config = newConfig;
         initializeStaticContext(this);
         if (!newConfig.logLevels.isEmpty()) {
-            EngineAccessor.LANGUAGE.configureLoggers(this, newConfig.logLevels, getAllLoggers());
+            EngineAccessor.LANGUAGE.configureLoggers(this, newConfig.logLevels, getAllLoggers(engine));
         }
         final PolyglotContextImpl prev = engine.enter(this);
         try {
@@ -2064,38 +2062,15 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             internalFs.onPreInitializeContextEnd();
             FileSystems.resetDefaultFileSystemProvider();
             if (!config.logLevels.isEmpty()) {
-                EngineAccessor.LANGUAGE.configureLoggers(context, null, context.getAllLoggers());
+                EngineAccessor.LANGUAGE.configureLoggers(context, null, getAllLoggers(engine));
             }
         }
     }
 
-    Object getOrCreateContextLoggers() {
-        Object res = contextBoundLoggers;
-        if (res == null) {
-            synchronized (this) {
-                res = contextBoundLoggers;
-                if (res == null) {
-                    res = LANGUAGE.createEngineLoggers(PolyglotLoggers.LoggerCache.newContextLoggerCache(this), config.logLevels);
-                    contextBoundLoggers = res;
-                }
-            }
-        }
-        return res;
-    }
-
-    private Object[] getAllLoggers() {
+    private static Object[] getAllLoggers(PolyglotEngineImpl engine) {
         Object defaultLoggers = EngineAccessor.LANGUAGE.getDefaultLoggers();
         Object engineLoggers = engine.getEngineLoggers();
-        Object contextLoggers = contextBoundLoggers;
-        List<Object> allLoggers = new ArrayList<>(3);
-        allLoggers.add(defaultLoggers);
-        if (engineLoggers != null) {
-            allLoggers.add(engineLoggers);
-        }
-        if (contextLoggers != null) {
-            allLoggers.add(contextLoggers);
-        }
-        return allLoggers.toArray(new Object[allLoggers.size()]);
+        return engineLoggers == null ? new Object[]{defaultLoggers} : new Object[]{defaultLoggers, engineLoggers};
     }
 
     static class ContextWeakReference extends WeakReference<PolyglotContextImpl> {
