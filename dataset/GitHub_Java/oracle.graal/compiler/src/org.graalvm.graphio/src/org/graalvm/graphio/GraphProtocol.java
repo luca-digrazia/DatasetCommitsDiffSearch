@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2011, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,17 +26,22 @@ package org.graalvm.graphio;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Objects;
+import java.util.WeakHashMap;
 
-public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition> implements Closeable {
+abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaMethod, ResolvedJavaField, Signature, NodeSourcePosition, Location> implements Closeable {
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
     private static final int CONSTANT_POOL_MAX_SIZE = 8000;
@@ -42,6 +49,7 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
     private static final int BEGIN_GROUP = 0x00;
     private static final int BEGIN_GRAPH = 0x01;
     private static final int CLOSE_GROUP = 0x02;
+    private static final int BEGIN_DOCUMENT = 0x03;
 
     private static final int POOL_NEW = 0x00;
     private static final int POOL_STRING = 0x01;
@@ -53,6 +61,7 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
     private static final int POOL_FIELD = 0x07;
     private static final int POOL_SIGNATURE = 0x08;
     private static final int POOL_NODE_SOURCE_POSITION = 0x09;
+    private static final int POOL_NODE = 0x0a;
 
     private static final int PROPERTY_POOL = 0x00;
     private static final int PROPERTY_INT = 0x01;
@@ -69,59 +78,120 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
 
     private static final byte[] MAGIC_BYTES = {'B', 'I', 'G', 'V'};
 
+    private static final int MAJOR_VERSION = 8;
+    private static final int MINOR_VERSION = 0;
+
     private final ConstantPool constantPool;
     private final ByteBuffer buffer;
     private final WritableByteChannel channel;
-    private final int versionMajor;
-    private final int versionMinor;
+    private final boolean embedded;
+    final int versionMajor;
+    final int versionMinor;
+    private boolean printing;
 
-    protected GraphProtocol(WritableByteChannel channel) throws IOException {
-        this(channel, 4, 0);
+    /**
+     * See {@code org.graalvm.compiler.serviceprovider.BufferUtil}.
+     */
+    private static Buffer asBaseBuffer(Buffer obj) {
+        return obj;
     }
 
-    private GraphProtocol(WritableByteChannel channel, int major, int minor) throws IOException {
-        if (major > 4) {
-            throw new IllegalArgumentException();
-        }
-        if (major == 4 && minor > 0) {
-            throw new IllegalArgumentException();
+    GraphProtocol(WritableByteChannel channel, int major, int minor, boolean embedded) throws IOException {
+        if (major > MAJOR_VERSION || (major == MAJOR_VERSION && minor > MINOR_VERSION)) {
+            throw new IllegalArgumentException("Unrecognized version " + major + "." + minor);
         }
         this.versionMajor = major;
         this.versionMinor = minor;
         this.constantPool = new ConstantPool();
         this.buffer = ByteBuffer.allocateDirect(256 * 1024);
         this.channel = channel;
-        writeVersion();
+        this.embedded = embedded;
+        if (!embedded) {
+            writeVersion();
+            flushEmbedded();
+        }
+    }
+
+    GraphProtocol(GraphProtocol<?, ?, ?, ?, ?, ?, ?, ?, ?, ?> parent) {
+        this.versionMajor = parent.versionMajor;
+        this.versionMinor = parent.versionMinor;
+        this.constantPool = parent.constantPool;
+        this.buffer = parent.buffer;
+        this.channel = parent.channel;
+        this.embedded = parent.embedded;
     }
 
     @SuppressWarnings("all")
     public final void print(Graph graph, Map<? extends Object, ? extends Object> properties, int id, String format, Object... args) throws IOException {
-        writeByte(BEGIN_GRAPH);
-        if (versionMajor >= 3) {
-            writeInt(id);
-            writeString(format);
-            writeInt(args.length);
-            for (Object a : args) {
-                writePropertyObject(graph, a);
+        printing = true;
+        try {
+            writeByte(BEGIN_GRAPH);
+            if (versionMajor >= 3) {
+                writeInt(id);
+                writeString(format);
+                writeInt(args.length);
+                for (Object a : args) {
+                    writePropertyObject(graph, a);
+                }
+            } else {
+                writePoolObject(formatTitle(graph, id, format, args));
             }
-        } else {
-            writePoolObject(formatTitle(graph, id, format, args));
+            writeGraph(graph, properties);
+            flushEmbedded();
+            flush();
+        } finally {
+            printing = false;
         }
-        writeGraph(graph, properties);
-        flush();
+    }
+
+    public final void startDocument(Map<? extends Object, ? extends Object> documentProperties) throws IOException {
+        if (versionMajor < 7) {
+            throw new IllegalStateException("Dump properties unsupported in format v." + versionMajor);
+        }
+        printing = true;
+        try {
+            writeByte(BEGIN_DOCUMENT);
+            writeProperties(null, documentProperties);
+        } finally {
+            printing = false;
+        }
     }
 
     public final void beginGroup(Graph noGraph, String name, String shortName, ResolvedJavaMethod method, int bci, Map<? extends Object, ? extends Object> properties) throws IOException {
-        writeByte(BEGIN_GROUP);
-        writePoolObject(name);
-        writePoolObject(shortName);
-        writePoolObject(method);
-        writeInt(bci);
-        writeProperties(noGraph, properties);
+        printing = true;
+        try {
+            writeByte(BEGIN_GROUP);
+            writePoolObject(name);
+            writePoolObject(shortName);
+            writePoolObject(method);
+            writeInt(bci);
+            writeProperties(noGraph, properties);
+            flushEmbedded();
+        } finally {
+            printing = false;
+        }
     }
 
     public final void endGroup() throws IOException {
-        writeByte(CLOSE_GROUP);
+        printing = true;
+        try {
+            writeByte(CLOSE_GROUP);
+            flushEmbedded();
+        } finally {
+            printing = false;
+        }
+    }
+
+    final int write(ByteBuffer src) throws IOException {
+        if (printing) {
+            throw new IllegalStateException("Trying to write during graph print.");
+        }
+        constantPool.reset();
+        return writeBytesRaw(src);
+    }
+
+    final boolean isOpen() {
+        return channel.isOpen();
     }
 
     @Override
@@ -138,7 +208,31 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
 
     protected abstract ResolvedJavaMethod findMethod(Object obj);
 
+    /**
+     * Attempts to recognize the provided object as a node. Used to encode it with
+     * {@link #POOL_NODE} pool type.
+     *
+     * @param obj any object
+     * @return <code>null</code> if it is not a node object, non-null otherwise
+     */
+    protected abstract Node findNode(Object obj);
+
+    /**
+     * Determines whether the provided object is node class or not.
+     *
+     * @param obj object to check
+     * @return {@code null} if {@code obj} does not represent a NodeClass otherwise the NodeClass
+     *         represented by {@code obj}
+     */
     protected abstract NodeClass findNodeClass(Object obj);
+
+    /**
+     * Returns the NodeClass for a given Node {@code obj}.
+     *
+     * @param obj instance of node
+     * @return non-{@code null} instance of the node's class object
+     */
+    protected abstract NodeClass findClassForNode(Node obj);
 
     /**
      * Find a Java class. The returned object must be acceptable by
@@ -229,7 +323,19 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
 
     protected abstract int findNodeSourcePositionBCI(NodeSourcePosition pos);
 
-    protected abstract StackTraceElement findMethodStackTraceElement(ResolvedJavaMethod method, int bci, NodeSourcePosition pos);
+    protected abstract Iterable<Location> findLocation(ResolvedJavaMethod method, int bci, NodeSourcePosition pos);
+
+    protected abstract String findLocationFile(Location loc) throws IOException;
+
+    protected abstract int findLocationLine(Location loc);
+
+    protected abstract URI findLocationURI(Location loc) throws URISyntaxException;
+
+    protected abstract String findLocationLanguage(Location loc);
+
+    protected abstract int findLocationStart(Location loc);
+
+    protected abstract int findLocationEnd(Location loc);
 
     private void writeVersion() throws IOException {
         writeBytesRaw(MAGIC_BYTES);
@@ -237,10 +343,17 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
         writeByte(versionMinor);
     }
 
+    private void flushEmbedded() throws IOException {
+        if (embedded) {
+            flush();
+            constantPool.reset();
+        }
+    }
+
     private void flush() throws IOException {
-        buffer.flip();
+        asBaseBuffer(buffer).flip();
         /*
-         * Try not to let interrupted threads aborting the write. There's still a race here but an
+         * Try not to let interrupted threads abort the write. There's still a race here but an
          * interrupt that's been pending for a long time shouldn't stop this writing.
          */
         boolean interrupted = Thread.interrupted();
@@ -315,6 +428,23 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
         }
     }
 
+    private int writeBytesRaw(ByteBuffer b) throws IOException {
+        int limit = b.limit();
+        int written = 0;
+        while (b.position() < limit) {
+            int toWrite = Math.min(limit - b.position(), buffer.capacity());
+            ensureAvailable(toWrite);
+            asBaseBuffer(b).limit(b.position() + toWrite);
+            try {
+                buffer.put(b);
+                written += toWrite;
+            } finally {
+                asBaseBuffer(b).limit(limit);
+            }
+        }
+        return written;
+    }
+
     private void writeInts(int[] b) throws IOException {
         if (b == null) {
             writeInt(-1);
@@ -323,7 +453,7 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
             int sizeInBytes = b.length * 4;
             ensureAvailable(sizeInBytes);
             buffer.asIntBuffer().put(b);
-            buffer.position(buffer.position() + sizeInBytes);
+            asBaseBuffer(buffer).position(buffer.position() + sizeInBytes);
         }
     }
 
@@ -335,39 +465,72 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
             int sizeInBytes = b.length * 8;
             ensureAvailable(sizeInBytes);
             buffer.asDoubleBuffer().put(b);
-            buffer.position(buffer.position() + sizeInBytes);
+            asBaseBuffer(buffer).position(buffer.position() + sizeInBytes);
         }
     }
 
-    private void writePoolObject(Object object) throws IOException {
+    private void writePoolObject(Object obj) throws IOException {
+        Object object = obj;
         if (object == null) {
             writeByte(POOL_NULL);
             return;
         }
-        Character id = constantPool.get(object);
+        Object[] found = new Object[1];
+        int type = findPoolType(object, found);
+        Character id = constantPool.get(object, type);
         if (id == null) {
-            addPoolEntry(object);
+            addPoolEntry(object, type, found);
         } else {
-            if (object instanceof Enum<?> || findEnumOrdinal(object) >= 0) {
-                writeByte(POOL_ENUM);
-            } else if (object instanceof Class<?> || findJavaTypeName(object) != null) {
-                writeByte(POOL_CLASS);
-            } else if (findJavaField(object) != null) {
-                writeByte(POOL_FIELD);
-            } else if (findSignature(object) != null) {
-                writeByte(POOL_SIGNATURE);
-            } else if (versionMajor >= 4 && findNodeSourcePosition(object) != null) {
-                writeByte(POOL_NODE_SOURCE_POSITION);
+            writeByte(type);
+            writeShort(id.charValue());
+        }
+    }
+
+    private int findPoolType(Object obj, Object[] found) throws IOException {
+        Object object = obj;
+        if (object == null) {
+            return POOL_NULL;
+        }
+        if (isFound(findJavaField(object), found)) {
+            return POOL_FIELD;
+        } else if (isFound(findSignature(object), found)) {
+            return POOL_SIGNATURE;
+        } else if (versionMajor >= 4 && isFound(findNodeSourcePosition(object), found)) {
+            return POOL_NODE_SOURCE_POSITION;
+        } else {
+            final Node node = findNode(object);
+            if (versionMajor == 4 && node != null) {
+                object = classForNode(node);
+            }
+            if (isFound(findNodeClass(object), found)) {
+                return POOL_NODE_CLASS;
+            } else if (versionMajor >= 5 && isFound(node, found)) {
+                return POOL_NODE;
+            } else if (isFound(findMethod(object), found)) {
+                return POOL_METHOD;
+            } else if (object instanceof Enum<?>) {
+                if (found != null) {
+                    found[0] = ((Enum<?>) object).ordinal();
+                }
+                return POOL_ENUM;
             } else {
-                if (findNodeClass(object) != null) {
-                    writeByte(POOL_NODE_CLASS);
-                } else if (findMethod(object) != null) {
-                    writeByte(POOL_METHOD);
+                int val = findEnumOrdinal(object);
+                if (val >= 0) {
+                    if (found != null) {
+                        found[0] = val;
+                    }
+                    return POOL_ENUM;
+                } else if (object instanceof Class<?>) {
+                    if (found != null) {
+                        found[0] = ((Class<?>) object).getName();
+                    }
+                    return POOL_CLASS;
+                } else if (isFound(findJavaTypeName(object), found)) {
+                    return POOL_CLASS;
                 } else {
-                    writeByte(POOL_STRING);
+                    return POOL_STRING;
                 }
             }
-            writeShort(id.charValue());
         }
     }
 
@@ -384,10 +547,7 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
         writeInt(size);
         int cnt = 0;
         for (Node node : findNodes(info)) {
-            NodeClass nodeClass = findNodeClass(node);
-            if (nodeClass == null) {
-                throw new IOException("No class for " + node);
-            }
+            NodeClass nodeClass = classForNode(node);
             findNodeProperties(node, props, info);
 
             writeInt(findNodeId(node));
@@ -406,7 +566,7 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
     }
 
     private void writeEdges(Graph graph, Node node, boolean dumpInputs) throws IOException {
-        NodeClass clazz = findNodeClass(node);
+        NodeClass clazz = classForNode(node);
         Edges edges = findClassEdges(clazz, dumpInputs);
         int size = findSize(edges);
         for (int i = 0; i < size; i++) {
@@ -435,6 +595,14 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
         }
     }
 
+    private NodeClass classForNode(Node node) throws IOException {
+        NodeClass clazz = findClassForNode(node);
+        if (clazz == null) {
+            throw new IOException("No class for " + node);
+        }
+        return clazz;
+    }
+
     private void writeNodeRef(Node node) throws IOException {
         writeInt(findNodeId(node));
     }
@@ -451,17 +619,9 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
             writeInt(blocks.size());
             for (Block block : blocks) {
                 Collection<? extends Node> nodes = findBlockNodes(info, block);
-                List<Node> extraNodes = new LinkedList<>();
                 writeInt(findBlockId(block));
+                writeInt(nodes.size());
                 for (Node node : nodes) {
-                    findExtraNodes(node, extraNodes);
-                }
-                extraNodes.removeAll(nodes);
-                writeInt(nodes.size() + extraNodes.size());
-                for (Node node : nodes) {
-                    writeInt(findNodeId(node));
-                }
-                for (Node node : extraNodes) {
                     writeInt(findNodeId(node));
                 }
                 final Collection<? extends Block> successors = findBlockSuccessors(block);
@@ -488,65 +648,87 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
         }
     }
 
-    @SuppressWarnings("all")
-    private void addPoolEntry(Object object) throws IOException {
-        ResolvedJavaField field;
-        String typeName;
-        Signature signature;
-        NodeSourcePosition pos;
-        int enumOrdinal;
-        char index = constantPool.add(object);
+    @SuppressWarnings("unchecked")
+    private void addPoolEntry(Object obj, int type, Object[] found) throws IOException {
+        Object object = obj;
+        char index = constantPool.add(object, type);
         writeByte(POOL_NEW);
         writeShort(index);
-        if ((typeName = findJavaTypeName(object)) != null) {
-            writeByte(POOL_CLASS);
-            writeString(typeName);
-            String[] enumValueNames = findEnumTypeValues(object);
-            if (enumValueNames != null) {
-                writeByte(ENUM_KLASS);
-                writeInt(enumValueNames.length);
-                for (String o : enumValueNames) {
-                    writePoolObject(o);
+
+        writeByte(type);
+        switch (type) {
+            case POOL_FIELD: {
+                ResolvedJavaField field = (ResolvedJavaField) found[0];
+                Objects.requireNonNull(field);
+                writePoolObject(findFieldDeclaringClass(field));
+                writePoolObject(findFieldName(field));
+                writePoolObject(findFieldTypeName(field));
+                writeInt(findFieldModifiers(field));
+                break;
+            }
+            case POOL_SIGNATURE: {
+                Signature signature = (Signature) found[0];
+                int args = findSignatureParameterCount(signature);
+                writeShort((char) args);
+                for (int i = 0; i < args; i++) {
+                    writePoolObject(findSignatureParameterTypeName(signature, i));
                 }
-            } else {
-                writeByte(KLASS);
+                writePoolObject(findSignatureReturnTypeName(signature));
+                break;
             }
-        } else if ((enumOrdinal = findEnumOrdinal(object)) >= 0) {
-            writeByte(POOL_ENUM);
-            writePoolObject(findEnumClass(object));
-            writeInt(enumOrdinal);
-        } else if ((field = findJavaField(object)) != null) {
-            writeByte(POOL_FIELD);
-            writePoolObject(findFieldDeclaringClass(field));
-            writePoolObject(findFieldName(field));
-            writePoolObject(findFieldTypeName(field));
-            writeInt(findFieldModifiers(field));
-        } else if ((signature = findSignature(object)) != null) {
-            writeByte(POOL_SIGNATURE);
-            int args = findSignatureParameterCount(signature);
-            writeShort((char) args);
-            for (int i = 0; i < args; i++) {
-                writePoolObject(findSignatureParameterTypeName(signature, i));
+            case POOL_NODE_SOURCE_POSITION: {
+                NodeSourcePosition pos = (NodeSourcePosition) found[0];
+                Objects.requireNonNull(pos);
+                ResolvedJavaMethod method = findNodeSourcePositionMethod(pos);
+                writePoolObject(method);
+                final int bci = findNodeSourcePositionBCI(pos);
+                writeInt(bci);
+                Iterator<Location> ste = findLocation(method, bci, pos).iterator();
+                if (versionMajor >= 6) {
+                    while (ste.hasNext()) {
+                        Location loc = ste.next();
+                        URI uri;
+                        try {
+                            uri = findLocationURI(loc);
+                        } catch (URISyntaxException ex) {
+                            throw new IOException(ex);
+                        }
+                        if (uri == null) {
+                            continue;
+                        }
+                        String l = findLocationLanguage(loc);
+                        if (l == null) {
+                            continue;
+                        }
+                        writePoolObject(uri.toString());
+                        writeString(l);
+                        writeInt(findLocationLine(loc));
+                        writeInt(findLocationStart(loc));
+                        writeInt(findLocationEnd(loc));
+                    }
+                    writePoolObject(null);
+                } else {
+                    Location first = ste.hasNext() ? ste.next() : null;
+                    String fileName = first != null ? findLocationFile(first) : null;
+                    if (fileName != null) {
+                        writePoolObject(fileName);
+                        writeInt(findLocationLine(first));
+                    } else {
+                        writePoolObject(null);
+                    }
+                }
+                writePoolObject(findNodeSourcePositionCaller(pos));
+                break;
             }
-            writePoolObject(findSignatureReturnTypeName(signature));
-        } else if (versionMajor >= 4 && (pos = findNodeSourcePosition(object)) != null) {
-            writeByte(POOL_NODE_SOURCE_POSITION);
-            ResolvedJavaMethod method = findNodeSourcePositionMethod(pos);
-            writePoolObject(method);
-            final int bci = findNodeSourcePositionBCI(pos);
-            writeInt(bci);
-            StackTraceElement ste = findMethodStackTraceElement(method, bci, pos);
-            if (ste != null) {
-                writePoolObject(ste.getFileName());
-                writeInt(ste.getLineNumber());
-            } else {
-                writePoolObject(null);
+            case POOL_NODE: {
+                Node node = (Node) found[0];
+                Objects.requireNonNull(node);
+                writeInt(findNodeId(node));
+                writePoolObject(classForNode(node));
+                break;
             }
-            writePoolObject(findNodeSourcePositionCaller(pos));
-        } else {
-            NodeClass nodeClass = findNodeClass(object);
-            if (nodeClass != null) {
-                writeByte(POOL_NODE_CLASS);
+            case POOL_NODE_CLASS: {
+                NodeClass nodeClass = (NodeClass) found[0];
                 final Object clazz = findJavaClass(nodeClass);
                 if (versionMajor >= 3) {
                     writePoolObject(clazz);
@@ -558,20 +740,50 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
                 }
                 writeEdgesInfo(nodeClass, true);
                 writeEdgesInfo(nodeClass, false);
-                return;
+                break;
             }
-            ResolvedJavaMethod method = findMethod(object);
-            if (method == null) {
-                writeByte(POOL_STRING);
+            case POOL_CLASS: {
+                String typeName = (String) found[0];
+                Objects.requireNonNull(typeName);
+                writeString(typeName);
+                String[] enumValueNames = findEnumTypeValues(object);
+                if (enumValueNames != null) {
+                    writeByte(ENUM_KLASS);
+                    writeInt(enumValueNames.length);
+                    for (String o : enumValueNames) {
+                        writePoolObject(o);
+                    }
+                } else {
+                    writeByte(KLASS);
+                }
+                break;
+            }
+            case POOL_METHOD: {
+                ResolvedJavaMethod method = (ResolvedJavaMethod) found[0];
+                Objects.requireNonNull(method);
+                writePoolObject(findMethodDeclaringClass(method));
+                writePoolObject(findMethodName(method));
+                final Signature methodSignature = findMethodSignature(method);
+                if (findSignature(methodSignature) == null) {
+                    throw new IOException("Should be recognized as signature: " + methodSignature + " for " + method);
+                }
+                writePoolObject(methodSignature);
+                writeInt(findMethodModifiers(method));
+                writeBytes(findMethodCode(method));
+                break;
+            }
+            case POOL_ENUM: {
+                int enumOrdinal = (int) found[0];
+                writePoolObject(findEnumClass(object));
+                writeInt(enumOrdinal);
+                break;
+            }
+            case POOL_STRING: {
                 writeString(object.toString());
-                return;
+                break;
             }
-            writeByte(POOL_METHOD);
-            writePoolObject(findMethodDeclaringClass(method));
-            writePoolObject(findMethodName(method));
-            writePoolObject(findMethodSignature(method));
-            writeInt(findMethodModifiers(method));
-            writeBytes(findMethodCode(method));
+            default:
+                throw new IllegalStateException();
         }
     }
 
@@ -637,7 +849,16 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
         }
         final int size = props.size();
         // properties
-        writeShort((char) size);
+        if (size >= Character.MAX_VALUE) {
+            if (versionMajor > 7) {
+                writeShort(Character.MAX_VALUE);
+                writeInt(size);
+            } else {
+                throw new IllegalArgumentException("Property count is too big. Properties can contain only " + (Character.MAX_VALUE - 1) + " in version < 8.");
+            }
+        } else {
+            writeShort((char) size);
+        }
         int cnt = 0;
         for (Map.Entry<? extends Object, ? extends Object> entry : props.entrySet()) {
             String key = entry.getKey().toString();
@@ -650,37 +871,122 @@ public abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, Resolv
         }
     }
 
-    private static final class ConstantPool extends LinkedHashMap<Object, Character> {
-
-        private final LinkedList<Character> availableIds;
-        private char nextId;
-        private static final long serialVersionUID = -2676889957907285681L;
-
-        ConstantPool() {
-            super(50, 0.65f);
-            availableIds = new LinkedList<>();
-        }
-
-        @Override
-        protected boolean removeEldestEntry(java.util.Map.Entry<Object, Character> eldest) {
-            if (size() > CONSTANT_POOL_MAX_SIZE) {
-                availableIds.addFirst(eldest.getValue());
-                return true;
-            }
+    private static boolean isFound(Object obj, Object[] found) {
+        if (obj == null) {
             return false;
         }
+        if (found != null) {
+            found[0] = obj;
+        }
+        return true;
+    }
 
-        private Character nextAvailableId() {
-            if (!availableIds.isEmpty()) {
-                return availableIds.removeFirst();
-            }
-            return nextId++;
+    private static HashSet<Class<?>> badToString;
+
+    /**
+     * This is a helper to identify objects that are encoded as POOL_STRING and have a poor
+     * {@link Object#toString()} implementation where two objects that are
+     * {@link Object#equals(Object)} have different String representations. Only the first mismatch
+     * is reported since this is a systematic issue and reporting every failure would be too much
+     * useless output.
+     */
+    private static synchronized void reportBadToString(Object lookupKey, Object value) {
+        if (badToString == null) {
+            badToString = new HashSet<>();
+        }
+        if (badToString.add(lookupKey.getClass())) {
+            System.err.println("GraphProtocol: toString mismatch for " + lookupKey.getClass() + ": " + value + " != " + lookupKey.toString());
+        }
+    }
+
+    private static boolean checkToString(Object lookupKey, Object value) {
+        if (!lookupKey.toString().equals(value)) {
+            reportBadToString(lookupKey, value);
+        }
+        return true;
+    }
+
+    /**
+     * This class maintains a limited pool of constants for use by the graph protocol. Once the
+     * cache fills up the oldest slots are replaced with new values in a cyclic fashion.
+     */
+    private static final class ConstantPool {
+        private char nextId;
+        /*
+         * A mapping from an object to the pool entry that represents it. Normally the value is the
+         * Character id of the entry but for {@link POOL_STRING} entries a second forwarding entry
+         * might be created. A {@link POOL_STRING} can be looked up either by the original object or
+         * by the toString representation of that object. To handle this case the original object is
+         * inserted with the toString as the value. That string should then be looked up to get the
+         * actual id. This is done to avoid excessive toString calls during encoding.
+         */
+        private final WeakHashMap<Object, Object> map = new WeakHashMap<>();
+        private final Object[] keys = new Object[CONSTANT_POOL_MAX_SIZE];
+
+        ConstantPool() {
         }
 
-        public char add(Object obj) {
-            Character id = nextAvailableId();
-            put(obj, id);
+        private static Object getLookupKey(Object key) {
+            // Collections must be converted to a String early since they can be mutated after
+            // being inserted into the map.
+            return (key instanceof Collection) ? key.toString() : key;
+        }
+
+        Character get(Object initialKey, int type) {
+            Object key = getLookupKey(initialKey);
+            Object value = map.get(key);
+            if (value instanceof String) {
+                Character id = (Character) map.get(value);
+                if (id != null && keys[id].equals(value)) {
+                    assert checkToString(key, value);
+                    return id;
+                }
+                value = null;
+            }
+            Character id = (Character) value;
+            if (id != null && keys[id].equals(key)) {
+                return id;
+            }
+            if (type == POOL_STRING && !(key instanceof String)) {
+                // See if the String representation is already in the map
+                String string = key.toString();
+                id = get(string, type);
+                if (id != null) {
+                    // Add an entry that forwards from the object to the string.
+                    map.put(key, string);
+                    return id;
+                }
+            }
+            return null;
+        }
+
+        char add(Object initialKey, int type) {
+            char id = nextId++;
+            if (nextId == CONSTANT_POOL_MAX_SIZE) {
+                nextId = 0;
+            }
+            if (keys[id] != null) {
+                map.remove(keys[id]);
+            }
+            Object key = getLookupKey(initialKey);
+            if (type == POOL_STRING && !(key instanceof String)) {
+                // Insert a forwarding entry from the original object to the string representation
+                // and then directly insert the string with the pool id.
+                String string = key.toString();
+                map.put(key, string);
+                map.put(string, id);
+                keys[id] = string;
+            } else {
+                map.put(key, id);
+                keys[id] = key;
+            }
             return id;
+        }
+
+        void reset() {
+            map.clear();
+            Arrays.fill(keys, null);
+            nextId = 0;
         }
     }
 
