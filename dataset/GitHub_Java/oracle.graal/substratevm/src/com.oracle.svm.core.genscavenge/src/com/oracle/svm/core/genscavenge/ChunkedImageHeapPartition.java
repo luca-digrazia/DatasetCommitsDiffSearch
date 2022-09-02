@@ -49,14 +49,9 @@ public class ChunkedImageHeapPartition extends AbstractImageHeapPartition {
     long startOffset = -1;
     long endOffset = -1;
 
-    private final int minimumObjectSize;
-
     ChunkedImageHeapPartition(String name, boolean writable, boolean hugeObjects) {
         super(name, writable);
         this.hugeObjects = hugeObjects;
-
-        /* Cache to prevent frequent lookups of the object layout from ImageSingletons. */
-        minimumObjectSize = ConfigurationValues.getObjectLayout().getMinimumObjectSize();
     }
 
     boolean usesUnalignedObjects() {
@@ -72,7 +67,7 @@ public class ChunkedImageHeapPartition extends AbstractImageHeapPartition {
     }
 
     private void layoutInUnalignedChunks(ChunkedImageHeapAllocator allocator) {
-        allocator.finishAlignedChunk();
+        allocator.maybeFinishAlignedChunk();
         allocator.alignBetweenChunks(getStartAlignment());
         startOffset = allocator.getPosition();
 
@@ -107,8 +102,8 @@ public class ChunkedImageHeapPartition extends AbstractImageHeapPartition {
         }
     }
 
-    private ImageHeapObject dequeueBestFit(NavigableMap<Long, Queue<ImageHeapObject>> objects, long nbytes) {
-        if (nbytes < minimumObjectSize) {
+    private static ImageHeapObject dequeueBestFit(NavigableMap<Long, Queue<ImageHeapObject>> objects, long nbytes) {
+        if (nbytes < ConfigurationValues.getObjectLayout().getMinimumObjectSize()) {
             return null;
         }
         Map.Entry<Long, Queue<ImageHeapObject>> entry = objects.floorEntry(nbytes);
