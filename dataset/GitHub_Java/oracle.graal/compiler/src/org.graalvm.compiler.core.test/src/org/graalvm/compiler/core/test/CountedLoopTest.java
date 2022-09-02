@@ -299,7 +299,7 @@ public class CountedLoopTest extends GraalCompilerTest {
 
     @Test
     public void decrementEq4() {
-        testRemovableCounted("decrementEqSnippet", -10, 0, Integer.MAX_VALUE);
+        testCounted("decrementEqSnippet", -10, 0, Integer.MAX_VALUE);
     }
 
     @Test
