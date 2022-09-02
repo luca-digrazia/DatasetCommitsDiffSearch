@@ -550,7 +550,7 @@ public final class Bytecodes {
         def(IF_ACMPEQ           , "if_acmpeq"       , "boo"  , -2, COMMUTATIVE | FALL_THROUGH | BRANCH);
         def(IF_ACMPNE           , "if_acmpne"       , "boo"  , -2, COMMUTATIVE | FALL_THROUGH | BRANCH);
         def(GOTO                , "goto"            , "boo"  ,  0, STOP | BRANCH);
-        def(JSR                 , "jsr"             , "boo"  ,  0, STOP | BRANCH);
+        def(JSR                 , "jsr"             , "boo"  ,  1, STOP | BRANCH);
         def(RET                 , "ret"             , "bi"   ,  0, STOP);
         def(TABLESWITCH         , "tableswitch"     , ""     , -1, STOP);
         def(LOOKUPSWITCH        , "lookupswitch"    , ""     , -1, STOP);
@@ -572,7 +572,7 @@ public final class Bytecodes {
         def(INVOKESPECIAL       , "invokespecial"   , "bjj"  , -1, TRAP | INVOKE);
         def(INVOKESTATIC        , "invokestatic"    , "bjj"  ,  0, TRAP | INVOKE);
         def(INVOKEINTERFACE     , "invokeinterface" , "bjja_", -1, TRAP | INVOKE);
-        def(INVOKEDYNAMIC       , "invokedynamic"   , "bjjjj",  1, TRAP | INVOKE);
+        def(INVOKEDYNAMIC       , "invokedynamic"   , "bjjjj",  0, TRAP | INVOKE);
         def(NEW                 , "new"             , "bii"  ,  1, TRAP);
         def(NEWARRAY            , "newarray"        , "bc"   ,  0, TRAP);
         def(ANEWARRAY           , "anewarray"       , "bii"  ,  0, TRAP);
@@ -587,7 +587,7 @@ public final class Bytecodes {
         def(IFNULL              , "ifnull"          , "boo"  , -1, FALL_THROUGH | BRANCH);
         def(IFNONNULL           , "ifnonnull"       , "boo"  , -1, FALL_THROUGH | BRANCH);
         def(GOTO_W              , "goto_w"          , "boooo",  0, STOP | BRANCH);
-        def(JSR_W               , "jsr_w"           , "boooo",  0, STOP | BRANCH);
+        def(JSR_W               , "jsr_w"           , "boooo",  1, STOP | BRANCH);
         def(BREAKPOINT          , "breakpoint"      , "b"    ,  0, TRAP);
         // Espresso quickened bytecodes.
         // Quickening patches the BCI, replacing it by a QUICK(nodeIndex) bytecode and spawning a child node.
