@@ -35,7 +35,6 @@ import static com.oracle.truffle.wasm.binary.Instructions.DROP;
 import static com.oracle.truffle.wasm.binary.Instructions.END;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_ADD;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_CONST;
-import static com.oracle.truffle.wasm.binary.Instructions.I32_MUL;
 import static com.oracle.truffle.wasm.binary.Instructions.I32_SUB;
 import static com.oracle.truffle.wasm.binary.Instructions.I64_CONST;
 
@@ -92,7 +91,7 @@ public class WasmBlockNode extends WasmNode {
                     int x = popInt(frame, stackPointer);
                     stackPointer--;
                     int y = popInt(frame, stackPointer);
-                    pushInt(frame, stackPointer, y + x);
+                    pushInt(frame, stackPointer, x + y);
                     stackPointer++;
                     break;
                 }
@@ -102,15 +101,6 @@ public class WasmBlockNode extends WasmNode {
                     stackPointer--;
                     int y = popInt(frame, stackPointer);
                     pushInt(frame, stackPointer, y - x);
-                    stackPointer++;
-                    break;
-                }
-                case I32_MUL: {
-                    stackPointer--;
-                    int x = popInt(frame, stackPointer);
-                    stackPointer--;
-                    int y = popInt(frame, stackPointer);
-                    pushInt(frame, stackPointer, y * x);
                     stackPointer++;
                     break;
                 }
