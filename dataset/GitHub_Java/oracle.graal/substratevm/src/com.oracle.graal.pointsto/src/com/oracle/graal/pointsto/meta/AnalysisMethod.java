@@ -589,7 +589,7 @@ public class AnalysisMethod implements WrappedJavaMethod, GraphProvider, Origina
                         continue;
                     }
 
-                    AnalysisParsedGraph graph = bb.getHostVM().parseBytecode(bb, this);
+                    AnalysisParsedGraph graph = AnalysisParsedGraph.parseBytecode(bb, this);
 
                     /*
                      * Must be called before any other thread can access the graph, i.e., before the
