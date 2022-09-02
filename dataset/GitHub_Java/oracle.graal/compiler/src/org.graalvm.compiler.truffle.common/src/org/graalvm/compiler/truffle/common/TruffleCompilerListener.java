@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -95,7 +95,10 @@ public interface TruffleCompilerListener {
      * compilation occurs between {@link #onTruffleTierFinished} and code installation.
      *
      * @param compilable the call target that was compiled
-     * @param graph the graph representing {@code compilable}
+     * @param graph the graph representing {@code compilable}. The {@code graph} object is only
+     *            valid for the lifetime of a call to this method. Invoking any {@link GraphInfo}
+     *            method on {@code graph} after this method returns will result in an
+     *            {@link IllegalStateException}.
      */
     void onGraalTierFinished(CompilableTruffleAST compilable, GraphInfo graph);
 
@@ -105,16 +108,47 @@ public interface TruffleCompilerListener {
      *
      * @param compilable the call target being compiled
      * @param inliningPlan the inlining plan used during partial evaluation
-     * @param graph the graph representing {@code compilable}
+     * @param graph the graph representing {@code compilable}. The {@code graph} object is only
+     *            valid for the lifetime of a call to this method. Invoking any {@link GraphInfo}
+     *            method on {@code graph} after this method returns will result in an
+     *            {@link IllegalStateException}.
      */
-    void onTruffleTierFinished(CompilableTruffleAST compilable, TruffleInliningPlan inliningPlan, GraphInfo graph);
+    void onTruffleTierFinished(CompilableTruffleAST compilable, TruffleInliningData inliningPlan, GraphInfo graph);
+
+    /**
+     * @deprecated use
+     *             {@link #onSuccess(CompilableTruffleAST, TruffleInliningData, GraphInfo, CompilationResultInfo, int)}
+     */
+    @Deprecated
+    default void onSuccess(CompilableTruffleAST compilable, TruffleInliningData inliningPlan, GraphInfo graph, CompilationResultInfo compilationResultInfo) {
+        onSuccess(compilable, inliningPlan, graph, compilationResultInfo, 0);
+    }
 
     /**
      * Notifies this object when compilation of {@code compilable} succeeds.
      *
      * @param compilable the Truffle AST whose compilation succeeded
+     * @param inliningPlan the inlining plan used during partial evaluation
+     * @param graph the graph representing {@code compilable}. The {@code graph} object is only
+     *            valid for the lifetime of a call to this method. Invoking any {@link GraphInfo}
+     *            method on {@code graph} after this method returns will result in an
+     *            {@link IllegalStateException}.
+     * @param compilationResultInfo the result of a compilation. The {@code compilationResultInfo}
+     *            object is only valid for the lifetime of a call to this method. Invoking any
+     *            {@link CompilationResultInfo} method on {@code compilationResultInfo} after this
+     *            method returns will result in an {@link IllegalStateException}.
+     * @param tier Which compilation tier was the compilation
      */
-    void onSuccess(CompilableTruffleAST compilable, TruffleInliningPlan inliningPlan, GraphInfo graphInfo, CompilationResultInfo compilationResultInfo);
+    default void onSuccess(CompilableTruffleAST compilable, TruffleInliningData inliningPlan, GraphInfo graph, CompilationResultInfo compilationResultInfo, int tier) {
+    }
+
+    /**
+     * @deprecated use {@link #onFailure(CompilableTruffleAST, String, boolean, boolean, int)}
+     */
+    @Deprecated
+    default void onFailure(CompilableTruffleAST compilable, String reason, boolean bailout, boolean permanentBailout) {
+        onFailure(compilable, reason, bailout, permanentBailout, 0);
+    }
 
     /**
      * Notifies this object when compilation of {@code compilable} fails.
@@ -128,6 +162,27 @@ public interface TruffleCompilerListener {
      * @param permanentBailout specifies if a bailout is due to a condition that probably won't
      *            change if the {@code target} is compiled again. This value is meaningless if
      *            {@code bailout == false}.
+     * @param tier Which compilation tier was the compilation
      */
-    void onFailure(CompilableTruffleAST compilable, String reason, boolean bailout, boolean permanentBailout);
+    default void onFailure(CompilableTruffleAST compilable, String reason, boolean bailout, boolean permanentBailout, int tier) {
+
+    }
+
+    /**
+     * @deprecated use {@link #onCompilationRetry(CompilableTruffleAST, int)}
+     */
+    @Deprecated
+    default void onCompilationRetry(CompilableTruffleAST compilable) {
+        onCompilationRetry(compilable, 0);
+    }
+
+    /**
+     * Notifies this object when compilation of {@code compilable} is re-tried to diagnose a
+     * compilation problem.
+     *
+     * @param compilable the Truffle AST which is going to be re-compiled.
+     * @param tier Which compilation tier is in question.
+     */
+    default void onCompilationRetry(CompilableTruffleAST compilable, int tier) {
+    }
 }
