@@ -912,21 +912,15 @@ public class InstrumentationTestLanguage extends TruffleLanguage<InstrumentConte
         }
 
         @ExportMessage
-        @TruffleBoundary
         final boolean hasRootInstance(@SuppressWarnings("unused") Frame frame) {
-            InstrumentContext context = lookupContextReference(InstrumentationTestLanguage.class).get();
-            return context.callFunctions.callTargets.containsKey(getRootNode().getName());
+            return true;
         }
 
         @ExportMessage
         @TruffleBoundary
-        final Object getRootInstance(@SuppressWarnings("unused") Frame frame) throws UnsupportedMessageException {
+        final Object getRootInstance(@SuppressWarnings("unused") Frame frame) {
             InstrumentContext context = lookupContextReference(InstrumentationTestLanguage.class).get();
-            Object function = context.callFunctions.findFunction(getRootNode().getName());
-            if (function != null) {
-                return function;
-            }
-            throw UnsupportedMessageException.create();
+            return context.callFunctions.findFunction(getRootNode().getName());
         }
 
         @ExportLibrary(InteropLibrary.class)
