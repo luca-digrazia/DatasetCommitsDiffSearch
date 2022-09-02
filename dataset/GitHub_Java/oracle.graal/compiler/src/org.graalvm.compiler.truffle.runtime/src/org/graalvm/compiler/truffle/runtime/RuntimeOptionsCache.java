@@ -124,7 +124,7 @@ public class RuntimeOptionsCache {
         return splittingMaxPropagationDepth;
     }
 
-    boolean isInlining() {
+    public boolean isInlining() {
         return inlining;
     }
 

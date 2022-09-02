@@ -71,6 +71,7 @@ public final class PolyglotCompilerOptions {
     }
 
     static final OptionType<EngineModeEnum> ENGINE_MODE_TYPE = new OptionType<>("EngineMode",
+                    EngineModeEnum.DEFAULT,
                     new Function<String, EngineModeEnum>() {
                         @Override
                         public EngineModeEnum apply(String s) {
