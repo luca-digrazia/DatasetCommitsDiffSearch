@@ -93,10 +93,6 @@ public class CountedLoopInfo {
         return this.unsigned;
     }
 
-    public ValueNode maxTripCountNode(boolean assumeLoopEntered) {
-        return maxTripCountNode(assumeLoopEntered, getCounterIntegerHelper());
-    }
-
     /**
      * Returns a node that computes the maximum trip count of this loop. That is the trip count of
      * this loop assuming it is not exited by an other exit than the {@linkplain #getLimitTest()
@@ -108,7 +104,7 @@ public class CountedLoopInfo {
      *
      * @param assumeLoopEntered if true the check that the loop is entered at all will be omitted.
      */
-    protected ValueNode maxTripCountNode(boolean assumeLoopEntered, IntegerHelper integerHelper) {
+    public ValueNode maxTripCountNode(boolean assumeLoopEntered) {
         StructuredGraph graph = iv.valueNode().graph();
         Stamp stamp = iv.valueNode().stamp(NodeView.DEFAULT);
 
@@ -142,7 +138,7 @@ public class CountedLoopInfo {
         // This check is "wide": it looks like min <= max
         // That's OK even if the loop is strict (`!isLimitIncluded()`)
         // because in this case, `div` will be zero when min == max
-        LogicNode noEntryCheck = integerHelper.createCompareNode(max, min, NodeView.DEFAULT);
+        LogicNode noEntryCheck = getCounterIntegerHelper().createCompareNode(max, min, NodeView.DEFAULT);
         return graph.addOrUniqueWithInputs(ConditionalNode.create(noEntryCheck, zero, div, NodeView.DEFAULT));
     }
 
@@ -181,10 +177,6 @@ public class CountedLoopInfo {
             // We don't know for sure that the loop can't be entered, so assume it can.
             return true;
         }
-    }
-
-    public IfNode getCountCheck() {
-        return ifNode;
     }
 
     /**
@@ -430,7 +422,7 @@ public class CountedLoopInfo {
         return (IntegerStamp) iv.valueNode().stamp(NodeView.DEFAULT);
     }
 
-    public boolean isInverted() {
-        return false;
+    public boolean canUnrollWithoutProtection() {
+        return true;
     }
 }

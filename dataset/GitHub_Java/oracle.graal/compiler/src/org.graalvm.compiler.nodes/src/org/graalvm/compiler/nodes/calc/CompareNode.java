@@ -49,7 +49,6 @@ import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.memory.VolatileReadNode;
-import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 
 import jdk.vm.ci.meta.Constant;
@@ -374,7 +373,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
         }
         if (otherLogic instanceof CompareNode) {
             CompareNode otherCompare = (CompareNode) otherLogic;
-            return implies(otherCompare, otherNegated, thisNegated);
+            return implies(otherCompare, thisNegated, otherNegated);
         } else {
             return false;
         }
@@ -401,8 +400,7 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
                 }
             }
         }
-        if (sameValue(getX(), otherX) && getY().isJavaConstant() && otherY.isJavaConstant() && getY().stamp(NodeView.DEFAULT) instanceof IntegerStamp &&
-                        otherY.stamp(NodeView.DEFAULT) instanceof IntegerStamp) {
+        if (sameValue(getX(), otherX) && getY().isJavaConstant() && otherY.isJavaConstant()) {
             long thisYLong = getY().asJavaConstant().asLong();
             long otherYLong = otherY.asJavaConstant().asLong();
             if (condition() == CanonicalCondition.EQ && !thisNegated) {
@@ -431,9 +429,6 @@ public abstract class CompareNode extends BinaryOpLogicNode implements Canonical
         }
         if (v1.isConstant() && v2.isConstant()) {
             return v1.asConstant().equals(v2.asConstant());
-        }
-        if (GraphUtil.skipPi(v1) == GraphUtil.skipPi(v2)) {
-            return true;
         }
         return false;
     }

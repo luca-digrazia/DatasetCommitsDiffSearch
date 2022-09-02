@@ -35,6 +35,7 @@ import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
 import org.graalvm.compiler.core.common.cfg.Loop;
 import org.graalvm.compiler.core.common.type.IntegerStamp;
+import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Graph;
@@ -420,6 +421,26 @@ public class LoopEx {
         return ivs;
     }
 
+    protected BasicInductionVariable createBasicInductionVariable(LoopEx loopEx, ValuePhiNode phi, ValueNode init, ValueNode rawStride, BinaryArithmeticNode<?> op) {
+        return new BasicInductionVariable(loopEx, phi, init, rawStride, op);
+    }
+
+    protected DerivedConvertedInductionVariable createDerivedConvertedInductionVariable(LoopEx loopEx, InductionVariable base, Stamp stamp, ValueNode value) {
+        return new DerivedConvertedInductionVariable(loopEx, base, stamp, value);
+    }
+
+    protected DerivedOffsetInductionVariable createDerivedOffsetInductionVariable(LoopEx loopEx, InductionVariable base, ValueNode offset, BinaryArithmeticNode<?> value) {
+        return new DerivedOffsetInductionVariable(loopEx, base, offset, value);
+    }
+
+    protected DerivedScaledInductionVariable createDerivedScaledInductionVariable(LoopEx loopEx, InductionVariable base, ValueNode scale, ValueNode value) {
+        return new DerivedScaledInductionVariable(loopEx, base, scale, value);
+    }
+
+    protected DerivedScaledInductionVariable createDerivedScaledInductionVariable(LoopEx loopEx, InductionVariable base, NegateNode value) {
+        return new DerivedScaledInductionVariable(loopEx, base, value);
+    }
+
     /**
      * Collect all the basic induction variables for the loop and the find any induction variables
      * which are derived from the basic ones.
@@ -439,7 +460,7 @@ public class LoopEx {
             }
             ValueNode stride = addSub(this, backValue, phi);
             if (stride != null) {
-                BasicInductionVariable biv = new BasicInductionVariable(this, (ValuePhiNode) phi, phi.valueAt(forwardEnd), stride, (BinaryArithmeticNode<?>) backValue);
+                BasicInductionVariable biv = createBasicInductionVariable(this, (ValuePhiNode) phi, phi.valueAt(forwardEnd), stride, (BinaryArithmeticNode<?>) backValue);
                 currentIvs.put(phi, biv);
                 scanQueue.add(biv);
             }
@@ -463,11 +484,11 @@ public class LoopEx {
                 ValueNode offset = addSub(this, op, baseIvNode);
                 ValueNode scale;
                 if (offset != null) {
-                    iv = new DerivedOffsetInductionVariable(this, baseIv, offset, (BinaryArithmeticNode<?>) op);
+                    iv = createDerivedOffsetInductionVariable(this, baseIv, offset, (BinaryArithmeticNode<?>) op);
                 } else if (op instanceof NegateNode) {
-                    iv = new DerivedScaledInductionVariable(this, baseIv, (NegateNode) op);
+                    iv = createDerivedScaledInductionVariable(this, baseIv, (NegateNode) op);
                 } else if ((scale = mul(this, op, baseIvNode)) != null) {
-                    iv = new DerivedScaledInductionVariable(this, baseIv, scale, op);
+                    iv = createDerivedScaledInductionVariable(this, baseIv, scale, op);
                 } else {
                     boolean isValidConvert = op instanceof PiNode || op instanceof SignExtendNode;
                     if (!isValidConvert && op instanceof ZeroExtendNode) {
@@ -480,7 +501,7 @@ public class LoopEx {
                     }
 
                     if (isValidConvert) {
-                        iv = new DerivedConvertedInductionVariable(this, baseIv, op.stamp(NodeView.DEFAULT), op);
+                        iv = createDerivedConvertedInductionVariable(this, baseIv, op.stamp(NodeView.DEFAULT), op);
                     }
                 }
 

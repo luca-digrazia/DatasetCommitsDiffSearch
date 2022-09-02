@@ -105,10 +105,6 @@ public class BasicInductionVariable extends InductionVariable {
         return init;
     }
 
-    public ValueNode rawStride() {
-        return rawStride;
-    }
-
     @Override
     public ValueNode strideNode() {
         if (op instanceof AddNode) {
@@ -166,9 +162,6 @@ public class BasicInductionVariable extends InductionVariable {
     @Override
     public ValueNode exitValueNode() {
         Stamp stamp = phi.stamp(NodeView.DEFAULT);
-        if (loop.counted().isInverted()) {
-            return extremumNode(false, stamp);
-        }
         ValueNode maxTripCount = loop.counted().maxTripCountNode();
         if (!maxTripCount.stamp(NodeView.DEFAULT).isCompatible(stamp)) {
             maxTripCount = IntegerConvertNode.convert(maxTripCount, stamp, graph(), NodeView.DEFAULT);

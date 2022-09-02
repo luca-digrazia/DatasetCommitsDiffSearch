@@ -112,15 +112,4 @@ public class DerivedConvertedInductionVariable extends DerivedInductionVariable 
     public String toString() {
         return String.format("DerivedConvertedInductionVariable base (%s) %s %s", base, value.getNodeClass().shortName(), stamp);
     }
-
-    @Override
-    public InductionVariable copy(InductionVariable newBase, ValueNode newValue) {
-        return new DerivedConvertedInductionVariable(loop, newBase, stamp, newValue);
-    }
-
-    @Override
-    public ValueNode copyValue(InductionVariable newBase) {
-        return op(newBase.valueNode());
-    }
-
 }
