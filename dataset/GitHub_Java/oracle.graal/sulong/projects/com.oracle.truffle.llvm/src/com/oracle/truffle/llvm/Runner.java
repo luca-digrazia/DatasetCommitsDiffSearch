@@ -56,8 +56,6 @@ import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage.ContextReference;
-import com.oracle.truffle.api.dsl.CachedContext;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -65,7 +63,6 @@ import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.utilities.AssumedValue;
-import com.oracle.truffle.llvm.RunnerFactory.StaticInitsNodeGen;
 import com.oracle.truffle.llvm.parser.LLVMParser;
 import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.parser.LLVMParserRuntime;
@@ -686,7 +683,7 @@ final class Runner {
         String[] sulongLibraryNames = language.getCapability(PlatformCapability.class).getSulongDefaultLibraries();
         ExternalLibrary[] sulongLibraries = new ExternalLibrary[sulongLibraryNames.length];
         for (int i = 0; i < sulongLibraries.length; i++) {
-            sulongLibraries[i] = context.addInternalLibrary(sulongLibraryNames[i], "<default bitcode library>");
+            sulongLibraries[i] = context.addInternalLibrary(sulongLibraryNames[i], false);
         }
 
         // parse all libraries that were passed on the command-line
@@ -760,12 +757,6 @@ final class Runner {
         return loader.getCachedSulongLibraries();
     }
 
-    /**
-     * Marker for renamed symbols. Keep in sync with `sulong-internal.h`.
-     */
-    private static final String SULONG_RENAME_MARKER = "___sulong_import_";
-    public static final int SULONG_RENAME_MARKER_LEN = SULONG_RENAME_MARKER.length();
-
     private static void resolveRenamedSymbols(LLVMParserResult[] sulongLibraryResults) {
         EconomicMap<String, LLVMScope> scopes = EconomicMap.create();
 
@@ -779,17 +770,16 @@ final class Runner {
                 FunctionSymbol external = it.next();
                 String name = external.getName();
                 /*
-                 * An unresolved name has the form defined by the {@code
-                 * _SULONG_IMPORT_SYMBOL(libName, symbolName)} macro defined in the {@code
-                 * sulong-internal.h} header file. Check whether we have a symbol named "symbolName"
-                 * in the library "libName". If it exists, introduce an alias. This can be used to
-                 * explicitly call symbols from a certain standard library, in case the symbol is
-                 * hidden (either using the "hidden" attribute, or because it is overridden).
+                 * An unresolved name has the form "__libName_symbolName". Check whether we have a
+                 * symbol named "symbolName" in the library "libName". If it exists, introduce an
+                 * alias. This can be used to explicitly call symbols from a certain standard
+                 * library, in case the symbol is hidden (either using the "hidden" attribute, or
+                 * because it is overridden).
                  */
-                if (name.startsWith(SULONG_RENAME_MARKER)) {
-                    int idx = name.indexOf('_', SULONG_RENAME_MARKER_LEN);
+                if (name.startsWith("__")) {
+                    int idx = name.indexOf('_', 2);
                     if (idx > 0) {
-                        String lib = name.substring(SULONG_RENAME_MARKER_LEN, idx);
+                        String lib = name.substring(2, idx);
                         LLVMScope scope = scopes.get(lib);
                         if (scope != null) {
                             String originalName = name.substring(idx + 1);
@@ -798,8 +788,6 @@ final class Runner {
                             LLVMAlias alias = new LLVMAlias(parserResult.getRuntime().getLibrary(), name, originalSymbol);
                             parserResult.getRuntime().getFileScope().register(alias);
                             it.remove();
-                        } else {
-                            throw new LLVMLinkerException(String.format("The %s could not be imported because library %s was not found.", external.getName(), lib));
                         }
                     }
                 }
@@ -879,7 +867,6 @@ final class Runner {
     @SuppressWarnings("unchecked")
     private void loadDefaults(Path internalLibraryPath) {
         ExternalLibrary polyglotMock = ExternalLibrary.createFromPath(internalLibraryPath.resolve(language.getCapability(PlatformCapability.class).getPolyglotMockLibrary()), false, true);
-        // TODO (je) maybe add the polyglotMock to the context already?
         LLVMParserResult polyglotMockResult = parseLibrary(polyglotMock, ParseContext.create());
         // We use the global scope here to avoid trying to intrinsify functions in the file scope.
         // However, this is based on the assumption that polyglot-mock is the first loaded library!
@@ -953,9 +940,9 @@ final class Runner {
      * implicit dependencies of {@code lib} are added to the
      * {@link ParseContext#dependencyQueueAddLast dependency queue}. The returned
      * {@link LLVMParserResult} is also added to the {@link ParseContext#parserResultsAdd parser
-     * results}. This method ensures that the {@code library} parameter is added to the
-     * {@link LLVMContext#ensureExternalLibraryAdded context}.
-     * 
+     * results}. This method adds {@code library} parameter to the
+     * {@link LLVMContext#addExternalLibrary context}.
+     *
      * @param source the {@link Source} of the library to be parsed
      * @param library the {@link ExternalLibrary} corresponding to the library to be parsed
      * @param bytes the bytes of the library to be parsed
@@ -966,7 +953,7 @@ final class Runner {
         BinaryParserResult binaryParserResult = BinaryParser.parse(bytes, source, context);
         if (binaryParserResult != null) {
             library.makeBitcodeLibrary();
-            context.ensureExternalLibraryAdded(library);
+            context.addExternalLibrary(library);
             context.addLibraryPaths(binaryParserResult.getLibraryPaths());
             ArrayList<ExternalLibrary> dependencies = processDependencies(binaryParserResult, parseContext, library);
             LLVMParserResult parserResult = parseBinary(binaryParserResult, library);
@@ -1145,11 +1132,12 @@ final class Runner {
         initializationOrder.add(module);
     }
 
-    abstract static class StaticInitsNode extends LLVMStatementNode {
+    private static final class StaticInitsNode extends LLVMStatementNode {
 
         @Children final LLVMStatementNode[] statements;
         final Object moduleName;
         final String prefix;
+        @CompilationFinal ContextReference<LLVMContext> ctxRef;
 
         StaticInitsNode(LLVMStatementNode[] statements, String prefix, Object moduleName) {
             this.statements = statements;
@@ -1158,9 +1146,13 @@ final class Runner {
         }
 
         @ExplodeLoop
-        @Specialization
-        public void doInit(VirtualFrame frame,
-                        @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+        @Override
+        public void execute(VirtualFrame frame) {
+            if (ctxRef == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                this.ctxRef = lookupContextReference(LLVMLanguage.class);
+            }
+            LLVMContext ctx = ctxRef.get();
             if (ctx.loaderTraceStream() != null) {
                 traceExecution(ctx);
             }
@@ -1255,7 +1247,7 @@ final class Runner {
             }
         }
         LLVMStatementNode[] initNodes = globalNodes.toArray(LLVMStatementNode.NO_STATEMENTS);
-        return StaticInitsNodeGen.create(initNodes, "global variable initializers", moduleName);
+        return new StaticInitsNode(initNodes, "global variable initializers", moduleName);
     }
 
     private static LLVMStatementNode createGlobalInitialization(LLVMParserRuntime runtime, LLVMSymbolReadResolver symbolResolver, GlobalVariable global, DataLayout dataLayout) {
@@ -1293,13 +1285,13 @@ final class Runner {
     }
 
     private static StaticInitsNode createConstructor(LLVMParserResult parserResult, Object moduleName) {
-        return StaticInitsNodeGen.create(createStructor(CONSTRUCTORS_VARNAME, parserResult, ASCENDING_PRIORITY), "init", moduleName);
+        return new StaticInitsNode(createStructor(CONSTRUCTORS_VARNAME, parserResult, ASCENDING_PRIORITY), "init", moduleName);
     }
 
     private RootCallTarget createDestructor(LLVMParserResult parserResult, Object moduleName) {
         LLVMStatementNode[] destructor = createStructor(DESTRUCTORS_VARNAME, parserResult, DESCENDING_PRIORITY);
         if (destructor.length > 0) {
-            LLVMStatementRootNode root = new LLVMStatementRootNode(language, StaticInitsNodeGen.create(destructor, "fini", moduleName), StackManager.createRootFrame());
+            LLVMStatementRootNode root = new LLVMStatementRootNode(language, new StaticInitsNode(destructor, "fini", moduleName), StackManager.createRootFrame());
             return Truffle.getRuntime().createCallTarget(root);
         } else {
             return null;

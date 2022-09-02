@@ -100,15 +100,11 @@ public final class SulongLibrary implements TruffleObject {
 
         abstract LLVMFunctionDescriptor execute(SulongLibrary library, String name);
 
-        /**
-         * @param library
-         * @param name
-         * @see #execute(SulongLibrary, String)
-         */
         @Specialization(guards = {"library == cachedLibrary", "name.equals(cachedName)"})
+        @SuppressWarnings("unused")
         LLVMFunctionDescriptor doCached(SulongLibrary library, String name,
-                        @Cached("library") @SuppressWarnings("unused") SulongLibrary cachedLibrary,
-                        @Cached("name") @SuppressWarnings("unused") String cachedName,
+                        @Cached("library") SulongLibrary cachedLibrary,
+                        @Cached("name") String cachedName,
                         @Cached("lookupFunctionDescriptor(cachedLibrary, cachedName)") LLVMFunctionDescriptor cachedDescriptor) {
             return cachedDescriptor;
         }
@@ -173,14 +169,10 @@ public final class SulongLibrary implements TruffleObject {
     @ExportMessage
     abstract static class Execute {
 
-        /**
-         * @param library
-         * @param args
-         * @see InteropLibrary#execute(Object, Object...)
-         */
         @Specialization(guards = "library == cachedLibrary")
+        @SuppressWarnings("unused")
         static Object doCached(SulongLibrary library, Object[] args,
-                        @Cached("library") @SuppressWarnings("unused") SulongLibrary cachedLibrary,
+                        @Cached("library") SulongLibrary cachedLibrary,
                         @Cached("createMainCall(cachedLibrary)") DirectCallNode call) {
             return call.call(args);
         }
@@ -197,7 +189,7 @@ public final class SulongLibrary implements TruffleObject {
     }
 
     @ExportMessage
-    @SuppressWarnings("static-method")
+    @SuppressWarnings({"unused", "static-method"})
     boolean hasLanguage() {
         return true;
     }
