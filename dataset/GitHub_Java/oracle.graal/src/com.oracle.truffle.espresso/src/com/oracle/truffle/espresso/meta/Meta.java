@@ -72,6 +72,7 @@ public final class Meta implements ContextAccess {
         String = knownKlass(Type.String);
         Class_Array = Class.array();
         Class_forName_String = Class.lookupDeclaredMethod(Name.forName, Signature.Class_String);
+        Class_forName_String_boolean_ClassLoader = Class.lookupDeclaredMethod(Name.forName, Signature.Class_String_boolean_ClassLoader);
         HIDDEN_PROTECTION_DOMAIN = Class.lookupHiddenField(Name.HIDDEN_PROTECTION_DOMAIN);
 
         Object_array = Object.array();
@@ -155,6 +156,7 @@ public final class Meta implements ContextAccess {
         IllegalArgumentException = knownKlass(Type.IllegalArgumentException);
         NullPointerException = knownKlass(Type.NullPointerException);
         ClassNotFoundException = knownKlass(Type.ClassNotFoundException);
+        NoClassDefFoundError = knownKlass(Type.NoClassDefFoundError);
         InterruptedException = knownKlass(Type.InterruptedException);
         RuntimeException = knownKlass(Type.RuntimeException);
 
@@ -211,6 +213,11 @@ public final class Meta implements ContextAccess {
         Shutdown = knownKlass(Type.Shutdown);
         Shutdown_shutdown = Shutdown.lookupDeclaredMethod(Name.shutdown, Signature._void);
 
+        Buffer = knownKlass(Type.Buffer);
+        sun_nio_ch_DirectBuffer = knownKlass(Type.sun_nio_ch_DirectBuffer);
+        Buffer_address = Buffer.lookupDeclaredField(Name.address, Type._long);
+        Buffer_capacity = Buffer.lookupDeclaredField(Name.capacity, Type._int);
+
         ByteBuffer = knownKlass(Type.ByteBuffer);
         ByteBuffer_wrap = ByteBuffer.lookupDeclaredMethod(Name.wrap, Signature.ByteBuffer_byte_array);
 
@@ -235,9 +242,6 @@ public final class Meta implements ContextAccess {
 
         sun_misc_VM = knownKlass(Type.sun_misc_VM);
         toThreadState = sun_misc_VM.lookupDeclaredMethod(Name.toThreadState, Signature.toThreadState);
-
-        sun_reflect_ConstantPool = knownKlass(Type.sun_reflect_ConstantPool);
-        constantPoolOop = sun_reflect_ConstantPool.lookupDeclaredField(Name.constantPoolOop, Type.Object);
 
         System = knownKlass(Type.System);
         System_initializeSystemClass = System.lookupDeclaredMethod(Name.initializeSystemClass, Signature._void);
@@ -301,9 +305,9 @@ public final class Meta implements ContextAccess {
     public final Field HIDDEN_MIRROR_KLASS;
     public final Field HIDDEN_PROTECTION_DOMAIN;
     public final Field HIDDEN_SIGNERS;
-    public final Field constantPoolOop;
     public final ArrayKlass Class_Array;
     public final Method Class_forName_String;
+    public final Method Class_forName_String_boolean_ClassLoader;
 
     // Primitives.
     public final PrimitiveKlass _boolean;
@@ -413,6 +417,7 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass IllegalArgumentException;
     public final ObjectKlass NullPointerException;
     public final ObjectKlass ClassNotFoundException;
+    public final ObjectKlass NoClassDefFoundError;
     public final ObjectKlass InterruptedException;
     public final ObjectKlass RuntimeException;
     public final ObjectKlass StackOverflowError;
@@ -441,6 +446,11 @@ public final class Meta implements ContextAccess {
     public final ObjectKlass Cloneable;
     public final ObjectKlass Serializable;
 
+    public final ObjectKlass sun_nio_ch_DirectBuffer;
+    public final ObjectKlass Buffer;
+    public final Field Buffer_address;
+    public final Field Buffer_capacity;
+
     public final ObjectKlass ByteBuffer;
     public final Method ByteBuffer_wrap;
 
@@ -464,7 +474,6 @@ public final class Meta implements ContextAccess {
 
     public final ObjectKlass sun_misc_VM;
     public final Method toThreadState;
-    public final ObjectKlass sun_reflect_ConstantPool;
 
     public final ObjectKlass System;
     public final Method System_initializeSystemClass;
@@ -689,7 +698,6 @@ public final class Meta implements ContextAccess {
         return (ObjectKlass) getRegistries().loadKlassWithBootClassLoader(type);
     }
 
-    @TruffleBoundary
     public ObjectKlass knownKlass(java.lang.Class<?> hostClass) {
         assert isKnownClass(hostClass);
         // Resolve non-primitive classes using BCL.

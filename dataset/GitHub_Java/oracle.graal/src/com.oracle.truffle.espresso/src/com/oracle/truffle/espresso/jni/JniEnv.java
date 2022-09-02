@@ -22,7 +22,8 @@
  */
 package com.oracle.truffle.espresso.jni;
 
-import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Parameter;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.CharBuffer;
@@ -102,7 +103,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     private final TruffleObject popLong;
     private final TruffleObject popObject;
 
-    private static final Map<String, JniSubstitutor> jniMethods = buildJniMethods();
+    private static final Map<String, java.lang.reflect.Method> jniMethods = buildJniMethods();
 
     private final WeakHandles<Field> fieldIds = new WeakHandles<>();
     private final WeakHandles<Method> methodIds = new WeakHandles<>();
@@ -132,34 +133,105 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         threadLocalPendingException.set(ex);
     }
 
-    public Callback jniMethodWrapper(JniSubstitutor m) {
+    public Callback jniMethodWrapper(java.lang.reflect.Method m) {
         return new Callback(m.getParameterCount() + 1, new Callback.Function() {
             @Override
             @TruffleBoundary
             public Object call(Object... args) {
                 assert (long) args[0] == JniEnv.this.getNativePointer() : "Calling " + m + " from alien JniEnv";
+                Object[] shiftedArgs = Arrays.copyOfRange(args, 1, args.length);
+
+                Class<?>[] params = m.getParameterTypes();
+
+                for (int i = 0; i < shiftedArgs.length; ++i) {
+                    // FIXME(peterssen): Espresso should accept interop null objects, since it
+                    // doesn't
+                    // we must convert to Espresso null.
+                    // FIXME(peterssen): Also, do use proper nodes.
+                    if (shiftedArgs[i] instanceof TruffleObject) {
+                        if (InteropLibrary.getFactory().getUncached().isNull(shiftedArgs[i])) {
+                            if (params[i] == StaticObject.class) {
+                                shiftedArgs[i] = StaticObject.NULL;
+                            } else {
+                                shiftedArgs[i] = null;
+                            }
+                        }
+                    } else {
+                        // TruffleNFI pass booleans as byte, do the proper conversion.
+                        if (params[i] == boolean.class) {
+                            shiftedArgs[i] = ((byte) shiftedArgs[i]) != 0;
+                        }
+                        // TruffleNFI pass chars as short
+                        if (params[i] == char.class) {
+                            shiftedArgs[i] = (char) (short) shiftedArgs[i];
+                        }
+                    }
+                }
+                assert args.length - 1 == shiftedArgs.length;
                 try {
                     // Substitute raw pointer by proper `this` reference.
                     // System.err.print("Call DEFINED method: " + m.getName() +
                     // Arrays.toString(shiftedArgs));
-                    return m.invoke(JniEnv.this, args);
-                } catch (EspressoException targetEx) {
-                    setPendingException(targetEx.getException());
-                    return defaultValue(m.returnType());
-                } catch (RuntimeException targetEx) {
-                    throw targetEx;
-                } catch (Throwable targetEx) {
+                    Object ret = m.invoke(JniEnv.this, shiftedArgs);
+
+                    if (ret instanceof Boolean) {
+                        return (boolean) ret ? (byte) 1 : (byte) 0;
+                    }
+
+                    if (ret instanceof Character) {
+                        return (short) (char) ret;
+                    }
+
+                    if (ret == null && !m.getReturnType().isPrimitive()) {
+                        throw EspressoError.shouldNotReachHere("Cannot return host null, only Espresso NULL");
+                    }
+
+                    if (ret == null && m.getReturnType() == void.class) {
+                        // Cannot return host null to TruffleNFI.
+                        ret = StaticObject.NULL;
+                    }
+
+                    // System.err.println(" -> " + ret);
+
+                    return ret;
+                } catch (InvocationTargetException e) {
+                    Throwable targetEx = e.getTargetException();
+                    if (targetEx instanceof EspressoException) {
+                        setPendingException(((EspressoException) targetEx).getException());
+                        return defaultValue(m.getReturnType());
+                    } else if (targetEx instanceof RuntimeException) {
+                        throw (RuntimeException) targetEx;
+                    }
                     // FIXME(peterssen): Handle VME exceptions back to guest.
                     throw EspressoError.shouldNotReachHere(targetEx);
+                } catch (IllegalAccessException e) {
+                    throw EspressoError.shouldNotReachHere(e);
                 }
             }
         });
     }
 
-    private static final int LOOKUP_JNI_IMPL_PARAMETER_COUNT = 1;
+    public static String jniNativeSignature(java.lang.reflect.Method method) {
+        StringBuilder sb = new StringBuilder("(");
+        // Prepend JNIEnv* . The raw pointer will be substituted by the proper `this` reference.
+        sb.append(NativeSimpleType.SINT64);
+        for (Parameter param : method.getParameters()) {
+            sb.append(", ");
+
+            // Override NFI type.
+            NFIType nfiType = param.getAnnotatedType().getAnnotation(NFIType.class);
+            if (nfiType != null) {
+                sb.append(NativeSimpleType.valueOf(nfiType.value().toUpperCase()));
+            } else {
+                sb.append(classToType(param.getType(), false));
+            }
+        }
+        sb.append("): ").append(classToType(method.getReturnType(), true));
+        return sb.toString();
+    }
 
     public TruffleObject lookupJniImpl(String methodName) {
-        JniSubstitutor m = jniMethods.get(methodName);
+        java.lang.reflect.Method m = jniMethods.get(methodName);
         try {
             // Dummy placeholder for unimplemented/unknown methods.
             if (m == null) {
@@ -175,7 +247,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
                                 }));
             }
 
-            String signature = m.jniNativeSignature();
+            String signature = jniNativeSignature(m);
             Callback target = jniMethodWrapper(m);
             return (TruffleObject) InteropLibrary.getFactory().getUncached().execute(dupClosureRefAndCast(signature), target);
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
@@ -327,7 +399,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         try {
             EspressoProperties props = context.getVmProperties();
             this.context = context;
-            nespressoLibrary = loadLibrary(props.getEspressoLibraryPath().split(File.pathSeparator), "nespresso");
+            nespressoLibrary = loadLibrary(props.espressoLibraryPath(), "nespresso");
             dupClosureRef = NativeLibrary.lookup(nespressoLibrary, "dupClosureRef");
 
             initializeNativeContext = NativeLibrary.lookupAndBind(nespressoLibrary,
@@ -347,20 +419,7 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
             popLong = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_long", "(sint64): sint64");
             popObject = NativeLibrary.lookupAndBind(nespressoLibrary, "pop_object", "(sint64): object");
 
-            Callback lookupJniImplCallback = new Callback(LOOKUP_JNI_IMPL_PARAMETER_COUNT, new Callback.Function() {
-                @Override
-                public Object call(Object... args) {
-                    try {
-                        return JniEnv.this.lookupJniImpl((String) args[0]);
-                    } catch (ClassCastException e) {
-                        throw EspressoError.shouldNotReachHere(e);
-                    } catch (RuntimeException e) {
-                        throw e;
-                    } catch (Throwable e) {
-                        throw EspressoError.shouldNotReachHere(e);
-                    }
-                }
-            });
+            Callback lookupJniImplCallback = Callback.wrapInstanceMethod(this, "lookupJniImpl", String.class);
             this.jniEnvPtr = (long) InteropLibrary.getFactory().getUncached().execute(initializeNativeContext, lookupJniImplCallback);
             assert this.jniEnvPtr != 0;
         } catch (UnsupportedMessageException | ArityException | UnknownIdentifierException | UnsupportedTypeException e) {
@@ -368,11 +427,15 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
         }
     }
 
-    private static Map<String, JniSubstitutor> buildJniMethods() {
-        Map<String, JniSubstitutor> map = new HashMap<>();
-        for (JniSubstitutor method : JniCollector.getInstance()) {
-            assert !map.containsKey(method.methodName()) : "JniImpl for " + method.methodName() + " already exists";
-            map.put(method.methodName(), method);
+    private static Map<String, java.lang.reflect.Method> buildJniMethods() {
+        Map<String, java.lang.reflect.Method> map = new HashMap<>();
+        java.lang.reflect.Method[] declaredMethods = JniEnv.class.getDeclaredMethods();
+        for (java.lang.reflect.Method method : declaredMethods) {
+            JniImpl jniImpl = method.getAnnotation(JniImpl.class);
+            if (jniImpl != null) {
+                assert !map.containsKey(method.getName()) : "JniImpl for " + method + " already exists";
+                map.put(method.getName(), method);
+            }
         }
         return Collections.unmodifiableMap(map);
     }
@@ -1981,5 +2044,55 @@ public final class JniEnv extends NativeEnv implements ContextAccess {
     @JniImpl
     public static @Host(Object.class) StaticObject PopLocalFrame(@Host(Object.class) StaticObject result) {
         return result;
+    }
+
+    /**
+     * <h3>void* GetDirectBufferAddress(JNIEnv* env, jobject buf);</h3>
+     *
+     * Fetches and returns the starting address of the memory region referenced by the given direct
+     * {@link java.nio.Buffer}. This function allows native code to access the same memory region
+     * that is accessible to Java code via the buffer object.
+     *
+     * @param buf a direct java.nio.Buffer object (must not be NULL)
+     * @return the starting address of the memory region referenced by the buffer. Returns NULL if
+     *         the memory region is undefined, if the given object is not a direct java.nio.Buffer,
+     *         or if JNI access to direct buffers is not supported by this virtual machine.
+     */
+    @JniImpl
+    public long GetDirectBufferAddress(@Host(java.nio.Buffer.class) StaticObject buf) {
+        assert StaticObject.notNull(buf);
+        // HotSpot check.
+        assert InterpreterToVM.instanceOf(buf, getMeta().sun_nio_ch_DirectBuffer);
+        // TODO(peterssen): Returns NULL if the memory region is undefined.
+        if (!InterpreterToVM.instanceOf(buf, getMeta().Buffer)) {
+            return /* NULL */ 0L;
+        }
+        return (long) getMeta().Buffer_address.get(buf);
+    }
+
+    /**
+     * <h3>jlong GetDirectBufferCapacity(JNIEnv* env, jobject buf);</h3>
+     *
+     * Fetches and returns the capacity of the memory region referenced by the given direct
+     * {@link java.nio.Buffer}. The capacity is the number of elements that the memory region
+     * contains.
+     *
+     * @param buf a direct java.nio.Buffer object (must not be NULL)
+     * @return the capacity of the memory region associated with the buffer. Returns -1 if the given
+     *         object is not a direct java.nio.Buffer, if the object is an unaligned view buffer and
+     *         the processor architecture does not support unaligned access, or if JNI access to
+     *         direct buffers is not supported by this virtual machine.
+     */
+    @JniImpl
+    public long GetDirectBufferCapacity(@Host(java.nio.Buffer.class) StaticObject buf) {
+        assert StaticObject.notNull(buf);
+        // HotSpot check.
+        assert InterpreterToVM.instanceOf(buf, getMeta().sun_nio_ch_DirectBuffer);
+        // TODO(peterssen): Return -1 if the object is an unaligned view buffer and the processor
+        // architecture does not support unaligned access.
+        if (!InterpreterToVM.instanceOf(buf, getMeta().Buffer)) {
+            return -1L;
+        }
+        return (int) getMeta().Buffer_capacity.get(buf);
     }
 }
