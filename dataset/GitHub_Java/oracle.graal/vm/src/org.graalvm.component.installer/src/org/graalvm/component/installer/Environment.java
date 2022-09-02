@@ -55,10 +55,10 @@ public final class Environment implements Feedback, CommandInput {
     private InputStream in = System.in;
     private PrintStream err = System.err;
     private PrintStream out = System.out;
-    private Supplier<ComponentCollection> registrySupplier;
+    private Supplier<ComponentRegistry> registrySupplier;
     private ComponentRegistry localRegistry;
     private boolean stacktraces;
-    private ComponentIterable fileIterable;
+    private Iterable<ComponentParam> fileIterable;
     private Map<URL, Path> fileMap = new HashMap<>();
     private boolean allOutputToErr;
     private boolean autoYesEnabled;
@@ -135,12 +135,12 @@ public final class Environment implements Feedback, CommandInput {
         }
     }
 
-    public void setFileIterable(ComponentIterable fileIterable) {
+    public void setFileIterable(Iterable<ComponentParam> fileIterable) {
         this.fileIterable = fileIterable;
     }
 
     @Override
-    public ComponentCollection getRegistry() {
+    public ComponentRegistry getRegistry() {
         return registrySupplier.get();
     }
 
@@ -156,12 +156,12 @@ public final class Environment implements Feedback, CommandInput {
         }
     }
 
-    public void setComponentRegistry(Supplier<ComponentCollection> registrySupplier) {
+    public void setComponentRegistry(Supplier<ComponentRegistry> registrySupplier) {
         this.registrySupplier = registrySupplier;
     }
 
     public void setGraalHome(Path f) {
-        this.graalHome = f.normalize();
+        this.graalHome = f;
 
     }
 
@@ -352,6 +352,7 @@ public final class Environment implements Feedback, CommandInput {
             public Path getLocalCache(URL location) {
                 return Environment.this.getLocalCache(location);
             }
+
         };
     }
 
@@ -408,11 +409,6 @@ public final class Environment implements Feedback, CommandInput {
     }
 
     @Override
-    public String peekParameter() {
-        return parameters.peek();
-    }
-
-    @Override
     public String requiredParameter() {
         if (parameters.isEmpty()) {
             throw new FailedOperationException(
@@ -427,7 +423,7 @@ public final class Environment implements Feedback, CommandInput {
     }
 
     @Override
-    public ComponentIterable existingFiles() {
+    public Iterable<ComponentParam> existingFiles() {
         return fileIterable;
     }
 
@@ -497,4 +493,5 @@ public final class Environment implements Feedback, CommandInput {
     public Path getLocalCache(URL location) {
         return fileMap.get(location);
     }
+
 }
