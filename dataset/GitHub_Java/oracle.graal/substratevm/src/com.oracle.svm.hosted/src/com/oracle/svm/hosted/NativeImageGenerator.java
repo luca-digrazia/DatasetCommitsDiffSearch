@@ -45,7 +45,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -55,7 +54,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import com.oracle.svm.core.OS;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.api.replacements.Fold;
@@ -157,6 +155,7 @@ import com.oracle.svm.core.ClassLoaderQuery;
 import com.oracle.svm.core.FrameAccess;
 import com.oracle.svm.core.JavaMainWrapper.JavaMainSupport;
 import com.oracle.svm.core.LinkerInvocation;
+import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateTargetDescription;
 import com.oracle.svm.core.SubstrateUtil;
@@ -187,6 +186,7 @@ import com.oracle.svm.core.graal.snippets.DeoptHostedSnippets;
 import com.oracle.svm.core.graal.snippets.DeoptRuntimeSnippets;
 import com.oracle.svm.core.graal.snippets.DeoptTester;
 import com.oracle.svm.core.graal.snippets.ExceptionSnippets;
+import com.oracle.svm.core.graal.snippets.LegacyTypeSnippets;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.graal.snippets.TypeSnippets;
 import com.oracle.svm.core.graal.stackvalue.StackValuePhase;
@@ -258,8 +258,6 @@ import com.oracle.svm.hosted.option.HostedOptionProvider;
 import com.oracle.svm.hosted.phases.CInterfaceInvocationPlugin;
 import com.oracle.svm.hosted.phases.ConstantFoldLoadFieldPlugin;
 import com.oracle.svm.hosted.phases.EarlyConstantFoldLoadFieldPlugin;
-import com.oracle.svm.hosted.phases.ExperimentalNativeImageInlineDuringParsingPlugin;
-import com.oracle.svm.hosted.phases.ExperimentalNativeImageInlineDuringParsingSupport;
 import com.oracle.svm.hosted.phases.InjectedAccessorsPlugin;
 import com.oracle.svm.hosted.phases.IntrinsifyMethodHandlesInvocationPlugin;
 import com.oracle.svm.hosted.phases.SubstrateClassInitializationPlugin;
@@ -317,63 +315,57 @@ public class NativeImageGenerator {
         optionProvider.getRuntimeValues().put(GraalOptions.EagerSnippets, true);
     }
 
-    public static Platform loadPlatform(ClassLoader classLoader, String platformClassName) throws ClassNotFoundException {
-        Class<?> platformClass;
-
-        platformClass = classLoader.loadClass(platformClassName);
-
-        Object result;
-        try {
-            result = ReflectionUtil.newInstance(platformClass);
-        } catch (ReflectionUtilError ex) {
-            throw UserError.abort(ex.getCause(), "Could not instantiate platform class %s. Ensure the class is not abstract and has a no-argument constructor.", platformClassName);
-        }
-
-        if (!(result instanceof Platform)) {
-            throw UserError.abort("Platform class %s does not implement %s", platformClassName, Platform.class.getTypeName());
-        }
-        return (Platform) result;
-    }
-
-    public static Platform loadPlatform(String os, String arch) {
-        ServiceLoader<Platform> loader = ServiceLoader.load(Platform.class);
-        for (Platform platform : loader) {
-            if (platform.getOS().equals(os) && platform.getArchitecture().equals(arch)) {
-                return platform;
-            }
-        }
-        throw UserError.abort("Platform specified as " + os + "-" + arch + " isn't supported.");
-    }
-
-    public static Platform getTargetPlatform(ClassLoader classLoader) {
+    public static Platform defaultPlatform(ClassLoader classLoader) {
         /*
          * We cannot use a regular hosted option for the platform class: The code that instantiates
          * the platform class runs before options are parsed, because option parsing depends on the
          * platform (there can be platform-specific options). So we need to use a regular system
          * property to specify a platform class explicitly on the command line.
          */
-
         String platformClassName = System.getProperty(Platform.PLATFORM_PROPERTY_NAME);
         if (platformClassName != null) {
+            Class<?> platformClass;
             try {
-                return loadPlatform(classLoader, platformClassName);
+                platformClass = classLoader.loadClass(platformClassName);
             } catch (ClassNotFoundException ex) {
                 throw UserError.abort("Could not find platform class %s that was specified explicitly on the command line using the system property %s",
                                 platformClassName, Platform.PLATFORM_PROPERTY_NAME);
             }
+
+            Object result;
+            try {
+                result = ReflectionUtil.newInstance(platformClass);
+            } catch (ReflectionUtilError ex) {
+                throw UserError.abort(ex.getCause(), "Could not instantiate platform class %s. Ensure the class is not abstract and has a no-argument constructor.", platformClassName);
+            }
+
+            if (!(result instanceof Platform)) {
+                throw UserError.abort("Platform class %s does not implement %s", platformClassName, Platform.class.getTypeName());
+            }
+            return (Platform) result;
         }
 
-        String os = System.getProperty("svm.targetPlatformOS");
-        if (os == null) {
-            os = OS.getCurrent().className.toLowerCase();
+        final Architecture hostedArchitecture = GraalAccess.getOriginalTarget().arch;
+        final OS currentOs = OS.getCurrent();
+        if (hostedArchitecture instanceof AMD64) {
+            if (currentOs == OS.LINUX) {
+                return new Platform.LINUX_AMD64();
+            } else if (currentOs == OS.DARWIN) {
+                return new Platform.DARWIN_AMD64();
+            } else if (currentOs == OS.WINDOWS) {
+                return new Platform.WINDOWS_AMD64();
+            } else {
+                throw VMError.shouldNotReachHere("Unsupported architecture/operating system: " + hostedArchitecture.getName() + "/" + currentOs.className);
+            }
+        } else if (hostedArchitecture instanceof AArch64) {
+            if (OS.getCurrent() == OS.LINUX) {
+                return new Platform.LINUX_AARCH64();
+            } else {
+                throw VMError.shouldNotReachHere("Unsupported architecture/operating system: " + hostedArchitecture.getName() + "/" + currentOs.className);
+            }
+        } else {
+            throw VMError.shouldNotReachHere("Unsupported architecture: " + hostedArchitecture.getClass().getSimpleName());
         }
-
-        String arch = System.getProperty("svm.targetPlatformArch");
-        if (arch == null) {
-            arch = SubstrateUtil.getArchitectureName();
-        }
-
-        return loadPlatform(os, arch);
     }
 
     /**
@@ -841,9 +833,6 @@ public class NativeImageGenerator {
                 ImageSingletons.add(RuntimeClassInitializationSupport.class, classInitializationSupport);
                 ClassInitializationFeature.processClassInitializationOptions(classInitializationSupport);
 
-                /* Initialize the registry for the inline decisions */
-                ImageSingletons.add(ExperimentalNativeImageInlineDuringParsingSupport.class, new ExperimentalNativeImageInlineDuringParsingSupport());
-
                 featureHandler.registerFeatures(loader, debug);
                 AfterRegistrationAccessImpl access = new AfterRegistrationAccessImpl(featureHandler, loader, originalMetaAccess, mainEntryPoint, debug);
                 featureHandler.forEachFeature(feature -> feature.afterRegistration(access));
@@ -1146,10 +1135,6 @@ public class NativeImageGenerator {
         SubstrateReplacements replacements = (SubstrateReplacements) providers.getReplacements();
         plugins.appendInlineInvokePlugin(replacements);
 
-        if (nativeImageInlineDuringParsingEnabled()) {
-            plugins.appendInlineInvokePlugin(new ExperimentalNativeImageInlineDuringParsingPlugin(analysis, providers));
-        }
-
         plugins.appendNodePlugin(new IntrinsifyMethodHandlesInvocationPlugin(analysis, providers, aUniverse, hUniverse));
         plugins.appendNodePlugin(new DeletedFieldsPlugin());
         plugins.appendNodePlugin(new InjectedAccessorsPlugin());
@@ -1240,12 +1225,6 @@ public class NativeImageGenerator {
         }
     }
 
-    public static boolean nativeImageInlineDuringParsingEnabled() {
-        return ExperimentalNativeImageInlineDuringParsingPlugin.Options.InlineBeforeAnalysis.getValue() &&
-                        !ImageSingletons.lookup(ExperimentalNativeImageInlineDuringParsingSupport.class).isNativeImageInlineDuringParsingDisabled() &&
-                        !DeoptTester.Options.DeoptimizeAll.getValue();
-    }
-
     @SuppressWarnings("try")
     public static void registerReplacements(DebugContext debug, FeatureHandler featureHandler, RuntimeConfiguration runtimeConfig, Providers providers,
                     SnippetReflectionProvider snippetReflection, boolean hosted, boolean initForeignCalls) {
@@ -1263,7 +1242,11 @@ public class NativeImageGenerator {
 
             Iterable<DebugHandlersFactory> factories = runtimeConfig != null ? runtimeConfig.getDebugHandlersFactories() : Collections.singletonList(new GraalDebugHandlersFactory(snippetReflection));
             lowerer.setConfiguration(runtimeConfig, options, factories, providers, snippetReflection);
-            TypeSnippets.registerLowerings(runtimeConfig, options, factories, providers, snippetReflection, lowerings);
+            if (SubstrateOptions.UseLegacyTypeCheck.getValue()) {
+                LegacyTypeSnippets.registerLowerings(runtimeConfig, options, factories, providers, snippetReflection, lowerings);
+            } else {
+                TypeSnippets.registerLowerings(runtimeConfig, options, factories, providers, snippetReflection, lowerings);
+            }
             ExceptionSnippets.registerLowerings(options, factories, providers, snippetReflection, lowerings);
 
             if (hosted) {
@@ -1616,8 +1599,8 @@ public class NativeImageGenerator {
                 System.out.print("reachable  ");
             }
 
-            System.out.format("type check start %d range %d slot # %d ", type.getTypeCheckStart(), type.getTypeCheckRange(), type.getTypeCheckSlot());
-            System.out.format("type check slots %s  ", slotsToString(type.getTypeCheckSlots()));
+            System.out.format("assignableFrom %s  ", matchesToString(type.getAssignableFromMatches()));
+            System.out.format("instanceOf typeID %d, # %d  ", type.getInstanceOfFromTypeID(), type.getInstanceOfNumTypeIDs());
             // if (type.findLeafConcreteSubtype() != null) {
             // System.out.format("unique %d %s ", type.findLeafConcreteSubtype().getTypeID(),
             // type.findLeafConcreteSubtype().toJavaName(false));
@@ -1695,13 +1678,13 @@ public class NativeImageGenerator {
         System.out.println("]");
     }
 
-    private static String slotsToString(short[] slots) {
-        if (slots == null) {
+    private static String matchesToString(int[] matches) {
+        if (matches == null) {
             return "null";
         }
         StringBuilder result = new StringBuilder();
-        for (int i = 0; i < slots.length; i += 2) {
-            result.append("[").append(slots[i]).append(", ").append(slots[i] + slots[i + 1] - 1).append("] ");
+        for (int i = 0; i < matches.length; i += 2) {
+            result.append("[").append(matches[i]).append(", ").append(matches[i] + matches[i + 1] - 1).append("] ");
         }
         return result.toString();
     }
