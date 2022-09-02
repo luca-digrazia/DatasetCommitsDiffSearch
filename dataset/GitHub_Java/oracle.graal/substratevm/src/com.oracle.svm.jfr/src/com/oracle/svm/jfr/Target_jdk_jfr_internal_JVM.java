@@ -26,6 +26,8 @@ package com.oracle.svm.jfr;
 
 import java.util.List;
 
+import com.oracle.svm.jfr.traceid.JfrTraceId;
+import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
 import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.svm.core.SubstrateUtil;
@@ -36,7 +38,6 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.jdk.JDK14OrEarlier;
 import com.oracle.svm.core.jdk.JDK15OrLater;
-import com.oracle.svm.jfr.traceid.JfrTraceId;
 
 import jdk.jfr.Event;
 import jdk.jfr.internal.EventWriter;
@@ -305,6 +306,20 @@ public final class Target_jdk_jfr_internal_JVM {
     @Substitute
     public void abort(String errorMsg) {
         SubstrateJVM.get().abort(errorMsg);
+    }
+
+    /** See {@link JVM#addStringConstant}. */
+    @Substitute
+    public static boolean addStringConstant(boolean epoch, long id, String s) {
+        // This 'implementation' will cause the EventWriter to always write strings by value.
+        return !epoch;
+    }
+
+    /** See {@link JVM#getEpochAddress}. */
+    @Substitute
+    public long getEpochAddress() {
+        // Should go away with backport of JDK-8257621
+        return JfrTraceIdEpoch.getInstance().getEpochAddress();
     }
 
     /** See {@link JVM#uncaughtException}. */
