@@ -52,7 +52,6 @@ import com.oracle.truffle.api.OptimizationFailedException;
 import com.oracle.truffle.api.ReplaceObserver;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
-import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -558,11 +557,8 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
              * entry stub again then this leads to an inconvenient stack overflow error. In order to
              * avoid this we just do not return true and wait for the second execution to jump to
              * the optimized code. In practice the installed code should rarely be bypassed.
-             *
-             * This is only important for HotSpot. We can safely ignore this behavior for SVM as
-             * there is no regular JDWP debugging supported.
              */
-            return isCompiled && (TruffleOptions.AOT || !bypassedInstalledCode);
+            return isCompiled && !bypassedInstalledCode;
         }
         return false;
     }
@@ -629,9 +625,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
     private Object executeRootNode(VirtualFrame frame) {
         final boolean inCompiled = CompilerDirectives.inCompilationRoot();
         try {
-            Object toRet = rootNode.execute(frame);
-            TruffleSafepoint.poll(rootNode);
-            return toRet;
+            return rootNode.execute(frame);
         } catch (ControlFlowException t) {
             throw rethrow(profileExceptionType(t));
         } catch (Throwable t) {
@@ -642,6 +636,7 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
             if (CompilerDirectives.inInterpreter() && inCompiled) {
                 notifyDeoptimized(frame);
             }
+            TruffleSafepoint.poll(rootNode);
             // this assertion is needed to keep the values from being cleared as non-live locals
             assert frame != null && this != null;
         }
@@ -984,7 +979,12 @@ public abstract class OptimizedCallTarget implements CompilableTruffleAST, RootC
 
     @Override
     public final String toString() {
-        return getName();
+        CompilerAsserts.neverPartOfCompilation();
+        String superString = rootNode.toString();
+        if (sourceCallTarget != null) {
+            superString += " <split-" + Integer.toHexString(hashCode()) + ">";
+        }
+        return superString;
     }
 
     /**
