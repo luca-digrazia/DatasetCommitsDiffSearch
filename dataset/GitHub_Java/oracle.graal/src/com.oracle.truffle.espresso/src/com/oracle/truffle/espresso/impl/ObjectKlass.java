@@ -53,8 +53,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
-import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
-import com.oracle.truffle.espresso.impl.PackageTable.PackageEntry;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
@@ -103,9 +101,6 @@ public final class ObjectKlass extends Klass {
 
     @CompilationFinal //
     private Klass nest;
-
-    @CompilationFinal //
-    private PackageEntry packageEntry;
 
     private String genericSignature;
 
@@ -196,7 +191,6 @@ public final class ObjectKlass extends Klass {
         this.itableLength = iKlassTable.length;
         this.initState = LINKED;
         assert verifyTables();
-        initPackage();
     }
 
     private boolean verifyTables() {
@@ -874,43 +868,11 @@ public final class ObjectKlass extends Klass {
             for (InnerClassesAttribute.Entry entry : innerClasses.entries()) {
                 if (entry.innerClassIndex != 0) {
                     result.add(getConstantPool().classAt(entry.innerClassIndex).getName(getConstantPool()));
+
                 }
             }
         }
         return result;
-    }
-
-    private void initPackage() {
-        ClassRegistry registry = getRegistries().getClassRegistry(getDefiningClassLoader());
-        if (getRuntimePackage() != null) {
-            packageEntry = registry.packages().lookup(getRuntimePackage());
-            // If the package name is not found in the loader's package
-            // entry table, it is an indication that the package has not
-            // been defined. Consider it defined within the unnamed module.
-            if (packageEntry == null) {
-                if (!getRegistries().javaBaseDefined()) {
-                    // Before java.base is defined during bootstrapping, define all packages in
-                    // the java.base module.
-                    packageEntry = registry.packages().lookupOrCreate(getRuntimePackage(), getRegistries().getJavaBaseModule());
-                } else {
-                    packageEntry = registry.packages().lookupOrCreate(getRuntimePackage(), registry.getUnnamedModule());
-                }
-            }
-        }
-    }
-
-    public ModuleEntry module() {
-        if (!inUnnamedPackage()) {
-            return packageEntry.module();
-        }
-        if (getHostClass() != null) {
-            return getRegistries().getClassRegistry(getHostClass().getDefiningClassLoader()).getUnnamedModule();
-        }
-        return getRegistries().getClassRegistry(getDefiningClassLoader()).getUnnamedModule();
-    }
-
-    private boolean inUnnamedPackage() {
-        return packageEntry == null;
     }
 
     @TruffleBoundary
