@@ -68,6 +68,7 @@ import static org.graalvm.wasm.Assert.assertTrue;
 import static org.graalvm.wasm.Assert.assertUnsignedIntLess;
 import static org.graalvm.wasm.WasmMath.maxUnsigned;
 import static org.graalvm.wasm.WasmMath.minUnsigned;
+import static org.graalvm.wasm.WasmMath.unsignedIntToLong;
 
 /**
  * Contains the symbol information of a module.
@@ -79,7 +80,7 @@ public abstract class SymbolTable {
     private static final int INITIAL_FUNCTION_TYPES_SIZE = 128;
     private static final int GLOBAL_MUTABLE_BIT = 0x0100;
     private static final int GLOBAL_EXPORT_BIT = 0x0200;
-    static final int UNINITIALIZED_GLOBAL_ADDRESS = Integer.MIN_VALUE;
+    private static final int UNINITIALIZED_GLOBAL_ADDRESS = -1;
     private static final int NO_EQUIVALENCE_CLASS = 0;
     static final int FIRST_EQUIVALENCE_CLASS = NO_EQUIVALENCE_CLASS + 1;
 
@@ -467,7 +468,9 @@ public abstract class SymbolTable {
     private WasmFunction allocateFunction(int typeIndex, ImportDescriptor importDescriptor) {
         checkNotParsed();
         ensureFunctionsCapacity(numFunctions);
-        assertUnsignedIntLess(typeIndex, typeCount(), Failure.UNKNOWN_TYPE);
+        if (typeIndex < 0 || typeIndex >= typeCount) {
+            throw WasmException.create(Failure.UNKNOWN_TYPE, String.format("Function type out of bounds: %d should be < %d.", unsignedIntToLong(typeIndex), typeCount));
+        }
         final WasmFunction function = new WasmFunction(this, numFunctions, typeIndex, importDescriptor);
         functions[numFunctions] = function;
         numFunctions++;
