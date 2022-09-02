@@ -955,6 +955,10 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         return hostClassCache;
     }
 
+    HostClassDesc findHostClassDesc(Class<?> clazz) {
+        return hostClassCache.forClass(clazz);
+    }
+
     private static final class PolyglotShutDownHook implements Runnable {
 
         public void run() {
@@ -1138,7 +1142,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     @Override
     @SuppressWarnings({"all"})
     public synchronized Context createContext(OutputStream configOut, OutputStream configErr, InputStream configIn, boolean allowHostLookup,
-                    HostAccess hostAccess,
+                    HostAccess access,
                     PolyglotAccess polyglotAccess, boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO,
                     boolean allowHostClassLoading, boolean allowExperimentalOptions, Predicate<String> classFilter, Map<String, String> options,
                     Map<String, String[]> arguments, String[] onlyLanguages, FileSystem fileSystem, Object logHandlerOrStream, boolean allowCreateProcess, ProcessHandler processHandler,
@@ -1149,7 +1153,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                             "Use Engine.newBuilder().build() to construct a new engine and pass it using Context.newBuilder().engine(engine).build().");
         }
 
-        initializeHostAccess(hostAccess);
+        initializeHostAccess(access);
 
         Set<String> allowedLanguages;
         if (onlyLanguages.length == 0) {
