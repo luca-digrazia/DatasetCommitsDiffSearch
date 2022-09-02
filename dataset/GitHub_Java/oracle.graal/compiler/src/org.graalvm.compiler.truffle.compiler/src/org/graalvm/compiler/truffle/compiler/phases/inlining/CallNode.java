@@ -212,11 +212,10 @@ public final class CallNode extends Node {
     }
 
     private void addIndirectChildren(GraphManager.Entry entry) {
-        for (Invoke indirectInvoke : entry.indirectInvokes) {
-            if (indirectInvoke != null && indirectInvoke.isAlive()) {
+        for (Invoke invoke : entry.indirectInvokes) {
+            if (invoke != null && invoke.isAlive()) {
                 final CallNode child = new CallNode(null, null, 0, depth + 1);
                 child.state = State.Indirect;
-                child.invoke = indirectInvoke;
                 getCallTree().add(child);
                 children.add(child);
             }
