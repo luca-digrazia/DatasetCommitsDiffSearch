@@ -52,10 +52,8 @@ public class VMFeature implements Feature {
     public void beforeAnalysis(BeforeAnalysisAccess a) {
         if (SubstrateOptions.DumpTargetInfo.getValue()) {
             System.out.println("# Building image for target platform: " + ImageSingletons.lookup(Platform.class).getClass().getName());
-            if (ImageSingletons.contains(CCompilerInvoker.class)) {
-                System.out.println("# Using native toolchain:");
-                ImageSingletons.lookup(CCompilerInvoker.class).compilerInfo.dump(x -> System.out.println("#   " + x));
-            }
+            System.out.println("# Using native toolchain:");
+            ImageSingletons.lookup(CCompilerInvoker.class).compilerInfo.dump(x -> System.out.println("#   " + x));
             System.out.println("# Using CLibrary: " + ImageSingletons.lookup(LibCBase.class).getClass().getName());
         }
 

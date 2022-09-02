@@ -42,7 +42,6 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
-import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.c.CContext;
@@ -111,7 +110,6 @@ public final class NativeLibraries {
     private final CAnnotationProcessorCache cache;
 
     public final Path tempDirectory;
-    public final DebugContext debug;
 
     /*
      * Static JDK libraries compiled with different LibCBase versions are placed inside of <GraalVM
@@ -120,14 +118,13 @@ public final class NativeLibraries {
     private static final Path CUSTOM_LIBC_STATIC_DIST_PATH = Paths.get("svm", "static-libs");
 
     public NativeLibraries(ConstantReflectionProvider constantReflection, MetaAccessProvider metaAccess, SnippetReflectionProvider snippetReflection, TargetDescription target,
-                    ClassInitializationSupport classInitializationSupport, Path tempDirectory, DebugContext debug) {
+                    ClassInitializationSupport classInitializationSupport, Path tempDirectory) {
         this.metaAccess = metaAccess;
         this.constantReflection = constantReflection;
         this.snippetReflection = snippetReflection;
         this.target = target;
         this.classInitializationSupport = classInitializationSupport;
         this.tempDirectory = tempDirectory;
-        this.debug = debug;
 
         elementToInfo = new HashMap<>();
         errors = new ArrayList<>();
