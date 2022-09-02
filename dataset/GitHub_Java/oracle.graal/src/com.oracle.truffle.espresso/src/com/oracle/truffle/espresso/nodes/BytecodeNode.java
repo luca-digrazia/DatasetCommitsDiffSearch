@@ -1075,7 +1075,7 @@ public final class BytecodeNode extends EspressoMethodNode {
                             BytecodeStream original = new BytecodeStream(getMethodVersion().getCodeAttribute().getOriginalCode());
                             char cpi = original.readCPI(curBCI);
                             int nodeOpcode = quickNode.getOpcode();
-                            Method resolutionSeed = resolveMethodNoCache(nodeOpcode, cpi);
+                            Method resolutionSeed = resolveMethod(nodeOpcode, cpi, true);
                             QuickNode invoke = insert(dispatchQuickened(top, curBCI, cpi, nodeOpcode, statementIndex, resolutionSeed, getContext().InlineFieldAccessors));
                             nodes[bs.readCPI(curBCI)] = invoke;
                             top += invoke.execute(frame);
@@ -1401,7 +1401,9 @@ public final class BytecodeNode extends EspressoMethodNode {
         int newTop = top + Bytecodes.stackEffectOf(opcode);
         if (targetBCI <= curBCI) {
             checkStopping(curBCI, targetBCI);
-            LoopNode.reportLoopCount(this, 1);
+            if (CompilerDirectives.inInterpreter()) {
+                LoopNode.reportLoopCount(this, 1);
+            }
         }
         return newTop;
     }
@@ -1984,15 +1986,13 @@ public final class BytecodeNode extends EspressoMethodNode {
         return getConstantPool().resolvedKlassAt(getMethod().getDeclaringKlass(), cpi);
     }
 
-    public Method resolveMethod(int opcode, char cpi) {
-        assert Bytecodes.isInvoke(opcode);
-        return getConstantPool().resolvedMethodAt(getMethod().getDeclaringKlass(), cpi);
+    private Method resolveMethod(int opcode, char cpi) {
+        return resolveMethod(opcode, cpi, false);
     }
 
-    private Method resolveMethodNoCache(int opcode, char cpi) {
-        CompilerAsserts.neverPartOfCompilation();
+    private Method resolveMethod(int opcode, char cpi, boolean noCache) {
         assert Bytecodes.isInvoke(opcode);
-        return getConstantPool().resolvedMethodAtNoCache(getMethod().getDeclaringKlass(), cpi);
+        return getConstantPool().resolvedMethodAt(getMethod().getDeclaringKlass(), cpi, noCache);
     }
 
     private Field resolveField(int opcode, char cpi) {
