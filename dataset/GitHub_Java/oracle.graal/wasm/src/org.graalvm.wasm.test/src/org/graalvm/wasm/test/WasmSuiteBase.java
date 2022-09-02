@@ -1,31 +1,42 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * All rights reserved.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * Redistribution and use in source and binary forms, with or without modification, are
- * permitted provided that the following conditions are met:
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * 1. Redistributions of source code must retain the above copyright notice, this list of
- * conditions and the following disclaimer.
+ * (a) the Software, and
  *
- * 2. Redistributions in binary form must reproduce the above copyright notice, this list of
- * conditions and the following disclaimer in the documentation and/or other materials provided
- * with the distribution.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
  *
- * 3. Neither the name of the copyright holder nor the names of its contributors may be used to
- * endorse or promote products derived from this software without specific prior written
- * permission.
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
- * OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
- * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
- * GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
- * AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
- * OF THE POSSIBILITY OF SUCH DAMAGE.
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package org.graalvm.wasm.test;
 
@@ -38,6 +49,7 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -47,13 +59,15 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
-import org.graalvm.polyglot.io.ByteSequence;
 import org.graalvm.wasm.predefined.testutil.TestutilModule;
 import org.graalvm.wasm.test.options.WasmTestOptions;
 import org.graalvm.wasm.utils.cases.WasmCase;
+import org.graalvm.wasm.utils.cases.WasmCaseData;
 import org.junit.Assert;
 
 import com.oracle.truffle.api.Truffle;
+
+import static junit.framework.TestCase.fail;
 
 public abstract class WasmSuiteBase extends WasmTestBase {
 
@@ -101,75 +115,98 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         contextBuilder.option("engine.Compilation", "true");
         contextBuilder.option("engine.BackgroundCompilation", "true");
         contextBuilder.option("engine.CompileImmediately", "false");
-        contextBuilder.option("engine.Inlining", "true");
+        contextBuilder.option("engine.Inlining", "false");
+        contextBuilder.option("engine.CompilationThreshold", "100");
         return contextBuilder.build();
     }
 
-    private static Value runInContext(WasmCase testCase, Context context, Source source, int iterations, String phaseIcon, String phaseLabel) {
+    private static boolean inCI() {
+        final String prid = System.getenv("CONTINUOUS_INTEGRATION");
+        return prid != null;
+    }
+
+    private static boolean inWindows() {
+        return System.getProperty("os.name").contains("win");
+    }
+
+    private static boolean isPoorShell() {
+        return inCI() || inWindows();
+    }
+
+    private static void runInContext(WasmCase testCase, Context context, List<Source> sources, int iterations, String phaseIcon, String phaseLabel) {
         boolean requiresZeroMemory = Boolean.parseBoolean(testCase.options().getProperty("zero-memory", "false"));
 
         final PrintStream oldOut = System.out;
-        resetStatus(oldOut, PHASE_PARSE_ICON, "parsing");
-        context.eval(source);
+        try {
+            resetStatus(oldOut, PHASE_PARSE_ICON, "parsing");
 
-        // The sequence of WebAssembly functions to execute.
-        // Run custom initialization.
-        // Execute the main function (exported as "_main").
-        // Then, optionally save memory and globals, and compare them.
-        // Execute a special function, which resets memory and globals to their default values.
-        Value mainFunction = context.getBindings("wasm").getMember("_main");
-        Value resetContext = context.getBindings("wasm").getMember(TestutilModule.Names.RESET_CONTEXT);
-        Value customInitialize = context.getBindings("wasm").getMember(TestutilModule.Names.RUN_CUSTOM_INITIALIZATION);
-        Value saveContext = context.getBindings("wasm").getMember(TestutilModule.Names.SAVE_CONTEXT);
-        Value compareContexts = context.getBindings("wasm").getMember(TestutilModule.Names.COMPARE_CONTEXTS);
-
-        Value result = null;
-        resetStatus(oldOut, phaseIcon, phaseLabel);
-        ByteArrayOutputStream capturedStdout = null;
-        Object firstIterationContextState = null;
-
-        for (int i = 0; i != iterations; ++i) {
             try {
-                capturedStdout = new ByteArrayOutputStream();
-                System.setOut(new PrintStream(capturedStdout));
-
-                // Run custom initialization.
-                if (testCase.initialization() != null) {
-                    customInitialize.execute(testCase.initialization());
-                }
-
-                // Execute benchmark.
-                result = mainFunction.execute();
-
-                // Save context state, and check that it's consistent with the previous one.
-                if (iterationNeedsStateCheck(i)) {
-                    Object contextState = saveContext.execute();
-                    if (firstIterationContextState == null) {
-                        firstIterationContextState = contextState;
-                    } else {
-                        compareContexts.execute(firstIterationContextState, contextState);
-                    }
-                }
-
-                // Reset context state.
-                boolean zeroMemory = iterationNeedsStateCheck(i + 1) || requiresZeroMemory;
-                resetContext.execute(zeroMemory);
-
-                validateResult(testCase.data().resultValidator(), result, capturedStdout);
+                sources.forEach(context::eval);
             } catch (PolyglotException e) {
-                // We cannot label the tests with polyglot errors, because they might be return
-                // values.
-                throw e;
-            } catch (Throwable t) {
-                final RuntimeException e = new RuntimeException("Error during test phase '" + phaseLabel + "'", t);
-                e.setStackTrace(new StackTraceElement[0]);
-                throw e;
-            } finally {
-                System.setOut(oldOut);
+                validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
+                return;
             }
-        }
 
-        return result;
+            // The sequence of WebAssembly functions to execute.
+            // Run custom initialization.
+            // Execute the main function (exported as "_main").
+            // Then, optionally save memory and globals, and compare them.
+            // Execute a special function, which resets memory and globals to their default values.
+            Value mainFunction = context.getBindings("wasm").getMember("_start");
+            if (mainFunction == null) {
+                mainFunction = context.getBindings("wasm").getMember("_main");
+            }
+            Value resetContext = context.getBindings("wasm").getMember(TestutilModule.Names.RESET_CONTEXT);
+            Value saveContext = context.getBindings("wasm").getMember(TestutilModule.Names.SAVE_CONTEXT);
+            Value compareContexts = context.getBindings("wasm").getMember(TestutilModule.Names.COMPARE_CONTEXTS);
+
+            resetStatus(oldOut, phaseIcon, phaseLabel);
+            ByteArrayOutputStream capturedStdout;
+            Object firstIterationContextState = null;
+
+            for (int i = 0; i != iterations; ++i) {
+                try {
+                    capturedStdout = new ByteArrayOutputStream();
+                    System.setOut(new PrintStream(capturedStdout));
+
+                    final String argString = testCase.options().getProperty("argument");
+
+                    // Execute benchmark.
+                    final Value result = argString == null ? mainFunction.execute() : mainFunction.execute(Integer.parseInt(argString));
+
+                    // Save context state, and check that it's consistent with the previous one.
+                    if (iterationNeedsStateCheck(i)) {
+                        Object contextState = saveContext.execute();
+                        if (firstIterationContextState == null) {
+                            firstIterationContextState = contextState;
+                        } else {
+                            compareContexts.execute(firstIterationContextState, contextState);
+                        }
+                    }
+
+                    // Reset context state.
+                    boolean zeroMemory = iterationNeedsStateCheck(i + 1) || requiresZeroMemory;
+                    resetContext.execute(zeroMemory);
+
+                    validateResult(testCase.data().resultValidator(), result, capturedStdout);
+                } catch (PolyglotException e) {
+                    // We cannot label the tests with polyglot errors, because they might
+                    // semantically be return values of the test.
+                    if (testCase.data().expectedErrorTime() == WasmCaseData.ErrorType.Validation) {
+                        validateThrown(testCase.data(), WasmCaseData.ErrorType.Validation, e);
+                        return;
+                    }
+                    validateThrown(testCase.data(), WasmCaseData.ErrorType.Runtime, e);
+                } catch (Throwable t) {
+                    final RuntimeException e = new RuntimeException("Error during test phase '" + phaseLabel + "'", t);
+                    e.setStackTrace(new StackTraceElement[0]);
+                    throw e;
+                }
+            }
+        } finally {
+            System.setOut(oldOut);
+            context.close(true);
+        }
     }
 
     private static boolean iterationNeedsStateCheck(int i) {
@@ -184,10 +221,17 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         for (int i = formattedLabel.length(); i < STATUS_LABEL_WIDTH; i++) {
             formattedLabel += " ";
         }
-        eraseStatus(oldOut);
-        oldOut.print(icon);
-        oldOut.print(formattedLabel);
-        oldOut.flush();
+        if (isPoorShell()) {
+            oldOut.println();
+            oldOut.print(icon);
+            oldOut.print(formattedLabel);
+            oldOut.flush();
+        } else {
+            eraseStatus(oldOut);
+            oldOut.print(icon);
+            oldOut.print(formattedLabel);
+            oldOut.flush();
+        }
     }
 
     private static void eraseStatus(PrintStream oldOut) {
@@ -198,47 +242,53 @@ public abstract class WasmSuiteBase extends WasmTestBase {
 
     private WasmTestStatus runTestCase(WasmCase testCase) {
         try {
-            byte[] binary = testCase.createBinary();
             Context.Builder contextBuilder = Context.newBuilder("wasm");
-            Source.Builder sourceBuilder = Source.newBuilder("wasm", ByteSequence.create(binary), "test");
+            contextBuilder.allowExperimentalOptions(true);
 
             if (WasmTestOptions.LOG_LEVEL != null && !WasmTestOptions.LOG_LEVEL.equals("")) {
                 contextBuilder.option("log.wasm.level", WasmTestOptions.LOG_LEVEL);
             }
 
-            contextBuilder.allowExperimentalOptions(true);
-            contextBuilder.option("wasm.PredefinedModules", includedExternalModules());
-            Source source = sourceBuilder.build();
+            if (WasmTestOptions.STORE_CONSTANTS_POLICY != null && !WasmTestOptions.STORE_CONSTANTS_POLICY.equals("")) {
+                contextBuilder.option("wasm.StoreConstantsPolicy", WasmTestOptions.STORE_CONSTANTS_POLICY);
+                System.out.println("wasm.StoreConstantsPolicy: " + WasmTestOptions.STORE_CONSTANTS_POLICY);
+            }
+
+            contextBuilder.option("wasm.Builtins", includedExternalModules());
+            String commandLineArgs = testCase.options().getProperty("command-line-args");
+            if (commandLineArgs != null) {
+                contextBuilder.arguments("wasm", commandLineArgs.split(" "));
+            }
+
             Context context;
+            ArrayList<Source> sources = testCase.getSources();
 
             // Run in interpreted mode, with inlining turned off, to ensure profiles are populated.
             int interpreterIterations = Integer.parseInt(testCase.options().getProperty("interpreter-iterations", String.valueOf(DEFAULT_INTERPRETER_ITERATIONS)));
             context = getInterpretedNoInline(contextBuilder);
-            runInContext(testCase, context, source, interpreterIterations, PHASE_INTERPRETER_ICON, "interpreter");
+            runInContext(testCase, context, sources, interpreterIterations, PHASE_INTERPRETER_ICON, "interpreter");
 
             // Run in synchronous compiled mode, with inlining turned off.
             // We need to run the test at least twice like this, since the first run will lead to
             // de-opts due to empty profiles.
             int syncNoinlineIterations = Integer.parseInt(testCase.options().getProperty("sync-noinline-iterations", String.valueOf(DEFAULT_SYNC_NOINLINE_ITERATIONS)));
             context = getSyncCompiledNoInline(contextBuilder);
-            runInContext(testCase, context, source, syncNoinlineIterations, PHASE_SYNC_NO_INLINE_ICON, "sync,no-inl");
+            runInContext(testCase, context, sources, syncNoinlineIterations, PHASE_SYNC_NO_INLINE_ICON, "sync,no-inl");
 
             // Run in synchronous compiled mode, with inlining turned on.
             // We need to run the test at least twice like this, since the first run will lead to
             // de-opts due to empty profiles.
             int syncInlineIterations = Integer.parseInt(testCase.options().getProperty("sync-inline-iterations", String.valueOf(DEFAULT_SYNC_INLINE_ITERATIONS)));
             context = getSyncCompiledWithInline(contextBuilder);
-            runInContext(testCase, context, source, syncInlineIterations, PHASE_SYNC_INLINE_ICON, "sync,inl");
+            runInContext(testCase, context, sources, syncInlineIterations, PHASE_SYNC_INLINE_ICON, "sync,inl");
 
             // Run with normal, asynchronous compilation.
             // Run 1000 + 1 times - the last time run with a surrogate stream, to collect output.
             int asyncIterations = Integer.parseInt(testCase.options().getProperty("async-iterations", String.valueOf(DEFAULT_ASYNC_ITERATIONS)));
             context = getAsyncCompiled(contextBuilder);
-            runInContext(testCase, context, source, asyncIterations, PHASE_ASYNC_ICON, "async,multi");
+            runInContext(testCase, context, sources, asyncIterations, PHASE_ASYNC_ICON, "async,multi");
         } catch (InterruptedException | IOException e) {
             Assert.fail(String.format("Test %s failed: %s", testCase.name(), e.getMessage()));
-        } catch (PolyglotException e) {
-            validateThrown(testCase.data().expectedErrorMessage(), e);
         }
         return WasmTestStatus.OK;
     }
@@ -255,14 +305,11 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         }
     }
 
-    private static void validateThrown(String expectedErrorMessage, PolyglotException e) throws PolyglotException {
-        if (expectedErrorMessage != null) {
-            if (!expectedErrorMessage.equals(e.getMessage())) {
-                throw e;
-            }
-        } else {
+    private static void validateThrown(WasmCaseData data, WasmCaseData.ErrorType phase, PolyglotException e) throws PolyglotException {
+        if (data.expectedErrorMessage() == null || !data.expectedErrorMessage().equals(e.getMessage())) {
             throw e;
         }
+        Assert.assertEquals("Unexpected error phase (should not have been thrown during the running phase).", data.expectedErrorTime(), phase);
     }
 
     @Override
@@ -307,13 +354,19 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 statusIcon = TEST_FAILED_ICON;
                 errors.put(testCase, e);
             } finally {
-                for (int i = 0; i < requiredWidth; i++) {
-                    System.out.print(MOVE_LEFT);
-                    System.out.print(" ");
-                    System.out.print(MOVE_LEFT);
+                if (isPoorShell()) {
+                    System.out.println();
+                    System.out.println(statusIcon);
+                    System.out.println();
+                } else {
+                    for (int i = 0; i < requiredWidth; i++) {
+                        System.out.print(MOVE_LEFT);
+                        System.out.print(" ");
+                        System.out.print(MOVE_LEFT);
+                    }
+                    System.out.print(statusIcon);
+                    System.out.flush();
                 }
-                System.out.print(statusIcon);
-                System.out.flush();
             }
             position++;
         }
@@ -326,10 +379,12 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 entry.getValue().printStackTrace();
             }
             System.err.println(String.format("\uD83D\uDCA5\u001B[31m %d/%d Wasm tests passed.\u001B[0m", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size()));
+            System.out.println();
+            fail();
         } else {
             System.out.println(String.format("\uD83C\uDF40\u001B[32m %d/%d Wasm tests passed.\u001B[0m", qualifyingTestCases.size() - errors.size(), qualifyingTestCases.size()));
+            System.out.println();
         }
-        System.out.println();
     }
 
     private static int retrieveTerminalWidth() {
@@ -344,7 +399,8 @@ public abstract class WasmSuiteBase extends WasmTestBase {
             final int width = Integer.parseInt(output.split(" ")[1]);
             return width;
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            System.err.println("Could not retrieve terminal width: " + e.getMessage());
+            return -1;
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
