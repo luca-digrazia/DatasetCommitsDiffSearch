@@ -23,11 +23,15 @@
 package com.oracle.truffle.espresso.staticobject;
 
 public final class DefaultStaticProperty extends StaticProperty {
-    DefaultStaticProperty(byte internalKind) {
-        super(internalKind);
+    private final String id;
+
+    public DefaultStaticProperty(String id, StaticPropertyKind kind, boolean storeAsFinal) {
+        super(kind, storeAsFinal);
+        this.id = id;
     }
 
-    public DefaultStaticProperty(StaticPropertyKind kind) {
-        super(kind);
+    @Override
+    public String getId() {
+        return id;
     }
 }

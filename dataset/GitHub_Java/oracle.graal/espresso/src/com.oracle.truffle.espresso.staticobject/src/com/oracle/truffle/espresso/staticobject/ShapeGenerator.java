@@ -22,10 +22,10 @@
  */
 package com.oracle.truffle.espresso.staticobject;
 
+import com.oracle.truffle.api.TruffleOptions;
 import com.oracle.truffle.api.impl.asm.ClassVisitor;
 import com.oracle.truffle.api.impl.asm.FieldVisitor;
 import com.oracle.truffle.api.impl.asm.Type;
-import com.oracle.truffle.espresso.staticobject.StaticShapeBuilder.ExtendedProperty;
 
 import java.lang.reflect.Field;
 import java.util.Collection;
@@ -37,63 +37,57 @@ import static com.oracle.truffle.api.impl.asm.Opcodes.ACC_PUBLIC;
 
 abstract class ShapeGenerator<T> {
     protected static final Unsafe UNSAFE = getUnsafe();
+    private static final boolean ARRAY_BASED_STORAGE = TruffleOptions.AOT || Boolean.getBoolean("com.oracle.truffle.espresso.staticobject.ArrayBasedStorage");
     private static final String DELIMITER = "$$";
     private static final AtomicInteger counter = new AtomicInteger();
 
-    protected final Class<?> generatedStorageClass;
-    protected final Class<? extends T> generatedFactoryClass;
-    protected final Collection<ExtendedProperty> extendedProperties;
-    protected final StaticShape<T> parentShape;
+    abstract StaticShape<T> generateShape(StaticShape<T> parentShape, Collection<StaticProperty> staticProperties);
 
-    ShapeGenerator(Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass, Collection<ExtendedProperty> extendedProperties, StaticShape<T> parentShape) {
-        this.generatedStorageClass = generatedStorageClass;
-        this.generatedFactoryClass = generatedFactoryClass;
-        this.extendedProperties = extendedProperties;
-        this.parentShape = parentShape;
+    static <T> ShapeGenerator<T> getShapeGenerator(GeneratorClassLoader gcl, StaticShape<T> parentShape) {
+        Class<?> parentStorageClass = parentShape.getStorageClass();
+        Class<?> storageSuperclass = ARRAY_BASED_STORAGE ? parentStorageClass.getSuperclass() : parentStorageClass;
+        return getShapeGenerator(gcl, storageSuperclass, parentShape.getFactoryInterface());
     }
 
-    abstract StaticShape<T> generateShape();
-
-    @SuppressWarnings("unchecked")
-    static <T> ShapeGenerator<T> getShapeGenerator(StaticShape<T> parentShape, Collection<ExtendedProperty> extendedProperties) {
-        return ArrayBasedShapeGenerator.getShapeGenerator(parentShape, extendedProperties);
-    }
-
-    @SuppressWarnings("unchecked")
-    static <T> ShapeGenerator<T> getShapeGenerator(Class<?> storageSuperClass, Class<T> storageFactoryInterface, Collection<ExtendedProperty> extendedProperties) {
-        return ArrayBasedShapeGenerator.getShapeGenerator(storageSuperClass, storageFactoryInterface, extendedProperties);
-    }
-
-    static String generateStorageName(Class<?> storageSuperClass) {
-        String internalStorageSuperClassName = Type.getInternalName(storageSuperClass);
-        String baseName;
-        int index = internalStorageSuperClassName.indexOf(DELIMITER);
-        if (index == -1) {
-            baseName = internalStorageSuperClassName + DELIMITER;
+    static <T> ShapeGenerator<T> getShapeGenerator(GeneratorClassLoader gcl, Class<?> storageSuperClass, Class<T> storageFactoryInterface) {
+        if (ARRAY_BASED_STORAGE) {
+            return ArrayBasedShapeGenerator.getShapeGenerator(gcl, storageSuperClass, storageFactoryInterface);
         } else {
-            baseName = internalStorageSuperClassName.substring(0, index + DELIMITER.length());
+            return FieldBasedShapeGenerator.getShapeGenerator(gcl, storageSuperClass, storageFactoryInterface);
         }
-        return baseName + counter.incrementAndGet();
+    }
+
+    static String generateStorageName() {
+        return ShapeGenerator.class.getPackage().getName().replace('.', '/') + "/GeneratedStaticObject" + DELIMITER + counter.incrementAndGet();
     }
 
     static String generateFactoryName(Class<?> generatedStorageClass) {
         return Type.getInternalName(generatedStorageClass) + DELIMITER + "Factory";
     }
 
-    static void addStorageFields(ClassVisitor cv, Collection<ExtendedProperty> extendedProperties) {
-        for (ExtendedProperty extendedProperty : extendedProperties) {
-            int access = ACC_PUBLIC;
-            if (extendedProperty.isFinal()) {
-                access |= ACC_FINAL;
-            }
-            FieldVisitor fv = cv.visitField(access, extendedProperty.getName(), StaticPropertyKind.getDescriptor(extendedProperty.getProperty().getInternalKind()), null, null);
-            fv.visitEnd();
+    static String generateFieldName(StaticProperty property) {
+        return property.getId();
+    }
+
+    static void addStorageFields(ClassVisitor cv, Collection<StaticProperty> staticProperties) {
+        for (StaticProperty staticProperty : staticProperties) {
+            addStorageField(cv, generateFieldName(staticProperty), staticProperty.getInternalKind(), staticProperty.storeAsFinal());
         }
     }
 
+    static void addStorageField(ClassVisitor cv, String propertyName, byte internalKind, boolean storeAsFinal) {
+        int access = storeAsFinal ? ACC_FINAL | ACC_PUBLIC : ACC_PUBLIC;
+        FieldVisitor fv = cv.visitField(access, propertyName, StaticPropertyKind.getDescriptor(internalKind), null, null);
+        fv.visitEnd();
+    }
+
     @SuppressWarnings("unchecked")
-    static <T> Class<? extends T> load(String name, byte[] bytes, Class<T> referenceClass) {
-        return (Class<T>) UNSAFE.defineClass(name, bytes, 0, bytes.length, referenceClass.getClassLoader(), referenceClass.getProtectionDomain());
+    static <T> Class<? extends T> load(GeneratorClassLoader gcl, String internalName, byte[] bytes) {
+        try {
+            return (Class<T>) gcl.defineGeneratedClass(internalName.replace('/', '.'), bytes, 0, bytes.length);
+        } catch (ClassFormatError e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private static Unsafe getUnsafe() {
