@@ -55,7 +55,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.logging.Handler;
@@ -210,6 +209,8 @@ public abstract class Accessor {
 
         public abstract Object createDefaultNodeObject(Node node);
 
+        public abstract boolean isValidNodeObject(Object obj);
+
         public abstract Object createLegacyMetaObjectWrapper(Object receiver, Object result);
 
         public abstract Object unwrapLegacyMetaObjectWrapper(Object receiver);
@@ -334,7 +335,7 @@ public abstract class Accessor {
 
         public abstract PolyglotException wrapGuestException(String languageId, Throwable exception);
 
-        public abstract <T> T getOrCreateRuntimeData(Object polyglotEngine, BiFunction<OptionValues, Function<String,TruffleLogger>,T> constructor);
+        public abstract <T> T getOrCreateRuntimeData(Object polyglotEngine, Function<OptionValues, T> constructor);
 
         public abstract Set<? extends Class<?>> getProvidedTags(LanguageInfo language);
 
@@ -354,11 +355,9 @@ public abstract class Accessor {
 
         public abstract Object asBoxedGuestValue(Object guestObject, Object polyglotLanguageContext);
 
-        public abstract Object createDefaultLoggerCacheSPI();
+        public abstract Handler getLogHandler(Object polyglotEngine);
 
-        public abstract Handler getLogHandler(Object loggerCacheSPI);
-
-        public abstract Map<String, Level> getLogLevels(Object loggerCacheSPI);
+        public abstract Map<String, Level> getLogLevels(Object polyglotObject);
 
         public abstract TruffleLogger getLogger(Object polyglotInstrument, String name);
 
@@ -540,7 +539,7 @@ public abstract class Accessor {
 
         public abstract Object getDefaultLoggers();
 
-        public abstract Object createEngineLoggers(Object spi, Map<String, Level> logLevels);
+        public abstract Object createEngineLoggers(Object polyglotEngine, Map<String, Level> logLevels);
 
         public abstract void closeEngineLoggers(Object loggers);
 
