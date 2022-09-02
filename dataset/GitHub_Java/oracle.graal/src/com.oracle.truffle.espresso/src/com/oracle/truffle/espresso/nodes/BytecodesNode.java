@@ -2184,7 +2184,7 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
     static final class InstrumentationSupport extends Node {
 
         @Children private final EspressoInstrumentableNode[] statementNodes;
-        private Map<Integer, Integer> hookBCIToNodeIndex;
+        private final int[] bciToLine;
 
         InstrumentationSupport(Method method) {
             LineNumberTable table = null;
@@ -2196,15 +2196,31 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
             }
             if (table != null) {
                 LineNumberTable.Entry[] entries = table.getEntries();
-                statementNodes = new EspressoInstrumentableNode[entries.length];
-                hookBCIToNodeIndex = new HashMap<>(entries.length);
-
+                this.statementNodes = new EspressoInstrumentableNode[entries.length];
+                int maxBci = 0;
+                for (int i = 0; i < entries.length; i++) {
+                    maxBci = Math.max(entries[i].getBCI(), maxBci);
+                }
+                /*
+                 * TODO This is not efficient enough as it requires an int array in the size of
+                 * maxBci. This should probably be implemented with a binary search when the node is
+                 * looked up. We should make the binary search lookup to partially evaluate to a
+                 * constant. It is still an open question whether the binary search lookup is fast
+                 * enough in the interpreter. Maybe we can do better by remembering something in the
+                 * interpreter loop?
+                 */
+                this.bciToLine = new int[maxBci];
+                int prevBci = 0;
                 for (int i = 0; i < entries.length; i++) {
                     LineNumberTable.Entry entry = entries[i];
-                    statementNodes[i] = new EspressoStatementNode(entry.getBCI(), entry);
-                    hookBCIToNodeIndex.put(entry.getBCI(), i);
+                    this.statementNodes[i] = new EspressoStatementNode(prevBci, entries[i]);
+                    for (int j = prevBci; j < entry.getBCI(); j++) {
+                        bciToLine[j] = entry.getLineNumber();
+                    }
+                    prevBci = entry.getBCI();
                 }
             } else {
+                this.bciToLine = null;
                 this.statementNodes = null;
             }
         }
@@ -2277,12 +2293,7 @@ public final class BytecodesNode extends EspressoMethodNode implements CustomNod
             if (statementNodes == null) {
                 return null;
             }
-            Integer nodeIndex = hookBCIToNodeIndex.get(bci);
-            if (nodeIndex == null) {
-                return null;
-            }
-
-            EspressoInstrumentableNode node = statementNodes[nodeIndex];
+            EspressoInstrumentableNode node = statementNodes[bciToLine[bci]];
             if (!(node instanceof EspressoInstrumentableNodeWrapper)) {
                 return null;
             }
