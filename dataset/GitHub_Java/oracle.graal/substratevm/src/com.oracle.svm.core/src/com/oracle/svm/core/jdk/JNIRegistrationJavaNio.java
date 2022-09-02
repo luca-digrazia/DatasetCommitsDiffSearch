@@ -37,7 +37,6 @@ import org.graalvm.nativeimage.impl.InternalPlatform;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.jni.JNIRuntimeAccess;
 import com.oracle.svm.util.ReflectionUtil;
-import com.oracle.svm.util.ReflectionUtil.ReflectionUtilError;
 
 /**
  * Registration of classes, methods, and fields accessed via JNI by C code of the JDK.
@@ -96,19 +95,7 @@ class JNIRegistrationJavaNio extends JNIRegistrationUtil implements Feature {
          * The class instantiated on Posix systems depends on the OS, and instantiation is via
          * reflection. So we register exactly the class that is returned by the hosted invocation.
          */
-        Object hostedDefaultProvider;
-        try {
-            hostedDefaultProvider = ReflectionUtil.lookupMethod(sun.nio.fs.DefaultFileSystemProvider.class, "create").invoke(null);
-        } catch (ReflectionUtilError e) {
-            try {
-                // JDK-8213406
-                hostedDefaultProvider = ReflectionUtil.lookupMethod(sun.nio.fs.DefaultFileSystemProvider.class, "instance").invoke(null);
-            } catch (Exception e2) {
-                throw new InternalError(e2);
-            }
-        } catch (Exception e) {
-            throw new InternalError(e);
-        }
+        Object hostedDefaultProvider = sun.nio.fs.DefaultFileSystemProvider.create();
         RuntimeReflection.register(hostedDefaultProvider.getClass());
         RuntimeReflection.register(ReflectionUtil.lookupConstructor(hostedDefaultProvider.getClass()));
     }

@@ -25,23 +25,17 @@
 package com.oracle.svm.core.jdk;
 
 /* Checkstyle: allow reflection */
-
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.Set;
-import java.util.function.Consumer;
 
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.hosted.Feature.DuringAnalysisAccess;
 import org.graalvm.nativeimage.hosted.Feature.FeatureAccess;
+import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 
 import com.oracle.svm.core.jni.JNIRuntimeAccess;
-import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.util.ReflectionUtil;
 
 /**
@@ -50,15 +44,15 @@ import com.oracle.svm.util.ReflectionUtil;
 public class JNIRegistrationUtil {
 
     protected static boolean isPosix() {
-        return Platform.includedIn(Platform.LINUX.class) || Platform.includedIn(Platform.DARWIN.class);
+        return Platform.includedIn(InternalPlatform.LINUX_JNI.class) || Platform.includedIn(InternalPlatform.DARWIN_JNI.class);
     }
 
     protected static boolean isLinux() {
-        return Platform.includedIn(Platform.LINUX.class);
+        return Platform.includedIn(InternalPlatform.LINUX_JNI.class);
     }
 
     protected static boolean isDarwin() {
-        return Platform.includedIn(Platform.DARWIN.class);
+        return Platform.includedIn(InternalPlatform.DARWIN_JNI.class);
     }
 
     protected static boolean isWindows() {
@@ -73,9 +67,7 @@ public class JNIRegistrationUtil {
     }
 
     protected static Class<?> clazz(FeatureAccess access, String className) {
-        Class<?> classByName = access.findClassByName(className);
-        VMError.guarantee(classByName != null, "class " + className + " not found");
-        return classByName;
+        return access.findClassByName(className);
     }
 
     protected static Method method(FeatureAccess access, String className, String methodName, Class<?>... parameterTypes) {
@@ -100,16 +92,5 @@ public class JNIRegistrationUtil {
             JNIRuntimeAccess.register(clazz(access, exceptionClassName));
             JNIRuntimeAccess.register(constructor(access, exceptionClassName, String.class));
         }
-    }
-
-    private static Set<Consumer<DuringAnalysisAccess>> runOnceCallbacks = Collections.newSetFromMap(new IdentityHashMap<>());
-
-    /** Intended to be used from within a callback to ensure that it is run only once. */
-    protected static boolean isRunOnce(Consumer<DuringAnalysisAccess> callback) {
-        return !runOnceCallbacks.add(callback);
-    }
-
-    public void cleanup() {
-        runOnceCallbacks.clear();
     }
 }
