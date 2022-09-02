@@ -119,7 +119,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
 
     private static final Object NO_ENTER = new Object();
 
-    final Assumption singleThreaded = Truffle.getRuntime().createAssumption("Single threaded");
+    private final Assumption singleThreaded = Truffle.getRuntime().createAssumption("Single threaded");
     private final Assumption singleThreadedConstant = Truffle.getRuntime().createAssumption("Single threaded constant thread");
     private final Map<Thread, PolyglotThreadInfo> threads = new HashMap<>();
 
@@ -681,13 +681,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     @SuppressWarnings("rawtypes")
-    PolyglotLanguageContext findLanguageContext(Class<? extends TruffleLanguage> languageClazz) {
-        PolyglotLanguage directLanguage = engine.getLanguage(languageClazz, false);
-        if (directLanguage != null) {
-            return getContext(directLanguage);
-        }
-
-        // slow language lookup - for compatibility
+    PolyglotLanguageContext findLanguageContext(Class<? extends TruffleLanguage> languageClazz, boolean failIfNotFound) {
         for (PolyglotLanguageContext lang : contexts) {
             if (lang.isInitialized()) {
                 TruffleLanguage<?> language = VMAccessor.LANGUAGE.getLanguage(lang.env);
@@ -696,14 +690,17 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 }
             }
         }
-        Set<String> languageNames = new HashSet<>();
-        for (PolyglotLanguageContext lang : contexts) {
-            if (lang.isInitialized()) {
-                languageNames.add(lang.language.cache.getClassName());
+        if (failIfNotFound) {
+            Set<String> languageNames = new HashSet<>();
+            for (PolyglotLanguageContext lang : contexts) {
+                if (lang.isInitialized()) {
+                    languageNames.add(lang.language.cache.getClassName());
+                }
             }
+            throw new IllegalStateException("Cannot find language " + languageClazz + " among " + languageNames);
+        } else {
+            return null;
         }
-        throw new IllegalStateException("Cannot find language " + languageClazz + " among " + languageNames);
-
     }
 
     private PolyglotLanguageContext getLanguageContextImpl(Class<? extends TruffleLanguage<?>> languageClass) {
@@ -717,7 +714,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 }
                 indexValue = languageIndexMap.get(languageClass);
                 if (indexValue == -1) {
-                    PolyglotLanguageContext context = findLanguageContext(languageClass);
+                    PolyglotLanguageContext context = findLanguageContext(languageClass, true);
                     indexValue = context.language.index;
                     this.languageIndexMap.put(languageClass, indexValue);
                 }
