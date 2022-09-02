@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,22 +40,32 @@
  */
 package org.graalvm.wasm.api;
 
-import org.graalvm.wasm.ImportDescriptor;
-import org.graalvm.wasm.WasmFunction;
-import org.graalvm.wasm.WasmModule;
-
-import java.util.ArrayList;
-
 import static org.graalvm.wasm.api.ImportExportKind.function;
 import static org.graalvm.wasm.api.ImportExportKind.global;
 import static org.graalvm.wasm.api.ImportExportKind.memory;
 import static org.graalvm.wasm.api.ImportExportKind.table;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Objects;
+
+import org.graalvm.wasm.ImportDescriptor;
+import org.graalvm.wasm.WasmContext;
+import org.graalvm.wasm.WasmCustomSection;
+import org.graalvm.wasm.WasmFunction;
+import org.graalvm.wasm.WasmModule;
+import org.graalvm.wasm.constants.ImportIdentifier;
+import org.graalvm.wasm.exception.Failure;
+import org.graalvm.wasm.exception.WasmException;
+
+import com.oracle.truffle.api.CompilerDirectives;
+
 public class Module extends Dictionary {
     private final WasmModule module;
 
-    public Module(WasmModule module) {
-        this.module = module;
+    public Module(WasmContext context, byte[] source) {
+        this.module = context.readModule(source, JsConstants.JS_LIMITS);
         addMembers(new Object[]{
                         "exports", new Executable(args -> exports()),
                         "imports", new Executable(args -> imports()),
@@ -65,45 +75,76 @@ public class Module extends Dictionary {
 
     public Sequence<ModuleExportDescriptor> exports() {
         final ArrayList<ModuleExportDescriptor> list = new ArrayList<>();
-        for (String name : module.symbolTable().exportedFunctions().keySet()) {
-            list.add(new ModuleExportDescriptor(name, function.name()));
-        }
-        final String exportedTable = module.symbolTable().exportedTable();
-        if (exportedTable != null) {
-            list.add(new ModuleExportDescriptor(exportedTable, table.name()));
-        }
-        final String exportedMemory = module.symbolTable().exportedMemory();
-        if (exportedMemory != null) {
-            list.add(new ModuleExportDescriptor(exportedMemory, memory.name()));
-        }
-        for (String name : module.symbolTable().exportedGlobals().keySet()) {
-            list.add(new ModuleExportDescriptor(name, global.name()));
+        for (final String name : module.exportedSymbols()) {
+            final WasmFunction f = module.exportedFunctions().get(name);
+            final Integer globalIndex = module.exportedGlobals().get(name);
+
+            if (module.exportedMemoryNames().contains(name)) {
+                list.add(new ModuleExportDescriptor(name, memory.name(), null));
+            } else if (module.exportedTableNames().contains(name)) {
+                list.add(new ModuleExportDescriptor(name, table.name(), null));
+            } else if (f != null) {
+                list.add(new ModuleExportDescriptor(name, function.name(), WebAssembly.functionTypeToString(f)));
+            } else if (globalIndex != null) {
+                String valueType = ValueType.fromByteValue(module.globalValueType(globalIndex)).toString();
+                list.add(new ModuleExportDescriptor(name, global.name(), valueType));
+            } else {
+                CompilerDirectives.transferToInterpreter();
+                throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Exported symbol list does not match the actual exports.");
+            }
         }
         return new Sequence<>(list);
     }
 
     public Sequence<ModuleImportDescriptor> imports() {
+        final LinkedHashMap<ImportDescriptor, Integer> importedGlobalDescriptors = module.importedGlobalDescriptors();
         final ArrayList<ModuleImportDescriptor> list = new ArrayList<>();
-        for (WasmFunction f : module.symbolTable().importedFunctions()) {
-            list.add(new ModuleImportDescriptor(f.importedModuleName(), f.importedFunctionName(), function.name()));
-        }
-        final ImportDescriptor tableDescriptor = module.symbolTable().importedTable();
-        if (tableDescriptor != null) {
-            list.add(new ModuleImportDescriptor(tableDescriptor.moduleName, tableDescriptor.memberName, table.name()));
-        }
-        final ImportDescriptor memoryDescriptor = module.symbolTable().importedMemory();
-        if (memoryDescriptor != null) {
-            list.add(new ModuleImportDescriptor(memoryDescriptor.moduleName, memoryDescriptor.memberName, memory.name()));
-        }
-        for (ImportDescriptor descriptor : module.symbolTable().importedGlobals().values()) {
-            list.add(new ModuleImportDescriptor(descriptor.moduleName, descriptor.memberName, global.name()));
+        for (ImportDescriptor descriptor : module.importedSymbols()) {
+            switch (descriptor.identifier) {
+                case ImportIdentifier.FUNCTION:
+                    final WasmFunction f = module.importedFunction(descriptor);
+                    list.add(new ModuleImportDescriptor(f.importedModuleName(), f.importedFunctionName(), function.name(), WebAssembly.functionTypeToString(f)));
+                    break;
+                case ImportIdentifier.TABLE:
+                    if (Objects.equals(module.importedTable(), descriptor)) {
+                        list.add(new ModuleImportDescriptor(descriptor.moduleName, descriptor.memberName, table.name(), null));
+                    } else {
+                        CompilerDirectives.transferToInterpreter();
+                        throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Table import inconsistent.");
+                    }
+                    break;
+                case ImportIdentifier.MEMORY:
+                    if (Objects.equals(module.importedMemory(), descriptor)) {
+                        list.add(new ModuleImportDescriptor(descriptor.moduleName, descriptor.memberName, memory.name(), null));
+                    } else {
+                        CompilerDirectives.transferToInterpreter();
+                        throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Memory import inconsistent.");
+                    }
+                    break;
+                case ImportIdentifier.GLOBAL:
+                    final Integer index = importedGlobalDescriptors.get(descriptor);
+                    String valueType = ValueType.fromByteValue(module.globalValueType(index)).toString();
+                    list.add(new ModuleImportDescriptor(descriptor.moduleName, descriptor.memberName, global.name(), valueType));
+                    break;
+                default:
+                    CompilerDirectives.transferToInterpreter();
+                    throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, "Unknown import descriptor type: " + descriptor.identifier);
+            }
         }
         return new Sequence<>(list);
     }
 
     public Sequence<ByteArrayBuffer> customSections(Object sectionName) {
-        String name = (String) sectionName;
-        // TODO: Implement.
-        return null;
+        List<ByteArrayBuffer> sections = new ArrayList<>();
+        for (WasmCustomSection section : module.customSections()) {
+            if (section.getName().equals(sectionName)) {
+                sections.add(new ByteArrayBuffer(module.data(), section.getOffset(), section.getLength()));
+            }
+        }
+        return new Sequence<>(sections);
+    }
+
+    public WasmModule wasmModule() {
+        return module;
     }
 }
