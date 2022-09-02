@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -38,6 +40,7 @@ import jdk.tools.jaotc.collect.classname.ClassNameSourceProvider;
 import jdk.tools.jaotc.collect.directory.DirectorySourceProvider;
 import jdk.tools.jaotc.collect.jar.JarSourceProvider;
 import jdk.tools.jaotc.collect.module.ModuleSourceProvider;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -61,7 +64,7 @@ final class Collector {
 
         List<LoadedClass> foundClasses = null;
         try {
-            foundClasses = lookup.search(main.options.files, main.options.searchPath);
+            foundClasses = lookup.search(main.options.files, main.options.searchPath, this::handleLoadingError);
         } catch (InternalError e) {
             main.printer.reportError(e);
             return null;
@@ -90,6 +93,7 @@ final class Collector {
         if (!main.filters.shouldCompileMethod(method)) {
             return;
         }
+        assert ((HotSpotResolvedObjectType) method.getDeclaringClass()).getFingerprint() != 0 : "no fingerprint for " + method.getDeclaringClass().getName();
 
         aotClass.addMethod(method);
         main.printer.printlnVerbose("  added " + method.getName() + method.getSignature().toMethodDescriptor());
@@ -118,12 +122,7 @@ final class Collector {
                     addMethods(aotClass, ctors, compilationRestrictions);
                     total += ctors.length;
                 } catch (Throwable e) {
-                    // If we are running in JCK mode we ignore all exceptions.
-                    if (main.options.ignoreClassLoadingErrors) {
-                        main.printer.printError(c.getName() + ": " + e);
-                    } else {
-                        throw new InternalError(e);
-                    }
+                    handleLoadingError(c.getName(), e);
                 }
 
                 // Methods
@@ -132,12 +131,7 @@ final class Collector {
                     addMethods(aotClass, methods, compilationRestrictions);
                     total += methods.length;
                 } catch (Throwable e) {
-                    // If we are running in JCK mode we ignore all exceptions.
-                    if (main.options.ignoreClassLoadingErrors) {
-                        main.printer.printError(c.getName() + ": " + e);
-                    } else {
-                        throw new InternalError(e);
-                    }
+                    handleLoadingError(c.getName(), e);
                 }
 
                 // Class initializer
@@ -148,12 +142,7 @@ final class Collector {
                         total++;
                     }
                 } catch (Throwable e) {
-                    // If we are running in JCK mode we ignore all exceptions.
-                    if (main.options.ignoreClassLoadingErrors) {
-                        main.printer.printError(c.getName() + ": " + e);
-                    } else {
-                        throw new InternalError(e);
-                    }
+                    handleLoadingError(c.getName(), e);
                 }
 
                 // Found any methods to compile? Add the class.
@@ -215,4 +204,11 @@ final class Collector {
         return compilationRestrictions;
     }
 
+    private void handleLoadingError(String name, Throwable t) {
+        if (main.options.ignoreClassLoadingErrors) {
+            main.printer.printError(name + ": " + t);
+        } else {
+            throw new InternalError(t);
+        }
+    }
 }
