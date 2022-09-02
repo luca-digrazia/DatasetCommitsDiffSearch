@@ -30,6 +30,7 @@ import com.oracle.svm.util.ReflectionUtil;
 import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ResourceBundle;
 
 public class DelayedBundle implements StoredBundle {
 
@@ -40,7 +41,7 @@ public class DelayedBundle implements StoredBundle {
     }
 
     @Override
-    public Map<String, Object> getContent(Object bundle) {
+    public Map<String, Object> getContent(ResourceBundle bundle) {
         try {
             Object[][] content = (Object[][]) getContents.invoke(bundle);
             return asMap(content);

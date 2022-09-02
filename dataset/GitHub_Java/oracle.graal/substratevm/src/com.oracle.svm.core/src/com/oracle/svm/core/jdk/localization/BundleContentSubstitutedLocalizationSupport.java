@@ -100,7 +100,7 @@ public class BundleContentSubstitutedLocalizationSupport extends LocalizationSup
     }
 
     @Override
-    public Map<String, Object> getBundleContentOf(Object bundle) {
+    public Map<String, Object> getBundleContentOf(ResourceBundle bundle) {
         StoredBundle storedBundle = storedBundles.get(bundle.getClass());
         if (storedBundle != null) {
             return storedBundle.getContent(bundle);

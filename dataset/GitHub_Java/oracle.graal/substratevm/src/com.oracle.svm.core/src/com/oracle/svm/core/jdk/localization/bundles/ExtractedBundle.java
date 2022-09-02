@@ -25,6 +25,7 @@
 package com.oracle.svm.core.jdk.localization.bundles;
 
 import java.util.Map;
+import java.util.ResourceBundle;
 
 public final class ExtractedBundle implements StoredBundle {
     private final Map<String, Object> lookup;
@@ -34,7 +35,7 @@ public final class ExtractedBundle implements StoredBundle {
     }
 
     @Override
-    public Map<String, Object> getContent(Object bundle) {
+    public Map<String, Object> getContent(ResourceBundle bundle) {
         return lookup;
     }
 }
