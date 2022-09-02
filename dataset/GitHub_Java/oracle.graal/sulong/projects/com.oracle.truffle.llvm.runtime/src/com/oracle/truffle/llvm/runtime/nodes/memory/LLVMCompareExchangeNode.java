@@ -51,9 +51,13 @@ import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMCompareExchangeNodeGen.LLVMCMPXCHInternalNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI16LoadNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI16LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI32LoadNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI32LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI64LoadNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI64LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI8LoadNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI8LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI16StoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI16StoreNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI32StoreNode;
@@ -257,7 +261,7 @@ public abstract class LLVMCompareExchangeNode extends LLVMExpressionNode {
         }
 
         protected static LLVMI8LoadNode createI8Read() {
-            return LLVMI8LoadNode.create();
+            return LLVMI8LoadNodeGen.create(null);
         }
 
         protected static LLVMI8StoreNode createI8Write() {
@@ -265,7 +269,7 @@ public abstract class LLVMCompareExchangeNode extends LLVMExpressionNode {
         }
 
         protected static LLVMI16LoadNode createI16Read() {
-            return LLVMI16LoadNode.create();
+            return LLVMI16LoadNodeGen.create(null);
         }
 
         protected static LLVMI16StoreNode createI16Write() {
@@ -273,7 +277,7 @@ public abstract class LLVMCompareExchangeNode extends LLVMExpressionNode {
         }
 
         protected static LLVMI32LoadNode createI32Read() {
-            return LLVMI32LoadNode.create();
+            return LLVMI32LoadNodeGen.create(null);
         }
 
         protected static LLVMI32StoreNode createI32Write() {
@@ -281,7 +285,7 @@ public abstract class LLVMCompareExchangeNode extends LLVMExpressionNode {
         }
 
         protected static LLVMI64LoadNode createI64Read() {
-            return LLVMI64LoadNode.create();
+            return LLVMI64LoadNodeGen.create(null);
         }
 
         protected static LLVMI64StoreNode createI64Write() {
