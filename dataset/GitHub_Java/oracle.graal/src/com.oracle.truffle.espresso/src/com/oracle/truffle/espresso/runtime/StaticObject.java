@@ -297,37 +297,13 @@ public final class StaticObject implements TruffleObject {
         return false;
     }
 
-    private Number readNumberValue() throws UnsupportedMessageException {
-        Meta meta = klass.getMeta();
-        if (klass == meta.java_lang_Byte) {
-            return (Byte) meta.java_lang_Byte_value.get(this);
-        }
-        if (klass == meta.java_lang_Short) {
-            return (Short) meta.java_lang_Short_value.get(this);
-        }
-        if (klass == meta.java_lang_Integer) {
-            return (Integer) meta.java_lang_Integer_value.get(this);
-        }
-        if (klass == meta.java_lang_Long) {
-            return (Long) meta.java_lang_Long_value.get(this);
-        }
-        if (klass == meta.java_lang_Float) {
-            return (Float) meta.java_lang_Float_value.get(this);
-        }
-        if (klass == meta.java_lang_Double) {
-            return (Double) meta.java_lang_Double_value.get(this);
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw UnsupportedMessageException.create();
-    }
-
     @ExportMessage
     byte asByte() throws UnsupportedMessageException {
         if (!fitsInByte()) {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
         }
-        return readNumberValue().byteValue();
+        return (byte) getKlass().lookupMethod(Name.byteValue, Signature._byte).invokeDirect(this);
     }
 
     @ExportMessage
@@ -336,7 +312,7 @@ public final class StaticObject implements TruffleObject {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
         }
-        return readNumberValue().shortValue();
+        return (short) getKlass().lookupMethod(Name.shortValue, Signature._short).invokeDirect(this);
     }
 
     @ExportMessage
@@ -345,7 +321,7 @@ public final class StaticObject implements TruffleObject {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
         }
-        return readNumberValue().intValue();
+        return (int) getKlass().lookupMethod(Name.intValue, Signature._int).invokeDirect(this);
     }
 
     @ExportMessage
@@ -354,7 +330,7 @@ public final class StaticObject implements TruffleObject {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
         }
-        return readNumberValue().longValue();
+        return (long) getKlass().lookupMethod(Name.longValue, Signature._long).invokeDirect(this);
     }
 
     @ExportMessage
@@ -363,7 +339,7 @@ public final class StaticObject implements TruffleObject {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
         }
-        return readNumberValue().floatValue();
+        return (float) getKlass().lookupMethod(Name.floatValue, Signature._float).invokeDirect(this);
     }
 
     @ExportMessage
@@ -372,7 +348,7 @@ public final class StaticObject implements TruffleObject {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
         }
-        return readNumberValue().doubleValue();
+        return (double) getKlass().lookupMethod(Name.doubleValue, Signature._double).invokeDirect(this);
     }
 
     @SuppressWarnings("static-method")
