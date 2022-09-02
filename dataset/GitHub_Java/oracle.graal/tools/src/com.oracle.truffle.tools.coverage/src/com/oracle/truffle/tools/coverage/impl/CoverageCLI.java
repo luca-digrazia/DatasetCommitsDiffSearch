@@ -48,7 +48,7 @@ final class CoverageCLI {
     private final int summaryHeaderLen;
     private final SourceCoverage[] coverage;
 
-    CoverageCLI(PrintStream out, SourceCoverage[] coverage) {
+    private CoverageCLI(PrintStream out, SourceCoverage[] coverage) {
         this.out = out;
         this.coverage = coverage;
         sortCoverage();
@@ -57,7 +57,21 @@ final class CoverageCLI {
         summaryHeaderLen = summaryHeader.length();
     }
 
-    void printLinesOutput() {
+    static void handleOutput(PrintStream out, SourceCoverage[] coverage, CoverageInstrument.Output output) {
+        switch (output) {
+            case HISTOGRAM:
+                new CoverageCLI(out, coverage).printHistogramOutput();
+                break;
+            case LINES:
+                new CoverageCLI(out, coverage).printLinesOutput();
+                break;
+            case JSON:
+                new JSONPrinter(out, coverage).print();
+                break;
+        }
+    }
+
+    private void printLinesOutput() {
         printLine();
         printLinesLegend();
         for (SourceCoverage sourceCoverage : coverage) {
@@ -179,7 +193,7 @@ final class CoverageCLI {
         }
     }
 
-    void printHistogramOutput() {
+    private void printHistogramOutput() {
         printLine();
         out.println("Code coverage histogram.");
         out.println("  Shows what percent of each element was covered during execution");
