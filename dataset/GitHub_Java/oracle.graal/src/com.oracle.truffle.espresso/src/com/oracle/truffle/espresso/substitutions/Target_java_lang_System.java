@@ -152,7 +152,7 @@ public final class Target_java_lang_System {
                      * Perform bounds checks BEFORE checking for length == 0. (see JCK
                      * api/java_lang/System/index.html#Arraycopy: System1001)
                      */
-                    boundsCheck(meta, src.length(), srcPos, dest.length(), destPos, length, profiler);
+                    boundsCheck(meta, src, srcPos, dest, destPos, length, profiler);
                     if (length == 0) {
                         // Shortcut.
                         profiler.profile(ZERO_LENGTH_PROFILE);
@@ -218,7 +218,10 @@ public final class Target_java_lang_System {
         try {
             int srclen = (int) library.getArraySize(src);
             int destlen = (int) library.getArraySize(dest);
-            boundsCheck(meta, srclen, srcPos, destlen, destPos, length, profiler);
+            if (srcPos > srclen - length || destPos > destlen - length) {
+                // Other checks are caught during execution without side effects.
+                throw throwOutOfBoundsEx(meta, profiler);
+            }
             for (int i = 0; i < length; i++) {
                 Object cpy = toEspressoNode.execute(library.readArrayElement(src, i + srcPos), destType);
                 library.writeArrayElement(dest, destPos + i, cpy);
@@ -231,9 +234,9 @@ public final class Target_java_lang_System {
         }
     }
 
-    private static void boundsCheck(Meta meta, int srcLen, int srcPos, int dstLen, int destPos, int length, SubstitutionProfiler profiler) {
+    private static void boundsCheck(Meta meta, @Host(Object.class) StaticObject src, int srcPos, @Host(Object.class) StaticObject dest, int destPos, int length, SubstitutionProfiler profiler) {
         if (srcPos < 0 || destPos < 0 || length < 0 || // Negative checks
-                        srcPos > srcLen - length || destPos > dstLen - length) {
+                        srcPos > src.length() - length || destPos > dest.length() - length) {
             // Other checks are caught during execution without side effects.
             throw throwOutOfBoundsEx(meta, profiler);
         }
