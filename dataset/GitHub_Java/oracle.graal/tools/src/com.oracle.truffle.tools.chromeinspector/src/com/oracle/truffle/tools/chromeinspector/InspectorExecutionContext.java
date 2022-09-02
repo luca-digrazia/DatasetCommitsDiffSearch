@@ -154,7 +154,7 @@ public final class InspectorExecutionContext {
         synchronized (this) {
             sh = scriptsHandler;
             if (sh == null) {
-                scriptsHandler = sh = new ScriptsHandler(env, inspectInternal);
+                scriptsHandler = sh = new ScriptsHandler(inspectInternal);
                 attachListener = true;
                 schCounter = 0;
             }
@@ -215,16 +215,12 @@ public final class InspectorExecutionContext {
     }
 
     void setValue(DebugValue debugValue, CallArgument newValue) {
-        debugValue.set(getDebugValue(newValue, debugValue.getSession()));
-    }
-
-    DebugValue getDebugValue(CallArgument newValue, DebuggerSession session) {
         String objectId = newValue.getObjectId();
         if (objectId != null) {
             RemoteObject obj = getRemoteObjectsHandler().getRemote(objectId);
-            return obj.getDebugValue();
+            debugValue.set(obj.getDebugValue());
         } else {
-            return session.createPrimitiveValue(newValue.getPrimitiveValue(), null);
+            debugValue.set(newValue.getPrimitiveValue());
         }
     }
 
@@ -313,6 +309,16 @@ public final class InspectorExecutionContext {
 
     DebuggerSuspendedInfo getSuspendedInfo() {
         return suspendedInfo;
+    }
+
+    /**
+     * Returns the current debugger session if debugging is on.
+     *
+     * @return the current debugger session, or <code>null</code>.
+     */
+    public DebuggerSession getDebuggerSession() {
+        ScriptsHandler handler = this.scriptsHandler;
+        return (handler != null) ? handler.getDebuggerSession() : null;
     }
 
     /**

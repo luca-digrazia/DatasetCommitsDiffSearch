@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,7 +46,7 @@ import org.graalvm.polyglot.io.MessageTransport;
 /**
  * Tests the use of {@link MessageTransport} with the Inspector.
  */
-public class InspectorMessageTransportTest extends EnginesGCedTest {
+public class InspectorMessageTransportTest {
 
     private static final String PORT = "54367";
     private static final Pattern URI_PATTERN = Pattern.compile("ws://.*:" + PORT + "/[\\dA-Za-z_\\-]+");
@@ -93,20 +93,20 @@ public class InspectorMessageTransportTest extends EnginesGCedTest {
         inspectorEndpointTest(null, rc);
     }
 
-    private void inspectorEndpointTest(String path) {
+    private static void inspectorEndpointTest(String path) {
         inspectorEndpointTest(path, null);
     }
 
-    private void inspectorEndpointTest(String path, RaceControl rc) {
+    private static void inspectorEndpointTest(String path, RaceControl rc) {
         Session session = new Session(rc);
         DebuggerEndpoint endpoint = new DebuggerEndpoint(path, rc);
-        try (Engine engine = endpoint.onOpen(session)) {
-            Context context = Context.newBuilder().engine(engine).build();
-            Value result = context.eval("sl", "function main() {\n  x = 1;\n  return x;\n}");
-            Assert.assertEquals("Result", "1", result.toString());
+        Engine engine = endpoint.onOpen(session);
 
-            endpoint.onClose(session);
-        }
+        Context context = Context.newBuilder().engine(engine).build();
+        Value result = context.eval("sl", "function main() {\n  x = 1;\n  return x;\n}");
+        Assert.assertEquals("Result", "1", result.toString());
+
+        endpoint.onClose(session);
         int numMessages = MESSAGES_TO_BACKEND.length + MESSAGES_TO_CLIENT.length;
         Assert.assertEquals(session.messages.toString(), numMessages, session.messages.size());
         assertMessages(session.messages, MESSAGES_TO_BACKEND.length, MESSAGES_TO_CLIENT.length);
@@ -134,34 +134,33 @@ public class InspectorMessageTransportTest extends EnginesGCedTest {
     public void inspectorReconnectTest() throws IOException, InterruptedException {
         Session session = new Session(null);
         DebuggerEndpoint endpoint = new DebuggerEndpoint("simplePath" + SecureInspectorPathGenerator.getToken(), null);
-        try (Engine engine = endpoint.onOpen(session)) {
+        Engine engine = endpoint.onOpen(session);
 
-            try (Context context = Context.newBuilder().engine(engine).build()) {
-                Value result = context.eval("sl", "function main() {\n  x = 1;\n  return x;\n}");
-                Assert.assertEquals("Result", "1", result.toString());
+        try (Context context = Context.newBuilder().engine(engine).build()) {
+            Value result = context.eval("sl", "function main() {\n  x = 1;\n  return x;\n}");
+            Assert.assertEquals("Result", "1", result.toString());
 
-                MessageEndpoint peerEndpoint = endpoint.peer;
-                peerEndpoint.sendClose();
-                Assert.assertNotSame(peerEndpoint, endpoint.peer);
-                result = context.eval("sl", "function main() {\n  x = 2;\n  return x;\n}");
-                Assert.assertEquals("Result", "2", result.toString());
-            }
-            // We will not get the last 3 messages to client and 1 to backend
-            // as we do not do initial suspension on re-connect
-            int expectedNumMessages = 2 * (MESSAGES_TO_BACKEND.length + MESSAGES_TO_CLIENT.length) - 4;
-            synchronized (session.messages) {
-                while (session.messages.size() < expectedNumMessages) {
-                    // The reply messages are sent asynchronously. We need to wait for them.
-                    session.messages.wait();
-                }
-            }
-
-            Assert.assertEquals(session.messages.toString(), expectedNumMessages, session.messages.size());
-            assertMessages(session.messages, MESSAGES_TO_BACKEND.length, MESSAGES_TO_CLIENT.length);
-            // Messages after reconnect
-            List<String> messagesAfterReconnect = session.messages.subList(MESSAGES_TO_BACKEND.length + MESSAGES_TO_CLIENT.length, expectedNumMessages);
-            assertMessages(messagesAfterReconnect, MESSAGES_TO_BACKEND.length - 1, MESSAGES_TO_CLIENT.length - 3);
+            MessageEndpoint peerEndpoint = endpoint.peer;
+            peerEndpoint.sendClose();
+            Assert.assertNotSame(peerEndpoint, endpoint.peer);
+            result = context.eval("sl", "function main() {\n  x = 2;\n  return x;\n}");
+            Assert.assertEquals("Result", "2", result.toString());
         }
+        // We will not get the last 3 messages to client and 1 to backend
+        // as we do not do initial suspension on re-connect
+        int expectedNumMessages = 2 * (MESSAGES_TO_BACKEND.length + MESSAGES_TO_CLIENT.length) - 4;
+        synchronized (session.messages) {
+            while (session.messages.size() < expectedNumMessages) {
+                // The reply messages are sent asynchronously. We need to wait for them.
+                session.messages.wait();
+            }
+        }
+
+        Assert.assertEquals(session.messages.toString(), expectedNumMessages, session.messages.size());
+        assertMessages(session.messages, MESSAGES_TO_BACKEND.length, MESSAGES_TO_CLIENT.length);
+        // Messages after reconnect
+        List<String> messagesAfterReconnect = session.messages.subList(MESSAGES_TO_BACKEND.length + MESSAGES_TO_CLIENT.length, expectedNumMessages);
+        assertMessages(messagesAfterReconnect, MESSAGES_TO_BACKEND.length - 1, MESSAGES_TO_CLIENT.length - 3);
     }
 
     @Test
@@ -169,34 +168,33 @@ public class InspectorMessageTransportTest extends EnginesGCedTest {
         Session session = new Session(null);
         DebuggerEndpoint endpoint = new DebuggerEndpoint("simplePath" + SecureInspectorPathGenerator.getToken(), null);
         endpoint.setOpenCountLimit(1);
-        try (Engine engine = endpoint.onOpen(session)) {
-            try (Context context = Context.newBuilder().engine(engine).build()) {
-                Value result = context.eval("sl", "function main() {\n  x = 1;\n  return x;\n}");
-                Assert.assertEquals("Result", "1", result.toString());
+        Engine engine = endpoint.onOpen(session);
 
-                MessageEndpoint peerEndpoint = endpoint.peer;
-                peerEndpoint.sendClose();
-                // Execution goes on after close:
-                result = context.eval("sl", "function main() {\n  x = 2;\n  debugger;\n  return x;\n}");
-                Assert.assertEquals("Result", "2", result.toString());
-            }
-            try (Engine engine2 = endpoint.onOpen(session)) {
-                try (Context context = Context.newBuilder().engine(engine2).build()) {
-                    Value result = context.eval("sl", "function main() {\n  x = 3;\n  debugger;  return x;\n}");
-                    Assert.assertEquals("Result", "3", result.toString());
-                }
-                int expectedNumMessages = MESSAGES_TO_BACKEND.length + MESSAGES_TO_CLIENT.length;
-                synchronized (session.messages) {
-                    while (session.messages.size() < expectedNumMessages) {
-                        // The reply messages are sent asynchronously. We need to wait for them.
-                        session.messages.wait();
-                    }
-                }
+        try (Context context = Context.newBuilder().engine(engine).build()) {
+            Value result = context.eval("sl", "function main() {\n  x = 1;\n  return x;\n}");
+            Assert.assertEquals("Result", "1", result.toString());
 
-                Assert.assertEquals(session.messages.toString(), expectedNumMessages, session.messages.size());
-                assertMessages(session.messages, MESSAGES_TO_BACKEND.length, MESSAGES_TO_CLIENT.length);
+            MessageEndpoint peerEndpoint = endpoint.peer;
+            peerEndpoint.sendClose();
+            // Execution goes on after close:
+            result = context.eval("sl", "function main() {\n  x = 2;\n  debugger;\n  return x;\n}");
+            Assert.assertEquals("Result", "2", result.toString());
+        }
+        engine = endpoint.onOpen(session);
+        try (Context context = Context.newBuilder().engine(engine).build()) {
+            Value result = context.eval("sl", "function main() {\n  x = 3;\n  debugger;  return x;\n}");
+            Assert.assertEquals("Result", "3", result.toString());
+        }
+        int expectedNumMessages = MESSAGES_TO_BACKEND.length + MESSAGES_TO_CLIENT.length;
+        synchronized (session.messages) {
+            while (session.messages.size() < expectedNumMessages) {
+                // The reply messages are sent asynchronously. We need to wait for them.
+                session.messages.wait();
             }
         }
+
+        Assert.assertEquals(session.messages.toString(), expectedNumMessages, session.messages.size());
+        assertMessages(session.messages, MESSAGES_TO_BACKEND.length, MESSAGES_TO_CLIENT.length);
     }
 
     @Test
@@ -285,7 +283,7 @@ public class InspectorMessageTransportTest extends EnginesGCedTest {
 
     }
 
-    private final class DebuggerEndpoint {
+    private static final class DebuggerEndpoint {
 
         private final String path;
         private final RaceControl rc;
@@ -334,7 +332,6 @@ public class InspectorMessageTransportTest extends EnginesGCedTest {
                 engineBuilder.option("inspect.Path", path);
             }
             Engine engine = engineBuilder.build();
-            addEngineReference(engine);
             return engine;
         }
 
