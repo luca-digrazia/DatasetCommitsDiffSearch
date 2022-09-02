@@ -123,14 +123,14 @@ public final class NFIContextExtension implements ContextExtension {
     }
 
     @TruffleBoundary
-    public Object createNativeWrapper(LLVMFunction function, LLVMFunctionCode code) {
+    public Object createNativeWrapper(LLVMFunctionDescriptor descriptor) {
         Object wrapper = null;
 
         try {
-            String signature = getNativeSignature(function.getType(), 0);
+            String signature = getNativeSignature(descriptor.getLLVMFunction().getType(), 0);
             Object createNativeWrapper = getNativeFunction("createNativeWrapper", String.format("(env, %s):object", signature));
             try {
-                wrapper = INTEROP.execute(createNativeWrapper, new LLVMNativeWrapper(function, code));
+                wrapper = INTEROP.execute(createNativeWrapper, new LLVMNativeWrapper(descriptor));
             } catch (InteropException ex) {
                 throw new AssertionError(ex);
             }

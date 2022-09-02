@@ -146,12 +146,11 @@ public final class SulongEngineOption {
             help = "Enable IR-level debugging of LLVM bitcode files.")
     public static final OptionKey<Boolean> LL_DEBUG = new OptionKey<>(false);
 
-    public static final String LL_DEBUG_VERBOSE_NAME = "llvm.llDebug.verbose";
-    @Option(name = LL_DEBUG_VERBOSE_NAME,
+    @Option(name = "llvm.llDebug.verbose",
             category = OptionCategory.EXPERT,
             help = "Enables diagnostics for IR-level debugging (e.g., report missing .ll files). Requires \'--llvm.llDebug=true\'. " +
                    "Set value to \'stdout\', \'stderr\' or \'file://<path to writable file>\' to enable.")
-    public static final OptionKey<String> LL_DEBUG_VERBOSE = new OptionKey<>("stderr");
+    public static final OptionKey<String> LL_DEBUG_VERBOSE = new OptionKey<>("");
 
     @Option(name = "llvm.llDebug.sources",
             category = OptionCategory.EXPERT,
