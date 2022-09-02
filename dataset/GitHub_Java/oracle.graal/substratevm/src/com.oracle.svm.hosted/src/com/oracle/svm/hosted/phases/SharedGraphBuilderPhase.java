@@ -180,7 +180,7 @@ public abstract class SharedGraphBuilderPhase extends GraphBuilderPhase.Instance
              * If --allow-incomplete-classpath is set defer the error reporting to runtime,
              * otherwise report the error during image building.
              */
-            if (this.graphBuilderConfig.allowIncompleteClasspath(NativeImageOptions.AllowIncompleteClasspath.getValue())) {
+            if (NativeImageOptions.AllowIncompleteClasspath.getValue()) {
                 ExceptionSynthesizer.throwNoClassDefFoundError(this, type.toJavaName());
             } else {
                 reportUnresolvedElement("type", type.toJavaName());
