@@ -88,8 +88,7 @@ public final class Xar {
             }
         }
         if (embeddedBitcode == null) {
-            // No Bitcode file in embedded archive!
-            return null;
+            throw new LLVMParserException("No Bitcode file in embedded archive!");
         }
         return heap.subSequence((int) embeddedBitcode.offset, (int) (embeddedBitcode.offset + embeddedBitcode.size));
     }
