@@ -24,10 +24,7 @@
  */
 package com.oracle.truffle.regex.result;
 
-import java.util.Arrays;
-
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
 public final class SingleIndexArrayResult extends RegexResult {
 
@@ -41,19 +38,4 @@ public final class SingleIndexArrayResult extends RegexResult {
         return indices;
     }
 
-    @Override
-    public int getStart(int groupNumber) {
-        return indices[groupNumber * 2];
-    }
-
-    @Override
-    public int getEnd(int groupNumber) {
-        return indices[groupNumber * 2 + 1];
-    }
-
-    @TruffleBoundary
-    @Override
-    public String toString() {
-        return Arrays.toString(indices);
-    }
 }

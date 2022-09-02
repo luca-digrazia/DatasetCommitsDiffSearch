@@ -53,11 +53,6 @@ public abstract class LazyResult extends RegexResult implements JsonConvertible 
         return end;
     }
 
-    /**
-     * Forces evaluation of this lazy regex result. For debugging purposes only.
-     */
-    public abstract void debugForceEvaluation();
-
     @TruffleBoundary
     @Override
     public JsonObject toJson() {
