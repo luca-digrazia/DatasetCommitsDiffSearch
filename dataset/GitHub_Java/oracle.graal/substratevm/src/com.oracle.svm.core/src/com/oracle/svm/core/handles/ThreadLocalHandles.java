@@ -24,13 +24,10 @@
  */
 package com.oracle.svm.core.handles;
 
-import java.util.Arrays;
-
 import org.graalvm.nativeimage.ObjectHandle;
 import org.graalvm.word.SignedWord;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.Uninterruptible;
 
 /**
@@ -74,17 +71,14 @@ public final class ThreadLocalHandles<T extends ObjectHandle> {
 
     public int pushFrame(int capacity) {
         if (frameCount == frameStack.length) {
-            growFrameStack();
+            int[] oldArray = frameStack;
+            frameStack = new int[oldArray.length * 2];
+            System.arraycopy(oldArray, 0, frameStack, 0, oldArray.length);
         }
         frameStack[frameCount] = top;
         frameCount++;
         ensureCapacity(capacity);
         return frameCount;
-    }
-
-    @NeverInline("Decrease code size of JNI entry points by not inlining allocations")
-    private void growFrameStack() {
-        frameStack = Arrays.copyOf(frameStack, frameStack.length * 2);
     }
 
     @SuppressWarnings("unchecked")
@@ -127,14 +121,12 @@ public final class ThreadLocalHandles<T extends ObjectHandle> {
     }
 
     public void ensureCapacity(int capacity) {
-        int minLength = top + capacity;
-        if (minLength >= objects.length) {
-            growCapacity(minLength);
+        if (top + capacity >= objects.length) {
+            Object[] oldArray = objects;
+            int newLength = oldArray.length * 2;
+            assert newLength >= top + capacity;
+            objects = new Object[newLength];
+            System.arraycopy(oldArray, 0, objects, 0, oldArray.length);
         }
-    }
-
-    @NeverInline("Decrease code size of JNI entry points by not inlining allocations")
-    private void growCapacity(int minLength) {
-        objects = Arrays.copyOf(objects, minLength * 2);
     }
 }
