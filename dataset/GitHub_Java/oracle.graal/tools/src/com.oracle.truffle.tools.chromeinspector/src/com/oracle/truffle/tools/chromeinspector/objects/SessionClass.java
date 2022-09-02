@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,12 +38,10 @@ class SessionClass extends AbstractInspectorObject {
 
     private static final TruffleObject KEYS = new Keys(new String[0]);
 
-    private final Supplier<InspectorExecutionContext> contextSupplier;
-    private final UndefinedProvider undefinedProvider;
+    private Supplier<InspectorExecutionContext> contextSupplier;
 
-    SessionClass(Supplier<InspectorExecutionContext> contextSupplier, UndefinedProvider undefinedProvider) {
+    SessionClass(Supplier<InspectorExecutionContext> contextSupplier) {
         this.contextSupplier = contextSupplier;
-        this.undefinedProvider = undefinedProvider;
     }
 
     public static boolean isInstance(TruffleObject obj) {
@@ -58,7 +56,7 @@ class SessionClass extends AbstractInspectorObject {
     @Override
     @CompilerDirectives.TruffleBoundary
     protected Object instantiate(Object[] arguments) {
-        return new Session(contextSupplier, undefinedProvider);
+        return new Session(contextSupplier);
     }
 
     @Override

@@ -24,17 +24,16 @@
  */
 package com.oracle.truffle.tools.chromeinspector.objects;
 
-import com.oracle.truffle.api.interop.ForeignAccess;
-import com.oracle.truffle.api.interop.MessageResolution;
-import com.oracle.truffle.api.interop.Resolve;
+import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
 /**
  * Null.
  */
-@MessageResolution(receiverType = NullObject.class)
-final class NullObject implements TruffleObject {
+@ExportLibrary(InteropLibrary.class)
+public final class NullObject implements TruffleObject {
 
     public static final NullObject INSTANCE = new NullObject();
 
@@ -46,22 +45,10 @@ final class NullObject implements TruffleObject {
         return "null";
     }
 
-    @Override
-    public ForeignAccess getForeignAccess() {
-        return NullObjectForeign.ACCESS;
-    }
-
-    public static boolean isInstance(TruffleObject obj) {
-        return obj instanceof NullObject;
-    }
-
-    @Resolve(message = "IS_NULL")
-    abstract static class NullIsNullNode extends Node {
-
-        @SuppressWarnings("unused")
-        public Object access(NullObject n) {
-            return true;
-        }
+    @SuppressWarnings("static-method")
+    @ExportMessage
+    boolean isNull() {
+        return true;
     }
 
 }

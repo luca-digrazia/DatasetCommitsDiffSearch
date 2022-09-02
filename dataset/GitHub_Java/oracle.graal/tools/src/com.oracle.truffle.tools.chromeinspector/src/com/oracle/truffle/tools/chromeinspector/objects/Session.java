@@ -517,7 +517,7 @@ class Session extends AbstractInspectorObject {
                 return true;
             }
 
-            @ExportMessage
+            @ExportMessage(limit = "3")
             final Object execute(Object[] arguments, @CachedLibrary("this.listener") InteropLibrary library) throws UnsupportedTypeException, ArityException, UnsupportedMessageException {
                 listeners.removeListener(eventName, this);
                 try {
