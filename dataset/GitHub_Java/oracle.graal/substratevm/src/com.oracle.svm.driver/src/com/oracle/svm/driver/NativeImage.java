@@ -368,10 +368,6 @@ public class NativeImage {
         default boolean buildFallbackImage() {
             return false;
         }
-
-        default String getAgentJAR() {
-            return null;
-        }
     }
 
     private static class DefaultBuildConfiguration implements BuildConfiguration {
@@ -511,12 +507,6 @@ public class NativeImage {
             buildArgs.addAll(args);
             return buildArgs;
         }
-
-        @Override
-        public String getAgentJAR() {
-            return rootDir.resolve(Paths.get("lib", "svm", "builder", "svm.jar")).toAbsolutePath().toString();
-        }
-
     }
 
     private ArrayList<String> createFallbackBuildArgs() {
@@ -974,11 +964,6 @@ public class NativeImage {
             replaceArg(imageBuilderJavaArgs, oXms, Long.toUnsignedString(xmxValue));
         }
 
-        /* Enable class initializaiton tracing agent. */
-        if (traceClassInitialization()) {
-            imageBuilderJavaArgs.add("-javaagent:" + config.getAgentJAR());
-        }
-
         /* After JavaArgs consolidation add the user provided JavaArgs */
         addImageBuilderJavaArgs(customJavaArgs.toArray(new String[0]));
 
@@ -1078,17 +1063,6 @@ public class NativeImage {
         return buildImage(imageBuilderJavaArgs, imageBuilderBootClasspath, imageBuilderClasspath, imageBuilderArgs, finalImageClasspath);
     }
 
-    private boolean traceClassInitialization() {
-        String lastTracelArgument = null;
-        for (String imageBuilderArg : imageBuilderArgs) {
-            if (imageBuilderArg.contains("TraceClassInitialization")) {
-                lastTracelArgument = imageBuilderArg;
-            }
-        }
-
-        return "-H:+TraceClassInitialization".equals(lastTracelArgument);
-    }
-
     private String mainClass;
     private String imageName;
     private Path imagePath;
@@ -1110,7 +1084,6 @@ public class NativeImage {
         if (!bcp.isEmpty()) {
             command.add(bcp.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator, "-Xbootclasspath/a:", "")));
         }
-
         command.addAll(Arrays.asList("-cp", cp.stream().map(Path::toString).collect(Collectors.joining(File.pathSeparator))));
         command.add("com.oracle.svm.hosted.NativeImageGeneratorRunner");
         if (IS_AOT && OS.getCurrent().hasProcFS) {
