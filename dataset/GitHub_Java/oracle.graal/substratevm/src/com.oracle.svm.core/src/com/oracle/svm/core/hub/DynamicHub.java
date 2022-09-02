@@ -32,7 +32,6 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.Inherited;
-import java.lang.ref.Reference;
 import java.lang.reflect.AnnotatedElement;
 import java.lang.reflect.AnnotatedType;
 import java.lang.reflect.Constructor;
@@ -76,7 +75,6 @@ import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.annotate.UnknownObjectField;
 import com.oracle.svm.core.jdk.JDK11OrLater;
-import com.oracle.svm.core.jdk.JDK15OrLater;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.jdk.Package_jdk_internal_reflect;
 import com.oracle.svm.core.jdk.Resources;
@@ -113,11 +111,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
      * Used to quickly determine in which category a certain hub falls (e.g., instance or array).
      */
     private int hubType;
-
-    /**
-     * Used to quickly determine if this class is a subclass of {@link Reference}.
-     */
-    private byte referenceType;
 
     /**
      * Encoding of the object or array size. Decode using {@link LayoutEncoding}.
@@ -326,11 +319,10 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
     private final LazyFinalReference<String> packageNameReference = new LazyFinalReference<>(this::computePackageName);
 
     @Platforms(Platform.HOSTED_ONLY.class)
-    public DynamicHub(String name, HubType hubType, ReferenceType referenceType, boolean isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName,
+    public DynamicHub(String name, HubType hubType, boolean isLocalClass, Object isAnonymousClass, DynamicHub superType, DynamicHub componentHub, String sourceFileName,
                     int modifiers, ClassLoader classLoader) {
         this.name = name;
         this.hubType = hubType.getValue();
-        this.referenceType = referenceType.getValue();
         this.isLocalClass = isLocalClass;
         this.isAnonymousClass = isAnonymousClass;
         this.superHub = superType;
@@ -754,12 +746,6 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
         } else {
             throw VMError.shouldNotReachHere();
         }
-    }
-
-    @Substitute
-    @TargetElement(onlyWith = JDK15OrLater.class)
-    public boolean isHidden() {
-        throw VMError.shouldNotReachHere();
     }
 
     @Substitute

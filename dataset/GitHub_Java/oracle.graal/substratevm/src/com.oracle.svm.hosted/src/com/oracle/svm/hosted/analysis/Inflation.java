@@ -601,18 +601,18 @@ public class Inflation extends BigBang {
         }
     }
 
-    private static Set<Annotation> filterUsedAnnotation(Set<Annotation> used, Annotation[] rest) {
+    private static Annotation[] filterUsedAnnotation(Set<Annotation> used, Annotation[] rest) {
         if (rest == null) {
             return null;
         }
 
-        Set<Annotation> restUsed = new HashSet<>();
+        List<Annotation> restUsed = new ArrayList<>();
         for (Annotation a : rest) {
             if (used.contains(a)) {
                 restUsed.add(a);
             }
         }
-        return restUsed;
+        return restUsed.toArray(new Annotation[0]);
     }
 
     public static Object encodeAnnotations(AnalysisMetaAccess metaAccess, Annotation[] allAnnotations, Annotation[] declaredAnnotations, Object oldEncoding) {
@@ -636,10 +636,11 @@ public class Inflation extends BigBang {
                                     return false;
                                 }
                             }).collect(Collectors.toSet());
-            Set<Annotation> usedDeclared = filterUsedAnnotation(usedAnnotations, declaredAnnotations);
+            Annotation[] allUsed = filterUsedAnnotation(usedAnnotations, allAnnotations);
+            Annotation[] usedDeclared = filterUsedAnnotation(usedAnnotations, declaredAnnotations);
             newEncoding = usedAnnotations.size() == 0
                             ? null
-                            : AnnotationsEncoding.encodeAnnotations(usedAnnotations, usedDeclared);
+                            : new AnnotationsEncoding(allUsed, usedDeclared);
         }
 
         /*

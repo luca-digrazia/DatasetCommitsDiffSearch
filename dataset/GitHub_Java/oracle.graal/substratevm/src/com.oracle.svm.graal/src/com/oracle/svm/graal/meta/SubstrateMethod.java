@@ -44,6 +44,7 @@ import com.oracle.svm.core.deopt.Deoptimizer;
 import com.oracle.svm.core.graal.meta.SharedRuntimeMethod;
 import com.oracle.svm.core.hub.AnnotationsEncoding;
 import com.oracle.svm.core.util.HostedStringDeduplication;
+import com.oracle.svm.core.util.Replaced;
 
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantPool;
@@ -58,7 +59,7 @@ import jdk.vm.ci.meta.Signature;
 import jdk.vm.ci.meta.SpeculationLog;
 import jdk.vm.ci.meta.TriState;
 
-public class SubstrateMethod implements SharedRuntimeMethod {
+public class SubstrateMethod implements SharedRuntimeMethod, Replaced {
 
     private final byte[] encodedLineNumberTable;
     private final int modifiers;
@@ -105,7 +106,7 @@ public class SubstrateMethod implements SharedRuntimeMethod {
          * GraalObjectReplacer replaces them with SubstrateMethods. Therefore we have to preserve
          * the hashCode of the original AnalysisMethod. Note that this is only required because it
          * is a replaced object. For not replaced objects the hash code is preserved automatically
-         * in a synthetic hash-code field (see NativeImageHeap.ObjectInfo.identityHashCode).
+         * in a synthetic hash-code field (see BootImageHeap.ObjectInfo.identityHashCode).
          */
         hashCode = original.hashCode();
         implementations = new SubstrateMethod[0];
