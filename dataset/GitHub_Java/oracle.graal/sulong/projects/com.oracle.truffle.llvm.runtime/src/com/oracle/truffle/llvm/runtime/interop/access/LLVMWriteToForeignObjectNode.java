@@ -51,11 +51,10 @@ import com.oracle.truffle.llvm.runtime.interop.access.LLVMAccessForeignObjectNod
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMAccessForeignObjectNode.OffsetDummy;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMAccessForeignObjectNode.ResolveNativePointerNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativePointerSupport;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
-
 import java.nio.ByteOrder;
 
 @NodeChild(value = "foreign", type = ForeignDummy.class, implicit = true)
@@ -330,18 +329,18 @@ public abstract class LLVMWriteToForeignObjectNode extends LLVMAccessForeignObje
             language.getLLVMMemory().putI64(this, resolved, value);
         }
 
-        @Specialization
+        @Specialization(limit = "3")
         void doNativePointer(@SuppressWarnings("unused") Object foreign, @SuppressWarnings("unused") long offset, Object value, LLVMNativePointer resolved, @SuppressWarnings("unused") Object type,
-                        @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
+                        @CachedLibrary("value") LLVMNativeLibrary natives,
                         @CachedLanguage LLVMLanguage language) {
-            language.getLLVMMemory().putPointer(this, resolved, toNativePointer.execute(value));
+            language.getLLVMMemory().putPointer(this, resolved, natives.toNativePointer(value));
         }
 
-        @Specialization
+        @Specialization(limit = "3")
         @GenerateAOT.Exclude
         void doBufferLong(@SuppressWarnings("unused") Object foreign, @SuppressWarnings("unused") long offset, long value, LLVMManagedPointer resolved,
                         @SuppressWarnings("unused") LLVMInteropType.Buffer type,
-                        @CachedLibrary(limit = "3") InteropLibrary interop,
+                        @CachedLibrary("resolved.getObject()") InteropLibrary interop,
                         @Cached BranchProfile oobProfile) {
             try {
                 interop.writeBufferLong(resolved.getObject(), ByteOrder.nativeOrder(), resolved.getOffset(), value);
@@ -352,14 +351,14 @@ public abstract class LLVMWriteToForeignObjectNode extends LLVMAccessForeignObje
             }
         }
 
-        @Specialization
+        @Specialization(limit = "3")
         @GenerateAOT.Exclude
         void doBufferPointer(@SuppressWarnings("unused") Object foreign, @SuppressWarnings("unused") long offset, Object value, LLVMManagedPointer resolved,
                         @SuppressWarnings("unused") LLVMInteropType.Buffer type,
-                        @CachedLibrary(limit = "3") InteropLibrary interop,
-                        @Cached LLVMNativePointerSupport.ToNativePointerNode toNativePointer,
+                        @CachedLibrary("resolved.getObject()") InteropLibrary interop,
+                        @CachedLibrary("value") LLVMNativeLibrary natives,
                         @Cached BranchProfile oobProfile) {
-            LLVMNativePointer n = toNativePointer.execute(value);
+            LLVMNativePointer n = natives.toNativePointer(value);
             try {
                 interop.writeBufferLong(resolved.getObject(), ByteOrder.nativeOrder(), resolved.getOffset(), n.asNative());
             } catch (InvalidBufferOffsetException ex) {

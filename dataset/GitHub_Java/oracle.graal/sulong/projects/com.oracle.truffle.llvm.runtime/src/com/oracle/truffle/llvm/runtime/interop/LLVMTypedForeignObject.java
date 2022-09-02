@@ -40,7 +40,7 @@ import com.oracle.truffle.llvm.spi.NativeTypeLibrary;
 @ValueType
 @ExportLibrary(value = InteropLibrary.class, delegateTo = "foreign")
 @ExportLibrary(value = NativeTypeLibrary.class, useForAOT = false)
-@ExportLibrary(value = LLVMAsForeignLibrary.class, useForAOT = true, useForAOTPriority = 1)
+@ExportLibrary(LLVMAsForeignLibrary.class)
 public final class LLVMTypedForeignObject extends LLVMInternalTruffleObject {
 
     final Object foreign;

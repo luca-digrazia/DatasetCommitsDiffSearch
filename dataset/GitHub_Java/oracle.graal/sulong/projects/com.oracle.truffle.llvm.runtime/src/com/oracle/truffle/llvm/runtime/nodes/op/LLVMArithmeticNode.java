@@ -234,21 +234,24 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
             return l;
         }
 
-        @Specialization(guards = "lib.isPointer(ptr)", rewriteOn = UnsupportedMessageException.class)
+        @Specialization(limit = "3", guards = "lib.isPointer(ptr)", rewriteOn = UnsupportedMessageException.class)
+        @GenerateAOT.Exclude
         long doPointer(Object ptr,
-                        @CachedLibrary(limit = "3") LLVMNativeLibrary lib) throws UnsupportedMessageException {
+                        @CachedLibrary("ptr") LLVMNativeLibrary lib) throws UnsupportedMessageException {
             return lib.asPointer(ptr);
         }
 
-        @Specialization(guards = "!lib.isPointer(ptr)")
+        @Specialization(limit = "3", guards = "!lib.isPointer(ptr)")
+        @GenerateAOT.Exclude
         Object doManaged(Object ptr,
-                        @SuppressWarnings("unused") @CachedLibrary(limit = "3") LLVMNativeLibrary lib) {
+                        @SuppressWarnings("unused") @CachedLibrary("ptr") LLVMNativeLibrary lib) {
             return ptr;
         }
 
-        @Specialization(replaces = {"doLong", "doPointer", "doManaged"})
+        @Specialization(limit = "5", replaces = {"doLong", "doPointer", "doManaged"})
+        @GenerateAOT.Exclude
         Object doGeneric(Object ptr,
-                        @CachedLibrary(limit = "5") LLVMNativeLibrary lib) {
+                        @CachedLibrary("ptr") LLVMNativeLibrary lib) {
             if (lib.isPointer(ptr)) {
                 try {
                     return lib.asPointer(ptr);
@@ -319,15 +322,17 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
             return node.execute(left, right);
         }
 
-        @Specialization(guards = "!canDoManaged(left)")
+        @Specialization(limit = "3", guards = "!canDoManaged(left)")
+        @GenerateAOT.Exclude
         long doPointerRight(long left, LLVMPointer right,
-                        @CachedLibrary(limit = "3") LLVMNativeLibrary rightLib) {
+                        @CachedLibrary("right") LLVMNativeLibrary rightLib) {
             return op.doLong(left, rightLib.toNativePointer(right).asNative());
         }
 
-        @Specialization(guards = "!canDoManaged(right)")
+        @Specialization(limit = "3", guards = "!canDoManaged(right)")
+        @GenerateAOT.Exclude
         long doPointerLeft(LLVMPointer left, long right,
-                        @CachedLibrary(limit = "3") LLVMNativeLibrary leftLib) {
+                        @CachedLibrary("left") LLVMNativeLibrary leftLib) {
             return op.doLong(leftLib.toNativePointer(left).asNative(), right);
         }
     }
@@ -338,10 +343,11 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
             super(op);
         }
 
-        @Specialization
+        @Specialization(limit = "3")
+        @GenerateAOT.Exclude
         long doPointer(LLVMPointer left, LLVMPointer right,
-                        @CachedLibrary(limit = "3") LLVMNativeLibrary leftLib,
-                        @CachedLibrary(limit = "3") LLVMNativeLibrary rightLib) {
+                        @CachedLibrary("left") LLVMNativeLibrary leftLib,
+                        @CachedLibrary("right") LLVMNativeLibrary rightLib) {
             return op.doLong(leftLib.toNativePointer(left).asNative(), rightLib.toNativePointer(right).asNative());
         }
     }
@@ -358,11 +364,12 @@ public abstract class LLVMArithmeticNode extends LLVMExpressionNode {
             return left.getOffset() - right.getOffset();
         }
 
-        @Specialization(guards = "!sameObject.execute(left.getObject(), right.getObject())")
+        @Specialization(limit = "3", guards = "!sameObject.execute(left.getObject(), right.getObject())")
+        @GenerateAOT.Exclude
         long doNotSameObject(LLVMManagedPointer left, LLVMManagedPointer right,
                         @SuppressWarnings("unused") @Cached LLVMSameObjectNode sameObject,
-                        @CachedLibrary(limit = "3") LLVMNativeLibrary leftLib,
-                        @CachedLibrary(limit = "3") LLVMNativeLibrary rightLib) {
+                        @CachedLibrary("left") LLVMNativeLibrary leftLib,
+                        @CachedLibrary("right") LLVMNativeLibrary rightLib) {
             return leftLib.toNativePointer(left).asNative() - rightLib.toNativePointer(right).asNative();
         }
     }

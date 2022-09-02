@@ -89,7 +89,6 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
      * @param type
      */
     @Specialization(guards = {"checkMember(type, cachedMember, offset)", "cachedMember.isInheritanceMember"})
-    @GenerateAOT.Exclude
     AccessLocation doClazzInheritance(LLVMInteropType.Clazz type, Object foreign, long offset,
                     @Cached("findMember(type, offset)") StructMember cachedMember,
                     @Cached LLVMInteropAccessNode recursiveNode) {
@@ -97,7 +96,6 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
     }
 
     @Specialization(guards = {"checkMember(type, cachedMember, offset)", "!cachedMember.isInheritanceMember"})
-    @GenerateAOT.Exclude
     AccessLocation doStructMember(@SuppressWarnings("unused") LLVMInteropType.Struct type, Object foreign, long offset,
                     @Cached("findMember(type, offset)") StructMember cachedMember,
                     @Cached("create()") MakeAccessLocation makeAccessLocation) {
@@ -105,7 +103,6 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
     }
 
     @Specialization(replaces = {"doStructMember", "doClazzInheritance"})
-    @GenerateAOT.Exclude
     AccessLocation doStruct(LLVMInteropType.Struct type, Object foreign, long offset,
                     @Cached LLVMInteropAccessNode recursiveNode,
                     @Cached MakeAccessLocation makeAccessLocation) {

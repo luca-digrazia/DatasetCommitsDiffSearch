@@ -32,6 +32,7 @@ package com.oracle.truffle.llvm.runtime.nodes.memory;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.CachedLanguage;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.library.CachedLibrary;
@@ -87,19 +88,21 @@ public abstract class NativeMemSetNode extends LLVMMemSetNode {
         return null;
     }
 
-    @Specialization(guards = {"nativeWrite.isWritable(object.getObject())", "getAccessLength(object, length, nativeTypes) == 1"})
+    @Specialization(limit = "3", guards = {"nativeWrite.isWritable(object.getObject())", "getAccessLength(object, length, nativeTypes) == 1"})
+    @GenerateAOT.Exclude
     protected void memsetManagedI8(LLVMManagedPointer object, byte value, long length,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @SuppressWarnings("unused") @CachedLibrary("object.getObject()") NativeTypeLibrary nativeTypes,
+                    @CachedLibrary("object.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         for (int i = 0; i < length; i++) {
             nativeWrite.writeI8(object.getObject(), object.getOffset() + i, value);
         }
     }
 
-    @Specialization(guards = {"nativeWrite.isWritable(object.getObject())", "getAccessLength(object, length, nativeTypes) == 2"})
+    @Specialization(limit = "3", guards = {"nativeWrite.isWritable(object.getObject())", "getAccessLength(object, length, nativeTypes) == 2"})
+    @GenerateAOT.Exclude
     protected void memsetManagedI16(LLVMManagedPointer object, byte value, long length,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @SuppressWarnings("unused") @CachedLibrary("object.getObject()") NativeTypeLibrary nativeTypes,
+                    @CachedLibrary("object.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         int bValue = value & 0xFF;
         int sValue = (bValue << 8) | bValue;
         for (int i = 0; i < length; i += 2) {
@@ -107,10 +110,11 @@ public abstract class NativeMemSetNode extends LLVMMemSetNode {
         }
     }
 
-    @Specialization(guards = {"nativeWrite.isWritable(object.getObject())", "getAccessLength(object, length, nativeTypes) == 4"})
+    @Specialization(limit = "3", guards = {"nativeWrite.isWritable(object.getObject())", "getAccessLength(object, length, nativeTypes) == 4"})
+    @GenerateAOT.Exclude
     protected void memsetManagedI32(LLVMManagedPointer object, byte value, long length,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @SuppressWarnings("unused") @CachedLibrary("object.getObject()") NativeTypeLibrary nativeTypes,
+                    @CachedLibrary("object.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         int bValue = value & 0xFF;
         int sValue = (bValue << 8) | bValue;
         int iValue = (sValue << 16) | sValue;
@@ -119,10 +123,11 @@ public abstract class NativeMemSetNode extends LLVMMemSetNode {
         }
     }
 
-    @Specialization(guards = {"nativeWrite.isWritable(object.getObject())", "getAccessLength(object, length, nativeTypes) == 8"})
+    @Specialization(limit = "3", guards = {"nativeWrite.isWritable(object.getObject())", "getAccessLength(object, length, nativeTypes) == 8"})
+    @GenerateAOT.Exclude
     protected void memsetManagedI64(LLVMManagedPointer object, byte value, long length,
-                    @SuppressWarnings("unused") @CachedLibrary(limit = "3") NativeTypeLibrary nativeTypes,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @SuppressWarnings("unused") @CachedLibrary("object.getObject()") NativeTypeLibrary nativeTypes,
+                    @CachedLibrary("object.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         long bValue = value & 0xFFL;
         long sValue = (bValue << 8) | bValue;
         long iValue = (sValue << 16) | sValue;

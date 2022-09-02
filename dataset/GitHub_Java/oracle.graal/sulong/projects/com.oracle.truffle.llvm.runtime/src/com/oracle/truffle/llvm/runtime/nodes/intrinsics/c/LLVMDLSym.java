@@ -29,14 +29,26 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.intrinsics.c;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.dsl.CachedContext;
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.llvm.runtime.SulongLibrary;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.LLVMSymbol;
+import com.oracle.truffle.llvm.runtime.NativeContextExtension;
+import com.oracle.truffle.llvm.runtime.NativeContextExtension.NativeLookupResult;
+import com.oracle.truffle.llvm.runtime.PlatformCapability;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.intrinsics.c.LLVMDLOpen.LLVMDLHandler;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.interop.LLVMReadStringNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.LLVMIntrinsic;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
@@ -47,29 +59,102 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 @NodeChild(type = LLVMExpressionNode.class)
 public abstract class LLVMDLSym extends LLVMIntrinsic {
 
-    @Specialization(guards = "isSulongLibrary(library)", limit = "1")
-    protected Object doOp(LLVMManagedPointer library,
-                          LLVMPointer flag,
-                          @Cached() LLVMReadStringNode readStr,
-                          @CachedLibrary("library.getObject()") InteropLibrary interop) {
+    // Linux Mac
+    // RTLD_NEXT ((void *) -1l) ((void *) -1)
+    // RTLD_DEFAULT ((void *) 0) ((void *) -2)
+
+    @Specialization(guards = "isLLVMLibrary(libraryHandle)", limit = "2")
+    @GenerateAOT.Exclude
+    protected Object doOp(LLVMManagedPointer libraryHandle,
+                    LLVMPointer symbol,
+                    @Cached() LLVMReadStringNode readStr,
+                    @CachedLibrary("getLibrary(libraryHandle)") InteropLibrary interop,
+                    @Cached WrappedFunctionNode wrapper,
+                    @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
         try {
-            String flagName = readStr.executeWithTarget(flag);
-            return LLVMManagedPointer.create(interop.readMember(library.getObject(), flagName));
+            String symbolName = readStr.executeWithTarget(symbol);
+            Object function = interop.readMember(getLibrary(libraryHandle), symbolName);
+            return wrapper.execute(function);
         } catch (InteropException e) {
+            ctx.setDLError(2);
             return LLVMNativePointer.createNull();
         }
     }
 
-    @Specialization(guards = "!(isSulongLibrary(library))")
-    protected Object doOp(@SuppressWarnings("unused") LLVMManagedPointer library,
-                          @SuppressWarnings("unused") LLVMPointer flag,
-                          @SuppressWarnings("unused") @Cached() LLVMReadStringNode readStr){
+    @Specialization(guards = "!(isLLVMLibrary(libraryHandle))")
+    protected Object doOp(@SuppressWarnings("unused") LLVMManagedPointer libraryHandle,
+                    @SuppressWarnings("unused") LLVMPointer symbol,
+                    @SuppressWarnings("unused") @Cached() LLVMReadStringNode readStr) {
         return LLVMNativePointer.createNull();
     }
 
-    protected boolean isSulongLibrary(LLVMManagedPointer library){
-        return library.getObject() instanceof SulongLibrary;
+    @Specialization(guards = "isRtldDefault(libraryHandle)")
+    protected Object doDefaultHandle(@SuppressWarnings("unused") LLVMNativePointer libraryHandle,
+                    @SuppressWarnings("unused") LLVMPointer symbolName,
+                    @SuppressWarnings("unused") @Cached() LLVMReadStringNode readStr,
+                    @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+        String name = readStr.executeWithTarget(symbolName);
+        LLVMSymbol symbol = ctx.getGlobalScope().get(name);
+        if (symbol == null) {
+            Object nativeSymbol = getNativeSymbol(name, ctx);
+            if (nativeSymbol == null) {
+                ctx.setDLError(2);
+                return LLVMNativePointer.createNull();
+            }
+            return nativeSymbol;
+        }
+        return ctx.getSymbol(symbol);
     }
 
+    @TruffleBoundary
+    protected Object getNativeSymbol(String name, LLVMContext context) {
+        NativeContextExtension nativeContextExtension = context.getContextExtensionOrNull(NativeContextExtension.class);
+        if (nativeContextExtension != null) {
+            NativeLookupResult result = nativeContextExtension.getNativeFunctionOrNull(name);
+            return result.getObject();
+        }
+        return null;
+    }
+
+    protected boolean isRtldDefault(LLVMNativePointer libraryHandle) {
+        PlatformCapability<?> sysContextExt = LLVMLanguage.getLanguage().getCapability(PlatformCapability.class);
+        return sysContextExt.isDefaultDLSymFlagSet(libraryHandle.asNative());
+    }
+
+    protected Object getLibrary(LLVMManagedPointer pointer) {
+        return ((LLVMDLHandler) pointer.getObject()).getLibrary();
+    }
+
+    protected boolean isLLVMLibrary(LLVMManagedPointer library) {
+        return library.getObject() instanceof LLVMDLHandler;
+    }
+
+    abstract static class WrappedFunctionNode extends LLVMNode {
+
+        abstract LLVMPointer execute(Object function);
+
+        @Specialization
+        protected LLVMManagedPointer doFunctionDescriptor(LLVMFunctionDescriptor function) {
+            return LLVMManagedPointer.create(function);
+        }
+
+        @GenerateAOT.Exclude
+        @Specialization(guards = {"!isFunctionDescriptor(symbol)", "interopLibrary.isPointer(symbol)"}, limit = "1")
+        protected LLVMNativePointer doNFISymbol(Object symbol,
+                        @CachedLibrary("symbol") InteropLibrary interopLibrary,
+                        @CachedContext(LLVMLanguage.class) LLVMContext ctx) {
+            try {
+                return LLVMNativePointer.create(interopLibrary.asPointer(symbol));
+            } catch (InteropException e) {
+                ctx.setDLError(2);
+                throw CompilerDirectives.shouldNotReachHere(e);
+            }
+        }
+
+        protected static boolean isFunctionDescriptor(Object function) {
+            return function instanceof LLVMFunctionDescriptor;
+        }
+
+    }
 
 }

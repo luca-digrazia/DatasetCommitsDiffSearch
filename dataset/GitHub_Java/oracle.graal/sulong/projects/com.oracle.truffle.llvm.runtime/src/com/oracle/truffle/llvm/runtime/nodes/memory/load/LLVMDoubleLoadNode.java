@@ -68,6 +68,7 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
         }
 
         @Specialization(guards = "isAutoDerefHandle(language, addr)")
+        @GenerateAOT.Exclude
         protected static double doDoubleDerefHandle(LLVMNativePointer addr, long offset,
                         @Cached LLVMDerefHandleGetReceiverNode getReceiver,
                         @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
@@ -75,9 +76,10 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
             return doDoubleManaged(getReceiver.execute(addr), offset, nativeRead);
         }
 
-        @Specialization
+        @Specialization(limit = "3")
+        @GenerateAOT.Exclude
         protected static double doDoubleManaged(LLVMManagedPointer addr, long offset,
-                        @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
+                        @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
             return nativeRead.readDouble(addr.getObject(), addr.getOffset() + offset);
         }
     }
@@ -89,6 +91,7 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
     }
 
     @Specialization(guards = "isAutoDerefHandle(language, addr)")
+    @GenerateAOT.Exclude
     protected static double doDoubleDerefHandle(LLVMNativePointer addr,
                     @Cached LLVMDerefHandleGetReceiverNode getReceiver,
                     @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
@@ -96,9 +99,10 @@ public abstract class LLVMDoubleLoadNode extends LLVMLoadNode {
         return doDoubleManaged(getReceiver.execute(addr), nativeRead);
     }
 
-    @Specialization
+    @Specialization(limit = "3")
+    @GenerateAOT.Exclude
     protected static double doDoubleManaged(LLVMManagedPointer addr,
-                    @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
+                    @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
         return nativeRead.readDouble(addr.getObject(), addr.getOffset());
     }
 }

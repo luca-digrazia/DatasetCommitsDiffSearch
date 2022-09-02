@@ -59,16 +59,6 @@ import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
 @NodeChild(value = "fromNode", type = LLVMExpressionNode.class)
 public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
-    protected final boolean isRecursive;
-
-    protected LLVMToDoubleNode() {
-        this(false);
-    }
-
-    protected LLVMToDoubleNode(boolean isRecursive) {
-        this.isRecursive = isRecursive;
-    }
-
     protected abstract double executeWith(long value);
 
     protected LLVMToDoubleNode createRecursive() {
@@ -86,7 +76,7 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
         return recursive.executeWith(ptr);
     }
 
-    @Specialization(guards = "!isRecursive")
+    @Specialization
     protected double doPointer(LLVMPointer from,
                     @Cached("createToNativeWithTarget()") LLVMToNativeNode toNative,
                     @Cached("createRecursive()") LLVMToDoubleNode recursive) {
@@ -104,16 +94,9 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
     public abstract static class LLVMSignedCastToDoubleNode extends LLVMToDoubleNode {
 
-        protected LLVMSignedCastToDoubleNode() {
-        }
-
-        protected LLVMSignedCastToDoubleNode(boolean isRecursive) {
-            super(isRecursive);
-        }
-
         @Override
         protected LLVMToDoubleNode createRecursive() {
-            return LLVMSignedCastToDoubleNodeGen.create(true, null);
+            return LLVMSignedCastToDoubleNodeGen.create(null);
         }
 
         @Specialization
@@ -161,16 +144,9 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
         private static final double LEADING_BIT = 0x1.0p63;
 
-        protected LLVMUnsignedCastToDoubleNode() {
-        }
-
-        protected LLVMUnsignedCastToDoubleNode(boolean isRecursive) {
-            super(isRecursive);
-        }
-
         @Override
         protected LLVMToDoubleNode createRecursive() {
-            return LLVMUnsignedCastToDoubleNodeGen.create(true, null);
+            return LLVMUnsignedCastToDoubleNodeGen.create(null);
         }
 
         @Specialization
@@ -214,16 +190,9 @@ public abstract class LLVMToDoubleNode extends LLVMExpressionNode {
 
     public abstract static class LLVMBitcastToDoubleNode extends LLVMToDoubleNode {
 
-        protected LLVMBitcastToDoubleNode() {
-        }
-
-        protected LLVMBitcastToDoubleNode(boolean isRecursive) {
-            super(isRecursive);
-        }
-
         @Override
         protected LLVMToDoubleNode createRecursive() {
-            return LLVMBitcastToDoubleNodeGen.create(true, null);
+            return LLVMBitcastToDoubleNodeGen.create(null);
         }
 
         @Specialization

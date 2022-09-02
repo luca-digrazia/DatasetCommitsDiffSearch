@@ -184,10 +184,11 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
         }
     }
 
-    @Specialization
+    @Specialization(limit = "3")
     @ExplodeLoop
+    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI1Vector value,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
         long curOffset = address.getOffset();
         for (int i = 0; i < getVectorLength(); i++) {
@@ -196,10 +197,11 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
         }
     }
 
-    @Specialization
+    @Specialization(limit = "3")
     @ExplodeLoop
+    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI8Vector value,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
         long curOffset = address.getOffset();
         for (int i = 0; i < getVectorLength(); i++) {
@@ -208,10 +210,11 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
         }
     }
 
-    @Specialization
+    @Specialization(limit = "3")
     @ExplodeLoop
+    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI16Vector value,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
         long curOffset = address.getOffset();
         for (int i = 0; i < getVectorLength(); i++) {
@@ -220,10 +223,11 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
         }
     }
 
-    @Specialization
+    @Specialization(limit = "3")
     @ExplodeLoop
+    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI32Vector value,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
         long curOffset = address.getOffset();
         for (int i = 0; i < getVectorLength(); i++) {
@@ -232,10 +236,11 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
         }
     }
 
-    @Specialization
+    @Specialization(limit = "3")
     @ExplodeLoop
+    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMFloatVector value,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
         long curOffset = address.getOffset();
         for (int i = 0; i < getVectorLength(); i++) {
@@ -244,10 +249,11 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
         }
     }
 
-    @Specialization
+    @Specialization(limit = "3")
     @ExplodeLoop
+    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMDoubleVector value,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
         long curOffset = address.getOffset();
         for (int i = 0; i < getVectorLength(); i++) {
@@ -256,10 +262,11 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
         }
     }
 
-    @Specialization
+    @Specialization(limit = "3")
     @ExplodeLoop
+    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMI64Vector value,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
         long curOffset = address.getOffset();
         for (int i = 0; i < getVectorLength(); i++) {
@@ -268,10 +275,11 @@ public abstract class LLVMStoreVectorNode extends LLVMStoreNode {
         }
     }
 
-    @Specialization
+    @Specialization(limit = "3")
     @ExplodeLoop
+    @GenerateAOT.Exclude
     protected void writeVector(LLVMManagedPointer address, LLVMPointerVector value,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         assert value.getLength() == getVectorLength();
         long curOffset = address.getOffset();
         for (int i = 0; i < getVectorLength(); i++) {

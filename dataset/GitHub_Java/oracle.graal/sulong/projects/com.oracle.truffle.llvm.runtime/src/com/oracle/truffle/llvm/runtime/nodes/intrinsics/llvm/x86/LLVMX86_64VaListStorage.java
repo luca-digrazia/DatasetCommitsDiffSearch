@@ -66,7 +66,6 @@ import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemMoveNode;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack.LLVMGetStackSpaceInstruction;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMTypes;
 import com.oracle.truffle.llvm.runtime.nodes.func.LLVMRootNode;
 import com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.va.LLVMVAEnd;
@@ -228,7 +227,7 @@ public final class LLVMX86_64VaListStorage extends LLVMVaListStorage {
     @TruffleBoundary
     Object getNativeType(@CachedLanguage LLVMLanguage language) {
         // This method should never be invoked
-        return language.getInteropType(LLVMSourceTypeFactory.resolveType(VA_LIST_TYPE, findDataLayoutFromCurrentFrame()));
+        return language.getInteropType(LLVMSourceTypeFactory.resolveType(VA_LIST_TYPE, getDataLayout()));
     }
 
     // LLVMManagedReadLibrary implementation
@@ -640,9 +639,9 @@ public final class LLVMX86_64VaListStorage extends LLVMVaListStorage {
         }
     }
 
-    static long getVAListTypeSize(LLVMNode node) {
+    static long getVAListTypeSize() {
         try {
-            return VA_LIST_TYPE.getSize(node.getDataLayout());
+            return VA_LIST_TYPE.getSize(getDataLayout());
         } catch (TypeOverflowException e) {
             CompilerDirectives.transferToInterpreter();
             throw new UnsupportedOperationException("Should not get here");
@@ -651,12 +650,12 @@ public final class LLVMX86_64VaListStorage extends LLVMVaListStorage {
 
     @SuppressWarnings("static-method")
     LLVMExpressionNode createAllocaNode(LLVMLanguage language) {
-        DataLayout dataLayout = findDataLayoutFromCurrentFrame();
+        DataLayout dataLayout = getDataLayout();
         return language.getActiveConfiguration().createNodeFactory(language, dataLayout).createAlloca(VA_LIST_TYPE, 16);
     }
 
     LLVMExpressionNode createAllocaNodeUncached(LLVMLanguage language) {
-        DataLayout dataLayout = findDataLayoutFromCurrentFrame();
+        DataLayout dataLayout = getDataLayout();
         LLVMExpressionNode alloca = language.getActiveConfiguration().createNodeFactory(language, dataLayout).createAlloca(VA_LIST_TYPE, 16);
         if (alloca instanceof LLVMGetStackSpaceInstruction) {
             ((LLVMGetStackSpaceInstruction) alloca).setStackAccess(rootNode.getStackAccess());
@@ -883,7 +882,7 @@ public final class LLVMX86_64VaListStorage extends LLVMVaListStorage {
                             @SuppressWarnings("unused") @CachedLanguage() LLVMLanguage language,
                             @Shared("stackAllocationNode") @Cached StackAllocationNode stackAllocationNode,
                             @CachedLibrary(limit = "1") LLVMVaListLibrary vaListLibrary,
-                            @Cached(value = "getVAListTypeSize(stackAllocationNode)", allowUncached = true) long vaListTypeSize) {
+                            @Cached(value = "getVAListTypeSize()", allowUncached = true) long vaListTypeSize) {
                 LLVMPointer nativeDestPtr = stackAllocationNode.executeWithTarget(vaListTypeSize);
                 dest.nativized = nativeDestPtr;
 

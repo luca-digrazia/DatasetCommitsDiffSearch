@@ -67,9 +67,10 @@ public abstract class LLVMIVarBitLoadNode extends LLVMLoadNode {
         return load.executeWithTarget(getReceiver.execute(addr));
     }
 
-    @Specialization
+    @Specialization(limit = "3")
+    @GenerateAOT.Exclude
     protected LLVMIVarBit doForeign(LLVMManagedPointer addr,
-                    @CachedLibrary(limit = "3") LLVMManagedReadLibrary nativeRead) {
+                    @CachedLibrary("addr.getObject()") LLVMManagedReadLibrary nativeRead) {
         byte[] result = new byte[getByteSize()];
         long curOffset = addr.getOffset();
         for (int i = result.length - 1; i >= 0; i--) {

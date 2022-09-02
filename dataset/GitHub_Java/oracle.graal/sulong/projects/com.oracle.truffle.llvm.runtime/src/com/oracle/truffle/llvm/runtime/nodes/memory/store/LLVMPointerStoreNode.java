@@ -76,6 +76,7 @@ public abstract class LLVMPointerStoreNode extends LLVMStoreNode {
         }
 
         @Specialization(guards = "isAutoDerefHandle(language, addr)")
+        @GenerateAOT.Exclude
         protected static void doOpDerefHandle(LLVMNativePointer addr, long offset, Object value,
                         @Cached LLVMToPointerNode toPointer,
                         @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
@@ -85,6 +86,7 @@ public abstract class LLVMPointerStoreNode extends LLVMStoreNode {
         }
 
         @Specialization(guards = "isAutoDerefHandle(language, addr)")
+        @GenerateAOT.Exclude
         protected static void doDerefAddress(long addr, long offset, Object value,
                         @Cached LLVMToPointerNode toPointer,
                         @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
@@ -93,10 +95,11 @@ public abstract class LLVMPointerStoreNode extends LLVMStoreNode {
             doManaged(getReceiver.execute(addr), offset, value, toPointer, nativeWrite);
         }
 
-        @Specialization
+        @Specialization(limit = "3")
+        @GenerateAOT.Exclude
         protected static void doManaged(LLVMManagedPointer addr, long offset, Object value,
                         @Cached LLVMToPointerNode toPointer,
-                        @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                        @CachedLibrary("addr.getObject()") LLVMManagedWriteLibrary nativeWrite) {
             nativeWrite.writePointer(addr.getObject(), addr.getOffset() + offset, toPointer.executeWithTarget(value));
         }
     }
@@ -116,6 +119,7 @@ public abstract class LLVMPointerStoreNode extends LLVMStoreNode {
     }
 
     @Specialization(guards = "isAutoDerefHandle(language, addr)")
+    @GenerateAOT.Exclude
     protected static void doOpDerefHandle(LLVMNativePointer addr, Object value,
                     @Cached LLVMToPointerNode toPointer,
                     @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
@@ -125,6 +129,7 @@ public abstract class LLVMPointerStoreNode extends LLVMStoreNode {
     }
 
     @Specialization(guards = "isAutoDerefHandle(language, addr)")
+    @GenerateAOT.Exclude
     protected static void doDerefAddress(long addr, Object value,
                     @Cached LLVMToPointerNode toPointer,
                     @CachedLanguage @SuppressWarnings("unused") LLVMLanguage language,
@@ -133,10 +138,11 @@ public abstract class LLVMPointerStoreNode extends LLVMStoreNode {
         doManaged(getReceiver.execute(addr), value, toPointer, nativeWrite);
     }
 
-    @Specialization
+    @Specialization(limit = "3")
+    @GenerateAOT.Exclude
     protected static void doManaged(LLVMManagedPointer address, Object value,
                     @Cached LLVMToPointerNode toPointer,
-                    @CachedLibrary(limit = "3") LLVMManagedWriteLibrary nativeWrite) {
+                    @CachedLibrary("address.getObject()") LLVMManagedWriteLibrary nativeWrite) {
         nativeWrite.writePointer(address.getObject(), address.getOffset(), toPointer.executeWithTarget(value));
     }
 }

@@ -29,12 +29,14 @@
  */
 package com.oracle.truffle.llvm.runtime.library.internal;
 
+import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.library.Library;
 import com.oracle.truffle.api.library.LibraryFactory;
 import com.oracle.truffle.llvm.runtime.except.LLVMException;
 
 @GenerateLibrary
+@GenerateAOT
 public abstract class LLVMCopyTargetLibrary extends Library {
 
     static final LibraryFactory<LLVMCopyTargetLibrary> FACTORY = LibraryFactory.resolve(LLVMCopyTargetLibrary.class);
@@ -43,11 +45,11 @@ public abstract class LLVMCopyTargetLibrary extends Library {
         return FACTORY;
     }
 
-    public boolean canCopyFrom(@SuppressWarnings("unused") Object receiver, @SuppressWarnings("unused") Object source) {
+    public boolean canCopyFrom(@SuppressWarnings("unused") Object receiver, @SuppressWarnings("unused") Object source, @SuppressWarnings("unused") long length) {
         return false;
     }
 
-    public void copyFrom(@SuppressWarnings("unused") Object receiver, @SuppressWarnings("unused") Object source) {
+    public void copyFrom(@SuppressWarnings("unused") Object receiver, @SuppressWarnings("unused") Object source, @SuppressWarnings("unused") long length) {
         throw new InvalidSourceException();
     }
 

@@ -42,8 +42,8 @@ import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
+import com.oracle.truffle.llvm.runtime.library.internal.LLVMNativeLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMNativePointerSupport;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDerefHandleGetReceiverNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
@@ -83,11 +83,10 @@ public abstract class LLVMAccessForeignObjectNode extends LLVMNode {
          * Helper for guards to check whether {@code obj} is an auto-deref handle (e.g. a wrapped
          * pointer). This helper assumes that an isPointer call returns true for {@code obj}.
          */
-        static boolean isWrappedAutoDerefHandle(LLVMLanguage language, LLVMNativePointerSupport.IsPointerNode isPointerNode,
-                        LLVMNativePointerSupport.AsPointerNode asPointerNode, Object obj) {
+        static boolean isWrappedAutoDerefHandle(LLVMLanguage language, LLVMNativeLibrary nativeLibrary, Object obj) {
             try {
-                assert isPointerNode.execute(obj);
-                return LLVMNode.isAutoDerefHandle(language, asPointerNode.execute(obj));
+                assert nativeLibrary.isPointer(obj);
+                return LLVMNode.isAutoDerefHandle(language, nativeLibrary.asPointer(obj));
             } catch (UnsupportedMessageException ex) {
                 throw CompilerDirectives.shouldNotReachHere(ex);
             }
@@ -95,36 +94,34 @@ public abstract class LLVMAccessForeignObjectNode extends LLVMNode {
 
         public abstract LLVMPointer execute(Object foreign, long offset);
 
-        @Specialization(limit = "3", guards = {"isPointerNode.execute(receiver)", "!isWrappedAutoDerefHandle(language, isPointerNode, asPointerNode, receiver)"})
+        @Specialization(limit = "3", guards = {"nativeLibrary.isPointer(receiver)", "!isWrappedAutoDerefHandle(language, nativeLibrary, receiver)"})
         LLVMNativePointer doPointer(Object receiver, long offset,
                         @SuppressWarnings("unused") @CachedLanguage LLVMLanguage language,
-                        @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointerNode,
-                        @Cached LLVMNativePointerSupport.AsPointerNode asPointerNode) {
+                        @CachedLibrary("receiver") LLVMNativeLibrary nativeLibrary) {
             try {
-                long addr = asPointerNode.execute(receiver) + offset;
+                long addr = nativeLibrary.asPointer(receiver) + offset;
                 return LLVMNativePointer.create(addr);
             } catch (UnsupportedMessageException ex) {
                 throw CompilerDirectives.shouldNotReachHere(ex);
             }
         }
 
-        @Specialization(limit = "3", guards = {"isPointerNode.execute(receiver)", "isWrappedAutoDerefHandle(language, isPointerNode, asPointerNode, receiver)"})
+        @Specialization(limit = "3", guards = {"nativeLibrary.isPointer(receiver)", "isWrappedAutoDerefHandle(language, nativeLibrary, receiver)"})
         LLVMManagedPointer doDerefHandle(Object receiver, long offset,
                         @SuppressWarnings("unused") @CachedLanguage LLVMLanguage language,
                         @Cached LLVMDerefHandleGetReceiverNode receiverNode,
-                        @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointerNode,
-                        @Cached LLVMNativePointerSupport.AsPointerNode asPointerNode) {
+                        @CachedLibrary("receiver") LLVMNativeLibrary nativeLibrary) {
             try {
-                long addr = asPointerNode.execute(receiver) + offset;
+                long addr = nativeLibrary.asPointer(receiver) + offset;
                 return receiverNode.execute(addr);
             } catch (UnsupportedMessageException ex) {
                 throw CompilerDirectives.shouldNotReachHere(ex);
             }
         }
 
-        @Specialization(limit = "3", guards = "!isPointerNode.execute(receiver)")
+        @Specialization(limit = "3", guards = "!nativeLibrary.isPointer(receiver)")
         LLVMManagedPointer doManaged(Object receiver, long offset,
-                        @SuppressWarnings("unused") @Cached LLVMNativePointerSupport.IsPointerNode isPointerNode) {
+                        @SuppressWarnings("unused") @CachedLibrary("receiver") LLVMNativeLibrary nativeLibrary) {
             return LLVMManagedPointer.create(receiver).increment(offset);
         }
     }
