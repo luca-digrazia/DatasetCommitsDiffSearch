@@ -221,10 +221,11 @@ class PosixParkEvent extends ParkEvent {
     private final Pthread.pthread_cond_t cond;
 
     /**
-     * The ticket: false implies unavailable, true implies available. Volatile so it can be safely
-     * updated in {@link #reset()} without holding the lock.
+     * The ticket: false implies unavailable, true implies available. No need to be volatile,
+     * because it is read and written only when the mutex is held, or before a reference to this
+     * ParkEvent is handed out.
      */
-    protected volatile boolean event;
+    protected boolean event;
 
     PosixParkEvent() {
         /* Create a mutex. */
@@ -249,6 +250,9 @@ class PosixParkEvent extends ParkEvent {
     protected void condWait() {
         PosixUtils.checkStatusIs0(Pthread.pthread_mutex_lock(mutex), "park(): mutex lock");
         try {
+            if (resetEventBeforeWait) {
+                event = false;
+            }
             while (!event) {
                 int status = Pthread.pthread_cond_wait(cond, mutex);
                 PosixUtils.checkStatusIs0(status, "park(): condition variable wait");
@@ -267,6 +271,9 @@ class PosixParkEvent extends ParkEvent {
 
         PosixUtils.checkStatusIs0(Pthread.pthread_mutex_lock(mutex), "park(long): mutex lock");
         try {
+            if (resetEventBeforeWait) {
+                event = false;
+            }
             while (!event) {
                 int status = Pthread.pthread_cond_timedwait(cond, mutex, deadlineTimespec);
                 if (status == Errno.ETIMEDOUT()) {

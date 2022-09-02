@@ -51,6 +51,16 @@ public abstract class ParkEvent {
     }
 
     /**
+     * When true, calls to {@link #condWait} and {@link #condTimedWait} will always wait, even a
+     * previous call to {@link #unpark} had not been consumed by a wait yet (the semantics of
+     * {@link Thread#sleep}).
+     *
+     * When false, {@link #condWait} and {@link #condTimedWait} will return immediately when a
+     * previous call to {@link #unpark} has happend (the semantics of {@link sun.misc.Unsafe#park}).
+     */
+    protected boolean resetEventBeforeWait;
+
+    /**
      * A cons-cell for putting this ParkEvent on the free list. This must be (a) allocated
      * beforehand because I need it when I can not allocate, (b) must not be reused, to avoid an ABA
      * problem.
@@ -61,10 +71,6 @@ public abstract class ParkEvent {
     protected ParkEvent() {
     }
 
-    /**
-     * Resets a pending {@link #unpark()} at the time of the call. This must synchronize in a way
-     * that prevents it from being reordered with regard to setting the thread's interrupted status.
-     */
     protected abstract void reset();
 
     /* cond_wait. */
@@ -89,7 +95,7 @@ public abstract class ParkEvent {
      * and garbage collected.
      */
 
-    static ParkEvent initializeOnce(AtomicReference<ParkEvent> ref) {
+    static ParkEvent initializeOnce(AtomicReference<ParkEvent> ref, boolean resetEventBeforeWait) {
         ParkEvent result = ref.get();
         if (result == null) {
             ParkEvent newEvent = ParkEvent.acquire();
@@ -98,6 +104,7 @@ public abstract class ParkEvent {
              * free-list or allocated.
              */
             newEvent.consCell = new ParkEventConsCell(newEvent);
+            newEvent.resetEventBeforeWait = resetEventBeforeWait;
             newEvent.reset();
 
             if (ref.compareAndSet(null, newEvent)) {
