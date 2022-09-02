@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,12 +40,20 @@
  */
 package org.graalvm.wasm.api;
 
-import org.graalvm.wasm.exception.WasmExecutionException;
-import org.graalvm.wasm.WasmTable;
+import static java.lang.Integer.compareUnsigned;
+import static org.graalvm.wasm.WasmMath.minUnsigned;
+import static org.graalvm.wasm.api.JsConstants.JS_LIMITS;
 
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import org.graalvm.wasm.WasmFunctionInstance;
+import org.graalvm.wasm.WasmTable;
+import org.graalvm.wasm.WasmVoidResult;
+import org.graalvm.wasm.exception.WasmJsApiException;
+
 import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 
 @ExportLibrary(InteropLibrary.class)
 public class Table extends Dictionary {
@@ -53,43 +61,109 @@ public class Table extends Dictionary {
     private final WasmTable table;
 
     public Table(WasmTable table) {
-        this.descriptor = new TableDescriptor(TableKind.anyfunc, (long) table.size(), (long) table.maxSize());
+        this.descriptor = new TableDescriptor(TableKind.anyfunc.name(), table.declaredMinSize(), table.declaredMaxSize());
         this.table = table;
         addMembers(new Object[]{
                         "descriptor", this.descriptor,
-                        "grow", new Executable(args -> grow((Long) args[0])),
-                        "get", new Executable(args -> get((Long) args[0])),
-                        "set", new Executable(args -> set((Long) args[0], args[1])),
+                        "grow", new Executable(args -> grow((Integer) args[0])),
+                        "get", new Executable(args -> get((Integer) args[0])),
+                        "set", new Executable(args -> set((Integer) args[0], args[1])),
         });
     }
 
-    @TruffleBoundary
-    private WasmExecutionException rangeError() {
-        return new WasmExecutionException(null, "Range error.");
+    public static Table create(int declaredMinSize, int declaredMaxSize) {
+        if (compareUnsigned(declaredMinSize, declaredMaxSize) > 0) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.LinkError, "Min table size exceeds max memory size");
+        } else if (compareUnsigned(declaredMinSize, JS_LIMITS.memoryInstanceSizeLimit()) > 0) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.LinkError, "Min table size exceeds implementation limit");
+        }
+        final int maxAllowedSize = minUnsigned(declaredMaxSize, JS_LIMITS.memoryInstanceSizeLimit());
+        final WasmTable wasmTable = new WasmTable(declaredMinSize, declaredMaxSize, maxAllowedSize);
+        return new Table(wasmTable);
     }
 
-    public long grow(long delta) {
-        final long size = table.size();
-        if (!table.grow(delta)) {
-            throw rangeError();
+    public static Table create(Object descriptor) {
+        return create(initial(descriptor), maximum(descriptor));
+    }
+
+    @SuppressWarnings({"unused", "static-method"})
+    @ExportMessage
+    @Override
+    public boolean isMemberReadable(String member) {
+        return member.equals("length") || super.isMemberReadable(member);
+    }
+
+    @SuppressWarnings({"unused"})
+    @ExportMessage
+    @Override
+    public Object readMember(String member) throws UnknownIdentifierException {
+        if (member.equals("length")) {
+            return table.size();
+        } else {
+            return super.readMember(member);
+        }
+    }
+
+    private static int initial(Object descriptor) {
+        try {
+            return (Integer) InteropLibrary.getUncached().readMember(descriptor, "initial");
+        } catch (UnsupportedMessageException | UnknownIdentifierException e) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid memory descriptor " + descriptor);
+        }
+    }
+
+    private static int maximum(Object descriptor) {
+        try {
+            return (Integer) InteropLibrary.getUncached().readMember(descriptor, "maximum");
+        } catch (UnsupportedMessageException | UnknownIdentifierException e) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid memory descriptor " + descriptor);
+        }
+    }
+
+    public WasmTable wasmTable() {
+        return table;
+    }
+
+    public TableDescriptor descriptor() {
+        return descriptor;
+    }
+
+    public int grow(int delta) {
+        final int size = table.size();
+        try {
+            table.grow(delta);
+        } catch (IllegalArgumentException e) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.RangeError, e.getMessage());
         }
         return size;
     }
 
-    public Object get(long index) {
-        if (index > table.size()) {
-            throw rangeError();
+    public Object get(int index) {
+        try {
+            final Object result = table.get(index);
+            return result == null ? WasmVoidResult.getInstance() : result;
+        } catch (IndexOutOfBoundsException e) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.RangeError, "Table index out of bounds: " + e.getMessage());
         }
-        final Object function = table.get((int) index);
-        return function;
     }
 
-    private Object set(long index, Object function) {
-        if (index > table.size()) {
-            throw rangeError();
+    public Object set(int index, Object element) {
+        final WasmFunctionInstance functionInstance;
+        if (element instanceof WasmFunctionInstance) {
+            functionInstance = (WasmFunctionInstance) element;
+        } else if (InteropLibrary.getUncached(element).isNull(element)) {
+            functionInstance = null;
+        } else {
+            throw new WasmJsApiException(WasmJsApiException.Kind.TypeError, "Invalid table element");
         }
-        table.set((int) index, function);
-        return null;
+
+        try {
+            table.set(index, functionInstance);
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw new WasmJsApiException(WasmJsApiException.Kind.RangeError, "Table index out of bounds: " + e.getMessage());
+        }
+
+        return WasmVoidResult.getInstance();
     }
 
 }

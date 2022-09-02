@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,9 +40,10 @@
  */
 package org.graalvm.wasm;
 
-import org.graalvm.wasm.memory.WasmMemory;
-
+import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import org.graalvm.wasm.memory.WasmMemory;
 
 /**
  * Represents the state of a WebAssembly module.
@@ -50,8 +51,15 @@ import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 @SuppressWarnings("static-method")
 public class RuntimeState {
     private static final int INITIAL_GLOBALS_SIZE = 64;
+    private static final int INITIAL_TARGETS_SIZE = 32;
 
+    private final WasmContext context;
     private final WasmModule module;
+
+    /**
+     * An array of call targets that correspond to the WebAssembly functions of the current module.
+     */
+    @CompilationFinal(dimensions = 1) private CallTarget[] targets;
 
     /**
      * This array is monotonically populated from the left. An index i denotes the i-th global in
@@ -80,6 +88,8 @@ public class RuntimeState {
      */
     @CompilationFinal private WasmMemory memory;
 
+    @CompilationFinal private Linker.LinkState linkState;
+
     private void ensureGlobalsCapacity(int index) {
         while (index >= globalAddresses.length) {
             final int[] nGlobalAddresses = new int[globalAddresses.length * 2];
@@ -88,10 +98,68 @@ public class RuntimeState {
         }
     }
 
-    public RuntimeState(WasmModule module) {
+    private void ensureTargetsCapacity(int index) {
+        while (index >= targets.length) {
+            final CallTarget[] nTargets = new CallTarget[targets.length * 2];
+            System.arraycopy(targets, 0, nTargets, 0, targets.length);
+            targets = nTargets;
+        }
+    }
+
+    public RuntimeState(WasmContext context, WasmModule module) {
+        this.context = context;
         this.module = module;
         this.globalAddresses = new int[INITIAL_GLOBALS_SIZE];
-        ensureGlobalsCapacity(module.maxGlobalIndex());
+        this.targets = new CallTarget[INITIAL_TARGETS_SIZE];
+        this.linkState = Linker.LinkState.nonLinked;
+    }
+
+    private void checkNotLinked() {
+        // The symbol table must be read-only after the module gets linked.
+        if (linkState == Linker.LinkState.linked) {
+            throw CompilerDirectives.shouldNotReachHere("The engine tried to modify the instance after linking.");
+        }
+    }
+
+    public void setLinkInProgress() {
+        if (linkState != Linker.LinkState.nonLinked) {
+            throw CompilerDirectives.shouldNotReachHere("Can only switch to in-progress state when not linked.");
+        }
+        this.linkState = Linker.LinkState.inProgress;
+    }
+
+    public void setLinkCompleted() {
+        if (linkState != Linker.LinkState.inProgress) {
+            throw CompilerDirectives.shouldNotReachHere("Can only switch to linked state when linking is in-progress.");
+        }
+        this.linkState = Linker.LinkState.linked;
+    }
+
+    public void setLinkFailed() {
+        if (linkState != Linker.LinkState.inProgress) {
+            throw CompilerDirectives.shouldNotReachHere("Can only switch to failed state when linking is in-progress.");
+        }
+        this.linkState = Linker.LinkState.failed;
+    }
+
+    public WasmContext context() {
+        return context;
+    }
+
+    public boolean isNonLinked() {
+        return linkState == Linker.LinkState.nonLinked;
+    }
+
+    public boolean isLinkInProgress() {
+        return linkState == Linker.LinkState.inProgress;
+    }
+
+    public boolean isLinkCompleted() {
+        return linkState == Linker.LinkState.linked;
+    }
+
+    public boolean isLinkFailed() {
+        return linkState == Linker.LinkState.failed;
     }
 
     public SymbolTable symbolTable() {
@@ -106,12 +174,28 @@ public class RuntimeState {
         return module;
     }
 
+    public int targetCount() {
+        return symbolTable().numFunctions();
+    }
+
+    public CallTarget target(int index) {
+        return targets[index];
+    }
+
+    public void setTarget(int index, CallTarget target) {
+        ensureTargetsCapacity(index);
+        targets[index] = target;
+    }
+
     public int globalAddress(int index) {
-        return globalAddresses[index];
+        final int result = globalAddresses[index];
+        assert result != SymbolTable.UNINITIALIZED_GLOBAL_ADDRESS : "Uninitialized global at index: " + index;
+        return result;
     }
 
     void setGlobalAddress(int globalIndex, int address) {
-        // TODO: checkNotLinked();
+        ensureGlobalsCapacity(globalIndex);
+        checkNotLinked();
         globalAddresses[globalIndex] = address;
     }
 
@@ -120,7 +204,7 @@ public class RuntimeState {
     }
 
     void setTable(WasmTable table) {
-        // TODO: checkNotLinked();
+        checkNotLinked();
         this.table = table;
     }
 
@@ -129,7 +213,7 @@ public class RuntimeState {
     }
 
     public void setMemory(WasmMemory memory) {
-        // TODO: checkNotLinked();
+        checkNotLinked();
         this.memory = memory;
     }
 }
