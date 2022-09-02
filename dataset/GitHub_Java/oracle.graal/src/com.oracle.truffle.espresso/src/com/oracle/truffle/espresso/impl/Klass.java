@@ -129,7 +129,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     }
 
     @ExportMessage
-    Object invokeMember(String member,
+    public Object invokeMember(String member,
                     Object[] arguments,
                     @Cached LookupDeclaredMethod lookupMethod,
                     @Exclusive @Cached InvokeEspressoNode invoke)
