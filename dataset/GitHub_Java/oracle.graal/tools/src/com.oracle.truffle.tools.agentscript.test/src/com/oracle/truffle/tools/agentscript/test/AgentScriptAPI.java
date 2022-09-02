@@ -59,39 +59,30 @@ public interface AgentScriptAPI {
     }
 
     interface SourceInfo {
-        /** Name of the {@link OnSourceLoadedHandler#sourceLoaded}.
+        /** Name of the {@link #sourceLoaded}.
          * @return name of the loaded source
-         * @since 0.1
          */
         String name();
-        /** Character content of the {@link OnSourceLoadedHandler#sourceLoaded}.
+        /** Character content of the {@link #sourceLoaded}.
          * @return content of the loaded source
-         * @since 0.1
          */
         String characters();
         /** Identification of this source's language.
          * @return String representing the language ID
-         * @since 0.1
          */
         String language();
         /** Mime type of this source.
          * @return given mime type or {@code null}
-         * @since 0.1
          */
         String mimeType();
         /** URI uniquely identifying the source.
          * @return the URI
-         * @since 0.1
          */
         String uri();
     }
 
     @FunctionalInterface
     interface OnSourceLoadedHandler extends Handler {
-        /** Called when a new source is loaded into the system.
-         * @param info information about the loaded source
-         * @since 0.1
-         */
         void sourceLoaded(SourceInfo info);
     }
     /** Register a handler to be notified when a source is loaded.
@@ -124,7 +115,7 @@ public interface AgentScriptAPI {
             String characters();
 
             /** Line of this location. The same as {@link #startLine()}.
-             *
+             * 
              * @return line number counting from one
              * @since 0.4
              */
@@ -172,10 +163,7 @@ public interface AgentScriptAPI {
         public boolean statements;
         public boolean roots;
         public Predicate<String> rootNameFilter;
-        /* @since 0.4 */
-        public Predicate<SourceInfo> sourceFilter;
     }
-
     /** Register a handler on a particular elements in the source code.
      *
      * @param event one of {@code "enter"}, {@code "return"} strings
@@ -197,9 +185,9 @@ public interface AgentScriptAPI {
     void on(String event, OnCloseHandler handler);
 
     /** Unregisters a handler.
-     *
+     * 
      * @param event the event type to unregister from
-     * @param handler the instance of handler registered
+     * @param handler the instance of handler registered 
      *   by one of the {@code on} methods
      * @since 0.2
      */
