@@ -23,6 +23,8 @@
 
 package com.oracle.truffle.espresso.nodes;
 
+import java.util.Arrays;
+
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
@@ -31,41 +33,47 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.substitutions.Substitutor;
 import com.oracle.truffle.object.DebugCounter;
 
-public class IntrinsicSubstitutorNode extends EspressoMethodNode {
+public final class IntrinsicSubstitutorNode extends EspressoMethodNode {
     @Child private Substitutor substitution;
 
     @CompilerDirectives.CompilationFinal //
-    int callCount = 0;
+    int callState = 0;
 
     // Truffle does not want to report split on first call. Delay until the second.
     private final DebugCounter nbSplits;
 
     public IntrinsicSubstitutorNode(Substitutor.Factory factory, Method method) {
-        super(method);
+        super(method.getMethodVersion());
         this.substitution = factory.create(EspressoLanguage.getCurrentContext().getMeta());
         if (substitution.shouldSplit()) {
-            this.nbSplits = DebugCounter.create("Splits for: " + factory.getMethodName());
+            this.nbSplits = DebugCounter.create("Splits for: " + Arrays.toString(factory.getMethodNames()));
         } else {
             this.nbSplits = null;
         }
     }
 
     private IntrinsicSubstitutorNode(IntrinsicSubstitutorNode toSplit) {
-        super(toSplit.getMethod());
+        super(toSplit.getMethodVersion());
         assert toSplit.substitution.shouldSplit();
         this.substitution = toSplit.substitution.split();
         this.nbSplits = toSplit.nbSplits;
-        this.callCount = 3;
+        this.callState = 3;
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
-        if (CompilerDirectives.inInterpreter() && callCount <= 1) {
-            callCount++;
+    void initializeBody(VirtualFrame frame) {
+        // nop
+    }
+
+    @Override
+    public Object executeBody(VirtualFrame frame) {
+        if (CompilerDirectives.inInterpreter() && callState <= 1) {
+            callState++;
         }
-        if (CompilerDirectives.inInterpreter() && callCount == 2 && !substitution.uninitialized()) {
+        if (CompilerDirectives.inInterpreter() && callState == 2 && !substitution.uninitialized()) {
+            // Hints to the truffle runtime that it should split this node on every new call site
             reportPolymorphicSpecialize();
-            callCount = 3;
+            callState = 3;
         }
         return substitution.invoke(frame.getArguments());
     }

@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import java.util.Arrays;
-
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -53,7 +51,6 @@ public final class NativeMethodNode extends EspressoMethodNode {
 
     private static final DebugCounter NATIVE_METHOD_CALLS = DebugCounter.create("Native method calls");
 
-
     public NativeMethodNode(TruffleObject boundNative, MethodVersion method, boolean isJni) {
         super(method);
         this.boundNative = boundNative;
@@ -72,7 +69,7 @@ public final class NativeMethodNode extends EspressoMethodNode {
         } else {
             if (!Types.isPrimitive(espressoType)) {
                 assert arg instanceof StaticObject;
-                return (/* @Word */ long) env.getHandles().createLocal((StaticObject) arg);
+                return (long) env.getHandles().createLocal((StaticObject) arg);
             }
             return arg;
         }
@@ -100,7 +97,12 @@ public final class NativeMethodNode extends EspressoMethodNode {
     }
 
     @Override
-    public Object execute(VirtualFrame frame) {
+    void initializeBody(VirtualFrame frame) {
+        // nop
+    }
+
+    @Override
+    public Object executeBody(VirtualFrame frame) {
         final JniEnv env = getContext().getJNI();
 
         int nativeFrame = env.getHandles().pushFrame();
@@ -118,16 +120,6 @@ public final class NativeMethodNode extends EspressoMethodNode {
     }
 
     @TruffleBoundary
-    private void logOut(Object[] argsWithEnv, Object result) {
-        System.err.println("Return from native " + getMethod() + Arrays.toString(argsWithEnv) + " -> " + result);
-    }
-
-    @TruffleBoundary
-    private void logIn(Object[] argsWithEnv) {
-        System.err.println("Calling native " + getMethod() + Arrays.toString(argsWithEnv));
-    }
-
-    @TruffleBoundary
     private static void maybeThrowAndClearPendingException(JniEnv jniEnv) {
         StaticObject ex = jniEnv.getPendingException();
         if (ex != null) {
@@ -137,7 +129,7 @@ public final class NativeMethodNode extends EspressoMethodNode {
     }
 
     protected Object processResult(JniEnv env, Object result) {
-        assert env.getNativePointer() != 0;
+        assert !InteropLibrary.getFactory().getUncached().isNull(env.getNativePointer());
 
         // JNI exception handling.
         maybeThrowAndClearPendingException(env);
