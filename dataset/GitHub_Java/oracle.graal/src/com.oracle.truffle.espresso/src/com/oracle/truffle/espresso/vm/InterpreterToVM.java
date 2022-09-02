@@ -30,8 +30,11 @@ import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.frame.FrameInstance;
 import com.oracle.truffle.api.frame.FrameInstanceVisitor;
+import com.oracle.truffle.api.frame.FrameSlot;
+import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -65,6 +68,7 @@ public final class InterpreterToVM implements ContextAccess {
     }
 
     private static final Unsafe hostUnsafe;
+    private static final FrameSlot BCIslot;
 
     static {
         try {
@@ -72,6 +76,13 @@ public final class InterpreterToVM implements ContextAccess {
             f.setAccessible(true);
             hostUnsafe = (Unsafe) f.get(null);
         } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw EspressoError.shouldNotReachHere(e);
+        }
+        try {
+            java.lang.reflect.Constructor<FrameSlot> frameSlot = FrameSlot.class.getDeclaredConstructor(FrameDescriptor.class, Object.class, Object.class, FrameSlotKind.class, int.class);
+            frameSlot.setAccessible(true);
+            BCIslot = frameSlot.newInstance(null, null, null, FrameSlotKind.Int, 0);
+        } catch (Throwable e) {
             throw EspressoError.shouldNotReachHere(e);
         }
     }
@@ -449,11 +460,13 @@ public final class InterpreterToVM implements ContextAccess {
                             Method method = espressoNode.getMethod();
                             if (!c.checkFillIn(method)) {
                                 if (!c.checkThrowableInit(method)) {
-                                    int bci = -1; // unknown
+                                    int bci = -2;
                                     if (espressoNode.isBytecodeNode()) {
-                                        bci = espressoNode.readBCI(frameInstance);
-                                    } else if (method.isNative()) {
-                                        bci = -2; // native
+                                        try {
+                                            bci = frameInstance.getFrame(FrameInstance.FrameAccess.READ_ONLY).getInt(BCIslot);
+                                        } catch (Throwable e) {
+                                            bci = -1;
+                                        }
                                     }
                                     frames.add(new VM.StackElement(method, bci));
                                     c.inc();

@@ -33,17 +33,12 @@ import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.espresso.debugger.api.JDWPOptions;
-import com.oracle.truffle.espresso.debugger.api.VMEventListeners;
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import org.graalvm.polyglot.Engine;
 
+import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.TruffleFile;
-
-import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.source.Source;
@@ -63,6 +58,7 @@ import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.substitutions.Substitutions;
+import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
 import com.oracle.truffle.espresso.vm.VM;
 
@@ -189,22 +185,8 @@ public final class EspressoContext {
 
     public void initializeContext() {
         assert !this.initialized;
-        new JDWPContextImpl(this, getEnv(), getLanguage()).jdwpInit();
         spawnVM();
         this.initialized = true;
-        VMInitializedListeners.getDefault().fire();
-    }
-
-    public Source findOrCreateSource(Method method) {
-        String sourceFile = method.getSourceFile();
-        if (sourceFile == null) {
-            return null;
-        } else {
-            TruffleFile file = env.getInternalTruffleFile(sourceFile);
-            Source source = Source.newBuilder("java", file).content(Source.CONTENT_NONE).build();
-            // sources are interned so no cache needed (hopefully)
-            return source;
-        }
     }
 
     public Meta getMeta() {
@@ -261,6 +243,12 @@ public final class EspressoContext {
         StaticObject outOfMemoryErrorInstance = meta.OutOfMemoryError.allocateInstance();
         meta.StackOverflowError.lookupDeclaredMethod(Name.INIT, Signature._void_String).invokeDirect(stackOverflowErrorInstance, meta.toGuestString("VM StackOverFlow"));
         meta.OutOfMemoryError.lookupDeclaredMethod(Name.INIT, Signature._void_String).invokeDirect(outOfMemoryErrorInstance, meta.toGuestString("VM OutOfMemory"));
+
+        stackOverflowErrorInstance.setHiddenField(meta.HIDDEN_FRAMES, new VM.StackTrace());
+        stackOverflowErrorInstance.setField(meta.Throwable_backtrace, stackOverflowErrorInstance);
+        outOfMemoryErrorInstance.setHiddenField(meta.HIDDEN_FRAMES, new VM.StackTrace());
+        outOfMemoryErrorInstance.setField(meta.Throwable_backtrace, outOfMemoryErrorInstance);
+
         this.stackOverflow = new EspressoException(stackOverflowErrorInstance);
         this.outOfMemory = new EspressoException(outOfMemoryErrorInstance);
 
@@ -275,7 +263,7 @@ public final class EspressoContext {
 
         StaticObject systemThreadGroup = meta.ThreadGroup.allocateInstance();
         meta.ThreadGroup.lookupDeclaredMethod(Name.INIT, Signature._void) // private ThreadGroup()
-                .invokeDirect(systemThreadGroup);
+                        .invokeDirect(systemThreadGroup);
         StaticObject mainThread = meta.Thread.allocateInstance();
         // Allow guest Thread.currentThread() to work.
         mainThread.setIntField(meta.Thread_priority, Thread.NORM_PRIORITY);
@@ -286,19 +274,17 @@ public final class EspressoContext {
 
         // Guest Thread.currentThread() must work as this point.
         meta.ThreadGroup // public ThreadGroup(ThreadGroup parent, String name)
-                .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_String) //
-                .invokeDirect(mainThreadGroup,
-                        /* parent */ systemThreadGroup,
-                        /* name */ meta.toGuestString("main"));
+                        .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_String) //
+                        .invokeDirect(mainThreadGroup,
+                                        /* parent */ systemThreadGroup,
+                                        /* name */ meta.toGuestString("main"));
 
         meta.Thread // public Thread(ThreadGroup group, String name)
-                .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_String) //
-                .invokeDirect(mainThread,
-                        /* group */ mainThreadGroup,
-                        /* name */ meta.toGuestString("main"));
+                        .lookupDeclaredMethod(Name.INIT, Signature._void_ThreadGroup_String) //
+                        .invokeDirect(mainThread,
+                                        /* group */ mainThreadGroup,
+                                        /* name */ meta.toGuestString("main"));
         mainThread.setIntField(meta.Thread_threadStatus, Target_java_lang_Thread.State.RUNNABLE.value);
-
-        VMEventListeners.getDefault().threadStarted(mainThread);
     }
 
     public void interruptActiveThreads() {
@@ -410,6 +396,7 @@ public final class EspressoContext {
     public EspressoException getOutOfMemory() {
         return outOfMemory;
     }
+
     // Thread management
 
     public StaticObject getGuestThreadFromHost(Thread host) {
@@ -420,16 +407,16 @@ public final class EspressoContext {
         return threadManager.getGuestThreadFromHost(Thread.currentThread());
     }
 
-    public Iterable<StaticObject> getActiveThreads() {
-        return threadManager.activeThreads();
-    }
-
     public void registerThread(Thread host, StaticObject self) {
         threadManager.registerThread(host, self);
     }
 
     public void unregisterThread(StaticObject self) {
         threadManager.unregisterThread(self);
+    }
+
+    public StaticObject[] getActiveThreads() {
+        return threadManager.activeThreads();
     }
 
     public void invalidateNoThreadStop(String message) {
@@ -462,7 +449,7 @@ public final class EspressoContext {
     public final boolean InlineFieldAccessors;
 
     public final EspressoOptions.VerifyMode Verify;
-    public final JDWPOptions JDWPOptions;
+    public final EspressoOptions.JDWPOptions JDWPOptions;
 
     // endregion Options
 }

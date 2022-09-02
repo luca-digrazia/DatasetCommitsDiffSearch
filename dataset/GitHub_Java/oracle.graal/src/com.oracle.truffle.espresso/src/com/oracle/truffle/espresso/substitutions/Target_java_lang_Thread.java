@@ -23,16 +23,12 @@
 
 package com.oracle.truffle.espresso.substitutions;
 
-import static com.oracle.truffle.espresso.descriptors.Symbol.Name;
-import static com.oracle.truffle.espresso.descriptors.Symbol.Signature;
-
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.EspressoOptions;
-import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
@@ -128,9 +124,7 @@ public final class Target_java_lang_Thread {
                     } else {
                         setThreadStop(thread, KillStatus.NORMAL);
                     }
-                    // check if death cause throwable is set, if not throw ThreadDeath
-                    StaticObject deathThrowable = (StaticObject) getDeathThrowable(thread);
-                    throw deathThrowable != null ? meta.throwEx(deathThrowable) : meta.throwEx(ThreadDeath.class);
+                    throw meta.throwEx(ThreadDeath.class);
                 case DISSIDENT:
                     // This thread refuses to stop. Send a host exception.
                     // throw getMeta().throwEx(ThreadDeath.class);
@@ -197,9 +191,7 @@ public final class Target_java_lang_Thread {
                         self.getKlass().vtableLookup(meta.Thread_run.getVTableIndex()).invokeDirect(self);
                         checkDeprecatedState(meta, self);
                     } catch (EspressoException uncaught) {
-                        Method dispatchUncaughtException = self.getKlass().lookupMethod(Name.dispatchUncaughtException, Signature._void_Throwable);
-                        assert !dispatchUncaughtException.isStatic();
-                        dispatchUncaughtException.invokeDirect(self, uncaught.getExceptionObject());
+                        meta.Thread_dispatchUncaughtException.invokeDirect(self, uncaught.getException());
                     } finally {
                         setThreadStop(self, KillStatus.EXITING);
                         meta.Thread_exit.invokeDirect(self);
@@ -367,11 +359,11 @@ public final class Target_java_lang_Thread {
 
     @TruffleBoundary
     @Substitution(hasReceiver = true)
-    public static void stop0(@Host(Object.class) StaticObject self, Object throwable) {
+    @SuppressWarnings("unused")
+    public static void stop0(@Host(Object.class) StaticObject self, Object unused) {
         self.getKlass().getContext().invalidateNoThreadStop("Calling thread.stop()");
         killThread(self);
         setInterrupt(self, true);
-        setDeathThrowable(self, throwable);
         Thread hostThread = getHostFromGuestThread(self);
         if (hostThread == null) {
             return;
@@ -400,14 +392,6 @@ public final class Target_java_lang_Thread {
 
     public static void killThread(StaticObject thread) {
         thread.setHiddenField(thread.getKlass().getMeta().HIDDEN_DEATH, KillStatus.KILL);
-    }
-
-    public static void setDeathThrowable(StaticObject self, Object deathThrowable) {
-        self.setHiddenField(self.getKlass().getMeta().HIDDEN_DEATH_THROWABLE, deathThrowable);
-    }
-
-    public static Object getDeathThrowable(StaticObject self) {
-        return self.getHiddenField(self.getKlass().getMeta().HIDDEN_DEATH_THROWABLE);
     }
 
     public static KillStatus getKillStatus(StaticObject thread) {
@@ -461,7 +445,7 @@ public final class Target_java_lang_Thread {
     /**
      * Synchronizes on Target_ class to avoid deadlock when locking on thread object.
      */
-    private static synchronized SuspendLock initSuspendLock(@Host(Object.class) StaticObject self) {
+    private synchronized static SuspendLock initSuspendLock(@Host(Object.class) StaticObject self) {
         SuspendLock lock = getSuspendLock(self);
         if (lock == null) {
             lock = new SuspendLock();

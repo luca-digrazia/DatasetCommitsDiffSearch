@@ -87,7 +87,6 @@ import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.jni.Callback;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.jni.JniImpl;
@@ -287,50 +286,18 @@ public final class VM extends NativeEnv implements ContextAccess {
 
     @VmImpl
     @JniImpl
-    public static @Host(Object.class) StaticObject JVM_Clone(@Host(Object.class) StaticObject self) {
-        assert StaticObject.notNull(self);
+    public @Host(Object.class) StaticObject JVM_Clone(@Host(Object.class) StaticObject self) {
         if (self.isArray()) {
-            // Arrays are always cloneable.
+            // For arrays.
             return self.copy();
         }
-
-        Meta meta = self.getKlass().getMeta();
+        Meta meta = getMeta();
         if (!meta.Cloneable.isAssignableFrom(self.getKlass())) {
             throw meta.throwEx(java.lang.CloneNotSupportedException.class);
         }
 
-        if (InterpreterToVM.instanceOf(self, meta.Reference)) {
-            // HotSpot 8202260: The semantics of cloning a Reference object is not clearly defined.
-            // In addition, it is questionable whether it should be supported due to its tight
-            // interaction with garbage collector.
-            //
-            // The reachability state of a Reference object may change during GC reference
-            // processing. The referent may have been cleared when it reaches its reachability
-            // state. On the other hand, it may be enqueued or pending for enqueuing. Cloning a
-            // Reference object with a referent that is unreachable but not yet cleared might mean
-            // to resurrect the referent. A cloned enqueued Reference object will never be enqueued.
-            //
-            // A Reference object cannot be meaningfully cloned.
-
-            // Non-strong references are not cloneable.
-            if (InterpreterToVM.instanceOf(self, meta.WeakReference) //
-                            || InterpreterToVM.instanceOf(self, meta.SoftReference) //
-                            || InterpreterToVM.instanceOf(self, meta.FinalReference) //
-                            || InterpreterToVM.instanceOf(self, meta.PhantomReference)) {
-
-                throw meta.throwExWithMessage(java.lang.CloneNotSupportedException.class, self.getKlass().getName().toString());
-            }
-        }
-
-        final StaticObject clone = self.copy();
-
-        // If the original object is finalizable, so is the copy.
-        assert self.getKlass() instanceof ObjectKlass;
-        if (((ObjectKlass) self.getKlass()).hasFinalizer()) {
-            meta.Finalizer_register.invokeDirect(null, clone);
-        }
-
-        return clone;
+        // Normal object just copy the fields.
+        return self.copy();
     }
 
     public Callback vmMethodWrapper(VMSubstitutor m) {
@@ -349,7 +316,7 @@ public final class VM extends NativeEnv implements ContextAccess {
                     return m.invoke(VM.this, args);
                 } catch (EspressoException e) {
                     if (isJni) {
-                        jniEnv.getThreadLocalPendingException().set(e.getExceptionObject());
+                        jniEnv.getThreadLocalPendingException().set(e.getException());
                         return defaultValue(m.returnType());
                     }
                     throw EspressoError.shouldNotReachHere(e);
@@ -990,8 +957,8 @@ public final class VM extends NativeEnv implements ContextAccess {
 
         private Element top;
 
-        public void push(FrameInstance frame, StaticObject context, Klass klass) {
-            top = new Element(frame, context, klass, top);
+        public void push(FrameInstance frame, StaticObject context) {
+            top = new Element(frame, context, top);
         }
 
         public void pop() {
@@ -1008,21 +975,14 @@ public final class VM extends NativeEnv implements ContextAccess {
             return top.context;
         }
 
-        public StaticObject classLoader() {
-            assert top != null;
-            return top.klass.getDefiningClassLoader();
-        }
-
         static private class Element {
             long frameID;
             StaticObject context;
-            Klass klass;
             Element next;
 
-            public Element(FrameInstance frame, StaticObject context, Klass klass, Element next) {
+            public Element(FrameInstance frame, StaticObject context, Element next) {
                 this.frameID = initPrivilegedFrame(frame);
                 this.context = context;
-                this.klass = klass;
                 this.next = next;
             }
 
@@ -1108,17 +1068,17 @@ public final class VM extends NativeEnv implements ContextAccess {
 
         // Prepare the privileged stack
         PrivilegedStack stack = privilegedStackThreadLocal.get();
-        stack.push(callerFrame, acc, caller);
+        stack.push(callerFrame, acc);
 
         // Execute the action.
         StaticObject result = StaticObject.NULL;
         try {
             result = (StaticObject) run.invokeDirect(action);
         } catch (EspressoException e) {
-            if (getMeta().Exception.isAssignableFrom(e.getExceptionObject().getKlass()) &&
-                            !getMeta().RuntimeException.isAssignableFrom(e.getExceptionObject().getKlass())) {
+            if (getMeta().Exception.isAssignableFrom(e.getException().getKlass()) &&
+                            !getMeta().RuntimeException.isAssignableFrom(e.getException().getKlass())) {
                 StaticObject wrapper = getMeta().PrivilegedActionException.allocateInstance();
-                getMeta().PrivilegedActionException_init_Exception.invokeDirect(wrapper, e.getExceptionObject());
+                getMeta().PrivilegedActionException_init_Exception.invokeDirect(wrapper, e.getException());
                 throw new EspressoException(wrapper);
             }
             throw e;
@@ -1513,125 +1473,5 @@ public final class VM extends NativeEnv implements ContextAccess {
     @VmImpl
     public static int JVM_ActiveProcessorCount() {
         return Runtime.getRuntime().availableProcessors();
-    }
-
-    @JniImpl
-    @VmImpl
-    public @Host(Class.class) StaticObject JVM_CurrentLoadedClass() {
-        PrivilegedStack stack = privilegedStackThreadLocal.get();
-        StaticObject mirrorKlass = Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<StaticObject>() {
-            public StaticObject visitFrame(FrameInstance frameInstance) {
-                Method m = getMethodFromFrame(frameInstance);
-                if (m != null) {
-                    if (isTrustedFrame(frameInstance, stack)) {
-                        return StaticObject.NULL;
-                    }
-                    if (!m.isNative()) {
-                        ObjectKlass klass = m.getDeclaringKlass();
-                        StaticObject loader = klass.getDefiningClassLoader();
-                        if (StaticObject.notNull(loader) && !isTrustedLoader(loader)) {
-                            return klass.mirror();
-                        }
-                    }
-                }
-                return null;
-            }
-        });
-        return mirrorKlass == null ? StaticObject.NULL : mirrorKlass;
-    }
-
-    @JniImpl
-    @VmImpl
-    public @Host(Class.class) StaticObject JVM_CurrentClassLoader() {
-        @Host(Class.class)
-        StaticObject loadedClass = JVM_CurrentLoadedClass();
-        return StaticObject.isNull(loadedClass) ? StaticObject.NULL : loadedClass.getMirrorKlass().getDefiningClassLoader();
-    }
-
-    @JniImpl
-    @VmImpl
-    public int JVM_ClassLoaderDepth() {
-        PrivilegedStack stack = privilegedStackThreadLocal.get();
-        Integer res = Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Integer>() {
-            int depth = 0;
-
-            public Integer visitFrame(FrameInstance frameInstance) {
-                Method m = getMethodFromFrame(frameInstance);
-                if (m != null) {
-                    if (isTrustedFrame(frameInstance, stack)) {
-                        return -1;
-                    }
-                    if (!m.isNative()) {
-                        ObjectKlass klass = m.getDeclaringKlass();
-                        StaticObject loader = klass.getDefiningClassLoader();
-                        if (StaticObject.notNull(loader) && !isTrustedLoader(loader)) {
-                            return depth;
-                        }
-                        depth++;
-                    }
-                }
-                return null;
-            }
-        });
-        return res == null ? -1 : res;
-    }
-
-    @JniImpl
-    @VmImpl
-    public int JVM_ClassDepth(@Host(String.class) StaticObject name) {
-        Symbol<Name> className = getContext().getNames().lookup(Meta.toHostString(name).replace('.', '/'));
-        if (className == null) {
-            return -1;
-        }
-        Integer res = Truffle.getRuntime().iterateFrames(new FrameInstanceVisitor<Integer>() {
-            int depth = 0;
-
-            public Integer visitFrame(FrameInstance frameInstance) {
-                Method m = getMethodFromFrame(frameInstance);
-                if (m != null) {
-                    if (className.equals(m.getDeclaringKlass().getName())) {
-                        return depth;
-                    }
-                    depth++;
-                }
-                return null;
-            }
-        });
-        return res == null ? -1 : res;
-    }
-
-    private boolean isTrustedFrame(FrameInstance frameInstance, PrivilegedStack stack) {
-        if (stack.compare(frameInstance)) {
-            StaticObject loader = stack.classLoader();
-            if (StaticObject.isNull(loader)) {
-                return true;
-            }
-            if (isTrustedLoader(loader)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private StaticObject nonReflectionClassLoader(StaticObject loader) {
-        if (StaticObject.notNull(loader)) {
-            Meta meta = getMeta();
-            if (meta.sun_reflect_DelegatingClassLoader.isAssignableFrom(loader.getKlass())) {
-                return loader.getField(meta.ClassLoader_parent);
-            }
-        }
-        return loader;
-    }
-
-    private boolean isTrustedLoader(StaticObject loader) {
-        StaticObject nonDelLoader = nonReflectionClassLoader(loader);
-        StaticObject systemLoader = (StaticObject) getMeta().ClassLoader_getSystemClassLoader.invokeDirect(null);
-        while (StaticObject.notNull(systemLoader)) {
-            if (systemLoader == nonDelLoader) {
-                return true;
-            }
-            systemLoader = systemLoader.getField(getMeta().ClassLoader_parent);
-        }
-        return false;
     }
 }
