@@ -142,13 +142,13 @@ public class GraphTest extends PartialEvaluationTest {
         return graph;
     }
 
-    private static void assertNoInvokes(StructuredGraph graph) {
+    private void assertNoInvokes(StructuredGraph graph) {
         for (MethodCallTargetNode node : graph.getNodes(MethodCallTargetNode.TYPE)) {
             Assert.fail("Found invalid method call target node: " + node + " (" + node.targetMethod() + ")");
         }
     }
 
-    private static void assertCount(StructuredGraph graph, Class<? extends org.graalvm.compiler.graph.Node> nodeClass, int expected) {
+    private void assertCount(StructuredGraph graph, Class<? extends org.graalvm.compiler.graph.Node> nodeClass, int expected) {
         Assert.assertEquals(expected, graph.getNodes().filter(nodeClass).count());
     }
 
@@ -258,7 +258,7 @@ public class GraphTest extends PartialEvaluationTest {
         @Child private StaticObjectAbstractNode node;
 
         public StaticObjectRootNode(TruffleLanguage<?> language, FrameDescriptor descriptor, StaticObjectAbstractNode node) {
-            super(language, descriptor);
+            super(null, descriptor);
             this.node = node;
         }
 
