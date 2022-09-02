@@ -31,15 +31,12 @@ import org.graalvm.compiler.truffle.common.TruffleMetaAccessProvider;
 import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.InliningTruffleTierOnExpand;
-
 public final class CallTree extends Graph {
 
     private final InliningPolicy policy;
     private final GraphManager graphManager;
     private final CallNode root;
     private final PartialEvaluator.Request request;
-    final boolean truffleTierOnExpand;
     int expanded = 1;
     int inlined = 1;
     int frontierSize;
@@ -50,7 +47,6 @@ public final class CallTree extends Graph {
         this.policy = policy;
         this.request = request;
         this.graphManager = new GraphManager(partialEvaluator, request);
-        truffleTierOnExpand = request.options.get(InliningTruffleTierOnExpand);
         // Should be kept as the last call in the constructor, as this is an argument.
         this.root = CallNode.makeRoot(this, request);
     }
