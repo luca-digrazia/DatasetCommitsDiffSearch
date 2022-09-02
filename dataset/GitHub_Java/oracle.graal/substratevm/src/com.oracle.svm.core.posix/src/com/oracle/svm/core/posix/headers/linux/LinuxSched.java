@@ -24,20 +24,24 @@
  */
 package com.oracle.svm.core.posix.headers.linux;
 
+import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.CContext;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.function.CMacroInfo;
 import org.graalvm.nativeimage.c.struct.CStruct;
-import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 
 import com.oracle.svm.core.posix.headers.PosixDirectives;
 
 @CContext(PosixDirectives.class)
-@Platforms({DeprecatedPlatform.LINUX_SUBSTITUTION.class})
+@Platforms({Platform.LINUX.class})
 public class LinuxSched {
+
     // Checkstyle: stop
+
+    @CFunction
+    public static native int sched_setaffinity(int pid, int cpu_set_size, cpu_set_t set_ptr);
 
     @CFunction
     public static native int sched_getaffinity(int pid, int cpu_set_size, cpu_set_t set_ptr);
