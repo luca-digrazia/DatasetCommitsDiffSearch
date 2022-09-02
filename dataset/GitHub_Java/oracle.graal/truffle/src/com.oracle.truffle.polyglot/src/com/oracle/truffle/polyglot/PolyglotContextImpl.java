@@ -913,23 +913,29 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         return context;
     }
 
-    void initializeInnerContextLanguage(String languageId) {
+    void initializeInternalLanguage(String languageId) {
         PolyglotLanguage language = engine.idToLanguage.get(languageId);
-        assert language != null : "language creating the inner context not be found";
-        Object prev = engine.enterIfNeeded(this);
-        try {
-            initializeLanguage(language);
-        } finally {
-            engine.leaveIfNeeded(prev, this);
+        if (language == null) {
+            engine.requirePublicLanguage(languageId);
+            assert false;
+            return;
         }
+        initializeLanguage(language);
     }
 
     private boolean initializeLanguage(PolyglotLanguage language) {
         PolyglotLanguageContext languageContext = getContext(language);
         assert languageContext != null;
-        languageContext.checkAccess(null);
-        if (!languageContext.isInitialized()) {
-            return languageContext.ensureInitialized(null);
+        Object prev = hostEnter(languageContext);
+        try {
+            languageContext.checkAccess(null);
+            if (!languageContext.isInitialized()) {
+                return languageContext.ensureInitialized(null);
+            }
+        } catch (Throwable t) {
+            throw PolyglotImpl.guestToHostException(languageContext, t, true);
+        } finally {
+            hostLeave(languageContext, prev);
         }
         return false;
     }
@@ -937,15 +943,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     @Override
     public boolean initializeLanguage(String languageId) {
         PolyglotLanguage language = requirePublicLanguage(languageId);
-        PolyglotLanguageContext languageContext = getContext(language);
-        Object prev = hostEnter(languageContext);
-        try {
-            return initializeLanguage(language);
-        } catch (Throwable t) {
-            throw PolyglotImpl.guestToHostException(languageContext, t, true);
-        } finally {
-            hostLeave(languageContext, prev);
-        }
+        return initializeLanguage(language);
     }
 
     @Override
