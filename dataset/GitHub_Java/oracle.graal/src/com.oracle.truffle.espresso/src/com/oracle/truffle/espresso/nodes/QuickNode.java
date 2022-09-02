@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,19 +24,29 @@ package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-public abstract class QuickNode extends Node {
+public abstract class QuickNode extends EspressoInstrumentableQuickNode {
 
     public static final QuickNode[] EMPTY_ARRAY = new QuickNode[0];
 
-    public abstract int invoke(VirtualFrame frame, int top);
+    protected final int top;
+
+    private final int callerBCI;
+
+    protected QuickNode(int top, int callerBCI) {
+        this.top = top;
+        this.callerBCI = callerBCI;
+    }
+
+    @Override
+    public abstract int execute(VirtualFrame frame);
 
     // TODO(peterssen): Make this a node?
-    protected static final StaticObject nullCheck(StaticObject value) {
+    protected static StaticObject nullCheck(StaticObject value) {
         if (StaticObject.isNull(value)) {
             CompilerDirectives.transferToInterpreter();
             // TODO(peterssen): Profile whether null was hit or not.
@@ -44,5 +54,18 @@ public abstract class QuickNode extends Node {
             throw meta.throwEx(NullPointerException.class);
         }
         return value;
+    }
+
+    public final BytecodeNode getBytecodesNode() {
+        return (BytecodeNode) getParent();
+    }
+
+    public int getBCI() {
+        return callerBCI;
+    }
+
+    @Override
+    public SourceSection getSourceSection() {
+        return getBytecodesNode().getSourceSectionAtBCI(callerBCI);
     }
 }
