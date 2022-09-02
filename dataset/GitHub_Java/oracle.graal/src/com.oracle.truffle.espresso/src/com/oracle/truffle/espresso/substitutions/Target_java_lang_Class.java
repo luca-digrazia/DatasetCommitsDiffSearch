@@ -28,7 +28,6 @@ import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntFunction;
-import java.util.logging.Level;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -155,7 +154,7 @@ public final class Target_java_lang_Class {
             throw e;
         } catch (Throwable e) {
             CompilerDirectives.transferToInterpreter();
-            context.getLogger().log(Level.WARNING, "Host exception happened in Class.forName: {}", e);
+            System.err.println("Host exception happened in Class.forName: " + e);
             throw e;
         }
     }

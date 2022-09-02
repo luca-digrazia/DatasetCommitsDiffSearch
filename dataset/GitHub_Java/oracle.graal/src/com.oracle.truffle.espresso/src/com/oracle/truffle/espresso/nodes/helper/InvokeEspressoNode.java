@@ -4,8 +4,6 @@ import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.ArityException;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.interop.UnsupportedTypeException;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.Node;
@@ -23,7 +21,18 @@ public abstract class InvokeEspressoNode extends Node {
         return InvokeEspressoNodeGen.create();
     }
 
-    public abstract Object execute(Method method, Object receiver, Object[] arguments) throws ArityException, UnsupportedMessageException, UnsupportedTypeException;
+    public final Object execute(Method method, Object receiver, Object[] arguments) throws UnsupportedTypeException, ArityException {
+        try {
+            return executeImpl(method, receiver, arguments);
+        } catch (ClassCastException | NullPointerException e) {
+            // conversion failed by ToJavaNode
+            throw UnsupportedTypeException.create(arguments);
+        } catch (UnsupportedTypeException | ArityException e) {
+            throw e;
+        }
+    }
+
+    protected abstract Object executeImpl(Method method, Object receiver, Object[] args) throws UnsupportedTypeException, ArityException;
 
     static ToEspressoNode[] createToHost(int argsLength) {
         ToEspressoNode[] toEspresso = new ToEspressoNode[argsLength];
@@ -38,16 +47,14 @@ public abstract class InvokeEspressoNode extends Node {
     @Specialization(guards = {"method == cachedMethod"}, limit = "LIMIT")
     Object doCached(Method method, Object receiver, Object[] arguments,
                     @Cached("method") Method cachedMethod,
-                    @Cached(value = "createToHost(method.getParameterCount())", allowUncached = true) ToEspressoNode[] toEspressoNodes)
-                    throws ArityException, UnsupportedMessageException, UnsupportedTypeException {
+                    @Cached(value = "createToHost(method.getParameterCount())", allowUncached = true) ToEspressoNode[] toEspressoNodes) throws ArityException {
         int arity = cachedMethod.getParameterCount();
         if (arguments.length != arity) {
             throw ArityException.create(arity, arguments.length);
         }
         Klass[] types = cachedMethod.resolveParameterKlasses();
-        int parameterCount = method.getParameterCount();
-        Object[] convertedArguments = new Object[parameterCount];
-        for (int i = 0; i < parameterCount; i++) {
+        Object[] convertedArguments = new Object[arguments.length];
+        for (int i = 0; i < toEspressoNodes.length; i++) {
             convertedArguments[i] = toEspressoNodes[i].execute(arguments[i], types[i]);
         }
         return cachedMethod.invokeDirect(receiver, convertedArguments);

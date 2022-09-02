@@ -24,6 +24,7 @@ package com.oracle.truffle.espresso.launcher;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +38,7 @@ import org.graalvm.options.OptionCategory;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Context.Builder;
 import org.graalvm.polyglot.PolyglotException;
+import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 
 public class EspressoLauncher extends AbstractLanguageLauncher {
@@ -254,15 +256,6 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
         }
     }
 
-    // cf. sun.launcher.LauncherHelper
-    private enum LaunchMode {
-        LM_UNKNOWN,
-        LM_CLASS,
-        LM_JAR,
-        // LM_MODULE,
-        // LM_SOURCE
-    }
-
     @Override
     protected void launch(Builder contextBuilder) {
         contextBuilder.arguments(getLanguageId(), mainClassArgs.toArray(new String[0])).in(System.in).out(System.out).err(System.err);
@@ -292,7 +285,7 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
             try {
                 Value launcherHelper = context.eval("java", "sun.launcher.LauncherHelper");
                 Value mainKlass = launcherHelper //
-                                .invokeMember("checkAndLoadMain", true, LaunchMode.LM_CLASS.ordinal(), mainClassName) //
+                                .invokeMember("checkAndLoadMain", true, 1 /* LM_CLASS */, mainClassName) //
                                 .getMember("static");
                 mainKlass.invokeMember("main", (Object) mainClassArgs.toArray(new String[0]));
                 rc = 0;
@@ -305,6 +298,11 @@ public class EspressoLauncher extends AbstractLanguageLauncher {
             }
         }
         throw exit(rc);
+    }
+
+    private void eval(Context context) throws IOException {
+        Source src = Source.newBuilder(getLanguageId(), "", mainClassName).build();
+        context.eval(src);
     }
 
     @Override

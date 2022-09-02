@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,21 +22,25 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
+import static com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+
+import java.util.function.IntFunction;
+
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.espresso.EspressoLanguage;
-import com.oracle.truffle.espresso.impl.MethodInfo;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.runtime.Utils;
 
 public class MainLauncherRootNode extends RootNode {
 
-    private final MethodInfo main;
+    private final Method main;
 
-    public MainLauncherRootNode(EspressoLanguage language, MethodInfo main) {
+    public MainLauncherRootNode(EspressoLanguage language, Method main) {
         super(language);
         this.main = main;
     }
@@ -46,19 +50,31 @@ public class MainLauncherRootNode extends RootNode {
         try {
             assert frame.getArguments().length == 0;
             EspressoContext context = main.getContext();
+            // main.getDeclaringKlass().safeInitialize();
             // No var-args here, pull parameters from the context.
+            // getCallTarget initializes for us.
             return main.getCallTarget().call((Object) toGuestArguments(context, context.getMainArguments()));
-        } catch (EspressoException wrapped) {
-            throw wrapped;
-        } catch (Throwable throwable) {
-            // Non-espresso exceptions cannot escape to the guest.
-            // throw EspressoError.shouldNotReachHere();
-            throw new RuntimeException(throwable);
+        } catch (EspressoException e) {
+            printStackTrace(e);
+            return StaticObject.NULL;
+        } finally {
+            main.getMeta().java_lang_reflect_Shutdown_shutdown.invokeDirect(null);
         }
+    }
+
+    @TruffleBoundary
+    private static void printStackTrace(EspressoException e) {
+        StaticObject guestException = e.getExceptionObject();
+        guestException.getKlass().lookupMethod(Symbol.Name.printStackTrace, Symbol.Signature._void).invokeDirect(guestException);
     }
 
     private static StaticObject toGuestArguments(EspressoContext context, String... args) {
         Meta meta = context.getMeta();
-        return (StaticObject) meta.STRING.allocateArray(args.length, i -> meta.toGuest(args[i]));
+        return meta.java_lang_String.allocateReferenceArray(args.length, new IntFunction<StaticObject>() {
+            @Override
+            public StaticObject apply(int i) {
+                return meta.toGuestString(args[i]);
+            }
+        });
     }
 }
