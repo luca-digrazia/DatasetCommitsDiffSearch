@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,24 +47,23 @@ import jdk.vm.ci.meta.Value;
 public final class AllocaNode extends FixedWithNextNode implements LIRLowerable {
 
     public static final NodeClass<AllocaNode> TYPE = NodeClass.create(AllocaNode.class);
+    /**
+     * The number of slots in block.
+     */
+    protected final int slots;
 
-    private final int sizeInBytes;
-    private final int alignmentInBytes;
-
-    public AllocaNode(@InjectedNodeParameter WordTypes wordTypes, int sizeInBytes, int alignmentInBytes) {
+    public AllocaNode(@InjectedNodeParameter WordTypes wordTypes, int slots) {
         super(TYPE, StampFactory.forKind(wordTypes.getWordKind()));
-        assert sizeInBytes > 0 && alignmentInBytes > 0;
-        this.sizeInBytes = sizeInBytes;
-        this.alignmentInBytes = alignmentInBytes;
+        this.slots = slots;
     }
 
     @Override
     public void generate(NodeLIRBuilderTool gen) {
-        VirtualStackSlot array = gen.getLIRGeneratorTool().allocateStackMemory(sizeInBytes, alignmentInBytes);
+        VirtualStackSlot array = gen.getLIRGeneratorTool().allocateStackSlots(slots);
         Value result = gen.getLIRGeneratorTool().emitAddress(array);
         gen.setResult(this, result);
     }
 
     @NodeIntrinsic
-    public static native Word alloca(@ConstantNodeParameter int sizeInBytes, @ConstantNodeParameter int alignmentInBytes);
+    public static native Word alloca(@ConstantNodeParameter int slots);
 }

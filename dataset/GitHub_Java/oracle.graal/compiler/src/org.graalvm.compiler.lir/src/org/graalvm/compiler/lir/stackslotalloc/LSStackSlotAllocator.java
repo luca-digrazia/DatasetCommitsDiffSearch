@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,12 +33,11 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.PriorityQueue;
-import java.util.function.Predicate;
 
 import org.graalvm.collections.EconomicSet;
-import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.cfg.AbstractBlockBase;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
@@ -50,7 +49,6 @@ import org.graalvm.compiler.lir.LIRInstruction.OperandFlag;
 import org.graalvm.compiler.lir.LIRInstruction.OperandMode;
 import org.graalvm.compiler.lir.ValueProcedure;
 import org.graalvm.compiler.lir.VirtualStackSlot;
-import org.graalvm.compiler.lir.framemap.FrameMap;
 import org.graalvm.compiler.lir.framemap.FrameMapBuilderTool;
 import org.graalvm.compiler.lir.framemap.SimpleVirtualStackSlot;
 import org.graalvm.compiler.lir.framemap.VirtualStackSlotRange;
@@ -60,7 +58,6 @@ import org.graalvm.compiler.options.NestedBooleanOptionKey;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 
-import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.StackSlot;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.Value;
@@ -159,15 +156,7 @@ public final class LSStackSlotAllocator extends AllocationPhase {
             }
             // step 4: allocate stack slots
             try (DebugCloseable t = AllocateSlotsTimer.start(debug)) {
-                /*
-                 * Allocate primitive spill slots before reference spill slots. This ensures a
-                 * ReferenceMap will be as compact as possible and only exceed the encoding limit of
-                 * a stack offset if there are really too many objects live on the stack at an
-                 * instruction with a ReferenceMap (as opposed to the method simply having a very
-                 * large frame).
-                 */
-                allocateStackSlots(IS_PRIMITIVE_INTERVAL);
-                allocateStackSlots(IS_REFERENCE_INTERVAL);
+                allocateStackSlots();
             }
             if (debug.isDumpEnabled(DebugContext.VERBOSE_LEVEL)) {
                 dumpIntervals("After stack slot allocation");
@@ -237,36 +226,21 @@ public final class LSStackSlotAllocator extends AllocationPhase {
         // ====================
 
         @SuppressWarnings("try")
-        private void allocateStackSlots(Predicate<StackInterval> predicate) {
+        private void allocateStackSlots() {
+            // create unhandled lists
             for (StackInterval interval : stackSlotMap) {
-                if (interval != null && (predicate == null || predicate.test(interval))) {
+                if (interval != null) {
                     unhandled.add(interval);
                 }
             }
+
             for (StackInterval current = activateNext(); current != null; current = activateNext()) {
                 try (Indent indent = debug.logAndIndent("allocate %s", current)) {
                     allocateSlot(current);
                 }
             }
 
-            // Cannot re-use free slots between rounds of slot allocation
-            freeSlots = null;
-            active.clear();
         }
-
-        private static final Predicate<StackInterval> IS_REFERENCE_INTERVAL = new Predicate<StackInterval>() {
-            @Override
-            public boolean test(StackInterval interval) {
-                return !((LIRKind) interval.kind()).isValue();
-            }
-        };
-
-        private static final Predicate<StackInterval> IS_PRIMITIVE_INTERVAL = new Predicate<StackInterval>() {
-            @Override
-            public boolean test(StackInterval interval) {
-                return ((LIRKind) interval.kind()).isValue();
-            }
-        };
 
         private void allocateSlot(StackInterval current) {
             VirtualStackSlot virtualSlot = current.getOperand();
@@ -274,8 +248,8 @@ public final class LSStackSlotAllocator extends AllocationPhase {
             if (virtualSlot instanceof VirtualStackSlotRange) {
                 // No reuse of ranges (yet).
                 VirtualStackSlotRange slotRange = (VirtualStackSlotRange) virtualSlot;
-                location = frameMapBuilder.getFrameMap().allocateStackMemory(slotRange.getSizeInBytes(), slotRange.getAlignmentInBytes());
-                StackSlotAllocatorUtil.virtualFramesize.add(debug, slotRange.getSizeInBytes());
+                location = frameMapBuilder.getFrameMap().allocateStackSlots(slotRange.getSlots());
+                StackSlotAllocatorUtil.virtualFramesize.add(debug, frameMapBuilder.getFrameMap().spillSlotRangeSize(slotRange.getSlots()));
                 StackSlotAllocatorUtil.allocatedSlots.increment(debug);
             } else {
                 assert virtualSlot instanceof SimpleVirtualStackSlot : "Unexpected VirtualStackSlot type: " + virtualSlot;
@@ -300,44 +274,59 @@ public final class LSStackSlotAllocator extends AllocationPhase {
             current.setLocation(location);
         }
 
-        /**
-         * Map from log2 of {@link FrameMap#spillSlotSize(ValueKind) a spill slot size} to a list of
-         * free stack slots.
-         */
-        private ArrayList<Deque<StackSlot>> freeSlots;
+        private enum SlotSize {
+            Size1,
+            Size2,
+            Size4,
+            Size8,
+            Illegal;
+        }
+
+        private SlotSize forKind(ValueKind<?> kind) {
+            switch (frameMapBuilder.getFrameMap().spillSlotSize(kind)) {
+                case 1:
+                    return SlotSize.Size1;
+                case 2:
+                    return SlotSize.Size2;
+                case 4:
+                    return SlotSize.Size4;
+                case 8:
+                    return SlotSize.Size8;
+                default:
+                    return SlotSize.Illegal;
+            }
+        }
+
+        private EnumMap<SlotSize, Deque<StackSlot>> freeSlots;
 
         /**
-         * @return The list of free stack slots for {@code index} or {@code null} if there is none.
+         * @return The list of free stack slots for {@code size} or {@code null} if there is none.
          */
-        private Deque<StackSlot> getNullOrFreeSlots(int index) {
+        private Deque<StackSlot> getOrNullFreeSlots(SlotSize size) {
             if (freeSlots == null) {
                 return null;
             }
-            if (index < freeSlots.size()) {
-                return freeSlots.get(index);
-            }
-            return null;
+            return freeSlots.get(size);
         }
 
         /**
-         * @return the list of free stack slots for {@code index}. If there is none a list is
+         * @return the list of free stack slots for {@code size}. If there is none a list is
          *         created.
          */
-        private Deque<StackSlot> getOrInitFreeSlots(int index) {
-            Deque<StackSlot> freeList = null;
-            if (freeSlots == null) {
-                freeSlots = new ArrayList<>(6);
-            } else if (index < freeSlots.size()) {
-                freeList = freeSlots.get(index);
+        private Deque<StackSlot> getOrInitFreeSlots(SlotSize size) {
+            assert size != SlotSize.Illegal;
+            Deque<StackSlot> freeList;
+            if (freeSlots != null) {
+                freeList = freeSlots.get(size);
+            } else {
+                freeSlots = new EnumMap<>(SlotSize.class);
+                freeList = null;
             }
             if (freeList == null) {
-                int requiredSize = index + 1;
-                for (int i = freeSlots.size(); i < requiredSize; i++) {
-                    freeSlots.add(null);
-                }
                 freeList = new ArrayDeque<>();
-                freeSlots.set(index, freeList);
+                freeSlots.put(size, freeList);
             }
+            assert freeList != null;
             return freeList;
         }
 
@@ -346,8 +335,11 @@ public final class LSStackSlotAllocator extends AllocationPhase {
          */
         private StackSlot findFreeSlot(SimpleVirtualStackSlot slot) {
             assert slot != null;
-            int size = log2SpillSlotSize(slot.getValueKind());
-            Deque<StackSlot> freeList = getNullOrFreeSlots(size);
+            SlotSize size = forKind(slot.getValueKind());
+            if (size == SlotSize.Illegal) {
+                return null;
+            }
+            Deque<StackSlot> freeList = getOrNullFreeSlots(size);
             if (freeList == null) {
                 return null;
             }
@@ -358,14 +350,11 @@ public final class LSStackSlotAllocator extends AllocationPhase {
          * Adds a stack slot to the list of free slots.
          */
         private void freeSlot(StackSlot slot) {
-            int size = log2SpillSlotSize(slot.getValueKind());
+            SlotSize size = forKind(slot.getValueKind());
+            if (size == SlotSize.Illegal) {
+                return;
+            }
             getOrInitFreeSlots(size).addLast(slot);
-        }
-
-        private int log2SpillSlotSize(ValueKind<?> kind) {
-            int size = frameMapBuilder.getFrameMap().spillSlotSize(kind);
-            assert CodeUtil.isPowerOf2(size) : "kind: " + kind + ", size: " + size;
-            return CodeUtil.log2(size);
         }
 
         /**
@@ -401,14 +390,9 @@ public final class LSStackSlotAllocator extends AllocationPhase {
          * Finishes {@code interval} by adding its location to the list of free stack slots.
          */
         private void finished(StackInterval interval) {
-            if (interval.getOperand() instanceof VirtualStackSlotRange) {
-                /* Memory block with a non-standard size. Cannot re-use, so no need to free. */
-                debug.log("finished %s (not freeing VirtualStackSlotRange)", interval);
-            } else {
-                StackSlot location = interval.location();
-                debug.log("finished %s (freeing %s)", interval, location);
-                freeSlot(location);
-            }
+            StackSlot location = interval.location();
+            debug.log("finished %s (freeing %s)", interval, location);
+            freeSlot(location);
         }
 
         // ====================

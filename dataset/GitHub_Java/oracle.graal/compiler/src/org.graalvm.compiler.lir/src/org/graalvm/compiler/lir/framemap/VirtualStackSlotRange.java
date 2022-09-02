@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,25 +27,22 @@ package org.graalvm.compiler.lir.framemap;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.lir.VirtualStackSlot;
 
+import jdk.vm.ci.code.TargetDescription;
+
 /**
- * Represents a contiguous and aligned range of memory in the frame of the method being compiled.
+ * Represents a {@link #getSlots() numbered} range of {@link VirtualStackSlot virtual stack slot} of
+ * size {@link TargetDescription#wordSize}.
  */
 public class VirtualStackSlotRange extends VirtualStackSlot {
 
-    private final int sizeInBytes;
-    private final int alignmentInBytes;
+    private final int slots;
 
-    public VirtualStackSlotRange(int id, int sizeInBytes, int alignmentInBytes, LIRKind kind) {
+    public VirtualStackSlotRange(int id, int slots, LIRKind kind) {
         super(id, kind);
-        this.sizeInBytes = sizeInBytes;
-        this.alignmentInBytes = alignmentInBytes;
+        this.slots = slots;
     }
 
-    public int getSizeInBytes() {
-        return sizeInBytes;
-    }
-
-    public int getAlignmentInBytes() {
-        return alignmentInBytes;
+    public int getSlots() {
+        return slots;
     }
 }

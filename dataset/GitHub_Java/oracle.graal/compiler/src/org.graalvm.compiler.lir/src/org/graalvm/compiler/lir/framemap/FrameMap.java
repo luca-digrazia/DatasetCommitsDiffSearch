@@ -40,7 +40,7 @@ import jdk.vm.ci.meta.ValueKind;
  * This class is used to build the stack frame layout for a compiled method. A {@link StackSlot} is
  * used to index slots of the frame relative to the stack pointer. The frame size is only fixed
  * after register allocation when all spill slots have been allocated. Both the outgoing argument
- * area and the spill area can grow until then. Therefore, outgoing arguments are indexed from the
+ * area and the spill are can grow until then. Therefore, outgoing arguments are indexed from the
  * stack pointer, while spill slots are indexed from the beginning of the frame (and the total frame
  * size has to be added to get the actual offset from the stack pointer).
  */
@@ -218,6 +218,19 @@ public abstract class FrameMap {
     }
 
     /**
+     * Reserves a new spill slot in the frame of the method being compiled. The returned slot is
+     * aligned on its natural alignment, i.e., an 8-byte spill slot is aligned at an 8-byte
+     * boundary.
+     *
+     * @param kind The kind of the spill slot to be reserved.
+     * @param additionalOffset
+     * @return A spill slot denoting the reserved memory area.
+     */
+    protected StackSlot allocateNewSpillSlot(ValueKind<?> kind, int additionalOffset) {
+        return StackSlot.get(kind, -spillSize + additionalOffset, true);
+    }
+
+    /**
      * Returns the spill slot size for the given {@link ValueKind}. The default value is the size in
      * bytes for the target architecture.
      *
@@ -240,11 +253,7 @@ public abstract class FrameMap {
         assert frameSize == -1 : "frame size must not yet be fixed";
         int size = spillSlotSize(kind);
         spillSize = NumUtil.roundUp(spillSize + size, size);
-        return newStackSlot(kind);
-    }
-
-    private StackSlot newStackSlot(ValueKind<?> kind) {
-        return StackSlot.get(kind, -spillSize, true);
+        return allocateNewSpillSlot(kind, 0);
     }
 
     /**
@@ -269,8 +278,8 @@ public abstract class FrameMap {
         if (slots == 0) {
             return null;
         }
-        spillSize = NumUtil.roundUp(spillSize + spillSlotRangeSize(slots), getTarget().wordSize);
-        return newStackSlot(LIRKind.value(getTarget().arch.getWordKind()));
+        spillSize += spillSlotRangeSize(slots);
+        return allocateNewSpillSlot(LIRKind.value(getTarget().arch.getWordKind()), 0);
     }
 
     public ReferenceMapBuilder newReferenceMapBuilder() {
