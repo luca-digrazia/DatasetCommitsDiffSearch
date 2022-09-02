@@ -40,7 +40,6 @@ public abstract class LLVMSymbol {
     @CompilationFinal private ExternalLibrary library;
     private final int moduleId;
     private final int symbolIndex;
-    static final LLVMSymbol[] EMPTY = {};
 
     // Index for non-parsed symbols, such as alias, and function symbol for inline assembly.
     public static final int INVALID_INDEX = -1;
@@ -127,8 +126,6 @@ public abstract class LLVMSymbol {
     public abstract boolean isFunction();
 
     public abstract boolean isAlias();
-
-    public abstract boolean isExported();
 
     public abstract LLVMFunction asFunction();
 
