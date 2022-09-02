@@ -39,7 +39,6 @@ import com.oracle.svm.core.MemoryWalker;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.config.ConfigurationValues;
-import com.oracle.svm.core.genscavenge.GCImpl.ChunkReleaser;
 import com.oracle.svm.core.heap.ObjectVisitor;
 import com.oracle.svm.core.hub.LayoutEncoding;
 import com.oracle.svm.core.log.Log;
@@ -252,14 +251,9 @@ final class Space {
         }
     }
 
-    public void releaseChunks(ChunkReleaser chunkReleaser) {
-        chunkReleaser.add(firstAlignedHeapChunk);
-        chunkReleaser.add(firstUnalignedHeapChunk);
-
-        firstAlignedHeapChunk = WordFactory.nullPointer();
-        lastAlignedHeapChunk = WordFactory.nullPointer();
-        firstUnalignedHeapChunk = WordFactory.nullPointer();
-        lastUnalignedHeapChunk = WordFactory.nullPointer();
+    public void releaseChunks() {
+        releaseAlignedHeapChunks();
+        releaseUnalignedHeapChunks();
         accounting.reset();
     }
 
@@ -354,6 +348,19 @@ final class Space {
         HeapChunk.setSpace(aChunk, null);
     }
 
+    /**
+     * Pop an AlignedHeapChunk off the doubly-linked list of AlignedHeapChunks. This method is only
+     * used by the collector to release chunks, so it will never interact with uninterruptible
+     * methods that use the list.
+     */
+    private AlignedHeapChunk.AlignedHeader popAlignedHeapChunk() {
+        AlignedHeapChunk.AlignedHeader aChunk = getFirstAlignedHeapChunk();
+        if (aChunk.isNonNull()) {
+            extractAlignedHeapChunk(aChunk);
+        }
+        return aChunk;
+    }
+
     void appendUnalignedHeapChunk(UnalignedHeapChunk.UnalignedHeader uChunk) {
         /*
          * This method is used from {@link PosixJavaThreads#detachThread(VMThread)}, so it can not
@@ -407,6 +414,19 @@ final class Space {
         HeapChunk.setSpace(uChunk, null);
     }
 
+    /**
+     * Pop an UnalignedHeapChunk off the doubly-linked list of UnalignedHeapChunks. This method is
+     * only used by the collector to release chunks, so it will never interact with uninterruptible
+     * methods that use the list.
+     */
+    private UnalignedHeapChunk.UnalignedHeader popUnalignedHeapChunk() {
+        UnalignedHeapChunk.UnalignedHeader uChunk = getFirstUnalignedHeapChunk();
+        if (uChunk.isNonNull()) {
+            extractUnalignedHeapChunk(uChunk);
+        }
+        return uChunk;
+    }
+
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     AlignedHeapChunk.AlignedHeader getFirstAlignedHeapChunk() {
         return firstAlignedHeapChunk;
@@ -445,6 +465,22 @@ final class Space {
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     private void setLastUnalignedHeapChunk(UnalignedHeapChunk.UnalignedHeader chunk) {
         lastUnalignedHeapChunk = chunk;
+    }
+
+    private void releaseAlignedHeapChunks() {
+        for (AlignedHeapChunk.AlignedHeader chunk = popAlignedHeapChunk(); chunk.isNonNull(); chunk = popAlignedHeapChunk()) {
+            HeapImpl.getChunkProvider().consumeAlignedChunk(chunk);
+        }
+        assert getFirstAlignedHeapChunk().isNull() : "Failed to remove first AlignedHeapChunk.";
+        assert getLastAlignedHeapChunk().isNull() : "Failed to remove last AlignedHeapChunk.";
+    }
+
+    private void releaseUnalignedHeapChunks() {
+        for (UnalignedHeapChunk.UnalignedHeader chunk = popUnalignedHeapChunk(); chunk.isNonNull(); chunk = popUnalignedHeapChunk()) {
+            HeapChunkProvider.consumeUnalignedChunk(chunk);
+        }
+        assert getFirstUnalignedHeapChunk().isNull() : "Failed to remove first UnalignedHeapChunk";
+        assert getLastUnalignedHeapChunk().isNull() : "Failed to remove last UnalignedHeapChunk";
     }
 
     /** Promote an aligned Object to this Space. */
@@ -584,8 +620,7 @@ final class Space {
     }
 
     /**
-     * This value is only updated during a GC. Be careful when calling this method during a GC as it
-     * might wrongly include chunks that will be freed at the end of the GC.
+     * This value is only updated during a GC.
      */
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     UnsignedWord getChunkBytes() {

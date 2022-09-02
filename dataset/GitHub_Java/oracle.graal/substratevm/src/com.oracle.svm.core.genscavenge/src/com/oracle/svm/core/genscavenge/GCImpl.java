@@ -304,7 +304,7 @@ public final class GCImpl implements GC {
                 }
                 verboseGCLog.string(" GC:").string(" after ").string("  epoch: ").unsigned(getCollectionEpoch()).string("  cause: ").string(cause);
                 verboseGCLog.string("  policy: ");
-                verboseGCLog.string(getPolicy().getName());
+                getPolicy().nameToLog(verboseGCLog);
                 verboseGCLog.string("  type: ").string(completeCollection ? "complete" : "incremental");
                 if (HeapOptions.PrintHeapShape.getValue()) {
                     heap.report(verboseGCLog);
@@ -943,7 +943,7 @@ public final class GCImpl implements GC {
         return accounting;
     }
 
-    public CollectionPolicy getPolicy() {
+    private CollectionPolicy getPolicy() {
         return policy;
     }
 

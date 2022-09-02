@@ -228,7 +228,7 @@ public final class HeapImpl extends Heap {
         return runtimeCodeInfoGcSupport;
     }
 
-    GCImpl getGCImpl() {
+    public GCImpl getGCImpl() {
         return gcImpl;
     }
 
