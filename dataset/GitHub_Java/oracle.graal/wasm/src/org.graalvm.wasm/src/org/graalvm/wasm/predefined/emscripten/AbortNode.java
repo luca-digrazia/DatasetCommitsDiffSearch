@@ -42,7 +42,6 @@ package org.graalvm.wasm.predefined.emscripten;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.exception.WasmTrap;
@@ -54,7 +53,7 @@ public class AbortNode extends WasmPredefinedRootNode {
     }
 
     @Override
-    public Object executeWithContext(VirtualFrame frame, WasmContext context) {
+    public Object execute(VirtualFrame frame) {
         final int code = frame.getArguments().length > 0 ? (int) frame.getArguments()[0] : 0;
         throw fail(code);
     }

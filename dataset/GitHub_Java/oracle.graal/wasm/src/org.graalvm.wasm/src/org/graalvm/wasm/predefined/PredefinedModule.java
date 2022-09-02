@@ -56,7 +56,6 @@ import org.graalvm.wasm.constants.GlobalResolution;
 import org.graalvm.wasm.exception.WasmException;
 import org.graalvm.wasm.memory.WasmMemory;
 import org.graalvm.wasm.predefined.emscripten.EmscriptenModule;
-import org.graalvm.wasm.predefined.memory.MemoryModule;
 import org.graalvm.wasm.predefined.testutil.TestutilModule;
 import org.graalvm.wasm.predefined.wasi.WasiModule;
 
@@ -68,7 +67,6 @@ public abstract class PredefinedModule {
         pm.put("emscripten", new EmscriptenModule());
         pm.put("testutil", new TestutilModule());
         pm.put("wasi", new WasiModule());
-        pm.put("memory", new MemoryModule());
     }
 
     public static WasmModule createPredefined(WasmLanguage language, WasmContext context, String name, String predefinedModuleName) {
@@ -108,16 +106,8 @@ public abstract class PredefinedModule {
 
     protected WasmMemory defineMemory(WasmContext context, WasmModule module, String memoryName, int initSize, int maxSize) {
         final WasmMemory memory = module.symbolTable().allocateMemory(context, initSize, maxSize);
-        module.symbolTable().exportMemory(context, memoryName);
+        module.symbolTable().exportMemory(memoryName);
         return memory;
-    }
-
-    protected void importMemory(WasmContext context, WasmModule module, String importModuleName, String memoryName, int initSize, int maxSize) {
-        module.symbolTable().importMemory(context, importModuleName, memoryName, initSize, maxSize);
-    }
-
-    protected void exportMemory(WasmContext context, WasmModule module, String memoryName) {
-        module.symbolTable().exportMemory(context, memoryName);
     }
 
     protected byte[] types(byte... args) {

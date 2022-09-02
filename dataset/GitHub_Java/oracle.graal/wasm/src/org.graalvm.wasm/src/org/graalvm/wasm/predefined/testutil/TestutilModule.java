@@ -43,9 +43,9 @@ package org.graalvm.wasm.predefined.testutil;
 import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
-import org.graalvm.wasm.predefined.BuiltinModule;
+import org.graalvm.wasm.predefined.PredefinedModule;
 
-public class TestutilModule extends BuiltinModule {
+public class TestutilModule extends PredefinedModule {
     public static class Names {
         public static final String RESET_CONTEXT = "__testutil_reset_context";
         public static final String SAVE_CONTEXT = "__testutil_save_context";
@@ -61,7 +61,7 @@ public class TestutilModule extends BuiltinModule {
         defineFunction(module, Names.RESET_CONTEXT, types(), types(), new ResetContextNode(language, module));
         defineFunction(module, Names.SAVE_CONTEXT, types(), types(), new SaveContextNode(language, module));
         defineFunction(module, Names.COMPARE_CONTEXTS, types(), types(), new CompareContextsNode(language, module));
-        defineFunction(module, Names.RUN_CUSTOM_INITIALIZATION, types(), types(), new RunCustomInitialization(language));
+        defineFunction(module, Names.RUN_CUSTOM_INITIALIZATION, types(), types(), new RunCustomInitialization(language, module));
         return module;
     }
 }

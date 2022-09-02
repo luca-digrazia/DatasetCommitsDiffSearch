@@ -42,7 +42,6 @@ package org.graalvm.wasm.predefined.emscripten;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import org.graalvm.wasm.WasmContext;
 import org.graalvm.wasm.WasmLanguage;
 import org.graalvm.wasm.WasmModule;
 import org.graalvm.wasm.predefined.WasmPredefinedRootNode;
@@ -55,7 +54,7 @@ public class LLVMExp2F64 extends WasmPredefinedRootNode {
     }
 
     @Override
-    public Object executeWithContext(VirtualFrame frame, WasmContext context) {
+    public Object execute(VirtualFrame frame) {
         Object[] args = frame.getArguments();
         assert args.length == 1;
         for (Object arg : args) {

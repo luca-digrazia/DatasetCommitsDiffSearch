@@ -52,8 +52,7 @@ public class WasiModule extends PredefinedModule {
     protected WasmModule createModule(WasmLanguage language, WasmContext context, String name) {
         WasmModule module = new WasmModule(name, null);
         defineMemory(context, module, "memory", 32, 4096);
-        defineFunction(module, "__wasi_args_sizes_get", types(I32_TYPE, I32_TYPE), types(), new WasiArgsSizesGetNode(language, module));
-        defineFunction(module, "__wasi_args_get", types(I32_TYPE, I32_TYPE), types(), new WasiArgsGetNode(language, module));
+        defineFunction(module, "__wasi_args_sizes_get", types(I32_TYPE, I32_TYPE), types(), new WasiArgsSizesGetNode(language, null));
         return module;
     }
 }
