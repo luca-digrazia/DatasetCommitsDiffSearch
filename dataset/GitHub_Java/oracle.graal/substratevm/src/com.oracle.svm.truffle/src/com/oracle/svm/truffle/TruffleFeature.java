@@ -85,6 +85,7 @@ import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.RuntimeReflection;
 
+import com.oracle.graal.pointsto.infrastructure.Universe;
 import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
@@ -122,6 +123,7 @@ import com.oracle.truffle.api.TruffleRuntime;
 import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.impl.DefaultTruffleRuntime;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.GenerateLibrary;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -409,10 +411,9 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
     }
 
     private static Class<?> findGeneratedLibraryClass(DuringAnalysisAccess config, Class<?> lib) {
-        String className = lib.getPackage().getName() + "." + lib.getSimpleName() + "Gen";
-        Class<?> genClass = config.findClassByName(className);
+        Class<?> genClass = config.findClassByName(lib.getPackage().getName() + "." + lib.getSimpleName() + "Gen");
         if (genClass == null) {
-            throw UserError.abort(String.format("Could not find generated library class '%s'. Did the Java compilation succeed and did the Truffle annotation processor run?", genClass));
+            throw new IllegalStateException("Could not find generated library class %s. Did the Java compilation succeed and did the Truffle annotation processor run?");
         }
         return genClass;
     }
