@@ -311,6 +311,11 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
         }
         builder.end(); // statement
 
+        if (library.hasExportDelegation()) {
+            // we need to adopt children in order to make the parent lookup work for
+            // @CachedLibrary('this')
+            builder.statement("uncached.adoptChildren()");
+        }
         builder.startReturn().string("uncached").end();
 
         exportsClass.add(createUncached);
@@ -1014,8 +1019,10 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
             }
         }
 
-        CodeExecutableElement isAdoptable = uncachedClass.add(CodeExecutableElement.clone(ElementUtils.findExecutableElement(types.Node, "isAdoptable")));
-        isAdoptable.createBuilder().returnFalse();
+        if (!libraryExports.hasExportDelegation()) {
+            CodeExecutableElement isAdoptable = uncachedClass.add(CodeExecutableElement.clone(ElementUtils.findExecutableElement(types.Node, "isAdoptable")));
+            isAdoptable.createBuilder().returnFalse();
+        }
 
         CodeExecutableElement getCost = uncachedClass.add(CodeExecutableElement.clone(ElementUtils.findExecutableElement(types.Node, "getCost")));
         getCost.createBuilder().startReturn().staticReference(ElementUtils.findVariableElement(types.NodeCost, "MEGAMORPHIC")).end();
