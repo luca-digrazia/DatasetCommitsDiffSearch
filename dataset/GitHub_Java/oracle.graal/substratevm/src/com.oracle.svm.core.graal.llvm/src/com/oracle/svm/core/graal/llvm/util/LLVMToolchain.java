@@ -63,7 +63,7 @@ public class LLVMToolchain {
 
             if (SubstrateOptions.traceNativeToolUsage()) {
                 String commandLine = SubstrateUtil.getShellCommandString(pb.command(), false);
-                printf(">> %s%n", commandLine);
+                System.out.printf(">> %s%n", commandLine);
             }
 
             Process p = pb.start();
@@ -72,7 +72,7 @@ public class LLVMToolchain {
 
             if (SubstrateOptions.traceNativeToolUsage()) {
                 for (String line : lines) {
-                    printf("># %s%n", line);
+                    System.out.printf("># %s%n", line);
                 }
             }
 
@@ -86,12 +86,6 @@ public class LLVMToolchain {
             throw new RunFailureException(status, output);
         }
         return output;
-    }
-
-    private static void printf(String format, Object... args) {
-        // Checkstyle: stop
-        System.out.printf(format, args);
-        // Checkstyle: resume
     }
 
     private static Path getLLVMBinDir() {
