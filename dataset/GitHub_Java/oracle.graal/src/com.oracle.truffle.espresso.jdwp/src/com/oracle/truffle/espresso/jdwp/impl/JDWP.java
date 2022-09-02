@@ -24,20 +24,18 @@ package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.espresso.jdwp.api.ClassStatusConstants;
 import com.oracle.truffle.espresso.jdwp.api.FieldRef;
-import com.oracle.truffle.espresso.jdwp.api.JDWPCallFrame;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 import com.oracle.truffle.espresso.jdwp.api.LineNumberTableRef;
 import com.oracle.truffle.espresso.jdwp.api.LocalRef;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.TagConstants;
 
 import java.util.Collections;
 import java.util.concurrent.Callable;
 
-import static com.oracle.truffle.espresso.jdwp.api.TagConstants.BOOLEAN;
+import static com.oracle.truffle.espresso.jdwp.impl.TagConstants.BOOLEAN;
 
-final class JDWP {
+class JDWP {
 
     public static final String JAVA_LANG_OBJECT = "Ljava/lang/Object;";
 
@@ -2120,6 +2118,10 @@ final class JDWP {
             klass = (KlassRef) context.getIds().fromId((int) refTypeId);
         } catch (ClassCastException ex) {
             reply.errorCode(JDWPErrorCodes.INVALID_CLASS);
+            return null;
+        }
+        if (klass == context.getNullKlass()) {
+            reply.errorCode(JDWPErrorCodes.INVALID_OBJECT);
             return null;
         }
         return klass;

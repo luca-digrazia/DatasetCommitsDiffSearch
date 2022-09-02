@@ -356,16 +356,13 @@ public class JDWPDebuggerController {
             JDWPLogger.log("Suspended at: " + event.getSourceSection().toString() + " in thread: " + getThreadName(currentThread), JDWPLogger.LogLevel.STEPPING);
 
             if (commandRequestIds.get(currentThread) != null) {
-                // get the top frame for chekcing instance filters
-                JDWPCallFrame[] callFrames = createCallFrames(ids.getIdAsLong(currentThread), event.getStackFrames(), 1);
-                if (checkExclusionFilters(event, currentThread, callFrames[0])) {
+                if (checkExclusionFilters(event, currentThread)) {
                     JDWPLogger.log("not suspending here: " + event.getSourceSection(), JDWPLogger.LogLevel.STEPPING);
                     return;
                 }
             }
 
-            JDWPCallFrame[] callFrames = createCallFrames(ids.getIdAsLong(currentThread), event.getStackFrames(), -1);
-
+            JDWPCallFrame[] callFrames = createCallFrames(ids.getIdAsLong(currentThread), event.getStackFrames());
             SuspendedInfo suspendedInfo = new SuspendedInfo(event, callFrames, currentThread);
             suspendedInfos.put(currentThread, suspendedInfo);
 
@@ -473,7 +470,7 @@ public class JDWPDebuggerController {
             return false;
         }
 
-        private boolean checkExclusionFilters(SuspendedEvent event, Object thread, JDWPCallFrame frame) {
+        private boolean checkExclusionFilters(SuspendedEvent event, Object thread) {
             Integer id = commandRequestIds.get(thread);
 
             if (id != null) {
@@ -482,20 +479,19 @@ public class JDWPDebuggerController {
                 if (requestFilter != null && requestFilter.isStepping()) {
                     // we're currently stepping, so check if suspension point
                     // matches any exclusion filters
-                    if (requestFilter.getThisFilterId() != 0) {
-                        Object filterObject = context.getIds().fromId((int) requestFilter.getThisFilterId());
-                        Object thisObject = frame.getThisValue();
-                        if (filterObject != thisObject) {
+
+                    DebugStackFrame topFrame = event.getTopStackFrame();
+
+                    if (topFrame.getSourceSection() != null) {
+                        RootNode root = findCurrentRoot(topFrame);
+
+                        KlassRef klass = getContext().getKlassFromRootNode(root);
+
+                        if (klass != null && requestFilter.isKlassExcluded(klass)) {
+                            // should not suspend here then, tell the event to keep going
+                            continueStepping(event, thread);
                             return true;
                         }
-                    }
-
-                    KlassRef klass = (KlassRef) context.getIds().fromId((int) frame.getClassId());
-
-                    if (klass != null && requestFilter.isKlassExcluded(klass)) {
-                        // should not suspend here then, tell the event to keep going
-                        continueStepping(event, thread);
-                        return true;
                     }
                 }
             }
@@ -520,10 +516,8 @@ public class JDWPDebuggerController {
             }
         }
 
-        private JDWPCallFrame[] createCallFrames(long threadId, Iterable<DebugStackFrame> stackFrames, int frameLimit) {
+        private JDWPCallFrame[] createCallFrames(long threadId, Iterable<DebugStackFrame> stackFrames) {
             LinkedList<JDWPCallFrame> list = new LinkedList<>();
-            int frameCount = 0;
-
             for (DebugStackFrame frame : stackFrames) {
                 // byte type tag, long classId, long methodId, long codeIndex
 
@@ -563,11 +557,9 @@ public class JDWPDebuggerController {
                             }
                         }
                     }
+                    //System.out.println("collected frame info for method: " + klass.getNameAsString() + "." + method.getNameAsString() + "(" + line + ") : BCI(" + codeIndex + ")") ;
                     list.addLast(new JDWPCallFrame(threadId, typeTag, klassId, methodId, codeIndex, thisValue, realVariables.toArray(new Object[realVariables.size()])));
-                    frameCount++;
-                    if (frameLimit != -1 && frameCount >= frameLimit) {
-                        return list.toArray(new JDWPCallFrame[list.size()]);
-                    }
+
                 } else {
                     throw new RuntimeException("stack walking not implemented for root node type! " + root);
                 }

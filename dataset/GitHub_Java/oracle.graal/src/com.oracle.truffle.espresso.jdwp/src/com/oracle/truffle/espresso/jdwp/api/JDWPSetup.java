@@ -26,21 +26,26 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPDebuggerController;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
 
+import java.util.HashMap;
+
 /**
  * Main entry point for setting up JDWP. The class looks up the JDWP instrument
  * and initializes communication with the debugger.
  */
 public class JDWPSetup {
 
-    private JDWPDebuggerController controller;
+    private static final HashMap<JDWPContext, JDWPDebuggerController> contextMap = new HashMap<>();
 
-    public void setup(TruffleLanguage.Env env, JDWPOptions options, JDWPContext context) {
-        JDWPDebuggerController control = env.lookup(env.getInstruments().get(JDWPInstrument.ID), JDWPDebuggerController.class);
-        control.initialize(env, options, context, false);
-        this.controller = control;
+    public static void setup(TruffleLanguage.Env env, JDWPOptions options, JDWPContext context) {
+        JDWPDebuggerController controller = env.lookup(env.getInstruments().get(JDWPInstrument.ID), JDWPDebuggerController.class);
+        controller.initialize(env, options, context, false);
     }
 
-    public void finalizeSession() {
-        controller.disposeDebugger();
+    public static void finalize(JDWPContext context) {
+        JDWPDebuggerController controller = contextMap.get(context);
+        if (controller != null) {
+            VMEventListeners.getDefault().vmDied();
+            controller.disposeDebugger();
+        }
     }
 }
