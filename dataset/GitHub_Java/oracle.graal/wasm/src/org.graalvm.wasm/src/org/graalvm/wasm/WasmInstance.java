@@ -62,9 +62,9 @@ import static com.oracle.truffle.api.CompilerDirectives.transferToInterpreter;
 @ExportLibrary(InteropLibrary.class)
 @SuppressWarnings("static-method")
 public final class WasmInstance extends RuntimeState implements TruffleObject {
-    private final WasmOptions.ConstantsPolicy storeConstantsPolicy;
+    private final WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy;
 
-    public WasmInstance(WasmModule module, WasmOptions.ConstantsPolicy storeConstantsPolicy) {
+    public WasmInstance(WasmModule module, WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy) {
         super(module);
         this.storeConstantsPolicy = storeConstantsPolicy;
     }
@@ -215,7 +215,7 @@ public final class WasmInstance extends RuntimeState implements TruffleObject {
         return data() == null;
     }
 
-    public WasmOptions.ConstantsPolicy storeConstantsPolicy() {
+    public WasmOptions.StoreConstantsPolicyEnum storeConstantsPolicy() {
         return storeConstantsPolicy;
     }
 
