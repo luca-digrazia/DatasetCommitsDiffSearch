@@ -25,6 +25,7 @@
 package org.graalvm.compiler.truffle.runtime;
 
 import com.oracle.truffle.api.CompilerOptions;
+import org.graalvm.options.OptionKey;
 
 public class DefaultInliningPolicy implements TruffleInliningPolicy {
 

@@ -24,6 +24,9 @@
  */
 package org.graalvm.compiler.truffle.test;
 
+import static org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions.overrideOptions;
+
+import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions;
 import org.graalvm.compiler.truffle.runtime.TruffleInlining;
 import org.graalvm.compiler.truffle.runtime.TruffleRuntimeOptions;
 import org.graalvm.compiler.truffle.runtime.SharedTruffleRuntimeOptions;
