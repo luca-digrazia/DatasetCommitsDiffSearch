@@ -141,10 +141,7 @@ public final class SubstrateTruffleRuntime extends GraalTruffleRuntime {
 
     private void teardown() {
         long timeout = SubstrateUtil.assertionsEnabled() ? DEBUG_TEAR_DOWN_TIMEOUT : PRODUCTION_TEAR_DOWN_TIMEOUT;
-        BackgroundCompileQueue queue = getCompileQueue();
-        if (queue != null) {
-            queue.shutdownAndAwaitTermination(timeout);
-        }
+        getCompileQueue().shutdownAndAwaitTermination(timeout);
 
         TruffleCompiler tcp = truffleCompiler;
         if (tcp != null) {
