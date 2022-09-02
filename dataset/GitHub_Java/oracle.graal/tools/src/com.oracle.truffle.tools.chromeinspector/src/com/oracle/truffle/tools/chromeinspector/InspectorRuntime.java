@@ -511,8 +511,6 @@ public final class InspectorRuntime extends RuntimeDomain {
                                         throw new CommandProcessException("Named range out of bounds.");
                                     }
                                     arr.put(indexRange.end() - indexRange.start());
-                                } else if (LanguageChecks.isJS(value.getOriginalLanguage())) {
-                                    arr.put(props.size() + 1); // +1 for __proto__
                                 } else {
                                     arr.put(props.size());
                                 }
@@ -532,11 +530,7 @@ public final class InspectorRuntime extends RuntimeDomain {
                                 } else {
                                     arr.put(value.getArray().size());
                                 }
-                                if (LanguageChecks.isJS(value.getOriginalLanguage())) {
-                                    arr.put(1); // +1 for __proto__
-                                } else {
-                                    arr.put(0);
-                                }
+                                arr.put(0);
                                 result = new JSONObject();
                                 result.put("value", arr);
                             } else if (functionNoWS.equals(FUNCTION_GET_COLLECTION_NUM_PROPS)) {
@@ -552,8 +546,6 @@ public final class InspectorRuntime extends RuntimeDomain {
                                         throw new CommandProcessException("Named range out of bounds.");
                                     }
                                     arr.put(indexRange.end() - indexRange.start());
-                                } else if (LanguageChecks.isJS(value.getOriginalLanguage())) {
-                                    arr.put(props.size() + 1); // +1 for __proto__
                                 } else {
                                     arr.put(props.size());
                                 }
@@ -636,30 +628,8 @@ public final class InspectorRuntime extends RuntimeDomain {
                                         }
                                     }
                                 }
-                                StringBuilder code = new StringBuilder();
-                                code.append("(").append(functionTrimmed).append(").apply(").append(value != null ? value.getName() : "null");
-                                if (arguments != null) {
-                                    code.append(",[");
-                                    for (int i = 0; i < arguments.length(); i++) {
-                                        JSONObject arg = arguments.getJSONObject(i);
-                                        if (i > 0) {
-                                            code.append(",");
-                                        }
-                                        Object id = arg.opt("objectId");
-                                        if (id instanceof String) {
-                                            RemoteObject remoteArg = context.getRemoteObjectsHandler().getRemote((String) id);
-                                            if (remoteArg == null) {
-                                                throw new CommandProcessException("Cannot resolve argument by its objectId: " + id);
-                                            }
-                                            code.append(remoteArg.getDebugValue().getName());
-                                        } else {
-                                            code.append(arg.get("value"));
-                                        }
-                                    }
-                                    code.append("]");
-                                }
-                                code.append(")");
-                                DebugValue eval = suspendedInfo.getSuspendedEvent().getTopStackFrame().eval(code.toString());
+                                String code = "(" + functionTrimmed + ")(" + ((value != null) ? value.getName() : "") + ")";
+                                DebugValue eval = suspendedInfo.getSuspendedEvent().getTopStackFrame().eval(code);
                                 result = asResult(eval);
                             }
                             json.put("result", result);
