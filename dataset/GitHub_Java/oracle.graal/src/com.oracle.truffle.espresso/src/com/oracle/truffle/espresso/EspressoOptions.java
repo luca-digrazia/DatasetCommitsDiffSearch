@@ -22,21 +22,16 @@
  */
 package com.oracle.truffle.espresso;
 
+import com.oracle.truffle.api.Option;
+import org.graalvm.nativeimage.ImageInfo;
+import org.graalvm.options.*;
+
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
-
-import org.graalvm.nativeimage.ImageInfo;
-import org.graalvm.options.OptionCategory;
-import org.graalvm.options.OptionKey;
-import org.graalvm.options.OptionMap;
-import org.graalvm.options.OptionStability;
-import org.graalvm.options.OptionType;
-
-import com.oracle.truffle.api.Option;
 
 @Option.Group(EspressoLanguage.ID)
 public final class EspressoOptions {
@@ -194,6 +189,16 @@ public final class EspressoOptions {
                                 String value = parts[1];
                                 switch (key) {
                                     case "address":
+                                        long realValue;
+                                        try {
+                                            realValue = Long.valueOf(value);
+                                            if (realValue < 0 || realValue > 65535) {
+                                                throw new IllegalArgumentException("Invalid option for -Xrunjdwp, address: " + value + ". Must be in the 0 - 65535 range.");
+                                            }
+                                        }
+                                        catch(NumberFormatException ex) {
+                                            throw new IllegalArgumentException("Invalid option for -Xrunjdwp, address is not a number. Must be a number in the 0 - 65535 range.");
+                                        }
                                         address = value;
                                         break;
                                     case "transport":
