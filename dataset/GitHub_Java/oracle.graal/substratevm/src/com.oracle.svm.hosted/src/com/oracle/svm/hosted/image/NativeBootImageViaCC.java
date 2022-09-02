@@ -201,6 +201,10 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
 
     class WindowsCCLinkerInvocation extends CCLinkerInvocation {
 
+        WindowsCCLinkerInvocation() {
+            setCompilerCommand("CL");
+        }
+
         @Override
         protected void setOutputKind(List<String> cmd) {
             switch (kind) {
@@ -222,7 +226,8 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
         @Override
         public List<String> getCommand() {
             ArrayList<String> cmd = new ArrayList<>();
-            cmd.addAll(getCompilerCommand());
+            cmd.add(getCompilerCommand());
+
             setOutputKind(cmd);
 
             // Add debugging info
@@ -236,6 +241,9 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                 cmd.add("/PDBSTRIPPED");
             }
 
+            cmd.add("/Fe" + outputFile.toString());
+
+            cmd.addAll(inputFilenames);
             for (Path staticLibrary : nativeLibs.getStaticLibraries()) {
                 cmd.add(staticLibrary.toString());
             }
@@ -296,12 +304,12 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             inv.addLinkedLibrary(library);
         }
 
-        for (Path filename : codeCache.getCCInputFiles(tempDirectory, imageName)) {
+        for (String filename : codeCache.getCCInputFiles(tempDirectory, imageName)) {
             inv.addInputFile(filename);
         }
 
         for (Path staticLibraryPath : nativeLibs.getStaticLibraries()) {
-            inv.addInputFile(staticLibraryPath);
+            inv.addInputFile(staticLibraryPath.toString());
         }
 
         return inv;
