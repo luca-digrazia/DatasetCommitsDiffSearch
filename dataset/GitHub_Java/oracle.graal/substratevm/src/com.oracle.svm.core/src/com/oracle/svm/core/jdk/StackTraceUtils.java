@@ -174,7 +174,6 @@ class GetClassContextVisitor extends JavaStackFrameVisitor {
         this.skip = skip;
     }
 
-    @Override
     public boolean visitFrame(final FrameInfoQueryResult frameInfo) {
         if (skip > 0) {
             skip--;
