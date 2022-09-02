@@ -57,6 +57,7 @@ public final class TruffleTreeDumper {
     }
 
     private static final ASTDumpStructure AST_DUMP_STRUCTURE = new ASTDumpStructure();
+    private static final String AFTER_PROFILING = "After Profiling";
 
     public static void dump(TruffleDebugContext debug, OptimizedCallTarget callTarget) {
         if (GraalTruffleRuntime.getRuntime().isPrintGraphEnabled()) {
@@ -97,7 +98,9 @@ public final class TruffleTreeDumper {
         if (callTarget.getRootNode() != null) {
             AST ast = new AST(callTarget, nodeSources);
             final GraphOutput<AST, ?> astOutput = debug.buildOutput(GraphOutput.newBuilder(AST_DUMP_STRUCTURE).blocks(AST_DUMP_STRUCTURE));
-            astOutput.print(ast, Collections.emptyMap(), 0, callTarget.getName());
+            astOutput.beginGroup(ast, "AST", "AST", null, 0, debug.getVersionProperties());
+            astOutput.print(ast, Collections.emptyMap(), 0, AFTER_PROFILING);
+            astOutput.endGroup(); // AST
             astOutput.close();
         }
     }
