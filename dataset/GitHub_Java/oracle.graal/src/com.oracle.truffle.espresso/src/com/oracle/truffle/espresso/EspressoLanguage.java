@@ -213,7 +213,6 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         final EspressoContext context = getCurrentContext();
 
         assert context.isInitialized();
-        context.begin();
 
         String className = source.getName();
 
