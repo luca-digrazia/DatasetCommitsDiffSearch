@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,8 +26,11 @@ package org.graalvm.compiler.virtual.phases.ea;
 
 import java.util.ArrayList;
 
+import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
+import org.graalvm.compiler.nodes.AbstractBeginNode;
+import org.graalvm.compiler.nodes.BeginNode;
 import org.graalvm.compiler.nodes.ControlSinkNode;
 import org.graalvm.compiler.nodes.FixedNode;
 import org.graalvm.compiler.nodes.FixedWithNextNode;
@@ -34,11 +39,13 @@ import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.PhiNode;
 import org.graalvm.compiler.nodes.PiNode;
-import org.graalvm.compiler.nodes.ProxyNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.WithExceptionNode;
+import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.debug.DynamicCounterNode;
 import org.graalvm.compiler.nodes.debug.WeakCounterNode;
+import org.graalvm.compiler.nodes.memory.MemoryKill;
 import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.nodes.virtual.EscapeObjectState;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
@@ -76,7 +83,8 @@ public final class GraphEffectList extends EffectList {
 
     /**
      * Adds the given fixed node to the graph's control flow, before position (so that the original
-     * predecessor of position will then be node's predecessor).
+     * predecessor of position will then be node's predecessor). The node must not yet be part of
+     * the graph.
      *
      * @param node The fixed node to be added to the graph.
      * @param position The fixed node before which the node should be added.
@@ -88,6 +96,13 @@ public final class GraphEffectList extends EffectList {
         });
     }
 
+    /**
+     * Add {@code node} to the graph if it is not yet part of the graph. {@code node} must be a
+     * {@link FixedNode}. If it is not yet part of the graph, it is added before {@code position}.
+     *
+     * @param node The fixed node to be added to the graph if not yet present.
+     * @param position The fixed node before which the node should be added if not yet present.
+     */
     public void ensureAdded(ValueNode node, FixedNode position) {
         add("ensure added", graph -> {
             assert position.isAlive();
@@ -110,20 +125,30 @@ public final class GraphEffectList extends EffectList {
     }
 
     /**
-     * Add the given floating node to the graph.
+     * Add the given floating node to the graph. The node must not yet be part of the graph.
      *
      * @param node The floating node to be added.
      */
     public void addFloatingNode(ValueNode node, @SuppressWarnings("unused") String cause) {
         add("add floating node", graph -> {
-            if (node instanceof ProxyNode) {
-                ProxyNode proxyNode = (ProxyNode) node;
-                ValueNode value = proxyNode.value();
-                if (!value.isAlive()) {
-                    graph.addWithoutUnique(value);
-                }
+            assert !node.isAlive() && !node.isDeleted();
+            graph.addWithoutUniqueWithInputs(node);
+        });
+    }
+
+    /**
+     * Add {@code node} to the graph if it is not yet part of the graph. {@code node} must be a
+     * {@link FloatingNode}.
+     *
+     * @param node The floating node to be added to the graph if not yet present.
+     */
+    public void ensureFloatingAdded(ValueNode node) {
+        add("ensure floating added", graph -> {
+            assert node instanceof FloatingNode;
+            assert !node.isDeleted();
+            if (!node.isAlive()) {
+                graph.addWithoutUniqueWithInputs(node);
             }
-            graph.addWithoutUnique(node);
         });
     }
 
@@ -137,7 +162,7 @@ public final class GraphEffectList extends EffectList {
      */
     public void initializePhiInput(PhiNode node, int index, ValueNode value) {
         add("set phi input", (graph, obsoleteNodes) -> {
-            assert node.isAlive() && index >= 0;
+            assert node.isAlive() && index >= 0 : node;
             node.initializeValueAt(index, graph.addOrUniqueWithInputs(value));
         });
     }
@@ -178,11 +203,28 @@ public final class GraphEffectList extends EffectList {
      * @param node The fixed node that should be deleted.
      */
     public void deleteNode(Node node) {
-        add("delete fixed node", (graph, obsoleteNodes) -> {
-            if (node instanceof FixedWithNextNode) {
-                GraphUtil.unlinkFixedNode((FixedWithNextNode) node);
+        add("delete fixed node", new Effect() {
+            @Override
+            public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
+                if (node instanceof FixedWithNextNode) {
+                    GraphUtil.unlinkFixedNode((FixedWithNextNode) node);
+                } else if (node instanceof WithExceptionNode && node.isAlive()) {
+                    WithExceptionNode withExceptionNode = (WithExceptionNode) node;
+                    AbstractBeginNode next = withExceptionNode.next();
+                    GraphUtil.unlinkAndKillExceptionEdge(withExceptionNode);
+                    if (next.hasNoUsages() && next instanceof MemoryKill) {
+                        // This is a killing begin which is no longer needed.
+                        graph.replaceFixedWithFixed(next, graph.add(new BeginNode()));
+                    }
+                    obsoleteNodes.add(withExceptionNode);
+                }
+                obsoleteNodes.add(node);
             }
-            obsoleteNodes.add(node);
+
+            @Override
+            public boolean isCfgKill() {
+                return node instanceof WithExceptionNode;
+            }
         });
     }
 
@@ -190,7 +232,9 @@ public final class GraphEffectList extends EffectList {
         add("kill if branch", new Effect() {
             @Override
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                graph.removeSplitPropagate(ifNode, ifNode.getSuccessor(constantCondition));
+                if (ifNode.isAlive()) {
+                    graph.removeSplitPropagate(ifNode, ifNode.getSuccessor(constantCondition));
+                }
             }
 
             @Override
@@ -201,12 +245,15 @@ public final class GraphEffectList extends EffectList {
     }
 
     public void replaceWithSink(FixedWithNextNode node, ControlSinkNode sink) {
-        add("kill if branch", new Effect() {
+        add("replace with sink", new Effect() {
+            @SuppressWarnings("try")
             @Override
             public void apply(StructuredGraph graph, ArrayList<Node> obsoleteNodes) {
-                graph.addWithoutUnique(sink);
-                node.replaceAtPredecessor(sink);
-                GraphUtil.killCFG(node);
+                try (DebugCloseable position = graph.withNodeSourcePosition(node)) {
+                    graph.addWithoutUnique(sink);
+                    node.replaceAtPredecessor(sink);
+                    GraphUtil.killCFG(node);
+                }
             }
 
             @Override
@@ -227,32 +274,36 @@ public final class GraphEffectList extends EffectList {
      * @param insertBefore
      *
      */
+    @SuppressWarnings("try")
     public void replaceAtUsages(ValueNode node, ValueNode replacement, FixedNode insertBefore) {
         assert node != null && replacement != null : node + " " + replacement;
-        assert node.stamp(NodeView.DEFAULT).isCompatible(replacement.stamp(NodeView.DEFAULT)) : "Replacement node stamp not compatible " + node.stamp(NodeView.DEFAULT) + " vs " + replacement.stamp(NodeView.DEFAULT);
+        assert !node.hasUsages() || node.stamp(NodeView.DEFAULT).isCompatible(replacement.stamp(NodeView.DEFAULT)) : "Replacement node stamp not compatible " + node.stamp(NodeView.DEFAULT) + " vs " +
+                        replacement.stamp(NodeView.DEFAULT);
         add("replace at usages", (graph, obsoleteNodes) -> {
-            assert node.isAlive();
-            ValueNode replacementNode = graph.addOrUniqueWithInputs(replacement);
-            assert replacementNode.isAlive();
-            assert insertBefore != null;
-            if (replacementNode instanceof FixedWithNextNode && ((FixedWithNextNode) replacementNode).next() == null) {
-                graph.addBeforeFixed(insertBefore, (FixedWithNextNode) replacementNode);
+            try (DebugCloseable position = graph.withNodeSourcePosition(node)) {
+                assert node.isAlive();
+                ValueNode replacementNode = graph.addOrUniqueWithInputs(replacement);
+                assert replacementNode.isAlive();
+                assert insertBefore != null;
+                if (replacementNode instanceof FixedWithNextNode && ((FixedWithNextNode) replacementNode).next() == null) {
+                    graph.addBeforeFixed(insertBefore, (FixedWithNextNode) replacementNode);
+                }
+                /*
+                 * Keep the (better) stamp information when replacing a node with another one if the
+                 * replacement has a less precise stamp than the original node. This can happen for
+                 * example in the context of read nodes and unguarded pi nodes where the pi will be
+                 * used to improve the stamp information of the read. Such a read might later be
+                 * replaced with a read with a less precise stamp.
+                 */
+                if (node.hasUsages() && !node.stamp(NodeView.DEFAULT).equals(replacementNode.stamp(NodeView.DEFAULT))) {
+                    replacementNode = graph.unique(new PiNode(replacementNode, node.stamp(NodeView.DEFAULT)));
+                }
+                node.replaceAtUsages(replacementNode);
+                if (node instanceof FixedWithNextNode) {
+                    GraphUtil.unlinkFixedNode((FixedWithNextNode) node);
+                }
+                obsoleteNodes.add(node);
             }
-            /*
-             * Keep the (better) stamp information when replacing a node with another one if the
-             * replacement has a less precise stamp than the original node. This can happen for
-             * example in the context of read nodes and unguarded pi nodes where the pi will be used
-             * to improve the stamp information of the read. Such a read might later be replaced
-             * with a read with a less precise stamp.
-             */
-            if (!node.stamp(NodeView.DEFAULT).equals(replacementNode.stamp(NodeView.DEFAULT))) {
-                replacementNode = graph.unique(new PiNode(replacementNode, node.stamp(NodeView.DEFAULT)));
-            }
-            node.replaceAtUsages(replacementNode);
-            if (node instanceof FixedWithNextNode) {
-                GraphUtil.unlinkFixedNode((FixedWithNextNode) node);
-            }
-            obsoleteNodes.add(node);
         });
     }
 
