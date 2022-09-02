@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import com.oracle.truffle.llvm.runtime.target.TargetTriple;
 import org.graalvm.collections.EconomicMap;
 
 import com.oracle.truffle.api.Assumption;
@@ -59,6 +60,7 @@ import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.llvm.api.Toolchain;
 import com.oracle.truffle.llvm.runtime.LLVMArgumentBuffer.LLVMArgumentArray;
+import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.except.LLVMIllegalSymbolIndexException;
 import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
@@ -150,6 +152,10 @@ public final class LLVMContext {
     protected boolean initialized;
     protected boolean cleanupNecessary;
     private boolean initializeContextCalled;
+    private DataLayout libsulongDatalayout;
+    private boolean datalayoutInitialised;
+    private TargetTriple libsulongTargetTriple;
+    private boolean targetTripleInitialised;
     private final LLVMLanguage language;
 
     private LLVMTracerInstrument tracer;    // effectively final after initialization
@@ -173,6 +179,8 @@ public final class LLVMContext {
     @SuppressWarnings({"unchecked", "rawtypes"})
     LLVMContext(LLVMLanguage language, Env env, Toolchain toolchain) {
         this.language = language;
+        this.libsulongDatalayout = null;
+        this.datalayoutInitialised = false;
         this.env = env;
         this.initialized = false;
         this.cleanupNecessary = false;
@@ -200,7 +208,7 @@ public final class LLVMContext {
 
         addLibraryPaths(SulongEngineOption.getPolyglotOptionSearchPaths(env));
 
-        pThreadContext = new LLVMPThreadContext(getEnv(), getLanguage(), language.getDefaultDataLayout());
+        pThreadContext = new LLVMPThreadContext(getEnv(), getLanguage(), getLibsulongDataLayout());
 
         symbolAssumptions = new Assumption[10][];
         // These two fields contain the same value, but have different CompilationFinal annotations:
@@ -413,6 +421,34 @@ public final class LLVMContext {
 
     private static LLVMManagedPointer toManagedPointer(Object value) {
         return LLVMManagedPointer.create(value);
+    }
+
+    public void addLibsulongDataLayout(DataLayout datalayout) {
+        // Libsulong datalayout can only be set once.
+        if (!datalayoutInitialised) {
+            this.libsulongDatalayout = datalayout;
+            datalayoutInitialised = true;
+        } else {
+            throw new NullPointerException("The default datalayout cannot be overwritten");
+        }
+    }
+
+    public DataLayout getLibsulongDataLayout() {
+        return libsulongDatalayout;
+    }
+
+    public void addLibsulongTargetTriple(TargetTriple targetTriple) {
+        // Libsulong targettriple can only be set once.
+        if (!targetTripleInitialised) {
+            this.libsulongTargetTriple = targetTriple;
+            targetTripleInitialised = true;
+        } else {
+            throw new NullPointerException("The default targetTriple cannot be overwritten");
+        }
+    }
+
+    public TargetTriple getLibsulongTargetTriple() {
+        return libsulongTargetTriple;
     }
 
     void finalizeContext(LLVMFunction sulongDisposeContext) {
