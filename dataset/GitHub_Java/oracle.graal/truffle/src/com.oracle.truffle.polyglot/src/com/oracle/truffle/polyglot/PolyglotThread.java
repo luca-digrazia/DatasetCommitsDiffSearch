@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,13 +40,10 @@
  */
 package com.oracle.truffle.polyglot;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.polyglot.PolyglotEngineImpl.CancelExecution;
+
+import java.util.concurrent.atomic.AtomicInteger;
 
 final class PolyglotThread extends Thread {
 
@@ -60,7 +57,7 @@ final class PolyglotThread extends Thread {
         super(group, runnable, createDefaultName(languageContext), stackSize);
         this.languageContext = languageContext;
         setUncaughtExceptionHandler(languageContext.getPolyglotExceptionHandler());
-        this.callTarget = ThreadSpawnRootNode.lookup(languageContext.getLanguageInstance());
+        this.callTarget = ThreadSpawnRootNode.lookup(languageContext);
     }
 
     PolyglotThread(PolyglotLanguageContext languageContext, Runnable runnable, ThreadGroup group) {
@@ -100,20 +97,37 @@ final class PolyglotThread extends Thread {
         void execute();
     }
 
-    static final class ThreadSpawnRootNode extends RootNode {
+    private static final class ThreadSpawnRootNode extends HostToGuestRootNode {
 
-        ThreadSpawnRootNode(PolyglotLanguageInstance languageInstance) {
-            super(languageInstance.spi);
+        ThreadSpawnRootNode(PolyglotLanguageContext languageContext) {
+            super(languageContext);
         }
 
         @Override
-        public Object execute(VirtualFrame frame) {
-            Object[] args = frame.getArguments();
-            return executeImpl((PolyglotLanguageContext) args[0], (PolyglotThread) args[1], (PolyglotThreadRunnable) args[2]);
+        protected Class<?> getReceiverType() {
+            return PolyglotThread.class;
         }
 
+        @Override
+        protected boolean needsEnter() {
+            return false;
+        }
+
+        @Override
+        protected boolean needsExceptionWrapping() {
+            return false;
+        }
+
+        @Override
+        public boolean isInternal() {
+            return true;
+        }
+
+        @Override
         @TruffleBoundary
-        private static Object executeImpl(PolyglotLanguageContext languageContext, PolyglotThread thread, PolyglotThreadRunnable run) {
+        protected Object executeImpl(PolyglotLanguageContext languageContext, Object receiver, Object[] args) {
+            PolyglotThread thread = (PolyglotThread) receiver;
+            PolyglotThreadRunnable run = (PolyglotThreadRunnable) args[HostToGuestRootNode.ARGUMENT_OFFSET];
             PolyglotContextImpl prev;
             try {
                 prev = languageContext.enterThread(thread);
@@ -127,27 +141,16 @@ final class PolyglotThread extends Thread {
             assert prev == null; // is this assertion correct?
             try {
                 run.execute();
-            } catch (CancelExecution cancel) {
-                if (PolyglotEngineOptions.TriggerUncaughtExceptionHandlerForCancel.getValue(languageContext.context.engine.getEngineOptionValues())) {
-                    throw cancel;
-                } else {
-                    return null;
-                }
             } finally {
                 languageContext.leaveAndDisposePolyglotThread(prev, thread);
             }
             return null;
         }
 
-        @Override
-        public boolean isInternal() {
-            return true;
-        }
-
-        public static CallTarget lookup(PolyglotLanguageInstance languageInstance) {
-            CallTarget target = languageInstance.lookupCallTarget(ThreadSpawnRootNode.class);
+        public static CallTarget lookup(PolyglotLanguageContext languageContext) {
+            CallTarget target = lookupHostCodeCache(languageContext, ThreadSpawnRootNode.class, CallTarget.class);
             if (target == null) {
-                target = languageInstance.installCallTarget(new ThreadSpawnRootNode(languageInstance));
+                target = installHostCodeCache(languageContext, ThreadSpawnRootNode.class, createTarget(new ThreadSpawnRootNode(languageContext)), CallTarget.class);
             }
             return target;
         }

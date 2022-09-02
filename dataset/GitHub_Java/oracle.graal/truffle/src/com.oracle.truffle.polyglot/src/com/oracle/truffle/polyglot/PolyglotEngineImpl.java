@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -78,8 +78,8 @@ import java.util.logging.Level;
 
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
-import org.graalvm.home.HomeFinder;
 import org.graalvm.options.OptionDescriptors;
+import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.EnvironmentAccess;
 import org.graalvm.polyglot.HostAccess;
@@ -87,6 +87,7 @@ import org.graalvm.polyglot.Instrument;
 import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.Source;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 import org.graalvm.polyglot.io.FileSystem;
 import org.graalvm.polyglot.io.MessageTransport;
 import org.graalvm.polyglot.io.ProcessHandler;
@@ -106,7 +107,6 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.SpecializationStatistics;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.impl.DefaultTruffleRuntime;
 import com.oracle.truffle.api.impl.DispatchOutputStream;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
 import com.oracle.truffle.api.instrumentation.EventBinding;
@@ -129,7 +129,7 @@ import com.oracle.truffle.polyglot.PolyglotLocals.AbstractContextThreadLocal;
 import com.oracle.truffle.polyglot.PolyglotLocals.LocalLocation;
 import com.oracle.truffle.polyglot.PolyglotLoggers.EngineLoggerProvider;
 
-final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
+final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl implements com.oracle.truffle.polyglot.PolyglotImpl.VMObject {
 
     /**
      * Context index for the host language.
@@ -154,12 +154,13 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
     static final LocalLocation[] EMPTY_LOCATIONS = new LocalLocation[0];
 
     final Object lock = new Object();
+    Engine creatorApi; // effectively final
+    Engine currentApi;
     final Object instrumentationHandler;
     final PolyglotImpl impl;
     DispatchOutputStream out;       // effectively final
     DispatchOutputStream err;       // effectively final
     InputStream in;                 // effectively final
-    Engine api;
 
     final Map<String, PolyglotLanguage> idToLanguage;
     final Map<String, PolyglotLanguage> classToLanguage;
@@ -230,6 +231,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                     EngineLoggerProvider engineLogger, Map<String, String> options,
                     boolean allowExperimentalOptions, ClassLoader contextClassLoader, boolean boundEngine, boolean preInitialization,
                     MessageTransport messageInterceptor, Handler logHandler) {
+        super(impl);
         this.messageInterceptor = messageInterceptor;
         this.impl = impl;
         this.out = out;
@@ -340,6 +342,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
     }
 
     PolyglotEngineImpl(PolyglotEngineImpl prototype) {
+        super(prototype.impl);
         this.messageInterceptor = prototype.messageInterceptor;
         this.instrumentationHandler = INSTRUMENT.createInstrumentationHandler(
                         this,
@@ -452,11 +455,11 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         return OptionDescriptors.createUnion(engineOptionDescriptors, compilerOptionDescriptors);
     }
 
-    static Collection<Object> findActiveEngines() {
+    static Collection<Engine> findActiveEngines() {
         synchronized (ENGINES) {
-            List<Object> engines = new ArrayList<>(ENGINES.size());
+            List<Engine> engines = new ArrayList<>(ENGINES.size());
             for (PolyglotEngineImpl engine : ENGINES.keySet()) {
-                engines.add(engine.api);
+                engines.add(engine.creatorApi);
             }
             return engines;
         }
@@ -739,7 +742,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         for (InstrumentCache instrumentCache : cachedInstruments) {
             PolyglotInstrument instrumentImpl = new PolyglotInstrument(this, instrumentCache);
             instrumentImpl.info = LANGUAGE.createInstrument(instrumentImpl, instrumentCache.getId(), instrumentCache.getName(), instrumentCache.getVersion());
-            Instrument instrument = impl.getAPIAccess().newInstrument(impl.instrumentDispatch, instrumentImpl);
+            Instrument instrument = impl.getAPIAccess().newInstrument(instrumentImpl);
             instrumentImpl.api = instrument;
 
             String id = instrumentImpl.cache.getId();
@@ -834,7 +837,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
 
     private PolyglotLanguage createLanguage(LanguageCache cache, int index, RuntimeException initError) {
         PolyglotLanguage languageImpl = new PolyglotLanguage(this, cache, index, index == HOST_LANGUAGE_INDEX, initError);
-        Language language = impl.getAPIAccess().newLanguage(impl.languageDispatch, languageImpl);
+        Language language = impl.getAPIAccess().newLanguage(languageImpl);
         languageImpl.api = language;
         return languageImpl;
     }
@@ -867,6 +870,10 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
 
     void addContext(PolyglotContextImpl context) {
         assert Thread.holdsLock(this.lock);
+
+        Context api = impl.getAPIAccess().newContext(context);
+        context.creatorApi = api;
+        context.currentApi = impl.getAPIAccess().newContext(context);
 
         if (limits != null) {
             limits.validate(context.config.limits);
@@ -968,18 +975,23 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         }
     }
 
+    @Override
     public Language requirePublicLanguage(String id) {
-        checkState();
-        Language language = idToPublicLanguage.get(id);
-        if (language == null) {
-            String misspelledGuess = matchSpellingError(idToPublicLanguage.keySet(), id);
-            String didYouMean = "";
-            if (misspelledGuess != null) {
-                didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
+        try {
+            checkState();
+            Language language = idToPublicLanguage.get(id);
+            if (language == null) {
+                String misspelledGuess = matchSpellingError(idToPublicLanguage.keySet(), id);
+                String didYouMean = "";
+                if (misspelledGuess != null) {
+                    didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
+                }
+                throw PolyglotEngineException.illegalArgument(String.format("A language with id '%s' is not installed. %sInstalled languages are: %s.", id, didYouMean, getLanguages().keySet()));
             }
-            throw PolyglotEngineException.illegalArgument(String.format("A language with id '%s' is not installed. %sInstalled languages are: %s.", id, didYouMean, getLanguages().keySet()));
+            return language;
+        } catch (Throwable t) {
+            throw PolyglotImpl.guestToHostException(this, t);
         }
-        return language;
     }
 
     private static String matchSpellingError(Set<String> allIds, String enteredId) {
@@ -992,18 +1004,35 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         return null;
     }
 
+    @Override
     public Instrument requirePublicInstrument(String id) {
-        checkState();
-        Instrument instrument = idToPublicInstrument.get(id);
-        if (instrument == null) {
-            String misspelledGuess = matchSpellingError(idToPublicInstrument.keySet(), id);
-            String didYouMean = "";
-            if (misspelledGuess != null) {
-                didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
+        try {
+            checkState();
+            Instrument instrument = idToPublicInstrument.get(id);
+            if (instrument == null) {
+                String misspelledGuess = matchSpellingError(idToPublicInstrument.keySet(), id);
+                String didYouMean = "";
+                if (misspelledGuess != null) {
+                    didYouMean = String.format("Did you mean '%s'? ", misspelledGuess);
+                }
+                throw PolyglotEngineException.illegalState(String.format("An instrument with id '%s' is not installed. %sInstalled instruments are: %s.", id, didYouMean, getInstruments().keySet()));
             }
-            throw PolyglotEngineException.illegalState(String.format("An instrument with id '%s' is not installed. %sInstalled instruments are: %s.", id, didYouMean, getInstruments().keySet()));
+            return instrument;
+        } catch (Throwable t) {
+            throw PolyglotImpl.guestToHostException(this, t);
         }
-        return instrument;
+    }
+
+    @Override
+    public void close(Engine sourceEngine, boolean cancelIfExecuting) {
+        try {
+            if (sourceEngine != creatorApi) {
+                throw PolyglotEngineException.illegalState("Engine instances that were indirectly received using Context.get() cannot be closed.");
+            }
+            ensureClosed(cancelIfExecuting, false);
+        } catch (Throwable t) {
+            throw PolyglotImpl.guestToHostException(this, t);
+        }
     }
 
     @TruffleBoundary
@@ -1156,21 +1185,37 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         return localContexts;
     }
 
+    @Override
     public Map<String, Instrument> getInstruments() {
-        checkState();
-        return idToPublicInstrument;
+        try {
+            checkState();
+            return idToPublicInstrument;
+        } catch (Throwable t) {
+            throw PolyglotImpl.guestToHostException(this, t);
+        }
     }
 
+    @Override
     public Map<String, Language> getLanguages() {
-        checkState();
-        return idToPublicLanguage;
+        try {
+            checkState();
+            return idToPublicLanguage;
+        } catch (Throwable t) {
+            throw PolyglotImpl.guestToHostException(this, t);
+        }
     }
 
+    @Override
     public OptionDescriptors getOptions() {
-        checkState();
-        return engineOptionValues.getDescriptors();
+        try {
+            checkState();
+            return engineOptionValues.getDescriptors();
+        } catch (Throwable t) {
+            throw PolyglotImpl.guestToHostException(this, t);
+        }
     }
 
+    @Override
     public Set<Source> getCachedSources() {
         checkState();
         Set<Source> sources = new HashSet<>();
@@ -1513,6 +1558,15 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         }
     }
 
+    @Override
+    public String getImplementationName() {
+        try {
+            return Truffle.getRuntime().getName();
+        } catch (Throwable t) {
+            throw PolyglotImpl.guestToHostException(this, t);
+        }
+    }
+
     private static final String DISABLE_PRIVILEGES_VALUE = ImageBuildTimeOptions.get(ImageBuildTimeOptions.DISABLE_PRIVILEGES_NAME);
     private static final String[] DISABLED_PRIVILEGES = DISABLE_PRIVILEGES_VALUE.isEmpty() ? new String[0] : DISABLE_PRIVILEGES_VALUE.split(",");
 
@@ -1546,8 +1600,9 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
         ALLOW_IO = io;
     }
 
+    @Override
     @SuppressWarnings({"all"})
-    public PolyglotContextImpl createContext(OutputStream configOut, OutputStream configErr, InputStream configIn, boolean allowHostLookup,
+    public Context createContext(OutputStream configOut, OutputStream configErr, InputStream configIn, boolean allowHostLookup,
                     HostAccess hostAccess,
                     PolyglotAccess polyglotAccess, boolean allowNativeAccess, boolean allowCreateThread, boolean allowHostIO,
                     boolean allowHostClassLoading, boolean allowExperimentalOptions, Predicate<String> classFilter, Map<String, String> options,
@@ -1695,15 +1750,11 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                 }
             }
         }
-        checkTruffleRuntime();
-        return context;
+        return context.creatorApi;
     }
 
     private PolyglotContextImpl loadPreinitializedContext(PolyglotContextConfig config, HostAccess hostAccess) {
         PolyglotContextImpl context = preInitializedContext.getAndSet(null);
-        if (!getEngineOptionValues().get(PolyglotEngineOptions.UsePreInitializedContext)) {
-            context = null;
-        }
         if (context != null) {
             FileSystems.PreInitializeContextFileSystem preInitFs = (FileSystems.PreInitializeContextFileSystem) context.config.fileSystem;
             preInitFs.onLoadPreinitializedContext(config.fileSystem);
@@ -1749,6 +1800,8 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                     PolyglotEngineImpl engine = new PolyglotEngineImpl(this);
                     ensureClosed(true, false);
                     synchronized (engine.lock) {
+                        engine.creatorApi = getAPIAccess().newEngine(engine);
+                        engine.currentApi = getAPIAccess().newEngine(engine);
                         engine.initializeHostAccess(hostAccess);
                         context = new PolyglotContextImpl(engine, config);
                         engine.addContext(context);
@@ -1757,17 +1810,6 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
             }
         }
         return context;
-    }
-
-    private void checkTruffleRuntime() {
-        if (getEngineOptionValues().get(PolyglotEngineOptions.WarnInterpreterOnly) && Truffle.getRuntime().getClass() == DefaultTruffleRuntime.class) {
-            getEngineLogger().log(Level.WARNING, "" +
-                            "The polyglot context is using an implementation that does not support runtime compilation.\n" +
-                            "The guest application code will therefore be executed in interpreted mode only.\n" +
-                            "Execution only in interpreted mode will strongly impact the guest application performance.\n" +
-                            "For more information on using GraalVM see https://www.graalvm.org/java/quickstart/.\n" +
-                            "To disable this warning the '--engine.WarnInterpreterOnly=false' option or use the '-Dpolyglot.engine.WarnInterpreterOnly=false' system property.");
-        }
     }
 
     OptionValuesImpl getEngineOptionValues() {
@@ -1845,7 +1887,6 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
     PolyglotContextImpl enter(PolyglotContextImpl context, Node safepointLocation, boolean pollSafepoint) {
         PolyglotContextImpl prev;
         PolyglotThreadInfo info = context.cachedThreadInfo;
-        boolean enterReverted = false;
         if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, info.getThread() == Thread.currentThread())) {
             // Volatile increment is safe if only one thread does it.
             prev = info.enterInternal();
@@ -1867,7 +1908,6 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
                 return prev;
             } else {
                 info.leaveInternal(prev);
-                enterReverted = true;
             }
         }
         /*
@@ -1876,7 +1916,7 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
          * thread. The slow path acquires context lock to ensure ordering for context operations
          * like close.
          */
-        prev = context.enterThreadChanged(safepointLocation, enterReverted, pollSafepoint);
+        prev = context.enterThreadChanged(safepointLocation, pollSafepoint);
         assert verifyContext(context);
         return prev;
     }
@@ -2035,16 +2075,6 @@ final class PolyglotEngineImpl implements com.oracle.truffle.polyglot.PolyglotIm
             return true;
         }
 
-    }
-
-    @SuppressWarnings("static-method")
-    String getVersion() {
-        String version = HomeFinder.getInstance().getVersion();
-        if (version.equals("snapshot")) {
-            return "Development Build";
-        } else {
-            return version;
-        }
     }
 
 }
