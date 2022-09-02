@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -135,27 +135,26 @@ import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.profiles.BranchProfile;
+import com.oracle.truffle.tck.tests.ValueAssert;
 import com.oracle.truffle.tck.tests.ValueAssert.Trait;
 
 public class ValueAPITest {
 
     private static Context context;
-    private static Context secondaryContext;
 
     @BeforeClass
     public static void setUp() {
         context = Context.newBuilder().allowHostAccess(HostAccess.ALL).build();
-        secondaryContext = Context.newBuilder().allowHostAccess(HostAccess.ALL).build();
     }
 
     @AfterClass
     public static void tearDown() {
         context.close();
-        secondaryContext.close();
     }
 
     @Test
     public void testGetContext() {
+
         assertNull(Value.asValue(null).getContext());
         assertNull(Value.asValue("").getContext());
         assertNull(Value.asValue(42).getContext());
@@ -200,38 +199,27 @@ public class ValueAPITest {
     @Test
     public void testString() {
         for (Object string : STRINGS) {
-            assertValueInContexts(context.asValue(string), STRING);
-            assertValueInContexts(context.asValue(new StringWrapper(string.toString())), STRING);
+            assertValue(context.asValue(string), STRING);
+            assertValue(context.asValue(new StringWrapper(string.toString())), STRING);
         }
     }
 
     @Test
     public void testDatesTimesZonesAndDuration() {
-        assertValueInContexts(context.asValue(LocalDate.now()), HOST_OBJECT, MEMBERS, DATE, EXECUTABLE);
-        assertValueInContexts(context.asValue(LocalTime.now()), HOST_OBJECT, MEMBERS, TIME, EXECUTABLE);
-        assertValueInContexts(context.asValue(LocalDateTime.now()), HOST_OBJECT, MEMBERS, DATE, TIME, EXECUTABLE);
-        assertValueInContexts(context.asValue(Instant.now()), HOST_OBJECT, MEMBERS, DATE, TIME, TIMEZONE, EXECUTABLE);
-        assertValueInContexts(context.asValue(ZonedDateTime.now()), HOST_OBJECT, MEMBERS, DATE, TIME, TIMEZONE);
-        assertValueInContexts(context.asValue(ZoneId.of("UTC")), HOST_OBJECT, MEMBERS, TIMEZONE);
-        assertValueInContexts(context.asValue(Date.from(Instant.now())), HOST_OBJECT, MEMBERS, DATE, TIME, TIMEZONE);
-        assertValueInContexts(context.asValue(Duration.ofMillis(100)), HOST_OBJECT, MEMBERS, DURATION);
+        assertValue(context.asValue(LocalDate.now()), HOST_OBJECT, MEMBERS, DATE, EXECUTABLE);
+        assertValue(context.asValue(LocalTime.now()), HOST_OBJECT, MEMBERS, TIME, EXECUTABLE);
+        assertValue(context.asValue(LocalDateTime.now()), HOST_OBJECT, MEMBERS, DATE, TIME, EXECUTABLE);
+        assertValue(context.asValue(Instant.now()), HOST_OBJECT, MEMBERS, DATE, TIME, TIMEZONE, EXECUTABLE);
+        assertValue(context.asValue(ZonedDateTime.now()), HOST_OBJECT, MEMBERS, DATE, TIME, TIMEZONE);
+        assertValue(context.asValue(ZoneId.of("UTC")), HOST_OBJECT, MEMBERS, TIMEZONE);
+        assertValue(context.asValue(Date.from(Instant.now())), HOST_OBJECT, MEMBERS, DATE, TIME, TIMEZONE);
+        assertValue(context.asValue(Duration.ofMillis(100)), HOST_OBJECT, MEMBERS, DURATION);
 
-        assertValueInContexts(context.asValue(ProxyDate.from(LocalDate.now())), DATE, PROXY_OBJECT);
-        assertValueInContexts(context.asValue(ProxyTime.from(LocalTime.now())), TIME, PROXY_OBJECT);
-        assertValueInContexts(context.asValue(ProxyInstant.from(Instant.now())), DATE, TIME, TIMEZONE, PROXY_OBJECT);
-        assertValueInContexts(context.asValue(ProxyTimeZone.from(ZoneId.of("UTC"))), TIMEZONE, PROXY_OBJECT);
-        assertValueInContexts(context.asValue(ProxyDuration.from(Duration.ofMillis(100))), DURATION, PROXY_OBJECT);
-
-    }
-
-    private static void assertValueInContexts(Value value) {
-        assertValue(value);
-        assertValue(secondaryContext.asValue(value));
-    }
-
-    private static void assertValueInContexts(Value value, Trait... expectedTypes) {
-        assertValue(value, expectedTypes);
-        assertValue(secondaryContext.asValue(value), expectedTypes);
+        assertValue(context.asValue(ProxyDate.from(LocalDate.now())), DATE, PROXY_OBJECT);
+        assertValue(context.asValue(ProxyTime.from(LocalTime.now())), TIME, PROXY_OBJECT);
+        assertValue(context.asValue(ProxyInstant.from(Instant.now())), DATE, TIME, TIMEZONE, PROXY_OBJECT);
+        assertValue(context.asValue(ProxyTimeZone.from(ZoneId.of("UTC"))), TIMEZONE, PROXY_OBJECT);
+        assertValue(context.asValue(ProxyDuration.from(Duration.ofMillis(100))), DURATION, PROXY_OBJECT);
     }
 
     private static final Number[] NUMBERS = new Number[]{
@@ -247,8 +235,8 @@ public class ValueAPITest {
     @Test
     public void testNumbers() {
         for (Number number : NUMBERS) {
-            assertValueInContexts(context.asValue(number), NUMBER);
-            assertValueInContexts(context.asValue(new NumberWrapper(number)), NUMBER);
+            assertValue(context.asValue(number), NUMBER);
+            assertValue(context.asValue(new NumberWrapper(number)), NUMBER);
         }
     }
 
@@ -260,14 +248,14 @@ public class ValueAPITest {
     @Test
     public void testBooleans() {
         for (boolean bool : BOOLEANS) {
-            assertValueInContexts(context.asValue(bool), BOOLEAN);
-            assertValueInContexts(context.asValue(new BooleanWrapper(bool)), BOOLEAN);
+            assertValue(context.asValue(bool), BOOLEAN);
+            assertValue(context.asValue(new BooleanWrapper(bool)), BOOLEAN);
         }
     }
 
     @Test
     public void testNull() {
-        assertValueInContexts(context.asValue(null), HOST_OBJECT, NULL);
+        assertValue(context.asValue(null), HOST_OBJECT, NULL);
     }
 
     private static final Object[] HOST_OBJECTS = new Object[]{
@@ -283,11 +271,15 @@ public class ValueAPITest {
                         public Object apply(Object t) {
                             return t;
                         }
-                    }, new Supplier<String>() {
+                    },
+                    new Supplier<String>() {
                         public String get() {
                             return "foobar";
                         }
-                    }, BigDecimal.class, Class.class, Proxy.newProxyInstance(ValueAPITest.class.getClassLoader(), new Class<?>[]{ProxyInterface.class}, new InvocationHandler() {
+                    },
+                    BigDecimal.class,
+                    Class.class,
+                    Proxy.newProxyInstance(ValueAPITest.class.getClassLoader(), new Class<?>[]{ProxyInterface.class}, new InvocationHandler() {
                         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
                             switch (method.getName()) {
                                 case "foobar":
@@ -302,7 +294,8 @@ public class ValueAPITest {
                                     throw new UnsupportedOperationException(method.getName());
                             }
                         }
-                    }), ByteBuffer.wrap(new byte[0])};
+                    }),
+                    ByteBuffer.wrap(new byte[0])};
 
     @Test
     public void testHostObject() {
@@ -339,7 +332,7 @@ public class ValueAPITest {
                 expectedTraits.add(HASH);
             }
 
-            assertValueInContexts(context.asValue(value), expectedTraits.toArray(new Trait[0]));
+            assertValue(context.asValue(value), expectedTraits.toArray(new Trait[0]));
         }
     }
 
@@ -371,7 +364,7 @@ public class ValueAPITest {
     @Test
     public void testArrays() {
         for (Object array : ARRAYS) {
-            assertValueInContexts(context.asValue(array), ARRAY_ELEMENTS, ITERABLE, HOST_OBJECT, MEMBERS);
+            assertValue(context.asValue(array), ARRAY_ELEMENTS, ITERABLE, HOST_OBJECT, MEMBERS);
         }
     }
 
@@ -430,7 +423,7 @@ public class ValueAPITest {
     public void testBuffers() {
         for (final ByteBuffer buffer : BUFFERS) {
             final Value value = context.asValue(buffer);
-            assertValueInContexts(value, BUFFER_ELEMENTS, HOST_OBJECT, MEMBERS);
+            assertValue(value, BUFFER_ELEMENTS, HOST_OBJECT, MEMBERS);
         }
     }
 
@@ -891,8 +884,8 @@ public class ValueAPITest {
         }
 
         if (valueTest) {
-            assertValueInContexts(context.asValue(value));
-            assertValueInContexts(context.asValue(result));
+            assertValue(context.asValue(value));
+            assertValue(context.asValue(result));
         }
     }
 
@@ -1484,11 +1477,11 @@ public class ValueAPITest {
         assertFails(() -> v.putMember("value", ""), IllegalArgumentException.class,
                         "Invalid member value ''(language: Java, type: java.lang.String) for object 'MemberErrorTest'(language: Java, type: com.oracle.truffle.api.test.polyglot.ValueAPITest$MemberErrorTest) and member key 'value'.");
 
-        assertFails(() -> v.putMember("finalValue", 42), UnsupportedOperationException.class,
-                        "Non writable or non-existent member key 'finalValue' for object 'MemberErrorTest'(language: Java, type: com.oracle.truffle.api.test.polyglot.ValueAPITest$MemberErrorTest).");
+        assertFails(() -> v.putMember("finalValue", 42), IllegalArgumentException.class,
+                        "Invalid member key 'finalValue' for object 'MemberErrorTest'(language: Java, type: com.oracle.truffle.api.test.polyglot.ValueAPITest$MemberErrorTest).");
 
-        assertFails(() -> v.putMember("notAMember", ""), UnsupportedOperationException.class,
-                        "Non writable or non-existent member key 'notAMember' for object 'MemberErrorTest'(language: Java, type: com.oracle.truffle.api.test.polyglot.ValueAPITest$MemberErrorTest).");
+        assertFails(() -> v.putMember("notAMember", ""), IllegalArgumentException.class,
+                        "Invalid member key 'notAMember' for object 'MemberErrorTest'(language: Java, type: com.oracle.truffle.api.test.polyglot.ValueAPITest$MemberErrorTest).");
 
         assertNull(v.getMember("notAMember"));
 
@@ -1671,8 +1664,8 @@ public class ValueAPITest {
         Value value = context.asValue(new InvocableType());
         assertTrue(value.canInvokeMember("f"));
 
-        assertFails(() -> value.invokeMember(""), UnsupportedOperationException.class,
-                        "Non readable or non-existent member key '' for object 'com.oracle.truffle.api.test.polyglot.ValueAPITest.InvocableType'" +
+        assertFails(() -> value.invokeMember(""), IllegalArgumentException.class,
+                        "Invalid member key '' for object 'com.oracle.truffle.api.test.polyglot.ValueAPITest.InvocableType'" +
                                         "(language: Java, type: com.oracle.truffle.api.test.polyglot.ValueAPITest$InvocableType).");
         assertFails(() -> value.invokeMember("f", 2), IllegalArgumentException.class,
                         "Invalid argument count when invoking 'f' on 'com.oracle.truffle.api.test.polyglot.ValueAPITest.InvocableType'" +
@@ -1753,8 +1746,8 @@ public class ValueAPITest {
         assertEquals(v1, v1);
         assertEquals(v2, v2);
 
-        assertValueInContexts(v1);
-        assertValueInContexts(v2);
+        ValueAssert.assertValue(v1);
+        ValueAssert.assertValue(v2);
     }
 
     public static class RecursiveObject {
@@ -1779,31 +1772,8 @@ public class ValueAPITest {
         assertEquals(v1, v1);
         assertEquals(v2, v2);
 
-        assertValueInContexts(v1);
-        assertValueInContexts(v2);
-    }
-
-    @Test
-    public void testPolyglotMapRemoveEntry() {
-        Map<String, Object> map = new HashMap<>();
-        map.put("key", ProxyObject.fromMap(Collections.singletonMap("field", "value")));
-        Value mapValue = context.asValue(ProxyObject.fromMap(map));
-        Map<String, Object> membersMap = mapValue.as(new TypeLiteral<Map<String, Object>>() {
-        });
-        assertEquals(1, membersMap.size());
-        Map.Entry<String, Object> membersEntry = membersMap.entrySet().iterator().next();
-        membersMap.entrySet().remove(membersEntry);
-        assertEquals(0, membersMap.size());
-
-        List<Object> list = new ArrayList<>();
-        list.add(Collections.singletonMap("field", "value"));
-        Value arrayValue = context.asValue(ProxyArray.fromList(list));
-        Map<Integer, Object> arrayMap = arrayValue.as(new TypeLiteral<Map<Integer, Object>>() {
-        });
-        assertEquals(1, arrayMap.size());
-        Map.Entry<Integer, Object> arrayEntry = arrayMap.entrySet().iterator().next();
-        arrayMap.entrySet().remove(arrayEntry);
-        assertEquals(0, arrayMap.size());
+        ValueAssert.assertValue(v1);
+        ValueAssert.assertValue(v2);
     }
 
     @Implementable
@@ -1923,18 +1893,18 @@ public class ValueAPITest {
     @Test
     public void testAsValue() {
         for (Object number : NUMBERS) {
-            assertValueInContexts(Value.asValue(number), Trait.NUMBER);
+            ValueAssert.assertValue(Value.asValue(number), Trait.NUMBER);
         }
         for (Object string : STRINGS) {
-            assertValueInContexts(Value.asValue(string), Trait.STRING);
+            ValueAssert.assertValue(Value.asValue(string), Trait.STRING);
         }
         for (Object b : BOOLEANS) {
-            assertValueInContexts(Value.asValue(b), Trait.BOOLEAN);
+            ValueAssert.assertValue(Value.asValue(b), Trait.BOOLEAN);
         }
         for (Object b : HOST_OBJECTS) {
             Value v = Value.asValue(b);
             assertTrue(v.isHostObject());
-            assertValueInContexts(v);
+            ValueAssert.assertValue(v);
         }
         Object o = new Object();
         Value v = Value.asValue(o);
@@ -2103,7 +2073,7 @@ public class ValueAPITest {
     @Test
     public void testHostException() {
         Value exceptionValue = context.asValue(new RuntimeException("expected"));
-        assertValueInContexts(exceptionValue, HOST_OBJECT, MEMBERS, EXCEPTION);
+        assertValue(exceptionValue, HOST_OBJECT, MEMBERS, EXCEPTION);
         try {
             exceptionValue.throwException();
             fail("should have thrown");
@@ -2122,7 +2092,7 @@ public class ValueAPITest {
     @Test
     public void testGuestException() {
         Value exceptionValue = context.asValue(new ExceptionWrapper(new LanguageException("expected")));
-        assertValueInContexts(exceptionValue, EXCEPTION);
+        assertValue(exceptionValue, EXCEPTION);
         try {
             exceptionValue.throwException();
             fail("should have thrown");
@@ -2327,7 +2297,7 @@ public class ValueAPITest {
     public void testPrimitiveAndObject() {
         BooleanAndDelegate o = new BooleanAndDelegate(new TestArray(new String[0]));
         Value v = context.asValue(o);
-        assertValueInContexts(v, ARRAY_ELEMENTS, ITERABLE, BOOLEAN);
+        ValueAssert.assertValue(v, ARRAY_ELEMENTS, ITERABLE, BOOLEAN);
     }
 
     @Test
