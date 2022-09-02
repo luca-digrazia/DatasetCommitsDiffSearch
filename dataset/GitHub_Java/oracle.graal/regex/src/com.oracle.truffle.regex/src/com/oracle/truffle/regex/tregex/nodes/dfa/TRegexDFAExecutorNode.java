@@ -137,11 +137,6 @@ public final class TRegexDFAExecutorNode extends TRegexExecutorNode {
         return new TRegexDFAExecutorLocals(input, fromIndex, index, maxIndex, createCGData());
     }
 
-    @Override
-    public boolean writesCaptureGroups() {
-        return isSimpleCG();
-    }
-
     private DFACaptureGroupTrackingData createCGData() {
         if (isGenericCG() || isSimpleCG()) {
             return new DFACaptureGroupTrackingData(getMaxNumberOfNFAStates(), getNumberOfCaptureGroups(), props);

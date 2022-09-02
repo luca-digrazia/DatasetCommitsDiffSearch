@@ -159,20 +159,22 @@ public final class RegexParser {
     }
 
     public void prepareForDFA() {
-        if (properties.hasQuantifiers()) {
+        if (properties.hasQuantifiers() && !properties.hasLargeCountedRepetitions()) {
             UnrollQuantifiersVisitor.unrollQuantifiers(this, ast.getRoot());
         }
         CalcASTPropsVisitor.run(ast);
         for (LookAroundAssertion lb : ast.getLookArounds()) {
-            if (lb.isLookBehindAssertion() && !lb.isLiteral()) {
+            if (lb instanceof LookBehindAssertion && !lb.isLiteral()) {
                 properties.setNonLiteralLookBehindAssertions();
                 break;
             }
         }
-        ast.createPrefix();
-        InitIDVisitor.init(ast);
-        if (!properties.hasNonLiteralLookBehindAssertions() && !properties.hasBackReferences() && !properties.hasLargeCountedRepetitions()) {
-            new MarkLookBehindEntriesVisitor(ast).run();
+        if (!properties.hasNonLiteralLookBehindAssertions()) {
+            ast.createPrefix();
+            InitIDVisitor.init(ast);
+            if (!properties.hasBackReferences() && !properties.hasLargeCountedRepetitions()) {
+                new MarkLookBehindEntriesVisitor(ast).run();
+            }
         }
         checkInnerLiteral();
     }
@@ -187,7 +189,7 @@ public final class RegexParser {
         int maxPath = 0;
         for (int i = 0; i < terms.size(); i++) {
             Term t = terms.get(i);
-            if (t.isCharacterClass() && (t.asCharacterClass().getCharSet().matchesSingleChar() || t.asCharacterClass().getCharSet().matches2CharsWith1BitDifference())) {
+            if (t instanceof CharacterClass && (((CharacterClass) t).getCharSet().matchesSingleChar() || ((CharacterClass) t).getCharSet().matches2CharsWith1BitDifference())) {
                 if (literalStart < 0) {
                     literalStart = i;
                 }
@@ -259,7 +261,7 @@ public final class RegexParser {
     private void popGroup(Token token) throws RegexSyntaxException {
         curGroup.setEnclosedCaptureGroupsHigh(groupCount.getCount());
         ast.addSourceSection(curGroup, token);
-        if (curGroup.getParent().isLookAroundAssertion()) {
+        if (curGroup.getParent() instanceof LookAroundAssertion) {
             ast.addSourceSection(curGroup.getParent(), token);
         }
         curTerm = curGroup;
@@ -267,7 +269,7 @@ public final class RegexParser {
         if (parent instanceof RegexASTRootNode) {
             throw syntaxError(ErrorMessages.UNMATCHED_RIGHT_PARENTHESIS);
         }
-        if (parent.isLookAroundAssertion()) {
+        if (parent instanceof LookAroundAssertion) {
             curSequence = (Sequence) parent.getParent();
             curTerm = (Term) parent;
             optimizeLookAround();
@@ -290,7 +292,7 @@ public final class RegexParser {
                     removeCurTerm();
                 }
             } else if (!lookaround.isNegated()) {
-                if (group.size() == 1 && group.getFirstAlternative().size() == 1 && group.getFirstAlternative().getFirstTerm().isPositionAssertion()) {
+                if (group.size() == 1 && group.getFirstAlternative().size() == 1 && group.getFirstAlternative().getFirstTerm() instanceof PositionAssertion) {
                     // unwrap positive lookarounds containing only a position assertion
                     removeCurTerm();
                     addTerm(group.getFirstAlternative().getFirstTerm());
@@ -298,7 +300,7 @@ public final class RegexParser {
                     int innerPositionAssertion = -1;
                     for (int i = 0; i < group.size(); i++) {
                         Sequence s = group.getAlternatives().get(i);
-                        if (s.size() == 1 && s.getFirstTerm().isPositionAssertion()) {
+                        if (s.size() == 1 && s.getFirstTerm() instanceof PositionAssertion) {
                             innerPositionAssertion = i;
                             break;
                         }
@@ -480,78 +482,74 @@ public final class RegexParser {
         return characterClass;
     }
 
-    private void createOptionalBranch(QuantifiableTerm term, Quantifier quantifier, boolean copy, boolean unroll, int recurse) throws RegexSyntaxException {
+    private void createOptionalBranch(QuantifiableTerm term, Quantifier quantifier, boolean copy, int recurse) throws RegexSyntaxException {
         addTerm(copy ? copyVisitor.copy(term) : term);
-        curTerm.setExpandedQuantifier(false);
-        ((QuantifiableTerm) curTerm).setQuantifier(null);
-        curTerm.setEmptyGuard(true);
-        createOptional(term, quantifier, true, unroll, recurse - 1);
+        if (curTerm instanceof Group) {
+            // When translating a quantified expression that allows zero occurrences into a
+            // disjunction of the form (curTerm|), we must make sure that curTerm cannot match the
+            // empty string, as is specified in step 2a of RepeatMatcher from ECMAScript draft 2018,
+            // chapter 21.2.2.5.1.
+            curTerm.setEmptyGuard(true);
+        }
+        term.setExpandedQuantifier(false);
+        term.setQuantifier(null);
+        createOptional(term, quantifier, true, recurse - 1);
     }
 
-    private void createOptional(QuantifiableTerm term, Quantifier quantifier, boolean copy, boolean unroll, int recurse) throws RegexSyntaxException {
+    private void createOptional(QuantifiableTerm term, Quantifier quantifier, boolean copy, int recurse) throws RegexSyntaxException {
         if (recurse < 0) {
             return;
         }
         properties.setAlternations();
-        if (copy) {
-            // the outermost group is already generated by expandQuantifier if copy == false
-            createGroup(null);
-        }
-        curGroup.setExpandedQuantifier(unroll);
+        createGroup(null);
+        curGroup.setExpandedQuantifier(true);
         curGroup.setQuantifier(quantifier);
-        if (term.isGroup()) {
-            curGroup.setEnclosedCaptureGroupsLow(term.asGroup().getEnclosedCaptureGroupsLow());
-            curGroup.setEnclosedCaptureGroupsHigh(term.asGroup().getEnclosedCaptureGroupsHigh());
+        if (term instanceof Group) {
+            curGroup.setEnclosedCaptureGroupsLow(((Group) term).getEnclosedCaptureGroupsLow());
+            curGroup.setEnclosedCaptureGroupsHigh(((Group) term).getEnclosedCaptureGroupsHigh());
         }
         if (quantifier.isGreedy()) {
-            createOptionalBranch(term, quantifier, copy, unroll, recurse);
+            createOptionalBranch(term, quantifier, copy, recurse);
             addSequence();
             curSequence.setExpandedQuantifier(true);
         } else {
             curSequence.setExpandedQuantifier(true);
             addSequence();
-            createOptionalBranch(term, quantifier, copy, unroll, recurse);
+            createOptionalBranch(term, quantifier, copy, recurse);
         }
         popGroup(null);
     }
 
-    private void expandQuantifier(QuantifiableTerm toExpand, boolean unroll) {
+    private void expandQuantifier(QuantifiableTerm toExpand) {
         assert toExpand.hasNotUnrolledQuantifier();
         Token.Quantifier quantifier = toExpand.getQuantifier();
-        assert !unroll || quantifier.getMin() <= TRegexOptions.TRegexMaxCountedRepetition && quantifier.getMax() <= TRegexOptions.TRegexMaxCountedRepetition : toExpand + " in " + source;
+        assert quantifier.getMin() <= TRegexOptions.TRegexMaxCountedRepetition && quantifier.getMax() <= TRegexOptions.TRegexMaxCountedRepetition : toExpand + " in " + source;
         curTerm = toExpand;
         curSequence = (Sequence) curTerm.getParent();
         curGroup = curSequence.getParent();
 
         ObjectArrayBuffer<Term> buf = compilationBuffer.getObjectBuffer1();
-        if (unroll && quantifier.getMin() > 0) {
-            // stash successors of toExpand to buffer
-            int size = curSequence.size();
-            for (int i = curTerm.getSeqIndex() + 1; i < size; i++) {
-                buf.add(curSequence.getLastTerm());
-                curSequence.removeLastTerm();
-            }
-            // unroll non-optional part ( x{3} -> xxx )
-            curTerm.setExpandedQuantifier(true);
-            for (int i = 0; i < quantifier.getMin() - 1; i++) {
-                addTerm(copyVisitor.copy(curTerm));
-                curTerm.setExpandedQuantifier(true);
-            }
-        } else {
-            assert !unroll || quantifier.getMin() == 0;
-            // replace the term to expand with a new wrapper group
-            ((Sequence) toExpand.getParent()).replace(toExpand.getSeqIndex(), createGroup(null, false, false, null));
+        int size = curSequence.size();
+        for (int i = curTerm.getSeqIndex() + 1; i < size; i++) {
+            buf.add(curSequence.getLastTerm());
+            curSequence.removeLastTerm();
         }
-        // unroll optional part ( x{0,3} -> (x(x(x|)|)|) )
-        createOptional(toExpand, quantifier, unroll && quantifier.getMin() > 0, unroll, !unroll || quantifier.isInfiniteLoop() ? 0 : (quantifier.getMax() - quantifier.getMin()) - 1);
-        if (!unroll || quantifier.isInfiniteLoop()) {
+
+        if (quantifier.getMin() == 0) {
+            curSequence.removeLastTerm();
+        }
+        QuantifiableTerm t = (QuantifiableTerm) curTerm;
+        curTerm.setExpandedQuantifier(true);
+        for (int i = quantifier.getMin(); i > 1; i--) {
+            addTerm(copyVisitor.copy(t));
+            curTerm.setExpandedQuantifier(true);
+        }
+        createOptional(t, quantifier, quantifier.getMin() > 0, quantifier.isInfiniteLoop() ? 0 : (quantifier.getMax() - quantifier.getMin()) - 1);
+        if (quantifier.isInfiniteLoop()) {
             ((Group) curTerm).setLoop(true);
         }
-        if (unroll && quantifier.getMin() > 0) {
-            // restore the stashed successors
-            for (int i = buf.length() - 1; i >= 0; i--) {
-                curSequence.add(buf.get(i));
-            }
+        for (int i = buf.length() - 1; i >= 0; i--) {
+            curSequence.add(buf.get(i));
         }
     }
 
@@ -570,44 +568,35 @@ public final class RegexParser {
 
         @Override
         protected void visit(BackReference backReference) {
-            if (backReference.hasNotUnrolledQuantifier()) {
-                parser.expandQuantifier(backReference, shouldAlwaysUnroll(backReference));
+            if (backReference.hasNotUnrolledQuantifier() && backReference.getQuantifier().getMin() == 0) {
+                parser.expandQuantifier(backReference);
             }
         }
 
         @Override
         protected void visit(CharacterClass characterClass) {
             if (characterClass.hasNotUnrolledQuantifier()) {
-                parser.expandQuantifier(characterClass, isInUnrollBounds(characterClass));
+                parser.expandQuantifier(characterClass);
             }
         }
 
         @Override
         protected void leave(Group group) {
-            if (group.hasNotUnrolledQuantifier() && !group.getFirstAlternative().isExpandedQuantifier() && !group.getLastAlternative().isExpandedQuantifier()) {
-                parser.expandQuantifier(group, shouldAlwaysUnroll(group) || isInUnrollBounds(group) && shouldUnrollVisitor.shouldUnroll(group));
+            if (group.hasNotUnrolledQuantifier() && shouldUnrollVisitor.shouldUnroll(group)) {
+                parser.expandQuantifier(group);
             }
-        }
-
-        private static boolean isInUnrollBounds(QuantifiableTerm term) {
-            Quantifier quantifier = term.getQuantifier();
-            return quantifier.getMin() <= TRegexOptions.TRegexMaxCountedRepetition && quantifier.getMax() <= TRegexOptions.TRegexMaxCountedRepetition;
-        }
-
-        private static boolean shouldAlwaysUnroll(QuantifiableTerm term) {
-            Quantifier quantifier = term.getQuantifier();
-            return quantifier.getMin() == 0 && (quantifier.getMax() == 1 || quantifier.isInfiniteLoop());
         }
 
         private static final class ShouldUnrollQuantifierVisitor extends DepthFirstTraversalRegexASTVisitor {
 
-            private Group root;
             private boolean result;
 
             boolean shouldUnroll(Group group) {
                 assert group.hasQuantifier();
+                if (group.getQuantifier().getMin() == 0 && (group.getQuantifier().getMax() == 1 || group.getQuantifier().isInfiniteLoop())) {
+                    return true;
+                }
                 result = true;
-                root = group;
                 run(group);
                 return result;
             }
@@ -616,14 +605,11 @@ public final class RegexParser {
             protected void visit(BackReference backReference) {
                 result = false;
             }
-
-            @Override
-            protected void visit(Group group) {
-                if (group != root && group.hasNotUnrolledQuantifier()) {
-                    result = false;
-                }
-            }
         }
+    }
+
+    private boolean curTermIsAnchor(PositionAssertion.Type type) {
+        return curTerm instanceof PositionAssertion && ((PositionAssertion) curTerm).type == type;
     }
 
     private void substitute(Token token, Group substitution) {
@@ -648,33 +634,25 @@ public final class RegexParser {
         while (lexer.hasNext()) {
             prevKind = token == null ? null : token.kind;
             token = lexer.next();
-            if (token.kind != Token.Kind.quantifier && curTerm != null && curTerm.isBackReference() && curTerm.asBackReference().isNestedOrForwardReference()) {
-                // nested/forward back-references are no-ops in JavaScript
-                removeCurTerm();
-            }
             switch (token.kind) {
                 case caret:
-                    if (prevKind != Token.Kind.caret) {
-                        if (flags.isMultiline()) {
-                            substitute(token, MULTI_LINE_CARET_SUBSTITUTION);
-                            properties.setAlternations();
-                        } else {
-                            PositionAssertion caret = ast.createPositionAssertion(PositionAssertion.Type.CARET);
-                            ast.addSourceSection(caret, token);
-                            addTerm(caret);
-                        }
+                    if (flags.isMultiline()) {
+                        substitute(token, MULTI_LINE_CARET_SUBSTITUTION);
+                        properties.setAlternations();
+                    } else if (!curTermIsAnchor(PositionAssertion.Type.CARET)) {
+                        PositionAssertion caret = ast.createPositionAssertion(PositionAssertion.Type.CARET);
+                        ast.addSourceSection(caret, token);
+                        addTerm(caret);
                     }
                     break;
                 case dollar:
-                    if (prevKind != Token.Kind.dollar) {
-                        if (flags.isMultiline()) {
-                            substitute(token, MULTI_LINE_DOLLAR_SUBSTITUTION);
-                            properties.setAlternations();
-                        } else {
-                            PositionAssertion dollar = ast.createPositionAssertion(PositionAssertion.Type.DOLLAR);
-                            ast.addSourceSection(dollar, token);
-                            addTerm(dollar);
-                        }
+                    if (flags.isMultiline()) {
+                        substitute(token, MULTI_LINE_DOLLAR_SUBSTITUTION);
+                        properties.setAlternations();
+                    } else if (!curTermIsAnchor(PositionAssertion.Type.DOLLAR)) {
+                        PositionAssertion dollar = ast.createPositionAssertion(PositionAssertion.Type.DOLLAR);
+                        ast.addSourceSection(dollar, token);
+                        addTerm(dollar);
                     }
                     break;
                 case wordBoundary:
@@ -711,11 +689,6 @@ public final class RegexParser {
                     BackReference backReference = ast.createBackReference(((Token.BackReference) token).getGroupNr());
                     ast.addSourceSection(backReference, token);
                     addTerm(backReference);
-                    if (backReference.getGroupNr() >= groupCount.getCount()) {
-                        backReference.setForwardReference();
-                    } else if (isNestedBackReference(backReference)) {
-                        backReference.setNestedBackReference();
-                    }
                     break;
                 case quantifier:
                     parseQuantifier((Token.Quantifier) token);
@@ -760,23 +733,6 @@ public final class RegexParser {
         return root;
     }
 
-    private static boolean isNestedBackReference(BackReference backReference) {
-        RegexASTNode parent = backReference.getParent().getParent();
-        while (true) {
-            if (parent.asGroup().getGroupNumber() == backReference.getGroupNr()) {
-                return true;
-            }
-            parent = parent.getParent();
-            if (parent.isRoot()) {
-                return false;
-            }
-            if (parent.isLookAroundAssertion()) {
-                parent = parent.getParent();
-            }
-            parent = parent.getParent();
-        }
-    }
-
     private void optimizeGroup() {
         sortAlternatives(curGroup);
         mergeCommonPrefixes(curGroup);
@@ -787,10 +743,10 @@ public final class RegexParser {
         if (curTerm == null) {
             throw syntaxError(ErrorMessages.QUANTIFIER_WITHOUT_TARGET);
         }
-        if (flags.isUnicode() && curTerm.isLookAheadAssertion()) {
+        if (flags.isUnicode() && curTerm instanceof LookAheadAssertion) {
             throw syntaxError(ErrorMessages.QUANTIFIER_ON_LOOKAHEAD_ASSERTION);
         }
-        if (curTerm.isLookBehindAssertion()) {
+        if (curTerm instanceof LookBehindAssertion) {
             throw syntaxError(ErrorMessages.QUANTIFIER_ON_LOOKBEHIND_ASSERTION);
         }
         assert curTerm == curSequence.getLastTerm();
@@ -798,14 +754,14 @@ public final class RegexParser {
             replaceCurTermWithDeadNode();
             return;
         }
-        boolean curTermIsZeroWidthGroup = curTerm.isGroup() && curTerm.asGroup().isAlwaysZeroWidth();
-        if (quantifier.getMax() == 0 || quantifier.getMin() == 0 && (curTerm.isLookAroundAssertion() || curTermIsZeroWidthGroup ||
-                        curTerm.isCharacterClass() && curTerm.asCharacterClass().getCharSet().matchesNothing())) {
+        boolean curTermIsZeroWidthGroup = curTerm instanceof Group && ((Group) curTerm).isAlwaysZeroWidth();
+        if (quantifier.getMax() == 0 || quantifier.getMin() == 0 && (curTerm instanceof LookAroundAssertion || curTermIsZeroWidthGroup ||
+                        curTerm instanceof CharacterClass && ((CharacterClass) curTerm).getCharSet().matchesNothing())) {
             removeCurTerm();
             return;
         }
         ast.addSourceSection(curTerm, quantifier);
-        if (curTerm.isLookAroundAssertion() || curTermIsZeroWidthGroup) {
+        if (curTerm instanceof LookAroundAssertion || curTermIsZeroWidthGroup) {
             // quantifying LookAroundAssertions doesn't do anything if quantifier.getMin() > 0, so
             // ignore.
             return;
@@ -818,8 +774,8 @@ public final class RegexParser {
         // merge equal successive quantified terms
         if (curSequence.size() > 1) {
             Term prevTerm = curSequence.getTerms().get(curSequence.size() - 2);
-            if (prevTerm.isQuantifiableTerm()) {
-                QuantifiableTerm prev = prevTerm.asQuantifiableTerm();
+            if (prevTerm instanceof QuantifiableTerm) {
+                QuantifiableTerm prev = (QuantifiableTerm) prevTerm;
                 if (prev.hasQuantifier() && ((QuantifiableTerm) curTerm).equalsSemantic(prev, true)) {
                     removeCurTerm();
                     long min = (long) prev.getQuantifier().getMin() + quantifier.getMin();
@@ -963,9 +919,10 @@ public final class RegexParser {
                         }
                     }
                     // merge successive single-character-class alternatives
-                    if (i > begin && s.size() - prefixSize == 1 && s.getLastTerm().isCharacterClass() && !s.getLastTerm().asCharacterClass().hasQuantifier() &&
+                    if (i > begin && s.size() - prefixSize == 1 &&
+                                    s.getLastTerm() instanceof CharacterClass && !((CharacterClass) s.getLastTerm()).hasQuantifier() &&
                                     innerGroup.getLastAlternative().isSingleCharClass()) {
-                        mergeCharClasses(innerGroup.getLastAlternative().getFirstTerm().asCharacterClass(), s.getLastTerm().asCharacterClass());
+                        mergeCharClasses((CharacterClass) innerGroup.getLastAlternative().getFirstTerm(), (CharacterClass) s.getLastTerm());
                     } else {
                         // avoid creation of multiple empty alternatives in one group
                         if (prefixSize == s.size()) {
@@ -978,8 +935,8 @@ public final class RegexParser {
                             for (int j = prefixSize; j < s.size(); j++) {
                                 Term t = s.getTerms().get(j);
                                 copy.add(t);
-                                if (t.isGroup()) {
-                                    Group g = t.asGroup();
+                                if (t instanceof Group) {
+                                    Group g = (Group) t;
                                     if (g.getEnclosedCaptureGroupsLow() != g.getEnclosedCaptureGroupsHigh()) {
                                         enclosedCGLo = Math.min(enclosedCGLo, g.getEnclosedCaptureGroupsLow());
                                         enclosedCGHi = Math.max(enclosedCGHi, g.getEnclosedCaptureGroupsHigh());
@@ -1065,7 +1022,7 @@ public final class RegexParser {
         int ret = -1;
         for (int i = begin; i < group.size(); i++) {
             Sequence s = group.getAlternatives().get(i);
-            if (s.isEmpty() || !s.getFirstTerm().isCharacterClass() || !s.getFirstTerm().asCharacterClass().wasSingleChar()) {
+            if (s.isEmpty() || !(s.getFirstTerm() instanceof CharacterClass) || !((CharacterClass) s.getFirstTerm()).wasSingleChar()) {
                 return ret;
             }
             ret = i + 1;
@@ -1078,14 +1035,14 @@ public final class RegexParser {
      * expansion: {@code (?!x) -> (?=[^x]|$)}. This simplifies things for the DFA generator.
      */
     private void singleCharNegativeLookAroundToPositive(Group group) {
-        if (group.getParent().isLookAroundAssertion() && group.getParent().asLookAroundAssertion().isNegated() && group.size() == 1 && group.getFirstAlternative().isSingleCharClass()) {
+        if (group.getParent() instanceof LookAroundAssertion && ((LookAroundAssertion) group.getParent()).isNegated() && group.size() == 1 && group.getFirstAlternative().isSingleCharClass()) {
             ast.invertNegativeLookAround((LookAroundAssertion) group.getParent());
             CharacterClass cc = (CharacterClass) group.getFirstAlternative().getFirstTerm();
             // we don't have to expand the inverse in unicode mode here, because the character set
             // is guaranteed to be in BMP range, and its inverse will match all surrogates
             cc.setCharSet(cc.getCharSet().createInverse());
             Sequence empty = ast.createSequence();
-            if (group.getParent().isLookAheadAssertion()) {
+            if (group.getParent() instanceof LookAheadAssertion) {
                 empty.add(ast.createPositionAssertion(PositionAssertion.Type.DOLLAR));
                 properties.setComplexLookAheadAssertions();
             } else {
