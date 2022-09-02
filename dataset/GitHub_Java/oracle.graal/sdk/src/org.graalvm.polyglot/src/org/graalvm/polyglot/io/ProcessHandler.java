@@ -56,7 +56,7 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
  * Service-provider for Truffle process builder. This interface allows embedder to intercept
  * subprocess creation done by guest languages.
  *
- * @since 20.0.0 beta 1
+ * @since 1.0
  */
 public interface ProcessHandler {
 
@@ -67,20 +67,15 @@ public interface ProcessHandler {
      * @return the new subprocess
      * @throws SecurityException if the process creation was forbidden by this handler
      * @throws IOException if the process fails to execute
-     * @since 20.0.0 beta 1
+     * @since 1.0
      */
     Process start(ProcessCommand command) throws IOException;
 
     /**
      * Subprocess attributes passed to
      * {@link #start(org.graalvm.polyglot.io.ProcessHandler.ProcessCommand) start} method.
-     *
-     * @since 20.0.0 beta 1
      */
     final class ProcessCommand {
-
-        private static final AbstractPolyglotImpl impl = initImpl();
-
         private List<String> cmd;
         private String cwd;
         private Map<String, String> environment;
@@ -102,7 +97,7 @@ public interface ProcessHandler {
          * Returns the subprocess executable and arguments.
          *
          * @return the list containing the executable and its arguments
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         public List<String> getCommand() {
             return cmd;
@@ -112,7 +107,7 @@ public interface ProcessHandler {
          * Returns the subprocess working directory.
          *
          * @return the working directory
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         public String getDirectory() {
             return cwd;
@@ -122,7 +117,7 @@ public interface ProcessHandler {
          * Returns the subprocess environment.
          *
          * @return the environment
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         public Map<String, String> getEnvironment() {
             return environment;
@@ -132,7 +127,7 @@ public interface ProcessHandler {
          * Return whether the standard error output should be merged into standard output.
          *
          * @return if {@code true} the standard error output is merged into standard output
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         public boolean isRedirectErrorStream() {
             return redirectErrorStream;
@@ -142,7 +137,7 @@ public interface ProcessHandler {
          * Returns the standard input source.
          *
          * @return the standard input source
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         public Redirect getInputRedirect() {
             return redirects[0];
@@ -152,7 +147,7 @@ public interface ProcessHandler {
          * Returns the standard output destination.
          *
          * @return the standard output destination
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         public Redirect getOutputRedirect() {
             return redirects[1];
@@ -162,32 +157,18 @@ public interface ProcessHandler {
          * Returns the standard error output destination.
          *
          * @return the standard error output destination
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         public Redirect getErrorRedirect() {
             return redirects[2];
         }
 
-        /**
-         * Throws a {@link SecurityException} with a given message. The {@link ProcessHandler}
-         * should use this method to throw the {@link SecurityException} when it forbids the
-         * sub-process creation.
-         *
-         * @param message the exception message
-         * @since 20.0.0 beta 1
-         */
-        @SuppressWarnings("static-method")
-        public SecurityException throwSecurityException(String message) {
-            throw impl.throwSecurityException(message);
-        }
-
-        private static AbstractPolyglotImpl initImpl() {
+        static {
             try {
                 Method method = Engine.class.getDeclaredMethod("getImpl");
                 method.setAccessible(true);
-                AbstractPolyglotImpl polyglotImpl = (AbstractPolyglotImpl) method.invoke(null);
-                polyglotImpl.setIO(new IOAccessImpl());
-                return polyglotImpl;
+                AbstractPolyglotImpl impl = (AbstractPolyglotImpl) method.invoke(null);
+                impl.setIO(new IOAccessImpl());
             } catch (Exception e) {
                 throw new IllegalStateException("Failed to initialize execution listener class.", e);
             }
@@ -204,21 +185,21 @@ public interface ProcessHandler {
     /**
      * Represents a source of subprocess input or a destination of subprocess output.
      *
-     * @since 20.0.0 beta 1
+     * @since 1.0
      */
     final class Redirect {
 
         /**
          * The current Java process creates a pipe to communicate with a subprocess.
          *
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         public static final Redirect PIPE = new Redirect(Type.PIPE);
 
         /**
          * The subprocess inherits input or output from the current Java process.
          *
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         public static final Redirect INHERIT = new Redirect(Type.INHERIT);
 
@@ -232,7 +213,7 @@ public interface ProcessHandler {
         /**
          * {@inheritDoc}
          *
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         @Override
         public String toString() {
@@ -242,7 +223,7 @@ public interface ProcessHandler {
         /**
          * {@inheritDoc}
          *
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         @Override
         public int hashCode() {
@@ -252,7 +233,7 @@ public interface ProcessHandler {
         /**
          * {@inheritDoc}
          *
-         * @since 20.0.0 beta 1
+         * @since 1.0
          */
         @Override
         public boolean equals(Object obj) {

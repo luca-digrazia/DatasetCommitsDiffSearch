@@ -50,6 +50,7 @@ import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.logging.Handler;
 import java.util.logging.Level;
+import org.graalvm.polyglot.impl.AbstractPolyglotImpl;
 
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractContextImpl;
 import org.graalvm.polyglot.io.FileSystem;
@@ -765,6 +766,7 @@ public final class Context implements AutoCloseable {
         private ProcessHandler processHandler;
         private EnvironmentAccess environmentAcceess;
         private Map<String, String> environment;
+        private boolean allowInheritEnvironment;
 
         Builder(String... onlyLanguages) {
             Objects.requireNonNull(onlyLanguages);
@@ -909,9 +911,6 @@ public final class Context implements AutoCloseable {
          * bindings}.
          * <li>Unrestricted {@link #allowIO(boolean) IO operations} on host system.
          * <li>Passing {@link #allowExperimentalOptions(boolean) experimental options}.
-         * <li>The {@link #allowCreateProcess(boolean) creation} and use of new sub-processes.
-         * <li>The {@link #allowEnvironmentAccess(org.graalvm.polyglot.EnvironmentAccess) access} to
-         * process environment variables.
          * </ul>
          *
          * @param enabled <code>true</code> for all access by default.
@@ -1241,7 +1240,8 @@ public final class Context implements AutoCloseable {
          * <code>true</code>, then process creation is enabled if not denied explicitly.
          *
          * @param enabled {@code true} to enable external process creation
-         * @since 20.0.0 beta 2
+         * @return the {@link Builder}
+         * @since 1.0
          */
         public Builder allowCreateProcess(boolean enabled) {
             this.allowCreateProcess = enabled;
@@ -1252,7 +1252,8 @@ public final class Context implements AutoCloseable {
          * Installs a {@link ProcessHandler} responsible for external process creation.
          *
          * @param handler the handler to be installed
-         * @since 20.0.0 beta 2
+         * @return the {@link Builder}
+         * @since 1.0
          */
         public Builder processHandler(ProcessHandler handler) {
             Objects.requireNonNull(handler, "Handler must be non null.");
@@ -1263,11 +1264,12 @@ public final class Context implements AutoCloseable {
         /**
          * Allow environment access using the provided policy. If {@link #allowAllAccess(boolean)
          * all access} is {@code true} then the default environment access policy is
-         * {@link EnvironmentAccess#INHERIT}, otherwise {@link EnvironmentAccess#NONE}. The provided
+         * {@link EnvironmentAccess#ALL}, otherwise {@link EnvironmentAccess#NONE}. The provided
          * access policy must not be {@code null}.
          *
          * @param accessPolicy the {@link EnvironmentAccess environment access policy}
-         * @since 20.0.0 beta 2
+         * @return the {@link Builder}
+         * @since 1.0
          */
         public Builder allowEnvironmentAccess(EnvironmentAccess accessPolicy) {
             Objects.requireNonNull(accessPolicy, "AccessPolicy must be non null.");
@@ -1278,9 +1280,10 @@ public final class Context implements AutoCloseable {
         /**
          * Sets an environment variable.
          *
-         * @param name the environment variable name
-         * @param value the environment variable value
-         * @since 20.0.0 beta 2
+         * @param name the variable name
+         * @param value the value
+         * @return the {@link Builder}
+         * @since 1.0
          */
         public Builder environment(String name, String value) {
             Objects.requireNonNull(name, "Name must be non null.");
@@ -1298,13 +1301,26 @@ public final class Context implements AutoCloseable {
          *
          * @param env environment variables
          * @see #environment(String, String) To set a single environment variable.
-         * @since 20.0.0 beta 2
+         * @since 1.0
          */
         public Builder environment(Map<String, String> env) {
             Objects.requireNonNull(env, "Env must be non null.");
             for (Map.Entry<String, String> e : env.entrySet()) {
                 environment(e.getKey(), e.getValue());
             }
+            return this;
+        }
+
+        /**
+         * Shortcut for setting multiple {@link #environment(String, String) environment variables}
+         * using a map. All values of the provided map must be non-null.
+         *
+         * @param env environment variables
+         * @see #environment(String, String) To set a single environment variable.
+         * @since 1.0
+         */
+        public Builder inheritEnvironment(boolean enabled) {
+            this.allowInheritEnvironment = enabled;
             return this;
         }
 
@@ -1358,9 +1374,12 @@ public final class Context implements AutoCloseable {
             }
 
             boolean createProcess = orAllAccess(allowCreateProcess);
+            boolean inheritEnvironment = orAllAccess(allowInheritEnvironment);
             if (environmentAcceess == null) {
-                environmentAcceess = this.allowAllAccess ? EnvironmentAccess.INHERIT : EnvironmentAccess.NONE;
+                environmentAcceess = this.allowAllAccess ? EnvironmentAccess.ALL : EnvironmentAccess.NONE;
             }
+            AbstractPolyglotImpl.EnvironmentConfig envConfig = new AbstractPolyglotImpl.EnvironmentConfig(environmentAcceess, inheritEnvironment,
+                            environment == null ? Collections.emptyMap() : environment);
             if (!io && customFileSystem != null) {
                 throw new IllegalStateException("Cannot install custom FileSystem when IO is disabled.");
             }
@@ -1390,7 +1409,7 @@ public final class Context implements AutoCloseable {
                 return engine.impl.createContext(null, null, null, hostClassLookupEnabled, hostAccess, polyglotAccess, nativeAccess, createThread,
                                 io, hostClassLoading, experimentalOptions,
                                 localHostLookupFilter, Collections.emptyMap(), arguments == null ? Collections.emptyMap() : arguments,
-                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, environmentAcceess, environment);
+                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, envConfig);
             } else {
                 if (messageTransport != null) {
                     throw new IllegalStateException("Cannot use MessageTransport in a context that shares an Engine.");
@@ -1398,7 +1417,7 @@ public final class Context implements AutoCloseable {
                 return engine.impl.createContext(out, err, in, hostClassLookupEnabled, hostAccess, polyglotAccess, nativeAccess, createThread,
                                 io, hostClassLoading, experimentalOptions,
                                 localHostLookupFilter, options == null ? Collections.emptyMap() : options, arguments == null ? Collections.emptyMap() : arguments,
-                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, environmentAcceess, environment);
+                                onlyLanguages, customFileSystem, customLogHandler, createProcess, processHandler, envConfig);
             }
         }
 

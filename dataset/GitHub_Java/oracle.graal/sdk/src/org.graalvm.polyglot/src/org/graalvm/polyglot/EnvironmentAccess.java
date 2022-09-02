@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -40,32 +40,40 @@
  */
 package org.graalvm.polyglot;
 
-import org.graalvm.polyglot.Context.Builder;
-
 /**
- * Represents an access policy to the process environment for the guest languages of a context.
+ * Represents an access policy for process environment in the guest languages.
  *
- * @since 20.0.0 beta 2
+ * @since 1.0
  */
 public final class EnvironmentAccess {
 
     /**
      * Provides guest languages no access to process environment. No environment variables are
-     * visible for reading. The {@code NONE} is a default value for {@link Context}s created without
-     * {@link Builder#allowAllAccess(boolean) all access}.
+     * visible for reading. The environment modification fails with {@link SecurityException}.
      *
-     * @since 20.0.0 beta 2
+     * @since 1.0
      */
     public static EnvironmentAccess NONE = new EnvironmentAccess();
 
     /**
-     * Provides guest languages read access to process environment. The {@code INHERIT} is a default
-     * value for {@link Context}s created with {@link Builder#allowAllAccess(boolean) all access}
-     * set to {@code true}.
+     * Provides guest languages read access to process environment. The
+     * {@link Context.Builder#environment(java.lang.String, java.lang.String) context} configured
+     * environment variables are visible for reading. The environment modification fails with
+     * {@link SecurityException}.
      *
-     * @since 20.0.0 beta 2
+     * @since 1.0
      */
-    public static EnvironmentAccess INHERIT = new EnvironmentAccess();
+    public static EnvironmentAccess READ = new EnvironmentAccess();
+
+    /**
+     * Provides guest languages full access to process environment. The
+     * {@link Context.Builder#environment(java.lang.String, java.lang.String) context} configured
+     * environment variables are visible for reading. Gest language can add, override environment
+     * variables.
+     *
+     * @since 1.0
+     */
+    public static EnvironmentAccess ALL = new EnvironmentAccess();
 
     private EnvironmentAccess() {
     }
