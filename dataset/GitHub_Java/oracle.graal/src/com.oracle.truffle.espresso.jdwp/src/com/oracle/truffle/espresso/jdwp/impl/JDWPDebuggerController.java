@@ -70,12 +70,14 @@ public class JDWPDebuggerController {
 
     public static boolean isDebug(Debug debug) {
         switch (debug) {
-            case NONE: return false;
-            case THREAD: return debugLevel == Debug.THREAD || debugLevel == Debug.ALL;
-            case PACKET: return debugLevel == Debug.PACKET || debugLevel == Debug.ALL;
-            case ALL: return debugLevel == Debug.ALL || debugLevel == Debug.THREAD || debugLevel == Debug.PACKET;
-            default: return false;
+            case THREAD:
+                return debugLevel == Debug.THREAD || debugLevel == Debug.ALL;
+            case PACKET:
+                return debugLevel == Debug.PACKET || debugLevel == Debug.ALL;
+            case ALL:
+                return debugLevel == Debug.ALL || debugLevel == Debug.THREAD || debugLevel == Debug.PACKET;
         }
+        return false;
     }
 
 
