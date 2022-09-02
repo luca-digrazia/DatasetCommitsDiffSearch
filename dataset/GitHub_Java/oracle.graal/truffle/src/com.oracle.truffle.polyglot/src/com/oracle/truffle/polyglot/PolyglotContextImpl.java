@@ -907,21 +907,17 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
         }
     }
 
+    public enum ClosePrepareResult {
+
+        ALREADY_CLOSED,
+        NEEDS_CLOSE,
+        NEEDS_FORCE_CLOSE,
+
+    }
+
     boolean closeImpl(boolean cancelIfExecuting, boolean waitForPolyglotThreads) {
-        /*
-         * As a first step we prepare for close by waiting for other threads to finish closing and
-         * checking whether other threads are still executing. This block performs the following
-         * checks:
-         *
-         * 1) The close was already performed on another thread -> return true
-         *
-         * 2) The close is currently already being performed on this thread -> return true
-         *
-         * 3) The close was not yet performed but other threads are still executing -> mark current
-         * thread as cancelled and return false
-         *
-         * 4) The close was not yet performed and no thread is executing -> perform close
-         */
+        boolean success = false;
+        Thread[] remainingThreads = null;
         boolean waitForClose = false;
         while (true) {
             if (waitForClose) {
@@ -977,15 +973,9 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             }
         }
 
-        /*
-         * If we reach here then we can continue with the close. This means that no other concurrent
-         * close is running and no other thread is currently executing.
-         */
         assert closingThread == Thread.currentThread();
         assert closingLock.isHeldByCurrentThread() : "lock is acquired";
         assert !closed;
-        Thread[] remainingThreads = null;
-        boolean success = false;
         try {
             Object prev = enter();
             try {
@@ -994,6 +984,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 finalizeContext();
 
                 // finalization performed commit close -> no reinitialization allowed
+                disposing = true;
 
                 disposeContext();
 
@@ -1024,6 +1015,7 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
                 if (success && engine.boundEngine) {
                     disposeStaticContext(this);
                 }
+                this.disposing = false;
             }
         } finally {
             closingThread = null;
@@ -1057,8 +1049,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
     }
 
     private void disposeContext() {
-        assert !this.disposing;
-        this.disposing = true;
         List<PolyglotLanguageContext> disposedContexts = new ArrayList<>(contexts.length);
         try {
             synchronized (this) {
@@ -1078,7 +1068,6 @@ final class PolyglotContextImpl extends AbstractContextImpl implements com.oracl
             for (PolyglotLanguageContext context : disposedContexts) {
                 context.notifyDisposed();
             }
-            this.disposing = false;
         }
     }
 
