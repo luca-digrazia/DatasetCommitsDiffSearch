@@ -31,10 +31,6 @@ package com.oracle.truffle.llvm.runtime.interop;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Cached.Shared;
-import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -47,19 +43,12 @@ import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropReadNode;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropWriteNode;
 import com.oracle.truffle.llvm.runtime.interop.convert.ForeignToLLVM.ForeignToLLVMType;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedReadLibrary;
-import com.oracle.truffle.llvm.runtime.library.internal.LLVMManagedWriteLibrary;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMObjectAccess;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.spi.NativeTypeLibrary;
-import com.oracle.truffle.llvm.spi.ReferenceLibrary;
 
 @ValueType
 @ExportLibrary(InteropLibrary.class)
-@ExportLibrary(LLVMManagedReadLibrary.class)
-@ExportLibrary(LLVMManagedWriteLibrary.class)
-@ExportLibrary(ReferenceLibrary.class)
 public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInternalTruffleObject {
 
     final Object foreign;
@@ -112,7 +101,6 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
         return foreign.hashCode();
     }
 
-    @GenerateUncached
     public abstract static class ForeignGetTypeNode extends LLVMNode {
 
         public abstract LLVMInteropType.Structured execute(LLVMTypedForeignObject object);
@@ -170,111 +158,6 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
         }
     }
 
-    @ExportMessage(name = "isReadable")
-    @ExportMessage(name = "isWritable")
-    @SuppressWarnings("static-method")
-    boolean isAccessible() {
-        return true;
-    }
-
-    @ExportMessage
-    byte readI8(long offset,
-                    @Shared("read") @Cached LLVMInteropReadNode read,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        return (byte) read.execute(getType.execute(this), getForeign(), offset, ForeignToLLVMType.I8);
-    }
-
-    @ExportMessage
-    short readI16(long offset,
-                    @Shared("read") @Cached LLVMInteropReadNode read,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        return (short) read.execute(getType.execute(this), getForeign(), offset, ForeignToLLVMType.I16);
-    }
-
-    @ExportMessage
-    int readI32(long offset,
-                    @Shared("read") @Cached LLVMInteropReadNode read,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        return (int) read.execute(getType.execute(this), getForeign(), offset, ForeignToLLVMType.I32);
-    }
-
-    @ExportMessage
-    Object readGenericI64(long offset,
-                    @Shared("read") @Cached LLVMInteropReadNode read,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        return read.execute(getType.execute(this), getForeign(), offset, ForeignToLLVMType.I64);
-    }
-
-    @ExportMessage
-    float readFloat(long offset,
-                    @Shared("read") @Cached LLVMInteropReadNode read,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        return (float) read.execute(getType.execute(this), getForeign(), offset, ForeignToLLVMType.FLOAT);
-    }
-
-    @ExportMessage
-    double readDouble(long offset,
-                    @Shared("read") @Cached LLVMInteropReadNode read,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        return (double) read.execute(getType.execute(this), getForeign(), offset, ForeignToLLVMType.DOUBLE);
-    }
-
-    @ExportMessage
-    LLVMPointer readPointer(long offset,
-                    @Shared("read") @Cached LLVMInteropReadNode read,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        return LLVMPointer.cast(read.execute(getType.execute(this), getForeign(), offset, ForeignToLLVMType.POINTER));
-    }
-
-    @ExportMessage
-    void writeI8(long offset, byte value,
-                    @Shared("write") @Cached LLVMInteropWriteNode write,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        write.execute(getType.execute(this), getForeign(), offset, value, ForeignToLLVMType.I8);
-    }
-
-    @ExportMessage
-    void writeI16(long offset, short value,
-                    @Shared("write") @Cached LLVMInteropWriteNode write,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        write.execute(getType.execute(this), getForeign(), offset, value, ForeignToLLVMType.I16);
-    }
-
-    @ExportMessage
-    void writeI32(long offset, int value,
-                    @Shared("write") @Cached LLVMInteropWriteNode write,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        write.execute(getType.execute(this), getForeign(), offset, value, ForeignToLLVMType.I32);
-    }
-
-    @ExportMessage
-    void writeGenericI64(long offset, Object value,
-                    @Shared("write") @Cached LLVMInteropWriteNode write,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        write.execute(getType.execute(this), getForeign(), offset, value, ForeignToLLVMType.I64);
-    }
-
-    @ExportMessage
-    void writeFloat(long offset, float value,
-                    @Shared("write") @Cached LLVMInteropWriteNode write,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        write.execute(getType.execute(this), getForeign(), offset, value, ForeignToLLVMType.FLOAT);
-    }
-
-    @ExportMessage
-    void writeDouble(long offset, double value,
-                    @Shared("write") @Cached LLVMInteropWriteNode write,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        write.execute(getType.execute(this), getForeign(), offset, value, ForeignToLLVMType.DOUBLE);
-    }
-
-    @ExportMessage
-    void writePointer(long offset, LLVMPointer value,
-                    @Shared("write") @Cached LLVMInteropWriteNode write,
-                    @Shared("getType") @Cached ForeignGetTypeNode getType) {
-        write.execute(getType.execute(this), getForeign(), offset, value, ForeignToLLVMType.POINTER);
-    }
-
     @ExportMessage
     boolean isNull(@CachedLibrary("this.foreign") InteropLibrary interop) {
         return interop.isNull(getForeign());
@@ -293,21 +176,5 @@ public final class LLVMTypedForeignObject implements LLVMObjectAccess, LLVMInter
     @ExportMessage
     void toNative(@CachedLibrary("this.foreign") InteropLibrary interop) {
         interop.toNative(getForeign());
-    }
-
-    @ExportMessage
-    static class IsSame {
-
-        @Specialization
-        static boolean doTyped(LLVMTypedForeignObject receiver, LLVMTypedForeignObject other,
-                        @CachedLibrary("receiver.foreign") ReferenceLibrary lib) {
-            return lib.isSame(receiver.foreign, other.foreign);
-        }
-
-        @Fallback
-        @SuppressWarnings("unused")
-        static boolean doGeneric(LLVMTypedForeignObject receiver, Object other) {
-            return false;
-        }
     }
 }
