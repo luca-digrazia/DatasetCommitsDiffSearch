@@ -107,11 +107,6 @@ class ReturnAddressOperand extends PrimitiveOperand {
         targetBCIs.add(target);
     }
 
-    private ReturnAddressOperand(ArrayList<Integer> bcis) {
-        super(JavaKind.ReturnAddress);
-        targetBCIs.addAll(bcis);
-    }
-
     @Override
     boolean isReturnAddress() {
         return true;
@@ -139,7 +134,7 @@ class ReturnAddressOperand extends PrimitiveOperand {
         if (!other.isReturnAddress()) {
             return null;
         }
-        ReturnAddressOperand ra = new ReturnAddressOperand(((ReturnAddressOperand) other).targetBCIs);
+        ReturnAddressOperand ra = (ReturnAddressOperand) other;
         for (Integer target : targetBCIs) {
             if (!ra.targetBCIs.contains(target)) {
                 ra.targetBCIs.add(target);
@@ -263,13 +258,17 @@ class ArrayOperand extends Operand {
     boolean compliesWith(Operand other) {
         if (other.isArrayType()) {
             if (other.getDimensions() < getDimensions()) {
-                return other.getElemental().isReference() && other.getElemental().getType() == Type.Object;
+                return other.getElemental().isReference() && (other.getElemental().getType() == Type.Object ||
+                                other.getElemental().getType() == Type.Cloneable ||
+                                other.getElemental().getType() == Type.Serializable);
             } else if (other.getDimensions() == getDimensions()) {
                 return elemental.compliesWith(other.getElemental());
             }
             return false;
         }
-        return (other == Invalid) || (other.isReference() && other.getType() == Type.Object);
+        return (other == Invalid) || (other.isReference() && (other.getType() == Type.Object ||
+                        other.getType() == Type.Cloneable ||
+                        other.getType() == Type.Serializable));
     }
 
     @Override
