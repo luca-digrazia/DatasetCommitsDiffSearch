@@ -62,7 +62,7 @@ public class InternalErrorPropagationTest extends AbstractPolyglotTest {
 
     @Test
     public void testInstrumentCreateException() {
-        TestContextListener listener = new TestContextListener();
+        TestListener listener = new TestListener();
         ProxyInstrument instrument = new ProxyInstrument() {
             @Override
             protected void onCreate(Env env) {
@@ -71,12 +71,10 @@ public class InternalErrorPropagationTest extends AbstractPolyglotTest {
             }
         };
 
-        TestEventListener triggerFailure = new TestEventListener();
-
         setupEnv(Context.create(ProxyLanguage.ID), instrument);
 
         try {
-            listener.onContextCreated = triggerFailure;
+            listener.onContextCreated = (c) -> triggerParseFailure(languageEnv, c);
             setupEnv(Context.create(ProxyLanguage.ID), instrument);
             Assert.fail();
         } catch (PolyglotException e) {
@@ -85,7 +83,7 @@ public class InternalErrorPropagationTest extends AbstractPolyglotTest {
 
         try {
             listener.onContextCreated = null;
-            listener.onLanguageContextCreated = triggerFailure;
+            listener.onLanguageContextCreated = (c) -> triggerParseFailure(languageEnv, c);
             setupEnv(Context.create(ProxyLanguage.ID), instrument);
             Assert.fail();
         } catch (PolyglotException e) {
@@ -94,7 +92,7 @@ public class InternalErrorPropagationTest extends AbstractPolyglotTest {
 
         try {
             listener.onLanguageContextCreated = null;
-            listener.onLanguageContextInitialized = triggerFailure;
+            listener.onLanguageContextInitialized = (c) -> triggerParseFailure(languageEnv, c);
             setupEnv(Context.create(ProxyLanguage.ID), instrument);
             Assert.fail();
         } catch (PolyglotException e) {
@@ -104,7 +102,7 @@ public class InternalErrorPropagationTest extends AbstractPolyglotTest {
         listener.onLanguageContextInitialized = null;
         setupEnv(Context.create(ProxyLanguage.ID), instrument);
         try {
-            listener.onLanguageContextFinalized = triggerFailure;
+            listener.onLanguageContextFinalized = (c) -> triggerParseFailure(languageEnv, c);
             context.close();
             Assert.fail();
         } catch (PolyglotException e) {
@@ -116,7 +114,7 @@ public class InternalErrorPropagationTest extends AbstractPolyglotTest {
         listener.onLanguageContextFinalized = null;
         setupEnv(Context.create(ProxyLanguage.ID), instrument);
         try {
-            listener.onLanguageContextDisposed = triggerFailure;
+            listener.onLanguageContextDisposed = (c) -> triggerParseFailure(languageEnv, c);
             context.close();
             Assert.fail();
         } catch (PolyglotException e) {
@@ -128,7 +126,7 @@ public class InternalErrorPropagationTest extends AbstractPolyglotTest {
         listener.onLanguageContextDisposed = null;
         setupEnv(Context.create(ProxyLanguage.ID), instrument);
         try {
-            listener.onContextClosed = triggerFailure;
+            listener.onContextClosed = (c) -> triggerParseFailure(languageEnv, c);
             context.close();
             Assert.fail();
         } catch (PolyglotException e) {
@@ -157,22 +155,21 @@ public class InternalErrorPropagationTest extends AbstractPolyglotTest {
         }
     }
 
-    final class TestEventListener {
+    @FunctionalInterface
+    interface EventListener {
 
-        void accept(TruffleContext c) {
-            triggerParseFailure(languageEnv, c);
-        }
+        void accept(TruffleContext c);
 
     }
 
-    static class TestContextListener implements ContextsListener {
+    static class TestListener implements ContextsListener {
 
-        TestEventListener onLanguageContextInitialized;
-        TestEventListener onLanguageContextFinalized;
-        TestEventListener onLanguageContextDisposed;
-        TestEventListener onLanguageContextCreated;
-        TestEventListener onContextCreated;
-        TestEventListener onContextClosed;
+        EventListener onLanguageContextInitialized;
+        EventListener onLanguageContextFinalized;
+        EventListener onLanguageContextDisposed;
+        EventListener onLanguageContextCreated;
+        EventListener onContextCreated;
+        EventListener onContextClosed;
 
         public void onLanguageContextInitialized(TruffleContext c, LanguageInfo l) {
             if (onLanguageContextInitialized != null) {
