@@ -154,7 +154,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         return getMethodVersion().pool;
     }
 
-    public LinkedMethod getLinkedMethod() {
+    private LinkedMethod getLinkedMethod() {
         return getMethodVersion().linkedMethod;
     }
 
@@ -427,7 +427,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         if (isPublic() || isProtected()) {
             return true;
         }
-        return getDeclaringKlass().sameRuntimePackage(getDeclaringKlass().getDefiningClassLoader(), other.getDeclaringKlass());
+        return getDeclaringKlass().sameRuntimePackage(other.getDeclaringKlass());
     }
 
     public ObjectKlass[] getCheckedExceptions() {
@@ -622,10 +622,16 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             return false;
         }
         Symbol<Type>[] signature = getParsedSignature();
-        if (!(Signatures.parameterCount(signature, false) == 1 &&
-                        Signatures.parameterType(signature, 0) == Type.java_lang_Object_array &&
-                        (getJavaVersion().java9OrLater() || Signatures.returnType(signature) == Type.java_lang_Object))) {
+        if (Signatures.parameterCount(signature, false) != 1) {
             return false;
+        }
+        if (Signatures.parameterType(signature, 0) != Type.java_lang_Object_array) {
+            return false;
+        }
+        if (getJavaVersion().java8OrEarlier()) {
+            if (Signatures.returnType(signature) != Type.java_lang_Object) {
+                return false;
+            }
         }
         int required = ACC_NATIVE | ACC_VARARGS;
         int flags = getModifiers();
@@ -971,17 +977,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         ids.replaceObject(oldVersion, methodVersion);
     }
 
-    void onSubclassMethodChanged(Ids<Object> ids) {
-        MethodVersion oldVersion = methodVersion;
-        methodVersion = new MethodVersion(oldVersion.pool, oldVersion.linkedMethod, oldVersion.getCodeAttribute());
-        oldVersion.getAssumption().invalidate();
-        ids.replaceObject(oldVersion, methodVersion);
-    }
-
     public MethodVersion getMethodVersion() {
-        // block execution during class redefinition
-        ClassRedefinition.check();
-
         MethodVersion version = methodVersion;
         if (!version.getAssumption().isValid()) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
