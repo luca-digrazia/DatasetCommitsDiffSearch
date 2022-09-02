@@ -61,7 +61,6 @@ import com.oracle.truffle.espresso.jdwp.api.Ids;
 import com.oracle.truffle.espresso.impl.ModuleTable.ModuleEntry;
 import com.oracle.truffle.espresso.impl.PackageTable.PackageEntry;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
-import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.runtime.Attribute;
@@ -120,8 +119,9 @@ public final class ObjectKlass extends Klass {
     private final StaticObject definingClassLoader;
 
     @CompilationFinal volatile RedefinitionCache redefineCache;
+    private Field redefinitionCountField;
 
-    // used for class redefintion when refreshing vtables etc.
+    // used for class redefintion whenrefreshing vtables etc.
     private final ArrayList<ObjectKlass> subTypes = new ArrayList<>(8);
 
     public static final int LOADED = 0;
@@ -272,9 +272,7 @@ public final class ObjectKlass extends Klass {
     private void actualInit() {
         checkErroneousInitialization();
         synchronized (this) {
-            // Double-check under lock
-            checkErroneousInitialization();
-            if (!(isInitializedOrPrepared())) {
+            if (!(isInitializedOrPrepared())) { // Check under lock
                 try {
                     /*
                      * Spec fragment: Then, initialize each final static field of C with the
@@ -584,8 +582,7 @@ public final class ObjectKlass extends Klass {
         throw EspressoError.shouldNotReachHere();
     }
 
-    // Exposed to LookupVirtualMethodNode
-    public Method[] getVTable() {
+    Method[] getVTable() {
         assert !isInterface();
         return getRedefineCache().vtable;
     }
@@ -680,6 +677,7 @@ public final class ObjectKlass extends Klass {
                  * Methods in superInterf.getInterfaceMethodsTable() are all non-static non-private
                  * methods declared in superInterf.
                  */
+
                 if (name == superM.getName() && signature == superM.getRawSignature()) {
                     if (resolved == null) {
                         resolved = superM;
@@ -1078,7 +1076,6 @@ public final class ObjectKlass extends Klass {
             // find the old real method
             Method method = findMethod(changedMethod, oldVersion.declaredMethods);
             method.redefine(changedMethod, packet.parserKlass, ids);
-            JDWPLogger.log("Redefining method %s.%s", JDWPLogger.LogLevel.REDEFINE, method.getDeclaringKlass().getNameAsString(), method.getNameAsString());
         }
 
         if (change.getAddedAndRemovedMethods().size() > 0) {
@@ -1094,16 +1091,13 @@ public final class ObjectKlass extends Klass {
                     it.remove();
                     oldDeclaredMethod.removedByRedefinition();
                     oldDeclaredMethod.getMethodVersion().getAssumption().invalidate();
-                    JDWPLogger.log("Removed method %s.%s", JDWPLogger.LogLevel.REDEFINE, oldDeclaredMethod.getDeclaringKlass().getNameAsString(), oldDeclaredMethod.getNameAsString());
                 }
             }
 
             // added methods
             for (ParserMethod addedMethod : addedMethods) {
                 LinkedMethod linkedMethod = new LinkedMethod(addedMethod);
-                Method added = new Method(this, linkedMethod, pool);
-                JDWPLogger.log("Added method %s.%s", JDWPLogger.LogLevel.REDEFINE, added.getDeclaringKlass().getNameAsString(), added.getNameAsString());
-                declaredMethods.addLast(added);
+                declaredMethods.addLast(new Method(this, linkedMethod, pool));
             }
 
             newDeclaredMethods = declaredMethods.toArray(new Method[declaredMethods.size()]);
@@ -1145,8 +1139,17 @@ public final class ObjectKlass extends Klass {
 
     private void flushReflectionCaches() {
         // increment the redefine count on the class instance to flush reflection caches
-        int value = InterpreterToVM.getFieldInt(mirror(), getMeta().java_lang_Class_classRedefinedCount);
-        InterpreterToVM.setFieldInt(++value, mirror(), getMeta().java_lang_Class_classRedefinedCount);
+        if (redefinitionCountField == null) {
+            for (Field f : mirror().getKlass().getDeclaredFields()) {
+                // TODO(Gregersen) - is the field name the same on all JDKs?
+                if ("classRedefinedCount".equals(f.getNameAsString())) {
+                    redefinitionCountField = f;
+                    break;
+                }
+            }
+        }
+        int value = InterpreterToVM.getFieldInt(mirror(), redefinitionCountField);
+        InterpreterToVM.setFieldInt(++value, mirror(), redefinitionCountField);
     }
 
     private static Method findMethod(ParserMethod changedMethod, Method[] declaredMethods) {

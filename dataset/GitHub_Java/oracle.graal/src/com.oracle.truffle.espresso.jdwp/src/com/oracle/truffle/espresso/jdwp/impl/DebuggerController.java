@@ -485,7 +485,7 @@ public final class DebuggerController implements ContextsListener {
 
     public boolean enterTruffleContext() {
         if (previous == null && truffleContext != null) {
-            previous = truffleContext.enter(null);
+            previous = truffleContext.enter();
             return true;
         }
         return false;
@@ -493,7 +493,7 @@ public final class DebuggerController implements ContextsListener {
 
     public void leaveTruffleContext() {
         if (truffleContext != null) {
-            truffleContext.leave(null, previous);
+            truffleContext.leave(previous);
             previous = null;
         }
     }

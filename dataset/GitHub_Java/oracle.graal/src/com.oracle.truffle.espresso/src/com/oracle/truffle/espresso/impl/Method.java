@@ -133,7 +133,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     // the parts of the method that can change when it's redefined
     // are encapsulated within the methodVersion
     @CompilationFinal volatile MethodVersion methodVersion;
-    @CompilationFinal private Assumption removedByRedefinition;
+    private final Assumption removedByRedefinition = Truffle.getRuntime().createAssumption();
 
     public Method identity() {
         return proxy == null ? this : proxy;
@@ -623,16 +623,10 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
             return false;
         }
         Symbol<Type>[] signature = getParsedSignature();
-        if (Signatures.parameterCount(signature, false) != 1) {
+        if (!(Signatures.parameterCount(signature, false) == 1 &&
+                        Signatures.parameterType(signature, 0) == Type.java_lang_Object_array &&
+                        (getJavaVersion().java9OrLater() || Signatures.returnType(signature) == Type.java_lang_Object))) {
             return false;
-        }
-        if (Signatures.parameterType(signature, 0) != Type.java_lang_Object_array) {
-            return false;
-        }
-        if (getJavaVersion().java8OrEarlier()) {
-            if (Signatures.returnType(signature) != Type.java_lang_Object) {
-                return false;
-            }
         }
         int required = ACC_NATIVE | ACC_VARARGS;
         int flags = getModifiers();
@@ -1006,15 +1000,11 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     public void removedByRedefinition() {
-        if (removedByRedefinition == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            removedByRedefinition = Truffle.getRuntime().createAssumption();
-        }
         removedByRedefinition.invalidate();
     }
 
     public boolean isRemovedByRedefition() {
-        return removedByRedefinition != null && !removedByRedefinition.isValid();
+        return !removedByRedefinition.isValid();
     }
 
     public final class MethodVersion implements MethodRef {
