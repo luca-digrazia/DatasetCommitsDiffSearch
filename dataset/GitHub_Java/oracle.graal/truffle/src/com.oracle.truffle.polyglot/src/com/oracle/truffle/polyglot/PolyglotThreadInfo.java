@@ -89,10 +89,6 @@ final class PolyglotThreadInfo {
         return getThread() == Thread.currentThread();
     }
 
-    /*
-     * Volatile increment is safe if only one thread does it.
-     */
-    @SuppressFBWarnings("VO_VOLATILE_INCREMENT")
     void enter(PolyglotEngineImpl engine, PolyglotContextImpl profiledContext, boolean notify) {
         assert Thread.currentThread() == getThread();
         enteredCount++;
@@ -119,10 +115,6 @@ final class PolyglotThreadInfo {
         return false;
     }
 
-    /*
-     * Volatile decrement is safe if only one thread does it.
-     */
-    @SuppressFBWarnings("VO_VOLATILE_INCREMENT")
     void leave(PolyglotEngineImpl engine, PolyglotContextImpl profiledContext, boolean notify) {
         assert Thread.currentThread() == getThread();
         if (notify) {
