@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -20,39 +20,36 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.espresso.nodes.quick.interop;
+package com.oracle.truffle.espresso.nodes.quick.invoke;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.espresso.impl.Field;
+import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
-import com.oracle.truffle.espresso.nodes.helper.AbstractSetFieldNode;
-import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 
-public final class QuickenedPutFieldNode extends QuickNode {
-    private final int slotCount;
-    private final int statementIndex;
+public final class LeafAssumptionSetterNode extends InlinedSetterNode {
 
-    @Child AbstractSetFieldNode setFieldNode;
+    private final int curBCI;
+    private final int opcode;
 
-    public QuickenedPutFieldNode(int top, int callerBCI, Field field, int statementIndex) {
-        super(top, callerBCI);
-        assert !field.isStatic();
-        this.setFieldNode = AbstractSetFieldNode.create(field);
-        this.slotCount = field.getKind().getSlotCount();
-        this.statementIndex = statementIndex;
+    protected LeafAssumptionSetterNode(Method inlinedMethod, int top, int opCode, int curBCI, int statementIndex) {
+        super(inlinedMethod, top, opCode, curBCI, statementIndex);
+        this.curBCI = curBCI;
+        this.opcode = opCode;
     }
 
     @Override
     public int execute(VirtualFrame frame, long[] primitives, Object[] refs) {
         BytecodeNode root = getBytecodeNode();
-        StaticObject receiver = nullCheck(BytecodeNode.popObject(refs, top - 1 - slotCount));
-        setFieldNode.setField(frame, primitives, refs, root, receiver, top, statementIndex);
-        return -slotCount - 1; // -receiver
+        if (inlinedMethod.leafAssumption()) {
+            StaticObject receiver = field.isStatic()
+                            ? field.getDeclaringKlass().tryInitializeAndGetStatics()
+                            : nullCheck(BytecodeNode.popObject(refs, top - 1 - slotCount));
+            setFieldNode.setField(frame, primitives, refs, root, receiver, top, statementIndex);
+            return -slotCount + stackEffect;
+        } else {
+            return root.reQuickenInvoke(frame, primitives, refs, top, curBCI, opcode, statementIndex, inlinedMethod);
+        }
     }
 
-    @Override
-    public boolean producedForeignObject(Object[] refs) {
-        return false;
-    }
 }

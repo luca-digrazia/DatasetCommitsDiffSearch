@@ -73,4 +73,9 @@ public abstract class ByteArrayStoreNode extends QuickNode {
     void doEspresso(StaticObject array, int index, byte value) {
         getBytecodeNode().getInterpreterToVM().setArrayByte(value, index, array);
     }
+
+    @Override
+    public boolean producedForeignObject(Object[] refs) {
+        return false;
+    }
 }

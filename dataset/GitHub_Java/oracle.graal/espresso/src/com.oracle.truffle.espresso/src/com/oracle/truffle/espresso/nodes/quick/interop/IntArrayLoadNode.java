@@ -78,4 +78,9 @@ public abstract class IntArrayLoadNode extends QuickNode {
     int doEspresso(StaticObject array, int index) {
         return getBytecodeNode().getInterpreterToVM().getArrayInt(index, array);
     }
+
+    @Override
+    public boolean producedForeignObject(Object[] refs) {
+        return false;
+    }
 }

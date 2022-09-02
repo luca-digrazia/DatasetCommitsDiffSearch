@@ -22,32 +22,9 @@
  */
 package com.oracle.truffle.espresso.nodes;
 
-import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.GenerateWrapper;
-import com.oracle.truffle.api.instrumentation.InstrumentableNode;
-import com.oracle.truffle.api.instrumentation.ProbeNode;
-import com.oracle.truffle.api.instrumentation.StandardTags;
-import com.oracle.truffle.api.instrumentation.Tag;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.frame.Frame;
 
-@GenerateWrapper
-public abstract class BaseEspressoStatementNode extends Node implements InstrumentableNode {
+public interface BciProvider {
 
-    public void execute(@SuppressWarnings("unused") VirtualFrame frame) {
-        // only here to satisfy wrapper generation
-    }
-
-    public boolean hasTag(Class<? extends Tag> tag) {
-        return tag == StandardTags.StatementTag.class;
-    }
-
-    @Override
-    public boolean isInstrumentable() {
-        return true;
-    }
-
-    @Override
-    public WrapperNode createWrapper(ProbeNode probe) {
-        return new BaseEspressoStatementNodeWrapper(this, probe);
-    }
+    int getBci(Frame frame);
 }

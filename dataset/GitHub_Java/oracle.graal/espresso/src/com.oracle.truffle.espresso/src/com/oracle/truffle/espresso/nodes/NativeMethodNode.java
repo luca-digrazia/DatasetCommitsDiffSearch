@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,6 +25,7 @@ package com.oracle.truffle.espresso.nodes;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.frame.Frame;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -39,9 +40,9 @@ import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.impl.Method.MethodVersion;
 import com.oracle.truffle.espresso.jni.JniEnv;
 import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.Meta;
+import com.oracle.truffle.espresso.perf.DebugCounter;
+import com.oracle.truffle.espresso.runtime.EspressoException;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.object.DebugCounter;
 
 /**
  * Represents a native Java method.
@@ -123,11 +124,11 @@ public final class NativeMethodNode extends EspressoMethodNode {
     }
 
     private void maybeThrowAndClearPendingException(JniEnv jniEnv) {
-        StaticObject ex = jniEnv.getPendingException();
+        EspressoException ex = jniEnv.getPendingEspressoException();
         if (ex != null) {
             enterThrowsException();
             jniEnv.clearPendingException();
-            throw Meta.throwException(ex);
+            throw ex;
         }
     }
 
@@ -140,5 +141,10 @@ public final class NativeMethodNode extends EspressoMethodNode {
         }
         assert !(returnType == Type._void) || result == StaticObject.NULL;
         return result;
+    }
+
+    @Override
+    public int getBci(@SuppressWarnings("unused") Frame frame) {
+        return -2;
     }
 }

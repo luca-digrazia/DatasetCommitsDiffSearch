@@ -89,4 +89,9 @@ public abstract class ByteArrayLoadNode extends QuickNode {
     byte doEspresso(StaticObject array, int index) {
         return getBytecodeNode().getInterpreterToVM().getArrayByte(index, array);
     }
+
+    @Override
+    public final boolean producedForeignObject(Object[] refs) {
+        return false;
+    }
 }

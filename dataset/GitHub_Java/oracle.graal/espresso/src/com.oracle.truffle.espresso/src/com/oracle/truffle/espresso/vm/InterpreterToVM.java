@@ -192,20 +192,12 @@ public final class InterpreterToVM implements ContextAccess {
         }
     }
 
-    public byte getArrayByte(int index, @Host(byte[].class /* or boolean[] */) StaticObject array) {
-        return getArrayByte(index, array, null);
+    public byte getArrayByte(int index, @Host(byte[].class /* or boolean[] */) StaticObject array, BytecodeNode bytecodeNode) {
+        return array.getArrayByte(index, getMeta(), bytecodeNode);
     }
 
-    public byte getArrayByte(int index, @Host(byte[].class /* or boolean[] */) StaticObject array, BytecodeNode bytecodeNode) {
-        try {
-            return (array.<byte[]> unwrap())[index];
-        } catch (ArrayIndexOutOfBoundsException e) {
-            if (bytecodeNode != null) {
-                bytecodeNode.enterImplicitExceptionProfile();
-            }
-            Meta meta = getMeta();
-            throw meta.throwExceptionWithMessage(meta.java_lang_ArrayIndexOutOfBoundsException, e.getMessage());
-        }
+    public byte getArrayByte(int index, @Host(byte[].class /* or boolean[] */) StaticObject array) {
+        return getArrayByte(index, array, null);
     }
 
     public char getArrayChar(int index, @Host(char[].class) StaticObject array) {
@@ -313,15 +305,10 @@ public final class InterpreterToVM implements ContextAccess {
     }
 
     public void setArrayByte(byte value, int index, @Host(byte[].class /* or boolean[] */) StaticObject array, BytecodeNode bytecodeNode) {
-        byte val = getJavaVersion().java9OrLater() && array.getKlass() == getMeta()._boolean_array ? (byte) (value & 1) : value;
-        try {
-            (array.<byte[]> unwrap())[index] = val;
-        } catch (ArrayIndexOutOfBoundsException e) {
-            if (bytecodeNode != null) {
-                bytecodeNode.enterImplicitExceptionProfile();
-            }
-            Meta meta = getMeta();
-            throw meta.throwExceptionWithMessage(meta.java_lang_ArrayIndexOutOfBoundsException, e.getMessage());
+        if (getJavaVersion().java9OrLater() && array.getKlass() == getMeta()._boolean_array) {
+            array.setArrayByte((byte) (value & 1), index, getMeta(), bytecodeNode);
+        } else {
+            array.setArrayByte(value, index, getMeta(), bytecodeNode);
         }
     }
 
@@ -358,39 +345,13 @@ public final class InterpreterToVM implements ContextAccess {
     }
 
     public void setArrayObject(StaticObject value, int index, StaticObject wrapper) {
-        setArrayObject(value, index, wrapper, null);
+        wrapper.putObject(value, index, getMeta(), null);
     }
 
     public void setArrayObject(StaticObject value, int index, StaticObject wrapper, BytecodeNode bytecodeNode) {
-        if (StaticObject.isNull(value) || instanceOf(value, ((ArrayKlass) wrapper.getKlass()).getComponentType())) {
-            try {
-                (wrapper.<Object[]> unwrap())[index] = value;
-            } catch (ArrayIndexOutOfBoundsException e) {
-                throwArrayIndexOutOfBoundsException(getMeta(), bytecodeNode);
-            }
-        } else {
-            // We must throw ArrayIndexOutOfBoundsException before ArrayStoreException
-            if (index < 0 || index >= wrapper.length()) {
-                throwArrayIndexOutOfBoundsException(getMeta(), bytecodeNode);
-            } else {
-                throwArrayStoreException(getMeta(), bytecodeNode);
-            }
-        }
+        wrapper.putObject(value, index, getMeta(), bytecodeNode);
     }
 
-    private static void throwArrayIndexOutOfBoundsException(Meta meta, BytecodeNode bytecodeNode) {
-        if (bytecodeNode != null) {
-            bytecodeNode.enterImplicitExceptionProfile();
-        }
-        throw meta.throwException(meta.java_lang_ArrayIndexOutOfBoundsException);
-    }
-
-    private static StaticObject throwArrayStoreException(Meta meta, BytecodeNode bytecodeNode) {
-        if (bytecodeNode != null) {
-            bytecodeNode.enterImplicitExceptionProfile();
-        }
-        throw meta.throwException(meta.java_lang_ArrayStoreException);
-    }
     // endregion
 
     // region Monitor enter/exit
