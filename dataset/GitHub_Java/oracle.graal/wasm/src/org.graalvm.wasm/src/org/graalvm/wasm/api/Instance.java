@@ -101,7 +101,6 @@ public class Instance extends Dictionary {
         }
 
         HashMap<String, ImportModule> importModules = new HashMap<>();
-        final InteropLibrary lib = InteropLibrary.getUncached();
         try {
             int i = 0;
             while (i < module.imports().getArraySize()) {
@@ -110,31 +109,33 @@ public class Instance extends Dictionary {
                 final Object member = getMember(importedModule, d.name());
                 switch(d.kind()) {
                     case function:
-                        if (!lib.isExecutable(member)) {
+                        if (!(member instanceof Executable)) {
                             throw new WasmJsApiException(Kind.LinkError, "Member " + member + " is not callable.");
                         }
+                        Executable e = (Executable) member;
                         WasmFunction f = module.wasmModule().importedFunction(d.name());
-                        ensureImportModule(importModules, d.module()).addFunction(d.name(), Pair.create(f, member));
+                        ensureImportModule(importModules, d.module()).addFunction(d.name(), Pair.create(f, e));
                         break;
                     case memory:
-                        if (!isMemory(lib, member)) {
-                            throw new WasmJsApiException(Kind.LinkError, "Member " + member + " is not a valid memory.");
+                        if (!(member instanceof Memory)) {
+                            throw new WasmJsApiException(Kind.LinkError, "Member " + member + " is not a memory.");
                         }
-                        // TODO: Use the Interop API to access the memory.
-                        ensureImportModule(importModules, d.module()).addMemory(d.name(), (Memory) member);
+                        final Memory memory = (Memory) member;
+                        ensureImportModule(importModules, d.module()).addMemory(d.name(), memory);
                         break;
                     case table:
-                        if (!isTable(lib, member)) {
-                            throw new WasmJsApiException(Kind.LinkError, "Member " + member + " is not a valid table.");
+                        if (!(member instanceof Table)) {
+                            throw new WasmJsApiException(Kind.LinkError, "Member " + member + " is not a table.");
                         }
-                        // TODO: Use the Interop API to access the table.
-                        ensureImportModule(importModules, d.module()).addTable(d.name(), (Table) member);
+                        final Table table = (Table) member;
+                        ensureImportModule(importModules, d.module()).addTable(d.name(), table);
                         break;
                     case global:
-                        if (!isGlobal(lib, member)) {
-                            throw new WasmJsApiException(Kind.LinkError, "Member " + member + " is not a valid global.");
+                        if (!(member instanceof Global)) {
+                            throw new WasmJsApiException(Kind.LinkError, "Member " + member + " is not a global.");
                         }
-                        ensureImportModule(importModules, d.module()).addGlobal(d.name(), member);
+                        final Global global = (Global) member;
+                        ensureImportModule(importModules, d.module()).addGlobal(d.name(), global);
                         break;
                     default:
                         throw new WasmExecutionException(null, "Unimplemented case: " + d.kind());
@@ -147,79 +148,6 @@ public class Instance extends Dictionary {
         }
 
         return importModules;
-    }
-
-    private static boolean isMemory(InteropLibrary lib, Object memory) throws UnknownIdentifierException, UnsupportedMessageException {
-        if (!lib.isMemberReadable(memory, "descriptor")) {
-            return false;
-        }
-        final Object descriptor = lib.readMember(memory, "descriptor");
-        if (!(lib.isMemberReadable(descriptor, "initial") && lib.isNumber(lib.readMember(descriptor, "initial")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(descriptor, "maximum") && lib.isNumber(lib.readMember(descriptor, "maximum")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(memory, "grow") && lib.isExecutable(lib.readMember(memory, "grow")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(memory, "buffer"))) {
-            return false;
-        }
-        return true;
-    }
-
-    private static boolean isTable(InteropLibrary lib, Object table) throws UnknownIdentifierException, UnsupportedMessageException {
-        if (!lib.isMemberReadable(table, "descriptor")) {
-            return false;
-        }
-        final Object descriptor = lib.readMember(table, "descriptor");
-        if (!(lib.isMemberReadable(descriptor, "initial") && lib.isNumber(lib.readMember(descriptor, "initial")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(descriptor, "maximum") && lib.isNumber(lib.readMember(descriptor, "maximum")))) {
-            return false;
-        }
-        if (!lib.isMemberReadable(descriptor, "element")) {
-            return false;
-        }
-        final Object element = lib.readMember(descriptor, "element");
-        if (!(lib.isString(element) && lib.asString(element).equals(TableKind.anyfunc.name()))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(table, "grow") && lib.isExecutable(lib.readMember(table, "grow")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(table, "get") && lib.isExecutable(lib.readMember(table, "get")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(table, "set") && lib.isExecutable(lib.readMember(table, "set")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(table, "length") && lib.isNumber(lib.readMember(table, "length")))) {
-            return false;
-        }
-        return true;
-    }
-
-    private static boolean isGlobal(InteropLibrary lib, Object table) throws UnknownIdentifierException, UnsupportedMessageException {
-        if (!lib.isMemberReadable(table, "descriptor")) {
-            return false;
-        }
-        final Object descriptor = lib.readMember(table, "descriptor");
-        if (!(lib.isMemberReadable(descriptor, "value") && lib.isString(lib.readMember(descriptor, "value")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(descriptor, "mutable") && lib.isBoolean(lib.readMember(descriptor, "mutable")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(table, "valueOf") && lib.isExecutable(lib.readMember(table, "valueOf")))) {
-            return false;
-        }
-        if (!(lib.isMemberReadable(table, "value") && lib.isNumber(lib.readMember(table, "value")))) {
-            return false;
-        }
-        return true;
     }
 
     private WasmInstance instantiateCore(WasmContext context, HashMap<String, ImportModule> importModules) {

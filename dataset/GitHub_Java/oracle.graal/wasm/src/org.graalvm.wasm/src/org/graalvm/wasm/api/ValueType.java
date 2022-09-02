@@ -41,15 +41,14 @@
 package org.graalvm.wasm.api;
 
 import com.oracle.truffle.api.CompilerDirectives;
-import org.graalvm.wasm.WasmType;
-import org.graalvm.wasm.exception.Failure;
-import org.graalvm.wasm.exception.WasmException;
+import org.graalvm.wasm.ValueTypes;
+import org.graalvm.wasm.exception.WasmExecutionException;
 
 public enum ValueType {
-    i32(WasmType.I32_TYPE),
-    i64(WasmType.I64_TYPE),
-    f32(WasmType.F32_TYPE),
-    f64(WasmType.F64_TYPE);
+    i32(ValueTypes.I32_TYPE),
+    i64(ValueTypes.I64_TYPE),
+    f32(ValueTypes.F32_TYPE),
+    f64(ValueTypes.F64_TYPE);
 
     private final byte byteValue;
 
@@ -64,16 +63,16 @@ public enum ValueType {
 
     public static ValueType fromByteValue(byte value) {
         switch (value) {
-            case WasmType.I32_TYPE:
+            case ValueTypes.I32_TYPE:
                 return i32;
-            case WasmType.I64_TYPE:
+            case ValueTypes.I64_TYPE:
                 return i64;
-            case WasmType.F32_TYPE:
+            case ValueTypes.F32_TYPE:
                 return f32;
-            case WasmType.F64_TYPE:
+            case ValueTypes.F64_TYPE:
                 return f64;
             default:
-                throw WasmException.create(Failure.UNSPECIFIED_INTERNAL, null, "Unknown value type: 0x" + Integer.toHexString(value));
+                throw WasmExecutionException.create(null, "Unknown value type: 0x" + Integer.toHexString(value));
         }
     }
 
