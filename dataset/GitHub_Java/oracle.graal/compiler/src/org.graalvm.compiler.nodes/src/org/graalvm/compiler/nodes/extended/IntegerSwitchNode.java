@@ -109,7 +109,6 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
     /**
      * Gets the key at the specified index, as a java int.
      */
-    @Override
     public int intKeyAt(int i) {
         return keys[i];
     }
@@ -167,9 +166,44 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         successors.add(defaultNode);
     }
 
+    private boolean defaultSuccessorShared() {
+        for (int i = 0; i < keyCount(); i++) {
+            if (keySuccessorIndex(i) == defaultSuccessorIndex()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public Node getNextSwitchFoldableBranch() {
+        if (defaultSuccessorShared()) {
+            return null;
+        }
         return defaultSuccessor();
+    }
+
+    @Override
+    public boolean updateSwitchData(QuickQueryKeyData keyData, QuickQueryList<AbstractBeginNode> newSuccessors, double[] cumulative, List<AbstractBeginNode> duplicates) {
+        for (int i = 0; i < keyCount(); i++) {
+            int key = intKeyAt(i);
+            if (SwitchFoldable.isDuplicateKey(key, keyData)) {
+                // Unreachable key: kill it manually at the end
+                if (!newSuccessors.contains(keySuccessor(i))) {
+                    duplicates.add(keySuccessor(i));
+                }
+            }
+            double keyProbability = cumulative[0] * keyProbability(i);
+            int pos = SwitchFoldable.duplicateIndex(keySuccessor(i), newSuccessors);
+            if (pos != -1) {
+                keyData.add(new SwitchFoldable.KeyData(key, keyProbability, pos));
+            } else {
+                keyData.add(new SwitchFoldable.KeyData(key, keyProbability, newSuccessors.size()));
+                newSuccessors.add(keySuccessor(i));
+            }
+        }
+        cumulative[0] *= defaultProbability();
+        return true;
     }
 
     @Override
@@ -177,46 +211,26 @@ public final class IntegerSwitchNode extends SwitchNode implements LIRLowerable,
         return value == switchValue;
     }
 
-    private List<AbstractBeginNode> untargettedSuccessors() {
-        // This switch may be malformed. Find all successors that no key map to, and attach them to
-        // this before killing it after switch folding.
-        boolean[] checker = new boolean[successors.size()];
-        for (int successorIndex : keySuccessors) {
-            checker[successorIndex] = true;
-        }
-        // default successor is always reachable
-        checker[defaultSuccessorIndex()] = true;
-        List<AbstractBeginNode> result = new ArrayList<>();
-        for (int index = 0; index < checker.length; index++) {
-            if (!checker[index]) {
-                result.add(successors.get(index));
-            }
-        }
-        return result;
-    }
-
     @Override
     public void cutOffCascadeNode() {
-        List<AbstractBeginNode> toKill = untargettedSuccessors();
-        toKill.add(defaultSuccessor());
+        AbstractBeginNode defaultNode = defaultSuccessor();
         clearSuccessors();
-        for (AbstractBeginNode begin : toKill) {
-            addSuccessorForDeletion(begin);
-        }
+        addSuccessorForDeletion(defaultNode);
     }
 
     @Override
     public void cutOffLowestCascadeNode() {
-        List<AbstractBeginNode> toKill = untargettedSuccessors();
         clearSuccessors();
-        for (AbstractBeginNode begin : toKill) {
-            addSuccessorForDeletion(begin);
-        }
     }
 
     @Override
-    public AbstractBeginNode getDefault() {
-        return defaultSuccessor();
+    public int addDefault(QuickQueryList<AbstractBeginNode> newSuccessors) {
+        int index = newSuccessors.indexOf(defaultSuccessor());
+        if (index == -1) {
+            newSuccessors.add(defaultSuccessor());
+            return newSuccessors.size() - 1;
+        }
+        return index;
     }
 
     @Override
