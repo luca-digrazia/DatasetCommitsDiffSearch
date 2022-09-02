@@ -308,13 +308,11 @@ public class HotSpotReplacementsUtil {
 
     @Fold
     public static int osThreadOffset(@InjectedParameter GraalHotSpotVMConfig config) {
-        assert config.osThreadOffset != Integer.MAX_VALUE;
         return config.osThreadOffset;
     }
 
     @Fold
     public static int osThreadInterruptedOffset(@InjectedParameter GraalHotSpotVMConfig config) {
-        assert config.osThreadInterruptedOffset != Integer.MAX_VALUE;
         return config.osThreadInterruptedOffset;
     }
 
