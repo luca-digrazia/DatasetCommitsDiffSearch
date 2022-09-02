@@ -260,17 +260,13 @@ public interface EspressoProperties {
         }
 
         // Inject polyglot.jar.
-        if (options.get(EspressoOptions.Polyglot)) {
-            Path espressoHome = Paths.get(language.getEspressoHome());
-            Path polyglotJar = espressoHome.resolve("polyglot.jar");
-            if (Files.isReadable(polyglotJar)) {
-                TruffleLogger.getLogger(EspressoLanguage.ID).fine("Adding Polyglot API to the boot classpath: " + polyglotJar.toString());
-                bootClasspath.add(polyglotJar);
-            } else {
-                TruffleLogger.getLogger(EspressoLanguage.ID).warning("polyglot.jar (Polyglot API) not found at " + espressoHome);
-            }
+        Path espressoHome = Paths.get(language.getEspressoHome());
+        Path polyglotJar = espressoHome.resolve("polyglot.jar");
+        if (Files.isReadable(polyglotJar)) {
+            TruffleLogger.getLogger(EspressoLanguage.ID).fine("Adding Polyglot API to the boot classpath: " + polyglotJar.toString());
+            bootClasspath.add(polyglotJar);
         } else {
-            TruffleLogger.getLogger(EspressoLanguage.ID).fine("Polyglot support is (--java.Poylglot=false) disabled.");
+            TruffleLogger.getLogger(EspressoLanguage.ID).warning("polyglot.jar (Polyglot API) not found at " + espressoHome);
         }
 
         // Process boot classpath + append and prepend options.
