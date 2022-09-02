@@ -27,7 +27,6 @@ package org.graalvm.compiler.hotspot.stubs;
 import static java.util.Collections.singletonList;
 import static org.graalvm.compiler.core.GraalCompiler.emitFrontEnd;
 import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
-import static org.graalvm.compiler.core.common.GraalOptions.RegisterPressure;
 import static org.graalvm.compiler.debug.DebugContext.DEFAULT_LOG_STREAM;
 import static org.graalvm.compiler.debug.DebugOptions.DebugStubsAndSnippets;
 import static org.graalvm.compiler.hotspot.HotSpotHostBackend.UNCOMMON_TRAP_HANDLER;
@@ -136,9 +135,7 @@ public abstract class Stub {
      */
     public Stub(OptionValues options, HotSpotProviders providers, HotSpotForeignCallLinkage linkage) {
         this.linkage = linkage;
-        // The RegisterPressure flag can be ignored by a compilation that runs out of registers, so
-        // the stub compilation must ignore the flag so that all allocatable registers are saved.
-        this.options = new OptionValues(options, GraalOptions.TraceInlining, GraalOptions.TraceInliningForStubsAndSnippets.getValue(options), RegisterPressure, null);
+        this.options = new OptionValues(options, GraalOptions.TraceInlining, GraalOptions.TraceInliningForStubsAndSnippets.getValue(options));
         this.providers = providers;
     }
 

@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -30,14 +32,11 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.ILLEGAL;
 import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
 
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
 import java.util.EnumSet;
 
 import org.graalvm.compiler.asm.Label;
 import org.graalvm.compiler.asm.amd64.AMD64Address;
 import org.graalvm.compiler.asm.amd64.AMD64Address.Scale;
-import org.graalvm.compiler.asm.amd64.AMD64Assembler.AvxVectorLen;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.ConditionFlag;
 import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
 import org.graalvm.compiler.core.common.LIRKind;
@@ -53,7 +52,6 @@ import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.Value;
-import sun.misc.Unsafe;
 
 /**
  * Emits code which compares two arrays lexicographically. If the CPU supports any vector
@@ -71,8 +69,10 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
     @Def({REG}) protected Value resultValue;
     @Alive({REG}) protected Value array1Value;
     @Alive({REG}) protected Value array2Value;
-    @Alive({REG}) protected Value length1Value;
-    @Alive({REG}) protected Value length2Value;
+    @Use({REG}) protected Value length1Value;
+    @Use({REG}) protected Value length2Value;
+    @Temp({REG}) protected Value length1ValueTemp;
+    @Temp({REG}) protected Value length2ValueTemp;
     @Temp({REG}) protected Value temp1;
     @Temp({REG}) protected Value temp2;
 
@@ -84,32 +84,36 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
         this.kind2 = kind2;
 
         // Both offsets should be the same but better be safe than sorry.
-        Class<?> array1Class = Array.newInstance(kind1.toJavaClass(), 0).getClass();
-        Class<?> array2Class = Array.newInstance(kind2.toJavaClass(), 0).getClass();
-        this.array1BaseOffset = UNSAFE.arrayBaseOffset(array1Class);
-        this.array2BaseOffset = UNSAFE.arrayBaseOffset(array2Class);
+        this.array1BaseOffset = tool.getProviders().getMetaAccess().getArrayBaseOffset(kind1);
+        this.array2BaseOffset = tool.getProviders().getMetaAccess().getArrayBaseOffset(kind2);
 
         this.resultValue = result;
         this.array1Value = array1;
         this.array2Value = array2;
+        /*
+         * The length values are inputs but are also killed like temporaries so need both Use and
+         * Temp annotations, which will only work with fixed registers.
+         */
         this.length1Value = length1;
         this.length2Value = length2;
+        this.length1ValueTemp = length1;
+        this.length2ValueTemp = length2;
 
         // Allocate some temporaries.
         this.temp1 = tool.newVariable(LIRKind.unknownReference(tool.target().arch.getWordKind()));
         this.temp2 = tool.newVariable(LIRKind.unknownReference(tool.target().arch.getWordKind()));
 
         // We only need the vector temporaries if we generate SSE code.
-        if (supportsSSE41(tool.target())) {
+        if (supportsSSE42(tool.target())) {
             this.vectorTemp1 = tool.newVariable(LIRKind.value(AMD64Kind.DOUBLE));
         } else {
             this.vectorTemp1 = Value.ILLEGAL;
         }
     }
 
-    private static boolean supportsSSE41(TargetDescription target) {
+    private static boolean supportsSSE42(TargetDescription target) {
         AMD64 arch = (AMD64) target.arch;
-        return arch.getFeatures().contains(CPUFeature.SSE4_1);
+        return arch.getFeatures().contains(CPUFeature.SSE4_2);
     }
 
     private static boolean supportsAVX2(TargetDescription target) {
@@ -118,8 +122,7 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
     }
 
     private static boolean supportsAVX512VLBW(TargetDescription target) {
-        AMD64 arch = (AMD64) target.arch;
-        EnumSet<CPUFeature> features = arch.getFeatures();
+        EnumSet<CPUFeature> features = ((AMD64) target.arch).getFeatures();
         return features.contains(CPUFeature.AVX512BW) && features.contains(CPUFeature.AVX512VL);
     }
 
@@ -152,7 +155,7 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
         AMD64Address.Scale scale2 = null;
 
         // if (ae != StrIntrinsicNode::LL) {
-        if (kind1 == JavaKind.Byte && kind2 == JavaKind.Byte) {
+        if (!(kind1 == JavaKind.Byte && kind2 == JavaKind.Byte)) {
             stride2x2 = 0x20;
         }
 
@@ -217,7 +220,7 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
         }
 
         // if (UseAVX >= 2 && UseSSE42Intrinsics) {
-        if (supportsAVX2(crb.target) && supportsSSE41(crb.target)) {
+        if (supportsAVX2(crb.target) && supportsSSE42(crb.target)) {
             Register vec1 = asRegister(vectorTemp1, AMD64Kind.DOUBLE);
 
             // Checkstyle: stop
@@ -318,15 +321,15 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
                 masm.bind(COMPARE_WIDE_VECTORS_LOOP_AVX3); // the hottest loop
                 // if (ae == StrIntrinsicNode::LL || ae == StrIntrinsicNode::UU) {
                 if (kind1 == kind2) {
-                    masm.evmovdquq(vec1, new AMD64Address(str1, result, scale), AvxVectorLen.AVX_512bit);
+                    masm.evmovdqu64(vec1, new AMD64Address(str1, result, scale));
                     // k7 == 11..11, if operands equal, otherwise k7 has some 0
-                    masm.evpcmpeqb(k7, vec1, new AMD64Address(str2, result, scale), AvxVectorLen.AVX_512bit);
+                    masm.evpcmpeqb(k7, vec1, new AMD64Address(str2, result, scale));
                 } else {
-                    masm.vpmovzxbw(vec1, new AMD64Address(str1, result, scale1), AvxVectorLen.AVX_512bit);
+                    masm.evpmovzxbw(vec1, new AMD64Address(str1, result, scale1));
                     // k7 == 11..11, if operands equal, otherwise k7 has some 0
-                    masm.evpcmpeqb(k7, vec1, new AMD64Address(str2, result, scale2), AvxVectorLen.AVX_512bit);
+                    masm.evpcmpeqb(k7, vec1, new AMD64Address(str2, result, scale2));
                 }
-                masm.kortestql(k7, k7);
+                masm.kortestq(k7, k7);
                 masm.jcc(ConditionFlag.AboveEqual, COMPARE_WIDE_VECTORS_LOOP_FAILED);     // miscompare
                 masm.addq(result, stride2x2);  // update since we already compared at this addr
                 masm.subl(cnt2, stride2x2);      // and sub the size too
@@ -342,7 +345,7 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
                 masm.vmovdqu(vec1, new AMD64Address(str1, result, scale));
                 masm.vpxor(vec1, vec1, new AMD64Address(str2, result, scale));
             } else {
-                masm.vpmovzxbw(vec1, new AMD64Address(str1, result, scale1), AvxVectorLen.AVX_256bit);
+                masm.vpmovzxbw(vec1, new AMD64Address(str1, result, scale1));
                 masm.vpxor(vec1, vec1, new AMD64Address(str2, result, scale2));
             }
             masm.vptest(vec1, vec1);
@@ -405,7 +408,7 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
             masm.jmpb(WHILE_HEAD_LABEL);
 
             masm.bind(COMPARE_SMALL_STR);
-        } else if (supportsSSE41(crb.target)) {
+        } else if (supportsSSE42(crb.target)) {
             Register vec1 = asRegister(vectorTemp1, AMD64Kind.DOUBLE);
 
             // Checkstyle: stop
@@ -524,11 +527,11 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
         if (supportsAVX512VLBW(crb.target)) {
             masm.bind(COMPARE_WIDE_VECTORS_LOOP_FAILED);
 
-            masm.kmovql(cnt1, k7);
+            masm.kmovq(cnt1, k7);
             masm.notq(cnt1);
             masm.bsfq(cnt2, cnt1);
             // if (ae != StrIntrinsicNode::LL) {
-            if (kind1 != JavaKind.Byte && kind2 != JavaKind.Byte) {
+            if (!(kind1 == JavaKind.Byte && kind2 == JavaKind.Byte)) {
                 // Divide diff by 2 to get number of chars
                 masm.sarl(cnt2, 1);
             }
@@ -577,19 +580,8 @@ public final class AMD64ArrayCompareToOp extends AMD64LIRInstruction {
         }
     }
 
-    private static final Unsafe UNSAFE = initUnsafe();
-
-    private static Unsafe initUnsafe() {
-        try {
-            return Unsafe.getUnsafe();
-        } catch (SecurityException se) {
-            try {
-                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-                theUnsafe.setAccessible(true);
-                return (Unsafe) theUnsafe.get(Unsafe.class);
-            } catch (Exception e) {
-                throw new RuntimeException("exception while trying to get Unsafe", e);
-            }
-        }
+    @Override
+    public boolean needsClearUpperVectorRegisters() {
+        return true;
     }
 }

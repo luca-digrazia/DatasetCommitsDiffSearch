@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,21 +24,22 @@
  */
 package org.graalvm.compiler.lir.amd64.vector;
 
-import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
-import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.STACK;
 import static jdk.vm.ci.code.ValueUtil.asRegister;
 import static jdk.vm.ci.code.ValueUtil.isRegister;
-import jdk.vm.ci.meta.AllocatableValue;
+import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.REG;
+import static org.graalvm.compiler.lir.LIRInstruction.OperandFlag.STACK;
 
 import org.graalvm.compiler.asm.amd64.AMD64Address;
-import org.graalvm.compiler.asm.amd64.AMD64VectorAssembler;
 import org.graalvm.compiler.asm.amd64.AMD64Assembler.VexRMOp;
+import org.graalvm.compiler.asm.amd64.AMD64MacroAssembler;
+import org.graalvm.compiler.asm.amd64.AVXKind.AVXSize;
 import org.graalvm.compiler.lir.LIRInstructionClass;
 import org.graalvm.compiler.lir.Opcode;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
-import org.graalvm.compiler.asm.amd64.AVXKind.AVXSize;
 
-public final class AMD64VectorCompareOp extends AMD64VectorLIRInstruction {
+import jdk.vm.ci.meta.AllocatableValue;
+
+public final class AMD64VectorCompareOp extends AMD64VectorInstruction {
     public static final LIRInstructionClass<AMD64VectorCompareOp> TYPE = LIRInstructionClass.create(AMD64VectorCompareOp.class);
 
     @Opcode private final VexRMOp opcode;
@@ -46,18 +47,22 @@ public final class AMD64VectorCompareOp extends AMD64VectorLIRInstruction {
     @Use({REG, STACK}) protected AllocatableValue y;
 
     public AMD64VectorCompareOp(VexRMOp opcode, AllocatableValue x, AllocatableValue y) {
-        super(TYPE);
+        this(opcode, AVXSize.XMM, x, y);
+    }
+
+    public AMD64VectorCompareOp(VexRMOp opcode, AVXSize size, AllocatableValue x, AllocatableValue y) {
+        super(TYPE, size);
         this.opcode = opcode;
         this.x = x;
         this.y = y;
     }
 
     @Override
-    public void emitCode(CompilationResultBuilder crb, AMD64VectorAssembler vasm) {
+    public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
         if (isRegister(y)) {
-            opcode.emit(vasm, AVXSize.XMM, asRegister(x), asRegister(y));
+            opcode.emit(masm, size, asRegister(x), asRegister(y));
         } else {
-            opcode.emit(vasm, AVXSize.XMM, asRegister(x), (AMD64Address) crb.asAddress(y));
+            opcode.emit(masm, size, asRegister(x), (AMD64Address) crb.asAddress(y));
         }
     }
 }
