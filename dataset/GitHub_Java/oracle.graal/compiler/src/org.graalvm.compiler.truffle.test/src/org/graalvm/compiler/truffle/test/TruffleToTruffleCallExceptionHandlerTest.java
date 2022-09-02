@@ -129,7 +129,7 @@ public class TruffleToTruffleCallExceptionHandlerTest extends PartialEvaluationT
          * partial evaluator will compile the exception handler edge
          */
         try {
-            calleeWithException.callDirectOrInlined(null, new Object());
+            calleeWithException.callDirect(null, new Object());
             Assert.fail();
         } catch (Throwable t) {
             Assert.assertTrue(t instanceof RuntimeException);

@@ -37,7 +37,6 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Itera
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.LanguageAgnosticInlining;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumGraalNodeCount;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.MaximumInlineNodeCount;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TreatPerformanceWarningsAsErrors;
 import static org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions.getPolyglotOptionValue;
 
 import java.io.Closeable;
@@ -828,8 +827,7 @@ public abstract class PartialEvaluator {
         public static boolean isWarningEnabled(PerformanceWarningKind warningKind) {
             PerformanceInformationHandler handler = instance.get();
             return getPolyglotOptionValue(handler.options, TracePerformanceWarnings).contains(warningKind) ||
-                            getPolyglotOptionValue(handler.options, PerformanceWarningsAreFatal).contains(warningKind) ||
-                            getPolyglotOptionValue(handler.options, TreatPerformanceWarningsAsErrors).contains(warningKind);
+                            getPolyglotOptionValue(handler.options, PerformanceWarningsAreFatal).contains(warningKind);
         }
 
         public static void logPerformanceWarning(PerformanceWarningKind warningKind, String callTargetName, List<? extends Node> locations, String details,
@@ -951,9 +949,6 @@ public abstract class PartialEvaluator {
 
             if (!Collections.disjoint(getWarnings(), getPolyglotOptionValue(options, PerformanceWarningsAreFatal))) { // TODO
                 throw new AssertionError("Performance warning detected and is fatal.");
-            }
-            if (!Collections.disjoint(getWarnings(), getPolyglotOptionValue(options, TreatPerformanceWarningsAsErrors))) {
-                throw new AssertionError("Performance warning detected and is treated as an compilation error.");
             }
         }
 

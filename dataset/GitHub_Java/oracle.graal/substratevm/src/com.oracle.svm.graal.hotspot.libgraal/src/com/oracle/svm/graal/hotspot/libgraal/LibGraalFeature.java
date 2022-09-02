@@ -45,8 +45,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -76,9 +76,7 @@ import org.graalvm.compiler.hotspot.HotSpotReplacementsImpl;
 import org.graalvm.compiler.hotspot.meta.HotSpotProviders;
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins;
 import org.graalvm.compiler.nodes.graphbuilderconf.MethodSubstitutionPlugin;
-import org.graalvm.compiler.options.OptionDescriptor;
 import org.graalvm.compiler.options.OptionDescriptors;
-import org.graalvm.compiler.options.OptionDescriptorsMap;
 import org.graalvm.compiler.options.OptionKey;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.options.OptionsParser;
@@ -111,7 +109,6 @@ import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.graal.meta.RuntimeConfiguration;
 import com.oracle.svm.core.graal.snippets.NodeLoweringProvider;
 import com.oracle.svm.core.jni.JNIRuntimeAccess;
-import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.option.RuntimeOptionValues;
 import com.oracle.svm.core.option.XOptions;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
@@ -172,21 +169,20 @@ public final class LibGraalFeature implements com.oracle.svm.core.graal.GraalFea
         ImageClassLoader imageClassLoader = ((DuringSetupAccessImpl) access).getImageClassLoader();
         registerJNIConfiguration(registry, imageClassLoader);
 
-        EconomicMap<String, OptionDescriptor> descriptors = EconomicMap.create();
+        List<OptionDescriptors> descriptors = new ArrayList<>();
         for (Class<? extends OptionDescriptors> optionsClass : imageClassLoader.findSubclasses(OptionDescriptors.class, false)) {
-            if (!Modifier.isAbstract(optionsClass.getModifiers()) && !OptionDescriptorsMap.class.isAssignableFrom(optionsClass)) {
+            if (!OptionDescriptorsFilter.shouldIncludeDescriptors(optionsClass)) {
+                continue;
+            }
+            if (!Modifier.isAbstract(optionsClass.getModifiers())) {
                 try {
-                    for (OptionDescriptor d : optionsClass.getDeclaredConstructor().newInstance()) {
-                        if (!(d.getOptionKey() instanceof HostedOptionKey)) {
-                            descriptors.put(d.getName(), d);
-                        }
-                    }
+                    descriptors.add(optionsClass.getDeclaredConstructor().newInstance());
                 } catch (ReflectiveOperationException ex) {
                     throw VMError.shouldNotReachHere(ex);
                 }
             }
         }
-        OptionsParser.setCachedOptionDescriptors(Collections.singletonList(new OptionDescriptorsMap(descriptors)));
+        OptionsParser.setCachedOptionDescriptors(descriptors);
     }
 
     /**
