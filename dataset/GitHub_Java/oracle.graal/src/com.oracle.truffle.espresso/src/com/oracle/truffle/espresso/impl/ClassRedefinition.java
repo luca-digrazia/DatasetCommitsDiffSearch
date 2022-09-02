@@ -132,7 +132,8 @@ public final class ClassRedefinition {
             DetectedChange detectedChange = new DetectedChange();
             if (klass instanceof ObjectKlass) {
                 ObjectKlass objectKlass = (ObjectKlass) klass;
-                classChange = detectClassChanges(parserKlass, objectKlass, detectedChange);
+                ParserKlass oldParserKlass = objectKlass.getLinkedKlass().getParserKlass();
+                classChange = detectClassChanges(parserKlass, oldParserKlass, detectedChange);
             } else {
                 // array or primitive klass, should never happen
                 classChange = ClassChange.INVALID;
@@ -202,9 +203,8 @@ public final class ClassRedefinition {
 
     // detect all types of class changes, but return early when a change that require arbitrary
     // changes
-    private static ClassChange detectClassChanges(ParserKlass newParserKlass, ObjectKlass oldKlass, DetectedChange collectedChanges) {
+    private static ClassChange detectClassChanges(ParserKlass newParserKlass, ParserKlass oldParserKlass, DetectedChange collectedChanges) {
         ClassChange result = ClassChange.NO_CHANGE;
-        ParserKlass oldParserKlass = oldKlass.getLinkedKlass().getParserKlass();
         // detect class-level changes
         if (newParserKlass.getFlags() != oldParserKlass.getFlags()) {
             return ClassChange.CLASS_MODIFIERS_CHANGE;
@@ -239,7 +239,7 @@ public final class ClassRedefinition {
         }
 
         // detect method changes (including constructors)
-        List<Method> oldMethods = new ArrayList<>(Arrays.asList(oldKlass.getDeclaredMethods()));
+        List<ParserMethod> oldMethods = new ArrayList<>(Arrays.asList(oldParserKlass.getMethods()));
         List<ParserMethod> newMethods = new ArrayList<>(Arrays.asList(newParserKlass.getMethods()));
 
         if (ClassRedefinition.REDEFINITION_SUPPORT == RedefinitionSupport.METHOD_BODY) {
@@ -258,29 +258,28 @@ public final class ClassRedefinition {
         if (!Arrays.equals(oldParserKlass.getConstantPool().getRawBytes(), newParserKlass.getConstantPool().getRawBytes())) {
             constantPoolChanged = true;
         }
-        Iterator<Method> oldIt = oldMethods.iterator();
+        Iterator<ParserMethod> oldIt = oldMethods.iterator();
         while (oldIt.hasNext()) {
-            Method oldMethod = oldIt.next();
-            ParserMethod oldParserMethod = oldMethod.getLinkedMethod().getParserMethod();
+            ParserMethod oldMethod = oldIt.next();
             // verify that there is a new corresponding method
             Iterator<ParserMethod> newIt = newMethods.iterator();
             while (newIt.hasNext()) {
                 ParserMethod newMethod = newIt.next();
-                if (isSameMethod(oldParserMethod, newMethod)) {
+                if (isSameMethod(oldMethod, newMethod)) {
                     // detect method changes
-                    ClassChange change = detectMethodChanges(oldParserMethod, newMethod);
+                    ClassChange change = detectMethodChanges(oldMethod, newMethod);
                     switch (change) {
                         case NO_CHANGE:
                             if (constantPoolChanged) {
-                                if (isObsolete(oldParserMethod, newMethod, oldParserKlass.getConstantPool(), newParserKlass.getConstantPool())) {
+                                if (isObsolete(oldMethod, newMethod, oldParserKlass.getConstantPool(), newParserKlass.getConstantPool())) {
                                     result = ClassChange.CONSTANT_POOL_CHANGE;
-                                    collectedChanges.addMethodBodyChange(oldMethod, newMethod);
+                                    collectedChanges.addMethodBodyChange(newMethod);
                                 }
                             }
                             break;
                         case METHOD_BODY_CHANGE:
                             result = change;
-                            collectedChanges.addMethodBodyChange(oldMethod, newMethod);
+                            collectedChanges.addMethodBodyChange(newMethod);
                             break;
                         default:
                             return change;
