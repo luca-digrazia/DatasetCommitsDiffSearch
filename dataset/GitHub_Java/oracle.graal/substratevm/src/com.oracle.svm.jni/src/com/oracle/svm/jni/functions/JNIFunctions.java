@@ -44,7 +44,6 @@ import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
-import org.graalvm.nativeimage.c.function.CodePointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
@@ -827,23 +826,11 @@ public final class JNIFunctions {
     @CEntryPointOptions(prologue = JNIEnvEnterFatalOnFailurePrologue.class, publishAs = Publish.NotPublished, include = CEntryPointOptions.NotIncludedAutomatically.class)
     @NeverInline("Access of caller frame.")
     static void FatalError(JNIEnvironment env, CCharPointer message) {
-        CodePointer callerIP = KnownIntrinsics.readReturnAddress();
-        LogHandler logHandler = ImageSingletons.lookup(LogHandler.class);
-        Log log = Log.enterFatalContext(logHandler, callerIP, CTypeConversion.toJavaString(message), null);
-        if (log != null) {
-            try {
-                log.string("Fatal error reported via JNI: ").string(message).newline();
-                VMThreads.StatusSupport.setStatusIgnoreSafepoints();
-                SubstrateDiagnostics.print(log, KnownIntrinsics.readCallerStackPointer(), callerIP);
-            } catch (Throwable ignored) {
-                /*
-                 * Ignore exceptions reported during error reporting, we are going to exit anyway.
-                 */
-            } finally {
-                Log.exitFatalContext();
-            }
-        }
-        logHandler.fatalError();
+        Log log = Log.log().autoflush(true);
+        log.string("Fatal error reported via JNI: ").string(message).newline();
+        VMThreads.StatusSupport.setStatusIgnoreSafepoints();
+        SubstrateDiagnostics.print(log, KnownIntrinsics.readCallerStackPointer(), KnownIntrinsics.readReturnAddress());
+        ImageSingletons.lookup(LogHandler.class).fatalError();
     }
 
     /*

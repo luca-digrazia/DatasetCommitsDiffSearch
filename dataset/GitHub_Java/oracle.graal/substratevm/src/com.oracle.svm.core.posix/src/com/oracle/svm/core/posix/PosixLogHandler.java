@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -24,28 +26,23 @@ package com.oracle.svm.core.posix;
 
 import java.io.FileDescriptor;
 
-import org.graalvm.nativeimage.Feature;
-import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.LogHandler;
 import org.graalvm.nativeimage.c.type.CCharPointer;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.UnsignedWord;
 
+import com.oracle.svm.core.CErrorNumber;
+import com.oracle.svm.core.SubstrateDiagnostics;
 import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.posix.headers.LibC;
+import com.oracle.svm.core.thread.VMThreads;
 
 @AutomaticFeature
 class PosixLogHandlerFeature implements Feature {
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
-        /* An alternative log handler can be set in Feature.duringSetup(). */
-        if (!ImageSingletons.contains(LogHandler.class)) {
-            /*
-             * Install the default log handler in ImageSingletons such that if another feature tries
-             * to install another log handler at a later point it will get an error.
-             */
-            LogHandler logHandler = new PosixLogHandler();
-            ImageSingletons.add(LogHandler.class, logHandler);
-        }
+        Log.finalizeDefaultLogHandler(new PosixLogHandler());
     }
 }
 
@@ -53,22 +50,39 @@ public class PosixLogHandler implements LogHandler {
 
     @Override
     public void log(CCharPointer bytes, UnsignedWord length) {
-        if (!PosixUtils.writeBytes(getOutputFile(), bytes, length)) {
-            /*
-             * We are in a low-level log routine and output failed, so there is little we can do.
-             */
-            fatalError();
+        /* Save and restore errno around calls that would otherwise change errno. */
+        final int savedErrno = CErrorNumber.getCErrorNumber();
+        try {
+            if (!PosixUtils.writeBytes(getOutputFile(), bytes, length)) {
+                /*
+                 * We are in a low-level log routine and output failed, so there is little we can
+                 * do.
+                 */
+                fatalError();
+            }
+        } finally {
+            CErrorNumber.setCErrorNumber(savedErrno);
         }
     }
 
     @Override
     public void flush() {
-        PosixUtils.flush(getOutputFile());
-        /* ignore error -- they're benign */
+        /* Save and restore errno around calls that would otherwise change errno. */
+        final int savedErrno = CErrorNumber.getCErrorNumber();
+        try {
+            PosixUtils.flush(getOutputFile());
+            /* ignore error -- they're benign */
+        } finally {
+            CErrorNumber.setCErrorNumber(savedErrno);
+        }
     }
 
     @Override
     public void fatalError() {
+        if (SubstrateDiagnostics.isInProgress()) {
+            // Delay the shutdown a bit if another thread has something important to report.
+            VMThreads.singleton().nativeSleep(3000);
+        }
         LibC.abort();
     }
 
