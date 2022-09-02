@@ -30,7 +30,7 @@ import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
 import com.oracle.truffle.espresso.impl.ContextAccess;
 import com.oracle.truffle.espresso.impl.Method;
-import com.oracle.truffle.espresso.impl.Method.MethodVersion;
+import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 /**
@@ -38,18 +38,14 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
  */
 public abstract class EspressoMethodNode extends EspressoInstrumentableNode implements ContextAccess {
 
-    private final MethodVersion method;
+    private final Method method;
 
-    EspressoMethodNode(MethodVersion method) {
+    EspressoMethodNode(Method method) {
         this.method = method;
     }
 
-    public MethodVersion getMethodVersion() {
-        return method;
-    }
-
     public final Method getMethod() {
-        return method.getMethod();
+        return method;
     }
 
     @Override
@@ -65,7 +61,7 @@ public abstract class EspressoMethodNode extends EspressoInstrumentableNode impl
             return null;
         }
 
-        LineNumberTableAttribute lineNumberTable = method.getLineNumberTableAttribute();
+        LineNumberTableAttribute lineNumberTable = method.getLineNumberTable();
 
         if (lineNumberTable != LineNumberTableAttribute.EMPTY) {
             LineNumberTableAttribute.Entry[] entries = lineNumberTable.getEntries();
@@ -89,12 +85,20 @@ public abstract class EspressoMethodNode extends EspressoInstrumentableNode impl
     }
 
     public final Source getSource() {
-        return getMethod().getSource();
+        return method.getSource();
     }
 
     @Override
     public final EspressoContext getContext() {
-        return getMethod().getContext();
+        return method.getContext();
+    }
+
+    public boolean shouldSplit() {
+        return false;
+    }
+
+    public EspressoMethodNode split() {
+        throw EspressoError.shouldNotReachHere();
     }
 
 }

@@ -24,23 +24,37 @@
 package com.oracle.truffle.espresso.nodes;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.substitutions.Substitutor;
 
 public class IntrinsicSubstitutorRootNode extends EspressoMethodNode {
     private final Substitutor substitution;
 
-    public IntrinsicSubstitutorRootNode(Substitutor sub, Method method) {
-        super(method.getMethodVersion());
-        this.substitution = sub;
+    public IntrinsicSubstitutorRootNode(Substitutor.Factory factory, Method method) {
+        super(method);
+        this.substitution = factory.create(EspressoLanguage.getCurrentContext().getMeta());
+    }
+
+    private IntrinsicSubstitutorRootNode(IntrinsicSubstitutorRootNode toSplit) {
+        super(toSplit.getMethod());
+        assert toSplit.substitution.shouldSplit();
+        this.substitution = toSplit.substitution.split();
     }
 
     @Override
-    void initializeBody(VirtualFrame frame) {
-    }
-
-    @Override
-    public Object executeBody(VirtualFrame frame) {
+    public Object execute(VirtualFrame frame) {
         return substitution.invoke(frame.getArguments());
     }
+
+    @Override
+    public boolean shouldSplit() {
+        return substitution.shouldSplit();
+    }
+
+    @Override
+    public IntrinsicSubstitutorRootNode split() {
+        return new IntrinsicSubstitutorRootNode(this);
+    }
+
 }

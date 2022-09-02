@@ -365,10 +365,14 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     public CallTarget getCallTarget() {
         if (callTarget == null) {
+            EspressoRootNode root = getRootNode();
+            if (root.shouldSplit()) {
+                return Truffle.getRuntime().createCallTarget(root.split());
+            }
             synchronized (this) {
                 if (callTarget == null) {
                     CompilerDirectives.transferToInterpreterAndInvalidate();
-                    callTarget = Truffle.getRuntime().createCallTarget(getRootNode());
+                    callTarget = Truffle.getRuntime().createCallTarget(root);
                 }
             }
         }
@@ -380,7 +384,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
      * specs on class init.
      */
     @TruffleBoundary
-    private EspressoRootNode getRootNode() {
+    public EspressoRootNode getRootNode() {
         if (rootNode == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             Meta meta = getMeta();
@@ -932,8 +936,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         }
         // BCI slot is always the latest.
         FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
-        EspressoRootNode root = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result, frameDescriptor, monitorSlot, bciSlot));
-        result.callTarget = Truffle.getRuntime().createCallTarget(root);
+        EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(result, frameDescriptor, monitorSlot, bciSlot));
+        result.callTarget = Truffle.getRuntime().createCallTarget(rootNode);
 
         return result;
     }
