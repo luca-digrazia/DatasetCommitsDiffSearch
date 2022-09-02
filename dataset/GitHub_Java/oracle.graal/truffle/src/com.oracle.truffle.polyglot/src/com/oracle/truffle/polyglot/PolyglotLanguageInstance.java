@@ -88,10 +88,15 @@ final class PolyglotLanguageInstance implements VMObject {
         } catch (Exception e) {
             throw new IllegalStateException(String.format("Error initializing language '%s' using class '%s'.", language.cache.getId(), language.cache.getClassName()), e);
         }
-        if (this.singleContext.isValid() && language.engine.noInnerContexts.isValid()) {
-            this.directContextSupplier = PolyglotReferences.createAssumeSingleContext(language, singleContext, language.engine.noInnerContexts, language.getContextReference());
+
+        if (language.engine.boundEngine && language.cache.getPolicy() == ContextPolicy.EXCLUSIVE) {
+            this.directContextSupplier = PolyglotReferences.createAlwaysSingleContext(language);
         } else {
-            this.directContextSupplier = language.getContextReference();
+            if (this.singleContext.isValid()) {
+                this.directContextSupplier = PolyglotReferences.createAssumeSingleContext(language, singleContext, language.getContextReference());
+            } else {
+                this.directContextSupplier = language.getContextReference();
+            }
         }
         this.directLanguageSupplier = PolyglotReferences.createAlwaysSingleLanguage(language, this);
     }
@@ -183,7 +188,7 @@ final class PolyglotLanguageInstance implements VMObject {
         }
     }
 
-    ContextPolicy getEffectiveContextPolicy(PolyglotLanguageInstance sourceRootLanguage) {
+    private ContextPolicy getEffectiveContextPolicy(PolyglotLanguageInstance sourceRootLanguage) {
         ContextPolicy sourcePolicy;
         if (language.engine.boundEngine) {
             // with a bound engine context policy is effectively always exclusive

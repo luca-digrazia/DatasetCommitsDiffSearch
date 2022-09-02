@@ -99,7 +99,6 @@ import com.oracle.truffle.api.nodes.RootNode;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.polyglot.HostLanguage.HostContext;
-import java.util.List;
 
 /*
  * This class is exported to the Graal SDK. Keep that in mind when changing its class or package name.
@@ -1142,23 +1141,5 @@ public final class PolyglotImpl extends AbstractPolyglotImpl {
             return (PolyglotLanguageInstance) VMAccessor.LANGUAGE.getLanguageInstance(sourceLanguageSPI);
         }
 
-        public FileSystem getFileSystem(Object contextVMObject) {
-            return ((PolyglotContextImpl) contextVMObject).config.fileSystem;
-        }
-
-        @Override
-        public FileSystem getDefaultFileSystem() {
-            return FileSystems.newDefaultFileSystem();
-        }
-
-        @Override
-        public List<? extends TruffleFile.FileTypeDetector> getFileTypeDetectors(ClassLoader loader) {
-            return LanguageCache.fileTypeDetectors(loader);
-        }
-
-        @Override
-        public boolean isLanguageCacheUsingContextClassLoader(Object contextVMObject) {
-            return ((VMObject) contextVMObject).getAPIAccess().useContextClassLoader();
-        }
     }
 }
