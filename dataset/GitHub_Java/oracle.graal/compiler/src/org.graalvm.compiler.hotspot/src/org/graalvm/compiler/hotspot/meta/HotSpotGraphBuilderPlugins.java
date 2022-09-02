@@ -59,11 +59,11 @@ import org.graalvm.compiler.hotspot.replacements.CipherBlockChainingSubstitution
 import org.graalvm.compiler.hotspot.replacements.ClassGetHubNode;
 import org.graalvm.compiler.hotspot.replacements.CounterModeSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.DigestBaseSubstitutions;
-import org.graalvm.compiler.hotspot.replacements.FastNotifyNode;
 import org.graalvm.compiler.hotspot.replacements.HotSpotArraySubstitutions;
 import org.graalvm.compiler.hotspot.replacements.HotSpotClassSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.IdentityHashCodeNode;
 import org.graalvm.compiler.hotspot.replacements.ObjectCloneNode;
+import org.graalvm.compiler.hotspot.replacements.ObjectSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.ReflectionGetCallerClassNode;
 import org.graalvm.compiler.hotspot.replacements.ReflectionSubstitutions;
 import org.graalvm.compiler.hotspot.replacements.SHA2Substitutions;
@@ -230,48 +230,12 @@ public class HotSpotGraphBuilderPlugins {
                 }
             });
         }
-        r.register1("hashCode", Receiver.class, new InvocationPlugin() {
-            @Override
-            public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                ValueNode object = receiver.get();
-                b.addPush(JavaKind.Int, new IdentityHashCodeNode(object));
-                return true;
-            }
-
-            @Override
-            public boolean inlineOnly() {
-                return true;
-            }
-        });
+        r.registerMethodSubstitution(ObjectSubstitutions.class, "hashCode", Receiver.class);
         if (config.inlineNotify()) {
-            r.register1("notify", Receiver.class, new InvocationPlugin() {
-                @Override
-                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                    ValueNode object = receiver.get();
-                    b.add(new FastNotifyNode(object, false, b.bci()));
-                    return true;
-                }
-
-                @Override
-                public boolean inlineOnly() {
-                    return true;
-                }
-            });
+            r.registerMethodSubstitution(ObjectSubstitutions.class, "notify", Receiver.class);
         }
         if (config.inlineNotifyAll()) {
-            r.register1("notifyAll", Receiver.class, new InvocationPlugin() {
-                @Override
-                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver) {
-                    ValueNode object = receiver.get();
-                    b.add(new FastNotifyNode(object, true, b.bci()));
-                    return true;
-                }
-
-                @Override
-                public boolean inlineOnly() {
-                    return true;
-                }
-            });
+            r.registerMethodSubstitution(ObjectSubstitutions.class, "notifyAll", Receiver.class);
         }
     }
 
@@ -665,7 +629,7 @@ public class HotSpotGraphBuilderPlugins {
     }
 
     private static void registerCounterModePlugins(InvocationPlugins plugins, GraalHotSpotVMConfig config, Replacements replacements) {
-        if (isIntrinsicName(config, "com/sun/crypto/provider/CounterMode", "implCrypt")) {
+        if (JavaVersionUtil.JAVA_SPEC > 8) {
             assert !config.useAESCTRIntrinsics || config.counterModeAESCrypt != 0L;
             Registration r = new Registration(plugins, "com.sun.crypto.provider.CounterMode", replacements);
             r.registerConditionalMethodSubstitution(config.useAESCTRIntrinsics, CounterModeSubstitutions.class, "implCrypt", Receiver.class, byte[].class, int.class, int.class, byte[].class,

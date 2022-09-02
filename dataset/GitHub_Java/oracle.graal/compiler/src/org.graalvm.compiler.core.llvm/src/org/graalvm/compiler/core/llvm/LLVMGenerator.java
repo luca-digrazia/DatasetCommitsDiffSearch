@@ -72,12 +72,11 @@ import org.graalvm.compiler.lir.gen.LIRGenerationResult;
 import org.graalvm.compiler.lir.gen.LIRGeneratorTool;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.cfg.Block;
-import org.graalvm.compiler.nodes.type.NarrowOopStamp;
 import org.graalvm.compiler.phases.util.Providers;
 
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMBasicBlockRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMTypeRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMValueRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMBasicBlockRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMTypeRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMValueRef;
 
 import jdk.vm.ci.code.CallingConvention;
 import jdk.vm.ci.code.CodeCacheProvider;
@@ -174,7 +173,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
         if (stamp instanceof RawPointerStamp) {
             return builder.rawPointerType();
         }
-        return builder.getLLVMType(getTypeKind(stamp.javaType(getMetaAccess()), false), stamp instanceof NarrowOopStamp);
+        return builder.getLLVMType(getTypeKind(stamp.javaType(getMetaAccess()), false));
     }
 
     protected JavaKind getTypeKind(@SuppressWarnings("unused") ResolvedJavaType type, @SuppressWarnings("unused") boolean forMainFunction) {
@@ -215,11 +214,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
             symbolName = "constant_" + builder.getFunctionName() + "#" + nextConstantId++;
             generationResult.recordConstant(constant, symbolName);
         }
-        return builder.getExternalObject(symbolName, isConstantCompressed(constant));
-    }
-
-    protected boolean isConstantCompressed(@SuppressWarnings("unused") Constant constant) {
-        throw unimplemented();
+        return builder.getExternalObject(symbolName);
     }
 
     protected void emitPrintf(String base) {
@@ -363,8 +358,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
 
     @Override
     public Value emitJavaConstant(JavaConstant constant) {
-        assert constant.getJavaKind() != JavaKind.Object;
-        LLVMValueRef value = emitLLVMConstant(builder.getLLVMType(constant.getJavaKind(), false), constant);
+        LLVMValueRef value = emitLLVMConstant(builder.getLLVMType(constant.getJavaKind()), constant);
         return new LLVMConstant(value, constant);
     }
 
@@ -396,9 +390,9 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
             value = builder.constantDouble(constant.asDouble());
         } else if (LLVMIRBuilder.isObject(type)) {
             if (constant.isNull()) {
-                value = builder.constantNull(builder.objectType(LLVMIRBuilder.isCompressed(type)));
+                value = builder.constantNull(builder.objectType());
             } else {
-                value = builder.buildLoad(getLLVMPlaceholderForConstant(constant), builder.objectType(LLVMIRBuilder.isCompressed(type)));
+                value = builder.buildLoad(getLLVMPlaceholderForConstant(constant), builder.objectType());
             }
         } else {
             throw shouldNotReachHere(dumpTypes("unsupported constant type", type));
@@ -507,7 +501,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
         /* Floating word cast */
         if (LLVMIRBuilder.isObject(destType) && LLVMIRBuilder.isIntegerType(sourceType) && LLVMIRBuilder.integerTypeWidth(sourceType) == JavaKind.Long.getBitCount()) {
             source = builder.buildIntToPtr(source, builder.rawPointerType());
-            source = builder.buildRegisterObject(source, LLVMIRBuilder.isCompressed(destType));
+            source = builder.buildRegisterObject(source);
         } else if (LLVMIRBuilder.isIntegerType(destType) && LLVMIRBuilder.integerTypeWidth(destType) == JavaKind.Long.getBitCount() && LLVMIRBuilder.isObject(sourceType)) {
             source = builder.buildPtrToInt(source, builder.longType());
         }
@@ -586,7 +580,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
 
     protected LLVMValueRef convertEnumReturnValue(LLVMValueRef longValue) {
         LLVMValueRef retVal = builder.buildIntToPtr(longValue, builder.rawPointerType());
-        retVal = builder.buildRegisterObject(retVal, false);
+        retVal = builder.buildRegisterObject(retVal);
         return retVal;
     }
 
@@ -625,7 +619,7 @@ public abstract class LLVMGenerator implements LIRGeneratorTool {
 
     @Override
     public AllocatableValue resultOperandFor(JavaKind javaKind, ValueKind<?> valueKind) {
-        throw unimplemented();
+        return new LLVMVariable(builder.getLLVMType(javaKind));
     }
 
     @Override
