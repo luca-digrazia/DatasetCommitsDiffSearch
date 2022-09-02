@@ -29,9 +29,11 @@
  */
 package com.oracle.truffle.llvm.nodes.memory;
 
+import com.oracle.truffle.api.interop.ForeignAccess;
 import com.oracle.truffle.api.interop.InteropException;
-import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.interop.Message;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
 import com.oracle.truffle.llvm.runtime.NFIContextExtension;
 import com.oracle.truffle.llvm.runtime.memory.LLVMAllocateNode;
@@ -44,24 +46,24 @@ public final class AllocateReadOnlyGlobalsBlockNode extends LLVMNode implements 
 
     private final long size;
 
-    @Child InteropLibrary interop;
+    @Child Node execute;
     @Child LLVMToNativeNode toNative;
 
     private final TruffleObject allocateGlobalsBlock;
 
     public AllocateReadOnlyGlobalsBlockNode(LLVMContext context, StructureType type) {
         this.size = context.getByteSize(type);
+        this.execute = Message.EXECUTE.createNode();
         this.toNative = LLVMToNativeNode.createToNativeWithTarget();
 
         NFIContextExtension nfiContextExtension = context.getContextExtensionOrNull(NFIContextExtension.class);
-        this.allocateGlobalsBlock = nfiContextExtension.getNativeFunction(context, "__sulong_allocate_globals_block", "(UINT64):POINTER");
-        this.interop = InteropLibrary.getFactory().create(allocateGlobalsBlock);
+        this.allocateGlobalsBlock = nfiContextExtension.getNativeFunction(context, "@__sulong_allocate_globals_block", "(UINT64):POINTER");
     }
 
     @Override
     public LLVMPointer executeWithTarget() {
         try {
-            Object ret = interop.execute(allocateGlobalsBlock, size);
+            Object ret = ForeignAccess.sendExecute(execute, allocateGlobalsBlock, size);
             return toNative.executeWithTarget(ret);
         } catch (InteropException ex) {
             throw new OutOfMemoryError("could not allocate globals block");
