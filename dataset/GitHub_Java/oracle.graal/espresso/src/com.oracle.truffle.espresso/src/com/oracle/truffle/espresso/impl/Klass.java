@@ -572,7 +572,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         this.runtimePackage = initRuntimePackage();
     }
 
-    @Override
     public abstract @Host(ClassLoader.class) StaticObject getDefiningClassLoader();
 
     public abstract ConstantPool getConstantPool();
@@ -583,7 +582,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
                         : JavaKind.Object;
     }
 
-    @Override
     public final boolean isArray() {
         return this instanceof ArrayKlass;
     }
@@ -628,7 +626,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return getArrayClass();
     }
 
-    @Override
     public ArrayKlass getArrayClass(int dimensions) {
         assert dimensions > 0;
         ArrayKlass array = getArrayClass();
@@ -703,7 +700,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      *
      * @return {@code true} if this type is primitive
      */
-    @Override
     public final boolean isPrimitive() {
         return getJavaKind().isPrimitive();
     }
@@ -901,14 +897,12 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      * Returns an array reflecting all the methods declared by this type. This method is similar to
      * {@link Class#getDeclaredMethods()} in terms of returned methods.
      */
-    @Override
     public abstract MethodRef[] getDeclaredMethodRefs();
 
     /**
      * Returns an array reflecting all the fields declared by this type. This method is similar to
      * {@link Class#getDeclaredFields()} in terms of returned fields.
      */
-    @Override
     public abstract Field[] getDeclaredFields();
 
     /**
@@ -1048,7 +1042,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     public final Field requireDeclaredField(Symbol<Name> fieldName, Symbol<Type> fieldType) {
         Field obj = lookupDeclaredField(fieldName, fieldType);
         if (obj == null) {
-            throw EspressoError.shouldNotReachHere("Missing field: ", fieldName, ": ", fieldType, " in ", this);
+            throw EspressoError.shouldNotReachHere("Missing field: ", this, fieldName, fieldType);
         }
         return obj;
     }
@@ -1125,22 +1119,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         // Array nor primitives have static fields.
         CompilerDirectives.transferToInterpreter();
         throw EspressoError.shouldNotReachHere("lookupStaticFieldTable on primitive/array type");
-    }
-
-    public final Method requireMethod(Symbol<Name> methodName, Symbol<Signature> signature) {
-        Method obj = lookupMethod(methodName, signature);
-        if (obj == null) {
-            throw EspressoError.shouldNotReachHere("Missing method: ", methodName, ": ", signature, " starting at ", this);
-        }
-        return obj;
-    }
-
-    public final Method requireDeclaredMethod(Symbol<Name> methodName, Symbol<Signature> signature) {
-        Method obj = lookupDeclaredMethod(methodName, signature);
-        if (obj == null) {
-            throw EspressoError.shouldNotReachHere("Missing method: ", methodName, ": ", signature, " in ", this);
-        }
-        return obj;
     }
 
     @ExplodeLoop
@@ -1244,7 +1222,6 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     /**
      * Returns the access flags provided by the .class file, e.g. ignores inner class access flags.
      */
-    @Override
     public final int getModifiers() {
         return modifiers;
     }
@@ -1314,12 +1291,10 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
 
     // region jdwp-specific
 
-    @Override
     public String getNameAsString() {
         return name.toString();
     }
 
-    @Override
     public String getTypeAsString() {
         return type.toString();
     }
