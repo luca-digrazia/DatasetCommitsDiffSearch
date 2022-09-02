@@ -22,7 +22,6 @@
  */
 package com.oracle.truffle.espresso.bytecode;
 
-import java.io.PrintStream;
 import java.util.Arrays;
 
 import com.oracle.truffle.api.CompilerDirectives;
@@ -44,6 +43,9 @@ public final class BytecodeStream {
     @CompilationFinal(dimensions = 1) //
     private final byte[] code;
 
+    private final BytecodeLookupSwitch bytecodeLookupSwitch;
+    private final BytecodeTableSwitch bytecodeTableSwitch;
+
     /**
      * Creates a new {@code BytecodeStream} for the specified bytecode.
      *
@@ -52,6 +54,8 @@ public final class BytecodeStream {
     public BytecodeStream(final byte[] code) {
         assert code != null;
         this.code = code;
+        this.bytecodeLookupSwitch = new BytecodeLookupSwitch(this);
+        this.bytecodeTableSwitch = new BytecodeTableSwitch(this);
     }
 
     /**
@@ -211,10 +215,10 @@ public final class BytecodeStream {
         if (length == 0) {
             switch (opcode(curBCI)) {
                 case Bytecodes.TABLESWITCH: {
-                    return BytecodeTableSwitch.INSTANCE.size(this, curBCI);
+                    return getBytecodeTableSwitch().size(curBCI);
                 }
                 case Bytecodes.LOOKUPSWITCH: {
-                    return BytecodeLookupSwitch.INSTANCE.size(this, curBCI);
+                    return getBytecodeLookupSwitch().size(curBCI);
                 }
                 case Bytecodes.WIDE: {
                     int opc = Bytes.beU1(code, curBCI + 1);
@@ -233,12 +237,20 @@ public final class BytecodeStream {
         return length;
     }
 
+    public BytecodeTableSwitch getBytecodeTableSwitch() {
+        return bytecodeTableSwitch;
+    }
+
+    public BytecodeLookupSwitch getBytecodeLookupSwitch() {
+        return bytecodeLookupSwitch;
+    }
+
     @CompilerDirectives.TruffleBoundary
     private static EspressoError error(int opcode) {
         throw EspressoError.shouldNotReachHere("unknown variable-length bytecode: " + opcode);
     }
 
-    public void printBytecode(Klass klass, PrintStream out) {
+    public void printBytecode(Klass klass) {
         try {
             ConstantPool pool = klass.getConstantPool();
             int bci = 0;
@@ -280,13 +292,13 @@ public final class BytecodeStream {
                     // @formatter:on
                     // Checkstyle: resume
                     str.append('\n');
-                    BytecodeTableSwitch helper = BytecodeTableSwitch.INSTANCE;
-                    int low = helper.lowKey(this, bci);
-                    int high = helper.highKey(this, bci);
+                    BytecodeTableSwitch helper = getBytecodeTableSwitch();
+                    int low = helper.lowKey(bci);
+                    int high = helper.highKey(bci);
                     for (int i = low; i != high + 1; i++) {
-                        str.append('\t').append(i).append(": ").append(helper.targetAt(this, bci, i)).append('\n');
+                        str.append('\t').append(i).append(": ").append(helper.targetAt(bci, i)).append('\n');
                     }
-                    str.append("\tdefault: ").append(helper.defaultTarget(this, bci));
+                    str.append("\tdefault: ").append(helper.defaultTarget(bci));
                 } else if (opcode == Bytecodes.LOOKUPSWITCH) {
                     // @formatter:off
                     // checkstyle: stop
@@ -299,13 +311,13 @@ public final class BytecodeStream {
                     // @formatter:on
                     // Checkstyle: resume
                     str.append('\n');
-                    BytecodeLookupSwitch helper = BytecodeLookupSwitch.INSTANCE;
+                    BytecodeLookupSwitch helper = getBytecodeLookupSwitch();
                     int low = 0;
-                    int high = helper.numberOfCases(this, bci) - 1;
+                    int high = helper.numberOfCases(bci) - 1;
                     for (int i = low; i <= high; i++) {
-                        str.append('\t').append(helper.keyAt(this, bci, i)).append(": ").append(helper.targetAt(this, bci, i));
+                        str.append('\t').append(helper.keyAt(bci, i)).append(": ").append(helper.targetAt(bci, i));
                     }
-                    str.append("\tdefault: ").append(helper.defaultTarget(this, bci));
+                    str.append("\tdefault: ").append(helper.defaultTarget(bci));
                 } else {
                     // {bci}: {opcode} {corresponding value}
                     if (nextBCI - bci == 2) {
@@ -318,14 +330,14 @@ public final class BytecodeStream {
                         str.append(readInt(bci + 1));
                     }
                 }
-                out.println(str.toString());
+                System.err.println(str.toString());
             }
         } catch (Throwable e) {
-            throw EspressoError.unexpected("Exception thrown during bytecode printing, aborting...", e);
+            System.err.println("Exception arised during bytecode printing, aborting...");
         }
     }
 
-    public void printRawBytecode(PrintStream out) {
-        out.println(Arrays.toString(code));
+    public void printRawBytecode() {
+        System.err.println(Arrays.toString(code));
     }
 }

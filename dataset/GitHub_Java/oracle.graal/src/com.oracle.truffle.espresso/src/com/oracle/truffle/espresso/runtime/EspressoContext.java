@@ -22,6 +22,8 @@
  */
 package com.oracle.truffle.espresso.runtime;
 
+import static com.oracle.truffle.espresso.EspressoLanguage.EspressoLogger;
+
 import java.io.File;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -33,8 +35,6 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 
-import com.oracle.truffle.api.TruffleLogger;
-import com.oracle.truffle.espresso.meta.EspressoError;
 import org.graalvm.polyglot.Engine;
 
 import com.oracle.truffle.api.Assumption;
@@ -74,8 +74,6 @@ public final class EspressoContext {
     public static final int DEFAULT_STACK_SIZE = 32;
     public static final StackTraceElement[] EMPTY_STACK = new StackTraceElement[0];
 
-    private final TruffleLogger logger = TruffleLogger.getLogger(EspressoLanguage.ID);
-
     private final EspressoLanguage language;
     private final TruffleLanguage.Env env;
     private final StringTable strings;
@@ -91,10 +89,6 @@ public final class EspressoContext {
     private JDWPContextImpl jdwpContext;
     private VMListener eventListener;
     private boolean contextReady;
-
-    public TruffleLogger getLogger() {
-        return logger;
-    }
 
     public int getNewId() {
         return klassIdProvider.getAndIncrement();
@@ -198,9 +192,6 @@ public final class EspressoContext {
     }
 
     public void initializeContext() {
-        EspressoError.guarantee(getEnv().isNativeAccessAllowed(),
-                        "Native access is not allowed by the host environment but it's required to load Espresso/Java native libraries. " +
-                                        "Allow native access on context creation e.g. contextBuilder.allowNativeAccess(true)");
         assert !this.initialized;
         eventListener = new EmptyListener();
         // Inject PublicFinalReference in the host VM.
@@ -353,7 +344,7 @@ public final class EspressoContext {
         // Create application (system) class loader.
         meta.java_lang_ClassLoader_getSystemClassLoader.invokeDirect(null);
 
-        getLogger().log(Level.FINE, "VM booted in {0} ms", System.currentTimeMillis() - ticks);
+        EspressoLogger.log(Level.FINE, "VM booted in {0} ms", System.currentTimeMillis() - ticks);
         initVMDoneMs = System.currentTimeMillis();
     }
 
@@ -463,7 +454,7 @@ public final class EspressoContext {
                         t.join();
                     }
                 } catch (InterruptedException e) {
-                    getLogger().warning("Thread interrupted while stopping thread in closing context.");
+                    EspressoLanguage.EspressoLogger.warning("Thread interrupted while stopping thread in closing context.");
                 }
             }
         }

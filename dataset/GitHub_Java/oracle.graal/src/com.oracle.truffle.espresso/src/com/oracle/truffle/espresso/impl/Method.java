@@ -36,11 +36,9 @@ import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeStatic;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeVirtual;
 import static com.oracle.truffle.espresso.jni.NativeEnv.word;
 
-import java.io.PrintStream;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.logging.Level;
 
 import com.oracle.truffle.api.Assumption;
 import com.oracle.truffle.api.CallTarget;
@@ -55,6 +53,7 @@ import com.oracle.truffle.api.frame.FrameSlotKind;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.Utils;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.bytecode.Bytecodes;
@@ -94,7 +93,6 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.vm.InterpreterToVM;
-import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
 public final class Method extends Member<Signature> implements TruffleObject, ContextAccess {
 
@@ -327,7 +325,7 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
     private static String buildJniNativeSignature(Method method) {
         // Prepend JNIEnv*.
-        StringBuilder sb = new StringBuilder("(").append(NativeSimpleType.POINTER);
+        StringBuilder sb = new StringBuilder("(").append(word());
         final Symbol<Type>[] signature = method.getParsedSignature();
 
         // Receiver for instance methods, class for static methods.
@@ -728,8 +726,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
     }
 
     @SuppressWarnings("unused")
-    void printBytecodes(PrintStream out) {
-        new BytecodeStream(getCode()).printBytecode(declaringKlass, out);
+    void printBytecodes() {
+        new BytecodeStream(getCode()).printBytecode(declaringKlass);
     }
 
     public LineNumberTableAttribute getLineNumberTable() {
@@ -987,10 +985,12 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                 // Initializing a class costs a lock, do it outside of this method's lock to avoid
                 // congestion.
                 // Note that requesting a call target is immediately followed by a call to the
-                // method, before advancing BCI.
+                // method,
+                // before advancing BCI.
                 // This ensures that we are respecting the specs, saying that a class must be
                 // initialized before a method is called, while saving a call to safeInitialize
-                // after a method lookup.
+                // after a
+                // method lookup.
                 declaringKlass.safeInitialize();
 
                 synchronized (this) {
@@ -1008,7 +1008,8 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                         if (getMethod().isNative()) {
                             // Bind native method.
                             // If the loader is null we have a system class, so we attempt a lookup
-                            // in the native Java library.
+                            // in
+                            // the native Java library.
                             if (StaticObject.isNull(getMethod().getDeclaringKlass().getDefiningClassLoader())) {
                                 // Look in libjava
                                 for (boolean withSignature : new boolean[]{false, true}) {
@@ -1051,12 +1052,12 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
                                      */
                                     this.callTarget = declaringKlass.lookupPolysigMethod(getName(), getRawSignature()).getCallTarget();
                                 } else {
-                                    getContext().getLogger().log(Level.WARNING, "Failed to link native method: {0}", this.toString());
+                                    EspressoLanguage.EspressoLogger.warning(String.format("Failed to link native method: %s", this.toString()));
                                     throw Meta.throwException(meta.java_lang_UnsatisfiedLinkError);
                                 }
                             }
                         } else {
-                            if (codeAttribute == null) {
+                            if (getCodeAttribute() == null) {
                                 throw Meta.throwExceptionWithMessage(meta.java_lang_AbstractMethodError,
                                                 "Calling abstract method: " + getMethod().getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
                             }
@@ -1065,13 +1066,13 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
 
                             // BCI slot is always the latest.
                             FrameSlot bciSlot = frameDescriptor.addFrameSlot("bci", FrameSlotKind.Int);
-                            EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(this, frameDescriptor, bciSlot));
+                            EspressoRootNode rootNode = EspressoRootNode.create(frameDescriptor, new BytecodeNode(methodVersion, frameDescriptor, bciSlot));
+
                             callTarget = Truffle.getRuntime().createCallTarget(rootNode);
                         }
                     }
                 }
             }
-
             return callTarget;
         }
 
@@ -1215,6 +1216,23 @@ public final class Method extends Member<Signature> implements TruffleObject, Co
         @Override
         public boolean isObsolete() {
             return !assumption.isValid();
+        }
+
+        @Override
+        public long getEndBCI() {
+            int bci = 0;
+            BytecodeStream bs = new BytecodeStream(getCodeAttribute().getCode());
+            int end = bs.endBCI();
+
+            while (bci < end) {
+                int nextBCI = bs.nextBCI(bci);
+                if (nextBCI >= end || nextBCI == bci) {
+                    return bci;
+                } else {
+                    bci = nextBCI;
+                }
+            }
+            return bci;
         }
     }
     // endregion jdwp-specific
