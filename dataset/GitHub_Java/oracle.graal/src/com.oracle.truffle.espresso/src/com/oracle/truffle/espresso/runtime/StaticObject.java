@@ -86,6 +86,8 @@ public final class StaticObject implements TruffleObject {
 
     public static final StaticObject NULL = new StaticObject();
 
+    private static final byte[] INTEROP_MARKER = new byte[0];
+
     private volatile EspressoLock lock;
 
     private final Klass klass; // != PrimitiveKlass
@@ -106,7 +108,9 @@ public final class StaticObject implements TruffleObject {
     @ExportMessage
     public static boolean isNull(StaticObject object) {
         assert object != null;
-        return object == StaticObject.NULL;
+        assert (object.getKlass() != null) || object == NULL ||
+                        (object.isInteropObject() && InteropLibrary.getUncached().isNull(object.rawInteropObject())) : "klass can only be null for Espresso null (NULL) and interop nulls";
+        return object.getKlass() == null;
     }
 
     @ExportMessage
@@ -115,12 +119,20 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    String asString() {
+    public String asString() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         return Meta.toHostString(this);
     }
 
     @ExportMessage
-    boolean isBoolean() {
+    public boolean isBoolean() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isNull(this)) {
             return false;
         }
@@ -128,7 +140,11 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    boolean asBoolean() throws UnsupportedMessageException {
+    public boolean asBoolean() throws UnsupportedMessageException {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (!isBoolean()) {
             throw UnsupportedMessageException.create();
         }
@@ -136,11 +152,14 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    boolean isNumber() {
+    public boolean isNumber() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isNull(this)) {
             return false;
         }
-
         Meta meta = klass.getMeta();
         return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Integer || klass == meta.java_lang_Long || klass == meta.java_lang_Float ||
                         klass == meta.java_lang_Double;
@@ -148,6 +167,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean fitsInByte() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isNull(this)) {
             return false;
         }
@@ -181,6 +204,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean fitsInShort() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isNull(this)) {
             return false;
         }
@@ -209,7 +236,11 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    boolean fitsInInt() {
+    public boolean fitsInInt() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isNull(this)) {
             return false;
         }
@@ -235,6 +266,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean fitsInLong() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isNull(this)) {
             return false;
         }
@@ -252,11 +287,14 @@ public final class StaticObject implements TruffleObject {
             return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
         }
         return false;
-
     }
 
     @ExportMessage
     boolean fitsInFloat() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isNull(this)) {
             return false;
         }
@@ -265,7 +303,8 @@ public final class StaticObject implements TruffleObject {
         }
 
         Meta meta = klass.getMeta();
-        // We might lose precision when we convert an int or a long to a float, however, we still
+        // We might lose precision when we convert an int or a long to a float, however, we
+        // still
         // perform the conversion.
         // This is consistent with Truffle interop, see GR-22718 for more details.
         if (klass == meta.java_lang_Integer) {
@@ -287,6 +326,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean fitsInDouble() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isNull(this)) {
             return false;
         }
@@ -308,6 +351,7 @@ public final class StaticObject implements TruffleObject {
     }
 
     private Number readNumberValue() throws UnsupportedMessageException {
+        assert isEspressoObject();
         Meta meta = klass.getMeta();
         if (klass == meta.java_lang_Byte) {
             return (Byte) meta.java_lang_Byte_value.get(this);
@@ -333,6 +377,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     byte asByte() throws UnsupportedMessageException {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (!fitsInByte()) {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
@@ -342,6 +390,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     short asShort() throws UnsupportedMessageException {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (!fitsInShort()) {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
@@ -350,7 +402,11 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    int asInt() throws UnsupportedMessageException {
+    public int asInt() throws UnsupportedMessageException {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (!fitsInInt()) {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
@@ -360,6 +416,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     long asLong() throws UnsupportedMessageException {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (!fitsInLong()) {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
@@ -369,6 +429,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     float asFloat() throws UnsupportedMessageException {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (!fitsInFloat()) {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
@@ -378,6 +442,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     double asDouble() throws UnsupportedMessageException {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (!fitsInDouble()) {
             CompilerDirectives.transferToInterpreter();
             throw UnsupportedMessageException.create();
@@ -387,6 +455,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     long getArraySize(@Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
+        if (isInteropObject()) {
+            error.enter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (!isArray()) {
             error.enter();
             throw UnsupportedMessageException.create();
@@ -395,13 +467,17 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    boolean hasArrayElements() {
+    boolean hasArrayElements(@Shared("error") @Cached BranchProfile error) {
+        if (isInteropObject()) {
+            error.enter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         return isArray();
     }
 
     @ExportMessage
     abstract static class ReadArrayElement {
-        @Specialization(guards = "isBooleanArray(receiver)")
+        @Specialization(guards = {"isBooleanArray(receiver)", "receiver.isEspressoObject()"})
         static boolean doBoolean(StaticObject receiver, long index,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             if (index < 0 || index > Integer.MAX_VALUE) {
@@ -416,7 +492,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isCharArray(receiver)")
+        @Specialization(guards = {"isCharArray(receiver)", "receiver.isEspressoObject()"})
         static char doChar(StaticObject receiver, long index,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             if (index < 0 || index > Integer.MAX_VALUE) {
@@ -431,7 +507,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isByteArray(receiver)")
+        @Specialization(guards = {"isByteArray(receiver)", "receiver.isEspressoObject()"})
         static byte doByte(StaticObject receiver, long index,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             if (index < 0 || index > Integer.MAX_VALUE) {
@@ -446,7 +522,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isShortArray(receiver)")
+        @Specialization(guards = {"isShortArray(receiver)", "receiver.isEspressoObject()"})
         static short doShort(StaticObject receiver, long index,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             if (index < 0 || index > Integer.MAX_VALUE) {
@@ -461,7 +537,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isIntArray(receiver)")
+        @Specialization(guards = {"isIntArray(receiver)", "receiver.isEspressoObject()"})
         static int doInt(StaticObject receiver, long index,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             if (index < 0 || index > Integer.MAX_VALUE) {
@@ -476,7 +552,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isLongArray(receiver)")
+        @Specialization(guards = {"isLongArray(receiver)", "receiver.isEspressoObject()"})
         static long doLong(StaticObject receiver, long index,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             if (index < 0 || index > Integer.MAX_VALUE) {
@@ -491,7 +567,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isFloatArray(receiver)")
+        @Specialization(guards = {"isFloatArray(receiver)", "receiver.isEspressoObject()"})
         static float doFloat(StaticObject receiver, long index,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             if (index < 0 || index > Integer.MAX_VALUE) {
@@ -506,7 +582,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isDoubleArray(receiver)")
+        @Specialization(guards = {"isDoubleArray(receiver)", "receiver.isEspressoObject()"})
         static double doDouble(StaticObject receiver, long index,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             if (index < 0 || index > Integer.MAX_VALUE) {
@@ -521,7 +597,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = {"receiver.isArray()", "!isPrimitiveArray(receiver)"})
+        @Specialization(guards = {"receiver.isArray()", "receiver.isEspressoObject()", "!isPrimitiveArray(receiver)"})
         static Object doObject(StaticObject receiver, long index,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
             if (index < 0 || index > Integer.MAX_VALUE) {
@@ -545,7 +621,7 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     abstract static class WriteArrayElement {
-        @Specialization(guards = "isBooleanArray(receiver)", limit = "1")
+        @Specialization(guards = {"isBooleanArray(receiver)", "receiver.isEspressoObject()"}, limit = "1")
         static void doBoolean(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
@@ -568,7 +644,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isCharArray(receiver)", limit = "1")
+        @Specialization(guards = {"isCharArray(receiver)", "receiver.isEspressoObject()"}, limit = "1")
         static void doChar(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
@@ -597,7 +673,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isByteArray(receiver)", limit = "1")
+        @Specialization(guards = {"isByteArray(receiver)", "receiver.isEspressoObject()"}, limit = "1")
         static void doByte(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
@@ -620,7 +696,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isShortArray(receiver)", limit = "1")
+        @Specialization(guards = {"isShortArray(receiver)", "receiver.isEspressoObject()"}, limit = "1")
         static void doShort(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
@@ -643,7 +719,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isIntArray(receiver)", limit = "1")
+        @Specialization(guards = {"isIntArray(receiver)", "receiver.isEspressoObject()"}, limit = "1")
         static void doInt(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
@@ -666,7 +742,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isLongArray(receiver)", limit = "1")
+        @Specialization(guards = {"isLongArray(receiver)", "receiver.isEspressoObject()"}, limit = "1")
         static void doLong(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
@@ -689,7 +765,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isFloatArray(receiver)", limit = "1")
+        @Specialization(guards = {"isFloatArray(receiver)", "receiver.isEspressoObject()"}, limit = "1")
         static void doFloat(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
@@ -712,7 +788,7 @@ public final class StaticObject implements TruffleObject {
             }
         }
 
-        @Specialization(guards = "isDoubleArray(receiver)", limit = "1")
+        @Specialization(guards = {"isDoubleArray(receiver)", "receiver.isEspressoObject()"}, limit = "1")
         static void doDouble(StaticObject receiver, long index, Object value,
                         @CachedLibrary("value") InteropLibrary interopLibrary,
                         @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
@@ -781,6 +857,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isArrayElementReadable(long index) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isArray()) {
             return index >= 0 && index < length();
         }
@@ -789,6 +869,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean isArrayElementModifiable(long index) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         return isPrimitiveArray(this) && index >= 0 && index < length();
     }
 
@@ -813,6 +897,14 @@ public final class StaticObject implements TruffleObject {
     @TruffleBoundary
     @ExportMessage
     Object toDisplayString(boolean allowSideEffects) {
+        if (isInteropObject()) {
+            InteropLibrary interopLibrary = InteropLibrary.getUncached();
+            try {
+                return "Foreign object: " + interopLibrary.asString(interopLibrary.toDisplayString(rawInteropObject(), allowSideEffects));
+            } catch (UnsupportedMessageException e) {
+                throw EspressoError.shouldNotReachHere("Interop library failed to convert display string to string");
+            }
+        }
         if (StaticObject.isNull(this)) {
             return "NULL";
         }
@@ -839,6 +931,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     Object readMember(String member) throws UnknownIdentifierException {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (notNull(this)) {
             // Class<T>.static == Klass<T>
             if (CLASS_TO_STATIC.equals(member)) {
@@ -858,11 +954,19 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     boolean hasMembers() {
-        return !isNull(this);
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
+        return notNull(this);
     }
 
     @ExportMessage
     boolean isMemberReadable(String member) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         return notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class //
                         && (CLASS_TO_STATIC.equals(member) || STATIC_TO_CLASS.equals(member));
     }
@@ -871,9 +975,13 @@ public final class StaticObject implements TruffleObject {
 
     @ExportMessage
     Object getMembers(@SuppressWarnings("unused") boolean includeInternal) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         return (notNull(this) && getKlass() == getKlass().getMeta().java_lang_Class)
-                        ? KeysArray.EMPTY
-                        : CLASS_MEMBERS; // .static and .class
+                        ? CLASS_MEMBERS // .static and .class
+                        : KeysArray.EMPTY;
     }
 
     // endregion Interop
@@ -888,6 +996,7 @@ public final class StaticObject implements TruffleObject {
 
     // Constructor for object copy.
     private StaticObject(ObjectKlass klass, Object[] fields, byte[] primitiveFields) {
+        assert klass != null;
         this.klass = klass;
         this.fields = fields;
         this.primitiveFields = primitiveFields;
@@ -895,6 +1004,7 @@ public final class StaticObject implements TruffleObject {
 
     // Constructor for regular objects.
     private StaticObject(ObjectKlass klass) {
+        assert klass != null;
         assert klass != klass.getMeta().java_lang_Class;
         this.klass = klass;
         LinkedKlass lk = klass.getLinkedKlass();
@@ -936,6 +1046,7 @@ public final class StaticObject implements TruffleObject {
 
     // Constructor for static fields storage.
     private StaticObject(ObjectKlass klass, @SuppressWarnings("unused") Void unused) {
+        assert klass != null;
         this.klass = klass;
         LinkedKlass lk = klass.getLinkedKlass();
         this.fields = lk.getStaticObjectFieldsCount() > 0 ? new Object[lk.getStaticObjectFieldsCount()] : null;
@@ -964,6 +1075,13 @@ public final class StaticObject implements TruffleObject {
         this.primitiveFields = null;
     }
 
+    private StaticObject(Klass klass, Object interopObject, @SuppressWarnings("unused") Void unused) {
+        this.klass = klass;
+        assert interopObject != null;
+        this.primitiveFields = INTEROP_MARKER;
+        this.fields = interopObject;
+    }
+
     public static StaticObject createNew(ObjectKlass klass) {
         assert !klass.isAbstract() && !klass.isInterface();
         return new StaticObject(klass);
@@ -985,6 +1103,14 @@ public final class StaticObject implements TruffleObject {
         return new StaticObject(klass, array);
     }
 
+    public static StaticObject createInterop(Klass klass, Object interopObject) {
+        assert interopObject != null;
+        if (InteropLibrary.getUncached().isNull(interopObject)) {
+            return new StaticObject(null, interopObject, null);
+        }
+        return new StaticObject(klass, interopObject, null);
+    }
+
     public Klass getKlass() {
         return klass;
     }
@@ -1002,6 +1128,10 @@ public final class StaticObject implements TruffleObject {
      * {@link Object#notifyAll notifyAll}) when used with the built-in monitor lock.
      */
     public EspressoLock getLock() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected interop object");
+        }
         if (isNull(this)) {
             CompilerDirectives.transferToInterpreter();
             throw EspressoError.shouldNotReachHere("StaticObject.NULL.getLock()");
@@ -1022,12 +1152,29 @@ public final class StaticObject implements TruffleObject {
         return !isNull(object);
     }
 
+    public boolean isInteropObject() {
+        return this.primitiveFields == INTEROP_MARKER;
+    }
+
+    public boolean isEspressoObject() {
+        return !isInteropObject();
+    }
+
+    public Object rawInteropObject() {
+        assert isInteropObject();
+        return this.fields;
+    }
+
     public boolean isStaticStorage() {
         return this == getKlass().getStatics();
     }
 
     // Shallow copy.
     public StaticObject copy() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         if (isNull(this)) {
             return NULL;
         }
@@ -1040,6 +1187,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExplodeLoop
     private void initInstanceFields(ObjectKlass thisKlass) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         CompilerAsserts.partialEvaluationConstant(thisKlass);
         for (Field f : thisKlass.getFieldTable()) {
             assert !f.isStatic();
@@ -1053,6 +1204,10 @@ public final class StaticObject implements TruffleObject {
 
     @ExplodeLoop
     private void initStaticFields(ObjectKlass thisKlass) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         CompilerAsserts.partialEvaluationConstant(thisKlass);
         for (Field f : thisKlass.getStaticFieldTable()) {
             assert f.isStatic();
@@ -1070,12 +1225,20 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public StaticObject getFieldVolatile(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return (StaticObject) UNSAFE.getObjectVolatile(CompilerDirectives.castExact(fields, Object[].class), getObjectFieldIndex(field.getIndex()));
     }
 
     // Not to be used to access hidden fields !
     public StaticObject getField(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert !field.getKind().isSubWord();
         Object result;
@@ -1090,28 +1253,52 @@ public final class StaticObject implements TruffleObject {
 
     // Use with caution. Can be used with hidden fields.
     public Object getUnsafeField(int fieldIndex) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         return UNSAFE.getObject(castExact(fields, Object[].class), getObjectFieldIndex(fieldIndex));
     }
 
     private void setUnsafeField(int index, Object value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         UNSAFE.putObject(fields, getObjectFieldIndex(index), value);
     }
 
     private Object getUnsafeFieldVolatile(int fieldIndex) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         return UNSAFE.getObjectVolatile(castExact(fields, Object[].class), getObjectFieldIndex(fieldIndex));
     }
 
     private void setUnsafeFieldVolatile(int index, Object value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         UNSAFE.putObjectVolatile(fields, getObjectFieldIndex(index), value);
     }
 
     @TruffleBoundary(allowInlining = true)
     public void setFieldVolatile(Field field, Object value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         UNSAFE.putObjectVolatile(castExact(fields, Object[].class), getObjectFieldIndex(field.getIndex()), value);
     }
 
     public void setField(Field field, Object value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert !field.getKind().isSubWord();
         assert !(value instanceof StaticObject) ||
@@ -1128,6 +1315,10 @@ public final class StaticObject implements TruffleObject {
     }
 
     public boolean compareAndSwapField(Field field, Object before, Object after) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.compareAndSwapObject(fields, getObjectFieldIndex(field.getIndex()), before, after);
     }
@@ -1143,6 +1334,10 @@ public final class StaticObject implements TruffleObject {
     }
 
     public boolean getBooleanField(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Boolean;
         if (field.isVolatile()) {
@@ -1154,11 +1349,19 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public byte getByteFieldVolatile(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getByteVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public byte getByteField(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Byte;
         if (field.isVolatile()) {
@@ -1169,6 +1372,10 @@ public final class StaticObject implements TruffleObject {
     }
 
     public char getCharField(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Char;
         if (field.isVolatile()) {
@@ -1180,11 +1387,19 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public char getCharFieldVolatile(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getCharVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public short getShortField(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Short;
         if (field.isVolatile()) {
@@ -1196,11 +1411,19 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public short getShortFieldVolatile(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getShortVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public int getIntField(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Int;
         if (field.isVolatile()) {
@@ -1212,11 +1435,19 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public int getIntFieldVolatile(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getIntVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public float getFloatField(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Float;
         if (field.isVolatile()) {
@@ -1228,11 +1459,19 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public float getFloatFieldVolatile(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getFloatVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public double getDoubleField(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Double;
         if (field.isVolatile()) {
@@ -1244,6 +1483,10 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public double getDoubleFieldVolatile(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getDoubleVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
@@ -1251,6 +1494,10 @@ public final class StaticObject implements TruffleObject {
     // Field setters
 
     public void setBooleanField(Field field, boolean value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Boolean;
         if (field.isVolatile()) {
@@ -1262,10 +1509,18 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setBooleanFieldVolatile(Field field, boolean value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         setByteFieldVolatile(field, (byte) (value ? 1 : 0));
     }
 
     public void setByteField(Field field, byte value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Byte;
         if (field.isVolatile()) {
@@ -1277,10 +1532,18 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setByteFieldVolatile(Field field, byte value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         UNSAFE.putByteVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setCharField(Field field, char value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Char;
         if (field.isVolatile()) {
@@ -1292,10 +1555,18 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setCharFieldVolatile(Field field, char value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         UNSAFE.putCharVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setShortField(Field field, short value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Short;
         if (field.isVolatile()) {
@@ -1307,10 +1578,18 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setShortFieldVolatile(Field field, short value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         UNSAFE.putShortVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setIntField(Field field, int value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Int || field.getKind() == JavaKind.Float;
         if (field.isVolatile()) {
@@ -1322,10 +1601,18 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setIntFieldVolatile(Field field, int value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         UNSAFE.putIntVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setFloatField(Field field, float value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Float;
         if (field.isVolatile()) {
@@ -1337,11 +1624,19 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setDoubleFieldVolatile(Field field, double value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         UNSAFE.putDoubleVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setDoubleField(Field field, double value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind() == JavaKind.Double;
         if (field.isVolatile()) {
@@ -1353,11 +1648,19 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setFloatFieldVolatile(Field field, float value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         UNSAFE.putFloatVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public boolean compareAndSwapIntField(Field field, int before, int after) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.compareAndSwapInt(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), before, after);
     }
@@ -1367,11 +1670,19 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public long getLongFieldVolatile(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.getLongVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
     }
 
     public long getLongField(Field field) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind().needsTwoSlots();
         if (field.isVolatile()) {
@@ -1383,11 +1694,19 @@ public final class StaticObject implements TruffleObject {
 
     @TruffleBoundary(allowInlining = true)
     public void setLongFieldVolatile(Field field, long value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         UNSAFE.putLongVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
     }
 
     public void setLongField(Field field, long value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         assert field.getKind().needsTwoSlots();
         if (field.isVolatile()) {
@@ -1398,6 +1717,10 @@ public final class StaticObject implements TruffleObject {
     }
 
     public boolean compareAndSwapLongField(Field field, long before, long after) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
         return UNSAFE.compareAndSwapLong(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), before, after);
     }
@@ -1407,6 +1730,10 @@ public final class StaticObject implements TruffleObject {
     // Given a guest Class, get the corresponding Klass.
     public Klass getMirrorKlass() {
         assert getKlass().getType() == Type.java_lang_Class;
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         Klass result = (Klass) getHiddenField(getKlass().getMeta().HIDDEN_MIRROR_KLASS);
         if (result == null) {
             CompilerDirectives.transferToInterpreter();
@@ -1420,6 +1747,9 @@ public final class StaticObject implements TruffleObject {
     public String toString() {
         if (this == NULL) {
             return "null";
+        }
+        if (isInteropObject()) {
+            return "interop object: " + getKlass().getTypeAsString();
         }
         if (getKlass() == getKlass().getMeta().java_lang_String) {
             return Meta.toHostString(this);
@@ -1437,6 +1767,9 @@ public final class StaticObject implements TruffleObject {
     public String toVerboseString() {
         if (this == NULL) {
             return "null";
+        }
+        if (isInteropObject()) {
+            return String.format("interop object: %s\n%s", getKlass().getTypeAsString(), InteropLibrary.getUncached().toDisplayString(rawInteropObject()));
         }
         if (getKlass() == getKlass().getMeta().java_lang_String) {
             return Meta.toHostString(this);
@@ -1456,21 +1789,37 @@ public final class StaticObject implements TruffleObject {
     }
 
     public void setHiddenField(Field hiddenField, Object value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert hiddenField.isHidden();
         setUnsafeField(hiddenField.getIndex(), value);
     }
 
     public Object getHiddenField(Field hiddenField) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert hiddenField.isHidden();
         return getUnsafeField(hiddenField.getIndex());
     }
 
     public void setHiddenFieldVolatile(Field hiddenField, Object value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert hiddenField.isHidden();
         setUnsafeFieldVolatile(hiddenField.getIndex(), value);
     }
 
     public Object getHiddenFieldVolatile(Field hiddenField) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert hiddenField.isHidden();
         return getUnsafeFieldVolatile(hiddenField.getIndex());
     }
@@ -1481,11 +1830,19 @@ public final class StaticObject implements TruffleObject {
 
     @SuppressWarnings("unchecked")
     public <T> T unwrap() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert isArray();
         return (T) fields;
     }
 
     public <T> T get(int index) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert isArray();
         return this.<T[]> unwrap()[index];
     }
@@ -1494,6 +1851,10 @@ public final class StaticObject implements TruffleObject {
      * Workaround to avoid casting to Object[] in InterpreterToVM (non-leaf type check).
      */
     public void putObject(StaticObject value, int index, Meta meta) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert isArray();
         if (index >= 0 && index < length()) {
             UNSAFE.putObject(fields, getObjectFieldIndex(index), arrayStoreExCheck(value, ((ArrayKlass) klass).getComponentType(), meta));
@@ -1512,11 +1873,19 @@ public final class StaticObject implements TruffleObject {
     }
 
     public int length() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert isArray();
         return Array.getLength(fields);
     }
 
     private Object cloneWrappedArray() {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert isArray();
         if (fields instanceof boolean[]) {
             return this.<boolean[]> unwrap().clone();
@@ -1626,6 +1995,10 @@ public final class StaticObject implements TruffleObject {
     }
 
     public void setArrayByte(byte value, int index, Meta meta) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert isArray() && (fields instanceof byte[] || fields instanceof boolean[]);
         if (index >= 0 && index < length()) {
             UNSAFE.putByte(fields, getArrayByteOffset(index), value);
@@ -1635,6 +2008,10 @@ public final class StaticObject implements TruffleObject {
     }
 
     public byte getArrayByte(int index, Meta meta) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         assert isArray() && (fields instanceof byte[] || fields instanceof boolean[]);
         if (index >= 0 && index < length()) {
             return UNSAFE.getByte(fields, getArrayByteOffset(index));
@@ -1644,6 +2021,10 @@ public final class StaticObject implements TruffleObject {
     }
 
     public StaticObject getAndSetObject(Field field, StaticObject value) {
+        if (isInteropObject()) {
+            CompilerDirectives.transferToInterpreter();
+            throw EspressoError.shouldNotReachHere("Unexpected wrapped interop object");
+        }
         return (StaticObject) UNSAFE.getAndSetObject(fields, getObjectFieldIndex(field.getIndex()), value);
     }
 }
