@@ -535,7 +535,6 @@ public final class EspressoContext {
     public JImageLibrary jimageLibrary() {
         if (jimageLibrary == null) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            EspressoError.guarantee((getJavaVersion() >= 9), "Jimage availbale for java >= 9");
             this.jimageLibrary = new JImageLibrary(this);
         }
         return jimageLibrary;
