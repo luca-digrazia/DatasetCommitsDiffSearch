@@ -304,6 +304,7 @@ public final class CallNode extends Node {
         return truffleCaller.isInliningForced();
     }
 
+
     public CallNode getParent() {
         return (CallNode) predecessor();
     }
