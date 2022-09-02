@@ -172,11 +172,9 @@ import static com.oracle.truffle.wasm.binary.constants.Instructions.NOP;
 import static com.oracle.truffle.wasm.binary.constants.Instructions.UNREACHABLE;
 
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.RepeatingNode;
 import com.oracle.truffle.wasm.binary.exception.WasmTrap;
-import com.oracle.truffle.wasm.binary.memory.WasmMemoryException;
 
 public class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private final int startOffset;
@@ -185,7 +183,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private final int initialByteConstantOffset;
     @CompilationFinal private final int initialIntConstantOffset;
     @CompilationFinal(dimensions = 1) WasmNode[] nestedControlTable;
-    @CompilationFinal(dimensions = 1) DirectCallNode[] callNodeTable;
 
     public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, int initialStackPointer, int initialByteConstantOffset, int initialIntConstantOffset) {
         super(wasmModule, codeEntry, -1, -1);
@@ -195,13 +192,11 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
         this.initialByteConstantOffset = initialByteConstantOffset;
         this.initialIntConstantOffset = initialIntConstantOffset;
         this.nestedControlTable = null;
-        this.callNodeTable = null;
     }
 
-    @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.MERGE_EXPLODE)
+    @ExplodeLoop
     public int execute(WasmContext context, VirtualFrame frame) {
         int nestedControlOffset = 0;
-        int callNodeOffset = 0;
         int byteConstantOffset = initialByteConstantOffset;
         int intConstantOffset = initialIntConstantOffset;
         int stackPointer = initialStackPointer;
@@ -312,9 +307,6 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byte returnType = function.returnType();
                     int numArgs = function.numArguments();
 
-                    DirectCallNode callNode = callNodeTable[callNodeOffset];
-                    callNodeOffset++;
-
                     Object[] args = new Object[numArgs];
                     for (int i = 0; i != numArgs; ++i) {
                         stackPointer--;
@@ -335,22 +327,25 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                         }
                     }
 
-                    Object result = callNode.call(args);
                     switch (returnType) {
                         case ValueTypes.I32_TYPE: {
-                            pushInt(frame, stackPointer, (int) result);
+                            int result = (int) function.execute(args);
+                            pushInt(frame, stackPointer, result);
                             break;
                         }
                         case ValueTypes.I64_TYPE: {
-                            push(frame, stackPointer, (long) result);
+                            long result = (long) function.execute(args);
+                            push(frame, stackPointer, result);
                             break;
                         }
                         case ValueTypes.F32_TYPE: {
-                            pushFloat(frame, stackPointer, (float) result);
+                            float result = (float) function.execute(args);
+                            pushFloat(frame, stackPointer, result);
                             break;
                         }
                         case ValueTypes.F64_TYPE: {
-                            pushDouble(frame, stackPointer, (double) result);
+                            double result = (double) function.execute(args);
+                            pushDouble(frame, stackPointer, result);
                             break;
                         }
                         default: {
@@ -506,95 +501,119 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     int baseAddress = popInt(frame, stackPointer);
                     int address = baseAddress + memOffset;
 
-                    try {
-                        switch (opcode) {
-                            case I32_LOAD: {
-                                context.memory().validateAddress(address, 32);
-                                int value = context.memory().load_i32(address);
-                                pushInt(frame, stackPointer, value);
-                                break;
+                    switch (opcode) {
+                        case I32_LOAD: {
+                            if (!context.memory().validateAddress(address, 32)) {
+                                throw new WasmTrap("address out of bounds", this);
                             }
-                            case I64_LOAD: {
-                                context.memory().validateAddress(address, 64);
-                                long value = context.memory().load_i64(address);
-                                push(frame, stackPointer, value);
-                                break;
-                            }
-                            case F32_LOAD: {
-                                context.memory().validateAddress(address, 32);
-                                float value = context.memory().load_f32(address);
-                                pushFloat(frame, stackPointer, value);
-                                break;
-                            }
-                            case F64_LOAD: {
-                                context.memory().validateAddress(address, 64);
-                                double value = context.memory().load_f64(address);
-                                pushDouble(frame, stackPointer, value);
-                                break;
-                            }
-                            case I32_LOAD8_S: {
-                                context.memory().validateAddress(address, 8);
-                                int value = context.memory().load_i32_8s(address);
-                                pushInt(frame, stackPointer, value);
-                                break;
-                            }
-                            case I32_LOAD8_U: {
-                                context.memory().validateAddress(address, 8);
-                                int value = context.memory().load_i32_8u(address);
-                                pushInt(frame, stackPointer, value);
-                                break;
-                            }
-                            case I32_LOAD16_S: {
-                                context.memory().validateAddress(address, 16);
-                                int value = context.memory().load_i32_16s(address);
-                                pushInt(frame, stackPointer, value);
-                                break;
-                            }
-                            case I32_LOAD16_U: {
-                                context.memory().validateAddress(address, 16);
-                                int value = context.memory().load_i32_16u(address);
-                                pushInt(frame, stackPointer, value);
-                                break;
-                            }
-                            case I64_LOAD8_S: {
-                                context.memory().validateAddress(address, 8);
-                                long value = context.memory().load_i64_8s(address);
-                                push(frame, stackPointer, value);
-                                break;
-                            }
-                            case I64_LOAD8_U: {
-                                context.memory().validateAddress(address, 8);
-                                long value = context.memory().load_i64_8u(address);
-                                push(frame, stackPointer, value);
-                                break;
-                            }
-                            case I64_LOAD16_S: {
-                                context.memory().validateAddress(address, 16);
-                                long value = context.memory().load_i64_16s(address);
-                                push(frame, stackPointer, value);
-                                break;
-                            }
-                            case I64_LOAD16_U: {
-                                context.memory().validateAddress(address, 16);
-                                long value = context.memory().load_i64_16u(address);
-                                push(frame, stackPointer, value);
-                                break;
-                            }
-                            case I64_LOAD32_S: {
-                                context.memory().validateAddress(address, 32);
-                                long value = context.memory().load_i64_32s(address);
-                                push(frame, stackPointer, value);
-                                break;
-                            }
-                            case I64_LOAD32_U: {
-                                context.memory().validateAddress(address, 32);
-                                long value = context.memory().load_i64_32u(address);
-                                push(frame, stackPointer, value);
-                                break;
-                            }
+                            int value = context.memory().load_i32(address);
+                            pushInt(frame, stackPointer, value);
+                            break;
                         }
-                    } catch (WasmMemoryException e) {
-                        throw new WasmTrap("memory address out-of-bounds", this);
+                        case I64_LOAD: {
+                            if (!context.memory().validateAddress(address, 64)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            long value = context.memory().load_i64(address);
+                            push(frame, stackPointer, value);
+                            break;
+                        }
+                        case F32_LOAD: {
+                            if (!context.memory().validateAddress(address, 32)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            float value = context.memory().load_f32(address);
+                            pushFloat(frame, stackPointer, value);
+                            break;
+                        }
+                        case F64_LOAD: {
+                            if (!context.memory().validateAddress(address, 64)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            double value = context.memory().load_f64(address);
+                            pushDouble(frame, stackPointer, value);
+                            break;
+                        }
+                        case I32_LOAD8_S: {
+                            if (!context.memory().validateAddress(address, 8)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            int value = context.memory().load_i32_8s(address);
+                            pushInt(frame, stackPointer, value);
+                            break;
+                        }
+                        case I32_LOAD8_U: {
+                            if (!context.memory().validateAddress(address, 8)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            int value = context.memory().load_i32_8u(address);
+                            pushInt(frame, stackPointer, value);
+                            break;
+                        }
+                        case I32_LOAD16_S: {
+                            if (!context.memory().validateAddress(address, 16)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            int value = context.memory().load_i32_16s(address);
+                            pushInt(frame, stackPointer, value);
+                            break;
+                        }
+                        case I32_LOAD16_U: {
+                            if (!context.memory().validateAddress(address, 16)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            int value = context.memory().load_i32_16u(address);
+                            pushInt(frame, stackPointer, value);
+                            break;
+                        }
+                        case I64_LOAD8_S: {
+                            if (!context.memory().validateAddress(address, 8)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            long value = context.memory().load_i64_8s(address);
+                            push(frame, stackPointer, value);
+                            break;
+                        }
+                        case I64_LOAD8_U: {
+                            if (!context.memory().validateAddress(address, 8)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            long value = context.memory().load_i64_8u(address);
+                            push(frame, stackPointer, value);
+                            break;
+                        }
+                        case I64_LOAD16_S: {
+                            if (!context.memory().validateAddress(address, 16)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            long value = context.memory().load_i64_16s(address);
+                            push(frame, stackPointer, value);
+                            break;
+                        }
+                        case I64_LOAD16_U: {
+                            if (!context.memory().validateAddress(address, 16)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            long value = context.memory().load_i64_16u(address);
+                            push(frame, stackPointer, value);
+                            break;
+                        }
+                        case I64_LOAD32_S: {
+                            if (!context.memory().validateAddress(address, 32)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            long value = context.memory().load_i64_32s(address);
+                            push(frame, stackPointer, value);
+                            break;
+                        }
+                        case I64_LOAD32_U: {
+                            if (!context.memory().validateAddress(address, 32)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            long value = context.memory().load_i64_32u(address);
+                            push(frame, stackPointer, value);
+                            break;
+                        }
                     }
                     stackPointer++;
                     break;
@@ -619,101 +638,115 @@ public class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byteConstantOffset++;
                     offset += memOffsetConstantLength;
 
-                    try {
-                        switch (opcode) {
-                            case I32_STORE: {
-                                stackPointer--;
-                                int value = popInt(frame, stackPointer);
-                                stackPointer--;
-                                int baseAddress = popInt(frame, stackPointer);
-                                int address = baseAddress + memOffset;
-                                context.memory().validateAddress(address, 32);
-                                context.memory().store_i32(address, value);
-                                break;
+                    switch (opcode) {
+                        case I32_STORE: {
+                            stackPointer--;
+                            int value = popInt(frame, stackPointer);
+                            stackPointer--;
+                            int baseAddress = popInt(frame, stackPointer);
+                            int address = baseAddress + memOffset;
+                            if (!context.memory().validateAddress(address, 32)) {
+                                throw new WasmTrap("address out of bounds", this);
                             }
-                            case I64_STORE: {
-                                stackPointer--;
-                                long value = pop(frame, stackPointer);
-                                stackPointer--;
-                                int baseAddress = popInt(frame, stackPointer);
-                                int address = baseAddress + memOffset;
-                                context.memory().validateAddress(address, 64);
-                                context.memory().store_i64(address, value);
-                                break;
-                            }
-                            case F32_STORE: {
-                                stackPointer--;
-                                float value = popAsFloat(frame, stackPointer);
-                                stackPointer--;
-                                int baseAddress = popInt(frame, stackPointer);
-                                int address = baseAddress + memOffset;
-                                context.memory().validateAddress(address, 32);
-                                context.memory().store_f32(address, value);
-                                break;
-                            }
-                            case F64_STORE: {
-                                stackPointer--;
-                                double value = popAsDouble(frame, stackPointer);
-                                stackPointer--;
-                                int baseAddress = popInt(frame, stackPointer);
-                                int address = baseAddress + memOffset;
-                                context.memory().validateAddress(address, 64);
-                                context.memory().store_f64(address, value);
-                                break;
-                            }
-                            case I32_STORE_8: {
-                                stackPointer--;
-                                int value = popInt(frame, stackPointer);
-                                stackPointer--;
-                                int baseAddress = popInt(frame, stackPointer);
-                                int address = baseAddress + memOffset;
-                                context.memory().validateAddress(address, 8);
-                                context.memory().store_i32_8(address, value);
-                                break;
-                            }
-                            case I32_STORE_16: {
-                                stackPointer--;
-                                int value = popInt(frame, stackPointer);
-                                stackPointer--;
-                                int baseAddress = popInt(frame, stackPointer);
-                                int address = baseAddress + memOffset;
-                                context.memory().validateAddress(address, 16);
-                                context.memory().store_i32_16(address, value);
-                                break;
-                            }
-                            case I64_STORE_8: {
-                                stackPointer--;
-                                long value = pop(frame, stackPointer);
-                                stackPointer--;
-                                int baseAddress = popInt(frame, stackPointer);
-                                int address = baseAddress + memOffset;
-                                context.memory().validateAddress(address, 8);
-                                context.memory().store_i64_8(address, value);
-                                break;
-                            }
-                            case I64_STORE_16: {
-                                stackPointer--;
-                                long value = pop(frame, stackPointer);
-                                stackPointer--;
-                                int baseAddress = popInt(frame, stackPointer);
-                                int address = baseAddress + memOffset;
-                                context.memory().validateAddress(address, 16);
-                                context.memory().store_i64_16(address, value);
-                                break;
-                            }
-                            case I64_STORE_32: {
-                                stackPointer--;
-                                long value = pop(frame, stackPointer);
-                                stackPointer--;
-                                int baseAddress = popInt(frame, stackPointer);
-                                int address = baseAddress + memOffset;
-                                context.memory().validateAddress(address, 32);
-                                context.memory().store_i64_32(address, value);
-                                break;
-                            }
+                            context.memory().store_i32(address, value);
+                            break;
                         }
-                    } catch (WasmMemoryException e) {
-                        throw new WasmTrap("memory address out-of-bounds", this);
+                        case I64_STORE: {
+                            stackPointer--;
+                            long value = pop(frame, stackPointer);
+                            stackPointer--;
+                            int baseAddress = popInt(frame, stackPointer);
+                            int address = baseAddress + memOffset;
+                            if (!context.memory().validateAddress(address, 64)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            context.memory().store_i64(address, value);
+                            break;
+                        }
+                        case F32_STORE: {
+                            stackPointer--;
+                            float value = popAsFloat(frame, stackPointer);
+                            stackPointer--;
+                            int baseAddress = popInt(frame, stackPointer);
+                            int address = baseAddress + memOffset;
+                            if (!context.memory().validateAddress(address, 32)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            context.memory().store_f32(address, value);
+                            break;
+                        }
+                        case F64_STORE: {
+                            stackPointer--;
+                            double value = popAsDouble(frame, stackPointer);
+                            stackPointer--;
+                            int baseAddress = popInt(frame, stackPointer);
+                            int address = baseAddress + memOffset;
+                            if (!context.memory().validateAddress(address, 64)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            context.memory().store_f64(address, value);
+                            break;
+                        }
+                        case I32_STORE_8: {
+                            stackPointer--;
+                            int value = popInt(frame, stackPointer);
+                            stackPointer--;
+                            int baseAddress = popInt(frame, stackPointer);
+                            int address = baseAddress + memOffset;
+                            if (!context.memory().validateAddress(address, 8)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            context.memory().store_i32_8(address, value);
+                            break;
+                        }
+                        case I32_STORE_16: {
+                            stackPointer--;
+                            int value = popInt(frame, stackPointer);
+                            stackPointer--;
+                            int baseAddress = popInt(frame, stackPointer);
+                            int address = baseAddress + memOffset;
+                            if (!context.memory().validateAddress(address, 16)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            context.memory().store_i32_16(address, value);
+                            break;
+                        }
+                        case I64_STORE_8: {
+                            stackPointer--;
+                            long value = pop(frame, stackPointer);
+                            stackPointer--;
+                            int baseAddress = popInt(frame, stackPointer);
+                            int address = baseAddress + memOffset;
+                            if (!context.memory().validateAddress(address, 8)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            context.memory().store_i64_8(address, value);
+                            break;
+                        }
+                        case I64_STORE_16: {
+                            stackPointer--;
+                            long value = pop(frame, stackPointer);
+                            stackPointer--;
+                            int baseAddress = popInt(frame, stackPointer);
+                            int address = baseAddress + memOffset;
+                            if (!context.memory().validateAddress(address, 16)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            context.memory().store_i64_16(address, value);
+                            break;
+                        }
+                        case I64_STORE_32: {
+                            stackPointer--;
+                            long value = pop(frame, stackPointer);
+                            stackPointer--;
+                            int baseAddress = popInt(frame, stackPointer);
+                            int address = baseAddress + memOffset;
+                            if (!context.memory().validateAddress(address, 32)) {
+                                throw new WasmTrap("address out of bounds", this);
+                            }
+                            context.memory().store_i64_32(address, value);
+                            break;
+                        }
                     }
 
                     break;
