@@ -92,7 +92,10 @@ public final class DefaultCallTarget implements RootCallTarget {
 
     @Override
     public Object call(Object... args) {
-        // Use the encapsulating node as call site and clear it inside as we cross the call boundary
+        /*
+         * Clear encapsulating node for uncached indirect call boundary. The encapsulating
+         * node is not longer needed if a call boundary is crossed.
+         */
         EncapsulatingNodeReference encapsulating = EncapsulatingNodeReference.getCurrent();
         Node parent = encapsulating.set(null);
         try {
