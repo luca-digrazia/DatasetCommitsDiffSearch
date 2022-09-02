@@ -1020,7 +1020,7 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
         private static final String GENERATOR_CLASS_LOADER_CLASS_NAME = "com.oracle.truffle.api.staticobject.GeneratorClassLoader";
         private static final ConcurrentHashMap<Pair<Class<?>, Class<?>>, Object> INTERCEPTED_ARGS = new ConcurrentHashMap<>();
         private static final Object FILLER_OBJECT = new Object();
-        private static final Map<Class<?>, ClassLoader> CLASS_LOADERS = new ConcurrentHashMap<>();
+        private static ClassLoader generatorClassLoader;
 
         static void registerInvocationPlugins(Providers providers, SnippetReflectionProvider snippetReflection, Plugins plugins, ParsingReason reason) {
             if (reason == ParsingReason.PointsToAnalysis) {
@@ -1090,23 +1090,17 @@ public final class TruffleFeature implements com.oracle.svm.core.graal.GraalFeat
             return storageClass;
         }
 
-        private static ClassLoader getGeneratorClassLoader(Class<?> factoryInterface) {
-            ClassLoader cl = CLASS_LOADERS.get(factoryInterface);
-            if (cl == null) {
+        private static synchronized ClassLoader getGeneratorClassLoader(Class<?> factoryInterface) {
+            if (generatorClassLoader == null) {
                 Class<?> classLoaderClass = loadClass(GENERATOR_CLASS_LOADER_CLASS_NAME);
                 Constructor<?> constructor = ReflectionUtil.lookupConstructor(classLoaderClass, Class.class);
-                ClassLoader newCL;
                 try {
-                    newCL = ClassLoader.class.cast(constructor.newInstance(factoryInterface));
+                    generatorClassLoader = ClassLoader.class.cast(constructor.newInstance(factoryInterface));
                 } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
                     throw JVMCIError.shouldNotReachHere(e);
                 }
-                cl = CLASS_LOADERS.putIfAbsent(factoryInterface, newCL);
-                if (cl == null) {
-                    cl = newCL;
-                }
             }
-            return cl;
+            return generatorClassLoader;
         }
 
         private static Class<?> loadClass(String name) {
