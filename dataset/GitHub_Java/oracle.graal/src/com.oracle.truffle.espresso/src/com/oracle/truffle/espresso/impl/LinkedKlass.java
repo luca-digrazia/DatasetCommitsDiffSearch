@@ -1,7 +1,30 @@
+/*
+ * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This code is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 only, as
+ * published by the Free Software Foundation.
+ *
+ * This code is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+ * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+ * version 2 for more details (a copy is included in the LICENSE file that
+ * accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License version
+ * 2 along with this work; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ *
+ * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
+ * or visit www.oracle.com if you need additional information or have any
+ * questions.
+ */
 package com.oracle.truffle.espresso.impl;
 
+import static com.oracle.truffle.espresso.classfile.Constants.ACC_FINALIZER;
+
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
@@ -27,75 +50,76 @@ public final class LinkedKlass {
     @CompilationFinal(dimensions = 1) //
     private final LinkedMethod[] methods;
 
-    @CompilationFinal(dimensions = 1) //
-    private final LinkedField[] fields; // Field slots already computed.
+    private final boolean hasFinalizer;
 
-    protected LinkedMethod[] getLinkedMethods() {
-        return methods;
-    }
-
-    protected LinkedField[] getLinkedFields() {
-        return fields;
-    }
-
-    protected final int instanceFieldCount;
-    protected final int staticFieldCount;
+    private final LinkedKlassFieldLayout fieldLayout;
 
     public LinkedKlass(ParserKlass parserKlass, LinkedKlass superKlass, LinkedKlass[] interfaces) {
+        this.parserKlass = parserKlass;
+        this.superKlass = superKlass;
+        this.interfaces = interfaces;
 
-        assert Arrays.stream(interfaces).allMatch(i -> Modifier.isInterface(i.getFlags()));
+        // Streams are forbidden in Espresso.
+        // assert Arrays.stream(interfaces).allMatch(i -> Modifier.isInterface(i.getFlags()));
         assert superKlass == null || !Modifier.isInterface(superKlass.getFlags());
 
-        int instanceFieldSlot = superKlass != null ? superKlass.instanceFieldCount : 0;
-        int staticFieldSlot = 0;
+        // Super interfaces are not checked for finalizers; a default .finalize method will be
+        // resolved to Object.finalize, making the finalizer not observable.
+        this.hasFinalizer = ((parserKlass.getFlags() & ACC_FINALIZER) != 0) || (superKlass != null && (superKlass.getFlags() & ACC_FINALIZER) != 0);
+        assert !this.hasFinalizer || !Type.java_lang_Object.equals(parserKlass.getType()) : "java.lang.Object cannot be marked as finalizable";
 
         final int methodCount = parserKlass.getMethods().length;
-        final int fieldCount = parserKlass.getFields().length;
-
-        LinkedField[] linkedFields = new LinkedField[fieldCount];
         LinkedMethod[] linkedMethods = new LinkedMethod[methodCount];
-
-        for (int i = 0; i < fieldCount; ++i) {
-            ParserField parserField = parserKlass.getFields()[i];
-
-            int slot = Modifier.isStatic(parserField.getFlags())
-                            ? staticFieldSlot++
-                            : instanceFieldSlot++;
-
-            linkedFields[i] = new LinkedField(parserField, this, slot);
-        }
 
         for (int i = 0; i < methodCount; ++i) {
             ParserMethod parserMethod = parserKlass.getMethods()[i];
             // TODO(peterssen): Methods with custom constant pool should spawned here, but not
             // supported.
-            linkedMethods[i] = new LinkedMethod(parserMethod, this);
+            linkedMethods[i] = new LinkedMethod(parserMethod);
         }
 
-        this.parserKlass = parserKlass;
-        this.superKlass = superKlass;
-        this.interfaces = interfaces;
-        this.staticFieldCount = staticFieldSlot;
-        this.instanceFieldCount = instanceFieldSlot;
-        this.fields = linkedFields;
         this.methods = linkedMethods;
+
+        fieldLayout = LinkedKlassFieldLayout.create(parserKlass, superKlass);
     }
 
-    public boolean equals(LinkedKlass other) {
-        return parserKlass == other.parserKlass &&
-                        superKlass == other.superKlass &&
-                        /* reference equals */ Arrays.equals(interfaces, other.interfaces);
+    public int getObjectFieldsCount() {
+        return fieldLayout.objectFields;
+    }
+
+    public int getInstancePrimitiveToAlloc() {
+        return fieldLayout.instanceToAlloc;
+    }
+
+    public int getPrimitiveInstanceFieldLastOffset() {
+        return fieldLayout.primInstanceLastOffset;
+    }
+
+    public int getStaticObjectFieldsCount() {
+        return fieldLayout.staticObjectFields;
+    }
+
+    public int getStaticPrimitiveToAlloc() {
+        return fieldLayout.staticToAlloc;
+    }
+
+    public int getPrimitiveStaticFieldLastOffset() {
+        return fieldLayout.primStaticLastOffset;
     }
 
     int getFlags() {
-        return parserKlass.getFlags();
+        int flags = parserKlass.getFlags();
+        if (hasFinalizer) {
+            flags |= ACC_FINALIZER;
+        }
+        return flags;
     }
 
     ConstantPool getConstantPool() {
         return parserKlass.getConstantPool();
     }
 
-    public Attribute getAttribute(Symbol<Name> name) {
+    Attribute getAttribute(Symbol<Name> name) {
         return parserKlass.getAttribute(name);
     }
 
@@ -103,7 +127,47 @@ public final class LinkedKlass {
         return parserKlass.getType();
     }
 
-    public Symbol<Name> getName() {
+    Symbol<Name> getName() {
         return parserKlass.getName();
+    }
+
+    ParserKlass getParserKlass() {
+        return parserKlass;
+    }
+
+    LinkedKlass getSuperKlass() {
+        return superKlass;
+    }
+
+    LinkedKlass[] getInterfaces() {
+        return interfaces;
+    }
+
+    int getMajorVersion() {
+        return getConstantPool().getMajorVersion();
+    }
+
+    int getMinorVersion() {
+        return getConstantPool().getMinorVersion();
+    }
+
+    LinkedMethod[] getLinkedMethods() {
+        return methods;
+    }
+
+    LinkedField[] getInstanceFields() {
+        return fieldLayout.instanceFields;
+    }
+
+    LinkedField[] getStaticFields() {
+        return fieldLayout.staticFields;
+    }
+
+    int getFieldTableLength() {
+        return fieldLayout.fieldTableLength;
+    }
+
+    int[][] getLeftoverHoles() {
+        return fieldLayout.leftoverHoles;
     }
 }
