@@ -104,6 +104,8 @@ import org.graalvm.compiler.replacements.PEGraphDecoder;
 import org.graalvm.compiler.replacements.ReplacementsImpl;
 import org.graalvm.compiler.replacements.SnippetCounter;
 import org.graalvm.compiler.replacements.SnippetIntegerHistogram;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 
 import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
@@ -127,6 +129,7 @@ import jdk.vm.ci.meta.UnresolvedJavaType;
  * method references into a symbolic form that can be resolved at graph decode time using
  * {@link SymbolicJVMCIReference}.
  */
+@Platforms(Platform.HOSTED_ONLY.class)
 public class SymbolicSnippetEncoder {
 
     /**
