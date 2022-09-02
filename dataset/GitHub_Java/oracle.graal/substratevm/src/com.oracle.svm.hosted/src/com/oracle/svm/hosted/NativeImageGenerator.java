@@ -54,7 +54,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import com.oracle.svm.core.c.libc.TemporaryBuildDirectoryProvider;
 import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Pair;
 import org.graalvm.compiler.api.replacements.Fold;
@@ -160,8 +159,10 @@ import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateTargetDescription;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
+import com.oracle.svm.core.c.libc.GLibc;
 import com.oracle.svm.core.c.libc.LibCBase;
-import com.oracle.svm.core.c.libc.NoLibC;
+import com.oracle.svm.core.c.libc.MuslLibc;
+import com.oracle.svm.core.c.libc.BionicLibc;
 import com.oracle.svm.core.code.RuntimeCodeCache;
 import com.oracle.svm.core.config.ConfigurationValues;
 import com.oracle.svm.core.graal.GraalConfiguration;
@@ -821,11 +822,9 @@ public class NativeImageGenerator {
                 ImageSingletons.add(RuntimeClassInitializationSupport.class, classInitializationSupport);
                 ClassInitializationFeature.processClassInitializationOptions(classInitializationSupport);
 
-                ImageSingletons.add(TemporaryBuildDirectoryProvider.class, this::tempDirectory);
                 featureHandler.registerFeatures(loader, debug);
                 AfterRegistrationAccessImpl access = new AfterRegistrationAccessImpl(featureHandler, loader, originalMetaAccess, mainEntryPoint, debug);
                 featureHandler.forEachFeature(feature -> feature.afterRegistration(access));
-                setDefaultLibCIfMissing();
                 if (!Pair.<Method, CEntryPointData> empty().equals(access.getMainEntryPoint())) {
                     setAndVerifyMainEntryPoint(access, entryPoints);
                 }
@@ -847,6 +846,8 @@ public class NativeImageGenerator {
                 AnalysisConstantReflectionProvider aConstantReflection = new AnalysisConstantReflectionProvider(aUniverse, originalProviders.getConstantReflection(), classInitializationSupport);
                 WordTypes aWordTypes = new SubstrateWordTypes(aMetaAccess, FrameAccess.getWordKind());
                 HostedSnippetReflectionProvider aSnippetReflection = new HostedSnippetReflectionProvider((SVMHost) aUniverse.hostVM(), aWordTypes);
+
+                prepareLibC();
 
                 if (!(NativeImageOptions.ExitAfterRelocatableImageWrite.getValue() && CAnnotationProcessorCache.Options.UseCAPCache.getValue())) {
                     CCompilerInvoker compilerInvoker = CCompilerInvoker.create(tempDirectory());
@@ -872,10 +873,17 @@ public class NativeImageGenerator {
         }
     }
 
-    private static void setDefaultLibCIfMissing() {
-        if (!ImageSingletons.contains(LibCBase.class)) {
-            ImageSingletons.add(LibCBase.class, new NoLibC());
+    private void prepareLibC() {
+        LibCBase libc;
+        if (SubstrateOptions.UseMuslC.hasBeenSet()) {
+            libc = new MuslLibc();
+        } else if (SubstrateOptions.UseBionicC.hasBeenSet()) {
+            libc = new BionicLibc();
+        } else {
+            libc = new GLibc();
         }
+        libc.prepare(tempDirectory());
+        ImageSingletons.add(LibCBase.class, libc);
     }
 
     private void setAndVerifyMainEntryPoint(AfterRegistrationAccessImpl access, Map<Method, CEntryPointData> entryPoints) {
@@ -1388,15 +1396,17 @@ public class NativeImageGenerator {
          */
         for (AnalysisMethod method : aUniverse.getMethods()) {
             for (int i = 0; i < method.getTypeFlow().getOriginalMethodFlows().getParameters().length; i++) {
-                TypeState state = method.getTypeFlow().getParameterTypeState(bigbang, i);
-                if (state != null) {
+                TypeState parameterState = method.getTypeFlow().getParameterTypeState(bigbang, i);
+                if (parameterState != null) {
                     AnalysisType declaredType = method.getTypeFlow().getOriginalMethodFlows().getParameter(i).getDeclaredType();
                     if (declaredType.isInterface()) {
-                        state = TypeState.forSubtraction(bigbang, state, declaredType.getTypeFlow(bigbang, true).getState());
-                        if (!state.isEmpty()) {
+                        TypeState declaredTypeState = declaredType.getTypeFlow(bigbang, true).getState();
+                        parameterState = TypeState.forSubtraction(bigbang, parameterState, declaredTypeState);
+                        if (!parameterState.isEmpty()) {
                             String methodKey = method.format("%H.%n(%p)");
                             bigbang.getUnsupportedFeatures().addMessage(methodKey, method,
-                                            "Parameter " + i + " of " + methodKey + " has declared type " + declaredType.toJavaName(true) + " which is incompatible with types in state: " + state);
+                                            "Parameter " + i + " of " + methodKey + " has declared type " + declaredType.toJavaName(true) +
+                                                            " with state " + declaredTypeState + " which is incompatible with types in parameter state: " + parameterState);
                         }
                     }
                 }
