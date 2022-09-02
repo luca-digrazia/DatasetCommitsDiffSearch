@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,7 +42,6 @@ import org.graalvm.compiler.core.common.type.StampPair;
 import org.graalvm.compiler.core.common.type.TypeReference;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.graph.Node;
-import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool.RoundingMode;
 import org.graalvm.compiler.nodes.CallTargetNode;
 import org.graalvm.compiler.nodes.CallTargetNode.InvokeKind;
 import org.graalvm.compiler.nodes.ConditionAnchorNode;
@@ -63,7 +62,6 @@ import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.calc.CompareNode;
 import org.graalvm.compiler.nodes.calc.ConditionalNode;
 import org.graalvm.compiler.nodes.calc.IntegerMulHighNode;
-import org.graalvm.compiler.nodes.calc.RoundNode;
 import org.graalvm.compiler.nodes.extended.BoxNode;
 import org.graalvm.compiler.nodes.extended.BranchProbabilityNode;
 import org.graalvm.compiler.nodes.extended.GuardedUnsafeLoadNode;
@@ -78,8 +76,6 @@ import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.Registratio
 import org.graalvm.compiler.nodes.graphbuilderconf.InvocationPlugins.ResolvedJavaSymbol;
 import org.graalvm.compiler.nodes.java.InstanceOfDynamicNode;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
-import org.graalvm.compiler.nodes.spi.LoweringProvider;
-import org.graalvm.compiler.nodes.spi.Replacements;
 import org.graalvm.compiler.nodes.type.StampTool;
 import org.graalvm.compiler.nodes.virtual.EnsureVirtualizedNode;
 import org.graalvm.compiler.phases.util.Providers;
@@ -121,7 +117,7 @@ public class TruffleGraphBuilderPlugins {
         MetaAccessProvider metaAccess = providers.getMetaAccess();
         registerObjectsPlugins(plugins, metaAccess);
         registerOptimizedAssumptionPlugins(plugins, metaAccess, types);
-        registerExactMathPlugins(plugins, providers.getReplacements(), providers.getLowerer(), metaAccess);
+        registerExactMathPlugins(plugins, metaAccess);
         registerGraalCompilerDirectivesPlugins(plugins, metaAccess);
         registerCompilerDirectivesPlugins(plugins, metaAccess, canDelayIntrinsification);
         registerCompilerAssertsPlugins(plugins, metaAccess, canDelayIntrinsification);
@@ -185,9 +181,9 @@ public class TruffleGraphBuilderPlugins {
         r.register1("check", Receiver.class, plugin);
     }
 
-    public static void registerExactMathPlugins(InvocationPlugins plugins, Replacements replacements, LoweringProvider lowerer, MetaAccessProvider metaAccess) {
+    public static void registerExactMathPlugins(InvocationPlugins plugins, MetaAccessProvider metaAccess) {
         final ResolvedJavaType exactMathType = getRuntime().resolveType(metaAccess, "com.oracle.truffle.api.ExactMath");
-        Registration r = new Registration(plugins, new ResolvedJavaSymbol(exactMathType), replacements);
+        Registration r = new Registration(plugins, new ResolvedJavaSymbol(exactMathType));
         for (JavaKind kind : new JavaKind[]{JavaKind.Int, JavaKind.Long}) {
             Class<?> type = kind.toJavaClass();
             r.register2("multiplyHigh", type, type, new InvocationPlugin() {
@@ -201,15 +197,6 @@ public class TruffleGraphBuilderPlugins {
                 @Override
                 public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode x, ValueNode y) {
                     b.addPush(kind, new UnsignedMulHighNode(x, y));
-                    return true;
-                }
-            });
-        }
-        for (JavaKind kind : new JavaKind[]{JavaKind.Float, JavaKind.Double}) {
-            r.registerConditional1(lowerer.supportsRounding(), "truncate", kind.toJavaClass(), new InvocationPlugin() {
-                @Override
-                public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode x) {
-                    b.addPush(kind, new RoundNode(x, RoundingMode.TRUNCATE));
                     return true;
                 }
             });
@@ -686,18 +673,15 @@ public class TruffleGraphBuilderPlugins {
         public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode object, ValueNode offset, ValueNode condition, ValueNode location) {
             if (location.isConstant()) {
                 LocationIdentity locationIdentity;
-                boolean forceLocation;
                 if (location.isNullConstant()) {
                     locationIdentity = LocationIdentity.any();
-                    forceLocation = false;
                 } else {
                     locationIdentity = ObjectLocationIdentity.create(location.asJavaConstant());
-                    forceLocation = true;
                 }
                 LogicNode compare = b.add(CompareNode.createCompareNode(b.getConstantReflection(), b.getMetaAccess(), b.getOptions(), null, CanonicalCondition.EQ, condition,
                                 ConstantNode.forBoolean(true, object.graph()), NodeView.DEFAULT));
                 ConditionAnchorNode anchor = b.add(new ConditionAnchorNode(compare));
-                b.addPush(returnKind, b.add(new GuardedUnsafeLoadNode(b.addNonNullCast(object), offset, returnKind, locationIdentity, anchor, forceLocation)));
+                b.addPush(returnKind, b.add(new GuardedUnsafeLoadNode(b.addNonNullCast(object), offset, returnKind, locationIdentity, anchor)));
                 return true;
             } else if (canDelayIntrinsification) {
                 return false;
@@ -726,18 +710,16 @@ public class TruffleGraphBuilderPlugins {
             ValueNode locationArgument = location;
             if (locationArgument.isConstant()) {
                 LocationIdentity locationIdentity;
-                boolean forceLocation;
+                boolean forceAnyLocation = false;
                 if (locationArgument.isNullConstant()) {
                     locationIdentity = LocationIdentity.any();
-                    forceLocation = false;
                 } else if (locationArgument.asJavaConstant().equals(anyConstant)) {
                     locationIdentity = LocationIdentity.any();
-                    forceLocation = true;
+                    forceAnyLocation = true;
                 } else {
                     locationIdentity = ObjectLocationIdentity.create(locationArgument.asJavaConstant());
-                    forceLocation = true;
                 }
-                b.add(new RawStoreNode(object, offset, value, kind, locationIdentity, true, null, forceLocation));
+                b.add(new RawStoreNode(object, offset, value, kind, locationIdentity, true, null, forceAnyLocation));
                 return true;
             } else if (canDelayIntrinsification) {
                 return false;
