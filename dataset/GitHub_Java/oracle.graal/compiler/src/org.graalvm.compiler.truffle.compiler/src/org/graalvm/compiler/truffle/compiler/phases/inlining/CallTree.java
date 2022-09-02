@@ -36,8 +36,8 @@ import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
 
 public class CallTree extends Graph {
 
-    final GraphManager graphManager;
     private final CallNode root;
+    final GraphManager graphManager;
     int expanded = 1;
     int inlined = 1;
     TruffleCompilerRuntime runtime = TruffleCompilerRuntime.getRuntime();
