@@ -80,14 +80,11 @@ class SubstrateJVM {
         typeRepo = new JfrTypeRepository();
         methodRepo = new JfrMethodRepository(typeRepo, symbolRepo);
         stackTraceRepo = new JfrStackTraceRepository(methodRepo);
-        JfrFrameTypeSerializer frameTypeSerializer = new JfrFrameTypeSerializer();
-        // NOTE: The ordering of repositories in the array dictates the order in which the repositories
-        // (constant pools) will be written in the recording.
-        repositories = new JfrRepository[]{frameTypeSerializer, stringRepo, typeRepo, methodRepo, stackTraceRepo, symbolRepo};
+        repositories = new JfrRepository[]{stringRepo, typeRepo, symbolRepo, methodRepo, stackTraceRepo};
 
         threadLocal = new JfrThreadLocal();
         globalMemory = new JfrGlobalMemory();
-        unlockedChunkWriter = new JfrChunkWriter(globalMemory);
+        unlockedChunkWriter = new JfrChunkWriter();
         recorderThread = new JfrRecorderThread(globalMemory, unlockedChunkWriter);
 
         initialized = false;
