@@ -124,10 +124,10 @@ import com.oracle.truffle.espresso.runtime.EspressoProperties;
 import com.oracle.truffle.espresso.runtime.JavaVersion;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.substitutions.CallableFromNative;
 import com.oracle.truffle.espresso.substitutions.GenerateNativeEnv;
 import com.oracle.truffle.espresso.substitutions.InjectMeta;
 import com.oracle.truffle.espresso.substitutions.InjectProfile;
+import com.oracle.truffle.espresso.substitutions.IntrinsicSubstitutor;
 import com.oracle.truffle.espresso.substitutions.JavaType;
 import com.oracle.truffle.espresso.substitutions.SubstitutionProfiler;
 import com.oracle.truffle.espresso.substitutions.Target_java_lang_Class;
@@ -370,11 +370,9 @@ public final class VM extends NativeEnv implements ContextAccess {
         return jvmti;
     }
 
-    private final static List<CallableFromNative.Factory> VM_IMPL_FACTORIES = VmImplCollector.getInstances(CallableFromNative.Factory.class);
-
     @Override
-    protected List<CallableFromNative.Factory> getCollector() {
-        return VM_IMPL_FACTORIES;
+    protected List<IntrinsicSubstitutor.Factory> getCollector() {
+        return VMCollector.getCollector();
     }
 
     public static VM create(JniEnv jniEnv) {
