@@ -24,11 +24,9 @@
  */
 package org.graalvm.libgraal;
 
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotSpeculationLog;
 import jdk.vm.ci.services.Services;
 
 /**
@@ -42,7 +40,6 @@ public class LibGraal {
     static final Method runtimeIsCurrentThreadAttached;
     static final Method runtimeAttachCurrentThread;
     static final Method runtimeDetachCurrentThread;
-    static final Method speculationLogGetFailedSpeculationsAddress;
 
     static {
         Method unhand = null;
@@ -51,7 +48,6 @@ public class LibGraal {
         Method isCurrentThreadAttached = null;
         Method attachCurrentThread = null;
         Method detachCurrentThread = null;
-        Method getFailedSpeculationsAddress = null;
         boolean firstFound = false;
         try {
             Class<?> runtimeClass = HotSpotJVMCIRuntime.class;
@@ -62,7 +58,6 @@ public class LibGraal {
             isCurrentThreadAttached = runtimeClass.getDeclaredMethod("isCurrentThreadAttached");
             attachCurrentThread = runtimeClass.getDeclaredMethod("attachCurrentThread", Boolean.TYPE);
             detachCurrentThread = runtimeClass.getDeclaredMethod("detachCurrentThread");
-            getFailedSpeculationsAddress = HotSpotSpeculationLog.class.getDeclaredMethod("getFailedSpeculationsAddress");
         } catch (Exception e) {
             // If the very first method is unavailable assume nothing is available. Otherwise only
             // some are missing so complain about it.
@@ -77,15 +72,10 @@ public class LibGraal {
         runtimeIsCurrentThreadAttached = isCurrentThreadAttached;
         runtimeAttachCurrentThread = attachCurrentThread;
         runtimeDetachCurrentThread = detachCurrentThread;
-        speculationLogGetFailedSpeculationsAddress = getFailedSpeculationsAddress;
     }
 
     public static boolean isAvailable() {
         return inLibGraal() || isolate != 0L;
-    }
-
-    public static boolean isSupported() {
-        return speculationLogGetFailedSpeculationsAddress != null;
     }
 
     public static boolean inLibGraal() {
@@ -184,15 +174,4 @@ public class LibGraal {
     }
 
     static native long getCurrentIsolateThread(long iso);
-
-    public static long getFailedSpeculationsAddress(HotSpotSpeculationLog log) {
-        if (speculationLogGetFailedSpeculationsAddress != null) {
-            try {
-                return (long) speculationLogGetFailedSpeculationsAddress.invoke(log);
-            } catch (IllegalAccessException | InvocationTargetException e) {
-                e.printStackTrace();
-            }
-        }
-        throw new UnsupportedOperationException();
-    }
 }
