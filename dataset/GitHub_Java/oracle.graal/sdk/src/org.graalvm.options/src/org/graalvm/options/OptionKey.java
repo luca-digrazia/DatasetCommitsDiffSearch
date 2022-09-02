@@ -40,6 +40,8 @@
  */
 package org.graalvm.options;
 
+import org.graalvm.compiler.options.Option;
+
 import java.util.Objects;
 
 /**
