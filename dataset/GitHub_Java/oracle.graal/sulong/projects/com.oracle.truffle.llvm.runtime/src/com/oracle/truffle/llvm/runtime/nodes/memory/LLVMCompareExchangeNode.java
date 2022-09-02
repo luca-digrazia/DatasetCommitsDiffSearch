@@ -45,6 +45,7 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMMemory.CMPXCHGI8;
 import com.oracle.truffle.llvm.runtime.memory.LLVMStack;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
+import com.oracle.truffle.llvm.runtime.nodes.func.LLVMFunctionStartNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.LLVMCompareExchangeNodeGen.LLVMCMPXCHInternalNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI16LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI16LoadNodeGen;
@@ -74,7 +75,9 @@ public abstract class LLVMCompareExchangeNode extends LLVMExpressionNode {
 
     @Child private LLVMCMPXCHInternalNode cmpxch;
 
-    public LLVMCompareExchangeNode(AggregateType returnType, DataLayout dataLayout) {
+    public LLVMCompareExchangeNode(AggregateType returnType) {
+        LLVMFunctionStartNode startNode = (LLVMFunctionStartNode) getRootNode();
+        DataLayout dataLayout = startNode.getDataSpecConverter();
         int resultSize = returnType.getSize(dataLayout);
         long secondValueOffset = returnType.getOffsetOf(1, dataLayout);
         this.cmpxch = LLVMCMPXCHInternalNodeGen.create(resultSize, secondValueOffset);

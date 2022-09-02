@@ -95,6 +95,10 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
         public abstract CallTarget load(LLVMContext context, Source source);
     }
 
+    public static ContextReference<LLVMContext> getLLVMContextReference() {
+        return getCurrentLanguage(LLVMLanguage.class).getContextReference();
+    }
+
     public List<ContextExtension> getLanguageContextExtension() {
         return contextExtensions;
     }
@@ -117,16 +121,6 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
         return null;
     }
 
-    /**
-     * Do not use this on fast-path.
-     */
-    public static LLVMContext getContext() {
-        return getCurrentContext(LLVMLanguage.class);
-    }
-
-    /**
-     * Do not use this on fast-path.
-     */
     public static LLVMLanguage getLanguage() {
         return getCurrentLanguage(LLVMLanguage.class);
     }
@@ -194,7 +188,8 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     @Override
     protected CallTarget parse(ParsingRequest request) {
         Source source = request.getSource();
-        return getCapability(Loader.class).load(getContext(), source);
+        LLVMContext context = getContextReference().get();
+        return getCapability(Loader.class).load(context, source);
     }
 
     @Override
