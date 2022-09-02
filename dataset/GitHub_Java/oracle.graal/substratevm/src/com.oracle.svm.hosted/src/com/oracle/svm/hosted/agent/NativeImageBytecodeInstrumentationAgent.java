@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,17 +24,17 @@
  */
 package com.oracle.svm.hosted.agent;
 
-import static jdk.internal.org.objectweb.asm.ClassReader.EXPAND_FRAMES;
-import static jdk.internal.org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
-import static jdk.internal.org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
+import static org.objectweb.asm.ClassReader.EXPAND_FRAMES;
+import static org.objectweb.asm.ClassWriter.COMPUTE_FRAMES;
+import static org.objectweb.asm.ClassWriter.COMPUTE_MAXS;
 
 import java.lang.instrument.Instrumentation;
 
+import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassWriter;
+
 import com.oracle.svm.hosted.agent.jdk8.lambda.LambdaMetaFactoryRewriteVisitor;
 import com.oracle.svm.util.AgentSupport;
-
-import jdk.internal.org.objectweb.asm.ClassReader;
-import jdk.internal.org.objectweb.asm.ClassWriter;
 
 /*
  * Note: no java.lang.invoke.LambdaMetafactory (e.g., Java lambdas) in this file.
@@ -42,31 +42,23 @@ import jdk.internal.org.objectweb.asm.ClassWriter;
 @SuppressWarnings({"Anonymous2MethodRef", "Convert2Lambda"})
 public class NativeImageBytecodeInstrumentationAgent {
 
-    private static TracingAdvisor advisor;
-
     @SuppressWarnings({"unused", "Convert2Lambda"})
     public static void premain(String agentArgs, Instrumentation inst) {
         /* In 11+ we modify the JDK */
         if (getJavaVersion() == 8) {
             inst.addTransformer(AgentSupport.createClassInstrumentationTransformer(NativeImageBytecodeInstrumentationAgent::applyRewriteLambdasTransformation));
         }
-        if (agentArgs != null && !agentArgs.isEmpty()) {
-            advisor = new TracingAdvisor(agentArgs);
+        if ("traceInitialization".equals(agentArgs)) {
             inst.addTransformer(AgentSupport.createClassInstrumentationTransformer(NativeImageBytecodeInstrumentationAgent::applyInitializationTrackingTransformation));
         }
     }
 
-    private static byte[] applyInitializationTrackingTransformation(@SuppressWarnings("unused") String moduleName, @SuppressWarnings("unused") ClassLoader loader, String className,
-                    byte[] classfileBuffer) {
-        if (advisor.shouldTraceClassInitialization(className.replace('/', '.'))) {
-            ClassReader reader = new ClassReader(classfileBuffer);
-            ClassWriter writer = new ClassWriter(reader, COMPUTE_FRAMES);
-            ClinitGenerationVisitor visitor = new ClinitGenerationVisitor(writer);
-            reader.accept(visitor, 0);
-            return writer.toByteArray();
-        } else {
-            return classfileBuffer;
-        }
+    private static byte[] applyInitializationTrackingTransformation(String moduleName, ClassLoader loader, String className, byte[] classfileBuffer) {
+        ClassReader reader = new ClassReader(classfileBuffer);
+        ClassWriter writer = new ClassWriter(reader, COMPUTE_FRAMES);
+        ClassInitializationTrackingVisitor visitor = new ClassInitializationTrackingVisitor(moduleName, loader, className, writer);
+        reader.accept(visitor, 0);
+        return writer.toByteArray();
     }
 
     @SuppressWarnings("unused")
@@ -86,10 +78,6 @@ public class NativeImageBytecodeInstrumentationAgent {
             int dot = version.indexOf(".");
             if (dot != -1) {
                 version = version.substring(0, dot);
-            }
-            int dash = version.indexOf("-");
-            if (dash != -1) {
-                version = version.substring(0, dash);
             }
         }
         return Integer.parseInt(version);
