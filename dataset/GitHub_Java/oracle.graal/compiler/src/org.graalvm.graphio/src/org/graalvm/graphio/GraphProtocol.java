@@ -474,11 +474,10 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
             writeByte(POOL_NULL);
             return;
         }
-        Object[] found = new Object[1];
-        int type = findPoolType(object, found);
+        int type = findPoolType(object, null);
         Character id = constantPool.get(object, type);
         if (id == null) {
-            addPoolEntry(object, type, found);
+            addPoolEntry(object);
         } else {
             writeByte(type);
             writeShort(id.charValue());
@@ -648,8 +647,10 @@ abstract class GraphProtocol<Graph, Node, NodeClass, Edges, Block, ResolvedJavaM
     }
 
     @SuppressWarnings("unchecked")
-    private void addPoolEntry(Object obj, int type, Object[] found) throws IOException {
+    private void addPoolEntry(Object obj) throws IOException {
         Object object = obj;
+        Object[] found = {null};
+        int type = findPoolType(object, found);
         char index = constantPool.add(object, type);
         writeByte(POOL_NEW);
         writeShort(index);
