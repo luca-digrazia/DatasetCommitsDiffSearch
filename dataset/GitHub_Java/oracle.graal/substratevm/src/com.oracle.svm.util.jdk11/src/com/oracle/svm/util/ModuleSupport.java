@@ -25,11 +25,9 @@
 package com.oracle.svm.util;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.module.ModuleFinder;
 import java.lang.module.ModuleReader;
 import java.lang.module.ModuleReference;
-import java.lang.module.ResolvedModule;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -39,8 +37,6 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.ResourceBundle;
 import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import jdk.internal.module.Modules;
@@ -134,56 +130,7 @@ public final class ModuleSupport {
         }
     }
 
-    /**
-     * Exports and opens a single package {@code pkg} in the module named {@code name} to all
-     * unnamed modules.
-     */
-    @SuppressWarnings("unused")
-    public static void exportAndOpenPackageToUnnamed(String name, String pkg, boolean optional) {
-        Optional<Module> value = ModuleLayer.boot().findModule(name);
-        if (value.isEmpty()) {
-            if (!optional) {
-                throw new NoSuchElementException(name);
-            }
-            return;
-        }
-        Module module = value.get();
-        Modules.addExportsToAllUnnamed(module, pkg);
-        Modules.addOpensToAllUnnamed(module, pkg);
-    }
-
     public static String getModuleName(Class<?> clazz) {
         return clazz.getModule().getName();
-    }
-
-    /**
-     * In the modules of the boot module layer, filters all resources that match the given
-     * predicate, and calls the operation on the matched resources. This is a temporary solution
-     * until we fully support modules in native-image
-     *
-     * @param resourceNameFilter predicate applied to all resource names in the module
-     * @param operation a function to process matched resources, it receives the name of the
-     *            resources as the first argument and an open stream as the second argument
-     */
-    @SuppressWarnings("unused")
-    public static void findResourcesInModules(Predicate<String> resourceNameFilter, BiConsumer<String, InputStream> operation) throws IOException {
-        for (ResolvedModule resolvedModule : ModuleLayer.boot().configuration().modules()) {
-            ModuleReference modRef = resolvedModule.reference();
-            try (ModuleReader moduleReader = modRef.open()) {
-                final List<String> resources = moduleReader.list()
-                                .filter(resourceNameFilter)
-                                .collect(Collectors.toList());
-
-                for (String resName : resources) {
-                    Optional<InputStream> content = moduleReader.open(resName);
-                    if (content.isEmpty()) {
-                        continue;
-                    }
-                    InputStream is = content.get();
-                    operation.accept(resName, is);
-                    is.close();
-                }
-            }
-        }
     }
 }
