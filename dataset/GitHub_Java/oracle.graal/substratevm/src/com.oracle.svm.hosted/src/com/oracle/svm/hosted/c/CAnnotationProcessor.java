@@ -33,7 +33,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.util.InterruptImageBuilding;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
@@ -168,7 +167,7 @@ public class CAnnotationProcessor {
         CInterfaceError error = new CInterfaceError(
                         String.format("Error compiling query code (in %s). Compiler command '%s' output included error: %s",
                                         queryFile,
-                                        SubstrateUtil.getShellCommandString(current.command()),
+                                        String.join(" ", current.command()),
                                         line),
                         elements);
         nativeLibs.getErrors().add(error);

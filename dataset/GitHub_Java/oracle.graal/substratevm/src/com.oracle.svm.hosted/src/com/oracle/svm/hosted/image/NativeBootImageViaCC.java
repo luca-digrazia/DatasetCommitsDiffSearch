@@ -48,7 +48,6 @@ import com.oracle.objectfile.macho.MachOSymtab;
 import com.oracle.svm.core.LinkerInvocation;
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.c.libc.LibCBase;
 import com.oracle.svm.core.option.OptionUtils;
 import com.oracle.svm.core.util.UserError;
@@ -56,6 +55,7 @@ import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.FeatureImpl.BeforeImageWriteAccessImpl;
 import com.oracle.svm.hosted.NativeImageOptions;
 import com.oracle.svm.hosted.c.NativeLibraries;
+import com.oracle.svm.hosted.c.codegen.CCompilerInvoker;
 import com.oracle.svm.hosted.c.util.FileUtils;
 import com.oracle.svm.hosted.meta.HostedMetaAccess;
 import com.oracle.svm.hosted.meta.HostedMethod;
@@ -357,8 +357,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             }
             try (DebugContext.Scope s = debug.scope("InvokeCC")) {
                 List<String> cmd = inv.getCommand();
-                String commandLine = SubstrateUtil.getShellCommandString(cmd);
-                debug.log("Using CompilerCommand: %s", commandLine);
+                String commandLine = CCompilerInvoker.debugLogCompilerCommand(debug, cmd).toString().trim();
 
                 if (NativeImageOptions.MachODebugInfoTesting.getValue()) {
                     System.out.printf("Testing Mach-O debuginfo generation - SKIP %s%n", commandLine);
