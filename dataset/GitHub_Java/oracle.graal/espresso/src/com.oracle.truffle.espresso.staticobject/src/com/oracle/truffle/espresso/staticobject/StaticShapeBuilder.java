@@ -50,7 +50,7 @@ public final class StaticShapeBuilder {
 
     public <T> StaticShape<T> build(StaticShape<T> parentShape) {
         Objects.requireNonNull(parentShape);
-        ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(parentShape);
+        ShapeGenerator<T> sg = ShapeGenerator.getShapeGenerator(parentShape.getStorageClass().getSuperclass(), parentShape.getFactoryInterface());
         return build(sg, parentShape);
 
     }

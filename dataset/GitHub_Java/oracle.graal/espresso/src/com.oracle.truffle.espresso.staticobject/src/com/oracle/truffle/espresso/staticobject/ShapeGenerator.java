@@ -74,10 +74,7 @@ abstract class ShapeGenerator<T> {
 
     abstract StaticShape<T> generateShape(StaticShape<T> parentShape, Collection<ExtendedProperty> extendedProperties);
 
-    static <T> ShapeGenerator<T> getShapeGenerator(StaticShape<T> parentShape) {
-        return getShapeGenerator(parentShape.getStorageClass().getSuperclass(), parentShape.getFactoryInterface());
-    }
-
+    @SuppressWarnings("unchecked")
     static <T> ShapeGenerator<T> getShapeGenerator(Class<?> storageSuperClass, Class<T> storageFactoryInterface) {
         return ArrayBasedShapeGenerator.getShapeGenerator(storageSuperClass, storageFactoryInterface);
     }

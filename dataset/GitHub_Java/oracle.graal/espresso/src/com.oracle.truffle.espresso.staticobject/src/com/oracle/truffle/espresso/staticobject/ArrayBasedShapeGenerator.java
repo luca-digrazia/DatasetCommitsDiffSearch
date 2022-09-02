@@ -67,9 +67,6 @@ final class ArrayBasedShapeGenerator<T> extends ShapeGenerator<T> {
     private static final int UNINITIALIZED_NATIVE_OFFSET = -1;
     private static final ConcurrentHashMap<Pair<Class<?>, Class<?>>, ArrayBasedShapeGenerator<?>> generatorCache = new ConcurrentHashMap<>();
 
-    private final Class<?> generatedStorageClass;
-    private final Class<? extends T> generatedFactoryClass;
-
     @CompilationFinal private int byteArrayOffset;
     @CompilationFinal private int objectArrayOffset;
     @CompilationFinal private int shapeOffset;
@@ -104,8 +101,7 @@ final class ArrayBasedShapeGenerator<T> extends ShapeGenerator<T> {
     }
 
     private ArrayBasedShapeGenerator(Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass, int byteArrayOffset, int objectArrayOffset, int shapeOffset) {
-        this.generatedStorageClass = generatedStorageClass;
-        this.generatedFactoryClass = generatedFactoryClass;
+        super(generatedStorageClass, generatedFactoryClass);
         this.byteArrayOffset = byteArrayOffset;
         this.objectArrayOffset = objectArrayOffset;
         this.shapeOffset = shapeOffset;
