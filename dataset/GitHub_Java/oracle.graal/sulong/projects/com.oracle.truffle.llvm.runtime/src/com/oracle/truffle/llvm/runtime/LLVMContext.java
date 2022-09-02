@@ -100,7 +100,6 @@ public final class LLVMContext {
     protected final ArrayList<LLVMPointer> globalsNonPointerStore = new ArrayList<>();
     protected final EconomicMap<Integer, LLVMPointer> globalsReadOnlyStore = EconomicMap.create();
     private final Object globalsStoreLock = new Object();
-    public final Object atomicInstructionsLock = new Object();
 
     private final List<LLVMThread> runningThreads = new ArrayList<>();
     @CompilationFinal private LLVMThreadingStack threadingStack;
@@ -672,15 +671,7 @@ public final class LLVMContext {
             }
             return symbolFinalStorage[id][index];
         } else {
-            try {
-                return symbolDynamicStorage[id][index];
-            } catch (ArrayIndexOutOfBoundsException e) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                int idLength = symbolDynamicStorage[id].length;
-                throw new IllegalStateException("id: " + id + " index: " + index + " id length: " + idLength +
-                                " symbol name: " + symbol.getName() + " symbol kind: " + symbol.getKind() +
-                                " symbol class: " + symbol.getClass(), e);
-            }
+            return symbolDynamicStorage[id][index];
         }
     }
 

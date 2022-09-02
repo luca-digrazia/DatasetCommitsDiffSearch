@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2021, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -29,67 +29,114 @@
  */
 package com.oracle.truffle.llvm.runtime.nodes.vars;
 
-import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.CachedContext;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.VirtualFrame;
+import com.oracle.truffle.api.memory.ByteArraySupport;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
+import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMLanguage;
+import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMStatementNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI64StoreNode.LLVMI64OptimizedStoreNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI8StoreNode.LLVMI8OptimizedStoreNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMOptimizedStoreNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI64StoreNode.LLVMI64OffsetStoreNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMI8StoreNode.LLVMI8OffsetStoreNode;
+import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMOffsetStoreNode;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@NodeChild(type = LLVMExpressionNode.class)
 public abstract class AggregateLiteralInPlaceNode extends LLVMStatementNode {
 
-    @Children private final LLVMOptimizedStoreNode[] stores;
+    @Children private final LLVMOffsetStoreNode[] stores;
 
     @CompilationFinal(dimensions = 1) private final byte[] data;
     @CompilationFinal(dimensions = 1) private final int[] offsets;
     @CompilationFinal(dimensions = 1) private final int[] sizes;
+    @CompilationFinal(dimensions = 1) private final int[] bufferOffsets;
+    @CompilationFinal(dimensions = 1) private final LLVMGlobal[] descriptors;
 
-    public AggregateLiteralInPlaceNode(byte[] data, LLVMOptimizedStoreNode[] stores, int[] offsets, int[] sizes) {
+    private static final ByteArraySupport byteSupport = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN ? ByteArraySupport.bigEndian() : ByteArraySupport.littleEndian();
+
+    /**
+     * This node initializes a block of memory with a combination of raw bytes and explicit store
+     * nodes. When executed, it transfers all bytes from {@code data} to the target (using i8 and
+     * i64 stores as appropriate), except for those covered by a node in {@code stores}. Every store
+     * node has a corresponding entry in {@code offsets} and {@sizes}.
+     */
+    public AggregateLiteralInPlaceNode(byte[] data, LLVMOffsetStoreNode[] stores, int[] offsets, int[] sizes, int[] bufferOffsets, LLVMGlobal[] descriptors) {
         assert offsets.length == stores.length + 1 && stores.length == sizes.length;
-        assert offsets[offsets.length - 1] == data.length;
+        assert offsets[offsets.length - 1] == data.length : "offsets is expected to have a trailing entry with the overall size";
+        assert bufferOffsets.length == descriptors.length;
         this.data = data;
         this.stores = stores;
         this.sizes = sizes;
         this.offsets = offsets;
+        this.bufferOffsets = bufferOffsets;
+        this.descriptors = descriptors;
+    }
+
+    @Specialization
+    protected void initialize(VirtualFrame frame,
+                    @CachedContext(LLVMLanguage.class) LLVMContext context,
+                    @Cached LLVMI8OffsetStoreNode storeI8,
+                    @Cached LLVMI64OffsetStoreNode storeI64) {
+        writePrimitives(context, storeI8, storeI64);
+        writeObjects(frame, context);
+    }
+
+    private void writePrimitives(LLVMContext context, LLVMI8OffsetStoreNode storeI8, LLVMI64OffsetStoreNode storeI64) {
+        int offset = 0;
+        int nextStore = 0;
+        for (int i = 0; i < descriptors.length; i++) {
+            LLVMPointer address = context.getSymbol(descriptors[i]);
+            int bufferOffset = bufferOffsets[i];
+            int bufferEnd = i == descriptors.length - 1 ? data.length : bufferOffsets[i + 1];
+            while (offset < bufferEnd) {
+                int nextStoreOffset = Math.min(offsets[nextStore], bufferEnd);
+                offset = initializePrimitiveBlock(address, storeI8, storeI64, offset, nextStoreOffset, bufferOffset);
+                if (offset < bufferEnd && nextStore < stores.length) {
+                    offset += sizes[nextStore++];
+                }
+            }
+        }
     }
 
     @ExplodeLoop
-    @Specialization
-    protected void initialize(VirtualFrame frame, LLVMPointer address,
-                    @Cached LLVMI8OptimizedStoreNode storeI8,
-                    @Cached LLVMI64OptimizedStoreNode storeI64) {
+    private void writeObjects(VirtualFrame frame, LLVMContext context) {
         int offset = 0;
         int nextStore = 0;
-        ByteBuffer view = ByteBuffer.wrap(data);
-        view.order(ByteOrder.nativeOrder());
-        while (offset < data.length) {
-            int nextStoreOffset = offsets[nextStore];
-            while (offset < nextStoreOffset && ((offset & 0x7) != 0)) {
-                storeI8.executeWithTarget(address, offset, data[offset]);
-                offset++;
-            }
-            while (offset < (nextStoreOffset - 7)) {
-                storeI64.executeWithTarget(address, offset, view.getLong(offset));
-                offset += Long.BYTES;
-            }
-            while (offset < nextStoreOffset) {
-                storeI8.executeWithTarget(address, offset, data[offset]);
-                offset++;
-            }
-            if (nextStore < stores.length) {
-                stores[nextStore].executeWithTarget(frame, address, nextStoreOffset);
-                offset += sizes[nextStore++];
+        for (int i = 0; i < descriptors.length; i++) {
+            LLVMPointer address = context.getSymbol(descriptors[i]);
+            int bufferOffset = bufferOffsets[i];
+            int bufferEnd = i == descriptors.length - 1 ? data.length : bufferOffsets[i + 1];
+            while (offset < bufferEnd) {
+                offset = Math.min(offsets[nextStore], bufferEnd);
+                if (offset < bufferEnd && nextStore < stores.length) {
+                    stores[nextStore].executeWithTarget(frame, address, offset - bufferOffset);
+                    offset += sizes[nextStore++];
+                }
             }
         }
+    }
+
+    private int initializePrimitiveBlock(LLVMPointer address, LLVMI8OffsetStoreNode storeI8, LLVMI64OffsetStoreNode storeI64, int startOffset, int nextStoreOffset, int bufferOffset) {
+        int offset = startOffset;
+        // This loop ensures that the target offset is aligned for the 64-bit write loop below.
+        // (the source offset might not be aligned)
+        while (offset < nextStoreOffset && (((offset - bufferOffset) & 0x7) != 0)) {
+            storeI8.executeWithTarget(address, offset - bufferOffset, data[offset]);
+            offset++;
+        }
+        while (offset < (nextStoreOffset - 7)) {
+            storeI64.executeWithTarget(address, offset - bufferOffset, byteSupport.getLong(data, offset));
+            offset += Long.BYTES;
+        }
+        while (offset < nextStoreOffset) {
+            storeI8.executeWithTarget(address, offset - bufferOffset, data[offset]);
+            offset++;
+        }
+        return offset;
     }
 }
