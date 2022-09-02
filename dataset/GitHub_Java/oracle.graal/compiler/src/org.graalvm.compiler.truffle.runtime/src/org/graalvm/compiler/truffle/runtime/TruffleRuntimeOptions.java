@@ -86,7 +86,6 @@ import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.Trace
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceSplitting;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceSplittingSummary;
 import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceStackTraceLimit;
-import static org.graalvm.compiler.truffle.options.PolyglotCompilerOptions.TraceTransferToInterpreter;
 
 /**
  * Helpers to read and overwrite values of Truffle runtime options. The options themselves are
@@ -304,7 +303,6 @@ public final class TruffleRuntimeOptions {
         result.put(TraceStackTraceLimit, SharedTruffleRuntimeOptions.TraceTruffleStackTraceLimit);
         result.put(CompilationStatistics, SharedTruffleRuntimeOptions.TruffleCompilationStatistics);
         result.put(CompilationStatisticDetails, SharedTruffleRuntimeOptions.TruffleCompilationStatisticDetails);
-        result.put(TraceTransferToInterpreter, SharedTruffleRuntimeOptions.TraceTruffleTransferToInterpreter);
 
         result.put(TraceInlining, SharedTruffleRuntimeOptions.TraceTruffleInlining);
         result.put(TraceSplitting, SharedTruffleRuntimeOptions.TraceTruffleSplitting);
