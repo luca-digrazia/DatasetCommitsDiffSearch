@@ -935,7 +935,7 @@ final class PolyglotLanguageContext implements PolyglotImpl.VMObject {
             // allowed to be passed freely
             return value;
         } else if (HostObject.isInstance(value)) {
-            return HostObject.withContext(value, this);
+            return ((HostObject) value).withContext(this);
         } else if (PolyglotProxy.isProxyGuestObject(value)) {
             return value;
         } else if (valueContext == null) {
