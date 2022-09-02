@@ -33,6 +33,7 @@ import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.genscavenge.ChunkedImageHeapAllocator.AlignedChunk;
 import com.oracle.svm.core.genscavenge.ChunkedImageHeapAllocator.Chunk;
 import com.oracle.svm.core.genscavenge.ChunkedImageHeapAllocator.UnalignedChunk;
+import com.oracle.svm.core.image.AbstractImageHeapLayouter;
 import com.oracle.svm.core.image.ImageHeap;
 import com.oracle.svm.core.image.ImageHeapLayoutInfo;
 import com.oracle.svm.core.image.ImageHeapObject;
@@ -71,10 +72,10 @@ public class ChunkedImageHeapLayouter extends AbstractImageHeapLayouter<ChunkedI
         for (ChunkedImageHeapPartition partition : getPartitions()) {
             partition.layout(allocator);
         }
-        return populateInfoObjects(imageHeap.countDynamicHubs());
+        return populateInfoObjects();
     }
 
-    private ImageHeapLayoutInfo populateInfoObjects(int dynamicHubCount) {
+    private ImageHeapLayoutInfo populateInfoObjects() {
         // Determine writable start boundary from chunks: a chunk that contains writable objects
         // must also have a writable card table
         long writableBegin = getWritablePrimitive().getStartOffset();
@@ -96,7 +97,7 @@ public class ChunkedImageHeapLayouter extends AbstractImageHeapLayouter<ChunkedI
         heapInfo.initialize(getReadOnlyPrimitive().firstObject, getReadOnlyPrimitive().lastObject, getReadOnlyReference().firstObject, getReadOnlyReference().lastObject,
                         getReadOnlyRelocatable().firstObject, getReadOnlyRelocatable().lastObject, getWritablePrimitive().firstObject, getWritablePrimitive().lastObject,
                         getWritableReference().firstObject, getWritableReference().lastObject, getWritableHuge().firstObject, getWritableHuge().lastObject,
-                        getReadOnlyHuge().firstObject, getReadOnlyHuge().lastObject, writableBegin, firstWritableUnalignedChunk, dynamicHubCount);
+                        getReadOnlyHuge().firstObject, getReadOnlyHuge().lastObject, writableBegin, firstWritableUnalignedChunk);
 
         long writableEnd = getWritableHuge().getStartOffset() + getWritableHuge().getSize();
         long writableSize = writableEnd - writableBegin;
@@ -133,7 +134,7 @@ public class ChunkedImageHeapLayouter extends AbstractImageHeapLayouter<ChunkedI
                 assert aligned.isFinished();
                 writer.initializeAlignedChunk(chunkPosition, current.getTopOffset(), current.getEndOffset(), offsetToPrevious, offsetToNext);
                 for (ImageHeapObject obj : aligned.getObjects()) {
-                    long offsetInChunk = obj.getOffset() - chunkPosition;
+                    long offsetInChunk = obj.getOffsetInPartition() + obj.getPartition().getStartOffset() - chunkPosition;
                     long endOffsetInChunk = offsetInChunk + obj.getSize();
                     writer.insertIntoAlignedChunkFirstObjectTable(chunkPosition, offsetInChunk, endOffsetInChunk);
                 }

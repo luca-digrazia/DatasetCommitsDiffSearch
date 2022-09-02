@@ -26,7 +26,6 @@ package com.oracle.svm.core.genscavenge;
 
 import java.nio.ByteBuffer;
 
-import org.graalvm.compiler.word.Word;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.WordFactory;
 
@@ -37,21 +36,15 @@ import sun.nio.ch.DirectBuffer;
 /** Chunk writer that uses the same methods as memory management during image runtime. */
 public class RuntimeImageHeapChunkWriter implements ImageHeapChunkWriter {
     private final Pointer heapBegin;
-    private final Word layoutToBufferOffsetAddend;
 
-    RuntimeImageHeapChunkWriter(ByteBuffer buffer, long layoutToBufferOffsetAddend) {
+    RuntimeImageHeapChunkWriter(ByteBuffer buffer) {
         DirectBuffer direct = (DirectBuffer) buffer; // required from caller
         this.heapBegin = WordFactory.pointer(direct.address());
-        this.layoutToBufferOffsetAddend = WordFactory.signed(layoutToBufferOffsetAddend);
-    }
-
-    private Pointer getChunkPointerInBuffer(int chunkPosition) {
-        return heapBegin.add(chunkPosition).add(layoutToBufferOffsetAddend);
     }
 
     @Override
     public void initializeAlignedChunk(int chunkPosition, long topOffset, long endOffset, long offsetToPreviousChunk, long offsetToNextChunk) {
-        AlignedHeapChunk.AlignedHeader header = (AlignedHeapChunk.AlignedHeader) getChunkPointerInBuffer(chunkPosition);
+        AlignedHeapChunk.AlignedHeader header = (AlignedHeapChunk.AlignedHeader) heapBegin.add(chunkPosition);
         header.setTopOffset(WordFactory.unsigned(topOffset));
         header.setEndOffset(WordFactory.unsigned(endOffset));
         header.setSpace(null);
@@ -64,7 +57,7 @@ public class RuntimeImageHeapChunkWriter implements ImageHeapChunkWriter {
 
     @Override
     public void insertIntoAlignedChunkFirstObjectTable(int chunkPosition, long objectOffsetInChunk, long objectEndOffsetInChunk) {
-        AlignedHeapChunk.AlignedHeader header = (AlignedHeapChunk.AlignedHeader) getChunkPointerInBuffer(chunkPosition);
+        AlignedHeapChunk.AlignedHeader header = (AlignedHeapChunk.AlignedHeader) heapBegin.add(chunkPosition);
         FirstObjectTable.setTableForObjectAtOffsetUnchecked(AlignedHeapChunk.getFirstObjectTableStart(header),
                         WordFactory.unsigned(objectOffsetInChunk).subtract(AlignedHeapChunk.getObjectsStartOffset()),
                         WordFactory.unsigned(objectEndOffsetInChunk).subtract(AlignedHeapChunk.getObjectsStartOffset()));
@@ -72,7 +65,7 @@ public class RuntimeImageHeapChunkWriter implements ImageHeapChunkWriter {
 
     @Override
     public void initializeUnalignedChunk(int chunkPosition, long topOffset, long endOffset, long offsetToPreviousChunk, long offsetToNextChunk) {
-        UnalignedHeapChunk.UnalignedHeader header = (UnalignedHeapChunk.UnalignedHeader) getChunkPointerInBuffer(chunkPosition);
+        UnalignedHeapChunk.UnalignedHeader header = (UnalignedHeapChunk.UnalignedHeader) heapBegin.add(chunkPosition);
         header.setTopOffset(WordFactory.unsigned(topOffset));
         header.setEndOffset(WordFactory.unsigned(endOffset));
         header.setSpace(null);
