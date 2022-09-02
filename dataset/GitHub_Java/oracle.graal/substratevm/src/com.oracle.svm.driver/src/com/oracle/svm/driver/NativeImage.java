@@ -386,7 +386,7 @@ public class NativeImage {
             return false;
         }
 
-        default Path getAgentJAR() {
+        default String getAgentJAR() {
             return null;
         }
     }
@@ -545,8 +545,8 @@ public class NativeImage {
         }
 
         @Override
-        public Path getAgentJAR() {
-            return rootDir.resolve(Paths.get("lib", "svm", "builder", "svm.jar"));
+        public String getAgentJAR() {
+            return rootDir.resolve(Paths.get("lib", "svm", "builder", "svm.jar")).toAbsolutePath().toString();
         }
 
     }
@@ -1010,8 +1010,10 @@ public class NativeImage {
             replaceArg(imageBuilderJavaArgs, oXms, Long.toUnsignedString(xmxValue));
         }
 
-        imageBuilderJavaArgs.add("-javaagent:" + config.getAgentJAR().toAbsolutePath().toString() + (traceClassInitialization() ? "=traceInitialization" : ""));
-        imageBuilderJavaArgs.add("-Djava.lang.invoke.InnerClassLambdaMetafactory.initializeLambdas=false");
+        /* Enable class initializaiton tracing agent. */
+        if (traceClassInitialization()) {
+            imageBuilderJavaArgs.add("-javaagent:" + config.getAgentJAR());
+        }
 
         /* After JavaArgs consolidation add the user provided JavaArgs */
         addImageBuilderJavaArgs(customJavaArgs.toArray(new String[0]));
@@ -1035,7 +1037,7 @@ public class NativeImage {
 
         consolidateArgs(imageBuilderArgs, oHName, Function.identity(), Function.identity(), () -> null, takeLast);
         mainClass = consolidateSingleValueArg(imageBuilderArgs, oHClass);
-        boolean buildExecutable = imageBuilderArgs.stream().noneMatch(arg -> arg.contains(enableSharedLibraryFlag));
+        boolean buildExecutable = !imageBuilderArgs.stream().anyMatch(arg -> arg.contains(enableSharedLibraryFlag));
         boolean printFlags = imageBuilderArgs.stream().anyMatch(arg -> arg.contains(enablePrintFlags));
 
         if (!printFlags) {

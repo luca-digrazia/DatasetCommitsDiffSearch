@@ -174,12 +174,10 @@ final class MacroOption {
     static final class EnabledOption {
         private final MacroOption option;
         private final String optionArg;
-        private final boolean enabledFromCommandline;
 
-        private EnabledOption(MacroOption option, String optionArg, boolean enabledFromCommandline) {
+        private EnabledOption(MacroOption option, String optionArg) {
             this.option = Objects.requireNonNull(option);
             this.optionArg = optionArg;
-            this.enabledFromCommandline = enabledFromCommandline;
         }
 
         private String resolvePropertyValue(BuildConfiguration config, String val) {
@@ -209,10 +207,6 @@ final class MacroOption {
 
         MacroOption getOption() {
             return option;
-        }
-
-        boolean isEnabledFromCommandline() {
-            return enabledFromCommandline;
         }
     }
 
@@ -361,7 +355,7 @@ final class MacroOption {
                 return;
             }
             addedCheck.add(option);
-            EnabledOption enabledOption = new EnabledOption(option, optionArg, context == null);
+            EnabledOption enabledOption = new EnabledOption(option, optionArg);
             String requires = enabledOption.getProperty(config, "Requires", "");
             if (!requires.isEmpty()) {
                 for (String specString : requires.split(" ")) {
@@ -375,7 +369,7 @@ final class MacroOption {
                  * Every language requires Truffle. If it is not specified explicitly as a
                  * requirement, add it automatically.
                  */
-                enableResolved(config, truffleOption, null, addedCheck, option, enabler);
+                enableResolved(config, truffleOption, null, addedCheck, context, enabler);
             }
             enabler.accept(enabledOption);
             enabled.add(enabledOption);
