@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -30,39 +30,28 @@
 package com.oracle.truffle.llvm.runtime.nodes.api;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
 import com.oracle.truffle.api.nodes.NodeCost;
+import com.oracle.truffle.api.nodes.NodeInfo;
 import com.oracle.truffle.api.nodes.UnexpectedResultException;
-import com.oracle.truffle.llvm.runtime.LLVMIVarBit;
-import com.oracle.truffle.llvm.runtime.floating.LLVM80BitFloat;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
-import com.oracle.truffle.llvm.runtime.vector.LLVMDoubleVector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI16Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI1Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI32Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI64Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMI8Vector;
-import com.oracle.truffle.llvm.runtime.vector.LLVMPointerVector;
+import com.oracle.truffle.llvm.runtime.nodes.base.LLVMFrameNullerUtil;
 
-public final class LLVMFrameNullerExpression extends LLVMExpressionNode {
+/**
+ * Nulls out the given set of frame slots after evaluating the given expression.
+ */
+@NodeInfo(cost = NodeCost.NONE) // this node reduces the compiled code size
+public abstract class LLVMFrameNullerExpression extends LLVMExpressionNode {
 
-    @Child private LLVMExpressionNode afterExpression;
     @CompilationFinal(dimensions = 1) private final FrameSlot[] frameSlots;
 
-    public LLVMFrameNullerExpression(LLVMExpressionNode afterExpression, FrameSlot[] frameSlots) {
-        this.afterExpression = afterExpression;
-        this.frameSlots = frameSlots;
-    }
+    @Child private LLVMExpressionNode expression;
 
-    @Override
-    public NodeCost getCost() {
-        // this node reduces the compile code size
-        return NodeCost.NONE;
+    public LLVMFrameNullerExpression(FrameSlot[] frameSlots, LLVMExpressionNode expression) {
+        this.frameSlots = frameSlots;
+        this.expression = expression;
     }
 
     @Override
@@ -77,46 +66,10 @@ public final class LLVMFrameNullerExpression extends LLVMExpressionNode {
         }
     }
 
-    @Override
-    public Object executeGeneric(VirtualFrame frame) {
+    @Specialization
+    public Object doGeneric(VirtualFrame frame) {
         try {
-            return afterExpression.executeGeneric(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVM80BitFloat executeLLVM80BitFloat(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVM80BitFloat(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMPointer executeLLVMPointer(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMPointer(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMNativePointer executeLLVMNativePointer(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMNativePointer(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMManagedPointer executeLLVMManagedPointer(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMManagedPointer(frame);
+            return expression.executeGeneric(frame);
         } finally {
             nullSlots(frame);
         }
@@ -125,7 +78,7 @@ public final class LLVMFrameNullerExpression extends LLVMExpressionNode {
     @Override
     public double executeDouble(VirtualFrame frame) throws UnexpectedResultException {
         try {
-            return afterExpression.executeDouble(frame);
+            return expression.executeDouble(frame);
         } finally {
             nullSlots(frame);
         }
@@ -134,7 +87,7 @@ public final class LLVMFrameNullerExpression extends LLVMExpressionNode {
     @Override
     public float executeFloat(VirtualFrame frame) throws UnexpectedResultException {
         try {
-            return afterExpression.executeFloat(frame);
+            return expression.executeFloat(frame);
         } finally {
             nullSlots(frame);
         }
@@ -143,7 +96,7 @@ public final class LLVMFrameNullerExpression extends LLVMExpressionNode {
     @Override
     public short executeI16(VirtualFrame frame) throws UnexpectedResultException {
         try {
-            return afterExpression.executeI16(frame);
+            return expression.executeI16(frame);
         } finally {
             nullSlots(frame);
         }
@@ -152,7 +105,7 @@ public final class LLVMFrameNullerExpression extends LLVMExpressionNode {
     @Override
     public boolean executeI1(VirtualFrame frame) throws UnexpectedResultException {
         try {
-            return afterExpression.executeI1(frame);
+            return expression.executeI1(frame);
         } finally {
             nullSlots(frame);
         }
@@ -161,7 +114,7 @@ public final class LLVMFrameNullerExpression extends LLVMExpressionNode {
     @Override
     public int executeI32(VirtualFrame frame) throws UnexpectedResultException {
         try {
-            return afterExpression.executeI32(frame);
+            return expression.executeI32(frame);
         } finally {
             nullSlots(frame);
         }
@@ -170,16 +123,7 @@ public final class LLVMFrameNullerExpression extends LLVMExpressionNode {
     @Override
     public long executeI64(VirtualFrame frame) throws UnexpectedResultException {
         try {
-            return afterExpression.executeI64(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMIVarBit executeLLVMIVarBit(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMIVarBit(frame);
+            return expression.executeI64(frame);
         } finally {
             nullSlots(frame);
         }
@@ -188,79 +132,7 @@ public final class LLVMFrameNullerExpression extends LLVMExpressionNode {
     @Override
     public byte executeI8(VirtualFrame frame) throws UnexpectedResultException {
         try {
-            return afterExpression.executeI8(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMI8Vector executeLLVMI8Vector(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMI8Vector(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMI64Vector executeLLVMI64Vector(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMI64Vector(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMI32Vector executeLLVMI32Vector(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMI32Vector(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMI1Vector executeLLVMI1Vector(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMI1Vector(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMI16Vector executeLLVMI16Vector(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMI16Vector(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMFloatVector executeLLVMFloatVector(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMFloatVector(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMDoubleVector executeLLVMDoubleVector(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMDoubleVector(frame);
-        } finally {
-            nullSlots(frame);
-        }
-    }
-
-    @Override
-    public LLVMPointerVector executeLLVMPointerVector(VirtualFrame frame) throws UnexpectedResultException {
-        try {
-            return afterExpression.executeLLVMPointerVector(frame);
+            return expression.executeI8(frame);
         } finally {
             nullSlots(frame);
         }

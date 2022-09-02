@@ -35,12 +35,10 @@ import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.instrumentation.StandardTags;
 import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.llvm.runtime.LLVMFunction;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.others.LLVMAccessSymbolNode;
 import com.oracle.truffle.llvm.runtime.types.FunctionType;
 
-@NodeChild(value = "dispatchTarget", type = LLVMExpressionNode.class)
+@NodeChild(value = "dispatchTarget", type = LLVMLookupDispatchTargetNode.class)
 public abstract class LLVMCallNode extends LLVMExpressionNode {
 
     public static final int USER_ARGUMENT_OFFSET = 1;
@@ -54,20 +52,13 @@ public abstract class LLVMCallNode extends LLVMExpressionNode {
     private final boolean isSourceCall;
 
     public static LLVMCallNode create(FunctionType functionType, LLVMExpressionNode functionNode, LLVMExpressionNode[] argumentNodes, boolean isSourceCall) {
-        LLVMFunction llvmFun = null;
-        if (functionNode instanceof LLVMAccessSymbolNode) {
-            LLVMAccessSymbolNode node = (LLVMAccessSymbolNode) functionNode;
-            if (node.getSymbol() instanceof LLVMFunction) {
-                llvmFun = (LLVMFunction) node.getSymbol();
-            }
-        }
-        return LLVMCallNodeGen.create(functionType, argumentNodes, isSourceCall, llvmFun, LLVMLookupDispatchTargetNode.createOptimized(functionNode));
+        return LLVMCallNodeGen.create(functionType, argumentNodes, isSourceCall, LLVMLookupDispatchTargetNodeGen.create(functionNode));
     }
 
-    LLVMCallNode(FunctionType functionType, LLVMExpressionNode[] argumentNodes, boolean isSourceCall, LLVMFunction llvmFunction) {
+    LLVMCallNode(FunctionType functionType, LLVMExpressionNode[] argumentNodes, boolean isSourceCall) {
         this.argumentNodes = argumentNodes;
         this.prepareArgumentNodes = createPrepareArgumentNodes(argumentNodes);
-        this.dispatchNode = LLVMDispatchNodeGen.create(functionType, llvmFunction);
+        this.dispatchNode = LLVMDispatchNodeGen.create(functionType);
         this.isSourceCall = isSourceCall;
     }
 

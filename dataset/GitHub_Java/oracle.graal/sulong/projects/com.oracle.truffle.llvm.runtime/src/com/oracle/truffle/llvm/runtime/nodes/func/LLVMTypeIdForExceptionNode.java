@@ -27,37 +27,26 @@
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.arith;
+package com.oracle.truffle.llvm.runtime.nodes.func;
 
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMDoubleStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMDoubleStoreNodeGen;
+import com.oracle.truffle.llvm.runtime.nodes.op.ToComparableValue;
+import com.oracle.truffle.llvm.runtime.nodes.op.ToComparableValueNodeGen;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@NodeChild(value = "result", type = LLVMExpressionNode.class)
-@NodeChild(value = "a", type = LLVMExpressionNode.class)
-@NodeChild(value = "b", type = LLVMExpressionNode.class)
-@NodeChild(value = "c", type = LLVMExpressionNode.class)
-@NodeChild(value = "d", type = LLVMExpressionNode.class)
-public abstract class LLVMComplexDoubleDiv extends LLVMExpressionNode {
+@NodeChild(value = "thrownTypeID", type = LLVMExpressionNode.class)
+public abstract class LLVMTypeIdForExceptionNode extends LLVMExpressionNode {
 
-    @Child private LLVMDoubleStoreNode store;
+    @Child private ToComparableValue toComparableValue;
 
-    public LLVMComplexDoubleDiv() {
-        this.store = LLVMDoubleStoreNodeGen.create(null, null);
+    public LLVMTypeIdForExceptionNode() {
+        this.toComparableValue = ToComparableValueNodeGen.create();
     }
 
     @Specialization
-    public Object doDouble(LLVMPointer result, double a, double b, double c, double d) {
-        double denom = c * c + d * d;
-        double zReal = (a * c + b * d) / denom;
-        double zImag = (b * c - a * d) / denom;
-
-        store.executeWithTarget(result, zReal);
-        store.executeWithTarget(result.increment(LLVMExpressionNode.DOUBLE_SIZE_IN_BYTES), zImag);
-
-        return result;
+    public Object doGeneric(LLVMPointer thrownTypeID) {
+        return (int) toComparableValue.executeWithTarget(thrownTypeID);
     }
 }

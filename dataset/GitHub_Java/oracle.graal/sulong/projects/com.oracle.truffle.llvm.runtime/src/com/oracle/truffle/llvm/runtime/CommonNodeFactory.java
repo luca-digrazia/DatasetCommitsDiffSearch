@@ -131,24 +131,16 @@ import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFacto
 import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMI8LiteralNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMIVarBitLiteralNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.literals.LLVMSimpleLiteralNodeFactory.LLVMNativePointerLiteralNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNode.LLVMPointerDirectLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVM80BitFloatDirectLoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMIVarBitDirectLoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMPointerDirectLoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDirectLoadNodeFactory.LLVMStructDirectLoadNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDoubleLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMDoubleLoadNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMFloatLoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMFloatLoadNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI16LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI16LoadNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI1LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI1LoadNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI32LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI32LoadNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI64LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI64LoadNodeGen;
-import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI8LoadNode;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMI8LoadNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMLoadVectorNodeFactory.LLVMLoadDoubleVectorNodeGen;
 import com.oracle.truffle.llvm.runtime.nodes.memory.load.LLVMLoadVectorNodeFactory.LLVMLoadFloatVectorNodeGen;
@@ -247,44 +239,21 @@ public class CommonNodeFactory {
     public static LLVMLoadNode createLoadNode(LLVMInteropType.ValueKind kind) {
         switch (kind) {
             case I1:
-                return LLVMI1LoadNode.create();
+                return LLVMI1LoadNodeGen.create(null);
             case I8:
-                return LLVMI8LoadNode.create();
+                return LLVMI8LoadNodeGen.create(null);
             case I16:
-                return LLVMI16LoadNode.create();
+                return LLVMI16LoadNodeGen.create(null);
             case I32:
-                return LLVMI32LoadNode.create();
+                return LLVMI32LoadNodeGen.create(null);
             case I64:
-                return LLVMI64LoadNode.create();
+                return LLVMI64LoadNodeGen.create(null);
             case FLOAT:
-                return LLVMFloatLoadNode.create();
+                return LLVMFloatLoadNodeGen.create(null);
             case DOUBLE:
-                return LLVMDoubleLoadNode.create();
+                return LLVMDoubleLoadNodeGen.create(null);
             case POINTER:
-                return LLVMPointerDirectLoadNode.create();
-            default:
-                throw new IllegalStateException("unexpected interop kind " + kind);
-        }
-    }
-
-    public static LLVMLoadNode getUncachedLoadNode(LLVMInteropType.ValueKind kind) {
-        switch (kind) {
-            case I1:
-                return LLVMI1LoadNodeGen.getUncached();
-            case I8:
-                return LLVMI8LoadNodeGen.getUncached();
-            case I16:
-                return LLVMI16LoadNodeGen.getUncached();
-            case I32:
-                return LLVMI32LoadNodeGen.getUncached();
-            case I64:
-                return LLVMI64LoadNodeGen.getUncached();
-            case FLOAT:
-                return LLVMFloatLoadNodeGen.getUncached();
-            case DOUBLE:
-                return LLVMDoubleLoadNodeGen.getUncached();
-            case POINTER:
-                return LLVMPointerDirectLoadNodeGen.getUncached();
+                return LLVMPointerDirectLoadNodeGen.create(null);
             default:
                 throw new IllegalStateException("unexpected interop kind " + kind);
         }

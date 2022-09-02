@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2020, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -31,33 +31,25 @@ package com.oracle.truffle.llvm.runtime.nodes.intrinsics.llvm.arith;
 
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMDoubleStoreNode;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMExpressionNode;
-import com.oracle.truffle.llvm.runtime.nodes.memory.store.LLVMDoubleStoreNodeGen;
-import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
+import com.oracle.truffle.llvm.runtime.vector.LLVMFloatVector;
 
-@NodeChild(value = "result", type = LLVMExpressionNode.class)
 @NodeChild(value = "a", type = LLVMExpressionNode.class)
 @NodeChild(value = "b", type = LLVMExpressionNode.class)
 @NodeChild(value = "c", type = LLVMExpressionNode.class)
 @NodeChild(value = "d", type = LLVMExpressionNode.class)
-public abstract class LLVMComplexDoubleDiv extends LLVMExpressionNode {
-
-    @Child private LLVMDoubleStoreNode store;
-
-    public LLVMComplexDoubleDiv() {
-        this.store = LLVMDoubleStoreNodeGen.create(null, null);
-    }
+public abstract class LLVMComplexFloatMul extends LLVMExpressionNode {
 
     @Specialization
-    public Object doDouble(LLVMPointer result, double a, double b, double c, double d) {
-        double denom = c * c + d * d;
-        double zReal = (a * c + b * d) / denom;
-        double zImag = (b * c - a * d) / denom;
+    public LLVMFloatVector doFloat(float a, float b, float c, float d) {
+        float ac = a * c;
+        float bd = b * d;
+        float ad = a * d;
+        float bc = b * c;
+        float zReal = ac - bd;
+        float zImag = ad + bc;
 
-        store.executeWithTarget(result, zReal);
-        store.executeWithTarget(result.increment(LLVMExpressionNode.DOUBLE_SIZE_IN_BYTES), zImag);
-
-        return result;
+        float[] values = {zReal, zImag};
+        return LLVMFloatVector.create(values);
     }
 }
