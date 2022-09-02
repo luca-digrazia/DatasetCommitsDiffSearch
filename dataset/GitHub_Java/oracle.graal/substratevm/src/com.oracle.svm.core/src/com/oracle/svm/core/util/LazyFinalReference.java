@@ -63,10 +63,6 @@ public final class LazyFinalReference<T> {
         this.supplier = supplier;
     }
 
-    public boolean isPresent() {
-        return value != UNINITIALIZED || UNSAFE.getObjectVolatile(this, VALUE_OFFSET) != UNINITIALIZED;
-    }
-
     @SuppressWarnings("unchecked")
     public T get() {
         T v = value;
