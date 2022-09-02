@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.core;
 
-import static com.oracle.svm.core.annotate.RestrictHeapAccess.Access.NO_ALLOCATION;
-
 import org.graalvm.compiler.options.Option;
 import org.graalvm.nativeimage.ImageInfo;
 import org.graalvm.nativeimage.ImageSingletons;
@@ -38,7 +36,6 @@ import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.c.function.CEntryPointErrors;
 import com.oracle.svm.core.graal.nodes.WriteCurrentVMThreadNode;
@@ -81,7 +78,6 @@ public abstract class SubstrateSegfaultHandler {
 
     /** Called from the platform dependent segfault handler to enter the isolate. */
     @Uninterruptible(reason = "Called from uninterruptible code.")
-    @RestrictHeapAccess(access = NO_ALLOCATION, reason = "Must not allocate in segfault handler.", overridesCallers = true)
     protected static boolean tryEnterIsolate(RegisterDumper.Context context) {
         if (SubstrateOptions.SpawnIsolates.getValue()) {
             PointerBase heapBase = RegisterDumper.singleton().getHeapBase(context);
@@ -103,7 +99,6 @@ public abstract class SubstrateSegfaultHandler {
 
     /** Called from the platform dependent segfault handler to print diagnostics. */
     @Uninterruptible(reason = "Must be uninterruptible until we get immune to safepoints.", calleeMustBe = false)
-    @RestrictHeapAccess(access = NO_ALLOCATION, reason = "Must not allocate in segfault handler.", overridesCallers = true)
     protected static void dump(RegisterDumper.Context context) {
         VMThreads.StatusSupport.setStatusIgnoreSafepoints();
         dumpInterruptibly(context);
@@ -120,7 +115,9 @@ public abstract class SubstrateSegfaultHandler {
         PointerBase ip = RegisterDumper.singleton().getIP(context);
         SubstrateUtil.printDiagnostics(log, (Pointer) sp, (CodePointer) ip, context);
 
-        log.string("Segfault detected, aborting process. Use runtime option -R:-InstallSegfaultHandler if you don't want to use SubstrateSegfaultHandler.").newline();
+        log.string("Use runtime option -R:-InstallSegfaultHandler if you don't want to use SubstrateSegfaultHandler.").newline();
+        log.newline();
+        log.string("Bye bye ...").newline();
         log.newline();
 
         ImageSingletons.lookup(LogHandler.class).fatalError();
