@@ -57,28 +57,23 @@ public abstract class ToLLVM extends LLVMNode {
 
     public abstract Object executeWithType(Object value, LLVMInteropType.Value incomingType, ForeignToLLVMType targetType);
 
-    @Specialization(guards = {"incomingType != null", "incomingType.getSize() == targetType.getSizeInBytes()"}, rewriteOn = UnsupportedMessageException.class)
+    @Specialization(guards = "incomingType != null")
     Object doConvert(Object value, LLVMInteropType.Value incomingType, ForeignToLLVMType targetType,
                     @Cached ReadValue read,
-                    @Cached ConvertValue convert) throws UnsupportedMessageException {
-        Object incoming = read.execute(value, incomingType);
-        return convert.execute(incoming, targetType);
-    }
-
-    @Specialization(guards = "incomingType != null", replaces = "doConvert")
-    Object doConvertTypeMismatch(Object value, LLVMInteropType.Value incomingType, ForeignToLLVMType targetType,
-                    @Cached ReadValue read,
                     @Cached ConvertValue convert,
-                    @Cached ReadUnknown readUnknown) {
-        if (incomingType.getSize() == targetType.getSizeInBytes()) {
+                    @Cached BranchProfile error) {
+        if (incomingType.getKind().foreignToLLVMType.getSizeInBytes() != targetType.getSizeInBytes()) {
+            error.enter();
+            throw new LLVMPolyglotException(this, "Can't read a %s from a foreign field of type %s.", targetType, incomingType);
+        } else {
             try {
-                return doConvert(value, incomingType, targetType, read, convert);
-            } catch (UnsupportedMessageException ex) {
+                Object incoming = read.execute(value, incomingType);
+                return convert.execute(incoming, targetType);
+            } catch (UnsupportedMessageException e) {
+                error.enter();
+                throw new LLVMPolyglotException(this, "Unexpected value %s while reading from a foreign field of type %s.", value, incomingType);
             }
         }
-
-        // if we get an unexpected return type, retry with the targetType
-        return readUnknown.executeWithType(value, targetType);
     }
 
     @Specialization(guards = "incomingType == null")
