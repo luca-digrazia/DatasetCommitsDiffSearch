@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,7 @@ import static com.oracle.truffle.espresso.nodes.methodhandle.LinkToSpecialNode.s
 import static com.oracle.truffle.espresso.nodes.methodhandle.LinkToStaticNode.staticLinker;
 import static com.oracle.truffle.espresso.nodes.methodhandle.LinkToVirtualNode.virtualLinker;
 
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -37,10 +38,10 @@ import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.ClassRedefinition;
 import com.oracle.truffle.espresso.impl.Klass;
-import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.nodes.quick.invoke.InvokeDynamicCallSiteNode;
 import com.oracle.truffle.espresso.runtime.MethodHandleIntrinsics;
 import com.oracle.truffle.espresso.runtime.StaticObject;
@@ -61,7 +62,7 @@ import com.oracle.truffle.espresso.runtime.StaticObject;
 public abstract class MHLinkToNode extends MethodHandleIntrinsicNode {
     private final int argCount;
     private final Linker linker;
-    private final Field hiddenVmtarget;
+    private final int hiddenVmtarget;
     private final boolean hasReceiver;
 
     static final int INLINE_CACHE_SIZE_LIMIT = 5;
@@ -69,7 +70,7 @@ public abstract class MHLinkToNode extends MethodHandleIntrinsicNode {
     MHLinkToNode(Method method, MethodHandleIntrinsics.PolySigIntrinsics id) {
         super(method);
         this.argCount = Signatures.parameterCount(method.getParsedSignature(), false);
-        this.hiddenVmtarget = method.getMeta().HIDDEN_VMTARGET;
+        this.hiddenVmtarget = method.getMeta().HIDDEN_VMTARGET.getIndex();
         this.hasReceiver = id != MethodHandleIntrinsics.PolySigIntrinsics.LinkToStatic;
         this.linker = findLinker(id);
         assert method.isStatic();
@@ -82,13 +83,35 @@ public abstract class MHLinkToNode extends MethodHandleIntrinsicNode {
         Object[] basicArgs = unbasic(args, resolutionSeed.getParsedSignature(), 0, argCount - 1, hasReceiver);
         // method might have been redefined or removed by redefinition
         if (resolutionSeed.isRemovedByRedefition()) {
-            Klass receiverKlass = hasReceiver ? ((StaticObject) basicArgs[0]).getKlass() : resolutionSeed.getDeclaringKlass();
-            resolutionSeed = ClassRedefinition.handleRemovedMethod(resolutionSeed, receiverKlass);
+            resolutionSeed = handleRemovedMethod(hasReceiver ? (StaticObject) basicArgs[0] : null, resolutionSeed);
         }
 
         Method target = linker.linkTo(resolutionSeed, args);
         Object result = executeCall(basicArgs, target.getMethodVersion());
         return rebasic(result, target.getReturnKind());
+    }
+
+    @TruffleBoundary
+    private static Method handleRemovedMethod(StaticObject receiver, Method resolutionSeed) {
+        // do not run while a redefinition is in progress
+        try {
+            ClassRedefinition.lock();
+            // first check to see if there's a compatible new method before
+            // bailing out with a NoSuchMethodError
+            Klass receiverKlass = receiver != null ? receiver.getKlass() : resolutionSeed.getDeclaringKlass();
+            Method method = receiverKlass.lookupMethod(resolutionSeed.getName(), resolutionSeed.getRawSignature(), receiverKlass);
+            Meta meta = resolutionSeed.getMeta();
+            if (method == null) {
+                throw Meta.throwExceptionWithMessage(meta.java_lang_NoSuchMethodError,
+                                meta.toGuestString(resolutionSeed.getDeclaringKlass().getNameAsString() + "." + resolutionSeed.getName() + resolutionSeed.getRawSignature()));
+            } else if (method.isStatic() != (receiver == null)) {
+                throw Meta.throwExceptionWithMessage(meta.java_lang_IncompatibleClassChangeError, "expected non-static method: " + method.getName());
+            } else {
+                return method;
+            }
+        } finally {
+            ClassRedefinition.unlock();
+        }
     }
 
     protected abstract Object executeCall(Object[] args, Method.MethodVersion target);
@@ -162,6 +185,6 @@ public abstract class MHLinkToNode extends MethodHandleIntrinsicNode {
         assert args.length >= 1;
         StaticObject memberName = (StaticObject) args[args.length - 1];
         assert (memberName.getKlass().getType() == Symbol.Type.java_lang_invoke_MemberName);
-        return (Method) hiddenVmtarget.getHiddenObject(memberName);
+        return (Method) memberName.getUnsafeField(hiddenVmtarget);
     }
 }
