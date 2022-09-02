@@ -26,7 +26,6 @@ import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
-import org.graalvm.home.Version;
 import org.graalvm.options.OptionDescriptors;
 
 import com.oracle.truffle.api.CallTarget;
@@ -56,7 +55,6 @@ import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.EspressoRootNode;
 import com.oracle.truffle.espresso.nodes.EspressoStatementNode;
 import com.oracle.truffle.espresso.nodes.interop.DestroyVMNode;
-import com.oracle.truffle.espresso.nodes.interop.ExitCodeNode;
 import com.oracle.truffle.espresso.nodes.quick.QuickNode;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.EspressoExitException;
@@ -73,7 +71,7 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
     // Espresso VM info
     public static final String VM_SPECIFICATION_NAME = "Java Virtual Machine Specification";
     public static final String VM_SPECIFICATION_VENDOR = "Oracle Corporation";
-    public static final String VM_VERSION = /* 1.8|11 */ "espresso-" + Version.getCurrent();
+    public static final String VM_VERSION = /* 1.8|11 */ "espresso-20.3-b01";
     public static final String VM_VENDOR = "Oracle Corporation";
     public static final String VM_NAME = "Espresso 64-Bit VM";
     public static final String VM_INFO = "mixed mode";
@@ -240,10 +238,6 @@ public final class EspressoLanguage extends TruffleLanguage<EspressoContext> {
         String contents = request.getSource().getCharacters().toString();
         if (DestroyVMNode.EVAL_NAME.equals(contents)) {
             RootNode node = new DestroyVMNode(this);
-            return Truffle.getRuntime().createCallTarget(node);
-        }
-        if (ExitCodeNode.EVAL_NAME.equals(contents)) {
-            RootNode node = new ExitCodeNode(this);
             return Truffle.getRuntime().createCallTarget(node);
         }
         throw new UnsupportedOperationException("Unsupported operation. Use the language bindings to load classes e.g. context.getBindings(\"" + ID + "\").getMember(\"java.lang.Integer\")");
