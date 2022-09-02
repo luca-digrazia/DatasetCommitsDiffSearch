@@ -95,7 +95,7 @@ public class PropertyAccessTest extends StaticObjectModelTest {
 
     @BeforeClass
     public static void setup() {
-        environments = getTestEnvironments();
+        environments = new TestEnvironment[]{new TestEnvironment(true), new TestEnvironment(false)};
         descriptors = new TestDescriptor[StaticPropertyKind.values().length];
 
         for (StaticPropertyKind kind : StaticPropertyKind.values()) {

@@ -59,7 +59,7 @@ public class ShapeAndFactoryTest extends StaticObjectModelTest {
 
     @BeforeClass
     public static void setup() {
-        environments = getTestEnvironments();
+        environments = new TestEnvironment[]{new TestEnvironment(true), new TestEnvironment(false)};
     }
 
     @AfterClass
