@@ -33,10 +33,12 @@ import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.Compi
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.CompileOnly;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.FirstTierCompilationThreshold;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.FirstTierMinInvokeThreshold;
+import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.InvalidationReprofileCount;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.MinInvokeThreshold;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.Mode;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.MultiTier;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.PerformanceWarningsAreFatal;
+import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.ReplaceReprofileCount;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.ReturnTypeSpeculation;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.Splitting;
 import static org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.SplittingAllowForcedSplits;
@@ -58,8 +60,6 @@ import java.util.function.Function;
 import org.graalvm.compiler.truffle.runtime.PolyglotCompilerOptions.EngineModeEnum;
 import org.graalvm.options.OptionValues;
 
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-
 /**
  * Class used to store data used by the compiler in the Engine. Enables "global" compiler state per
  * engine.
@@ -75,52 +75,44 @@ public final class EngineData {
 
     int splitLimit;
     int splitCount;
-    @CompilationFinal OptionValues engineOptions;
+    final OptionValues engineOptions;
     final TruffleSplittingStrategy.SplitStatisticsReporter reporter;
 
-    /*
-     * Important while visible, options must not be modified except in loadOptions.
-     */
     // splitting options
-    @CompilationFinal public boolean splitting;
-    @CompilationFinal public boolean splittingAllowForcedSplits;
-    @CompilationFinal public boolean splittingDumpDecisions;
-    @CompilationFinal public boolean splittingTraceEvents;
-    @CompilationFinal public boolean traceSplittingSummary;
-    @CompilationFinal public int splittingMaxCalleeSize;
-    @CompilationFinal public int splittingMaxPropagationDepth;
-    @CompilationFinal public double splittingGrowthLimit;
-    @CompilationFinal public int splittingMaxNumberOfSplitNodes;
+    public final boolean splitting;
+    public final boolean splittingAllowForcedSplits;
+    public final boolean splittingDumpDecisions;
+    public final boolean splittingTraceEvents;
+    public final boolean traceSplittingSummary;
+    public final int splittingMaxCalleeSize;
+    public final int splittingMaxPropagationDepth;
+    public final double splittingGrowthLimit;
+    public final int splittingMaxNumberOfSplitNodes;
 
     // compilation options
-    @CompilationFinal public boolean compilation;
-    @CompilationFinal public boolean compileImmediately;
-    @CompilationFinal public boolean multiTier;
-    @CompilationFinal public boolean returnTypeSpeculation;
-    @CompilationFinal public boolean argumentTypeSpeculation;
-    @CompilationFinal public boolean traceCompilation;
-    @CompilationFinal public boolean traceCompilationDetails;
-    @CompilationFinal public boolean backgroundCompilation;
-    @CompilationFinal public boolean compilationExceptionsAreThrown;
-    @CompilationFinal public boolean performanceWarningsAreFatal;
-    @CompilationFinal public String compileOnly;
-    @CompilationFinal public boolean callTargetStatistics;
+    public final boolean compilation;
+    public final boolean compileImmediately;
+    public final int minInvokeThreshold;
+    public final int compilationThreshold;
+    public final boolean multiTier;
+    public final int firstTierMinInvokeThreshold;
+    public final int firstTierCompilationThreshold;
+    public final boolean returnTypeSpeculation;
+    public final int invalidationReprofileCount;
+    public final int replaceReprofileCount;
+    public final boolean argumentTypeSpeculation;
+    public final boolean traceCompilation;
+    public final boolean traceCompilationDetails;
+    public final boolean backgroundCompilation;
+    public final boolean compilationExceptionsAreThrown;
+    public final boolean performanceWarningsAreFatal;
+    public final String compileOnly;
 
-    // computed fields.
-    @CompilationFinal public int firstTierCallThreshold;
-    @CompilationFinal public int firstTierCallAndLoopThreshold;
-    @CompilationFinal public int lastTierCallThreshold;
+    public final boolean callTargetStatistics;
 
     EngineData(OptionValues options) {
-        // splitting options
-        loadOptions(options);
-
-        // the reporter requires options to be initialized
-        this.reporter = new TruffleSplittingStrategy.SplitStatisticsReporter(this);
-    }
-
-    void loadOptions(OptionValues options) {
         this.engineOptions = options;
+        // splitting options
         this.splitting = getValue(options, Splitting) &&
                         getValue(options, Mode) != EngineModeEnum.LATENCY;
         this.splittingAllowForcedSplits = getValue(options, SplittingAllowForcedSplits);
@@ -136,42 +128,31 @@ public final class EngineData {
         this.compilation = getValue(options, Compilation);
         this.compileOnly = getValue(options, CompileOnly);
         this.compileImmediately = getValue(options, CompileImmediately);
+        this.minInvokeThreshold = getValue(options, MinInvokeThreshold);
+        this.compilationThreshold = getValue(options, CompilationThreshold);
         this.multiTier = getValue(options, MultiTier);
-
+        if (multiTier) {
+            firstTierMinInvokeThreshold = getValue(options, FirstTierMinInvokeThreshold);
+            firstTierCompilationThreshold = getValue(options, FirstTierCompilationThreshold);
+        } else {
+            firstTierMinInvokeThreshold = Integer.MAX_VALUE;
+            firstTierCompilationThreshold = Integer.MAX_VALUE;
+        }
         this.returnTypeSpeculation = getValue(options, ReturnTypeSpeculation);
+        this.invalidationReprofileCount = getValue(options, InvalidationReprofileCount);
+        this.replaceReprofileCount = getValue(options, ReplaceReprofileCount);
         this.argumentTypeSpeculation = getValue(options, ArgumentTypeSpeculation);
         this.traceCompilation = getValue(options, TraceCompilation);
         this.traceCompilationDetails = getValue(options, TraceCompilationDetails);
         this.backgroundCompilation = getValue(options, BackgroundCompilation);
         this.compilationExceptionsAreThrown = getValue(options, CompilationExceptionsAreThrown);
         this.performanceWarningsAreFatal = getValue(options, PerformanceWarningsAreFatal);
-        this.firstTierCallThreshold = computeFirstTierCallThreshold(options);
-        this.firstTierCallAndLoopThreshold = computeFirstTierCallAndLoopThreshold(options);
-        this.lastTierCallThreshold = firstTierCallAndLoopThreshold;
+
         this.callTargetStatistics = TruffleRuntimeOptions.getValue(TruffleCompilationStatistics) ||
                         TruffleRuntimeOptions.getValue(TruffleCompilationStatisticDetails);
-    }
 
-    private int computeFirstTierCallThreshold(OptionValues options) {
-        if (compileImmediately) {
-            return 0;
-        }
-        if (multiTier) {
-            return Math.min(getValue(options, FirstTierMinInvokeThreshold), getValue(options, FirstTierCompilationThreshold));
-        } else {
-            return Math.min(getValue(options, MinInvokeThreshold), getValue(options, CompilationThreshold));
-        }
-    }
-
-    private int computeFirstTierCallAndLoopThreshold(OptionValues options) {
-        if (compileImmediately) {
-            return 0;
-        }
-        if (multiTier) {
-            return getValue(options, FirstTierCompilationThreshold);
-        } else {
-            return getValue(options, CompilationThreshold);
-        }
+        // the reporter requires options to be initialized
+        this.reporter = new TruffleSplittingStrategy.SplitStatisticsReporter(this);
     }
 
 }
