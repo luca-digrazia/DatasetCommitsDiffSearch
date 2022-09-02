@@ -28,10 +28,8 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.security.AccessControlContext;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -44,8 +42,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.oracle.svm.core.option.OptionUtils;
 import org.graalvm.compiler.debug.DebugContext;
-import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -56,12 +54,10 @@ import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.option.HostedOptionKey;
-import com.oracle.svm.core.option.LocatableMultiOptionValue;
 import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.hosted.FeatureImpl.DuringAnalysisAccessImpl;
 import com.oracle.svm.hosted.analysis.Inflation;
-import com.oracle.svm.util.ReflectionUtil;
 
 /**
  * Support for {@link ServiceLoader} on Substrate VM.
@@ -94,10 +90,10 @@ public class ServiceLoaderFeature implements Feature {
         public static final HostedOptionKey<Boolean> TraceServiceLoaderFeature = new HostedOptionKey<>(false);
 
         @Option(help = "Comma-separated list of services that should be excluded", type = OptionType.Expert) //
-        public static final HostedOptionKey<LocatableMultiOptionValue.Strings> ServiceLoaderFeatureExcludeServices = new HostedOptionKey<>(new LocatableMultiOptionValue.Strings());
+        public static final HostedOptionKey<String[]> ServiceLoaderFeatureExcludeServices = new HostedOptionKey<>(null);
 
         @Option(help = "Comma-separated list of service providers that should be excluded", type = OptionType.Expert) //
-        public static final HostedOptionKey<LocatableMultiOptionValue.Strings> ServiceLoaderFeatureExcludeServiceProviders = new HostedOptionKey<>(new LocatableMultiOptionValue.Strings());
+        public static final HostedOptionKey<String[]> ServiceLoaderFeatureExcludeServiceProviders = new HostedOptionKey<>(null);
 
     }
 
@@ -105,7 +101,7 @@ public class ServiceLoaderFeature implements Feature {
      * Services that should not be processes here, for example because they are handled by
      * specialized features.
      */
-    private final Set<String> servicesToSkip = new HashSet<>(Arrays.asList(
+    private static final Set<String> SERVICES_TO_SKIP = new HashSet<>(Arrays.asList(
                     "java.security.Provider",                       // see SecurityServicesFeature
                     "sun.util.locale.provider.LocaleDataMetaInfo",  // see LocaleSubstitutions
                     "org.graalvm.nativeimage.Platform"  // shouldn't be reachable after
@@ -118,7 +114,7 @@ public class ServiceLoaderFeature implements Feature {
     // before because implementation classes were instantiated using runtime reflection instead of
     // ServiceLoader (and thus weren't reachable in analysis).
 
-    private final Set<String> serviceProvidersToSkip = new HashSet<>(Arrays.asList(
+    private static final Set<String> SERVICE_PROVIDERS_TO_SKIP = new HashSet<>(Arrays.asList(
                     "com.sun.jndi.rmi.registry.RegistryContextFactory"      // GR-26547
     ));
 
@@ -145,29 +141,17 @@ public class ServiceLoaderFeature implements Feature {
 
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
-        servicesToSkip.addAll(Options.ServiceLoaderFeatureExcludeServices.getValue().values());
-        serviceProvidersToSkip.addAll(Options.ServiceLoaderFeatureExcludeServiceProviders.getValue().values());
+        SERVICES_TO_SKIP.addAll(OptionUtils.flatten(",", Options.ServiceLoaderFeatureExcludeServices.getValue()));
+        SERVICE_PROVIDERS_TO_SKIP.addAll(OptionUtils.flatten(",", Options.ServiceLoaderFeatureExcludeServiceProviders.getValue()));
     }
 
     @Override
     public void beforeAnalysis(BeforeAnalysisAccess access) {
-        registerProviderImpl();
         serviceProviders = ModuleAccess.lookupServiceProviders(access);
         if (trace) {
             int services = serviceProviders.keySet().size();
             int providers = serviceProviders.values().stream().mapToInt(List::size).sum();
             System.out.println("ServiceLoaderFeature: Discovered " + services + " with " + providers + " service providers registered using modules");
-        }
-    }
-
-    private void registerProviderImpl() {
-        try {
-            Class<?> clazz = Class.forName("java.util.ServiceLoader$ProviderImpl");
-            Constructor<?> constructor = ReflectionUtil.lookupConstructor(clazz, Class.class, Class.class, Constructor.class, AccessControlContext.class);
-            RuntimeReflection.register(clazz);
-            RuntimeReflection.register(constructor);
-        } catch (ClassNotFoundException e) {
-            GraalError.shouldNotReachHere(e);
         }
     }
 
@@ -209,7 +193,7 @@ public class ServiceLoaderFeature implements Feature {
         String serviceClassName = type.toClassName();
         String serviceResourceLocation = LOCATION_PREFIX + serviceClassName;
 
-        if (servicesToSkip.contains(serviceClassName)) {
+        if (SERVICES_TO_SKIP.contains(serviceClassName)) {
             if (trace) {
                 System.out.println("ServiceLoaderFeature: Skipping service " + serviceClassName);
             }
@@ -278,7 +262,7 @@ public class ServiceLoaderFeature implements Feature {
                 continue;
             }
 
-            if (serviceProvidersToSkip.contains(implementationClassName)) {
+            if (SERVICE_PROVIDERS_TO_SKIP.contains(implementationClassName)) {
                 if (trace) {
                     System.out.println("  ignoring implementation class: " + implementationClassName);
                 }
