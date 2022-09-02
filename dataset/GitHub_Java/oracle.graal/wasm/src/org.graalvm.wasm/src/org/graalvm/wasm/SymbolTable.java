@@ -74,22 +74,14 @@ public abstract class SymbolTable {
     static final int FIRST_EQUIVALENCE_CLASS = NO_EQUIVALENCE_CLASS + 1;
 
     public static class FunctionType {
-        private final byte[] paramTypes;
+        private final byte[] argumentTypes;
         private final byte returnType;
         private final int hashCode;
 
-        FunctionType(byte[] paramTypes, byte returnType) {
-            this.paramTypes = paramTypes;
+        FunctionType(byte[] argumentTypes, byte returnType) {
+            this.argumentTypes = argumentTypes;
             this.returnType = returnType;
-            this.hashCode = Arrays.hashCode(paramTypes) ^ Byte.hashCode(returnType);
-        }
-
-        public byte[] paramTypes() {
-            return paramTypes;
-        }
-
-        public byte[] returnTypes() {
-            return new byte[]{returnType};
+            this.hashCode = Arrays.hashCode(argumentTypes) ^ Byte.hashCode(returnType);
         }
 
         @Override
@@ -106,8 +98,8 @@ public abstract class SymbolTable {
             if (this.returnType != that.returnType) {
                 return false;
             }
-            for (int i = 0; i < paramTypes.length; i++) {
-                if (this.paramTypes[i] != that.paramTypes[i]) {
+            for (int i = 0; i < argumentTypes.length; i++) {
+                if (this.argumentTypes[i] != that.argumentTypes[i]) {
                     return false;
                 }
             }

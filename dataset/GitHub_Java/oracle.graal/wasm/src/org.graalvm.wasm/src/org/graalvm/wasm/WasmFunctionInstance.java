@@ -51,6 +51,7 @@ import com.oracle.truffle.api.library.ExportMessage;
 
 @ExportLibrary(InteropLibrary.class)
 public class WasmFunctionInstance implements TruffleObject {
+
     private final WasmFunction function;
     private final CallTarget target;
 
@@ -69,14 +70,6 @@ public class WasmFunctionInstance implements TruffleObject {
 
     public String name() {
         return function.name();
-    }
-
-    public WasmFunction function() {
-        return function;
-    }
-
-    public CallTarget target() {
-        return target;
     }
 
     @ExportMessage
