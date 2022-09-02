@@ -900,8 +900,6 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     instance.language.freeInstance(instance);
                 }
                 contextRef.freeInstances.clear();
-                contexts.remove(contextRef);
-                contextRef.removed = true;
             }
         }
     }
