@@ -269,7 +269,7 @@ public abstract class NodeLLVMBuilder implements NodeLIRBuilderTool {
     }
 
     void finish() {
-        gen.getLLVMResult().setBitcode(builder.getBitcode());
+        gen.getLLVMResult().setModule(builder.getModule());
     }
 
     @Override
