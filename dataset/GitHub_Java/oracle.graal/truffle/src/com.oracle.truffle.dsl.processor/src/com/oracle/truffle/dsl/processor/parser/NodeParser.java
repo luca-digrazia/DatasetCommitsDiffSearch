@@ -81,7 +81,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import javax.lang.model.element.AnnotationMirror;
@@ -2326,19 +2325,12 @@ public final class NodeParser extends AbstractParser<NodeData> {
                 continue;
             }
 
-            Map<TypeElement, LibraryData> libraryCache = ProcessorContext.getInstance().getCacheMap(LibraryParser.class);
-            LibraryData parsedLibrary = libraryCache.computeIfAbsent(type, (t) -> new LibraryParser().parse(t));
-
+            LibraryParser parser = new LibraryParser();
+            LibraryData parsedLibrary = parser.parse(type);
             if (parsedLibrary == null || parsedLibrary.hasErrors()) {
                 cachedLibrary.addError("Library '%s' has errors. Please resolve them first.", getSimpleName(parameterType));
                 continue;
             }
-
-            cachedLibrary.setCachedLibrary(parsedLibrary);
-            if (uncachedLibrary != null) {
-                uncachedLibrary.setCachedLibrary(parsedLibrary);
-            }
-
             String expression = cachedLibrary.getCachedLibraryExpression();
             DSLExpression receiverExpression = parseCachedExpression(resolver, cachedLibrary, parsedLibrary.getSignatureReceiverType(), expression);
             if (receiverExpression == null) {
@@ -2516,9 +2508,19 @@ public final class NodeParser extends AbstractParser<NodeData> {
         } else if (NodeCodeGenerator.isSpecializedNode(parameter.getType())) {
             // if it is a node try to parse with the node parser to find out whether we
             // should may use the generated create and getUncached methods.
-            List<CodeExecutableElement> executables = parseNodeFactoryMethods(parameter.getType());
-            if (executables != null) {
-                resolver = resolver.copy(executables);
+            NodeParser parser = NodeParser.createDefaultParser();
+            parser.nodeOnly = true; // make sure we cannot have cycles
+            TypeElement element = ElementUtils.castTypeElement(parameter.getType());
+            if (!nodeOnly) {
+                NodeData parsedNode = parser.parse(element);
+                if (parsedNode != null) {
+                    List<CodeExecutableElement> executables = NodeFactoryFactory.createFactoryMethods(parsedNode, ElementFilter.constructorsIn(element.getEnclosedElements()));
+                    TypeElement type = ElementUtils.castTypeElement(NodeCodeGenerator.factoryOrNodeType(parsedNode));
+                    for (CodeExecutableElement executableElement : executables) {
+                        executableElement.setEnclosingElement(type);
+                    }
+                    resolver = resolver.copy(executables);
+                }
             }
         }
 
@@ -2568,34 +2570,6 @@ public final class NodeParser extends AbstractParser<NodeData> {
         cache.setAdopt(getAnnotationValue(Boolean.class, cachedAnnotation, "adopt", true));
     }
 
-    private static class FactoryMethodCacheKey {
-    }
-
-    private List<CodeExecutableElement> parseNodeFactoryMethods(TypeMirror nodeType) {
-        if (nodeOnly) {
-            return null;
-        }
-        Map<TypeMirror, List<CodeExecutableElement>> cache = ProcessorContext.getInstance().getCacheMap(FactoryMethodCacheKey.class);
-        if (cache.containsKey(nodeType)) {
-            return cache.get(nodeType);
-        }
-
-        NodeParser parser = NodeParser.createDefaultParser();
-        parser.nodeOnly = true; // make sure we cannot have cycles
-        TypeElement element = ElementUtils.castTypeElement(nodeType);
-        NodeData parsedNode = parser.parse(element);
-        List<CodeExecutableElement> executables = null;
-        if (parsedNode != null) {
-            executables = NodeFactoryFactory.createFactoryMethods(parsedNode, ElementFilter.constructorsIn(element.getEnclosedElements()));
-            TypeElement type = ElementUtils.castTypeElement(NodeCodeGenerator.factoryOrNodeType(parsedNode));
-            for (CodeExecutableElement executableElement : executables) {
-                executableElement.setEnclosingElement(type);
-            }
-        }
-        cache.put(nodeType, executables);
-        return executables;
-    }
-
     private DSLExpression resolveCachedExpression(DSLExpressionResolver resolver, CacheExpression cache, TypeMirror targetType, DSLExpression expression, String originalString) {
         DSLExpressionResolver localResolver = targetType == null ? resolver : importStatics(resolver, targetType);
         try {
@@ -2636,39 +2610,35 @@ public final class NodeParser extends AbstractParser<NodeData> {
         List<String> guardDefinitions = getAnnotationValueList(String.class, specialization.getMarkerAnnotation(), "guards");
 
         Set<CacheExpression> handledCaches = new HashSet<>();
-
-        List<GuardExpression> existingGuards = new ArrayList<>(specialization.getGuards());
+        List<GuardExpression> guards = new ArrayList<>();
         for (String guardExpression : guardDefinitions) {
-            existingGuards.add(parseGuard(resolver, specialization, guardExpression));
-        }
+            GuardExpression guard = parseGuard(resolver, specialization, guardExpression);
 
-        List<GuardExpression> newGuards = new ArrayList<>();
-        for (GuardExpression guard : existingGuards) {
             if (guard.getExpression() != null) {
                 Set<CacheExpression> caches = specialization.getBoundCaches(guard.getExpression(), false);
                 for (CacheExpression cache : caches) {
                     if (handledCaches.contains(cache)) {
                         continue;
                     }
-                    handledCaches.add(cache);
                     if (cache.isGuardForNull()) {
-                        newGuards.add(createWeakReferenceGuard(resolver, specialization, cache));
+                        guards.add(createWeakReferenceGuard(resolver, specialization, cache));
                     }
                 }
+                handledCaches.addAll(caches);
             }
 
-            newGuards.add(guard);
+            guards.add(guard);
         }
         for (CacheExpression cache : specialization.getCaches()) {
             if (cache.isGuardForNull()) {
                 if (handledCaches.contains(cache)) {
                     continue;
                 }
-                newGuards.add(createWeakReferenceGuard(resolver, specialization, cache));
+                guards.add(createWeakReferenceGuard(resolver, specialization, cache));
             }
         }
-        specialization.getGuards().clear();
-        specialization.getGuards().addAll(newGuards);
+
+        specialization.getGuards().addAll(guards);
     }
 
     private GuardExpression createWeakReferenceGuard(DSLExpressionResolver resolver, SpecializationData specialization, CacheExpression cache) {
