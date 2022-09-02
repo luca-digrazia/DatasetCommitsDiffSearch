@@ -125,14 +125,6 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         return prid != null;
     }
 
-    private static boolean inWindows() {
-        return System.getProperty("os.name").contains("win");
-    }
-
-    private static boolean isRichShell() {
-        return inCI() && inWindows();
-    }
-
     private static void runInContext(WasmCase testCase, Context context, List<Source> sources, int iterations, String phaseIcon, String phaseLabel) {
         boolean requiresZeroMemory = Boolean.parseBoolean(testCase.options().getProperty("zero-memory", "false"));
 
@@ -219,7 +211,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
         for (int i = formattedLabel.length(); i < STATUS_LABEL_WIDTH; i++) {
             formattedLabel += " ";
         }
-        if (isRichShell()) {
+        if (inCI()) {
             oldOut.println();
             oldOut.print(icon);
             oldOut.print(formattedLabel);
@@ -352,7 +344,7 @@ public abstract class WasmSuiteBase extends WasmTestBase {
                 statusIcon = TEST_FAILED_ICON;
                 errors.put(testCase, e);
             } finally {
-                if (isRichShell()) {
+                if (inCI()) {
                     System.out.println();
                     System.out.println(statusIcon);
                     System.out.println();
