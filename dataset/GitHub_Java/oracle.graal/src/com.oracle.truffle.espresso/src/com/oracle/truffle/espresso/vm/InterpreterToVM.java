@@ -214,8 +214,8 @@ public final class InterpreterToVM implements ContextAccess {
     @TruffleBoundary
     public static void monitorEnter(@Host(Object.class) StaticObject obj) {
         final EspressoLock lock = obj.getLock();
-        EspressoContext context = obj.getKlass().getContext();
         if (!lock.tryLock()) {
+            EspressoContext context = obj.getKlass().getContext();
             Meta meta = context.getMeta();
             StaticObject thread = context.getCurrentThread();
             Target_java_lang_Thread.fromRunnable(thread, meta, Target_java_lang_Thread.State.BLOCKED);
@@ -225,15 +225,12 @@ public final class InterpreterToVM implements ContextAccess {
                 Field blockedCount = meta.HIDDEN_THREAD_BLOCKED_COUNT;
                 Target_java_lang_Thread.incrementThreadCounter(thread, blockedCount);
             }
-            context.getJDWPListener().onContendedMonitorEnter(obj);
             lock.lock();
-            context.getJDWPListener().onContendedMonitorEntered(obj);
             if (context.EnableManagement) {
                 thread.setHiddenField(meta.HIDDEN_THREAD_BLOCKED_OBJECT, null);
             }
             Target_java_lang_Thread.toRunnable(thread, meta, Target_java_lang_Thread.State.RUNNABLE);
         }
-        context.getJDWPListener().onMonitorEnter(obj);
     }
 
     @TruffleBoundary
@@ -246,7 +243,6 @@ public final class InterpreterToVM implements ContextAccess {
             throw Meta.throwException(meta.java_lang_IllegalMonitorStateException);
         }
         lock.unlock();
-        obj.getKlass().getContext().getJDWPListener().onMonitorExit(obj);
     }
 
     // endregion
@@ -405,20 +401,20 @@ public final class InterpreterToVM implements ContextAccess {
 
     public static StaticObject allocatePrimitiveArray(byte jvmPrimitiveType, int length) {
         // the constants for the cpi are loosely defined and no real cpi indices.
-        Meta meta = EspressoLanguage.getCurrentContext().getMeta();
         if (length < 0) {
+            Meta meta = EspressoLanguage.getCurrentContext().getMeta();
             throw Meta.throwException(meta.java_lang_NegativeArraySizeException);
         }
         // @formatter:off
         switch (jvmPrimitiveType) {
-            case 4  : return StaticObject.wrap(new boolean[length], meta);
-            case 5  : return StaticObject.wrap(new char[length], meta);
-            case 6  : return StaticObject.wrap(new float[length], meta);
-            case 7  : return StaticObject.wrap(new double[length], meta);
-            case 8  : return StaticObject.wrap(new byte[length], meta);
-            case 9  : return StaticObject.wrap(new short[length], meta);
-            case 10 : return StaticObject.wrap(new int[length], meta);
-            case 11 : return StaticObject.wrap(new long[length], meta);
+            case 4  : return StaticObject.wrap(new boolean[length]);
+            case 5  : return StaticObject.wrap(new char[length]);
+            case 6  : return StaticObject.wrap(new float[length]);
+            case 7  : return StaticObject.wrap(new double[length]);
+            case 8  : return StaticObject.wrap(new byte[length]);
+            case 9  : return StaticObject.wrap(new short[length]);
+            case 10 : return StaticObject.wrap(new int[length]);
+            case 11 : return StaticObject.wrap(new long[length]);
             default :
                 CompilerDirectives.transferToInterpreter();
                 throw EspressoError.shouldNotReachHere();
@@ -476,7 +472,7 @@ public final class InterpreterToVM implements ContextAccess {
                                             : meta.java_lang_InstantiationException);
         }
         klass.safeInitialize();
-        return StaticObject.createNew((ObjectKlass) klass);
+        return new StaticObject((ObjectKlass) klass);
     }
 
     public static int arrayLength(StaticObject arr) {
@@ -567,7 +563,7 @@ public final class InterpreterToVM implements ContextAccess {
                                 if (!c.checkThrowableInit(method)) {
                                     int bci = -1; // unknown
                                     if (espressoNode.isBytecodeNode()) {
-                                        bci = espressoNode.readBCI(frameInstance.getFrame(FrameInstance.FrameAccess.READ_ONLY));
+                                        bci = espressoNode.readBCI(frameInstance);
                                     } else if (method.isNative()) {
                                         bci = -2; // native
                                     }
