@@ -107,8 +107,7 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
     protected abstract static class Structure {
     }
 
-    public GraphKit(DebugContext debug, ResolvedJavaMethod stubMethod, Providers providers, WordTypes wordTypes, Plugins graphBuilderPlugins, CompilationIdentifier compilationId, String name,
-                    boolean trackNodeSourcePosition) {
+    public GraphKit(DebugContext debug, ResolvedJavaMethod stubMethod, Providers providers, WordTypes wordTypes, Plugins graphBuilderPlugins, CompilationIdentifier compilationId, String name) {
         super(providers);
         StructuredGraph.Builder builder = new StructuredGraph.Builder(debug.getOptions(), debug).compilationId(compilationId);
         if (name != null) {
@@ -118,9 +117,6 @@ public class GraphKit extends CoreProvidersDelegate implements GraphBuilderTool 
         }
         this.graph = builder.build();
         graph.disableUnsafeAccessTracking();
-        if (trackNodeSourcePosition) {
-            graph.setTrackNodeSourcePosition();
-        }
         if (graph.trackNodeSourcePosition()) {
             // Set up a default value that everything constructed by GraphKit will use.
             graph.withNodeSourcePosition(NodeSourcePosition.substitution(stubMethod));

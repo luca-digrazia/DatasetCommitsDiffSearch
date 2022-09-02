@@ -1585,6 +1585,15 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
         return emitBytecodeExceptionCheck(condition, true, BytecodeExceptionKind.ARRAY_STORE, value);
     }
 
+    protected GuardingNode maybeEmitExplicitDivisionByZeroCheck(ValueNode y) {
+        if (!((IntegerStamp) y.stamp(NodeView.DEFAULT)).contains(0) || !needsExplicitDivisionByZeroException(y)) {
+            return null;
+        }
+        ConstantNode zero = ConstantNode.defaultForKind(y.getStackKind(), graph);
+        LogicNode condition = genUnique(IntegerEqualsNode.create(getConstantReflection(), getMetaAccess(), options, null, y, zero, NodeView.DEFAULT));
+        return emitBytecodeExceptionCheck(condition, false, BytecodeExceptionKind.DIVISION_BY_ZERO);
+    }
+
     @Override
     public AbstractBeginNode emitBytecodeExceptionCheck(LogicNode condition, boolean passingOnTrue, BytecodeExceptionKind exceptionKind, ValueNode... arguments) {
         AbstractBeginNode result = GraphBuilderContext.super.emitBytecodeExceptionCheck(condition, passingOnTrue, exceptionKind, arguments);
@@ -4029,7 +4038,7 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
             JavaConstant constant = (JavaConstant) con;
             frameState.push(constant.getJavaKind(), appendConstant(constant));
         } else {
-            throw new Error("lookupConstant returned an object of incorrect type: " + con);
+            throw new Error("lookupConstant returned an object of incorrect type");
         }
     }
 
@@ -4830,6 +4839,15 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
         return needsExplicitException();
     }
 
+    /**
+     * Returns true if an explicit null check should be emitted for the given object.
+     *
+     * @param y The dividend.
+     */
+    protected boolean needsExplicitDivisionByZeroException(ValueNode y) {
+        return needsExplicitException();
+    }
+
     @Override
     public boolean needsExplicitException() {
         BytecodeExceptionMode exceptionMode = graphBuilderConfig.getBytecodeExceptionMode();
@@ -5018,8 +5036,9 @@ public class BytecodeParser extends CoreProvidersDelegate implements GraphBuilde
 
     private double[] switchProbability(int numberOfCases, int bci) {
         double[] prob = (profilingInfo == null ? null : profilingInfo.getSwitchProbabilities(bci));
-        /* A broken profile (wrong number of cases) must not fail compilation, so just ignore it. */
-        if (prob == null || prob.length != numberOfCases) {
+        if (prob != null) {
+            assert prob.length == numberOfCases;
+        } else {
             debug.log("Missing probability (switch) in %s at bci %d", method, bci);
             prob = new double[numberOfCases];
             for (int i = 0; i < numberOfCases; i++) {

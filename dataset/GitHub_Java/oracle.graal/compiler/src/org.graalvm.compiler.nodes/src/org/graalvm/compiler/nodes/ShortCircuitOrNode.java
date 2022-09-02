@@ -267,7 +267,7 @@ public final class ShortCircuitOrNode extends LogicNode implements IterableNodeT
         private final NodeView view;
 
         ProxyCanonicalizerTool(Stamp stamp, ValueNode node, CanonicalizerTool tool, NodeView view) {
-            super(tool);
+            super(tool.getProviders());
             this.stamp = stamp;
             this.node = node;
             this.tool = tool;
