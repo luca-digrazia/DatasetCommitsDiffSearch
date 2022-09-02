@@ -63,24 +63,11 @@ public abstract class SourceCache {
      * A list of all entries in the classpath used by the native image classloader.
      */
     protected static final List<String> sourcePathEntries = new ArrayList<>();
-
     /**
      * A list of root directories which may contain source files from which this cache can be
      * populated.
      */
     protected List<Path> srcRoots;
-
-    private static final String JAVA_SPEC_VERSION_PROP = "java.specification.version";
-
-    /**
-     *
-     * The java spec version for the current JDK.
-     */
-    private static String javaSpecVersion = System.getProperty(JAVA_SPEC_VERSION_PROP);
-
-    public static boolean isJDK8() {
-        return javaSpecVersion.equals("1.8");
-    }
 
     /**
      * Create some flavour of source cache.
@@ -179,29 +166,22 @@ public abstract class SourceCache {
      * @return the supplied path if the file has been located and copied to the local sources
      *         directory or null if it was not found or the copy failed.
      */
-    protected Path tryCacheFile(Path filePath) {
+    public Path tryCacheFile(Path filePath) {
         for (Path root : srcRoots) {
             Path targetPath = cachedPath(filePath);
             Path sourcePath = extendPath(root, filePath);
-            if (tryCacheFileFromRoot(sourcePath, targetPath)) {
-                // return the original filePath
-                // we don't want the sources/jdk prefix to go into the debuginfo
-                return filePath;
+            try {
+                if (checkSourcePath(sourcePath)) {
+                    ensureTargetDirs(targetPath.getParent());
+                    Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                    // return the original filePath
+                    // we don't want the sources/jdk prefix to go into the debuginfo
+                    return filePath;
+                }
+            } catch (IOException e) {
             }
         }
         return null;
-    }
-
-    protected boolean tryCacheFileFromRoot(Path sourcePath, Path targetPath) {
-        try {
-            if (checkSourcePath(sourcePath)) {
-                ensureTargetDirs(targetPath.getParent());
-                Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
-                return true;
-            }
-        } catch (IOException ioe) {
-        }
-        return false;
     }
 
     /**
@@ -214,12 +194,23 @@ public abstract class SourceCache {
      * @return the supplied path if the file is up to date or if an updated version has been copied
      *         to the local sources directory or null if was not found or the copy failed.
      */
-    protected Path checkCacheFile(Path filePath) {
+    public Path checkCacheFile(Path filePath) {
         Path targetPath = cachedPath(filePath);
         for (Path root : srcRoots) {
             Path sourcePath = extendPath(root, filePath);
             try {
-                if (tryCheckCacheFile(sourcePath, targetPath)) {
+                if (checkSourcePath(sourcePath)) {
+                    FileTime sourceTime = Files.getLastModifiedTime(sourcePath);
+                    FileTime destTime = Files.getLastModifiedTime(targetPath);
+                    if (destTime.compareTo(sourceTime) < 0) {
+                        try {
+                            Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+                        } catch (IOException e) {
+                            /* delete the target file as it is invalid */
+                            targetPath.toFile().delete();
+                            return null;
+                        }
+                    }
                     return filePath;
                 }
             } catch (IOException e) {
@@ -235,20 +226,8 @@ public abstract class SourceCache {
         return null;
     }
 
-    protected boolean tryCheckCacheFile(Path sourcePath, Path targetPath) throws IOException {
-        if (checkSourcePath(sourcePath)) {
-            FileTime sourceTime = Files.getLastModifiedTime(sourcePath);
-            FileTime destTime = Files.getLastModifiedTime(targetPath);
-            if (destTime.compareTo(sourceTime) < 0) {
-                Files.copy(sourcePath, targetPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
-            }
-            return true;
-        }
-        return false;
-    }
-
     /**
-     * Create and initialize the source cache used to locate and cache sources of a given type as
+     * Create and intialize the source cache used to locate and cache sources of a given type as
      * determined by the supplied key.
      * 
      * @param type an enum identifying both the type of Java sources cached by the returned cache
@@ -319,7 +298,7 @@ public abstract class SourceCache {
      * @param sourcePath the path to check
      * @return true if the path identifies a file or false if no such file can be found.
      */
-    protected static boolean checkSourcePath(Path sourcePath) {
+    private static boolean checkSourcePath(Path sourcePath) {
         return Files.isRegularFile(sourcePath);
     }
 
@@ -328,7 +307,7 @@ public abstract class SourceCache {
      * 
      * @param targetDir a path to the desired directory
      */
-    protected static void ensureTargetDirs(Path targetDir) {
+    private static void ensureTargetDirs(Path targetDir) {
         if (targetDir != null) {
             File targetFile = targetDir.toFile();
             if (!targetFile.exists()) {
