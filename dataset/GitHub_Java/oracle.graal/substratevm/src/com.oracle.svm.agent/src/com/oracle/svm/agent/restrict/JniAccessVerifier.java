@@ -40,8 +40,6 @@ import org.graalvm.nativeimage.c.type.WordPointer;
 
 import com.oracle.svm.agent.Agent;
 import com.oracle.svm.agent.jvmti.JvmtiError;
-import com.oracle.svm.configure.config.ConfigurationMethod;
-import com.oracle.svm.configure.config.TypeConfiguration;
 import com.oracle.svm.configure.trace.AccessAdvisor;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
 import com.oracle.svm.jni.nativeapi.JNIFieldId;
@@ -50,7 +48,7 @@ import com.oracle.svm.jni.nativeapi.JNIObjectHandle;
 
 public class JniAccessVerifier extends AbstractAccessVerifier {
 
-    public JniAccessVerifier(TypeConfiguration configuration, AccessAdvisor advisor) {
+    public JniAccessVerifier(Configuration configuration, AccessAdvisor advisor) {
         super(configuration, advisor);
     }
 
@@ -76,7 +74,7 @@ public class JniAccessVerifier extends AbstractAccessVerifier {
             if (!name.startsWith("[") && name.length() > 1) {
                 name = "L" + name + ";"; // FindClass doesn't require those
             }
-            if (configuration.getByInternalName(name) != null) {
+            if (configuration.get(name) != null) {
                 return true;
             }
         }
@@ -90,7 +88,7 @@ public class JniAccessVerifier extends AbstractAccessVerifier {
     public boolean verifyGetMethodID(JNIEnvironment env, JNIObjectHandle clazz, CCharPointer cname, CCharPointer csignature, JNIMethodId result, JNIObjectHandle callerClass) {
         assert result.isNonNull();
         String name = fromCString(cname);
-        if (accessAdvisor.shouldIgnoreJniMethodLookup(() -> getClassNameOrNull(env, clazz), () -> name, () -> fromCString(csignature), () -> getClassNameOrNull(env, callerClass))) {
+        if (accessAdvisor.shouldIgnoreJniMethodLookup(() -> (String) getClassNameOrNull(env, clazz), () -> name, () -> fromCString(csignature), () -> (String) getClassNameOrNull(env, callerClass))) {
             return true;
         }
         WordPointer declaringPtr = StackValue.get(WordPointer.class);
@@ -130,20 +128,6 @@ public class JniAccessVerifier extends AbstractAccessVerifier {
             jniFunctions().getThrowNew().invoke(env, handles().javaLangNoSuchFieldError, message.get());
         }
         return false;
-    }
-
-    public boolean verifyThrowNew(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle callerClass) {
-        String name = ConfigurationMethod.CONSTRUCTOR_NAME;
-        String signature = "(Ljava/lang/String;)V";
-        if (accessAdvisor.shouldIgnoreJniMethodLookup(() -> getClassNameOrNull(env, clazz), () -> name, () -> signature, () -> getClassNameOrNull(env, callerClass))) {
-            return true;
-        }
-        JNIMethodId result;
-        try (CCharPointerHolder cname = toCString(name); CCharPointerHolder csignature = toCString(signature)) {
-            result = jniFunctions().getGetMethodID().invoke(env, clazz, cname.get(), csignature.get());
-            // NOTE: GetMethodID() can have initialized `clazz` as a side effect
-        }
-        return result.isNull() || isMethodAccessible(env, clazz, name, () -> signature, result, clazz);
     }
 
     private static void beforeThrow(@SuppressWarnings("unused") CCharPointerHolder message) {

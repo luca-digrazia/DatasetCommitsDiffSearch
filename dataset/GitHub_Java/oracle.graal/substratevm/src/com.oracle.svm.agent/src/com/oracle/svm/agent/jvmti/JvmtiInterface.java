@@ -29,7 +29,6 @@ import org.graalvm.nativeimage.c.function.CFunctionPointer;
 import org.graalvm.nativeimage.c.function.InvokeCFunctionPointer;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
-import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.WordPointer;
@@ -203,21 +202,5 @@ public interface JvmtiInterface extends PointerBase {
     interface ForceEarlyReturnObjectFunctionPointer extends CFunctionPointer {
         @InvokeCFunctionPointer
         JvmtiError invoke(JvmtiEnv jvmtiEnv, JNIObjectHandle thread, JNIObjectHandle value);
-    }
-
-    @CField("GetSystemProperty")
-    GetSystemPropertyFunctionPointer GetSystemProperty();
-
-    interface GetSystemPropertyFunctionPointer extends CFunctionPointer {
-        @InvokeCFunctionPointer
-        JvmtiError invoke(JvmtiEnv jvmtiEnv, CCharPointer property, CCharPointerPointer valuePtr);
-    }
-
-    @CField("GetSystemProperties")
-    GetSystemPropertiesFunctionPointer GetSystemProperties();
-
-    interface GetSystemPropertiesFunctionPointer extends CFunctionPointer {
-        @InvokeCFunctionPointer
-        JvmtiError invoke(JvmtiEnv jvmtiEnv, CIntPointer countPtr, WordPointer propertyPtr);
     }
 }

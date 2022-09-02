@@ -67,9 +67,7 @@ import com.oracle.svm.agent.jvmti.JvmtiEnv;
 import com.oracle.svm.agent.jvmti.JvmtiError;
 import com.oracle.svm.agent.jvmti.JvmtiEventCallbacks;
 import com.oracle.svm.agent.jvmti.JvmtiEventMode;
-import com.oracle.svm.agent.restrict.ProxyAccessVerifier;
 import com.oracle.svm.agent.restrict.ReflectAccessVerifier;
-import com.oracle.svm.agent.restrict.ResourceAccessVerifier;
 import com.oracle.svm.core.c.function.CEntryPointOptions;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.jni.nativeapi.JNIEnvironment;
@@ -98,8 +96,6 @@ final class BreakpointInterceptor {
     private static TraceWriter traceWriter;
 
     private static ReflectAccessVerifier accessVerifier;
-    private static ProxyAccessVerifier proxyVerifier;
-    private static ResourceAccessVerifier resourceVerifier;
 
     private static Map<Long, Breakpoint> installedBreakpoints;
 
@@ -355,11 +351,8 @@ final class BreakpointInterceptor {
     }
 
     private static boolean handleGetResources(JNIEnvironment jni, JNIObjectHandle callerClass, Breakpoint bp, boolean returnsEnumeration) {
-        JNIObjectHandle name = getObjectArgument(1);
-        if (resourceVerifier != null && !resourceVerifier.verifyGetResources(jni, name, callerClass)) {
-            return forceGetResourceReturn(jni, returnsEnumeration);
-        }
         JNIObjectHandle self = getObjectArgument(0);
+        JNIObjectHandle name = getObjectArgument(1);
         JNIObjectHandle returnValue = jniFunctions().<CallObjectMethod1FunctionPointer> getCallObjectMethod().invoke(jni, self, bp.method, name);
         boolean result = returnValue.notEqual(nullHandle());
         if (clearException(jni)) {
@@ -387,22 +380,6 @@ final class BreakpointInterceptor {
         return hasElements;
     }
 
-    private static boolean forceGetResourceReturn(JNIEnvironment env, boolean returnsEnumeration) {
-        JNIObjectHandle newResult = nullHandle();
-        if (returnsEnumeration) {
-            JNIObjectHandle javaUtilCollections = handles().getJavaUtilCollections(env);
-            JNIMethodId emptyEnumeration = handles().getJavaUtilCollectionsEmptyEnumeration(env);
-            if (javaUtilCollections.notEqual(nullHandle()) && emptyEnumeration.isNonNull()) {
-                newResult = jniFunctions().<CallObjectMethod0FunctionPointer> getCallObjectMethod().invoke(env, javaUtilCollections, emptyEnumeration);
-                if (clearException(env)) {
-                    newResult = nullHandle();
-                }
-            }
-        }
-        jvmtiFunctions().ForceEarlyReturnObject().invoke(jvmtiEnv(), nullHandle(), newResult);
-        return false;
-    }
-
     private static boolean getSystemResource(JNIEnvironment jni, JNIObjectHandle callerClass, Breakpoint bp) {
         return handleGetSystemResources(jni, callerClass, bp, false);
     }
@@ -413,9 +390,6 @@ final class BreakpointInterceptor {
 
     private static boolean handleGetSystemResources(JNIEnvironment jni, JNIObjectHandle callerClass, Breakpoint bp, boolean returnsEnumeration) {
         JNIObjectHandle name = getObjectArgument(0);
-        if (resourceVerifier != null && !resourceVerifier.verifyGetSystemResources(jni, name, callerClass)) {
-            forceGetResourceReturn(jni, returnsEnumeration);
-        }
         JNIObjectHandle returnValue = jniFunctions().<CallObjectMethod1FunctionPointer> getCallStaticObjectMethod().invoke(jni, bp.clazz, bp.method, name);
         boolean result = returnValue.notEqual(nullHandle());
         if (clearException(jni)) {
@@ -431,16 +405,13 @@ final class BreakpointInterceptor {
     private static boolean newProxyInstance(JNIEnvironment jni, JNIObjectHandle callerClass, Breakpoint bp) {
         JNIObjectHandle classLoader = getObjectArgument(0);
         JNIObjectHandle ifaces = getObjectArgument(1);
-        Object ifaceNames = getClassArrayNames(jni, ifaces);
-        if (proxyVerifier != null && !proxyVerifier.verifyNewProxyInstance(jni, ifaceNames, callerClass)) {
-            return false;
-        }
         JNIObjectHandle invokeHandler = getObjectArgument(2);
         boolean result = nullHandle().notEqual(jniFunctions().<CallObjectMethod3FunctionPointer> getCallStaticObjectMethod()
                         .invoke(jni, bp.clazz, bp.method, classLoader, ifaces, invokeHandler));
         if (clearException(jni)) {
             result = false;
         }
+        Object ifaceNames = getClassArrayNames(jni, ifaces);
         traceBreakpoint(jni, nullHandle(), nullHandle(), callerClass, bp.specification.methodName, result, TraceWriter.UNKNOWN_VALUE, ifaceNames, TraceWriter.UNKNOWN_VALUE);
         return true;
     }
@@ -448,15 +419,12 @@ final class BreakpointInterceptor {
     private static boolean getProxyClass(JNIEnvironment jni, JNIObjectHandle callerClass, Breakpoint bp) {
         JNIObjectHandle classLoader = getObjectArgument(0);
         JNIObjectHandle ifaces = getObjectArgument(1);
-        Object ifaceNames = getClassArrayNames(jni, ifaces);
-        if (proxyVerifier != null && !proxyVerifier.verifyGetProxyClass(jni, ifaceNames, callerClass)) {
-            return false;
-        }
         boolean result = nullHandle().notEqual(jniFunctions().<CallObjectMethod2FunctionPointer> getCallStaticObjectMethod()
                         .invoke(jni, bp.clazz, bp.method, classLoader, ifaces));
         if (clearException(jni)) {
             result = false;
         }
+        Object ifaceNames = getClassArrayNames(jni, ifaces);
         traceBreakpoint(jni, nullHandle(), nullHandle(), callerClass, bp.specification.methodName, result, TraceWriter.UNKNOWN_VALUE, ifaceNames, TraceWriter.UNKNOWN_VALUE);
         return true;
     }
@@ -507,9 +475,7 @@ final class BreakpointInterceptor {
     private static final CEntryPointLiteral<CFunctionPointer> onBreakpointLiteral = CEntryPointLiteral.create(BreakpointInterceptor.class, "onBreakpoint",
                     JvmtiEnv.class, JNIEnvironment.class, JNIObjectHandle.class, JNIMethodId.class, long.class);
 
-    public static void onLoad(JvmtiEnv jvmti, JvmtiEventCallbacks callbacks, TraceWriter writer, ReflectAccessVerifier verifier,
-                    ProxyAccessVerifier prverifier, ResourceAccessVerifier resverifier) {
-
+    public static void onLoad(JvmtiEnv jvmti, JvmtiEventCallbacks callbacks, TraceWriter writer, ReflectAccessVerifier verifier) {
         JvmtiCapabilities capabilities = UnmanagedMemory.calloc(SizeOf.get(JvmtiCapabilities.class));
         check(jvmti.getFunctions().GetCapabilities().invoke(jvmti, capabilities));
         capabilities.setCanGenerateBreakpointEvents(1);
@@ -524,8 +490,6 @@ final class BreakpointInterceptor {
 
         BreakpointInterceptor.traceWriter = writer;
         BreakpointInterceptor.accessVerifier = verifier;
-        BreakpointInterceptor.proxyVerifier = prverifier;
-        BreakpointInterceptor.resourceVerifier = resverifier;
     }
 
     public static void onVMInit(JvmtiEnv jvmti, JNIEnvironment jni) {
@@ -569,8 +533,6 @@ final class BreakpointInterceptor {
                         ref -> jniFunctions().getDeleteGlobalRef().invoke(env, WordFactory.pointer(ref)));
         installedBreakpoints = null;
         accessVerifier = null;
-        proxyVerifier = null;
-        resourceVerifier = null;
         traceWriter = null;
     }
 
