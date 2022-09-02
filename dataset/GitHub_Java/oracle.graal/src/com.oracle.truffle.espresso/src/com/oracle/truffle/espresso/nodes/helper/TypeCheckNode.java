@@ -49,7 +49,7 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
  */
 @SuppressWarnings("unused")
 public abstract class TypeCheckNode extends Node implements ContextAccess {
-    protected static final int LIMIT = 4;
+    protected static final int LIMIT = 5;
 
     private final EspressoContext context;
 
@@ -74,12 +74,27 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
         return typeToCheck == k;
     }
 
-    @Specialization(guards = {"typeToCheck == cachedTTC", "k == cachedKlass"}, limit = "LIMIT")
+    @Specialization(replaces = {"typeCheckEquals", "typeCheckJLObject", "typeCheckFinal"}, guards = {"typeToCheck == cachedTTC", "k == cachedKlass"}, limit = "LIMIT")
     protected boolean typeCheckCached(Klass typeToCheck, Klass k,
                     @Cached("typeToCheck") Klass cachedTTC,
                     @Cached("k") Klass cachedKlass,
                     @Cached("doTypeCheck(typeToCheck, k)") boolean result) {
         return result;
+    }
+
+    @Specialization(replaces = "typeCheckCached", guards = "typeToCheck == k")
+    protected boolean typeCheckEqualsAfterCache(Klass typeToCheck, Klass k) {
+        return true;
+    }
+
+    @Specialization(replaces = "typeCheckCached", guards = "isJLObject(typeToCheck)")
+    protected boolean typeCheckJLObjectAfterCache(Klass typeToCheck, Klass k) {
+        return !k.isPrimitive();
+    }
+
+    @Specialization(replaces = "typeCheckCached", guards = "isFinal(typeToCheck)")
+    protected boolean typeCheckFinalAfterCache(ObjectKlass typeToCheck, Klass k) {
+        return typeToCheck == k;
     }
 
     @Specialization(replaces = "typeCheckCached", guards = "arrayBiggerDim(typeToCheck, k)")
@@ -102,7 +117,7 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
      */
 
     @Specialization(replaces = "typeCheckCached", guards = {
-                    "typeToCheck != k", // Re-specialize to add typeCheckEquals
+                    "typeToCheck != k", // Re-specialize to add typeCheckEqualsAfterCache
                     "arraySameDim(typeToCheck, k)",
     })
     protected boolean typeCheckArraySameDim(ArrayKlass typeToCheck, ArrayKlass k,
@@ -116,17 +131,17 @@ public abstract class TypeCheckNode extends Node implements ContextAccess {
     }
 
     @Specialization(replaces = "typeCheckCached", guards = {
-                    "typeToCheck != k", // Re-specialize to add typeCheckEquals
+                    "typeToCheck != k", // Re-specialize to add typeCheckEqualsAfterCache
                     "isInterface(typeToCheck)"})
     protected boolean typeCheckInterface(Klass typeToCheck, Klass k) {
         return typeToCheck.checkInterfaceSubclassing(k);
     }
 
     @Specialization(replaces = "typeCheckCached", guards = {
-                    "typeToCheck != k" // Re-specialize to add typeCheckEquals
+                    "typeToCheck != k" // Re-specialize to add typeCheckEqualsAfterCache
     })
     protected boolean typeCheckRegular(Klass typeToCheck, Klass k) {
-        return typeToCheck.checkOrdinaryClassSubclassing(k);
+        return typeToCheck.checkRegularClassSubclassing(k);
     }
 
     protected final boolean isJLObject(Klass k) {
