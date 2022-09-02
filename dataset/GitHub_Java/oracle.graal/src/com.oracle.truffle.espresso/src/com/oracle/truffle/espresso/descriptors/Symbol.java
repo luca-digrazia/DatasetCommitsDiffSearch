@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.util.Arrays;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.espresso.jni.ModifiedUtf8;
 import com.oracle.truffle.espresso.meta.EspressoError;
 
@@ -101,7 +100,6 @@ public final class Symbol<T> extends ByteSequence {
         return value[index];
     }
 
-    @TruffleBoundary
     @Override
     public String toString() {
         try {
