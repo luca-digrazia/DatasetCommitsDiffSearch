@@ -49,7 +49,6 @@ import org.graalvm.compiler.graph.Node;
 import org.graalvm.compiler.graph.iterators.NodeIterable;
 import org.graalvm.compiler.java.BytecodeParser;
 import org.graalvm.compiler.java.GraphBuilderPhase;
-import org.graalvm.compiler.nodes.FrameState;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.InvokeWithExceptionNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
@@ -129,9 +128,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
     private final AnnotationSubstitutionProcessor annotationSubstitutions;
     private final Map<ResolvedJavaField, ComputedValueField> fieldSubstitutions;
 
-    private final List<ResolvedJavaType> suppressWarnings;
-
-    private static ResolvedJavaType resolvedUnsafeClass;
+    private final List<ResolvedJavaType> supressWarnings;
 
     private ResolvedJavaMethod unsafeObjectFieldOffsetFieldMethod;
     private ResolvedJavaMethod unsafeObjectFieldOffsetClassStringMethod;
@@ -150,7 +147,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         this.snippetReflection = snippetReflection;
         this.annotationSubstitutions = annotationSubstitutions;
         this.fieldSubstitutions = new ConcurrentHashMap<>();
-        this.suppressWarnings = new ArrayList<>();
+        this.supressWarnings = new ArrayList<>();
     }
 
     public void init(ImageClassLoader loader, MetaAccessProvider originalMetaAccess, SVMHost hostVM) {
@@ -182,8 +179,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
             } catch (ClassNotFoundException cnfe) {
                 throw VMError.shouldNotReachHere(cnfe);
             }
-
-            resolvedUnsafeClass = originalMetaAccess.lookupJavaType(unsafeClass);
 
             Method unsafeObjectFieldOffset = unsafeClass.getMethod("objectFieldOffset", java.lang.reflect.Field.class);
             unsafeObjectFieldOffsetFieldMethod = originalMetaAccess.lookupJavaMethod(unsafeObjectFieldOffset);
@@ -254,7 +249,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
          * by default.
          */
         try {
-            suppressWarnings.add(originalMetaAccess.lookupJavaType(Class.forName("sun.security.provider.ByteArrayAccess")));
+            supressWarnings.add(originalMetaAccess.lookupJavaType(Class.forName("sun.security.provider.ByteArrayAccess")));
         } catch (ClassNotFoundException e) {
             throw VMError.shouldNotReachHere(e);
         }
@@ -307,13 +302,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         if (hostType.isArray()) {
             return;
         }
-
-        if (annotationSubstitutions.findSubstitution(hostType).isPresent()) {
-            // Class is substituted, clinit will be eliminated, so bail early.
-            reportSkippedSubstitution(hostType);
-            return;
-        }
-
         /* Detect field offset computation in static initializers. */
         ResolvedJavaMethod clinit = hostType.getClassInitializer();
 
@@ -428,11 +416,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
          */
         ResolvedJavaField offsetField = extractValueStoreField(unsafeObjectFieldOffsetInvoke.asNode(), FieldOffset, unsuccessfulReasons);
 
-        // No field, but doesn't escape local usage, ignore.
-        if (offsetField == null && unsuccessfulReasons.isEmpty()) {
-            return;
-        }
-
         /*
          * If the target field holder and name, and the offset field were found try to register a
          * substitution.
@@ -482,11 +465,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                 reportSuccessfulAutomaticRecomputation(ArrayBaseOffset, offsetField, arrayClass.getCanonicalName());
             }
         } else {
-            if (!unsuccessfulReasons.isEmpty()) {
-                // Only report if there's a reason, else it never
-                // escaped local usage anyhow.
-                reportUnsuccessfulAutomaticRecomputation(type, offsetField, unsafeArrayBaseOffsetInvoke, ArrayBaseOffset, unsuccessfulReasons);
-            }
+            reportUnsuccessfulAutomaticRecomputation(type, offsetField, unsafeArrayBaseOffsetInvoke, ArrayBaseOffset, unsuccessfulReasons);
         }
     }
 
@@ -538,9 +517,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
             }
         }
         if (!indexScaleComputed && !indexShiftComputed) {
-            if (!unsuccessfulReasons.isEmpty()) {
-                reportUnsuccessfulAutomaticRecomputation(type, indexScaleField, unsafeArrayIndexScale, ArrayIndexScale, unsuccessfulReasons);
-            }
+            reportUnsuccessfulAutomaticRecomputation(type, indexScaleField, unsafeArrayIndexScale, ArrayIndexScale, unsuccessfulReasons);
         }
     }
 
@@ -647,9 +624,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                          * that we can refer to in the error, and we check for null inside the
                          * method.
                          */
-                        if (!unsuccessfulReasons.isEmpty()) {
-                            reportUnsuccessfulAutomaticRecomputation(type, null, numberOfLeadingZerosInvoke, ArrayIndexShift, unsuccessfulReasons);
-                        }
+                        reportUnsuccessfulAutomaticRecomputation(type, null, numberOfLeadingZerosInvoke, ArrayIndexShift, unsuccessfulReasons);
                     }
                 }
             }
@@ -696,8 +671,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
         NodeIterable<StoreFieldNode> valueNodeStoreFieldUsages = valueNodeUsages.filter(StoreFieldNode.class);
         NodeIterable<SignExtendNode> valueNodeSignExtendUsages = valueNodeUsages.filter(SignExtendNode.class);
 
-        boolean doesEscape = false;
-
         if (valueNodeStoreFieldUsages.count() == 1) {
             offsetField = valueNodeStoreFieldUsages.first().field();
         } else if (valueNodeSignExtendUsages.count() == 1) {
@@ -705,24 +678,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
             NodeIterable<StoreFieldNode> signExtendFieldStoreUsages = signExtendNode.usages().filter(StoreFieldNode.class);
             if (signExtendFieldStoreUsages.count() == 1) {
                 offsetField = signExtendFieldStoreUsages.first().field();
-            }
-        } else {
-            // Determine if the usage of the offset escapes from local usage.
-            for (Node valueNodeUsage : valueNodeUsages) {
-                if (valueNodeUsage instanceof FrameState) {
-                    // it's just stuffed into a local
-                    continue;
-                } else if (valueNodeUsage instanceof MethodCallTargetNode) {
-                    // it's used directly in a call back into Unsafe.
-                    MethodCallTargetNode methodCallTarget = (MethodCallTargetNode) valueNodeUsage;
-                    ResolvedJavaMethod targetMethod = methodCallTarget.targetMethod();
-                    if (targetMethod.getDeclaringClass().equals(resolvedUnsafeClass)) {
-                        continue;
-                    }
-                }
-                // Some other non-Unsafe non-local usage exists, so it escapes. Probably.
-                doesEscape = true;
-                break;
             }
         }
 
@@ -735,10 +690,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                 unsuccessfulReasons.add(message);
             }
         } else {
-            if (!doesEscape) {
-                // No failure reason is added, as it doesn't actually constitute a failure.
-                return null;
-            }
             String producer;
             String operation;
             if (valueNode instanceof Invoke) {
@@ -809,13 +760,6 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
                 addSubstitutionField(field, substitutionSupplier.get());
                 return true;
             }
-        }
-    }
-
-    private static void reportSkippedSubstitution(ResolvedJavaType type) {
-        if (Options.UnsafeAutomaticSubstitutionsLogLevel.getValue() >= DEBUG_LEVEL) {
-            String msg = "Warning: skipped automatic Unsafe substitutions on type " + type.getName() + " as it is subsequently entirely substituted.";
-            System.out.println(msg);
         }
     }
 
@@ -934,7 +878,7 @@ public class UnsafeAutomaticSubstitutionProcessor extends SubstitutionProcessor 
     }
 
     private boolean warningsAreWhiteListed(ResolvedJavaType type) {
-        return suppressWarnings.contains(type);
+        return supressWarnings.contains(type);
     }
 
     private ResolvedJavaType findSubstitutionType(ResolvedJavaType type) {

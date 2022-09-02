@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -203,7 +203,6 @@ public final class GraphBuilderConfiguration {
     private final boolean trackNodeSourcePosition;
     private final boolean retainLocalVariables;
     private final Plugins plugins;
-    private final boolean replaceLocalsWithConstants;
 
     public enum BytecodeExceptionMode {
         /**
@@ -232,7 +231,6 @@ public final class GraphBuilderConfiguration {
                     boolean insertFullInfopoints,
                     boolean trackNodeSourcePosition,
                     boolean retainLocalVariables,
-                    boolean replaceLocalsWithConstants,
                     List<ResolvedJavaType> skippedExceptionTypes,
                     Plugins plugins) {
         this.eagerResolving = eagerResolving;
@@ -242,7 +240,6 @@ public final class GraphBuilderConfiguration {
         this.insertFullInfopoints = insertFullInfopoints;
         this.trackNodeSourcePosition = trackNodeSourcePosition;
         this.retainLocalVariables = retainLocalVariables;
-        this.replaceLocalsWithConstants = replaceLocalsWithConstants;
         this.skippedExceptionTypes = skippedExceptionTypes;
         this.plugins = plugins;
     }
@@ -262,7 +259,6 @@ public final class GraphBuilderConfiguration {
                         insertFullInfopoints,
                         trackNodeSourcePosition,
                         retainLocalVariables,
-                        replaceLocalsWithConstants,
                         skippedExceptionTypes,
                         newPlugins);
         return result;
@@ -283,7 +279,6 @@ public final class GraphBuilderConfiguration {
                         insertFullInfopoints,
                         trackNodeSourcePosition,
                         retainLocalVariables,
-                        replaceLocalsWithConstants,
                         skippedExceptionTypes,
                         plugins);
     }
@@ -297,7 +292,6 @@ public final class GraphBuilderConfiguration {
                         insertFullInfopoints,
                         trackNodeSourcePosition,
                         retainLocalVariables,
-                        replaceLocalsWithConstants,
                         skippedExceptionTypes,
                         plugins);
     }
@@ -311,7 +305,6 @@ public final class GraphBuilderConfiguration {
                         insertFullInfopoints,
                         trackNodeSourcePosition,
                         retainLocalVariables,
-                        replaceLocalsWithConstants,
                         Collections.unmodifiableList(Arrays.asList(newSkippedExceptionTypes)),
                         plugins);
     }
@@ -324,7 +317,6 @@ public final class GraphBuilderConfiguration {
                         insertFullInfopoints,
                         trackNodeSourcePosition,
                         retainLocalVariables,
-                        replaceLocalsWithConstants,
                         skippedExceptionTypes,
                         plugins);
     }
@@ -338,7 +330,6 @@ public final class GraphBuilderConfiguration {
                         insertFullInfopoints,
                         trackNodeSourcePosition,
                         retainLocalVariables,
-                        replaceLocalsWithConstants,
                         skippedExceptionTypes,
                         plugins);
     }
@@ -352,7 +343,6 @@ public final class GraphBuilderConfiguration {
                         newInsertFullInfopoints,
                         trackNodeSourcePosition,
                         retainLocalVariables,
-                        replaceLocalsWithConstants,
                         skippedExceptionTypes,
                         plugins);
     }
@@ -366,7 +356,6 @@ public final class GraphBuilderConfiguration {
                         insertFullInfopoints,
                         newTrackNodeSourcePosition,
                         retainLocalVariables,
-                        replaceLocalsWithConstants,
                         skippedExceptionTypes,
                         plugins);
     }
@@ -380,21 +369,6 @@ public final class GraphBuilderConfiguration {
                         insertFullInfopoints,
                         trackNodeSourcePosition,
                         newRetainLocalVariables,
-                        replaceLocalsWithConstants,
-                        skippedExceptionTypes,
-                        plugins);
-    }
-
-    public GraphBuilderConfiguration withReplaceLocalsWithConstants(boolean newReplaceLocalsWithConstants) {
-        return new GraphBuilderConfiguration(
-                        eagerResolving,
-                        unresolvedIsError,
-                        bytecodeExceptionMode,
-                        omitAssertions,
-                        insertFullInfopoints,
-                        trackNodeSourcePosition,
-                        retainLocalVariables,
-                        newReplaceLocalsWithConstants,
                         skippedExceptionTypes,
                         plugins);
     }
@@ -427,10 +401,6 @@ public final class GraphBuilderConfiguration {
         return insertFullInfopoints;
     }
 
-    public boolean replaceLocalsWithConstants() {
-        return this.replaceLocalsWithConstants;
-    }
-
     public static GraphBuilderConfiguration getDefault(Plugins plugins) {
         return new GraphBuilderConfiguration(
                         /* eagerResolving: */ false,
@@ -440,7 +410,6 @@ public final class GraphBuilderConfiguration {
                         /* insertFullInfopoints: */ false,
                         /* trackNodeSourcePosition: */ false,
                         /* retainLocalVariables */ false,
-                        /* replaceLocalsWithConstants */ false,
                         Collections.emptyList(),
                         plugins);
     }
@@ -454,7 +423,6 @@ public final class GraphBuilderConfiguration {
                         /* insertFullInfopoints: */ false,
                         /* trackNodeSourcePosition: */ false,
                         /* retainLocalVariables */ false,
-                        /* replaceLocalsWithConstants */ false,
                         Collections.emptyList(),
                         plugins);
     }
