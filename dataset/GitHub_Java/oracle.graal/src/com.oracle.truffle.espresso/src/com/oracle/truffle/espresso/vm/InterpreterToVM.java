@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -48,7 +48,6 @@ import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.runtime.StaticObject;
 import com.oracle.truffle.espresso.substitutions.Host;
 
-import com.oracle.truffle.espresso.substitutions.Target_java_lang_Thread;
 import sun.misc.Unsafe;
 
 public final class InterpreterToVM implements ContextAccess {
@@ -202,19 +201,15 @@ public final class InterpreterToVM implements ContextAccess {
 
     @SuppressWarnings({"deprecation"})
     @TruffleBoundary
-    public static void monitorEnter(@Host(Object.class) StaticObject obj) {
-        if (!hostUnsafe.tryMonitorEnter(obj)) {
-            Meta meta = obj.getKlass().getMeta();
-            StaticObject thread = meta.getContext().getCurrentThread();
-            Target_java_lang_Thread.fromRunnable(thread, meta, Target_java_lang_Thread.State.BLOCKED);
-            hostUnsafe.monitorEnter(obj);
-            Target_java_lang_Thread.toRunnable(thread, meta, Target_java_lang_Thread.State.RUNNABLE);
-        }
+    public static void monitorEnter(@Host(Object.class) Object obj) {
+        assert obj instanceof StaticObject;
+        hostUnsafe.monitorEnter(obj);
     }
 
     @SuppressWarnings({"deprecation"})
     @TruffleBoundary
-    public static void monitorExit(@Host(Object.class) StaticObject obj) {
+    public static void monitorExit(@Host(Object.class) Object obj) {
+        assert obj instanceof StaticObject;
         if (!Thread.holdsLock(obj)) {
             // No owner checks in SVM. This is a safeguard against unbalanced monitor accesses until
             // Espresso has its own monitor handling.
