@@ -92,7 +92,6 @@ public final class LLVMContext {
     private final List<Path> libraryPaths = new ArrayList<>();
     @CompilationFinal private Path internalLibraryPath;
     private final List<ExternalLibrary> externalLibraries = new ArrayList<>();
-    private final Object externalLibrariesLock = new Object();
     private final List<String> internalLibraryNames = new ArrayList<>();
 
     // map that contains all non-native globals, needed for pointer->global lookups
@@ -487,23 +486,19 @@ public final class LLVMContext {
     }
 
     private ExternalLibrary addExternalLibrary(ExternalLibrary externalLib) {
-        synchronized (externalLibrariesLock) {
-            int index = externalLibraries.indexOf(externalLib);
-            if (index >= 0) {
-                ExternalLibrary ret = externalLibraries.get(index);
-                assert ret.equals(externalLib);
-                return ret;
-            } else {
-                externalLibraries.add(externalLib);
-                return externalLib;
-            }
+        int index = externalLibraries.indexOf(externalLib);
+        if (index >= 0) {
+            ExternalLibrary ret = externalLibraries.get(index);
+            assert ret.equals(externalLib);
+            return ret;
+        } else {
+            externalLibraries.add(externalLib);
+            return externalLib;
         }
     }
 
     public List<ExternalLibrary> getExternalLibraries(Predicate<ExternalLibrary> filter) {
-        synchronized (externalLibrariesLock) {
-            return externalLibraries.stream().filter(f -> filter.test(f)).collect(Collectors.toList());
-        }
+        return externalLibraries.stream().filter(f -> filter.test(f)).collect(Collectors.toList());
     }
 
     public void addLibraryPaths(List<String> paths) {
