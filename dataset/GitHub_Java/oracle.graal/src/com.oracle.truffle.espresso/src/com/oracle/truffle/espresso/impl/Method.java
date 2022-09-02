@@ -22,17 +22,12 @@
  */
 package com.oracle.truffle.espresso.impl;
 
-import static com.oracle.truffle.espresso.bytecode.Bytecodes.ALOAD_0;
-import static com.oracle.truffle.espresso.bytecode.Bytecodes.GETFIELD;
-import static com.oracle.truffle.espresso.bytecode.Bytecodes.GETSTATIC;
-import static com.oracle.truffle.espresso.bytecode.Bytecodes.RETURN;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeInterface;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeSpecial;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeStatic;
 import static com.oracle.truffle.espresso.classfile.Constants.REF_invokeVirtual;
 
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
 import java.util.function.Function;
 
 import com.oracle.truffle.api.CallTarget;
@@ -45,7 +40,6 @@ import com.oracle.truffle.api.frame.FrameDescriptor;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.espresso.Utils;
-import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.classfile.BootstrapMethodsAttribute;
 import com.oracle.truffle.espresso.classfile.CodeAttribute;
 import com.oracle.truffle.espresso.classfile.ConstantPool;
@@ -77,8 +71,6 @@ import com.oracle.truffle.nfi.spi.types.NativeSimpleType;
 
 public final class Method implements TruffleObject, ModifiersProvider, ContextAccess {
     public static final Method[] EMPTY_ARRAY = new Method[0];
-    private static final byte GETTER_LENGTH = 5;
-    private static final byte STATIC_GETTER_LENGTH = 4;
 
     private final LinkedMethod linkedMethod;
     private final RuntimeConstantPool pool;
@@ -216,9 +208,6 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
 
     @TruffleBoundary
     public final int BCItoLineNumber(int atBCI) {
-        if (atBCI < 0) {
-            return atBCI;
-        }
         return codeAttribute.BCItoLineNumber(atBCI);
     }
 
@@ -253,26 +242,6 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
 
     public ExceptionHandler[] getExceptionHandlers() {
         return codeAttribute.getExceptionHandlers();
-    }
-
-    public int[] getSOEHandlerInfo() {
-        ArrayList<Integer> toArray = new ArrayList<>();
-        for (ExceptionHandler handler : getExceptionHandlers()) {
-            if (handler.getCatchType() == Type.StackOverflowError) {
-                toArray.add(handler.getStartBCI());
-                toArray.add(handler.getEndBCI());
-                toArray.add(handler.getHandlerBCI());
-            }
-        }
-        if (toArray.isEmpty()) {
-            return null;
-        }
-        int[] res = new int[toArray.size()];
-        int pos = 0;
-        for (Integer i : toArray) {
-            res[pos++] = i;
-        }
-        return res;
     }
 
     private static String buildJniNativeSignature(Method method) {
@@ -372,18 +341,16 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
 
                         if (callTarget == null) {
                             if (getDeclaringKlass() == getMeta().MethodHandle && (getName() == Name.invokeExact || getName() == Name.invoke)) {
-                                /*
-                                 * Happens only when trying to obtain call target of
-                                 * MethodHandle.invoke(Object... args), or
-                                 * MethodHandle.invokeExact(Object... args).
-                                 *
-                                 * The method was obtained through a regular lookup (since it is in
-                                 * the declared method). Delegate it to a polysignature method
-                                 * lookup.
-                                 *
-                                 * Redundant callTarget assignment. Better sure than sorry.
-                                 */
-                                this.callTarget = declaringKlass.lookupPolysigMethod(getName(), getRawSignature(), declaringKlass).getCallTarget();
+                                // Happens only when trying to obtain call target of
+                                // MethodHandle.invoke(Object... args), or
+                                // MethodHandle.invokeExact(Object... args).
+                                //
+                                // The method was obtained through a regular lookup (since it is in
+                                // the declared method). Delegate it to a polysignature method
+                                // lookup.
+                                //
+                                // Redundant callTarget assignment. Better sure than sorry.
+                                this.callTarget = declaringKlass.lookupPolysigMethod(getName(), getRawSignature()).getCallTarget();
                             } else {
                                 System.err.println("Failed to link native method: " + getDeclaringKlass().getType() + "." + getName() + " -> " + getRawSignature());
                                 throw getMeta().throwEx(UnsatisfiedLinkError.class);
@@ -657,7 +624,7 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
         this.poisonPill = true;
     }
 
-    public String getSourceFile() {
+    private String getSourceFile() {
         SourceFileAttribute sfa = (SourceFileAttribute) declaringKlass.getAttribute(Name.SourceFile);
         if (sfa == null) {
             return "unknown source";
@@ -679,30 +646,5 @@ public final class Method implements TruffleObject, ModifiersProvider, ContextAc
 
     public boolean isMethodHandleIntrinsic() {
         return isNative() && declaringKlass == getMeta().MethodHandle && MethodHandleIntrinsics.getId(this) != MethodHandleIntrinsics.PolySigIntrinsics.None;
-    }
-
-    public boolean isInlinableGetter() {
-        if (getSubstitutions().get(this) == null) {
-            if (getParameterCount() == 0 && !isAbstract() && !isNative()) {
-                if (isFinalFlagSet() || declaringKlass.isFinalFlagSet() || declaringKlass.leafAssumption() || isStatic()) {
-                    return hasGetterBytecodes();
-                }
-            }
-        }
-        return false;
-    }
-
-    private boolean hasGetterBytecodes() {
-        byte[] code = codeAttribute.getCode();
-        if (isStatic()) {
-            if (code.length == STATIC_GETTER_LENGTH && getExceptionHandlers().length == 0) {
-                return (code[0] == (byte) GETSTATIC) && (Bytecodes.isReturn(code[3]));
-            }
-        } else {
-            if (code.length == GETTER_LENGTH && getExceptionHandlers().length == 0) {
-                return (code[0] == (byte) ALOAD_0) && (code[1] == (byte) GETFIELD) && (Bytecodes.isReturn(code[4])) && code[4] != (byte) RETURN;
-            }
-        }
-        return false;
     }
 }
