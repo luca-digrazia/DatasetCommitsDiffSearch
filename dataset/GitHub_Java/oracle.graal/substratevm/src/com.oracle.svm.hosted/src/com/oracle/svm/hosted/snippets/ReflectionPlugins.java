@@ -52,7 +52,6 @@ import com.oracle.svm.core.reflect.ReflectionPluginExceptions;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.ImageClassLoader;
 import com.oracle.svm.hosted.NativeImageOptions;
-import com.oracle.svm.hosted.substitute.AnnotationSubstitutionProcessor;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
@@ -101,8 +100,7 @@ public class ReflectionPlugins {
         }
     }
 
-    public static void registerInvocationPlugins(ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions,
-                    InvocationPlugins plugins, boolean analysis, boolean hosted) {
+    public static void registerInvocationPlugins(ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, InvocationPlugins plugins, boolean analysis, boolean hosted) {
         /*
          * Initialize the registry if we are during analysis. If hosted is false, i.e., we are
          * analyzing the static initializers, then we always intrinsify, so don't need a registry.
@@ -111,11 +109,10 @@ public class ReflectionPlugins {
             ImageSingletons.add(ReflectionPluginRegistry.class, new ReflectionPluginRegistry());
         }
 
-        registerClassPlugins(imageClassLoader, snippetReflection, annotationSubstitutions, plugins, analysis, hosted);
+        registerClassPlugins(imageClassLoader, snippetReflection, plugins, analysis, hosted);
     }
 
-    private static void registerClassPlugins(ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions,
-                    InvocationPlugins plugins, boolean analysis, boolean hosted) {
+    private static void registerClassPlugins(ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, InvocationPlugins plugins, boolean analysis, boolean hosted) {
         Registration r = new Registration(plugins, Class.class);
 
         r.register1("forName", String.class, new InvocationPlugin() {
@@ -149,28 +146,28 @@ public class ReflectionPlugins {
         r.register3("getDeclaredMethod", Receiver.class, String.class, Class[].class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode name, ValueNode parameterTypes) {
-                return processGetMethod(b, targetMethod, receiver, name, parameterTypes, annotationSubstitutions, snippetReflection, true, analysis, hosted);
+                return processGetMethod(b, targetMethod, receiver, name, parameterTypes, snippetReflection, true, analysis, hosted);
             }
         });
 
         r.register3("getMethod", Receiver.class, String.class, Class[].class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode name, ValueNode parameterTypes) {
-                return processGetMethod(b, targetMethod, receiver, name, parameterTypes, annotationSubstitutions, snippetReflection, false, analysis, hosted);
+                return processGetMethod(b, targetMethod, receiver, name, parameterTypes, snippetReflection, false, analysis, hosted);
             }
         });
 
         r.register2("getDeclaredConstructor", Receiver.class, Class[].class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode parameterTypes) {
-                return processGetConstructor(b, targetMethod, receiver, parameterTypes, snippetReflection, annotationSubstitutions, true, analysis, hosted);
+                return processGetConstructor(b, targetMethod, receiver, parameterTypes, snippetReflection, true, analysis, hosted);
             }
         });
 
         r.register2("getConstructor", Receiver.class, Class[].class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode parameterTypes) {
-                return processGetConstructor(b, targetMethod, receiver, parameterTypes, snippetReflection, annotationSubstitutions, false, analysis, hosted);
+                return processGetConstructor(b, targetMethod, receiver, parameterTypes, snippetReflection, false, analysis, hosted);
             }
         });
     }
@@ -231,10 +228,9 @@ public class ReflectionPlugins {
     }
 
     private static boolean processGetMethod(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode name,
-                    ValueNode parameterTypes, AnnotationSubstitutionProcessor annotationSubstitutions, SnippetReflectionProvider snippetReflection, boolean declared, boolean analysis,
-                    boolean hosted) {
+                    ValueNode parameterTypes, SnippetReflectionProvider snippetReflection, boolean declared, boolean analysis, boolean hosted) {
         if (receiver.isConstant() && name.isConstant()) {
-            Class<?>[] paramTypes = SubstrateGraphBuilderPlugins.extractClassArray(annotationSubstitutions, snippetReflection, parameterTypes, true);
+            Class<?>[] paramTypes = SubstrateGraphBuilderPlugins.extractClassArray(snippetReflection, parameterTypes, true);
 
             if (paramTypes != null) {
                 Class<?> clazz = snippetReflection.asObject(Class.class, receiver.get().asJavaConstant());
@@ -271,10 +267,10 @@ public class ReflectionPlugins {
 
     private static boolean processGetConstructor(GraphBuilderContext b, ResolvedJavaMethod targetMethod,
                     Receiver receiver, ValueNode parameterTypes,
-                    SnippetReflectionProvider snippetReflection, AnnotationSubstitutionProcessor annotationSubstitutions, boolean declared,
+                    SnippetReflectionProvider snippetReflection, boolean declared,
                     boolean analysis, boolean hosted) {
         if (receiver.isConstant()) {
-            Class<?>[] paramTypes = SubstrateGraphBuilderPlugins.extractClassArray(annotationSubstitutions, snippetReflection, parameterTypes, true);
+            Class<?>[] paramTypes = SubstrateGraphBuilderPlugins.extractClassArray(snippetReflection, parameterTypes, true);
 
             if (paramTypes != null) {
                 Class<?> clazz = snippetReflection.asObject(Class.class, receiver.get().asJavaConstant());
