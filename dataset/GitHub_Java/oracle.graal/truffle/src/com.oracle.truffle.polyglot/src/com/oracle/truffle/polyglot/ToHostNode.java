@@ -123,7 +123,7 @@ abstract class ToHostNode extends Node {
                     Class<?> targetType, Type genericType,
                     PolyglotLanguageContext languageContext,
                     boolean useTargetMapping,
-                    @Cached("getUncached()") TargetMappingNode targetMapping,
+                    @Cached TargetMappingNode targetMapping,
                     @CachedLibrary(limit = "0") InteropLibrary interop) {
         return convertImpl(operand, targetType, genericType, allowsImplementation(languageContext, targetType),
                         isPrimitiveTarget(targetType), languageContext, interop, useTargetMapping, targetMapping);
@@ -214,7 +214,7 @@ abstract class ToHostNode extends Node {
             CompilerDirectives.transferToInterpreter();
             throw HostInteropErrors.cannotConvertPrimitive(languageContext, value, targetType);
         }
-        return targetType.cast(convertedValue);
+        return convertedValue;
     }
 
     static boolean canConvertToPrimitive(Object value, Class<?> targetType, InteropLibrary interop) {
@@ -335,7 +335,7 @@ abstract class ToHostNode extends Node {
     /**
      * See {@link Value#as(Class)} documentation.
      */
-    static Object convertToObject(Object value, PolyglotLanguageContext languageContext, InteropLibrary interop) {
+    private static Object convertToObject(Object value, PolyglotLanguageContext languageContext, InteropLibrary interop) {
         try {
             if (interop.isNull(value)) {
                 return null;

@@ -49,7 +49,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.time.zone.ZoneRules;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -89,9 +88,6 @@ import org.graalvm.polyglot.proxy.Proxy;
  * pointer value can be accessed using {@link #asNativePointer()}.
  * <li>{@link #isException() Exception}: This value represents an exception object. The exception
  * can be thrown using {@link #throwException()}.
- * <li>{@link #isMetaObject() Meta-Object}: This value represents a metaobject. Access metaobject
- * operations using {@link #getMetaSimpleName()}, {@link #getMetaQualifiedName()} and
- * {@link #isMetaInstance(Object)}.
  * </ul>
  * In addition any value may have one or more of the following traits:
  * <ul>
@@ -149,100 +145,16 @@ public final class Value {
     }
 
     /**
-     * Returns the metaobject that is associated with this value or <code>null</code> if no
-     * metaobject is available. The metaobject represents a description of the object, reveals it's
-     * kind and it's features. Some information that a metaobject might define includes the base
-     * object's type, interface, class, methods, attributes, etc.
-     * <p>
-     * The returned value returns <code>true</code> for {@link #isMetaObject()} and provides
-     * implementations for {@link #getMetaSimpleName()}, {@link #getMetaQualifiedName()}, and
-     * {@link #isMetaInstance(Object)}.
-     * <p>
-     * This method does not cause any observable side-effects.
+     * Returns the meta representation of this polyglot value. The interpretation of this function
+     * differs for each guest language. A language agnostic way to get to a type name is: <code>
+     * value.{@link #getMetaObject() getMetaObject()}.{@link #toString() toString()}</code>. If a
+     * language does not provide any meta object information, <code>null</code> is returned.
      *
      * @throws IllegalStateException if the context is already closed.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @see #isMetaObject()
-     * @since 19.0 revised in 20.1
+     * @since 19.0
      */
     public Value getMetaObject() {
         return impl.getMetaObject(receiver);
-    }
-
-    /**
-     * Returns <code>true</code> if the receiver value represents a metaobject. Metaobjects may be
-     * values that naturally occur in a language or they may be returned by
-     * {@link #getMetaObject()}. A metaobject represents a description of the object, reveals its
-     * kind and its features. Some information that a metaobject might define includes the base
-     * object's type, interface, class, methods, attributes, etc. Returns <code>false</code> by
-     * default.
-     * <p>
-     * <b>Sample interpretations:</b> In Java an instance of the type {@link Class} is a metaobject.
-     * In JavaScript any function instance is a metaobject. For example, the metaobject of a
-     * JavaScript class is the associated constructor function.
-     * <p>
-     * This method does not cause any observable side-effects. If this method is implemented then
-     * also {@link #getMetaQualifiedName()}, {@link #getMetaSimpleName()} and
-     * {@link #isMetaInstance(Object)} must be implemented as well.
-     *
-     * @throws IllegalStateException if the context is already closed.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @see #getMetaQualifiedName()
-     * @see #getMetaSimpleName()
-     * @see #isMetaInstance(Object)
-     * @see #getMetaObject()
-     * @since 20.1
-     */
-    public boolean isMetaObject() {
-        return impl.isMetaObject(receiver);
-    }
-
-    /**
-     * Returns the qualified name of a metaobject as {@link String}.
-     * <p>
-     * <b>Sample interpretations:</b> The qualified name of a Java class includes the package name
-     * and its class name. JavaScript does not have the notion of qualified name and therefore
-     * returns the {@link #getMetaSimpleName() simple name} instead.
-     *
-     * @throws UnsupportedOperationException if and only if {@link #isMetaObject()} returns
-     *             <code>false</code> for the same value.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 20.1
-     */
-    public String getMetaQualifiedName() {
-        return impl.getMetaQualifiedName(receiver);
-    }
-
-    /**
-     * Returns the simple name of a metaobject as {@link #isString() string}.
-     * <p>
-     * <b>Sample interpretations:</b> The simple name of a Java class is the class name.
-     *
-     * @throws UnsupportedOperationException if and only if {@link #isMetaObject()} returns
-     *             <code>false</code> for the same value.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 20.1
-     */
-    public String getMetaSimpleName() {
-        return impl.getMetaSimpleName(receiver);
-    }
-
-    /**
-     * Returns <code>true</code> if the given instance is of the provided receiver metaobject, else
-     * <code>false</code>.
-     * <p>
-     * <b>Sample interpretations:</b> A Java object is an instance of its returned
-     * {@link Object#getClass() class}.
-     * <p>
-     *
-     * @param instance the instance object to check.
-     * @throws UnsupportedOperationException if and only if {@link #isMetaObject()} returns
-     *             <code>false</code> for the same value.
-     * @throws PolyglotException if a guest language error occurred during execution.
-     * @since 20.1
-     */
-    public boolean isMetaInstance(Object instance) {
-        return impl.isMetaInstance(receiver, instance);
     }
 
     /**
@@ -1088,11 +1000,7 @@ public final class Value {
     }
 
     /**
-     * Converts the receiver to a human readable string. Each language may have special formating
-     * conventions - even primitive values may not follow the traditional Java formating rules. The
-     * format of the returned string is intended to be interpreted by humans not machines and should
-     * therefore not be relied upon by machines. By default the receiver class name and its
-     * {@link System#identityHashCode(Object) identity hash code} is used as string representation.
+     * A string representation of the value formatted by the original language.
      *
      * @since 19.0
      */
@@ -1231,10 +1139,9 @@ public final class Value {
      * <li>If {@link #isDate()} and {@link #isTime()} returns <code>false</code>, then it represents
      * just timezone information.
      * </ul>
-     * Objects with only date information must not have timezone information attached and objects
-     * with only time information must have either none, or {@link ZoneRules#isFixedOffset() fixed
-     * zone} only. If this rule is violated then an {@link AssertionError} is thrown if assertions
-     * are enabled.
+     * Objects with only time or only date information must not have timezone information attached,
+     * as aware date or time information always consist of both date and time. If this rule is
+     * violated then an {@link AssertionError} is thrown if assertions are enabled.
      * <p>
      * If this method is implemented then also {@link #asTimeZone()} must be implemented.
      *
