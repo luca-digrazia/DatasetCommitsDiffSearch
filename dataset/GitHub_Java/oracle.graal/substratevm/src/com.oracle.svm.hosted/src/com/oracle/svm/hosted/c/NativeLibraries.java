@@ -159,8 +159,8 @@ public final class NativeLibraries {
                         return false;
                     }
                     String lib = libName.substring(libPrefix.length(), libName.length() - libSuffix.length());
-                    return PlatformNativeLibrarySupport.defaultBuiltInLibraries.contains(lib);
-                }).count() == PlatformNativeLibrarySupport.defaultBuiltInLibraries.size()) {
+                    return PlatformNativeLibrarySupport.builtInLibraries.contains(lib);
+                }).count() == PlatformNativeLibrarySupport.builtInLibraries.size()) {
                     staticLibsDir = jdkLibDir;
                 }
             }
