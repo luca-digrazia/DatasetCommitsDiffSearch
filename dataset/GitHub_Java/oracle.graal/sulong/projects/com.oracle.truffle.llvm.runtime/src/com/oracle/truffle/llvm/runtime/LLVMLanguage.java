@@ -173,19 +173,13 @@ public class LLVMLanguage extends TruffleLanguage<LLVMContext> {
     }
 
     /**
-     * This function will return an assumption that is valid as long as no normal handles have been
-     * created.
+     * Get assumptions used to globally enable/disable checks for handles. This function will return
+     * an assumption that is valid as long as no handles of the selected type (deref or normal
+     * handles) have been created.
      */
-    public Assumption getNoCommonHandleAssumption() {
-        return noCommonHandleAssumption;
-    }
-
-    /**
-     * This function will return an assumption that is valid as long as no deref handles have been
-     * created.
-     */
-    public Assumption getNoDerefHandleAssumption() {
-        return noDerefHandleAssumption;
+    public Assumption getNoHandleAssumption(boolean deref) {
+        CompilerAsserts.partialEvaluationConstant(deref);
+        return deref ? noDerefHandleAssumption : noCommonHandleAssumption;
     }
 
     public final String getLLVMLanguageHome() {
