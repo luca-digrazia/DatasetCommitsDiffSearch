@@ -236,9 +236,9 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 callerBytecodePosition = invokePosition;
             }
             if (position != null) {
-                return position.addCaller(resolveSourceLanguagePosition(), callerBytecodePosition);
+                return position.addCaller(caller.resolveSourceLanguagePosition(), callerBytecodePosition);
             }
-            final SourceLanguagePosition pos = resolveSourceLanguagePosition();
+            final SourceLanguagePosition pos = caller.resolveSourceLanguagePosition();
             if (pos != null && callerBytecodePosition != null) {
                 return new NodeSourcePosition(pos, callerBytecodePosition.getCaller(), callerBytecodePosition.getMethod(), callerBytecodePosition.getBCI());
             }
@@ -294,16 +294,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
         @Override
         public String getLanguage() {
-            throw new IllegalStateException(getClass().getSimpleName() + " should not be reachable.");
-        }
-
-        @Override
-        public int getNodeId() {
-            throw new IllegalStateException(getClass().getSimpleName() + " should not be reachable.");
-        }
-
-        @Override
-        public String getNodeClassName() {
             throw new IllegalStateException(getClass().getSimpleName() + " should not be reachable.");
         }
     }
@@ -1041,9 +1031,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     }
 
     protected LoopScope doInline(PEMethodScope methodScope, LoopScope loopScope, InvokeData invokeData, InlineInfo inlineInfo, ValueNode[] arguments) {
-        if (invokeData.invoke.getInlineControl() != Invoke.InlineControl.Normal) {
-            // The graph decoder only has one version of the method so treat the BytecodesOnly case
-            // as don't inline.
+        if (!invokeData.invoke.useForInlining()) {
             return null;
         }
         ResolvedJavaMethod inlineMethod = inlineInfo.getMethodToInline();
