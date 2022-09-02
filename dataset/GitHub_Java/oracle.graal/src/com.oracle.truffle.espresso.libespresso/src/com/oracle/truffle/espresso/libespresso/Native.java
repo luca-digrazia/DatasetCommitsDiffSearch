@@ -168,7 +168,7 @@ class Native {
     }
 
     /* Is an option that starts with an 'X' one of the recognized X options? */
-    private static boolean isXOption(String arg) {
+    private boolean isXOption(String arg) {
         return (arg.startsWith("Xmn") || arg.startsWith("Xms") || arg.startsWith("Xmx") || arg.startsWith("Xss"));
     }
 
@@ -181,12 +181,11 @@ class Native {
         }
     }
 
-    private static boolean isBooleanOption(OptionDescriptor descriptor) {
+    private boolean isBooleanOption(OptionDescriptor descriptor) {
         return descriptor.getKey().getType().equals(OptionType.defaultType(Boolean.class));
     }
 
-    private static Arguments.ArgumentException unknownOption(String key) {
-        throw abort("Unknown native option: " + key + "."
-        /* + "Use --help:vm to list available options." */);
+    private Arguments.ArgumentException unknownOption(String key) {
+        throw abort("Unknown native option: " + key + ". Use --help:vm to list available options.");
     }
 }
