@@ -661,8 +661,7 @@ public final class RegexParser {
 
     private void optimizeGroup() {
         sortAlternatives(curGroup);
-        mergeCommonPrefixes(curGroup);
-        singleCharNegativeLookAroundToPositive(curGroup);
+        tryMergeCommonPrefixes(curGroup);
     }
 
     private void parseQuantifier(Token.Quantifier quantifier) throws RegexSyntaxException {
@@ -680,8 +679,7 @@ public final class RegexParser {
             replaceCurTermWithDeadNode();
             return;
         }
-        if (quantifier.getMax() == 0 ||
-                        quantifier.getMin() == 0 && (curTerm instanceof LookAroundAssertion || curTerm instanceof CharacterClass && ((CharacterClass) curTerm).getCharSet().matchesNothing())) {
+        if (quantifier.getMax() == 0 || (quantifier.getMin() == 0 && (curTerm instanceof LookAroundAssertion || (curTerm instanceof CharacterClass && ((CharacterClass) curTerm).isDead())))) {
             removeCurTerm();
             return;
         }
@@ -774,7 +772,7 @@ public final class RegexParser {
 
     /**
      * Stable-sort consecutive alternations that start with single characters, to enable more
-     * simplifications with {@link #mergeCommonPrefixes(Group)}. This also works in ignore-case
+     * simplifications with {@link #tryMergeCommonPrefixes(Group)}. This also works in ignore-case
      * mode, since we track character classes that were generated from single characters via
      * {@link CharacterClass#wasSingleChar()}.
      */
@@ -800,7 +798,7 @@ public final class RegexParser {
      * Simplify redundant alternation prefixes, e.g. {@code /ab|ac/ -> /a(?:b|c)/}. This method
      * should be called when {@code curGroup} is about to be closed.
      */
-    private boolean mergeCommonPrefixes(Group group) {
+    private boolean tryMergeCommonPrefixes(Group group) {
         if (group.size() < 2) {
             return false;
         }
@@ -877,7 +875,7 @@ public final class RegexParser {
                     innerGroup.setEnclosedCaptureGroupsHigh(enclosedCGHi);
                 }
                 if (!innerGroup.isEmpty() && !(innerGroup.size() == 1 && innerGroup.getAlternatives().get(0).isEmpty())) {
-                    mergeCommonPrefixes(innerGroup);
+                    tryMergeCommonPrefixes(innerGroup);
                     prefixSeq.add(innerGroup);
                 }
                 newAlternatives.add(prefixSeq);
@@ -951,29 +949,6 @@ public final class RegexParser {
             ret = i + 1;
         }
         return ret;
-    }
-
-    /**
-     * Convert single-character-class negative lookarounds to positive ones by the following
-     * expansion: {@code (?!x) -> (?=[^x]|$)}. This simplifies things for the DFA generator.
-     */
-    private void singleCharNegativeLookAroundToPositive(Group group) {
-        if (group.getParent() instanceof LookAroundAssertion && ((LookAroundAssertion) group.getParent()).isNegated() && group.size() == 1 && group.getAlternatives().get(0).isSingleCharClass()) {
-            ast.invertNegativeLookAround((LookAroundAssertion) group.getParent());
-            CharacterClass cc = (CharacterClass) group.getAlternatives().get(0).getFirstTerm();
-            // we don't have to expand the inverse in unicode mode here, because the character set
-            // is guaranteed to be in BMP range, and its inverse will match all surrogates
-            cc.setCharSet(cc.getCharSet().createInverse());
-            Sequence empty = ast.createSequence();
-            if (group.getParent() instanceof LookAheadAssertion) {
-                empty.add(ast.createPositionAssertion(PositionAssertion.Type.DOLLAR));
-                properties.setComplexLookAheadAssertions();
-            } else {
-                empty.add(ast.createPositionAssertion(PositionAssertion.Type.CARET));
-                properties.setComplexLookBehindAssertions();
-            }
-            group.add(empty);
-        }
     }
 
     private RegexSyntaxException syntaxError(String msg) {
