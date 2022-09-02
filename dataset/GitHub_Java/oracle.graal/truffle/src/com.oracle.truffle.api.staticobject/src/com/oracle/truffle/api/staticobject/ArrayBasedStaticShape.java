@@ -2,23 +2,41 @@
  * Copyright (c) 2021, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
- * This code is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * The Universal Permissive License (UPL), Version 1.0
  *
- * This code is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
- * version 2 for more details (a copy is included in the LICENSE file that
- * accompanied this code).
+ * Subject to the condition set forth below, permission is hereby granted to any
+ * person obtaining a copy of this software, associated documentation and/or
+ * data (collectively the "Software"), free of charge and under any and all
+ * copyright rights in the Software, and any and all patent rights owned or
+ * freely licensable by each licensor hereunder covering either (i) the
+ * unmodified Software as contributed to or provided by such licensor, or (ii)
+ * the Larger Works (as defined below), to deal in both
  *
- * You should have received a copy of the GNU General Public License version
- * 2 along with this work; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA.
+ * (a) the Software, and
  *
- * Please contact Oracle, 500 Oracle Parkway, Redwood Shores, CA 94065 USA
- * or visit www.oracle.com if you need additional information or have any
- * questions.
+ * (b) any piece of software and/or hardware listed in the lrgrwrks.txt file if
+ * one is included with the Software each a "Larger Work" to which the Software
+ * is contributed by such licensors),
+ *
+ * without restriction, including without limitation the rights to copy, create
+ * derivative works of, display, perform, and distribute the Software and make,
+ * use, sell, offer for sale, import, export, have made, and have sold the
+ * Software and the Larger Work(s), and to sublicense the foregoing rights on
+ * either these or other terms.
+ *
+ * This license is subject to the following condition:
+ *
+ * The above copyright notice and either this complete permission notice or at a
+ * minimum a reference to the UPL must be included in all copies or substantial
+ * portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 package com.oracle.truffle.api.staticobject;
 
@@ -29,21 +47,19 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+
 import sun.misc.Unsafe;
 
 import static com.oracle.truffle.api.staticobject.StaticPropertyKind.N_PRIMITIVES;
 
 final class ArrayBasedStaticShape<T> extends StaticShape<T> {
-    private static final PrivilegedToken TOKEN = new ArrayBasedPrivilegedToken();
-    @CompilationFinal //
-    private static Boolean enableShapeChecks;
     @CompilationFinal(dimensions = 1) //
     private final StaticShape<T>[] superShapes;
     private final ArrayBasedPropertyLayout propertyLayout;
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private ArrayBasedStaticShape(ArrayBasedStaticShape<T> parentShape, Class<?> storageClass, ArrayBasedPropertyLayout propertyLayout) {
-        super(storageClass, TOKEN);
+    private ArrayBasedStaticShape(ArrayBasedStaticShape<T> parentShape, Class<?> storageClass, ArrayBasedPropertyLayout propertyLayout, boolean safetyChecks) {
+        super(storageClass, safetyChecks);
         if (parentShape == null) {
             superShapes = new StaticShape[]{this};
         } else {
@@ -55,29 +71,12 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
         this.propertyLayout = propertyLayout;
     }
 
-    public static boolean shapeChecks() {
-        if (enableShapeChecks == null) {
-            initializeShapeChecks();
-        }
-        return enableShapeChecks;
-    }
-
-    @CompilerDirectives.TruffleBoundary
-    private static synchronized void initializeShapeChecks() {
-        if (enableShapeChecks == null) {
-            // Eventually this will become a context option.
-            // For now we store its value in a static field that is initialized on first usage to
-            // avoid that it gets initialized at native-image build time.
-            enableShapeChecks = Boolean.getBoolean("com.oracle.truffle.api.staticobject.ShapeChecks");
-        }
-    }
-
-    static <T> ArrayBasedStaticShape<T> create(Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass, ArrayBasedStaticShape<T> parentShape,
-                    Collection<StaticProperty> staticProperties, int byteArrayOffset, int objectArrayOffset, int shapeOffset) {
+    static <T> ArrayBasedStaticShape<T> create(ArrayBasedShapeGenerator<?> generator, Class<?> generatedStorageClass, Class<? extends T> generatedFactoryClass, ArrayBasedStaticShape<T> parentShape,
+                    Collection<StaticProperty> staticProperties, boolean checkShapes) {
         try {
             ArrayBasedPropertyLayout parentPropertyLayout = parentShape == null ? null : parentShape.getPropertyLayout();
-            ArrayBasedPropertyLayout propertyLayout = new ArrayBasedPropertyLayout(parentPropertyLayout, staticProperties, byteArrayOffset, objectArrayOffset, shapeOffset);
-            ArrayBasedStaticShape<T> shape = new ArrayBasedStaticShape<>(parentShape, generatedStorageClass, propertyLayout);
+            ArrayBasedPropertyLayout propertyLayout = new ArrayBasedPropertyLayout(generator, parentPropertyLayout, staticProperties);
+            ArrayBasedStaticShape<T> shape = new ArrayBasedStaticShape<>(parentShape, generatedStorageClass, propertyLayout, checkShapes);
             T factory = generatedFactoryClass.cast(
                             generatedFactoryClass.getConstructor(Object.class, int.class, int.class).newInstance(shape, propertyLayout.getPrimitiveArraySize(), propertyLayout.getObjectArraySize()));
             shape.setFactory(factory);
@@ -90,25 +89,25 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
     @Override
     Object getStorage(Object obj, boolean primitive) {
         Object receiverObject = cast(obj, storageClass);
-        if (shapeChecks()) {
+        if (safetyChecks) {
             checkShape(receiverObject);
+        } else {
+            assert checkShape(receiverObject);
         }
-        return UNSAFE.getObject(receiverObject, (long) (primitive ? propertyLayout.byteArrayOffset : propertyLayout.objectArrayOffset));
+        return UNSAFE.getObject(receiverObject, (long) (primitive ? propertyLayout.generator.getByteArrayOffset() : propertyLayout.generator.getObjectArrayOffset()));
     }
 
-    private void checkShape(Object receiverObject) {
-        ArrayBasedStaticShape<?> receiverShape = cast(UNSAFE.getObject(receiverObject, (long) propertyLayout.shapeOffset), ArrayBasedStaticShape.class);
+    private boolean checkShape(Object receiverObject) {
+        ArrayBasedStaticShape<?> receiverShape = cast(UNSAFE.getObject(receiverObject, (long) propertyLayout.generator.getShapeOffset()), ArrayBasedStaticShape.class);
         if (this != receiverShape && (receiverShape.superShapes.length < superShapes.length || receiverShape.superShapes[superShapes.length - 1] != this)) {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new IllegalArgumentException("Incompatible shape on property access. Expected '" + this + "' got '" + receiverShape + "'.");
         }
+        return true;
     }
 
     private ArrayBasedPropertyLayout getPropertyLayout() {
         return propertyLayout;
-    }
-
-    private static final class ArrayBasedPrivilegedToken extends PrivilegedToken {
     }
 
     /**
@@ -188,14 +187,10 @@ final class ArrayBasedStaticShape<T> extends StaticShape<T> {
         private final int[][] leftoverHoles;
         private final int lastOffset;
 
-        private final int byteArrayOffset;
-        private final int objectArrayOffset;
-        private final int shapeOffset;
+        private final ArrayBasedShapeGenerator<?> generator;
 
-        ArrayBasedPropertyLayout(ArrayBasedPropertyLayout parentLayout, Collection<StaticProperty> staticProperties, int byteArrayOffset, int objectArrayOffset, int shapeOffset) {
-            this.byteArrayOffset = byteArrayOffset;
-            this.objectArrayOffset = objectArrayOffset;
-            this.shapeOffset = shapeOffset;
+        ArrayBasedPropertyLayout(ArrayBasedShapeGenerator<?> generator, ArrayBasedPropertyLayout parentLayout, Collection<StaticProperty> staticProperties) {
+            this.generator = generator;
 
             // Stats about primitive fields
             int superTotalByteCount;
