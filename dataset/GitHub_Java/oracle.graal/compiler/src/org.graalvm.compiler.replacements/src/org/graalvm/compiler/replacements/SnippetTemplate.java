@@ -970,7 +970,7 @@ public class SnippetTemplate {
             this.snippet = snippetCopy;
             StartNode entryPointNode = snippet.start();
             MemoryAnchorNode anchor = snippetCopy.add(new MemoryAnchorNode(info.privateLocations));
-            snippetCopy.start().replaceAtUsages(anchor, InputType.Memory);
+            snippetCopy.start().replaceAtUsages(InputType.Memory, anchor);
             debug.dump(DebugContext.VERY_DETAILED_LEVEL, snippetCopy, "After adding memory anchor %s", anchor);
             if (anchor.hasNoUsages()) {
                 anchor.safeDelete();
