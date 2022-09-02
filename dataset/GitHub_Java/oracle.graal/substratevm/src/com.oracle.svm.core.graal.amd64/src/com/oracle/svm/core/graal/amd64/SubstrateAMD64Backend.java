@@ -24,8 +24,6 @@
  */
 package com.oracle.svm.core.graal.amd64;
 
-import static com.oracle.svm.core.graal.code.SubstrateBackend.SubstrateMarkId.PROLOGUE_DECD_RSP;
-import static com.oracle.svm.core.graal.code.SubstrateBackend.SubstrateMarkId.PROLOGUE_END;
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 import static com.oracle.svm.core.util.VMError.unimplemented;
 import static jdk.vm.ci.amd64.AMD64.rax;
@@ -160,6 +158,13 @@ import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.Value;
 
 public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenerationProvider {
+
+    public static final String MARK_PROLOGUE_DECD_RSP = "PROLOGUE_DECD_RSP";
+    public static final String MARK_PROLOGUE_SAVED_REGS = "PROLOGUE_SAVED_REGS";
+    public static final String MARK_PROLOGUE_END = "PROLOGUE_END";
+    public static final String MARK_EPILOGUE_START = "EPILOGUE_START";
+    public static final String MARK_EPILOGUE_INCD_RSP = "EPILOGUE_INCD_RSP";
+    public static final String MARK_EPILOGUE_END = "EPILOGUE_END";
 
     protected static CompressEncoding getCompressEncoding() {
         return ImageSingletons.lookup(CompressEncoding.class);
@@ -587,7 +592,7 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
 
         @Override
         protected DebugInfoBuilder createDebugInfoBuilder(StructuredGraph graph, NodeValueMap nodeValueMap) {
-            return new SubstrateDebugInfoBuilder(graph, gen.getProviders().getMetaAccessExtensionProvider(), nodeValueMap);
+            return new SubstrateDebugInfoBuilder(graph, nodeValueMap);
         }
 
         @Override
@@ -717,8 +722,8 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
             }
             asm.decrementq(rsp, frameSize);
 
-            tasm.recordMark(PROLOGUE_DECD_RSP);
-            tasm.recordMark(PROLOGUE_END);
+            tasm.recordMark(MARK_PROLOGUE_DECD_RSP);
+            tasm.recordMark(MARK_PROLOGUE_END);
         }
 
         @Override
@@ -726,7 +731,7 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
             AMD64MacroAssembler asm = (AMD64MacroAssembler) tasm.asm;
             int frameSize = tasm.frameMap.frameSize();
 
-            tasm.recordMark(SubstrateMarkId.EPILOGUE_START);
+            tasm.recordMark(MARK_EPILOGUE_START);
 
             if (((SubstrateAMD64RegisterConfig) tasm.frameMap.getRegisterConfig()).shouldUseBasePointer()) {
                 asm.movq(rsp, rbp);
@@ -735,12 +740,8 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
                 asm.incrementq(rsp, frameSize);
             }
 
-            tasm.recordMark(SubstrateMarkId.EPILOGUE_INCD_RSP);
-        }
-
-        @Override
-        public void returned(CompilationResultBuilder crb) {
-            crb.recordMark(SubstrateMarkId.EPILOGUE_END);
+            tasm.recordMark(MARK_EPILOGUE_INCD_RSP);
+            tasm.recordMark(MARK_EPILOGUE_END);
         }
 
         @Override
@@ -1082,8 +1083,8 @@ public class SubstrateAMD64Backend extends SubstrateBackend implements LIRGenera
         } else { // methodId is absolute address
             asm.jmp(new AMD64Address(methodIdArg.getRegister(), methodObjEntryPointOffset));
         }
-        result.recordMark(asm.position(), PROLOGUE_DECD_RSP);
-        result.recordMark(asm.position(), PROLOGUE_END);
+        result.recordMark(asm.position(), SubstrateAMD64Backend.MARK_PROLOGUE_DECD_RSP);
+        result.recordMark(asm.position(), SubstrateAMD64Backend.MARK_PROLOGUE_END);
         byte[] instructions = asm.close(true);
         result.setTargetCode(instructions, instructions.length);
         result.setTotalFrameSize(getTarget().wordSize); // not really, but 0 not allowed

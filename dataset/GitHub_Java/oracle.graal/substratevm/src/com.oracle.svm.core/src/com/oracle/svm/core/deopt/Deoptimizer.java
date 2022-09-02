@@ -310,17 +310,14 @@ public final class Deoptimizer {
     }
 
     private static StackFrameVisitor getStackFrameVisitor(Pointer fromIp, Pointer toIp, boolean deoptAll) {
-        return new StackFrameVisitor() {
-            @Override
-            public boolean visitFrame(Pointer frameSp, CodePointer frameIp, CodeInfo codeInfo, DeoptimizedFrame deoptFrame) {
-                Pointer ip = (Pointer) frameIp;
-                if (deoptFrame == null && ((ip.aboveOrEqual(fromIp) && ip.belowThan(toIp)) || deoptAll)) {
-                    CodeInfoQueryResult queryResult = CodeInfoTable.lookupCodeInfoQueryResult(codeInfo, frameIp);
-                    Deoptimizer deoptimizer = new Deoptimizer(frameSp, queryResult);
-                    deoptimizer.deoptSourceFrame(frameIp, deoptAll);
-                }
-                return true;
+        return (frameSp, frameIp, codeInfo, deoptFrame) -> {
+            Pointer ip = (Pointer) frameIp;
+            if (deoptFrame == null && ((ip.aboveOrEqual(fromIp) && ip.belowThan(toIp)) || deoptAll)) {
+                CodeInfoQueryResult queryResult = CodeInfoTable.lookupCodeInfoQueryResult(codeInfo, frameIp);
+                Deoptimizer deoptimizer = new Deoptimizer(frameSp, queryResult);
+                deoptimizer.deoptSourceFrame(frameIp, deoptAll);
             }
+            return true;
         };
     }
 

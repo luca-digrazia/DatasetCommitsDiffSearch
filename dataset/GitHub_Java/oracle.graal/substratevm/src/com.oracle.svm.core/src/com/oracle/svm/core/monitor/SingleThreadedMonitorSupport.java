@@ -52,19 +52,14 @@ public class SingleThreadedMonitorSupport extends MonitorSupport {
     }
 
     @Override
-    public boolean isLockedByCurrentThread(Object obj) {
+    public boolean holdsLock(Object obj) {
         /*
          * Since monitorenter and monitorexit are no-ops, we do not know the real answer. But since
          * the current thread has exclusive access to the object, true is a correct answer. Callers
-         * of isLockedByCurrentThread usually want to ensure that synchronization has occurred,
-         * i.e., assert that the returned value is true.
+         * of holdsLock usually want to ensure that synchronization has occurred, i.e., assert that
+         * the returned value is true.
          */
         return true;
-    }
-
-    @Override
-    public boolean isLockedByAnyThread(Object obj) {
-        return isLockedByCurrentThread(obj);
     }
 
     @Override

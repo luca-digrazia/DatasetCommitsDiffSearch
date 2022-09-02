@@ -27,7 +27,6 @@ package com.oracle.svm.core.code;
 import org.graalvm.nativeimage.c.function.CodePointer;
 
 import com.oracle.svm.core.CalleeSavedRegisters;
-import com.oracle.svm.core.ReservedRegisters;
 import com.oracle.svm.core.hub.DynamicHub;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.meta.SharedMethod;
@@ -59,12 +58,6 @@ public class FrameInfoQueryResult {
          * {@link CalleeSavedRegisters}.
          */
         Register(true),
-
-        /**
-         * A reserved register that has a fixed value as defined in {@link ReservedRegisters}. The
-         * {@link ValueInfo#data} is the {@link Register#number}.
-         */
-        ReservedRegister(true),
 
         /**
          * A {@link Constant} value. The {@link ValueInfo#data} is the primitive data value of the
@@ -240,20 +233,6 @@ public class FrameInfoQueryResult {
      */
     public int getBci() {
         return FrameInfoDecoder.decodeBci(encodedBci);
-    }
-
-    /**
-     * Returns whether the duringCall is set.
-     */
-    public boolean duringCall() {
-        return FrameInfoDecoder.decodeDuringCall(encodedBci);
-    }
-
-    /**
-     * Returns whether the rethrowException is set.
-     */
-    public boolean rethrowException() {
-        return FrameInfoDecoder.decodeRethrowException(encodedBci);
     }
 
     /**

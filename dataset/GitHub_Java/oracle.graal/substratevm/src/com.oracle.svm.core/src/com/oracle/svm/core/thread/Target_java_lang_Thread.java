@@ -289,10 +289,10 @@ final class Target_java_lang_Thread {
             return;
         }
 
-        Thread thread = JavaThreads.fromTarget(this);
-        JavaThreads.interrupt(thread);
-        JavaThreads.unpark(thread);
-        JavaThreads.wakeUpVMConditionWaiters(thread);
+        JavaThreads.interrupt(JavaThreads.fromTarget(this));
+        JavaThreads.unpark(JavaThreads.fromTarget(this));
+
+        JavaThreads.wakeUpVMConditionWaiters();
     }
 
     @Substitute
@@ -363,7 +363,7 @@ final class Target_java_lang_Thread {
     @Substitute
     private static boolean holdsLock(Object obj) {
         Objects.requireNonNull(obj);
-        return MonitorSupport.singleton().isLockedByCurrentThread(obj);
+        return MonitorSupport.singleton().holdsLock(obj);
     }
 
     @Substitute
