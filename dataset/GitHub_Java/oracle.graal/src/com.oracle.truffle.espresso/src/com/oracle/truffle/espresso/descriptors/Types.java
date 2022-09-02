@@ -22,8 +22,6 @@
  */
 package com.oracle.truffle.espresso.descriptors;
 
-import static com.oracle.truffle.espresso.descriptors.ByteSequence.EMPTY;
-
 import java.util.Arrays;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -201,11 +199,31 @@ public final class Types {
         return index;
     }
 
-    public static boolean isPrimitive(ByteSequence type) {
+    public static boolean isPrimitive(Symbol<Type> type) {
         if (type.length() != 1) {
             return false;
         }
         switch (type.byteAt(0)) {
+            case 'B': // byte
+            case 'C': // char
+            case 'D': // double
+            case 'F': // float
+            case 'I': // int
+            case 'J': // long
+            case 'S': // short
+            case 'V': // void
+            case 'Z': // boolean
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public static boolean isPrimitive(String type) {
+        if (type.length() != 1) {
+            return false;
+        }
+        switch (type.charAt(0)) {
             case 'B': // byte
             case 'C': // char
             case 'D': // double
@@ -236,7 +254,7 @@ public final class Types {
     /**
      * Gets the number of array dimensions in this type descriptor.
      */
-    public static int getArrayDimensions(ByteSequence type) {
+    public static int getArrayDimensions(Symbol<Type> type) {
         int dims = 0;
         while (dims < type.length() && type.byteAt(dims) == '[') {
             dims++;
@@ -319,8 +337,7 @@ public final class Types {
     @SuppressWarnings("unchecked")
     public static Symbol<Type> fromSymbol(Symbol<?> symbol) {
         Symbol<Type> type = (Symbol<Type>) symbol;
-        assert isValid(type) : "Type validity should have been checked beforehand";
-        return type;
+        return isValid(type) ? type : null;
     }
 
     public Symbol<Type> fromName(Symbol<Name> name) {
@@ -332,28 +349,30 @@ public final class Types {
         Symbol.copyBytes(name, 0, bytes, 1, name.length());
         bytes[0] = 'L';
         bytes[bytes.length - 1] = ';';
-        ByteSequence wrap = ByteSequence.wrap(bytes);
-        assert checkType(wrap) != null : "Type validity should have been checked beforehand";
-        return symbols.symbolify(wrap);
+        return symbols.symbolify(checkType(ByteSequence.wrap(bytes)));
     }
 
     public Symbol<Type> lookup(String type) {
         return symbols.lookup(checkType(type));
     }
 
-    public static ByteSequence getRuntimePackage(ByteSequence symbol) {
-        if (symbol.byteAt(0) == '[') {
-            int arrayDimensions = getArrayDimensions(symbol);
-            return getRuntimePackage(symbol.subSequence(arrayDimensions, symbol.length() - arrayDimensions));
+    public static String getRuntimePackage(Symbol<Type> symbol) {
+        String typeString = symbol.toString();
+        if (typeString.startsWith("[")) {
+            return getRuntimePackage(typeString.substring(getArrayDimensions(symbol)));
         }
-        if (symbol.byteAt(0) != 'L') {
-            assert isPrimitive(symbol);
-            return EMPTY;
+        return getRuntimePackage(typeString);
+    }
+
+    private static String getRuntimePackage(String typeString) {
+        if (!typeString.startsWith("L")) {
+            assert isPrimitive(typeString);
+            return "";
         }
-        int lastSlash = symbol.lastIndexOf((byte) '/');
+        int lastSlash = typeString.lastIndexOf('/');
         if (lastSlash < 0) {
-            return EMPTY;
+            return "";
         }
-        return symbol.subSequence(1, lastSlash - 1);
+        return typeString.substring(1, lastSlash);
     }
 }

@@ -24,8 +24,6 @@
 package com.oracle.truffle.espresso.impl;
 
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Supplier;
 
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
@@ -114,8 +112,8 @@ public abstract class ClassRegistry implements ContextAccess {
     private final int loaderID;
     private ModuleEntry unnamed;
 
-    private final PackageTable packages;
-    private final ModuleTable modules;
+    private final PackageTable packages = new PackageTable();
+    private final ModuleTable modules = new ModuleTable();
 
     public ModuleEntry getUnnamedModule() {
         return unnamed;
@@ -149,10 +147,6 @@ public abstract class ClassRegistry implements ContextAccess {
     protected ClassRegistry(EspressoContext context) {
         this.context = context;
         this.loaderID = context.getNewLoaderId();
-        ReadWriteLock rwLock = new ReentrantReadWriteLock();
-        this.packages = new PackageTable(rwLock);
-        this.modules = new ModuleTable(rwLock);
-
     }
 
     public void initUnnamedModule(StaticObject unnamedModule) {

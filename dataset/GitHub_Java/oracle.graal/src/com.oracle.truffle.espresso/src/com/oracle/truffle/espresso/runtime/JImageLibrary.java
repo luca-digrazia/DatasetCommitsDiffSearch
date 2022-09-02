@@ -79,10 +79,13 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
 
     // Cache "java.base" native module name
     private final RawBuffer javaBaseBuffer;
+    private final TruffleObject encodedJavaBase;
     // Cache the version sting.
     private final RawBuffer versionBuffer;
+    private final TruffleObject encodedVersion;
     // Cache the empty string
     private final RawBuffer emptyStringBuffer;
+    private final TruffleObject encodedEmptyString;
 
     // Function pointers
 
@@ -130,6 +133,9 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
             this.javaBaseBuffer = getNativeString(JAVA_BASE);
             this.versionBuffer = getNativeString(VERSION_STRING);
             this.emptyStringBuffer = getNativeString("");
+            this.encodedJavaBase = javaBaseBuffer.pointer();
+            this.encodedVersion = versionBuffer.pointer();
+            this.encodedEmptyString = emptyStringBuffer.pointer();
 
             this.uncached = InteropLibrary.getFactory().getUncached();
         } catch (UnknownIdentifierException e) {
@@ -171,7 +177,7 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
     private long findLocation(TruffleObject jimage, TruffleObject sizePtr, String name) {
         try (RawBuffer nameBuffer = getNativeString(name)) {
             TruffleObject namePtr = nameBuffer.pointer();
-            long location = (long) execute(findResource, jimage, emptyStringBuffer.pointer(), versionBuffer.pointer(), namePtr, sizePtr);
+            long location = (long) execute(findResource, jimage, encodedEmptyString, encodedVersion, namePtr, sizePtr);
             if (location != 0) {
                 // found.
                 return location;
@@ -183,7 +189,7 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
             }
 
             if (!getContext().modulesInitialized()) {
-                location = (long) execute(findResource, jimage, javaBaseBuffer.pointer(), versionBuffer.pointer(), namePtr, sizePtr);
+                location = (long) execute(findResource, jimage, encodedJavaBase, encodedVersion, namePtr, sizePtr);
                 if (location != 0 || !getContext().metaInitialized()) {
                     // During meta initialization, we rely on the fact that we do not succeed in
                     // finding certain classes in java.base (/ex: sun/misc/Unsafe).
@@ -196,7 +202,7 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
                 if (uncached.isNull(moduleName)) {
                     return 0;
                 }
-                return (long) execute(findResource, jimage, moduleName, versionBuffer.pointer(), namePtr, sizePtr);
+                return (long) execute(findResource, jimage, moduleName, encodedVersion, namePtr, sizePtr);
             } else {
                 Symbol<Name> pkgSymbol = getNames().lookup(pkg);
                 if (pkgSymbol == null) {
@@ -208,10 +214,10 @@ class JImageLibrary extends NativeEnv implements ContextAccess {
                 }
                 String moduleName = pkgEntry.module().getName().toString();
                 if (JAVA_BASE.equals(moduleName)) {
-                    return (long) execute(findResource, jimage, javaBaseBuffer.pointer(), versionBuffer.pointer(), namePtr, sizePtr);
+                    return (long) execute(findResource, jimage, encodedJavaBase, encodedVersion, namePtr, sizePtr);
                 } else {
                     try (RawBuffer moduleNameBuffer = getNativeString(moduleName)) {
-                        return (long) execute(findResource, jimage, moduleNameBuffer.pointer(), versionBuffer.pointer(), namePtr, sizePtr);
+                        return (long) execute(findResource, jimage, moduleNameBuffer.pointer(), encodedVersion, namePtr, sizePtr);
                     }
                 }
             }
