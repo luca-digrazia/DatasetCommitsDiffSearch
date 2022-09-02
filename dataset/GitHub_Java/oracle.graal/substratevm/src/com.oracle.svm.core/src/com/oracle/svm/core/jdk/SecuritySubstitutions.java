@@ -44,7 +44,6 @@ import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
 import com.oracle.svm.core.log.Log;
-import com.oracle.svm.core.option.SubstrateOptionsParser;
 import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.VMError;
 
@@ -215,7 +214,7 @@ final class ProviderUtil {
 
 }
 
-@TargetClass(className = "javax.crypto.JceSecurity", onlyWith = JDK8OrEarlier.class)
+@TargetClass(className = "javax.crypto.JceSecurity")
 @SuppressWarnings({"unused"})
 final class Target_javax_crypto_JceSecurity {
 
@@ -228,6 +227,7 @@ final class Target_javax_crypto_JceSecurity {
     static SecureRandom RANDOM;
 
     @Substitute
+    @TargetElement(onlyWith = JDK8OrEarlier.class)
     static void verifyProviderJar(URL var0) {
         throw JceSecurityUtil.shouldNotReach("javax.crypto.JceSecurity.verifyProviderJar(URL)");
     }
@@ -267,12 +267,10 @@ class JceSecurityAccessor {
 }
 
 final class JceSecurityUtil {
-    private static final String enableAllSecurityServices = SubstrateOptionsParser.commandArgument(SubstrateOptions.EnableAllSecurityServices, "+");
-
     static RuntimeException shouldNotReach(String method) {
         throw VMError.shouldNotReachHere(method + " is reached at runtime. " +
                         "This should not happen. The contents of JceSecurity.verificationResults " +
-                        "are computed and cached at image build time. Try enabling all security services with " + enableAllSecurityServices + ".");
+                        "are computed and cached at image build time.");
     }
 }
 
