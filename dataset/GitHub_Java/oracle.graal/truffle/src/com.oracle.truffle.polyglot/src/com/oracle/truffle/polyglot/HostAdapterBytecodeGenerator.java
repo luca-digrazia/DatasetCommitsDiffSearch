@@ -203,7 +203,6 @@ final class HostAdapterBytecodeGenerator {
 
     private static final String DELEGATE_FIELD_NAME = "delegate";
     private static final String IS_FUNCTION_FIELD_NAME = "isFunction";
-    private static final String PUBLIC_DELEGATE_FIELD_NAME = HostInteropReflect.ADAPTER_DELEGATE_MEMBER;
 
     // Method name prefix for invoking super-methods
     static final String SUPER_PREFIX = "super$";
@@ -231,7 +230,6 @@ final class HostAdapterBytecodeGenerator {
     private final Set<MethodInfo> methodInfos = new HashSet<>();
     private final boolean autoConvertibleFromFunction;
     private final boolean hasSuperMethods;
-    private final boolean hasPublicDelegateField;
 
     private final ClassWriter cw;
 
@@ -259,10 +257,6 @@ final class HostAdapterBytecodeGenerator {
         this.commonLoader = commonLoader;
         this.hostClassCache = hostClassCache;
         this.classOverride = classOverride;
-
-        this.superClassName = Type.getInternalName(superClass);
-        this.generatedClassName = getGeneratedClassName(superClass, interfaces);
-
         cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS) {
             @Override
             protected String getCommonSuperClass(final String type1, final String type2) {
@@ -274,41 +268,32 @@ final class HostAdapterBytecodeGenerator {
                 return HostAdapterBytecodeGenerator.this.getCommonSuperClass(type1, type2);
             }
         };
+        superClassName = Type.getInternalName(superClass);
+        generatedClassName = getGeneratedClassName(superClass, interfaces);
 
         cw.visit(Opcodes.V1_8, ACC_PUBLIC | ACC_SUPER, generatedClassName, null, superClassName, getInternalTypeNames(interfaces));
 
-        generatePrivateField(DELEGATE_FIELD_NAME, POLYGLOT_VALUE_TYPE_DESCRIPTOR);
-
-        this.hasPublicDelegateField = !classOverride;
-        if (hasPublicDelegateField) {
-            generatePublicDelegateField();
-        }
+        generateField(DELEGATE_FIELD_NAME, POLYGLOT_VALUE_TYPE_DESCRIPTOR);
 
         gatherMethods(superClass);
         gatherMethods(interfaces);
         if (abstractMethodNames.size() == 1) {
-            this.samName = abstractMethodNames.iterator().next();
-            generatePrivateField(IS_FUNCTION_FIELD_NAME, BOOLEAN_TYPE_DESCRIPTOR);
+            samName = abstractMethodNames.iterator().next();
+            generateField(IS_FUNCTION_FIELD_NAME, BOOLEAN_TYPE_DESCRIPTOR);
         } else {
-            this.samName = null;
+            samName = null;
         }
 
         generateClassInit();
-        this.autoConvertibleFromFunction = generateConstructors();
+        autoConvertibleFromFunction = generateConstructors();
         generateMethods();
         this.hasSuperMethods = generateSuperMethods();
 
         cw.visitEnd();
     }
 
-    private void generatePrivateField(final String name, final String fieldDesc) {
+    private void generateField(final String name, final String fieldDesc) {
         cw.visitField(ACC_PRIVATE | ACC_FINAL | (classOverride ? ACC_STATIC : 0), name, fieldDesc, null, null).visitEnd();
-    }
-
-    private void generatePublicDelegateField() {
-        FieldVisitor fw = cw.visitField(ACC_PUBLIC | ACC_FINAL, PUBLIC_DELEGATE_FIELD_NAME, POLYGLOT_VALUE_TYPE_DESCRIPTOR, null, null);
-        fw.visitAnnotation(HOST_EXPORT_ANNOTATION_DESCRIPTOR, true);
-        fw.visitEnd();
     }
 
     private void loadField(final InstructionAdapter mv, final String name, final String desc) {
@@ -544,12 +529,6 @@ final class HostAdapterBytecodeGenerator {
         mv.visitVarInsn(ALOAD, 0);
         mv.visitVarInsn(ALOAD, offset); // delegate object
         mv.putfield(generatedClassName, DELEGATE_FIELD_NAME, POLYGLOT_VALUE_TYPE_DESCRIPTOR);
-
-        if (hasPublicDelegateField) {
-            mv.visitVarInsn(ALOAD, 0);
-            mv.visitVarInsn(ALOAD, offset); // delegate object
-            mv.putfield(generatedClassName, PUBLIC_DELEGATE_FIELD_NAME, POLYGLOT_VALUE_TYPE_DESCRIPTOR);
-        }
 
         endInitMethod(mv);
     }
