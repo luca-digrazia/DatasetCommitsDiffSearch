@@ -396,24 +396,6 @@ public class SubstrateAArch64Backend extends SubstrateBackend implements LIRGene
         }
 
         @Override
-        public void emitConvertNullToZero(AllocatableValue result, Value value) {
-            if (useLinearPointerCompression()) {
-                append(new AArch64Move.ConvertNullToZeroOp(result, (AllocatableValue) value));
-            } else {
-                emitMove(result, value);
-            }
-        }
-
-        @Override
-        public void emitConvertZeroToNull(AllocatableValue result, Value value) {
-            if (useLinearPointerCompression()) {
-                append(new AArch64Move.ConvertZeroToNullOp(result, (AllocatableValue) value));
-            } else {
-                emitMove(result, value);
-            }
-        }
-
-        @Override
         public void emitReturn(JavaKind kind, Value input) {
             AllocatableValue operand = Value.ILLEGAL;
             if (input != null) {
