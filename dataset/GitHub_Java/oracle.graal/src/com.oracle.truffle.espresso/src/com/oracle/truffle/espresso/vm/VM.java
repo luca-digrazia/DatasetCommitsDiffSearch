@@ -45,6 +45,7 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 
+import com.oracle.truffle.espresso.impl.Field;
 import org.graalvm.options.OptionValues;
 
 import com.oracle.truffle.api.CallTarget;
@@ -71,7 +72,6 @@ import com.oracle.truffle.espresso.descriptors.Symbol.Name;
 import com.oracle.truffle.espresso.descriptors.Symbol.Signature;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.ContextAccess;
-import com.oracle.truffle.espresso.impl.Field;
 import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.impl.Method;
 import com.oracle.truffle.espresso.jni.Callback;
