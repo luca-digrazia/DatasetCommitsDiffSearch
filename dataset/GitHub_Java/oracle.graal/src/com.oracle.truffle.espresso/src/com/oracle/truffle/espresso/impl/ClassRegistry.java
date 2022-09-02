@@ -59,7 +59,6 @@ public abstract class ClassRegistry implements ContextAccess {
     static final ThreadLocal<TypeStack> stack = ThreadLocal.withInitial(TypeStack.supplier);
 
     static final class TypeStack {
-
         static final Supplier<TypeStack> supplier = new Supplier<TypeStack>() {
             @Override
             public TypeStack get() {
@@ -69,7 +68,6 @@ public abstract class ClassRegistry implements ContextAccess {
         Node head = null;
 
         static final class Node {
-
             Symbol<Type> entry;
             Node next;
 
@@ -77,7 +75,6 @@ public abstract class ClassRegistry implements ContextAccess {
                 this.entry = entry;
                 this.next = next;
             }
-
         }
 
         boolean isEmpty() {
@@ -110,16 +107,14 @@ public abstract class ClassRegistry implements ContextAccess {
 
         private TypeStack() {
         }
-
     }
 
     private final EspressoContext context;
 
     private final int loaderID;
-
     private ModuleEntry unnamed;
-    private final PackageTable packages;
 
+    private final PackageTable packages;
     private final ModuleTable modules;
 
     public ModuleEntry getUnnamedModule() {
@@ -240,14 +235,10 @@ public abstract class ClassRegistry implements ContextAccess {
     private ParserKlass getParserKlass(byte[] bytes, String strType) {
         // May throw guest ClassFormatError, NoClassDefFoundError.
         ParserKlass parserKlass = ClassfileParser.parse(new ClassfileStream(bytes, null), strType, null, context);
-        if (!loaderIsBootOrPlatform(getClassLoader(), getMeta()) && parserKlass.getName().toString().startsWith("java/")) {
+        if (StaticObject.notNull(getClassLoader()) && parserKlass.getName().toString().startsWith("java/")) {
             throw Meta.throwExceptionWithMessage(getMeta().java_lang_SecurityException, "Define class in prohibited package name: " + parserKlass.getName());
         }
         return parserKlass;
-    }
-
-    public static boolean loaderIsBootOrPlatform(StaticObject loader, Meta meta) {
-        return StaticObject.isNull(loader) || meta.jdk_internal_loader_ClassLoaders$PlatformClassLoader.isAssignableFrom(loader.getKlass());
     }
 
     private ObjectKlass createAndPutKlass(Meta meta, ParserKlass parserKlass, Symbol<Type> type, Symbol<Type> superKlassType) {

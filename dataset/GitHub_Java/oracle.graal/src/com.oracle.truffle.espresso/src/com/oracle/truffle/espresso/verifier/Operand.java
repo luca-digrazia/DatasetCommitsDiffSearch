@@ -42,10 +42,6 @@ abstract class Operand {
         this.kind = kind;
     }
 
-    boolean isTopOperand() {
-        return this == Invalid;
-    }
-
     JavaKind getKind() {
         return kind;
     }
@@ -120,7 +116,7 @@ class PrimitiveOperand extends Operand {
 
     @Override
     boolean compliesWith(Operand other) {
-        return (other.isTopOperand()) || other == this;
+        return (other == Invalid) || other == this;
     }
 
     @Override
@@ -157,7 +153,7 @@ final class ReturnAddressOperand extends PrimitiveOperand {
 
     @Override
     boolean compliesWith(Operand other) {
-        if (other.isTopOperand()) {
+        if (other == Invalid) {
             return true;
         }
         if (other.isReturnAddress()) {
@@ -282,7 +278,7 @@ class ReferenceOperand extends Operand {
             }
             return otherKlass.isAssignableFrom(getKlass());
         }
-        return other.isTopOperand();
+        return other == Invalid;
 
     }
 
@@ -349,7 +345,7 @@ final class ArrayOperand extends Operand {
             }
             return false;
         }
-        return (other.isTopOperand()) || (other.isReference() && (other.getType() == Type.java_lang_Object ||
+        return (other == Invalid) || (other.isReference() && (other.getType() == Type.java_lang_Object ||
                         other.getType() == Type.java_lang_Cloneable ||
                         other.getType() == Type.java_io_Serializable));
     }
@@ -459,7 +455,7 @@ final class UninitReferenceOperand extends ReferenceOperand {
         if (other.isUninit()) {
             return compliesWith(other);
         }
-        return other.isTopOperand();
+        return other == Invalid;
     }
 
     @Override

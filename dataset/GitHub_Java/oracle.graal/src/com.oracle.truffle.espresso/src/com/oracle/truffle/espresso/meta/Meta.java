@@ -153,7 +153,6 @@ public final class Meta implements ContextAccess {
         java_lang_Double_value = java_lang_Double.lookupDeclaredField(Name.value, Type._double);
         java_lang_Long_value = java_lang_Long.lookupDeclaredField(Name.value, Type._long);
 
-        java_lang_String_value = lookupFieldDiffVersion(java_lang_String, Name.value, Type._char_array, Name.value, Type._byte_array);
         java_lang_String_hash = java_lang_String.lookupDeclaredField(Name.hash, Type._int);
         java_lang_String_coder = java_lang_String.lookupDeclaredField(Name.coder, Type._byte);
         java_lang_String_COMPACT_STRINGS = java_lang_String.lookupDeclaredField(Name.COMPACT_STRINGS, Type._boolean);
@@ -400,29 +399,24 @@ public final class Meta implements ContextAccess {
 
         // Classes and Members that differ from Java 8 to 11
 
+        java_lang_String_value = lookupFieldDiffVersion(java_lang_String, Name.value, Type._char_array, Name.value, Type._byte_array);
+
         java_lang_Class_classLoader = java_lang_Class.lookupField(Name.classLoader, Type.java_lang_ClassLoader);
 
-        if (getContext().getJavaVersion().java9OrLater()) {
-            jdk_internal_ClassLoaders_PlatformClassLoader = knownKlass(Type.jdk_internal_ClassLoaders$PlatformClassLoader);
-        } else {
-            jdk_internal_ClassLoaders_PlatformClassLoader = null;
-        }
+        jdk_internal_ClassLoaders_PlatformClassLoader = knownKlass(Type.jdk_internal_ClassLoaders$PlatformClassLoader);
 
-        if (getContext().getJavaVersion().modulesEnabled()) {
-            java_lang_Module = knownKlass(Type.java_lang_Module);
+        java_lang_Module = knownKlass(Type.java_lang_Module);
+        if (java_lang_Module != null) {
             java_lang_Module_name = java_lang_Module.lookupField(Name.name, Type.java_lang_String);
             java_lang_Module_loader = java_lang_Module.lookupField(Name.loader, Type.java_lang_ClassLoader);
             HIDDEN_MODULE_ENTRY = java_lang_Module.lookupHiddenField(Name.HIDDEN_MODULE_ENTRY);
-
-            java_lang_Class_module = java_lang_Class.lookupField(Name.module, Type.java_lang_Module);
         } else {
-            java_lang_Module = null;
             java_lang_Module_name = null;
             java_lang_Module_loader = null;
             HIDDEN_MODULE_ENTRY = null;
-
-            java_lang_Class_module = null;
         }
+
+        java_lang_Class_module = java_lang_Class.lookupField(Name.module, Type.java_lang_Module);
 
         java_lang_System_initializeSystemClass = java_lang_System.lookupDeclaredMethod(Name.initializeSystemClass, Signature._void);
         java_lang_System_initPhase1 = java_lang_System.lookupDeclaredMethod(Name.initPhase1, Signature._void);
@@ -452,10 +446,8 @@ public final class Meta implements ContextAccess {
         java_lang_invoke_MethodHandleNatives_linkCallSite11 = java_lang_invoke_MethodHandleNatives.lookupDeclaredMethod(Name.linkCallSite,
                         Signature.MemberName_Object_int_Object_Object_Object_Object_Object_array);
 
-        // these classes are in module java.management. These become known after modules
+        // TODO: these classes are in module java.management. These become known after modules
         // initialization.
-        // TODO: Have them lazily loaded after modules initialization, and only if management is
-        // enabled.
 
         // java.management
         java_lang_management_MemoryUsage = knownKlass(Type.java_lang_management_MemoryUsage);
@@ -481,24 +473,20 @@ public final class Meta implements ContextAccess {
         }
     }
 
-    private Field lookupFieldDiffVersion(ObjectKlass klass, Symbol<Name> n1, Symbol<Type> t1, Symbol<Name> n2, Symbol<Type> t2) {
-        if (getContext().getJavaVersion().java8OrEarlier()) {
-            return klass.lookupDeclaredField(n1, t1);
-        } else if (getContext().getJavaVersion().java9OrLater()) {
-            return klass.lookupDeclaredField(n2, t2);
-        } else {
-            throw EspressoError.shouldNotReachHere();
+    private static Field lookupFieldDiffVersion(ObjectKlass klass, Symbol<Name> n1, Symbol<Type> t1, Symbol<Name> n2, Symbol<Type> t2) {
+        Field result = klass.lookupDeclaredField(n1, t1);
+        if (result != null) {
+            return result;
         }
+        return klass.lookupDeclaredField(n2, t2);
     }
 
     private ObjectKlass knownKlassDiffVersion(Symbol<Type> t1, Symbol<Type> t2) {
-        if (getContext().getJavaVersion().java8OrEarlier()) {
-            return knownKlass(t1);
-        } else if (getContext().getJavaVersion().java9OrLater()) {
-            return knownKlass(t2);
-        } else {
-            throw EspressoError.shouldNotReachHere();
+        ObjectKlass result = knownKlass(t1);
+        if (result != null) {
+            return result;
         }
+        return knownKlass(t2);
     }
 
     // Checkstyle: stop field name check
@@ -1026,7 +1014,7 @@ public final class Meta implements ContextAccess {
         ObjectKlass k = loadKlassWithBootClassLoader(type);
         if (k == null) {
             // TODO: rework loading of classes with differences according to version.
-            getContext().getLogger().log(Level.WARNING, "Failed loading known class: " + type + ", discovered java version: " + getContext().getJavaVersion());
+            getContext().getLogger().log(Level.FINE, "Failed loading known class: " + type + ", discovered java version: " + getContext().getJavaVersion());
         }
         return k;
     }
@@ -1150,7 +1138,7 @@ public final class Meta implements ContextAccess {
             return null;
         }
         Meta meta = str.getKlass().getMeta();
-        if (meta.getContext().getJavaVersion().byteArrayStrings()) {
+        if (meta.getContext().getJavaVersion() >= 9) {
             StaticObject wrappedChars = (StaticObject) meta.java_lang_String_toCharArray.invokeDirect(str);
             return HostJava.createString(wrappedChars.unwrap());
         }
@@ -1166,7 +1154,7 @@ public final class Meta implements ContextAccess {
         final char[] value = HostJava.getStringValue(hostString);
         final int hash = HostJava.getStringHash(hostString);
         StaticObject guestString = java_lang_String.allocateInstance();
-        if (getContext().getJavaVersion().byteArrayStrings()) {
+        if (getContext().getJavaVersion() >= 9) {
             // TODO(garcia): avoid expensive array copies
             byte[] bytes = null;
             byte coder = LATIN1;

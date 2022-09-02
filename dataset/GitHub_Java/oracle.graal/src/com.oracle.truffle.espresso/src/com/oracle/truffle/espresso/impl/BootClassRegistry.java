@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,97 +23,74 @@
 
 package com.oracle.truffle.espresso.impl;
 
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.oracle.truffle.espresso.classfile.ClassfileParser;
-import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Type;
+import com.oracle.truffle.espresso.descriptors.Types;
 import com.oracle.truffle.espresso.runtime.ClasspathFile;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
-import com.oracle.truffle.espresso.types.TypeDescriptor;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+import com.oracle.truffle.espresso.substitutions.Host;
+import com.oracle.truffle.object.DebugCounter;
 
 /**
- * A {@link GuestClassRegistry} maps class names to resolved {@link Klass} instances. Each class
- * loader is associated with a {@link GuestClassRegistry} and vice versa.
- *
- * This class is analogous to the ClassLoaderData C++ class in HotSpot.
+ * A {@link BootClassRegistry} maps type names to resolved {@link Klass} instances loaded by the
+ * boot class loader.
  */
-public class BootClassRegistry implements ClassRegistry {
+public final class BootClassRegistry extends ClassRegistry {
 
-    private final EspressoContext context;
+    static final DebugCounter loadKlassCount = DebugCounter.create("BCL loadKlassCount");
+    static final DebugCounter loadKlassCacheHits = DebugCounter.create("BCL loadKlassCacheHits");
 
-    /**
-     * The map from symbol to classes for the classes defined by the class loader associated with
-     * this registry. Use of {@link ConcurrentHashMap} allows for atomic insertion while still
-     * supporting fast, non-blocking lookup. There's no need for deletion as class unloading removes
-     * a whole class registry and all its contained classes.
-     */
-    private final ConcurrentHashMap<TypeDescriptor, Klass> classes = new ConcurrentHashMap<>();
+    @Override
+    protected void loadKlassCountInc() {
+        loadKlassCount.inc();
+    }
+
+    @Override
+    protected void loadKlassCacheHitsInc() {
+        loadKlassCacheHits.inc();
+    }
+
+    private final Map<String, String> packageMap = new ConcurrentHashMap<>();
 
     public BootClassRegistry(EspressoContext context) {
-        this.context = context;
-        // Primitive classes do not have a .class definition, inject them directly in the BCL.
-        for (JavaKind kind : JavaKind.values()) {
-            if (kind.isPrimitive()) {
-                classes.put(context.getTypeDescriptors().make(kind.getTypeChar() + ""), new PrimitiveKlass(context, kind));
-            }
-        }
+        super(context);
     }
 
     @Override
-    public Klass resolve(TypeDescriptor type) {
-        if (type.isArray()) {
-            Klass k = resolve(type.getComponentType());
-            if (k == null) {
-                return null;
-            }
-            return k.getArrayClass();
+    public Klass loadKlassImpl(Symbol<Type> type) {
+        if (Types.isPrimitive(type)) {
+            return null;
         }
-
-        // TODO(peterssen): Make boot class registry thread-safe. Class loading is not a
-        // trivial operation, it loads super classes as well, which discards computeIfAbsent.
-        Klass klass = classes.get(type);
-
-        if (klass == null) {
-            Klass hostClass = null;
-            String className = type.toJavaName();
-
-            if (type.isPrimitive()) {
-                throw EspressoError.shouldNotReachHere("Primitives must be in the registry");
-            }
-
-            if (type.isArray()) {
-                int dim = type.getArrayDimensions();
-                Klass arrType = resolve(type.getElementalType());
-                for (int i = 0; i < dim; ++i) {
-                    arrType = arrType.getArrayClass();
-                }
-                return arrType;
-            }
-            ClasspathFile classpathFile = context.getBootClasspath().readClassFile(className);
-            if (classpathFile == null) {
-                return null;
-            }
-            ClassfileParser parser = new ClassfileParser(null, classpathFile, className, hostClass, context);
-            klass = parser.parseClass();
-            Klass loadedFirst = classes.putIfAbsent(type, klass);
-            if (loadedFirst != null) {
-                klass = loadedFirst;
-            }
+        ClasspathFile classpathFile = getContext().getBootClasspath().readClassFile(type);
+        if (classpathFile == null) {
+            return null;
         }
+        // Defining a class also loads the superclass and the superinterfaces which excludes the
+        // use of computeIfAbsent to insert the class since the map is modified.
+        ObjectKlass result = defineKlass(type, classpathFile.contents);
+        getRegistries().recordConstraint(type, result, getClassLoader());
+        packageMap.put(result.getRuntimePackage().toString(), classpathFile.classpathEntry.path());
+        return result;
+    }
 
-        return klass;
+    @TruffleBoundary
+    public String getPackagePath(String pkgName) {
+        String result = packageMap.get(pkgName);
+        return result;
+    }
+
+    @TruffleBoundary
+    public String[] getPackages() {
+        return packageMap.keySet().toArray(new String[0]);
     }
 
     @Override
-    public Klass findLoadedClass(TypeDescriptor type) {
-        if (type.isArray()) {
-            Klass klass = findLoadedClass(type.getComponentType());
-            if (klass == null) {
-                return null;
-            }
-            return klass.getArrayClass();
-        }
-        return classes.get(type);
+    public @Host(ClassLoader.class) StaticObject getClassLoader() {
+        return StaticObject.NULL;
     }
 }

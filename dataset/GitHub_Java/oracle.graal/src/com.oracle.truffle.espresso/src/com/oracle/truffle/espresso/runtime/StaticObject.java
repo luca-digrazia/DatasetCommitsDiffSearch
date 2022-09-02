@@ -39,21 +39,13 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.Cached.Shared;
-import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
-import com.oracle.truffle.api.profiles.BranchProfile;
 import com.oracle.truffle.espresso.EspressoLanguage;
 import com.oracle.truffle.espresso.descriptors.Symbol.Type;
 import com.oracle.truffle.espresso.impl.ArrayKlass;
@@ -85,8 +77,6 @@ public final class StaticObject implements TruffleObject {
     public static final StaticObject[] EMPTY_ARRAY = new StaticObject[0];
 
     public static final StaticObject NULL = new StaticObject();
-
-    private static final byte[] INTEROP_MARKER = new byte[0];
 
     private volatile EspressoLock lock;
 
@@ -387,419 +377,6 @@ public final class StaticObject implements TruffleObject {
         return readNumberValue().doubleValue();
     }
 
-    @ExportMessage
-    long getArraySize(@Shared("error") @Cached BranchProfile error) throws UnsupportedMessageException {
-        if (!isArray()) {
-            error.enter();
-            throw UnsupportedMessageException.create();
-        }
-        return length();
-    }
-
-    @ExportMessage
-    boolean hasArrayElements() {
-        return isArray();
-    }
-
-    @ExportMessage
-    abstract static class ReadArrayElement {
-        @Specialization(guards = "isBooleanArray(receiver)")
-        static boolean doBoolean(StaticObject receiver, long index,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<boolean[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isCharArray(receiver)")
-        static char doChar(StaticObject receiver, long index,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<char[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isByteArray(receiver)")
-        static byte doByte(StaticObject receiver, long index,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<byte[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isShortArray(receiver)")
-        static short doShort(StaticObject receiver, long index,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<short[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isIntArray(receiver)")
-        static int doInt(StaticObject receiver, long index,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<int[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isLongArray(receiver)")
-        static long doLong(StaticObject receiver, long index,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<long[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isFloatArray(receiver)")
-        static float doFloat(StaticObject receiver, long index,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<float[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isDoubleArray(receiver)")
-        static double doDouble(StaticObject receiver, long index,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<double[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = {"receiver.isArray()", "!isPrimitiveArray(receiver)"})
-        static Object doObject(StaticObject receiver, long index,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<Object[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @SuppressWarnings("unused")
-        @Fallback
-        static Object doOther(StaticObject receiver, long index) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    @ExportMessage
-    abstract static class WriteArrayElement {
-        @Specialization(guards = "isBooleanArray(receiver)", limit = "1")
-        static void doBoolean(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            boolean boolValue;
-            try {
-                boolValue = interopLibrary.asBoolean(value);
-            } catch (UnsupportedMessageException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<boolean[]> unwrap()[(int) index] = boolValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isCharArray(receiver)", limit = "1")
-        static void doChar(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            char charValue;
-            try {
-                String s = interopLibrary.asString(value);
-                if (s.length() != 1) {
-                    error.enter();
-                    String message = "Expected a string of length 1 as an element of char array, got " + s;
-                    throw UnsupportedTypeException.create(new Object[]{value}, message);
-                }
-                charValue = s.charAt(0);
-            } catch (UnsupportedMessageException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<char[]> unwrap()[(int) index] = charValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isByteArray(receiver)", limit = "1")
-        static void doByte(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            byte byteValue;
-            try {
-                byteValue = interopLibrary.asByte(value);
-            } catch (UnsupportedMessageException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<byte[]> unwrap()[(int) index] = byteValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isShortArray(receiver)", limit = "1")
-        static void doShort(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            short shortValue;
-            try {
-                shortValue = interopLibrary.asShort(value);
-            } catch (UnsupportedMessageException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<short[]> unwrap()[(int) index] = shortValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isIntArray(receiver)", limit = "1")
-        static void doInt(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            int intValue;
-            try {
-                intValue = interopLibrary.asInt(value);
-            } catch (UnsupportedMessageException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<int[]> unwrap()[(int) index] = intValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isLongArray(receiver)", limit = "1")
-        static void doLong(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            long longValue;
-            try {
-                longValue = interopLibrary.asLong(value);
-            } catch (UnsupportedMessageException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<long[]> unwrap()[(int) index] = longValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isFloatArray(receiver)", limit = "1")
-        static void doFloat(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            float floatValue;
-            try {
-                floatValue = interopLibrary.asFloat(value);
-            } catch (UnsupportedMessageException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<float[]> unwrap()[(int) index] = floatValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isDoubleArray(receiver)", limit = "1")
-        static void doDouble(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary,
-                        @Shared("error") @Cached BranchProfile error) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index < 0 || index > Integer.MAX_VALUE) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-            double doubleValue;
-            try {
-                doubleValue = interopLibrary.asDouble(value);
-            } catch (UnsupportedMessageException e) {
-                error.enter();
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<double[]> unwrap()[(int) index] = doubleValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                error.enter();
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @SuppressWarnings("unused")
-        @Fallback
-        static void doOther(StaticObject receiver, long index, Object value) throws UnsupportedMessageException {
-            throw UnsupportedMessageException.create();
-        }
-    }
-
-    protected static boolean isBooleanArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._boolean_array);
-    }
-
-    protected static boolean isCharArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._char_array);
-    }
-
-    protected static boolean isByteArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._byte_array);
-    }
-
-    protected static boolean isShortArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._short_array);
-    }
-
-    protected static boolean isIntArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._int_array);
-    }
-
-    protected static boolean isLongArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._long_array);
-    }
-
-    protected static boolean isFloatArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._float_array);
-    }
-
-    protected static boolean isDoubleArray(StaticObject object) {
-        return !isNull(object) && object.getKlass().equals(object.getKlass().getMeta()._double_array);
-    }
-
-    protected static boolean isPrimitiveArray(StaticObject object) {
-        return isBooleanArray(object) || isCharArray(object) || isByteArray(object) || isShortArray(object) || isIntArray(object) || isLongArray(object) || isFloatArray(object) ||
-                        isDoubleArray(object);
-    }
-
-    @ExportMessage
-    boolean isArrayElementReadable(long index) {
-        if (isArray()) {
-            return index >= 0 && index < length();
-        }
-        return false;
-    }
-
-    @ExportMessage
-    boolean isArrayElementModifiable(long index) {
-        return isPrimitiveArray(this) && index >= 0 && index < length();
-    }
-
-    @SuppressWarnings({"unused", "static-method"})
-    @ExportMessage
-    boolean isArrayElementInsertable(long index) {
-        return false;
-    }
-
     @SuppressWarnings("static-method")
     @ExportMessage
     boolean hasLanguage() {
@@ -966,13 +543,6 @@ public final class StaticObject implements TruffleObject {
         this.primitiveFields = null;
     }
 
-    private StaticObject(Klass klass, Object interopObject) {
-        this.klass = klass;
-        assert interopObject != null;
-        this.primitiveFields = INTEROP_MARKER;
-        this.fields = interopObject;
-    }
-
     public static StaticObject createNew(ObjectKlass klass) {
         assert !klass.isAbstract() && !klass.isInterface();
         return new StaticObject(klass);
@@ -992,13 +562,6 @@ public final class StaticObject implements TruffleObject {
         assert !(array instanceof StaticObject);
         assert array.getClass().isArray();
         return new StaticObject(klass, array);
-    }
-
-    public static StaticObject createInterop(Klass klass, Object interopObject) {
-        if (interopObject == null) {
-            return NULL;
-        }
-        return new StaticObject(klass, interopObject);
     }
 
     public Klass getKlass() {
@@ -1038,15 +601,6 @@ public final class StaticObject implements TruffleObject {
         return !isNull(object);
     }
 
-    public boolean isInterop() {
-        return this.primitiveFields == INTEROP_MARKER;
-    }
-
-    public Object rawInteropObject() {
-        assert isInterop();
-        return this.fields;
-    }
-
     public boolean isStaticStorage() {
         return this == getKlass().getStatics();
     }
@@ -1070,7 +624,7 @@ public final class StaticObject implements TruffleObject {
             assert !f.isStatic();
             if (!f.isHidden()) {
                 if (f.getKind() == JavaKind.Object) {
-                    setUnsafeField(f.getIndex(), StaticObject.NULL);
+                    setUnsafeField(f.getFieldIndex(), StaticObject.NULL);
                 }
             }
         }
@@ -1082,7 +636,7 @@ public final class StaticObject implements TruffleObject {
         for (Field f : thisKlass.getStaticFieldTable()) {
             assert f.isStatic();
             if (f.getKind() == JavaKind.Object) {
-                setUnsafeField(f.getIndex(), StaticObject.NULL);
+                setUnsafeField(f.getFieldIndex(), StaticObject.NULL);
             }
         }
     }
@@ -1096,7 +650,7 @@ public final class StaticObject implements TruffleObject {
     @TruffleBoundary(allowInlining = true)
     public StaticObject getFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return (StaticObject) UNSAFE.getObjectVolatile(CompilerDirectives.castExact(fields, Object[].class), getObjectFieldIndex(field.getIndex()));
+        return (StaticObject) UNSAFE.getObjectVolatile(CompilerDirectives.castExact(fields, Object[].class), getObjectFieldIndex(field.getFieldIndex()));
     }
 
     // Not to be used to access hidden fields !
@@ -1107,7 +661,7 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             result = getFieldVolatile(field);
         } else {
-            result = castExact(fields, Object[].class)[field.getIndex()];
+            result = castExact(fields, Object[].class)[field.getFieldIndex()];
         }
         assert result != null;
         return (StaticObject) result;
@@ -1133,7 +687,7 @@ public final class StaticObject implements TruffleObject {
     @TruffleBoundary(allowInlining = true)
     public void setFieldVolatile(Field field, Object value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        UNSAFE.putObjectVolatile(castExact(fields, Object[].class), getObjectFieldIndex(field.getIndex()), value);
+        UNSAFE.putObjectVolatile(castExact(fields, Object[].class), getObjectFieldIndex(field.getFieldIndex()), value);
     }
 
     public void setField(Field field, Object value) {
@@ -1148,13 +702,13 @@ public final class StaticObject implements TruffleObject {
             setFieldVolatile(field, value);
         } else {
             Object[] fieldArray = castExact(fields, Object[].class);
-            fieldArray[field.getIndex()] = value;
+            fieldArray[field.getFieldIndex()] = value;
         }
     }
 
     public boolean compareAndSwapField(Field field, Object before, Object after) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.compareAndSwapObject(fields, getObjectFieldIndex(field.getIndex()), before, after);
+        return UNSAFE.compareAndSwapObject(fields, getObjectFieldIndex(field.getFieldIndex()), before, after);
     }
 
     // End non-primitive field handling
@@ -1173,14 +727,14 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             return getByteFieldVolatile(field) != 0;
         } else {
-            return UNSAFE.getByte(primitiveFields, getPrimitiveFieldIndex(field.getIndex())) != 0;
+            return UNSAFE.getByte(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex())) != 0;
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public byte getByteFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.getByteVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+        return UNSAFE.getByteVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
     }
 
     public byte getByteField(Field field) {
@@ -1189,7 +743,7 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             return getByteFieldVolatile(field);
         } else {
-            return UNSAFE.getByte(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+            return UNSAFE.getByte(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
         }
     }
 
@@ -1199,14 +753,14 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             return getCharFieldVolatile(field);
         } else {
-            return UNSAFE.getChar(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+            return UNSAFE.getChar(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public char getCharFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.getCharVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+        return UNSAFE.getCharVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
     }
 
     public short getShortField(Field field) {
@@ -1215,14 +769,14 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             return getShortFieldVolatile(field);
         } else {
-            return UNSAFE.getShort(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+            return UNSAFE.getShort(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public short getShortFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.getShortVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+        return UNSAFE.getShortVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
     }
 
     public int getIntField(Field field) {
@@ -1231,14 +785,14 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             return getIntFieldVolatile(field);
         } else {
-            return UNSAFE.getInt(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+            return UNSAFE.getInt(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public int getIntFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.getIntVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+        return UNSAFE.getIntVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
     }
 
     public float getFloatField(Field field) {
@@ -1247,14 +801,14 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             return getFloatFieldVolatile(field);
         } else {
-            return UNSAFE.getFloat(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+            return UNSAFE.getFloat(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public float getFloatFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.getFloatVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+        return UNSAFE.getFloatVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
     }
 
     public double getDoubleField(Field field) {
@@ -1263,14 +817,14 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             return getDoubleFieldVolatile(field);
         } else {
-            return UNSAFE.getDouble(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+            return UNSAFE.getDouble(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public double getDoubleFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.getDoubleVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+        return UNSAFE.getDoubleVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
     }
 
     // Field setters
@@ -1281,7 +835,7 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             setBooleanFieldVolatile(field, value);
         } else {
-            UNSAFE.putByte(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), (byte) (value ? 1 : 0));
+            UNSAFE.putByte(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), (byte) (value ? 1 : 0));
         }
     }
 
@@ -1296,13 +850,13 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             setByteFieldVolatile(field, value);
         } else {
-            UNSAFE.putByte(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+            UNSAFE.putByte(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public void setByteFieldVolatile(Field field, byte value) {
-        UNSAFE.putByteVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+        UNSAFE.putByteVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
     }
 
     public void setCharField(Field field, char value) {
@@ -1311,13 +865,13 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             setCharFieldVolatile(field, value);
         } else {
-            UNSAFE.putChar(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+            UNSAFE.putChar(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public void setCharFieldVolatile(Field field, char value) {
-        UNSAFE.putCharVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+        UNSAFE.putCharVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
     }
 
     public void setShortField(Field field, short value) {
@@ -1326,13 +880,13 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             setShortFieldVolatile(field, value);
         } else {
-            UNSAFE.putShort(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+            UNSAFE.putShort(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public void setShortFieldVolatile(Field field, short value) {
-        UNSAFE.putShortVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+        UNSAFE.putShortVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
     }
 
     public void setIntField(Field field, int value) {
@@ -1341,13 +895,13 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             setIntFieldVolatile(field, value);
         } else {
-            UNSAFE.putInt(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+            UNSAFE.putInt(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public void setIntFieldVolatile(Field field, int value) {
-        UNSAFE.putIntVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+        UNSAFE.putIntVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
     }
 
     public void setFloatField(Field field, float value) {
@@ -1356,14 +910,14 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             setFloatFieldVolatile(field, value);
         } else {
-            UNSAFE.putFloat(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+            UNSAFE.putFloat(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public void setDoubleFieldVolatile(Field field, double value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        UNSAFE.putDoubleVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+        UNSAFE.putDoubleVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
     }
 
     public void setDoubleField(Field field, double value) {
@@ -1372,19 +926,19 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             setDoubleFieldVolatile(field, value);
         } else {
-            UNSAFE.putDouble(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+            UNSAFE.putDouble(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public void setFloatFieldVolatile(Field field, float value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        UNSAFE.putFloatVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+        UNSAFE.putFloatVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
     }
 
     public boolean compareAndSwapIntField(Field field, int before, int after) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.compareAndSwapInt(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), before, after);
+        return UNSAFE.compareAndSwapInt(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), before, after);
     }
 
     // End subword field handling
@@ -1393,7 +947,7 @@ public final class StaticObject implements TruffleObject {
     @TruffleBoundary(allowInlining = true)
     public long getLongFieldVolatile(Field field) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.getLongVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+        return UNSAFE.getLongVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
     }
 
     public long getLongField(Field field) {
@@ -1402,14 +956,14 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             return getLongFieldVolatile(field);
         } else {
-            return UNSAFE.getLong(primitiveFields, getPrimitiveFieldIndex(field.getIndex()));
+            return UNSAFE.getLong(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()));
         }
     }
 
     @TruffleBoundary(allowInlining = true)
     public void setLongFieldVolatile(Field field, long value) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        UNSAFE.putLongVolatile(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+        UNSAFE.putLongVolatile(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
     }
 
     public void setLongField(Field field, long value) {
@@ -1418,13 +972,13 @@ public final class StaticObject implements TruffleObject {
         if (field.isVolatile()) {
             setLongFieldVolatile(field, value);
         } else {
-            UNSAFE.putLong(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), value);
+            UNSAFE.putLong(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), value);
         }
     }
 
     public boolean compareAndSwapLongField(Field field, long before, long after) {
         assert field.getDeclaringKlass().isAssignableFrom(getKlass());
-        return UNSAFE.compareAndSwapLong(primitiveFields, getPrimitiveFieldIndex(field.getIndex()), before, after);
+        return UNSAFE.compareAndSwapLong(primitiveFields, getPrimitiveFieldIndex(field.getFieldIndex()), before, after);
     }
 
     // End big words field handling.
@@ -1482,22 +1036,22 @@ public final class StaticObject implements TruffleObject {
 
     public void setHiddenField(Field hiddenField, Object value) {
         assert hiddenField.isHidden();
-        setUnsafeField(hiddenField.getIndex(), value);
+        setUnsafeField(hiddenField.getFieldIndex(), value);
     }
 
     public Object getHiddenField(Field hiddenField) {
         assert hiddenField.isHidden();
-        return getUnsafeField(hiddenField.getIndex());
+        return getUnsafeField(hiddenField.getFieldIndex());
     }
 
     public void setHiddenFieldVolatile(Field hiddenField, Object value) {
         assert hiddenField.isHidden();
-        setUnsafeFieldVolatile(hiddenField.getIndex(), value);
+        setUnsafeFieldVolatile(hiddenField.getFieldIndex(), value);
     }
 
     public Object getHiddenFieldVolatile(Field hiddenField) {
         assert hiddenField.isHidden();
-        return getUnsafeFieldVolatile(hiddenField.getIndex());
+        return getUnsafeFieldVolatile(hiddenField.getFieldIndex());
     }
 
     /**
@@ -1637,7 +1191,7 @@ public final class StaticObject implements TruffleObject {
     }
 
     public boolean isArray() {
-        return !isNull(this) && getKlass().isArray();
+        return getKlass().isArray();
     }
 
     public static long getArrayByteOffset(int index) {
@@ -1669,6 +1223,6 @@ public final class StaticObject implements TruffleObject {
     }
 
     public StaticObject getAndSetObject(Field field, StaticObject value) {
-        return (StaticObject) UNSAFE.getAndSetObject(fields, getObjectFieldIndex(field.getIndex()), value);
+        return (StaticObject) UNSAFE.getAndSetObject(fields, getObjectFieldIndex(field.getFieldIndex()), value);
     }
 }
