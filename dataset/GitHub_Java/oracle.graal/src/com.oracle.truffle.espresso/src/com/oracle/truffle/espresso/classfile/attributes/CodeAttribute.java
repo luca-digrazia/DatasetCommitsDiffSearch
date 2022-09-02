@@ -25,10 +25,6 @@ package com.oracle.truffle.espresso.classfile.attributes;
 
 import static com.oracle.truffle.espresso.classfile.ClassfileParser.JAVA_6_VERSION;
 
-import java.io.PrintStream;
-import java.util.Arrays;
-
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.espresso.bytecode.BytecodeStream;
 import com.oracle.truffle.espresso.descriptors.Symbol;
@@ -37,6 +33,9 @@ import com.oracle.truffle.espresso.impl.Klass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
 import com.oracle.truffle.espresso.runtime.Attribute;
+
+import java.io.PrintStream;
+import java.util.Arrays;
 
 public final class CodeAttribute extends Attribute {
 
@@ -48,7 +47,7 @@ public final class CodeAttribute extends Attribute {
     private final int maxLocals;
 
     @CompilationFinal(dimensions = 1) //
-    private volatile byte[] code = null;
+    private final byte[] code;
 
     @CompilationFinal(dimensions = 1) //
     private final byte[] originalCode; // no bytecode patching
@@ -64,6 +63,7 @@ public final class CodeAttribute extends Attribute {
         this.maxStack = maxStack;
         this.maxLocals = maxLocals;
         this.originalCode = code;
+        this.code = Arrays.copyOf(code, code.length);
         this.exceptionHandlerEntries = exceptionHandlerEntries;
         this.attributes = attributes;
         this.majorVersion = majorVersion;
@@ -87,14 +87,6 @@ public final class CodeAttribute extends Attribute {
     }
 
     public byte[] getCode() {
-        if (code == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            synchronized (this) {
-                if (code == null) {
-                    code = Arrays.copyOf(originalCode, originalCode.length);
-                }
-            }
-        }
         return code;
     }
 
