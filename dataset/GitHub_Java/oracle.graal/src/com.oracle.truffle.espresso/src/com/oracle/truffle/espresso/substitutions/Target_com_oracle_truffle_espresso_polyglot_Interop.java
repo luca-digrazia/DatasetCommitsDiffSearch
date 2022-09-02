@@ -608,10 +608,10 @@ public final class Target_com_oracle_truffle_espresso_polyglot_Interop {
         try {
             if (receiver.isEspressoObject()) {
                 // Do not throw away the types if the receiver is an Espresso object.
-                UNCACHED.writeArrayElement(receiver, index, value);
+                UNCACHED.writeArrayElement(value, index, value);
             } else {
                 // Write to foreign array, full unwrap.
-                UNCACHED.writeArrayElement(unwrap(receiver), index, unwrap(value));
+                UNCACHED.writeArrayElement(unwrap(value), index, unwrap(value));
             }
         } catch (InteropException e) {
             throw throwInteropException(e, meta);
