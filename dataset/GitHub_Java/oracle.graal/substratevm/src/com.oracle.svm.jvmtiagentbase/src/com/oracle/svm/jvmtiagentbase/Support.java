@@ -37,7 +37,6 @@ import org.graalvm.nativeimage.c.type.CCharPointerPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.WordPointer;
-import org.graalvm.word.WordBase;
 
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.util.VMError;
@@ -57,8 +56,6 @@ import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiInterface;
  * A utility class that contains helper methods for JNI/JVMTI that agents can use.
  */
 public final class Support {
-    private static final byte JNI_TRUE = 1;
-    private static final byte JNI_FALSE = 0;
 
     public static boolean isInitialized() {
         boolean initialized = jvmtiEnv.isNonNull();
@@ -176,30 +173,29 @@ public final class Support {
         return nullPointer();
     }
 
-    public static JNIObjectHandle getObjectArgument(int slot) {
+    public static JNIObjectHandle getObjectArgument(int depth, int slot) {
         WordPointer handlePtr = StackValue.get(WordPointer.class);
-        if (jvmtiFunctions().GetLocalObject().invoke(jvmtiEnv(), nullHandle(), 0, slot, handlePtr) != JvmtiError.JVMTI_ERROR_NONE) {
+        if (jvmtiFunctions().GetLocalObject().invoke(jvmtiEnv(), nullHandle(), depth, slot, handlePtr) != JvmtiError.JVMTI_ERROR_NONE) {
             return nullHandle();
         }
         return handlePtr.read();
     }
 
-    public static byte getByteArgument(int slot) {
-        CIntPointer valuePtr = StackValue.get(CIntPointer.class);
-        if (jvmtiFunctions().GetLocalInt().invoke(jvmtiEnv(), nullHandle(), 0, slot, valuePtr) != JvmtiError.JVMTI_ERROR_NONE) {
-            return 0;
-        }
-        assert (byte) valuePtr.read() == valuePtr.read();
-        return (byte) valuePtr.read();
+    public static JNIObjectHandle getObjectArgument(int slot) {
+        return getObjectArgument(0, slot);
     }
 
-    public static boolean getBooleanArgument(int slot) {
-        CIntPointer valuePtr = StackValue.get(CIntPointer.class);
-        if (jvmtiFunctions().GetLocalInt().invoke(jvmtiEnv(), nullHandle(), 0, slot, valuePtr) != JvmtiError.JVMTI_ERROR_NONE) {
-            return false;
+    public static int getIntArgument(int depth, int slot) {
+        CIntPointer handlePtr = StackValue.get(CIntPointer.class);
+        JvmtiError error = jvmtiFunctions().GetLocalInt().invoke(jvmtiEnv(), nullHandle(), depth, slot, handlePtr);
+        if (error != JvmtiError.JVMTI_ERROR_NONE) {
+            throw new RuntimeException(error.toString());
         }
-        assert valuePtr.read() == JNI_TRUE || valuePtr.read() == JNI_FALSE;
-        return valuePtr.read() == JNI_TRUE;
+        return handlePtr.read();
+    }
+
+    public static int getIntArgument(int slot) {
+        return getIntArgument(0, slot);
     }
 
     public static String getClassNameOr(JNIEnvironment env, JNIObjectHandle clazz, String forNullHandle, String forNullNameOrException) {
@@ -234,6 +230,76 @@ public final class Support {
         return declaringClass.read();
     }
 
+    /**
+     * Get method's name at specified frame. Return null if fails, e.g. at a not existed depth.
+     *
+     * @param depth frame depth
+     * @param withSignature should the method name returned with signature
+     * @return method name or null if failed
+     */
+    public static String getMethodNameAtFrame(int depth, boolean withSignature) {
+        JNIMethodId mID = getCallerMethod(depth);
+        if (mID.isNonNull()) {
+            return getMethodNameAndSignature(mID, withSignature);
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Get class' name at specified frame. Return null if fails, e.g. at a not existed depth.
+     *
+     * @param env
+     * @param depth frame depth
+     * @return full qualified class name
+     */
+    public static String getClassNameAtFrame(JNIEnvironment env, int depth) {
+        JNIObjectHandle classHandle = getCallerClass(depth);
+        if (classHandle.notEqual(nullHandle())) {
+            return getClassNameOr(env, classHandle, "null", "null");
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Get method's name with full qualified class name and method signature. Return null if fails,
+     * e.g. at a not existed depth.
+     *
+     * @param env
+     * @param depth frame depth
+     * @return method name with class name and signature.
+     */
+    public static String getMethodFullNameAtFrame(JNIEnvironment env, int depth) {
+        StringBuilder sb = new StringBuilder();
+        String methodName = getMethodNameAtFrame(depth, true);
+        // Didn't get method at specified depth, return null.
+        if (methodName == null) {
+            return null;
+        }
+        sb.append(getClassNameAtFrame(env, depth)).append(".").append(methodName);
+        return sb.toString();
+    }
+
+    public static String getMethodName(JNIMethodId method) {
+        return getMethodNameAndSignature(method, false);
+    }
+
+    public static String getMethodNameAndSignature(JNIMethodId method, boolean witSignature) {
+        String ret = null;
+        CCharPointerPointer namePtr = StackValue.get(CCharPointerPointer.class);
+        CCharPointerPointer sigPtr = witSignature ? StackValue.get(CCharPointerPointer.class) : nullPointer();
+        if (jvmtiFunctions().GetMethodName().invoke(jvmtiEnv(), method, namePtr, sigPtr, nullPointer()) == JvmtiError.JVMTI_ERROR_NONE) {
+            ret = fromCString(namePtr.read());
+            jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), namePtr.read());
+            if (witSignature) {
+                ret = ret + fromCString(sigPtr.read());
+                jvmtiFunctions().Deallocate().invoke(jvmtiEnv(), sigPtr.read());
+            }
+        }
+        return ret;
+    }
+
     public static String getFieldName(JNIObjectHandle clazz, JNIFieldId field) {
         String name = null;
         CCharPointerPointer namePtr = StackValue.get(CCharPointerPointer.class);
@@ -255,6 +321,18 @@ public final class Support {
         return methodName;
     }
 
+    public static JNIObjectHandle getObjectField(JNIEnvironment env, JNIObjectHandle clazz, JNIObjectHandle obj, String name, String signature) {
+        try (CCharPointerHolder nameHolder = toCString(name);
+                        CCharPointerHolder sigHolder = toCString(signature);) {
+            JNIFieldId fieldId = jniFunctions().getGetFieldID().invoke(env, clazz, nameHolder.get(), sigHolder.get());
+            if (nullHandle().notEqual(fieldId)) {
+                return jniFunctions().getGetObjectField().invoke(env, obj, fieldId);
+            } else {
+                return nullHandle();
+            }
+        }
+    }
+
     public static boolean clearException(JNIEnvironment localEnv) {
         if (jniFunctions().getExceptionCheck().invoke(localEnv)) {
             jniFunctions().getExceptionClear().invoke(localEnv);
@@ -269,6 +347,15 @@ public final class Support {
             return true;
         }
         return false;
+    }
+
+    public static JNIObjectHandle handleException(JNIEnvironment localEnv) {
+        if (jniFunctions().getExceptionCheck().invoke(localEnv)) {
+            JNIObjectHandle exception = jniFunctions().getExceptionOccurred().invoke(localEnv);
+            jniFunctions().getExceptionClear().invoke(localEnv);
+            return exception;
+        }
+        return nullHandle();
     }
 
     /*
@@ -295,12 +382,20 @@ public final class Support {
         return jniFunctions().getCallObjectMethodA().invoke(env, obj, method, args);
     }
 
-    public static JNIObjectHandle callObjectMethodBLLZ(JNIEnvironment env, JNIObjectHandle obj, JNIMethodId method, byte b0, JNIObjectHandle l1, JNIObjectHandle l2, boolean z3) {
-        JNIValue args = StackValue.get(4, JNIValue.class);
-        args.addressOf(0).setByte(b0);
+    public static JNIObjectHandle callObjectMethodLLL(JNIEnvironment env, JNIObjectHandle obj, JNIMethodId method, JNIObjectHandle l0, JNIObjectHandle l1, JNIObjectHandle l2) {
+        JNIValue args = StackValue.get(3, JNIValue.class);
+        args.addressOf(0).setObject(l0);
         args.addressOf(1).setObject(l1);
         args.addressOf(2).setObject(l2);
-        args.addressOf(3).setBoolean(z3);
+        return jniFunctions().getCallObjectMethodA().invoke(env, obj, method, args);
+    }
+
+    public static JNIObjectHandle callObjectMethodLLLL(JNIEnvironment env, JNIObjectHandle obj, JNIMethodId method, JNIObjectHandle l0, JNIObjectHandle l1, JNIObjectHandle l2, JNIObjectHandle l3) {
+        JNIValue args = StackValue.get(4, JNIValue.class);
+        args.addressOf(0).setObject(l0);
+        args.addressOf(1).setObject(l1);
+        args.addressOf(2).setObject(l2);
+        args.addressOf(3).setObject(l3);
         return jniFunctions().getCallObjectMethodA().invoke(env, obj, method, args);
     }
 
@@ -386,11 +481,9 @@ public final class Support {
         return jniFunctions().getCallIntMethodA().invoke(env, obj, method, args);
     }
 
-    public static JNIObjectHandle newObjectLLL(JNIEnvironment env, JNIObjectHandle clazz, JNIMethodId ctor, JNIObjectHandle l0, JNIObjectHandle l1, JNIObjectHandle l2) {
-        JNIValue args = StackValue.get(3, JNIValue.class);
+    public static JNIObjectHandle newObjectL(JNIEnvironment env, JNIObjectHandle clazz, JNIMethodId ctor, JNIObjectHandle l0) {
+        JNIValue args = StackValue.get(1, JNIValue.class);
         args.addressOf(0).setObject(l0);
-        args.addressOf(1).setObject(l1);
-        args.addressOf(2).setObject(l2);
         return jniFunctions().getNewObjectA().invoke(env, clazz, ctor, args);
     }
 
@@ -413,10 +506,6 @@ public final class Support {
 
     public static void checkJni(int resultCode) {
         guarantee(resultCode == JNIErrors.JNI_OK());
-    }
-
-    public interface WordSupplier<T extends WordBase> {
-        T get();
     }
 
     private Support() {

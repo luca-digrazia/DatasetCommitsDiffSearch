@@ -26,6 +26,7 @@ package com.oracle.svm.configure;
 
 import java.io.BufferedReader;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -194,10 +195,10 @@ public class ConfigurationTool {
                     set.getSerializationConfigPaths().add(requirePathUri(current, value));
                     break;
 
-                case "--predefined-classes-input":
+                case "--dynamic-classes-input":
                     set = inputSet; // fall through
-                case "--predefined-classes-output":
-                    set.getPredefinedClassesConfigPaths().add(requirePathUri(current, value));
+                case "--dynamic-classes-output":
+                    set.getDynamicClassesConfigPaths().add(requirePathUri(current, value));
                     break;
 
                 case "--trace-input":
@@ -244,7 +245,7 @@ public class ConfigurationTool {
             for (Path path : callerFilterFiles) {
                 try {
                     FilterConfigurationParser parser = new FilterConfigurationParser(callersFilter);
-                    parser.parseAndRegister(path);
+                    parser.parseAndRegister(new FileReader(path.toFile()));
                 } catch (Exception e) {
                     throw new UsageException("Cannot parse filter file " + path + ": " + e);
                 }
@@ -262,7 +263,7 @@ public class ConfigurationTool {
             p = new TraceProcessor(advisor, inputSet.loadJniConfig(ConfigurationSet.FAIL_ON_EXCEPTION), inputSet.loadReflectConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
                             inputSet.loadProxyConfig(ConfigurationSet.FAIL_ON_EXCEPTION), inputSet.loadResourceConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
                             inputSet.loadSerializationConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
-                            inputSet.loadPredefinedClassesConfig(null, ConfigurationSet.FAIL_ON_EXCEPTION));
+                            inputSet.loadDynamicClassesConfig(ConfigurationSet.FAIL_ON_EXCEPTION));
         } catch (IOException e) {
             throw e;
         } catch (Throwable t) {
@@ -305,9 +306,9 @@ public class ConfigurationTool {
                 p.getSerializationConfiguration().printJson(writer);
             }
         }
-        for (URI uri : outputSet.getPredefinedClassesConfigPaths()) {
+        for (URI uri : outputSet.getDynamicClassesConfigPaths()) {
             try (JsonWriter writer = new JsonWriter(Paths.get(uri))) {
-                p.getPredefinedClassesConfiguration().printJson(writer);
+                p.getDynamicClassesConfiguration().printJson(writer);
             }
         }
     }
@@ -355,7 +356,10 @@ public class ConfigurationTool {
 
                 case "--input-file":
                     rootNode = maybeCreateRootNode(rootNode);
-                    new FilterConfigurationParser(rootNode).parseAndRegister(requirePath(current, value));
+                    try (FileReader reader = new FileReader(requirePath(current, value).toFile())) {
+                        FilterConfigurationParser parser = new FilterConfigurationParser(rootNode);
+                        parser.parseAndRegister(reader);
+                    }
                     break;
 
                 case "--output-file":

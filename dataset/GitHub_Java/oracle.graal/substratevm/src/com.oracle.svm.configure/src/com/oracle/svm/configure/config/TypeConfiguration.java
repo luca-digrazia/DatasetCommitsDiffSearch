@@ -27,34 +27,52 @@ package com.oracle.svm.configure.config;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import com.oracle.svm.configure.json.JsonPrintable;
 import com.oracle.svm.configure.json.JsonWriter;
 import com.oracle.svm.core.util.UserError;
 
-import jdk.vm.ci.meta.MetaUtil;
+import jdk.vm.ci.meta.JavaKind;
 
 public class TypeConfiguration implements JsonPrintable {
-    private final Map<String, ConfigurationType> types = new HashMap<>();
+    private final ConcurrentMap<String, ConfigurationType> types = new ConcurrentHashMap<>();
 
     public ConfigurationType get(String qualifiedJavaName) {
         return types.get(qualifiedJavaName);
     }
 
-    public ConfigurationType getByInternalName(String name) {
-        return types.get(MetaUtil.internalNameToJava(name, true, false));
-    }
-
     public void add(ConfigurationType type) {
         ConfigurationType previous = types.putIfAbsent(type.getQualifiedJavaName(), type);
-        UserError.guarantee(previous == null || previous == type, "Cannot replace existing type");
+        UserError.guarantee(previous == null || previous == type, "Cannot replace existing type %s with %s", previous, type);
     }
 
-    public ConfigurationType getOrCreateType(String qualifiedJavaName) {
-        return types.computeIfAbsent(qualifiedJavaName, ConfigurationType::new);
+    public ConfigurationType getOrCreateType(String qualifiedForNameString) {
+        assert qualifiedForNameString.indexOf('/') == -1 : "Requires qualified Java name, not internal representation";
+        assert !qualifiedForNameString.endsWith("[]") : "Requires Class.forName syntax, for example '[Ljava.lang.String;'";
+        String s = qualifiedForNameString;
+        int n = 0;
+        while (n < s.length() && s.charAt(n) == '[') {
+            n++;
+        }
+        if (n > 0) { // transform to Java source syntax
+            StringBuilder sb = new StringBuilder(s.length() + n);
+            if (s.charAt(n) == 'L' && s.charAt(s.length() - 1) == ';') {
+                sb.append(s, n + 1, s.length() - 1); // cut off leading '[' and 'L' and trailing ';'
+            } else if (n == s.length() - 1) {
+                sb.append(JavaKind.fromPrimitiveOrVoidTypeChar(s.charAt(n)).getJavaName());
+            } else {
+                throw new IllegalArgumentException();
+            }
+
+            for (int i = 0; i < n; i++) {
+                sb.append("[]");
+            }
+            s = sb.toString();
+        }
+        return types.computeIfAbsent(s, ConfigurationType::new);
     }
 
     @Override

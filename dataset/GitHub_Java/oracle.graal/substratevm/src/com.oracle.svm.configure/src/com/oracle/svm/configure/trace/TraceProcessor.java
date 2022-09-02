@@ -29,29 +29,35 @@ import java.io.Reader;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.svm.configure.config.JniConfiguration;
+import com.oracle.svm.configure.config.DynamicClassesConfiguration;
 import com.oracle.svm.configure.config.ProxyConfiguration;
-import com.oracle.svm.configure.config.ReflectionConfiguration;
 import com.oracle.svm.configure.config.ResourceConfiguration;
+import com.oracle.svm.configure.config.SerializationConfiguration;
+import com.oracle.svm.configure.config.TypeConfiguration;
 import com.oracle.svm.core.util.json.JSONParser;
 
 public class TraceProcessor extends AbstractProcessor {
-    private final JniProcessor jniProcessor = new JniProcessor();
-    private final ReflectionProcessor reflectionProcessor = new ReflectionProcessor();
+    private final AccessAdvisor advisor;
+    private final JniProcessor jniProcessor;
+    private final ReflectionProcessor reflectionProcessor;
+    private final SerializationProcessor serializationProcessor;
+    private final DynamicClassesProcessor dynamicClassesProcessor;
 
-    public TraceProcessor() {
+    public TraceProcessor(AccessAdvisor accessAdvisor, TypeConfiguration jniConfiguration, TypeConfiguration reflectionConfiguration,
+                    ProxyConfiguration proxyConfiguration, ResourceConfiguration resourceConfiguration, SerializationConfiguration serializationConfiguration,
+                    DynamicClassesConfiguration dynamicClassesConfiguration) {
+        advisor = accessAdvisor;
+        jniProcessor = new JniProcessor(this.advisor, jniConfiguration, reflectionConfiguration);
+        reflectionProcessor = new ReflectionProcessor(this.advisor, reflectionConfiguration, proxyConfiguration, resourceConfiguration);
+        serializationProcessor = new SerializationProcessor(this.advisor, serializationConfiguration);
+        dynamicClassesProcessor = new DynamicClassesProcessor(dynamicClassesConfiguration);
     }
 
-    public void setFilterEnabled(boolean enabled) {
-        jniProcessor.setFilterEnabled(enabled);
-        reflectionProcessor.setFilterEnabled(enabled);
-    }
-
-    public JniConfiguration getJniConfiguration() {
+    public TypeConfiguration getJniConfiguration() {
         return jniProcessor.getConfiguration();
     }
 
-    public ReflectionConfiguration getReflectionConfiguration() {
+    public TypeConfiguration getReflectionConfiguration() {
         return reflectionProcessor.getConfiguration();
     }
 
@@ -61,6 +67,14 @@ public class TraceProcessor extends AbstractProcessor {
 
     public ResourceConfiguration getResourceConfiguration() {
         return reflectionProcessor.getResourceConfiguration();
+    }
+
+    public SerializationConfiguration getSerializationConfiguration() {
+        return serializationProcessor.getSerializationConfiguration();
+    }
+
+    public DynamicClassesConfiguration getDynamicClassesConfiguration() {
+        return dynamicClassesProcessor.getDynamicClassesConfiguration();
     }
 
     @SuppressWarnings("unchecked")
@@ -73,41 +87,52 @@ public class TraceProcessor extends AbstractProcessor {
 
     private void processTrace(List<Map<String, ?>> trace) {
         for (Map<String, ?> entry : trace) {
-            try {
-                processEntry(entry);
-            } catch (Exception e) {
-                logWarning("Error processing log entry: " + e.toString() + ": " + entry.toString());
-            }
+            processEntry(entry);
         }
     }
 
     @Override
-    void processEntry(Map<String, ?> entry) {
-        String tracer = (String) entry.get("tracer");
-        switch (tracer) {
-            case "meta": {
-                String event = (String) entry.get("event");
-                if (event.equals("phase_change")) {
-                    setInLivePhase(entry.get("phase").equals("live"));
-                } else {
-                    logWarning("Unknown meta event, ignoring: " + event);
+    public void processEntry(Map<String, ?> entry) {
+        try {
+            String tracer = (String) entry.get("tracer");
+            switch (tracer) {
+                case "meta": {
+                    String event = (String) entry.get("event");
+                    if (event.equals("phase_change")) {
+                        setInLivePhase(entry.get("phase").equals("live"));
+                    } else if (event.equals("initialization")) {
+                        // not needed for now, but contains version for breaking changes
+                    } else {
+                        logWarning("Unknown meta event, ignoring: " + event);
+                    }
+                    break;
                 }
-                break;
+                case "jni":
+                    jniProcessor.processEntry(entry);
+                    break;
+                case "reflect":
+                    reflectionProcessor.processEntry(entry);
+                    break;
+                case "serialization":
+                    serializationProcessor.processEntry(entry);
+                    break;
+                case "classDefiner":
+                    dynamicClassesProcessor.processEntry(entry);
+                    break;
+                default:
+                    logWarning("Unknown tracer, ignoring: " + tracer);
+                    break;
             }
-            case "jni":
-                jniProcessor.processEntry(entry);
-                break;
-            case "reflect":
-                reflectionProcessor.processEntry(entry);
-                break;
-            default:
-                logWarning("Unknown tracer, ignoring: " + tracer);
-                break;
+        } catch (Exception e) {
+            StackTraceElement stackTraceElement = e.getStackTrace()[0];
+            logWarning("Error processing trace entry: " + e.toString() +
+                            " (at " + stackTraceElement.getClassName() + ":" + stackTraceElement.getLineNumber() + ") : " + entry.toString());
         }
     }
 
     @Override
     void setInLivePhase(boolean live) {
+        advisor.setInLivePhase(live);
         jniProcessor.setInLivePhase(live);
         reflectionProcessor.setInLivePhase(live);
         super.setInLivePhase(live);

@@ -41,41 +41,45 @@ public final class ClassForNameSupport {
 
     /** The map used to collect registered classes. */
     private final EconomicMap<String, Class<?>> knownClasses = ImageHeapMap.create();
+    /** Store class name and checksum byte array as key-value pair. */
+    private final EconomicMap<String, byte[]> dynamicGeneratedClasses = ImageHeapMap.create();
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public static void registerClass(Class<?> clazz) {
-        if (PredefinedClassesSupport.isPredefined(clazz)) {
-            return; // must be defined at runtime before it can be looked up
-        }
         singleton().knownClasses.put(clazz.getName(), clazz);
     }
 
-    public static Class<?> forNameOrNull(String className, boolean initialize, ClassLoader classLoader) {
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public static void registerDynamicGeneratedClass(Class<?> generatedClazz, String definedClassName, String checksum) {
+        registerClass(generatedClazz);
+        ImageSingletons.lookup(ClassForNameSupport.class).dynamicGeneratedClasses.put(definedClassName, checksum.getBytes());
+    }
+
+    public static Class<?> forNameOrNull(String className, boolean initialize) {
         Class<?> result = singleton().knownClasses.get(className);
         if (result == null) {
-            result = PredefinedClassesSupport.getLoadedForNameOrNull(className, classLoader);
-            if (result == null) {
-                return null;
-            }
+            return null;
         }
-        // Note: for non-predefined classes, we (currently) don't need to check the provided loader
         if (initialize) {
             DynamicHub.fromClass(result).ensureInitialized();
         }
         return result;
     }
 
-    public static Class<?> forName(String className, boolean initialize, ClassLoader classLoader) throws ClassNotFoundException {
-        Class<?> result = forNameOrNull(className, initialize, classLoader);
+    public static Class<?> forName(String className, boolean initialize) throws ClassNotFoundException {
+        Class<?> result = forNameOrNull(className, initialize);
         if (result == null) {
             throw new ClassNotFoundException(className);
         }
         return result;
     }
 
-    /** Whether a call to {@link Class#forName} for the given class can be folded to a constant. */
-    public static boolean canBeFolded(Class<?> clazz) {
-        return !PredefinedClassesSupport.isPredefined(clazz);
+    public static String getDynamicClassChecksum(String className) throws ClassNotFoundException {
+        byte[] storedValue = ImageSingletons.lookup(ClassForNameSupport.class).dynamicGeneratedClasses.get(className);
+        if (storedValue == null) {
+            throw new ClassNotFoundException(className);
+        }
+        return new String(storedValue);
     }
 }
 
