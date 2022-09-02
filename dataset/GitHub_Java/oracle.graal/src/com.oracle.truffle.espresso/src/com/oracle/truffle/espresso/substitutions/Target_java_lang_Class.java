@@ -94,7 +94,10 @@ public final class Target_java_lang_Class {
         Klass klass = context.getRegistries().loadKlass(context.getTypes().fromClassGetName(Meta.toHostString(name)), loader);
 
         if (klass == null) {
-            throw meta.throwExWithMessage(meta.ClassNotFoundException, name);
+            StaticObject instance = meta.ClassNotFoundException.allocateInstance();
+            meta.ClassNotFoundException.lookupDeclaredMethod(Name.INIT, Signature._void).invokeDirect(instance);
+            // TODO(peterssen): Add class name to exception message.
+            throw new EspressoException(instance);
         }
 
         if (initialize) {

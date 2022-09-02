@@ -38,7 +38,10 @@ import com.oracle.truffle.espresso.impl.ParserField;
 import com.oracle.truffle.espresso.impl.ParserKlass;
 import com.oracle.truffle.espresso.impl.ParserMethod;
 import com.oracle.truffle.espresso.meta.ExceptionHandler;
-import com.oracle.truffle.espresso.runtime.*;
+import com.oracle.truffle.espresso.runtime.Attribute;
+import com.oracle.truffle.espresso.runtime.BootstrapMethodsAttribute;
+import com.oracle.truffle.espresso.runtime.ClasspathFile;
+import com.oracle.truffle.espresso.runtime.EspressoContext;
 
 public final class ClassfileParser {
 
@@ -269,9 +272,19 @@ public final class ClassfileParser {
         if (MethodParametersAttribute.NAME.equals(name)) {
             return parseMethodParameters(name);
         }
+        if (SignatureAttribute.NAME.equals(name)) {
+            return parseSignatureAttribute(name);
+        }
         int length = stream.readS4();
         byte[] data = stream.readByteArray(length);
         return new Attribute(name, data);
+    }
+
+    private SignatureAttribute parseSignatureAttribute(Symbol<Name> name) {
+        assert Name.Signature.equals(name);
+        /* int length = */ stream.readS4();
+        int signatureIndex = stream.readU2();
+        return new SignatureAttribute(name, signatureIndex);
     }
 
     private MethodParametersAttribute parseMethodParameters(Symbol<Name> name) {
