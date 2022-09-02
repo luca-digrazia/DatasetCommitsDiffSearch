@@ -90,7 +90,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
     private final boolean internal;
     private final ClassLoader loader;
     private final TruffleLanguage<?> globalInstance;
-    private final Set<String> services;
     private String languageHome;
     private volatile ContextPolicy policy;
     private volatile Class<? extends TruffleLanguage<?>> languageClass;
@@ -123,18 +122,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
         this.interactive = Boolean.valueOf(info.getProperty(prefix + "interactive"));
         this.internal = Boolean.valueOf(info.getProperty(prefix + "internal"));
         this.languageHome = url;
-
-        Set<String> servicesClassNames = new TreeSet<>();
-        for (int servicesCounter = 0;; servicesCounter++) {
-            String nth = prefix + "service" + servicesCounter;
-            String serviceName = info.getProperty(nth);
-            if (serviceName == null) {
-                break;
-            }
-            servicesClassNames.add(serviceName);
-        }
-        this.services = Collections.unmodifiableSet(servicesClassNames);
-
         if (TruffleOptions.AOT) {
             initializeLanguageClass();
             assert languageClass != null;
@@ -157,7 +144,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
     @SuppressWarnings("unchecked")
     LanguageCache(String id, String name, String implementationName, String version, boolean interactive, boolean internal,
-                    TruffleLanguage<?> instance, String... services) {
+                    TruffleLanguage<?> instance) {
         this.id = id;
         this.className = instance.getClass().getName();
         this.mimeTypes = Collections.emptySet();
@@ -175,13 +162,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
         this.languageHome = null;
         this.policy = ContextPolicy.SHARED;
         this.globalInstance = instance;
-        if (services.length == 0) {
-            this.services = Collections.emptySet();
-        } else {
-            Set<String> servicesClassNames = new TreeSet<>();
-            Collections.addAll(servicesClassNames, services);
-            this.services = Collections.unmodifiableSet(servicesClassNames);
-        }
     }
 
     static Map<String, LanguageCache> languageMimes() {
@@ -428,14 +408,6 @@ final class LanguageCache implements Comparable<LanguageCache> {
         return policy;
     }
 
-    Collection<String> getServices() {
-        return services;
-    }
-
-    boolean supportsService(Class<?> clazz) {
-        return services.contains(clazz.getName()) || services.contains(clazz.getCanonicalName());
-    }
-
     @SuppressWarnings("unchecked")
     private void initializeLanguageClass() {
         if (languageClass == null) {
@@ -449,7 +421,9 @@ final class LanguageCache implements Comparable<LanguageCache> {
                         } else {
                             policy = loadedClass.getAnnotation(Registration.class).contextPolicy();
                         }
-                        languageClass = (Class<? extends TruffleLanguage<?>>) loadedClass;
+                        @SuppressWarnings("rawtypes")
+                        Class<? extends TruffleLanguage> loadedLanguageClass = loadedClass.asSubclass(TruffleLanguage.class);
+                        languageClass = (Class<? extends TruffleLanguage<?>>) loadedLanguageClass;
                     } catch (ClassNotFoundException e) {
                         throw new IllegalStateException("Cannot load language " + name + ". Language implementation class " + className + " failed to load.", e);
                     }
@@ -460,7 +434,7 @@ final class LanguageCache implements Comparable<LanguageCache> {
 
     @Override
     public String toString() {
-        return "LanguageCache [id=" + id + ", name=" + name + ", implementationName=" + implementationName + ", version=" + version + ", className=" + className + ", services=" + services + "]";
+        return "LanguageCache [id=" + id + ", name=" + name + ", implementationName=" + implementationName + ", version=" + version + ", className=" + className + "]";
     }
 
     static void resetNativeImageCacheLanguageHomes() {
