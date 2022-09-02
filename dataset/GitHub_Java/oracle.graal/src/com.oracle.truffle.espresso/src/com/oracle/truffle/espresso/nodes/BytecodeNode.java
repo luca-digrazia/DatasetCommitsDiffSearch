@@ -312,9 +312,6 @@ public final class BytecodeNode extends EspressoBaseNode implements CustomNodeCo
 
     public static final DebugCounter invokeNodes = DebugCounter.create("total invoke nodes");
 
-    @CompilationFinal //
-    private int monitorStackSize = MonitorStack.DEFAULT_CAPACITY;
-
     @Children private QuickNode[] nodes = QuickNode.EMPTY_ARRAY;
 
     @CompilationFinal(dimensions = 1) //
