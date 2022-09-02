@@ -56,8 +56,4 @@ final class LibraryAccessor extends Accessor {
     static NodeSupport nodeAccessor() {
         return ACCESSOR.nodeSupport();
     }
-
-    static EngineSupport engineAccessor() {
-        return ACCESSOR.engineSupport();
-    }
 }
