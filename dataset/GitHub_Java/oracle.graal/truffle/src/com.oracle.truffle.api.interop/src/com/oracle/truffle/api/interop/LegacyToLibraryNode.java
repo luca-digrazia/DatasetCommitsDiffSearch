@@ -222,12 +222,11 @@ final class LegacyToLibraryNode extends Node {
         return interop.asPointer(receiver);
     }
 
-    Object sendToNative(TruffleObject receiver) throws UnsupportedMessageException {
+    Object sendToNative(TruffleObject receiver) {
         if (receiver.getForeignAccess() != null) {
             try {
                 return LibraryToLegacy.sendToNative(legacyToNative, receiver);
             } catch (UnsupportedMessageException e) {
-                throw e;
             }
         }
         interop.toNative(receiver);
