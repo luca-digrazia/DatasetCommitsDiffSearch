@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,13 +26,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
+import com.oracle.truffle.espresso.descriptors.Symbol;
+import com.oracle.truffle.espresso.descriptors.Symbol.Name;
+import com.oracle.truffle.espresso.jdwp.api.LocalVariableTableRef;
+import com.oracle.truffle.espresso.runtime.Attribute;
 
 /**
  * Describes the {@link Local}s for a Java method.
  *
  * @see "https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.7.13"
  */
-public final class LocalVariableTable {
+public final class LocalVariableTable extends Attribute implements LocalVariableTableRef {
+
+    public static final LocalVariableTable EMPTY = new LocalVariableTable(Name.LocalVariableTable, Local.EMPTY_ARRAY);
 
     @CompilationFinal(dimensions = 1) //
     private final Local[] locals;
@@ -45,7 +51,8 @@ public final class LocalVariableTable {
      */
     // @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "caller transfers ownership of
     // `locals`")
-    public LocalVariableTable(Local[] locals) {
+    public LocalVariableTable(Symbol<Name> name, Local[] locals) {
+        super(name, null);
         this.locals = locals;
     }
 
@@ -87,6 +94,6 @@ public final class LocalVariableTable {
                 result.add(l);
             }
         }
-        return result.toArray(new Local[result.size()]);
+        return result.toArray(Local.EMPTY_ARRAY);
     }
 }

@@ -109,6 +109,15 @@ public final class CodeAttribute extends Attribute {
         return LocalVariableTable.EMPTY;
     }
 
+    public LocalVariableTable getLocalvariableTypeTable() {
+        for (Attribute attr : attributes) {
+            if (attr.getName() == Name.LocalVariableTypeTable) {
+                return (LocalVariableTable) attr;
+            }
+        }
+        return LocalVariableTable.EMPTY;
+    }
+
     public int bciToLineNumber(int bci) {
         LineNumberTable lnt = getLineNumberTableAttribute();
         if (lnt == LineNumberTable.EMPTY) {
@@ -123,10 +132,6 @@ public final class CodeAttribute extends Attribute {
 
     public int getMajorVersion() {
         return majorVersion;
-    }
-
-    public CodeAttribute forceSplit() {
-        return new CodeAttribute(getName(), maxStack, maxLocals, code.clone(), exceptionHandlerEntries, attributes, majorVersion);
     }
 
     public void print(Klass klass) {
