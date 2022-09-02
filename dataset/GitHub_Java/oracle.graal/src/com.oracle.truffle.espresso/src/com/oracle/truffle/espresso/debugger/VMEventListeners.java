@@ -22,16 +22,17 @@
  */
 package com.oracle.truffle.espresso.debugger;
 
-import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.espresso.impl.ObjectKlass;
 
+import java.util.HashSet;
 
 public class VMEventListeners {
 
     private static final VMEventListeners DEFAULT = new VMEventListeners();
 
-    @CompilerDirectives.CompilationFinal(dimensions = 1)
-    private VMEventListener[] listeners = new VMEventListener[1];
+    // TODO(Gregersen) - change to array or even a single listener for now
+    private HashSet<VMEventListener> listeners = new HashSet<>();
 
     VMEventListeners() {
 
@@ -42,27 +43,36 @@ public class VMEventListeners {
     }
 
     public void registerListener(VMEventListener listener) {
-        assert listeners[0] == null;
-        listeners[0] = listener;
+        listeners.add(listener);
     }
 
     public void classPrepared(ObjectKlass klass) {
-        listeners[0].classPrepared(klass);
+        for (VMEventListener listener : listeners) {
+            listener.classPrepared(klass);
+        }
     }
 
     public void classUnloaded(ObjectKlass klass) {
-        listeners[0].classUnloaded(klass);
+        for (VMEventListener listener : listeners) {
+            listener.classUnloaded(klass);
+        }
     }
 
     public void threadStarted(Thread thread) {
-        listeners[0].threadStarted(thread);
+        for (VMEventListener listener : listeners) {
+            listener.threadStarted(thread);
+        }
     }
 
     public void threadDied(Thread thread) {
-        listeners[0].threadDied(thread);
+        for (VMEventListener listener : listeners) {
+            listener.threadDied(thread);
+        }
     }
 
     public void breakpointHit(BreakpointInfo info) {
-        listeners[0].breakpointHIt(info);
+        for (VMEventListener listener : listeners) {
+            listener.breakpointHIt(info);
+        }
     }
 }

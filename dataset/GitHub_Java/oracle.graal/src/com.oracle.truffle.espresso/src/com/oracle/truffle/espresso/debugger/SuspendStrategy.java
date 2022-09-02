@@ -22,20 +22,8 @@
  */
 package com.oracle.truffle.espresso.debugger;
 
-import com.oracle.truffle.api.debug.Breakpoint;
-import com.oracle.truffle.espresso.debugger.jdwp.ClassPrepareRequest;
-import com.oracle.truffle.espresso.impl.ObjectKlass;
-
-public interface VMEventListener {
-    void classPrepared(ObjectKlass klass);
-    void classUnloaded(ObjectKlass klass);
-    void threadStarted(Thread thread);
-    void threadDied(Thread thread);
-    void breakpointHIt(BreakpointInfo info);
-
-    void addClassUnloadRequestId(int id);
-    void addThreadStartedRequestId(int id);
-    void addThreadDiedRequestId(int id);
-
-    void addClassPrepareRequest(ClassPrepareRequest request);
+public class SuspendStrategy {
+    public static final byte NONE = 0;
+    public static final byte EVENT_THREAD = 1;
+    public static final byte ALL = 2;
 }
