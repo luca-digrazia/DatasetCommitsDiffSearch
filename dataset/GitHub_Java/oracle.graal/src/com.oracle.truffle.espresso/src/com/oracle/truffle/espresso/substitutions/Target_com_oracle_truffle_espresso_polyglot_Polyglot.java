@@ -27,6 +27,7 @@ import java.util.Set;
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.source.Source;
@@ -169,8 +170,6 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
         }
     }
 
-    // TODO(peterssen): Fix deprecation, GR-26729
-    @SuppressWarnings("deprecation")
     @Substitution
     public static @Host(Object.class) StaticObject eval(@Host(String.class) StaticObject language, @Host(String.class) StaticObject code, @InjectMeta Meta meta) {
         String languageId = Meta.toHostString(language);
@@ -188,7 +187,7 @@ public class Target_com_oracle_truffle_espresso_polyglot_Polyglot {
         try {
             evalResult = callTarget.call();
         } catch (Exception e) {
-            if (e instanceof com.oracle.truffle.api.TruffleException) {
+            if (e instanceof TruffleException) {
                 throw rethrowExceptionAsEspresso(meta.java_lang_RuntimeException, "Exception during evaluation: ", e);
             } else {
                 throw e;
