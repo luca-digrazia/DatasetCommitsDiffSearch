@@ -79,6 +79,7 @@ public final class GraalVMLocator extends TruffleLocator
             }
         }
         String version = homeFinder.getVersion();
+        System.setProperty("graalvm.version", version);
         System.setProperty("org.graalvm.version", version);
         for (Map.Entry<String, Path> languageHome : homeFinder.getLanguageHomes().entrySet()) {
             setLanguageHomeProperty(languageHome.getKey(), languageHome.getValue());
