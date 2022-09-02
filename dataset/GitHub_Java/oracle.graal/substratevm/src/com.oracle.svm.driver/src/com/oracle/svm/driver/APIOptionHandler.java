@@ -149,8 +149,6 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                             Class<? extends APIOptionGroup> groupClass = apiAnnotation.group();
                             group = ReflectionUtil.newInstance(groupClass);
                             String groupName = APIOption.Utils.groupName(group);
-                            VMError.guarantee(group.helpText() != null && !group.helpText().isEmpty(),
-                                            String.format("APIOptionGroup %s(%s) needs to provide help text", groupClass.getName(), group.name()));
                             String groupMember = apiAnnotation.name()[0];
                             apiOptionName = groupName + groupMember;
                             Boolean isEnabled = (Boolean) optionDescriptor.getOptionKey().getDefaultValue();
@@ -205,7 +203,7 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
                                 String.format("APIOption %s(%s) needs to provide help text", apiOptionName, rawOptionName));
                 if (group == null) {
                     /* Regular help text needs to start with lower-case letter */
-                    helpText = startLowerCase(helpText);
+                    helpText = helpText.substring(0, 1).toLowerCase() + helpText.substring(1);
                 }
 
                 List<Function<Object, Object>> valueTransformers = new ArrayList<>(apiAnnotation.valueTransformer().length);
@@ -225,10 +223,6 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
         } catch (NoSuchFieldException e) {
             /* Does not qualify as APIOption */
         }
-    }
-
-    private static String startLowerCase(String str) {
-        return str.substring(0, 1).toLowerCase() + str.substring(1);
     }
 
     @Override
@@ -353,7 +347,7 @@ class APIOptionHandler extends NativeImage.OptionHandler<NativeImage> {
         assert group != null;
         StringBuilder sb = new StringBuilder();
 
-        sb.append(startLowerCase(group.helpText()));
+        sb.append(group.helpText());
         if (!group.helpText().endsWith(".")) {
             sb.append(".");
         }
