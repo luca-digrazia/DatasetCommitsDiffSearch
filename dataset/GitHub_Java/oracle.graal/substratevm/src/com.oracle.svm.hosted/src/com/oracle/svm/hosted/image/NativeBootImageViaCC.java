@@ -42,6 +42,7 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.Indent;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.impl.InternalPlatform;
 
 import com.oracle.objectfile.ObjectFile;
 import com.oracle.objectfile.macho.MachOSymtab;
@@ -111,9 +112,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                     Files.write(exportedSymbolsPath, exportedSymbols);
                     additionalPreOptions.add("-Wl,--dynamic-list");
                     additionalPreOptions.add("-Wl," + exportedSymbolsPath.toAbsolutePath());
-
-                    // Drop global symbols in linked static libraries: not covered by --dynamic-list
-                    additionalPreOptions.add("-Wl,--exclude-libs,ALL");
                 } catch (IOException e) {
                     VMError.shouldNotReachHere();
                 }
@@ -192,7 +190,7 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
                     throw UserError.abort(OS.getCurrent().name() + " does not support building static executable images.");
                 case SHARED_LIBRARY:
                     cmd.add("-shared");
-                    if (Platform.includedIn(Platform.DARWIN.class)) {
+                    if (Platform.includedIn(InternalPlatform.DARWIN_JNI_AND_SUBSTITUTIONS.class)) {
                         cmd.add("-undefined");
                         cmd.add("dynamic_lookup");
                     }
@@ -223,9 +221,8 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
 
         @Override
         public List<String> getCommand() {
-            List<String> compilerCmd = getCompilerCommand(additionalPreOptions);
-
-            List<String> cmd = new ArrayList<>(compilerCmd);
+            ArrayList<String> cmd = new ArrayList<>();
+            cmd.addAll(getCompilerCommand());
             setOutputKind(cmd);
 
             // Add debugging info
@@ -261,7 +258,6 @@ public abstract class NativeBootImageViaCC extends NativeBootImage {
             cmd.add("iphlpapi.lib");
             cmd.add("userenv.lib");
 
-            Collections.addAll(cmd, Options.NativeLinkerOption.getValue());
             return cmd;
         }
     }

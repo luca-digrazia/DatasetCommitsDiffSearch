@@ -24,16 +24,14 @@
  */
 package com.oracle.svm.hosted.image;
 
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ForkJoinPool;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import com.oracle.graal.pointsto.BigBang;
-import com.oracle.graal.pointsto.util.CompletionExecutor;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.code.CompilationResult.CodeAnnotation;
 import org.graalvm.compiler.core.common.NumUtil;
@@ -72,7 +70,7 @@ public class LIRNativeImageCodeCache extends NativeImageCodeCache {
 
     @SuppressWarnings("try")
     @Override
-    public void layoutMethods(DebugContext debug, String imageName, BigBang bb, ForkJoinPool threadPool) {
+    public void layoutMethods(DebugContext debug, String imageName) {
 
         try (Indent indent = debug.logAndIndent("layout methods")) {
 
@@ -212,6 +210,11 @@ public class LIRNativeImageCodeCache extends NativeImageCodeCache {
                 objectFile.createDefinedSymbol(name, section, method.getCodeAddressOffset(), size, true, global);
             }
         };
+    }
+
+    @Override
+    public Path[] getCCInputFiles(Path tempDirectory, String imageName) {
+        return new Path[]{tempDirectory.resolve(imageName + ObjectFile.getFilenameSuffix())};
     }
 
     @Override

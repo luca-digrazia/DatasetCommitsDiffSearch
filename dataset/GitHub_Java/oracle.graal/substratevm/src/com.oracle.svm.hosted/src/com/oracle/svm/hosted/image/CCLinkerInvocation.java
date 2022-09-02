@@ -133,20 +133,22 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
         libs.add(index, libname);
     }
 
-    protected List<String> getCompilerCommand(List<String> options) {
-        return ImageSingletons.lookup(CCompilerInvoker.class).createCompilerCommand(options, outputFile, inputFilenames.toArray(new Path[0]));
+    protected List<String> getCompilerCommand() {
+        return ImageSingletons.lookup(CCompilerInvoker.class).createCompilerCommand(Collections.emptyList(), outputFile, inputFilenames.toArray(new Path[0]));
     }
 
     protected abstract void setOutputKind(List<String> cmd);
 
     @Override
     public List<String> getCommand() {
-        List<String> compilerCmd = getCompilerCommand(additionalPreOptions);
-
-        List<String> cmd = new ArrayList<>(compilerCmd);
+        ArrayList<String> cmd = new ArrayList<>();
+        cmd.addAll(getCompilerCommand());
         setOutputKind(cmd);
 
         cmd.add("-v");
+        for (String opt : additionalPreOptions) {
+            cmd.add(opt);
+        }
         for (String libpath : libpaths) {
             cmd.add("-L" + libpath);
         }
@@ -162,7 +164,9 @@ public abstract class CCLinkerInvocation implements LinkerInvocation {
             }
         }
 
-        Collections.addAll(cmd, Options.NativeLinkerOption.getValue());
+        for (String nativeLinkerOption : Options.NativeLinkerOption.getValue()) {
+            cmd.add(nativeLinkerOption);
+        }
         return cmd;
     }
 
