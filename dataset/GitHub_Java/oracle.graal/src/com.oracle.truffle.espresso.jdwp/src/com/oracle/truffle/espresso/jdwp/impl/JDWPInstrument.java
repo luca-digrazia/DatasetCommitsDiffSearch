@@ -30,13 +30,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 
-@TruffleInstrument.Registration(id = JDWPInstrument.ID, name = "Java debug wire protocol", services = DebuggerController.class)
+@TruffleInstrument.Registration(id = JDWPInstrument.ID, name = "Java debug wire protocol", services = JDWPDebuggerController.class)
 public final class JDWPInstrument extends TruffleInstrument implements Runnable {
 
     public static final String ID = "jdwp";
     public static final Object suspendStartupLock = new Object();
 
-    private DebuggerController controller;
+    private JDWPDebuggerController controller;
     private TruffleInstrument.Env env;
     private JDWPContext context;
     private DebuggerConnection connection;
@@ -45,7 +45,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
     @Override
     protected void onCreate(TruffleInstrument.Env instrumentEnv) {
         assert controller == null;
-        controller = new Controller(this);
+        controller = new JDWPController(this);
         this.env = instrumentEnv;
         this.env.registerService(controller);
     }
@@ -75,7 +75,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
         connection.close();
 
         // re-enable GC for all objects
-        controller.getGCPrevention().clearAll();
+        GCPrevention.clearAll();
 
         // end the current debugger session to avoid hitting any further breakpoints
         // when resuming all threads
@@ -111,7 +111,8 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
                         throw new RuntimeException("JDWP connection interrupted");
                     }
                 }
-            } else {
+            }
+            else {
                 // don't suspend until debugger attaches, so fire up deamon thread
                 Thread handshakeThread = new Thread(this, "jdwp-handshake-thread");
                 handshakeThread.setDaemon(true);
@@ -123,7 +124,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
     }
 
     void doConnect() throws IOException {
-        SocketConnection socketConnection = HandshakeController.createSocketConnection(controller.getListeningPort(), activeThreads);
+        SocketConnection socketConnection = JDWPHandshakeController.createSocketConnection(controller.getListeningPort(), activeThreads);
         // connection established with handshake. Prepare to process commands from debugger
         connection = new DebuggerConnection(socketConnection, controller);
         connection.doProcessCommands(controller.shouldWaitForAttach(), activeThreads);
@@ -134,7 +135,7 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
         try {
             doConnect();
         } catch (IOException e) {
-            throw new RuntimeException("JDWP connection setup failed", e);
+            throw new RuntimeException("JDWP connection setup failed" , e);
         }
     }
 
@@ -142,9 +143,9 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
         return context;
     }
 
-    private static final class Controller extends DebuggerController {
+    private static final class JDWPController extends JDWPDebuggerController {
 
-        Controller(JDWPInstrument instrument) {
+        JDWPController(JDWPInstrument instrument) {
             super(instrument);
         }
     }

@@ -23,6 +23,7 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.debug.Breakpoint;
 import com.oracle.truffle.api.debug.DebugException;
 import com.oracle.truffle.api.debug.DebugScope;
@@ -65,25 +66,27 @@ public class JDWPDebuggerController {
     private JDWPOptions options;
     private DebuggerSession debuggerSession;
     private final JDWPInstrument instrument;
+    private TruffleLanguage.Env languageEnv;
     private Ids<Object> ids;
     private JDWPContext context;
-    private final JDWPVirtualMachine vm;
-    private Debugger debugger;
+    private JDWPVirtualMachine vm;
 
     public JDWPDebuggerController(JDWPInstrument instrument) {
         this.instrument = instrument;
         this.vm = new JDWPVirtualMachineImpl();
     }
 
-    public void initialize(Debugger debugger, JDWPOptions jdwpOptions, JDWPContext jdwpContext, boolean reconnect) {
-        this.debugger = debugger;
+    public void initialize(TruffleLanguage.Env env, JDWPOptions jdwpOptions, JDWPContext jdwpContext, boolean reconnect) {
         this.options = jdwpOptions;
+        this.languageEnv = env;
         this.context = jdwpContext;
         this.ids = jdwpContext.getIds();
 
         // setup the debugger session object early to make sure instrumentable nodes are materialized
+        Debugger debugger = env.lookup(env.getInstruments().get("debugger"), Debugger.class);
         debuggerSession = debugger.startSession(new SuspendedCallbackImpl(), SourceElement.ROOT, SourceElement.STATEMENT);
         debuggerSession.setSteppingFilter(SuspensionFilter.newBuilder().ignoreLanguageContextInitialization(true).build());
+        //debuggerSession.suspendNextExecution();
 
         if (!reconnect) {
             instrument.init(jdwpContext);
@@ -91,7 +94,7 @@ public class JDWPDebuggerController {
     }
 
     public void reInitialize() {
-        initialize(debugger, options, context, true);
+        initialize(languageEnv, options, context, true);
     }
 
     public JDWPContext getContext() {
@@ -132,14 +135,13 @@ public class JDWPDebuggerController {
             if (ignoreCount > 0) {
                 bp.setIgnoreCount(ignoreCount);
             }
-            mapBreakpoint(bp, command.getBreakpointInfo());
+            mapBrekpoint(bp, command.getBreakpointInfo());
             debuggerSession.install(bp);
             JDWPLogger.log("Breakpoint submitted at %s", JDWPLogger.LogLevel.STEPPING, bp.getLocationDescription());
 
         } catch (NoSuchSourceLineException ex) {
             // perhaps the debugger's view on the source is out of sync, in which case
             // the bytecode and source does not match.
-            JDWPLogger.log("Failed submitting breakpoint at non-existing location: %s", JDWPLogger.LogLevel.ALL, location);
         }
     }
 
@@ -150,13 +152,13 @@ public class JDWPDebuggerController {
         if (ignoreCount > 0) {
             bp.setIgnoreCount(ignoreCount);
         }
-        mapBreakpoint(bp, command.getBreakpointInfo());
+        mapBrekpoint(bp, command.getBreakpointInfo());
         debuggerSession.install(bp);
         JDWPLogger.log("exception breakpoint submitted", JDWPLogger.LogLevel.STEPPING);
     }
 
     @CompilerDirectives.TruffleBoundary
-    private void mapBreakpoint(Breakpoint bp, BreakpointInfo info) {
+    private void mapBrekpoint(Breakpoint bp, BreakpointInfo info) {
         breakpointInfos.put(bp, info);
         info.setBreakpoint(bp);
     }
@@ -308,16 +310,13 @@ public class JDWPDebuggerController {
     }
 
     public void disposeDebugger() {
-        // Creating a new thread, because the reset method
-        // will interrupt all active jdwp threads, which might
-        // include the current one if we received a DISPOSE command.
         new Thread(new Runnable() {
             @Override
             public void run() {
                 instrument.reset(true);
-                VMEventListeners.getDefault().vmDied();
             }
         }).start();
+        VMEventListeners.getDefault().vmDied();
     }
 
     public void endSession() {
