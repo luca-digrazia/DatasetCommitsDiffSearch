@@ -90,15 +90,8 @@ public final class InspectorInstrument extends TruffleInstrument {
                 port = address.substring(colon + 1);
                 host = address.substring(0, colon);
             } else {
-                try {
-                    Integer.parseInt(address);
-                    // Successfully parsed, it's a port number
-                    port = address;
-                    host = null;
-                } catch (NumberFormatException e) {
-                    port = Integer.toString(DEFAULT_PORT);
-                    host = address;
-                }
+                port = address;
+                host = null;
             }
             return new HostAndPort(host, port);
         }
@@ -333,15 +326,15 @@ public final class InspectorInstrument extends TruffleInstrument {
 
         void verify() {
             // Check port:
-            if (port == 0 && portStr != null) {
+            if (port == 0) {
                 try {
                     port = Integer.parseInt(portStr);
                 } catch (NumberFormatException e) {
                     throw new IllegalArgumentException("Port is not a number: " + portStr);
                 }
             }
-            if (port != 0 && (port < 1024 || 65535 < port)) {
-                throw new IllegalArgumentException("Invalid port number: " + port + ". Needs to be 0, or in range from 1024 to 65535.");
+            if (port <= 0 || port > 65535) {
+                throw new IllegalArgumentException("Invalid port number: " + port);
             }
             // Check host:
             if (host != null && !host.isEmpty()) {
