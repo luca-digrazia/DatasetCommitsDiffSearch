@@ -738,7 +738,7 @@ class JDWP {
         static class VALUE {
             public static final int ID = 1;
 
-            static PacketStream createReply(Packet packet) {
+            static PacketStream createReply(Packet packet, EspressoContext context) {
                 PacketStream input = new PacketStream(packet);
                 long objectId = input.readLong();
                 StaticObject string = (StaticObject) Ids.fromId((int) objectId);
@@ -1128,9 +1128,8 @@ class JDWP {
                     } else if (sigbyte == TagConstants.OBJECT) {
                         if (value instanceof StaticObject) {
                             StaticObject staticObject = (StaticObject) value;
-                            if (JAVA_LANG_STRING.equals(staticObject.getKlass().getType().toString())) {
-                                sigbyte = TagConstants.STRING;
-                            }
+                            if (JAVA_LANG_STRING.equals(staticObject.getKlass().getType().toString()));
+                            sigbyte = TagConstants.STRING;
                             writeValue(sigbyte, value, reply, true);
                         }
                     } else {
