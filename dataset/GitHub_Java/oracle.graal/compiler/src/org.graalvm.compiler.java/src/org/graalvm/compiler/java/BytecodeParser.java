@@ -512,7 +512,7 @@ public class BytecodeParser implements GraphBuilderContext {
         }
 
         /**
-         * Creates a scope for graph builder inlining.
+         * Creates a scope for parsing an intrinsic during graph builder inlining.
          *
          * @param parser the parsing context of the (non-intrinsic) method calling the intrinsic
          * @param args the arguments to the call
@@ -606,8 +606,7 @@ public class BytecodeParser implements GraphBuilderContext {
                             if (graph.getGuardsStage().allowsFloatingGuards()) {
                                 throw GraalError.shouldNotReachHere("Cannot handle this UNWIND_BCI");
                             }
-                            // hope that by construction, there are no fixed guard after this unwind
-                            // and before an other state split
+                            // hope that by construction, there are no fixed guard after this unwind and before an other state split
                         } else {
                             assert frameState.bci == BytecodeFrame.INVALID_FRAMESTATE_BCI : frameState.bci;
                         }
@@ -617,8 +616,7 @@ public class BytecodeParser implements GraphBuilderContext {
             graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "After processPlaceholderFrameStates in %s", parser.method);
         }
 
-        @SuppressWarnings("unused")
-        protected void handleReturnMismatch(StructuredGraph g, FrameState fs) {
+        protected void handleReturnMismatch(StructuredGraph a, FrameState fs) {
             throw GraalError.shouldNotReachHere("Unexpected return kind mismatch in " + parser.method + " at FS " + fs);
         }
     }
