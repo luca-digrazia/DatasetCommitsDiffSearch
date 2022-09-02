@@ -99,7 +99,7 @@ public abstract class Launcher {
 
     static final boolean IS_AOT = Boolean.getBoolean("com.oracle.graalvm.isaot");
 
-    private static Engine tempEngine;
+    private Engine tempEngine;
 
     public enum VMType {
         Native,
@@ -153,7 +153,7 @@ public abstract class Launcher {
         }
     }
 
-    static Engine getTempEngine() {
+    private Engine getTempEngine() {
         if (tempEngine == null) {
             tempEngine = Engine.create();
         }
@@ -448,7 +448,7 @@ public abstract class Launcher {
      * {@linkplain Instrument instruments} on {@linkplain System#out stdout}.
      */
     protected static void printPolyglotVersions() {
-        Engine engine = getTempEngine();
+        Engine engine = Engine.create();
         System.out.println("GraalVM Polyglot Engine Version " + engine.getVersion());
         Path graalVMHome = Engine.findHome();
         if (graalVMHome != null) {
@@ -817,7 +817,7 @@ public abstract class Launcher {
         }
     }
 
-    private static OptionDescriptor findPolyglotOptionDescriptor(String group, String key) {
+    private OptionDescriptor findPolyglotOptionDescriptor(String group, String key) {
         OptionDescriptors descriptors = null;
         switch (group) {
             case "engine":
