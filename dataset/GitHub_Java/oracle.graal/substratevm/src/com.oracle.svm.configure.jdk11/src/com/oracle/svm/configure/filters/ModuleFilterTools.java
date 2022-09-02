@@ -33,20 +33,20 @@ import com.oracle.svm.configure.filters.RuleNode.Inclusion;
 
 public class ModuleFilterTools {
 
-    public static RuleNode generateFromModules(String[] includedModuleNames, boolean reduce) {
+    public static RuleNode generateFromModules(String[] moduleNames, Inclusion rootInclusion, Inclusion exportedInclusion, Inclusion unexportedInclusion, boolean reduce) {
         Set<String> includedModuleNameSet = new HashSet<>();
-        Collections.addAll(includedModuleNameSet, includedModuleNames);
+        Collections.addAll(includedModuleNameSet, moduleNames);
         for (Module module : ModuleLayer.boot().modules()) {
             if (includedModuleNameSet.contains(module.getName())) {
                 checkDependencies(module, includedModuleNameSet);
             }
         }
         RuleNode rootNode = RuleNode.createRoot();
+        rootNode.addOrGetChildren("**", rootInclusion);
         for (Module module : ModuleLayer.boot().modules()) {
-            String moduleName = module.getName();
-            Inclusion inclusion = includedModuleNameSet.contains(moduleName) ? Inclusion.Include : Inclusion.Exclude;
             for (String qualifiedPkg : module.getPackages()) {
-                rootNode.addOrGetChildren(qualifiedPkg + ".*", inclusion);
+                Inclusion pkgInclusion = module.isExported(qualifiedPkg) ? exportedInclusion : unexportedInclusion;
+                rootNode.addOrGetChildren(qualifiedPkg + ".*", pkgInclusion);
             }
         }
         if (reduce) {
