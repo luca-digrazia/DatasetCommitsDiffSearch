@@ -36,10 +36,8 @@ class Results {
     final long bestT;
     final long peakStartT;
     final long warmupTime;
-    final String rootName;
 
-    Results(String rootName, List<Long> samples, double epsilon) {
-        this.rootName = rootName;
+    Results(List<Long> samples, double epsilon) {
         this.samples = samples;
         bestT = bestTime(samples);
         bestI = bestIteration(samples, bestT);
