@@ -29,7 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import com.oracle.truffle.llvm.runtime.IDGenerater.BitcodeID;
 import org.graalvm.collections.EconomicSet;
 
 /**
@@ -45,18 +44,18 @@ import org.graalvm.collections.EconomicSet;
  */
 public class LLVMLocalScope extends LLVMScope {
 
-    private final EconomicSet<BitcodeID> ids;
+    private final EconomicSet<Integer> ids;
 
     public LLVMLocalScope() {
         super();
         this.ids = EconomicSet.create();
     }
 
-    public void addID(BitcodeID id) {
+    public void addID(int id) {
         ids.add(id);
     }
 
-    public boolean containID(BitcodeID id) {
+    public boolean containID(int id) {
         return ids.contains(id);
     }
 }
