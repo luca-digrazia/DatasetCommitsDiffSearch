@@ -23,45 +23,50 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
-public class PacketStream {
+public final class PacketStream {
 
     private final Packet packet;
     private int readPosition;
 
-    ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
+    private final ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
 
-    PacketStream() {
+    public PacketStream() {
         packet = new Packet();
-
     }
 
-    PacketStream(Packet packet) {
+    public PacketStream(Packet packet) {
         this.packet = packet;
     }
 
-    PacketStream commandPacket() {
+    public int getPacketId() {
+        return packet.id;
+    }
+
+    public PacketStream commandPacket() {
         packet.id = Packet.uID;
         return this;
     }
 
-    PacketStream command(int command) {
+    public PacketStream command(int command) {
         packet.cmd = (short) command;
         return this;
     }
 
-    PacketStream commandSet(int commandSet) {
+    public PacketStream commandSet(int commandSet) {
         packet.cmdSet = (short) commandSet;
         return this;
     }
 
-    PacketStream replyPacket() {
+    public PacketStream replyPacket() {
         packet.flags = Packet.Reply;
         packet.errorCode = Packet.ReplyNoError;
         return this;
     }
 
-    PacketStream id(int id) {
+    public PacketStream id(int id) {
         packet.id = id;
         return this;
     }
@@ -71,7 +76,7 @@ public class PacketStream {
         return this;
     }
 
-    byte[] prepareForShipment() {
+    public byte[] prepareForShipment() {
         packet.data = dataStream.toByteArray();
         return packet.toByteArray();
     }
@@ -125,114 +130,91 @@ public class PacketStream {
         writeLong(Double.doubleToLongBits(data));
     }
 
-    void writeByteArray(byte[] data) {
+    public void writeByteArray(byte[] data) {
         dataStream.write(data, 0, data.length);
     }
 
     public void writeString(String string) {
-        try {
-            byte[] stringBytes = string.getBytes("UTF8");
-            writeInt(stringBytes.length);
-            writeByteArray(stringBytes);
-        } catch (java.io.UnsupportedEncodingException e) {
-            throw new RuntimeException("Cannot convert string to UTF8 bytes");
-        }
+        byte[] stringBytes = string.getBytes(StandardCharsets.UTF_8);
+        writeInt(stringBytes.length);
+        writeByteArray(stringBytes);
     }
 
-    byte readByte() {
+    public byte readByte() {
         byte ret = packet.data[readPosition];
         readPosition += 1;
         return ret;
     }
 
-    boolean readBoolean() {
+    public boolean readBoolean() {
         byte ret = readByte();
         return (ret != 0);
     }
 
-    char readChar() {
-        int b1, b2;
+    public char readChar() {
+        int b1;
+        int b2;
 
         b1 = packet.data[readPosition++] & 0xff;
         b2 = packet.data[readPosition++] & 0xff;
 
-        return (char)((b1 << 8) + b2);
+        return (char) ((b1 << 8) + b2);
     }
 
-    short readShort() {
-        int b1, b2;
+    public short readShort() {
+        int b1 = packet.data[readPosition++] & 0xff;
+        int b2 = packet.data[readPosition++] & 0xff;
 
-        b1 = packet.data[readPosition++] & 0xff;
-        b2 = packet.data[readPosition++] & 0xff;
-
-        return (short)((b1 << 8) + b2);
+        return (short) ((b1 << 8) + b2);
     }
 
-    int readInt() {
-        int b1,b2,b3,b4;
-
-        b1 = packet.data[readPosition++] & 0xff;
-        b2 = packet.data[readPosition++] & 0xff;
-        b3 = packet.data[readPosition++] & 0xff;
-        b4 = packet.data[readPosition++] & 0xff;
+    public int readInt() {
+        int b1 = packet.data[readPosition++] & 0xff;
+        int b2 = packet.data[readPosition++] & 0xff;
+        int b3 = packet.data[readPosition++] & 0xff;
+        int b4 = packet.data[readPosition++] & 0xff;
 
         return ((b1 << 24) + (b2 << 16) + (b3 << 8) + b4);
     }
 
-    long readLong() {
-        long b1,b2,b3,b4;
-        long b5,b6,b7,b8;
+    public long readLong() {
+        long b1 = packet.data[readPosition++] & 0xff;
+        long b2 = packet.data[readPosition++] & 0xff;
+        long b3 = packet.data[readPosition++] & 0xff;
+        long b4 = packet.data[readPosition++] & 0xff;
 
-        b1 = packet.data[readPosition++] & 0xff;
-        b2 = packet.data[readPosition++] & 0xff;
-        b3 = packet.data[readPosition++] & 0xff;
-        b4 = packet.data[readPosition++] & 0xff;
+        long b5 = packet.data[readPosition++] & 0xff;
+        long b6 = packet.data[readPosition++] & 0xff;
+        long b7 = packet.data[readPosition++] & 0xff;
+        long b8 = packet.data[readPosition++] & 0xff;
 
-        b5 = packet.data[readPosition++] & 0xff;
-        b6 = packet.data[readPosition++] & 0xff;
-        b7 = packet.data[readPosition++] & 0xff;
-        b8 = packet.data[readPosition++] & 0xff;
-
-        return ((b1 << 56) + (b2 << 48) + (b3 << 40) + (b4 << 32)
-                + (b5 << 24) + (b6 << 16) + (b7 << 8) + b8);
+        return ((b1 << 56) + (b2 << 48) + (b3 << 40) + (b4 << 32) + (b5 << 24) + (b6 << 16) + (b7 << 8) + b8);
     }
 
-    float readFloat() {
+    public float readFloat() {
         return Float.intBitsToFloat(readInt());
     }
 
-    double readDouble() {
+    public double readDouble() {
         return Double.longBitsToDouble(readLong());
     }
 
-    String readString() {
+    public byte[] readByteArray(int length) {
+        byte[] result = Arrays.copyOfRange(packet.data, readPosition, readPosition + length);
+        readPosition += length;
+        return result;
+    }
+
+    public String readString() {
         String ret;
         int len = readInt();
 
         try {
             ret = new String(packet.data, readPosition, len, "UTF8");
-        } catch(java.io.UnsupportedEncodingException e) {
-            System.err.println(e);
+        } catch (java.io.UnsupportedEncodingException e) {
             ret = "Conversion error!";
         }
         readPosition += len;
         return ret;
-    }
-
-    private long readID(int size) {
-        switch (size) {
-            case 8:
-                return readLong();
-            case 4:
-                return (long)readInt();
-            case 2:
-                return (long)readShort();
-            default:
-                throw new UnsupportedOperationException("JDWP: ID size not supported: " + size);
-        }
-    }
-
-    public void dumpPacket() {
-        packet.dump(true);
     }
 }
