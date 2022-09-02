@@ -175,9 +175,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         final Times times = new Times();
         compilationTimes.set(times);
         Long timeStamp = timeQueued.get(target);
-        if (timeStamp != null) {
-            timeInQueue.accept(times.compilationStarted - timeStamp, target);
-        }
+        timeInQueue.accept(times.compilationStarted - timeStamp, target);
         timeQueued.remove(target);
     }
 
