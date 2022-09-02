@@ -53,7 +53,6 @@ import java.util.function.Predicate;
 import org.graalvm.polyglot.proxy.Proxy;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Scope;
 import com.oracle.truffle.api.Truffle;
@@ -100,7 +99,7 @@ class HostLanguage extends TruffleLanguage<HostContext> {
         }
 
         private void checkHostAccessAllowed() {
-            if (!internalContext.context.config.hostLookupAllowed) {
+            if (!internalContext.context.config.hostAccessAllowed) {
                 throw new HostLanguageException(String.format("Host class access is not allowed."));
             }
         }
@@ -167,7 +166,7 @@ class HostLanguage extends TruffleLanguage<HostContext> {
             if (!internalContext.context.config.hostClassLoadingAllowed) {
                 throw new HostLanguageException(String.format("Host class loading is not allowed."));
             }
-            if (FileSystems.hasNoIOFileSystem(classpathEntry)) {
+            if (FileSystems.isNoIOFileSystem(internalContext.context.config.fileSystem)) {
                 throw new HostLanguageException("Host class loading is disabled without IO permissions.");
             }
             getClassloader().addClasspathRoot(classpathEntry);
@@ -204,15 +203,9 @@ class HostLanguage extends TruffleLanguage<HostContext> {
     protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
         String sourceString = request.getSource().getCharacters().toString();
         return Truffle.getRuntime().createCallTarget(new RootNode(this) {
-
-            @CompilationFinal ContextReference<HostContext> contextRef;
-
             @Override
             public Object execute(VirtualFrame frame) {
-                if (contextRef == null) {
-                    contextRef = lookupContextReference(HostLanguage.class);
-                }
-                HostContext context = contextRef.get();
+                HostContext context = getContextReference().get();
                 Class<?> allTarget = context.findClass(sourceString);
                 return context.internalContext.toGuestValue(allTarget);
             }
