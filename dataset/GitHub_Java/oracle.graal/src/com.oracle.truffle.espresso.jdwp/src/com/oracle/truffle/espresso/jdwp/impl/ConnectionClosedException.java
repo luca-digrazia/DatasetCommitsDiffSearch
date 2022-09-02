@@ -23,6 +23,4 @@
 package com.oracle.truffle.espresso.jdwp.impl;
 
 public class ConnectionClosedException extends Exception {
-
-    private static final long serialVersionUID = 1240601650447364708L;
 }

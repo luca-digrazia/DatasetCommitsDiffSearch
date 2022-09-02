@@ -29,9 +29,7 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.Collection;
 
-public final class JDWPHandshakeController {
-
-    private static final String JDWP_HANDSHAKE = "JDWP-Handshake";
+public class JDWPHandshakeController {
 
     /**
      * Initializes a Socket connection which serves as a transport for jdwp communication.
@@ -62,7 +60,7 @@ public final class JDWPHandshakeController {
      */
     private static boolean handshake(Socket s) throws IOException {
 
-        byte[] hello = JDWP_HANDSHAKE.getBytes("UTF-8");
+        byte[] hello = "JDWP-Handshake".getBytes("UTF-8");
 
         byte[] b = new byte[hello.length];
         int received = 0;

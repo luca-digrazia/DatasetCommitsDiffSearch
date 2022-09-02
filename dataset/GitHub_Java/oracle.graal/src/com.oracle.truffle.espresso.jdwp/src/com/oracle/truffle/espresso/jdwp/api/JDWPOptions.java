@@ -22,25 +22,17 @@
  */
 package com.oracle.truffle.espresso.jdwp.api;
 
-import com.oracle.truffle.espresso.jdwp.impl.JDWPLogger;
-
-/**
- * Class representing common JDWP options.
- */
-public final class JDWPOptions {
+public class JDWPOptions {
     public final String transport;
     public final String address;
     public final boolean server;
     public final boolean suspend;
-    public final String logLevel;
 
-    public JDWPOptions(String transport, String address, boolean server, boolean suspend, String logLevel) {
+    public JDWPOptions(String transport, String address, boolean server, boolean suspend) {
         this.transport = transport;
         this.address = address;
         this.server = server;
         this.suspend = suspend;
-        this.logLevel = logLevel;
-        JDWPLogger.setupLogLevel(logLevel);
     }
 
     @Override

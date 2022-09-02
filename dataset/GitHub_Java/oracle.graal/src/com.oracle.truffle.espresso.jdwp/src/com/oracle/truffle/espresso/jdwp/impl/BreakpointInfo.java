@@ -26,7 +26,7 @@ import com.oracle.truffle.api.debug.Breakpoint;
 
 public class BreakpointInfo {
 
-    private final RequestFilter filter;
+    private final int requestId;
     private final byte typeTag;
     private final long classId;
     private final long methodId;
@@ -34,8 +34,8 @@ public class BreakpointInfo {
 
     private Breakpoint breakpoint;
 
-    public BreakpointInfo(RequestFilter filter, byte tag, long classId, long methodId, long bci) {
-        this.filter = filter;
+    public BreakpointInfo(int requestId, byte tag, long classId, long methodId, long bci) {
+        this.requestId = requestId;
         this.typeTag = tag;
         this.classId = classId;
         this.methodId = methodId;
@@ -43,11 +43,7 @@ public class BreakpointInfo {
     }
 
     public int getRequestId() {
-        return filter.getRequestId();
-    }
-
-    public Object getThread() {
-        return filter.getThread();
+        return requestId;
     }
 
     public long getClassId() {

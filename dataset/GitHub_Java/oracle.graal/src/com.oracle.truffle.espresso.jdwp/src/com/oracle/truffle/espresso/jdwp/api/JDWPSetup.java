@@ -26,14 +26,11 @@ import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPDebuggerController;
 import com.oracle.truffle.espresso.jdwp.impl.JDWPInstrument;
 
-/**
- * Main entry point for setting up JDWP. The class looks up the JDWP instrument
- * and initializes communication with the debugger.
- */
 public class JDWPSetup {
 
-    public static void setup(TruffleLanguage.Env env, JDWPOptions options, JDWPContext context) {
+    public static void setup(JDWPOptions options, JDWPContext context) {
+        TruffleLanguage.Env env = context.getEnv();
         JDWPDebuggerController controller = env.lookup(env.getInstruments().get(JDWPInstrument.ID), JDWPDebuggerController.class);
-        controller.initialize(env, options, context, false);
+        controller.initialize(options, context, false);
     }
 }

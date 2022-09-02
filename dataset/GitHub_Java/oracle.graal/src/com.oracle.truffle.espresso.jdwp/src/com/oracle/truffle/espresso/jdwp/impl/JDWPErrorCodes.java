@@ -22,7 +22,7 @@
  */
 package com.oracle.truffle.espresso.jdwp.impl;
 
-public final class JDWPErrorCodes {
+public class JDWPErrorCodes {
 
     public static final int INVALID_THREAD = 10;
     public static final int INVALID_THREAD_GROUP = 11;
@@ -36,11 +36,8 @@ public final class JDWPErrorCodes {
     public static final int INVALID_SLOT = 35;
     public static final int NOT_IMPLEMENTED = 99;
     public static final int ABSENT_INFORMATION = 101;
-    public static final int INVALID_EVENT_TYPE = 102;
     public static final int INVALID_LENGTH = 504;
     public static final int INVALID_STRING = 506;
     public static final int INVALID_CLASS_LOADER = 507;
     public static final int INVALID_ARRAY = 508;
-
-    private JDWPErrorCodes() {}
 }

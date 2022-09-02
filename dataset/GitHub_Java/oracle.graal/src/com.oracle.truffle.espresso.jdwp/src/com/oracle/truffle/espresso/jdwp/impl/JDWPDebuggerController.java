@@ -294,9 +294,11 @@ public class JDWPDebuggerController {
                     byte typeTag = TypeTag.getKind(klass);
                     int line = frame.getSourceSection().getStartLine();
 
-                    long codeIndex = method.getBCIFromLine(line);
+                    long codeIndex = method.getBCIFromLine(line); //  method.getLineNumberTable().getBCI(line);
 
                     DebugScope scope = frame.getScope();
+
+                    //System.out.println("collected frame info for method: " + klass.getName().toString() + "." + method.getName() + "(" + line + ") : BCI(" + codeIndex + ")") ;
 
                     Object thisValue = null;
                     ArrayList<Object> realVariables = new ArrayList<>();
@@ -310,12 +312,10 @@ public class JDWPDebuggerController {
                                 thisValue = getRealValue(var);
                             } else {
                                 // add to variables list
-                                Object realValue = getRealValue(var);
-                                realVariables.add(realValue);
+                                realVariables.add(getRealValue(var));
                             }
                         }
                     }
-                    //System.out.println("collected frame info for method: " + klass.getNameAsString() + "." + method.getNameAsString() + "(" + line + ") : BCI(" + codeIndex + ")") ;
                     list.addLast(new JDWPCallFrame(threadId, typeTag, klassId, methodId, codeIndex, thisValue, realVariables.toArray(new Object[realVariables.size()])));
 
                 } else {

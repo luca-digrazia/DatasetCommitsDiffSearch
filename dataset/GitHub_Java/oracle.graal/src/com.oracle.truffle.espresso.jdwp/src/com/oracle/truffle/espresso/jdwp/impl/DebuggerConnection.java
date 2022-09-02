@@ -68,29 +68,29 @@ public class DebuggerConnection implements JDWPCommands {
     }
 
     @Override
-    public void stepInto(Object thread, int requestId) {
-        DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.STEP_INTO, thread);
-        controller.setCommandRequestId(thread, requestId);
+    public void stepInto(int requestId) {
+        DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.STEP_INTO);
+        controller.setCommandRequestId(requestId);
         queue.add(debuggerCommand);
     }
 
     @Override
-    public void stepOver(Object thread, int requestId) {
-        DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.STEP_OVER, thread);
-        controller.setCommandRequestId(thread, requestId);
+    public void stepOver(int requestId) {
+        DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.STEP_OVER);
+        controller.setCommandRequestId(requestId);
         queue.add(debuggerCommand);
     }
 
     @Override
-    public void stepOut(Object thread, int requestId) {
-        DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.STEP_OUT, thread);
-        controller.setCommandRequestId(thread, requestId);
+    public void stepOut(int requestId) {
+        DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.STEP_OUT);
+        controller.setCommandRequestId(requestId);
         queue.add(debuggerCommand);
     }
 
     @Override
     public void createLineBreakpointCommand(String slashClassName, int line, byte suspendPolicy, BreakpointInfo info) {
-        DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.SUBMIT_BREAKPOINT, null);
+        DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.SUBMIT_BREAKPOINT);
         debuggerCommand.setSourceLocation(new SourceLocation(slashClassName, line, context));
         debuggerCommand.setBreakpointInfo(info);
         queue.add(debuggerCommand);
@@ -105,12 +105,12 @@ public class DebuggerConnection implements JDWPCommands {
                 //System.out.println("got a " + debuggerCommand.kind + " command from debugger");
 
                 if (debuggerCommand != null) {
-                    Object thread = debuggerCommand.getThread();
                     switch (debuggerCommand.kind) {
-                        case STEP_INTO: controller.stepInto(thread); break;
-                        case STEP_OVER: controller.stepOver(thread); break;
-                        case STEP_OUT: controller.stepOut(thread); break;
+                        case STEP_INTO: controller.stepInto(); break;
+                        case STEP_OVER: controller.stepOver(); break;
+                        case STEP_OUT: controller.stepOut(); break;
                         case SUBMIT_BREAKPOINT: controller.submitLineBreakpoint(debuggerCommand); break;
+                        case RESUME: controller.resume(); break;
                     }
                 }
             }
@@ -182,10 +182,9 @@ public class DebuggerConnection implements JDWPCommands {
                     } else {
                         processPacket(Packet.fromByteArray(connection.readPacket()));
                     }
+                    // blocking call
                 } catch (IOException e) {
-                    if (!Thread.currentThread().isInterrupted()) {
-                        throw new RuntimeException("Failed to process jdwp packet", e);
-                    }
+                    e.printStackTrace();
                 } catch (ConnectionClosedException e) {
                     // we closed the session, so let the thread run dry
                 }
@@ -338,9 +337,6 @@ public class DebuggerConnection implements JDWPCommands {
                             case JDWP.ThreadReference.NAME.ID:
                                 result = JDWP.ThreadReference.NAME.createReply(packet, context);
                                 break;
-                            case JDWP.ThreadReference.SUSPEND.ID:
-                                result = JDWP.ThreadReference.SUSPEND.createReply(packet, controller);
-                                break;
                             case JDWP.ThreadReference.RESUME.ID:
                                 result = JDWP.ThreadReference.RESUME.createReply(packet, controller);
                                 break;
@@ -398,7 +394,7 @@ public class DebuggerConnection implements JDWPCommands {
                     case JDWP.EventRequest.ID: {
                         switch (packet.cmd) {
                             case JDWP.EventRequest.SET.ID: {
-                                result = requestedJDWPEvents.registerEvent(packet, DebuggerConnection.this, context);
+                                result = requestedJDWPEvents.registerEvent(packet, DebuggerConnection.this);
                                 break;
                             }
                             case JDWP.EventRequest.CLEAR.ID: {
