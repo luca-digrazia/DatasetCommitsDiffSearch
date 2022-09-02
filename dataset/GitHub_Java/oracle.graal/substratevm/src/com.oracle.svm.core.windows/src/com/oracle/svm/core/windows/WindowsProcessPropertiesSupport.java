@@ -32,6 +32,8 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.graalvm.nativeimage.ImageSingletons;
+import org.graalvm.nativeimage.Platform;
+import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.function.CEntryPointLiteral;
 import org.graalvm.nativeimage.c.type.CCharPointer;
@@ -46,8 +48,8 @@ import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.core.windows.headers.Process;
 import com.oracle.svm.core.windows.headers.WinBase;
-import com.oracle.svm.core.windows.headers.WinBase.HANDLE;
 
+@Platforms(Platform.WINDOWS.class)
 public class WindowsProcessPropertiesSupport extends BaseProcessPropertiesSupport {
 
     @Override
@@ -129,18 +131,12 @@ public class WindowsProcessPropertiesSupport extends BaseProcessPropertiesSuppor
 
     @Override
     public boolean destroy(long processID) {
-        return destroyForcibly(processID);
+        throw VMError.unimplemented();
     }
 
     @Override
     public boolean destroyForcibly(long processID) {
-        HANDLE handle = Process.OpenProcess(Process.PROCESS_TERMINATE(), 0, (int) processID);
-        if (handle.isNull()) {
-            return false;
-        }
-        boolean result = Process.TerminateProcess(handle, 1) != 0;
-        WinBase.CloseHandle(handle);
-        return result;
+        throw VMError.unimplemented();
     }
 
     @Override

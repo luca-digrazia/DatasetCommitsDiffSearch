@@ -26,11 +26,11 @@ package com.oracle.svm.core;
 
 //Checkstyle: stop
 
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.TimeZone;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.options.Option;
@@ -39,17 +39,16 @@ import org.graalvm.nativeimage.CurrentIsolate;
 import org.graalvm.nativeimage.IsolateThread;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platform.WINDOWS;
-import org.graalvm.nativeimage.ProcessProperties;
-import org.graalvm.nativeimage.VMRuntime;
 import org.graalvm.nativeimage.hosted.Feature;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
+import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.deopt.DeoptimizationSupport;
 import com.oracle.svm.core.jdk.RuntimeSupport;
 import com.oracle.svm.core.log.Log;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.stack.JavaStackWalker;
-import com.oracle.svm.core.stack.ThreadStackPrinter.StackFramePrintVisitor;
+import com.oracle.svm.core.stack.ThreadStackPrinter;
 import com.oracle.svm.core.thread.JavaVMOperation;
 import com.oracle.svm.core.thread.VMThreads;
 
@@ -116,30 +115,47 @@ class DumpAllStacks implements SignalHandler {
         });
     }
 
+    @NeverInline("catch implicit exceptions")
     private static void dumpStack(Log log, IsolateThread vmThread) {
         log.string("VMThread ").zhex(vmThread.rawValue()).spaces(2).string(VMThreads.StatusSupport.getStatusString(vmThread)).newline();
         log.indent(true);
-        JavaStackWalker.walkThread(vmThread, StackFramePrintVisitor.SINGLETON, log);
+        JavaStackWalker.walkThread(vmThread, ThreadStackPrinter.AllocationFreeStackFrameVisitor);
         log.indent(false);
     }
 }
 
 class DumpHeapReport implements SignalHandler {
-    private static final TimeZone UTC_TIMEZONE = TimeZone.getTimeZone("UTC");
-
     static void install() {
         Signal.handle(new Signal("USR1"), new DumpHeapReport());
     }
 
+    private static void performHeapDump(FileOutputStream fileOutputStream) {
+        try {
+            RuntimeSupport.getRuntimeSupport().dumpHeap(fileOutputStream, true);
+        } catch (IOException e) {
+            Log.log().string("HeapDump failed: ").string(e.getMessage()).newline();
+        }
+    }
+
     @Override
     public void handle(Signal arg0) {
-        DateFormat dateFormat = new SimpleDateFormat("yyyyMMdd'T'HHmmss'Z'");
-        dateFormat.setTimeZone(UTC_TIMEZONE);
-        String heapDumpFileName = "svm-heapdump-" + ProcessProperties.getProcessID() + "-" + dateFormat.format(new Date()) + ".hprof";
+        Path heapDumpFilePath = null;
+        FileOutputStream fileOutputStream = null;
         try {
-            VMRuntime.dumpHeap(heapDumpFileName, true);
-        } catch (IOException e) {
-            Log.log().string("IOException during dumpHeap: ").string(e.getMessage()).newline();
+            heapDumpFilePath = Files.createTempFile(Paths.get("."), "svm-heapdump-", ".hprof");
+            fileOutputStream = new FileOutputStream(heapDumpFilePath.toFile());
+            performHeapDump(fileOutputStream);
+        } catch (Exception e) {
+            Log.log().string("svm-heapdump failed").newline().flush();
+            try {
+                if (fileOutputStream != null) {
+                    fileOutputStream.close();
+                }
+                if (heapDumpFilePath != null) {
+                    Files.deleteIfExists(heapDumpFilePath);
+                }
+            } catch (IOException e1) {
+            }
         }
     }
 }

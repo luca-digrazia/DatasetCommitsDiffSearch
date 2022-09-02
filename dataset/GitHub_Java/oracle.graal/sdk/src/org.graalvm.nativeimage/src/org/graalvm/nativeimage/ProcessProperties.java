@@ -160,10 +160,8 @@ public final class ProcessProperties {
     }
 
     /**
-     * If the running image is an executable the program name that is stored in the argument vector
-     * of the running process gets returned.
-     *
-     * @throws UnsupportedOperationException if called from a shared library image.
+     * If the running image is an executable (not a shared library) the program name that is stored
+     * in the argument vector of the running process gets returned.
      *
      * @since 20.1
      */
@@ -172,13 +170,12 @@ public final class ProcessProperties {
     }
 
     /**
-     * If the running image is an executable the program name that is stored in the argument vector
-     * of the running process gets replaced with the give name. If the size of the argument vector
-     * is too small for the given name it gets truncated so that the environment vector next to the
-     * argument vector does not get corrupted.
+     * If the running image is an executable (not a shared library) the program name that is stored
+     * in the argument vector of the running process gets replaced with the give name. If the size
+     * of the argument vector is too small for the given name it gets truncated so that the
+     * environment vector next to the argument vector does not get corrupted.
      *
      * @return true, if given name had to be truncated to fit in the argument vector
-     * @throws UnsupportedOperationException if called from a shared library image.
      *
      * @since 20.1
      */
@@ -187,10 +184,8 @@ public final class ProcessProperties {
     }
 
     /**
-     * If the running image is an executable the total size of the argument vector of the running
-     * process gets returned.
-     *
-     * @throws UnsupportedOperationException if called from a shared library image.
+     * If the running image is an executable (not a shared library) the total size of the argument
+     * vector of the running process gets returned.
      *
      * @since 20.1
      */

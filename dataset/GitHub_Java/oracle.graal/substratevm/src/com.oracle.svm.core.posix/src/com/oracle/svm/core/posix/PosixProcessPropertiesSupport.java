@@ -27,21 +27,25 @@ package com.oracle.svm.core.posix;
 import static com.oracle.svm.core.posix.headers.Signal.SignalEnum.SIGKILL;
 import static com.oracle.svm.core.posix.headers.Signal.SignalEnum.SIGTERM;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.graalvm.nativeimage.StackValue;
 import org.graalvm.nativeimage.c.function.CEntryPointLiteral;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
-import org.graalvm.nativeimage.impl.ProcessPropertiesSupport;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
+import com.oracle.svm.core.BaseProcessPropertiesSupport;
 import com.oracle.svm.core.posix.headers.Dlfcn;
 import com.oracle.svm.core.posix.headers.LibC;
 import com.oracle.svm.core.posix.headers.Signal;
 import com.oracle.svm.core.posix.headers.Stdlib;
+import com.oracle.svm.core.posix.headers.Unistd;
 
-public abstract class PosixProcessPropertiesSupport implements ProcessPropertiesSupport {
+public abstract class PosixProcessPropertiesSupport extends BaseProcessPropertiesSupport {
 
     @Override
     public long getProcessID() {
@@ -69,6 +73,11 @@ public abstract class PosixProcessPropertiesSupport implements ProcessProperties
     }
 
     @Override
+    public int waitForProcessExit(long processID) {
+        return PosixUtils.waitForProcessExit(Math.toIntExact(processID));
+    }
+
+    @Override
     public String getObjectFile(String symbol) {
         return getObjectPathDefiningSymbol(symbol);
     }
@@ -81,6 +90,21 @@ public abstract class PosixProcessPropertiesSupport implements ProcessProperties
     @Override
     public String setLocale(String category, String locale) {
         return PosixUtils.setLocale(category, locale);
+    }
+
+    @Override
+    public void exec(Path executable, String[] args) {
+        if (!Files.isExecutable(executable)) {
+            throw new RuntimeException("Path " + executable + " does not point to executable file");
+        }
+
+        try (CTypeConversion.CCharPointerHolder pathHolder = CTypeConversion.toCString(executable.toString());
+                        CTypeConversion.CCharPointerPointerHolder argvHolder = CTypeConversion.toCStrings(args)) {
+            if (Unistd.execv(pathHolder.get(), argvHolder.get()) != 0) {
+                String msg = PosixUtils.lastErrorString("Executing " + executable + " with arguments " + String.join(" ", args) + " failed");
+                throw new RuntimeException(msg);
+            }
+        }
     }
 
     static String getObjectPathDefiningSymbol(String symbol) {
