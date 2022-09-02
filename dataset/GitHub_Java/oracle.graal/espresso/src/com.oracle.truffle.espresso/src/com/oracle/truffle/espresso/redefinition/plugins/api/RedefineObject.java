@@ -25,15 +25,15 @@ package com.oracle.truffle.espresso.redefinition.plugins.api;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 
 public interface RedefineObject {
-    boolean notNull();
-
     KlassRef getKlass();
 
     RedefineObject fromType(String className);
 
-    RedefineObject invokeRaw(String name, RedefineObject... args) throws NoSuchMethodException;
+    Object invoke(String name, RedefineObject... args) throws NoSuchMethodException;
 
     RedefineObject invokePrecise(String className, String methodName, RedefineObject... args) throws NoSuchMethodException;
 
     RedefineObject getInstanceField(String fieldName) throws NoSuchFieldException;
+
+    Object getRawValue();
 }
