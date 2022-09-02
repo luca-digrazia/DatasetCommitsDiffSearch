@@ -79,7 +79,7 @@ final class GraphManager {
                         rootRequest.inliningPlan,
                         rootRequest.compilationId,
                         rootRequest.log,
-                        rootRequest.task);
+                        rootRequest.cancellable);
     }
 
     private PEAgnosticInlineInvokePlugin newPlugin() {
