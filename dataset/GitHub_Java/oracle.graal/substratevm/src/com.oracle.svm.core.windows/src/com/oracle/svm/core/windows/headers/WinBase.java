@@ -397,7 +397,7 @@ public class WinBase {
     public static native int GetVersion();
 
     @CFunction(transition = Transition.NO_TRANSITION)
-    public static native int GetCurrentDirectoryW(int nBufferLength, WCharPointer lpBuffer);
+    public static native int GetCurrentDirectoryA(long nBufferLength, CCharPointer lpBuffer);
 
     @CFunction(transition = Transition.NO_TRANSITION)
     public static native int GetUserNameW(WCharPointer lpBuffer, CIntPointer pcbBuffer);

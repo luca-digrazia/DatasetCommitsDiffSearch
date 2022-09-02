@@ -109,11 +109,7 @@ public class WindowsSystemPropertiesSupport extends SystemPropertiesSupport {
 
     @Override
     protected String tmpdirValue() {
-        int maxLength = WinBase.MAX_PATH + 1;
-        WCharPointer tmpdir = StackValue.get(maxLength, WCharPointer.class);
-        int length = FileAPI.GetTempPathW(maxLength, tmpdir);
-        VMError.guarantee(length > 0, "Could not determine value of java.io.tmpdir");
-        return toJavaString(tmpdir, WordFactory.unsigned(length));
+        return "C:\\Temp";
     }
 
     private static String toJavaString(WCharPointer wcString, UnsignedWord length) {
