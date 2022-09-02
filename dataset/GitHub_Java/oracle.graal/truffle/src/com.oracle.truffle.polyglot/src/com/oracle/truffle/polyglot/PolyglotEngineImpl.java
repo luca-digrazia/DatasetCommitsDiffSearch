@@ -886,15 +886,15 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
             allContexts = collectAliveContexts();
         }
         for (PolyglotContextImpl context : allContexts) {
-            listener.onContextCreated(context.creatorTruffleContext);
+            listener.onContextCreated(context.truffleContext);
             for (PolyglotLanguageContext lc : context.contexts) {
                 LanguageInfo language = lc.language.info;
                 if (lc.eventsEnabled && lc.env != null) {
-                    listener.onLanguageContextCreated(context.creatorTruffleContext, language);
+                    listener.onLanguageContextCreated(context.truffleContext, language);
                     if (lc.isInitialized()) {
-                        listener.onLanguageContextInitialized(context.creatorTruffleContext, language);
+                        listener.onLanguageContextInitialized(context.truffleContext, language);
                         if (lc.finalized) {
-                            listener.onLanguageContextFinalized(context.creatorTruffleContext, language);
+                            listener.onLanguageContextFinalized(context.truffleContext, language);
                         }
                     }
                 }
@@ -916,7 +916,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                 threads = context.getSeenThreads().keySet().toArray(new Thread[0]);
             }
             for (Thread thread : threads) {
-                listener.onThreadInitialized(context.creatorTruffleContext, thread);
+                listener.onThreadInitialized(context.truffleContext, thread);
             }
         }
     }
@@ -1341,7 +1341,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                     private void cancelExecution(EventContext eventContext) {
                         PolyglotContextImpl context = PolyglotContextImpl.requireContext();
                         if (context.invalid || context.cancelling) {
-                            throw context.createCancelException(eventContext.getInstrumentedNode());
+                            throw new CancelExecution(eventContext, context.invalidMessage);
                         }
                     }
                 });
@@ -1364,22 +1364,16 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
     @SuppressWarnings("serial")
     static final class CancelExecution extends ThreadDeath implements TruffleException {
 
-        private final Node location;
+        private final Node node;
         private final String cancelMessage;
-        private final boolean resourceLimit;
 
-        CancelExecution(Node location, String cancelMessage, boolean resourceLimit) {
-            this.location = location;
+        CancelExecution(EventContext context, String cancelMessage) {
+            this.node = context != null ? context.getInstrumentedNode() : null;
             this.cancelMessage = cancelMessage;
-            this.resourceLimit = resourceLimit;
         }
 
         public Node getLocation() {
-            return location;
-        }
-
-        public boolean isResourceLimit() {
-            return resourceLimit;
+            return node;
         }
 
         @Override
@@ -1687,7 +1681,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
         if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, info.getThread() == Thread.currentThread())) {
             // fast-path -> same thread
             prev = PolyglotContextImpl.getSingleContextState().getContextThreadLocal().setReturnParent(context);
-            info.enter(this, context, true);
+            info.enter(this, context);
         } else {
             // slow path -> changed thread
             if (singleThreadPerContext.isValid()) {
@@ -1708,7 +1702,7 @@ final class PolyglotEngineImpl extends AbstractPolyglotImpl.AbstractEngineImpl i
                         PolyglotContextImpl.currentNotEntered() == polyglotContext : "Cannot leave context that is currently not entered. Forgot to enter or leave a context?";
         PolyglotThreadInfo info = getCachedThreadInfo(polyglotContext);
         if (CompilerDirectives.injectBranchProbability(CompilerDirectives.LIKELY_PROBABILITY, info.getThread() == Thread.currentThread())) {
-            info.leave(this, polyglotContext, true);
+            info.leave(this, polyglotContext);
         } else {
             if (singleThreadPerContext.isValid() && singleContext.isValid()) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
