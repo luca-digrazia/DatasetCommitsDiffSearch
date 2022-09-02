@@ -39,11 +39,6 @@ public class Linker {
     }
 
     public void link(WasmModule module) {
-        linkFunctions(module);
-        linkGlobals(module);
-    }
-
-    private void linkFunctions(WasmModule module) {
         final WasmContext context = language.getContextReference().get();
         for (WasmFunction function : module.symbolTable().importedFunctions()) {
             final WasmModule importedModule = context.modules().get(function.importedModuleName());
@@ -56,9 +51,5 @@ public class Linker {
             }
             function.setCallTarget(importedFunction.resolveCallTarget());
         }
-    }
-
-    private void linkGlobals(WasmModule module) {
-        // TODO: Ensure that the globals are linked.
     }
 }
