@@ -1049,17 +1049,17 @@ public final class ClassfileParser {
         return new LineNumberTableAttribute(name, entries);
     }
 
-    private LocalVariableTable parseLocalVariableAttribute(Symbol<Name> name, int codeLength, int maxLocals) {
+    private LocalVariableTable parseLocalVariableAttribute(Symbol<Name> name, byte[] code, int maxLocals) {
         assert Name.LocalVariableTable.equals(name);
-        return parseLocalVariableTable(name, codeLength, maxLocals);
+        return parseLocalVariableTable(name, code, maxLocals);
     }
 
-    private LocalVariableTable parseLocalVariableTypeAttribute(Symbol<Name> name, int codeLength, int maxLocals) {
+    private LocalVariableTable parseLocalVariableTypeAttribute(Symbol<Name> name, byte[] code, int maxLocals) {
         assert Name.LocalVariableTypeTable.equals(name);
-        return parseLocalVariableTable(name, codeLength, maxLocals);
+        return parseLocalVariableTable(name, code, maxLocals);
     }
 
-    private LocalVariableTable parseLocalVariableTable(Symbol<Name> name, int codeLength, int maxLocals) {
+    private LocalVariableTable parseLocalVariableTable(Symbol<Name> name, byte[] code, int maxLocals) {
         boolean isLVTT = Name.LocalVariableTypeTable.equals(name);
         int entryCount = stream.readU2();
         if (entryCount == 0) {
@@ -1073,10 +1073,10 @@ public final class ClassfileParser {
             int descIndex = stream.readU2();
             int slot = stream.readU2();
 
-            if (bci < 0 || bci >= codeLength) {
+            if (bci < 0 || bci >= code.length) {
                 throw ConstantPool.classFormatError("Invalid local variable table attribute entry: start_pc out of bounds: " + bci);
             }
-            if (bci + length > codeLength) {
+            if (bci + length > code.length) {
                 throw ConstantPool.classFormatError("Invalid local variable table attribute entry: start_pc + length out of bounds: " + (bci + length));
             }
 
@@ -1428,10 +1428,10 @@ public final class ClassfileParser {
             if (attributeName.equals(Name.LineNumberTable)) {
                 codeAttributes[i] = parseLineNumberTable(attributeName);
             } else if (attributeName.equals(Name.LocalVariableTable)) {
-                codeAttributes[i] = parseLocalVariableAttribute(attributeName, codeLength, maxLocals);
+                codeAttributes[i] = parseLocalVariableAttribute(attributeName, code, maxLocals);
                 totalLocalTableCount++;
             } else if (attributeName.equals(Name.LocalVariableTypeTable)) {
-                codeAttributes[i] = parseLocalVariableTypeAttribute(attributeName, codeLength, maxLocals);
+                codeAttributes[i] = parseLocalVariableTypeAttribute(attributeName, code, maxLocals);
             } else if (attributeName.equals(Name.StackMapTable)) {
                 if (stackMapTable != null) {
                     throw ConstantPool.classFormatError("Duplicate StackMapTable attribute");
