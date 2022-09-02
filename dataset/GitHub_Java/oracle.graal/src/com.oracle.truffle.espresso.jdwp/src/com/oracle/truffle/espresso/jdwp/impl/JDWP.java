@@ -42,12 +42,6 @@ final class JDWP {
     public static final String JAVA_LANG_OBJECT = "Ljava/lang/Object;";
     public static final Object INVALID_VALUE = new Object();
 
-    private static final int ACC_SYNTHETIC = 0x00001000;
-    private static final int JDWP_SYNTHETIC = 0xF0000000;
-    static boolean isSynthetic(int mod) {
-        return (mod & ACC_SYNTHETIC) != 0;
-    }
-
     private JDWP() {
     }
 
@@ -412,6 +406,12 @@ final class JDWP {
                 }
                 return new CommandResult(reply);
             }
+
+            private static final int ACC_SYNTHETIC = 0x00001000;
+            private static final int JDWP_SYNTHETIC = 0xF0000000;
+            static boolean isSynthetic(int mod) {
+                return (mod & ACC_SYNTHETIC) != 0;
+            }
         }
 
         static class METHODS {
@@ -441,15 +441,7 @@ final class JDWP {
                     reply.writeLong(context.getIds().getIdAsLong(method));
                     reply.writeString(method.getNameAsString());
                     reply.writeString(method.getSignatureAsString());
-
-                    int modBits = method.getModifiers();
-                    if (isSynthetic(modBits)) {
-                        // JDWP has a different bit for synthetic
-                        modBits &= ~ACC_SYNTHETIC;
-                        modBits |= JDWP_SYNTHETIC;
-                    }
-
-                    reply.writeInt(modBits);
+                    reply.writeInt(method.getModifiers());
                 }
                 return new CommandResult(reply);
             }
@@ -647,14 +639,7 @@ final class JDWP {
                     reply.writeString(field.getNameAsString());
                     reply.writeString(field.getTypeAsString());
                     reply.writeString(field.getGenericSignatureAsString());
-                    int modBits = field.getModifiers();
-                    if (isSynthetic(modBits)) {
-                        // JDWP has a different bit for synthetic
-                        modBits &= ~ACC_SYNTHETIC;
-                        modBits |= JDWP_SYNTHETIC;
-                    }
-
-                    reply.writeInt(modBits);
+                    reply.writeInt(field.getModifiers());
                 }
                 return new CommandResult(reply);
             }
@@ -690,13 +675,7 @@ final class JDWP {
                     // TODO(Gregersen) - get the generic signature
                     // tracked by /browse/GR-19818
                     reply.writeString("");
-                    int modBits = method.getModifiers();
-                    if (isSynthetic(modBits)) {
-                        // JDWP has a different bit for synthetic
-                        modBits &= ~ACC_SYNTHETIC;
-                        modBits |= JDWP_SYNTHETIC;
-                    }
-                    reply.writeInt(modBits);
+                    reply.writeInt(method.getModifiers());
                 }
                 return new CommandResult(reply);
             }
