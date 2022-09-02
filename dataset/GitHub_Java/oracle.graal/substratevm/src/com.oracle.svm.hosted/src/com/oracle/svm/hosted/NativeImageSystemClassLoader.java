@@ -31,15 +31,14 @@ import java.security.SecureClassLoader;
 import java.util.Enumeration;
 import java.util.jar.JarFile;
 
-import com.oracle.svm.core.util.UserError;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.util.ReflectionUtil;
 
 /**
  * NativeImageCustomSystemClassLoader is a minimal {@link ClassLoader} that forwards loading of a
- * class to a {@link NativeImageSystemClassLoader#delegateClassLoader} {@link ClassLoader}. If such
- * delegate is null, then NativeImageSystemClassLoader forwards the class loading operation to the
- * default system class loader.
+ * class to a {@link NativeImageSystemClassLoader#delegate} {@link ClassLoader}. If such delegate is
+ * null, then NativeImageSystemClassLoader forwards the class loading operation to the default
+ * system class loader
  * 
  * This ClassLoader is necessary to enable the loading of classes/resources during image build-time.
  * This class must be used as a replacement for {@link ClassLoader#getSystemClassLoader()} and its
@@ -48,29 +47,20 @@ import com.oracle.svm.util.ReflectionUtil;
  */
 public final class NativeImageSystemClassLoader extends SecureClassLoader {
 
-    public final ClassLoader defaultSystemClassLoader;
-    private volatile ClassLoader delegateClassLoader = null;
+    private AbstractNativeImageClassLoaderSupport delegate = null;
+    private final ClassLoader defaultSystemClassLoader;
 
     public NativeImageSystemClassLoader(ClassLoader defaultSystemClassLoader) {
         super(defaultSystemClassLoader);
         this.defaultSystemClassLoader = defaultSystemClassLoader;
-        singleton = this;
     }
 
-    private static NativeImageSystemClassLoader singleton;
-
-    public static NativeImageSystemClassLoader singleton() {
-        if (singleton == null) {
-            String badCustomClassLoaderError = "NativeImageSystemClassLoader is not the default system class loader." +
-                            " This might create problems when using reflection during class initialization at build-time. " +
-                            "To fix this error add -Djava.system.class.loader=" + NativeImageSystemClassLoader.class.getCanonicalName();
-            UserError.abort(badCustomClassLoaderError);
-        }
-        return singleton;
+    public void setDelegate(AbstractNativeImageClassLoaderSupport delegateClassLoader) {
+        this.delegate = delegateClassLoader;
     }
 
-    public void setDelegate(ClassLoader delegateClassLoader) {
-        this.delegateClassLoader = delegateClassLoader;
+    public ClassLoader getDefaultSystemClassLoader() {
+        return defaultSystemClassLoader;
     }
 
     /**
@@ -150,27 +140,15 @@ public final class NativeImageSystemClassLoader extends SecureClassLoader {
     public String toString() {
         final String clString = super.toString();
         return clString + " {" +
-                        "delegate=" + delegateClassLoader +
+                        "delegate=" + delegate +
                         ", defaultSystemClassLoader=" + defaultSystemClassLoader +
                         '}';
     }
 
     private ClassLoader getActiveClassLoader() {
-        ClassLoader delegate = delegateClassLoader;
         return delegate != null
-                        ? delegate
+                        ? delegate.getClassLoader()
                         : defaultSystemClassLoader;
-    }
-
-    public boolean isNativeImageClassLoader(ClassLoader c) {
-        ClassLoader delegate = delegateClassLoader;
-        if (delegate == null) {
-            return false;
-        }
-        if (c == delegate) {
-            return true;
-        }
-        return false;
     }
 
     /**
