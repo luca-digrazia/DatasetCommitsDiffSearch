@@ -22,16 +22,12 @@
  */
 package com.oracle.truffle.espresso.impl;
 
-import com.oracle.truffle.espresso.bytecode.BytecodeStream;
-import com.oracle.truffle.espresso.bytecode.Bytecodes;
 import com.oracle.truffle.espresso.classfile.ClassfileParser;
 import com.oracle.truffle.espresso.classfile.ClassfileStream;
-import com.oracle.truffle.espresso.classfile.ConstantPool;
 import com.oracle.truffle.espresso.classfile.attributes.CodeAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.LineNumberTableAttribute;
 import com.oracle.truffle.espresso.classfile.attributes.Local;
 import com.oracle.truffle.espresso.classfile.attributes.LocalVariableTable;
-import com.oracle.truffle.espresso.classfile.constantpool.PoolConstant;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.jdwp.api.ErrorCodes;
 import com.oracle.truffle.espresso.runtime.Attribute;
@@ -202,18 +198,12 @@ public final class ClassRedefinition {
                     switch (change) {
                         case NO_CHANGE:
                             if (constantPoolChanged) {
-                                // determine if the method should be marked changed to
-                                // signal that the old method is now obsolete
-                                if (isObsolete(oldMethod, newMethod, oldParserKlass.getConstantPool(), newParserKlass.getConstantPool())) {
-                                    newMethod.markChanged();
-                                }
                                 result = ClassChange.METHOD_BODY_CHANGE;
                                 collectedChanges.addMethodBodyChange(newMethod);
                             }
                             break;
                         case METHOD_BODY_CHANGE:
                             result = change;
-                            newMethod.markChanged();
                             collectedChanges.addMethodBodyChange(newMethod);
                             break;
                         default:
@@ -228,36 +218,6 @@ public final class ClassRedefinition {
         }
 
         return result;
-    }
-
-    private static boolean isObsolete(ParserMethod oldMethod, ParserMethod newMethod, ConstantPool oldPool, ConstantPool newPool) {
-        CodeAttribute oldCodeAttribute = (CodeAttribute) oldMethod.getAttribute(Symbol.Name.Code);
-        CodeAttribute newCodeAttribute = (CodeAttribute) newMethod.getAttribute(Symbol.Name.Code);
-
-        BytecodeStream oldCode = new BytecodeStream(oldCodeAttribute.getOriginalCode());
-        BytecodeStream newCode = new BytecodeStream(newCodeAttribute.getOriginalCode());
-
-        return !isSame(oldCode, oldPool, newCode, newPool);
-    }
-
-    private static boolean isSame(BytecodeStream oldCode, ConstantPool oldPool, BytecodeStream newCode, ConstantPool newPool) {
-        int bci;
-        int nextBCI = 0;
-        while (nextBCI < oldCode.endBCI()) {
-            bci = nextBCI;
-            int opcode = oldCode.currentBC(bci);
-            nextBCI = oldCode.nextBCI(bci);
-            if (opcode == Bytecodes.LDC || opcode == Bytecodes.LDC2_W || opcode == Bytecodes.LDC_W || opcode == Bytecodes.NEW || opcode == Bytecodes.INVOKEDYNAMIC || Bytecodes.isInvoke(opcode)) {
-                int oldCPI = oldCode.readCPI(bci);
-                PoolConstant oldConstant = oldPool.at(oldCPI);
-                int newCPI = newCode.readCPI(bci);
-                PoolConstant newConstant = newPool.at(newCPI);
-                if (!oldConstant.toString(oldPool).equals(newConstant.toString(newPool))) {
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 
     private static ClassChange detectMethodChanges(ParserMethod oldMethod, ParserMethod newMethod) {
@@ -311,17 +271,17 @@ public final class ClassRedefinition {
         LineNumberTableAttribute.Entry[] newEntries = table2.getEntries();
 
         if (oldEntries.length != newEntries.length) {
-            return true;
+            return false;
         }
 
         for (int i = 0; i < oldEntries.length; i++) {
             LineNumberTableAttribute.Entry oldEntry = oldEntries[i];
             LineNumberTableAttribute.Entry newEntry = newEntries[i];
             if (oldEntry.getLineNumber() != newEntry.getLineNumber() || oldEntry.getBCI() != newEntry.getBCI()) {
-                return true;
+                return false;
             }
         }
-        return false;
+        return true;
     }
 
     private static boolean checkLocalVariableTable(LocalVariableTable table1, LocalVariableTable table2) {
@@ -329,7 +289,7 @@ public final class ClassRedefinition {
         Local[] newLocals = table2.getLocals();
 
         if (oldLocals.length != newLocals.length) {
-            return true;
+            return false;
         }
 
         for (int i = 0; i < oldLocals.length; i++) {
@@ -337,10 +297,10 @@ public final class ClassRedefinition {
             Local newLocal = newLocals[i];
             if (!oldLocal.getNameAsString().equals(newLocal.getNameAsString()) || oldLocal.getSlot() != newLocal.getSlot() || oldLocal.getStartBCI() != newLocal.getStartBCI() ||
                             oldLocal.getEndBCI() != newLocal.getEndBCI()) {
-                return true;
+                return false;
             }
         }
-        return false;
+        return true;
     }
 
     private static boolean checkAttribute(ParserMethod oldMethod, ParserMethod newMethod, Symbol<Symbol.Name> name) {
