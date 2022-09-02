@@ -33,19 +33,24 @@ import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleException;
 import com.oracle.truffle.api.nodes.Node;
 
+/**
+ * Thrown when a WebAssembly program encounters a trap, as defined by the specification.
+ */
 public class WasmTrap extends RuntimeException implements TruffleException {
+
+    private static final long serialVersionUID = 8195809219857028793L;
 
     private final Node location;
 
     @TruffleBoundary
-    public WasmTrap(String message, Node location) {
+    public WasmTrap(Node location, String message) {
         super(message);
         this.location = location;
     }
 
     @Override
     public Node getLocation() {
-        return null;
+        return location;
     }
 
     @Override

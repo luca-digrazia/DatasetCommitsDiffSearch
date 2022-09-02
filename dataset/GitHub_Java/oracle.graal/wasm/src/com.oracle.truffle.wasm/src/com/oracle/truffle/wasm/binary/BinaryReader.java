@@ -400,7 +400,8 @@ public class BinaryReader extends BinaryStreamReader {
                     // See GlobalModifier.
                     byte mutability = read1();
                     int index = module.symbolTable().maxGlobalIndex() + 1;
-                    context.linker().importGlobal(module, index, moduleName, memberName, type, mutability);
+                    final GlobalResolution resolution = context.linker().tryResolveGlobal(module, moduleName, memberName, type, mutability);
+                    module.symbolTable().importGlobal(language.getContextReference().get(), moduleName, memberName, index, type, mutability, resolution);
                     break;
                 }
                 default: {
