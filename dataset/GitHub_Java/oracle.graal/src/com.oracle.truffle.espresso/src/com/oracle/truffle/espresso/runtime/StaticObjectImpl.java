@@ -33,7 +33,6 @@ import com.oracle.truffle.espresso.impl.ObjectKlass;
 import com.oracle.truffle.espresso.meta.EspressoError;
 import com.oracle.truffle.espresso.meta.Meta;
 import com.oracle.truffle.espresso.meta.MetaUtil;
-
 import sun.misc.Unsafe;
 
 public class StaticObjectImpl extends StaticObject {
