@@ -97,6 +97,7 @@ import java.util.function.Supplier;
 import org.graalvm.polyglot.io.FileSystem;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import org.graalvm.polyglot.TypeLiteral;
 
 /**
  * An abstract representation of a file used by Truffle languages.
@@ -180,7 +181,9 @@ public final class TruffleFile {
      *
      * @since 19.0
      */
-    public static final AttributeDescriptor<Set<PosixFilePermission>> UNIX_PERMISSIONS = new AttributeDescriptor<Set<PosixFilePermission>>(AttributeGroup.POSIX, Set.class, "permissions");
+    public static final AttributeDescriptor<Set<PosixFilePermission>> UNIX_PERMISSIONS = new AttributeDescriptor<>(AttributeGroup.POSIX, "permissions",
+                    new TypeLiteral<Set<PosixFilePermission>>() {
+                    });
 
     /**
      * The file's mode containing the protection and file type bits. Supported only by UNIX native
@@ -483,7 +486,7 @@ public final class TruffleFile {
             return toUri();
         }
         try {
-            String strPath = "/".equals(fileSystemContext.fileSystem.getSeparator()) ? path.toString() : path.toString().replace(fileSystemContext.fileSystem.getSeparator(), "/");
+            String strPath = "/".equals(fileSystemContext.fileSystem.getSeparator()) ? path.toString() : path.toString().replace(path.getFileSystem().getSeparator(), "/");
             return new URI(null, null, strPath, null);
         } catch (Throwable t) {
             throw wrapHostException(t);
@@ -1648,11 +1651,10 @@ public final class TruffleFile {
             this.clazz = clazz;
         }
 
-        @SuppressWarnings("unchecked")
-        AttributeDescriptor(AttributeGroup group, Class<?> rawType, String name) {
+        AttributeDescriptor(AttributeGroup group, String name, TypeLiteral<T> typeLiteral) {
             this.group = group;
-            this.clazz = (Class<T>) rawType;
             this.name = name;
+            this.clazz = typeLiteral.getRawType();
         }
 
         /**
@@ -1951,10 +1953,10 @@ public final class TruffleFile {
     }
 
     static <T extends Throwable> RuntimeException wrapHostException(T t, FileSystem fs) {
-        if (LanguageAccessor.engineAccess().isDefaultFileSystem(fs)) {
+        if (TruffleLanguage.AccessAPI.engineAccess().isDefaultFileSystem(fs)) {
             throw sthrow(t);
         }
-        throw LanguageAccessor.engineAccess().wrapHostException(null, LanguageAccessor.engineAccess().getCurrentHostContext(), t);
+        throw TruffleLanguage.AccessAPI.engineAccess().wrapHostException(null, TruffleLanguage.AccessAPI.engineAccess().getCurrentHostContext(), t);
     }
 
     @SuppressWarnings("unchecked")
