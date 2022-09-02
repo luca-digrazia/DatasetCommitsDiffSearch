@@ -20,31 +20,26 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
-package com.oracle.truffle.espresso.jdwp.api;
+package com.oracle.truffle.espresso.jdwp.impl;
 
-import com.oracle.truffle.api.frame.MaterializedFrame;
+public class MonitorInfo {
 
-public final class MonitorStackInfo {
+    private int entryCount;
 
-    private final Object monitor;
-    private final MaterializedFrame materializedFrame;
-    private final int stackDepth;
-
-    public MonitorStackInfo(Object monitor, MaterializedFrame materializedFrame, int stackDepth) {
-        this.monitor = monitor;
-        this.materializedFrame = materializedFrame;
-        this.stackDepth = stackDepth;
+    MonitorInfo(int entryCount) {
+        this.entryCount = entryCount;
     }
 
-    public Object getMonitor() {
-        return monitor;
+    public int getEntryCount() {
+        return entryCount;
     }
 
-    public MaterializedFrame getMaterializedFrame() {
-        return materializedFrame;
+    public void incrementEntryCount() {
+        entryCount++;
     }
 
-    public int getStackDepth() {
-        return stackDepth;
+    public int decrementEntryCount() {
+        entryCount--;
+        return entryCount;
     }
 }

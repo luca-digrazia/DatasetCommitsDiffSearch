@@ -2506,10 +2506,14 @@ final class JDWP {
                     return new CommandResult(reply);
                 }
 
+                Object[] variables = frame.getVariables();
+                int offset = thisValue != null ? 1 : 0;
+
                 try {
+                    // below assumes the debugger asks for slot values in increasing order
                     for (int i = 0; i < slots; i++) {
                         int slot = input.readInt();
-                        Object value = frame.getVariable("" + slot);
+                        Object value = variables[slot - offset];
 
                         if (value == INVALID_VALUE) {
                             reply.errorCode(ErrorCodes.INVALID_OBJECT);
@@ -2556,12 +2560,14 @@ final class JDWP {
                     return new CommandResult(reply);
                 }
 
+                Object[] variables = frame.getVariables();
+                int offset = thisValue != null ? 1 : 0;
+
                 // below assumes the debugger asks for slot values in increasing order
                 for (int i = 0; i < slots; i++) {
-                    String identifier = input.readInt() + ""; // slot index
+                    int slot = input.readInt();
                     byte kind = input.readByte();
-                    Object value = readValue(kind, input, context);
-                    frame.setVariable(value, identifier);
+                    variables[slot - offset] = readValue(kind, input, context);
                 }
                 return new CommandResult(reply);
             }
@@ -2570,14 +2576,11 @@ final class JDWP {
         static class THIS_OBJECT {
             public static final int ID = 3;
 
-            static CommandResult createReply(Packet packet, DebuggerController controller) {
+            static CommandResult createReply(Packet packet, JDWPContext context) {
                 PacketStream input = new PacketStream(packet);
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
-                JDWPContext context = controller.getContext();
 
-                Object thread = verifyThread(input.readLong(), reply, context, true);
-
-                if (thread == null) {
+                if (verifyThread(input.readLong(), reply, context, true) == null) {
                     return new CommandResult(reply);
                 }
                 long frameId = input.readLong();

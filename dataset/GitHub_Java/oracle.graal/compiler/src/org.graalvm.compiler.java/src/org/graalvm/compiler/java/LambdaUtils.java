@@ -28,15 +28,15 @@ import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
-import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
 import org.graalvm.compiler.debug.DebugContext;
+import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.graphbuilderconf.ClassInitializationPlugin;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderConfiguration;
@@ -90,8 +90,8 @@ public final class LambdaUtils {
         } catch (Throwable e) {
             throw debug.handle(e);
         }
-        List<ResolvedJavaMethod> invokedMethods = StreamSupport.stream(graph.getInvokes().spliterator(), false).map((inv) -> inv.getTargetMethod()).collect(Collectors.toList());
-        if (invokedMethods.isEmpty()) {
+        Optional<Invoke> lambdaTargetInvokeOption = StreamSupport.stream(graph.getInvokes().spliterator(), false).findFirst();
+        if (!lambdaTargetInvokeOption.isPresent()) {
             StringBuilder sb = new StringBuilder();
             sb.append("Lambda without a target invoke: ").append(lambdaType.toClassName());
             for (ResolvedJavaMethod m : lambdaType.getDeclaredMethods()) {
@@ -99,7 +99,7 @@ public final class LambdaUtils {
             }
             throw new JVMCIError(sb.toString());
         }
-        String lambdaTargetName = createStableLambdaName(lambdaType, invokedMethods);
+        String lambdaTargetName = LambdaUtils.createStableLambdaName(lambdaType, lambdaTargetInvokeOption.get().getTargetMethod());
         return lambdaTargetName;
     }
 
@@ -112,15 +112,11 @@ public final class LambdaUtils {
         return isFinal && containsSlash && lamdaInName && matchesLamda;
     }
 
-    private static String createStableLambdaName(ResolvedJavaType lambdaType, List<ResolvedJavaMethod> targetMethods) {
+    private static String createStableLambdaName(ResolvedJavaType lambdaType, ResolvedJavaMethod targetMethod) {
         assert lambdaMatcher(lambdaType.getName()).find() : "Stable name should be created only for lambda types.";
-
         Matcher m = lambdaMatcher(lambdaType.getName());
-        StringBuilder sb = new StringBuilder();
-        targetMethods.forEach((targetMethod) -> {
-            sb.append(targetMethod.format("%H.%n(%P)%R"));
-        });
-        return m.replaceFirst("\\$\\$Lambda\\$" + digest(sb.toString()));
+        String stableTargetMethod = digest(targetMethod.format("%H.%n(%P)%R"));
+        return m.replaceFirst("\\$\\$Lambda\\$" + stableTargetMethod);
     }
 
     private static Matcher lambdaMatcher(String value) {

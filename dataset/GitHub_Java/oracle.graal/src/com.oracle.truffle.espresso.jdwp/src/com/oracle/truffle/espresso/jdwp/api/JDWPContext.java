@@ -23,7 +23,7 @@
 package com.oracle.truffle.espresso.jdwp.api;
 
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.frame.Frame;
+import com.oracle.truffle.api.frame.MaterializedFrame;
 import com.oracle.truffle.api.nodes.RootNode;
 
 import java.nio.file.Path;
@@ -395,19 +395,19 @@ public interface JDWPContext {
      * Determines if a caller has more same-line method invocations.
      *
      * @param callerRoot the root node of the caller frame
-     * @param frame the frame to read the current bci from
+     * @param materializedFrame the frame to read the current bci from
      * @return true if the caller method has further method invocations on the current line
      */
-    boolean moreMethodCallsOnLine(RootNode callerRoot, Frame frame);
+    boolean moreMethodCallsOnLine(RootNode callerRoot, MaterializedFrame materializedFrame);
 
     /**
      * Returns the current BCI or -1 if the BCI cannot be read.
      *
      * @param root the root node, representing the method/function
-     * @param frame the frame to read the bci from
+     * @param materializedFrame the frame to read the bci from
      * @return the BCI or -1
      */
-    long readBCIFromFrame(RootNode root, Frame frame);
+    long readBCIFromFrame(RootNode root, MaterializedFrame materializedFrame);
 
     /**
      * Returns a {@link CallFrame} representation of the location of
