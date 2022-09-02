@@ -126,10 +126,7 @@ public abstract class CCompilerInvoker {
             try {
                 String targetArch = null;
                 /* For cl.exe the first line holds all necessary information */
-                // Checkstyle: stop
-                String forToken = "用于";
-                // Checkstyle: resume
-                if (scanner.hasNext(forToken)) {
+                if (scanner.hasNext("用于")) {
                     /* Simplified-Chinese has targetArch first */
                     scanner.next();
                     targetArch = scanner.next();
