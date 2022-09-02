@@ -58,14 +58,10 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Queue;
-import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.jar.Attributes;
-import java.util.jar.JarFile;
-import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 
 import org.graalvm.compiler.options.OptionKey;
@@ -74,6 +70,7 @@ import org.graalvm.nativeimage.ProcessProperties;
 
 import com.oracle.graal.pointsto.api.PointstoOptions;
 import com.oracle.svm.core.FallbackExecutor;
+import com.oracle.svm.core.FallbackExecutor.Options;
 import com.oracle.svm.core.OS;
 import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.SubstrateUtil;
@@ -160,6 +157,7 @@ public class NativeImage {
     final String oHOptimize = oH(SubstrateOptions.Optimize);
     final String oHFallbackThreshold = oH(SubstrateOptions.FallbackThreshold);
     final String oHFallbackExecutorJavaArg = oH(FallbackExecutor.Options.FallbackExecutorJavaArg);
+    final String oHRuntimeJavaArg = oH(Options.FallbackExecutorRuntimeJavaArg);
 
     /* List arguments */
     final String oHSubstitutionFiles = oH(ConfigurationFiles.Options.SubstitutionFiles);
@@ -512,6 +510,13 @@ public class NativeImage {
             buildArgs.add(oH(FallbackExecutor.Options.FallbackExecutorSystemProperty) + property);
         }
 
+        List<String> runtimeJavaArgs = imageBuilderArgs.stream()
+                        .filter(s -> s.startsWith(oHRuntimeJavaArg))
+                        .collect(Collectors.toList());
+        for (String runtimeJavaArg : runtimeJavaArgs) {
+            buildArgs.add(runtimeJavaArg);
+        }
+
         List<String> fallbackExecutorJavaArgs = imageBuilderArgs.stream()
                         .filter(s -> s.startsWith(oHFallbackExecutorJavaArg))
                         .collect(Collectors.toList());
@@ -848,56 +853,6 @@ public class NativeImage {
             args.accept(oH(resourceType.optionKey) + resourceRoot.relativize(resourcePath));
         }
         args.apply(true);
-    }
-
-    static boolean processManifestMainAttributes(Path jarFilePath, BiConsumer<Path, Attributes> manifestConsumer) {
-        if (Files.isDirectory(jarFilePath)) {
-            return false;
-        }
-        try (JarFile jarFile = new JarFile(jarFilePath.toFile())) {
-            Manifest manifest = jarFile.getManifest();
-            if (manifest == null) {
-                return false;
-            }
-            manifestConsumer.accept(jarFilePath, manifest.getMainAttributes());
-            return true;
-        } catch (IOException e) {
-            throw NativeImage.showError("Invalid or corrupt jarfile " + jarFilePath, e);
-        }
-    }
-
-    void handleMainClassAttribute(Path jarFilePath, Attributes mainAttributes) {
-        String mainClassValue = mainAttributes.getValue("Main-Class");
-        if (mainClassValue == null) {
-            NativeImage.showError("No main manifest attribute, in " + jarFilePath);
-        }
-        addPlainImageBuilderArg(oHClass + mainClassValue);
-        String jarFileName = jarFilePath.getFileName().toString();
-        String jarSuffix = ".jar";
-        String jarFileNameBase;
-        if (jarFileName.endsWith(jarSuffix)) {
-            jarFileNameBase = jarFileName.substring(0, jarFileName.length() - jarSuffix.length());
-        } else {
-            jarFileNameBase = jarFileName;
-        }
-        if (!jarFileNameBase.isEmpty()) {
-            addPlainImageBuilderArg(oHName + jarFileNameBase);
-        }
-    }
-
-    void handleClassPathAttribute(Path jarFilePath, Attributes mainAttributes) {
-        String classPathValue = mainAttributes.getValue("Class-Path");
-        /* Missing Class-Path Attribute is tolerable */
-        if (classPathValue != null) {
-            for (String cp : classPathValue.split(" +")) {
-                Path manifestClassPath = ClasspathUtils.stringToClasspath(cp);
-                if (!manifestClassPath.isAbsolute()) {
-                    /* Resolve relative manifestClassPath against directory containing jar */
-                    manifestClassPath = jarFilePath.getParent().resolve(manifestClassPath);
-                }
-                addImageProvidedClasspath(manifestClassPath);
-            }
-        }
     }
 
     private int completeImageBuild() {
@@ -1247,10 +1202,8 @@ public class NativeImage {
 
     void addImageClasspath(Path classpath) {
         Path classpathEntry = canonicalize(classpath);
-        if (imageClasspath.add(classpathEntry)) {
-            processManifestMainAttributes(classpathEntry, this::handleClassPathAttribute);
-            processClasspathNativeImageMetaInf(classpathEntry);
-        }
+        processClasspathNativeImageMetaInf(classpathEntry);
+        imageClasspath.add(classpathEntry);
     }
 
     /**
@@ -1259,10 +1212,8 @@ public class NativeImage {
      */
     void addImageProvidedClasspath(Path classpath) {
         Path classpathEntry = canonicalize(classpath);
-        if (imageProvidedClasspath.add(classpathEntry) && !imageClasspath.contains(classpathEntry) && !customImageClasspath.contains(classpathEntry)) {
-            processManifestMainAttributes(classpathEntry, this::handleClassPathAttribute);
-            processClasspathNativeImageMetaInf(classpathEntry);
-        }
+        processClasspathNativeImageMetaInf(classpathEntry);
+        imageProvidedClasspath.add(classpathEntry);
     }
 
     void addCustomImageClasspath(String classpath) {
@@ -1281,11 +1232,8 @@ public class NativeImage {
             customImageClasspath.add(canonicalize(classpath, false));
             return;
         }
-
-        if (customImageClasspath.add(classpathEntry)) {
-            processManifestMainAttributes(classpathEntry, this::handleClassPathAttribute);
-            processClasspathNativeImageMetaInf(classpathEntry);
-        }
+        processClasspathNativeImageMetaInf(classpathEntry);
+        customImageClasspath.add(classpathEntry);
     }
 
     void addCustomJavaArgs(String javaArg) {
