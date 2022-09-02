@@ -104,6 +104,7 @@ public abstract class Node implements NodeInterface, Cloneable {
     }
 
     /** @since 0.8 or earlier */
+    @SuppressWarnings("deprecation")
     protected Node() {
         CompilerAsserts.neverPartOfCompilation("do not create a Node from compiled code");
         assert NodeClass.get(getClass()) != null; // ensure NodeClass constructor does not throw
@@ -260,6 +261,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         NodeUtil.adoptChildrenHelper(this);
     }
 
+    @SuppressWarnings("deprecation")
     final void adoptHelper(final Node newChild) {
         assert newChild != null;
         if (newChild == this) {
@@ -277,6 +279,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         return 1 + NodeUtil.adoptChildrenAndCountHelper(this);
     }
 
+    @SuppressWarnings("deprecation")
     int adoptAndCountHelper(Node newChild) {
         assert newChild != null;
         if (newChild == this) {
@@ -412,6 +415,7 @@ public abstract class Node implements NodeInterface, Cloneable {
         return NodeUtil.isReplacementSafe(getParent(), this, newNode);
     }
 
+    @SuppressWarnings("deprecation")
     private void reportReplace(Node oldNode, Node newNode, CharSequence reason) {
         Node node = this;
         while (node != null) {
