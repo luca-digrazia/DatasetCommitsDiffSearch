@@ -31,7 +31,6 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.calc.SignExtendNode;
 import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
 import org.graalvm.compiler.nodes.memory.ReadNode;
-import org.graalvm.compiler.nodes.memory.VolatileReadNode;
 import org.graalvm.compiler.phases.Phase;
 
 /**
@@ -47,7 +46,7 @@ public class AArch64ReadReplacementPhase extends Phase {
             if (node instanceof AArch64ReadNode) {
                 continue;
             }
-            if (node instanceof ReadNode && !(node instanceof VolatileReadNode)) {
+            if (node instanceof ReadNode) {
                 ReadNode readNode = (ReadNode) node;
                 if (readNode.hasExactlyOneUsage()) {
                     Node usage = readNode.usages().first();
