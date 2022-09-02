@@ -384,13 +384,13 @@ public final class LLVMContext {
 
     private CallTarget freeGlobalBlocks;
 
-    private void initFreeGlobalBlocks(NodeFactory nodeFactory) {
+    private void initFreeGlobalBlocks() {
         // lazily initialized, this is not necessary if there are no global blocks allocated
         if (freeGlobalBlocks == null) {
             freeGlobalBlocks = Truffle.getRuntime().createCallTarget(new RootNode(language) {
 
-                @Child LLVMMemoryOpNode freeRo = nodeFactory.createFreeGlobalsBlock(true);
-                @Child LLVMMemoryOpNode freeRw = nodeFactory.createFreeGlobalsBlock(false);
+                @Child LLVMMemoryOpNode freeRo = language.getNodeFactory().createFreeGlobalsBlock(true);
+                @Child LLVMMemoryOpNode freeRw = language.getNodeFactory().createFreeGlobalsBlock(false);
 
                 @Override
                 public Object execute(VirtualFrame frame) {
@@ -759,17 +759,17 @@ public final class LLVMContext {
     }
 
     @TruffleBoundary
-    public void registerReadOnlyGlobals(LLVMPointer nonPointerStore, NodeFactory nodeFactory) {
+    public void registerReadOnlyGlobals(LLVMPointer nonPointerStore) {
         synchronized (globalsStoreLock) {
-            initFreeGlobalBlocks(nodeFactory);
+            initFreeGlobalBlocks();
             globalsReadOnlyStore.add(nonPointerStore);
         }
     }
 
     @TruffleBoundary
-    public void registerGlobals(LLVMPointer nonPointerStore, NodeFactory nodeFactory) {
+    public void registerGlobals(LLVMPointer nonPointerStore) {
         synchronized (globalsStoreLock) {
-            initFreeGlobalBlocks(nodeFactory);
+            initFreeGlobalBlocks();
             globalsNonPointerStore.add(nonPointerStore);
         }
     }
