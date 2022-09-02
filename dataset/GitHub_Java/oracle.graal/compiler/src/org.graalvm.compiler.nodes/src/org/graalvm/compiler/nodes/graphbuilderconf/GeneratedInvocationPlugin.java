@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,6 @@ import java.lang.reflect.Method;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.debug.GraalError;
 import org.graalvm.compiler.graph.Node.NodeIntrinsic;
-import org.graalvm.compiler.nodes.PluginReplacementNode;
 import org.graalvm.compiler.nodes.ValueNode;
 
 import jdk.vm.ci.meta.MetaAccessProvider;
@@ -54,19 +53,14 @@ public abstract class GeneratedInvocationPlugin implements InvocationPlugin {
     public abstract Class<? extends Annotation> getSource();
 
     @Override
-    public boolean inlineOnly() {
-        return true;
-    }
-
-    @Override
     public abstract boolean execute(GraphBuilderContext b, ResolvedJavaMethod targetMethod, InvocationPlugin.Receiver receiver, ValueNode[] args);
 
     @Override
-    public String getSourceLocation() {
+    public StackTraceElement getApplySourceLocation(MetaAccessProvider metaAccess) {
         Class<?> c = getClass();
         for (Method m : c.getDeclaredMethods()) {
             if (m.getName().equals("execute")) {
-                return String.format("%s.%s()", m.getClass().getName(), m.getName());
+                return metaAccess.lookupJavaMethod(m).asStackTraceElement(0);
             }
         }
         throw new GraalError("could not find method named \"execute\" in " + c.getName());
@@ -86,24 +80,16 @@ public abstract class GeneratedInvocationPlugin implements InvocationPlugin {
             return false;
         }
 
-        if (IS_BUILDING_NATIVE_IMAGE) {
-            // The use of this plugin in the plugin itself shouldn't be folded since that defeats
-            // the purpose of the fold.
-            ResolvedJavaType foldNodeClass = b.getMetaAccess().lookupJavaType(PluginReplacementNode.ReplacementFunction.class);
-            if (foldNodeClass.isAssignableFrom(b.getMethod().getDeclaringClass())) {
-                return false;
-            }
-            ResolvedJavaType foldPluginClass = b.getMetaAccess().lookupJavaType(GeneratedFoldInvocationPlugin.class);
-            if (foldPluginClass.isAssignableFrom(b.getMethod().getDeclaringClass())) {
-                return false;
-            }
-        }
-
         ResolvedJavaMethod thisExecuteMethod = getExecutedMethod(b);
         if (b.getMethod().equals(thisExecuteMethod)) {
+            // The "execute" method of this plugin is itself being compiled. In (only) this context,
+            // the injected argument of the call to the @Fold annotated method will be non-null.
+            if (IS_BUILDING_NATIVE_IMAGE) {
+                return false;
+            }
             return true;
         }
-        throw new AssertionError("must pass null to injected argument of " + foldAnnotatedMethod.format("%H.%n(%p)") + ", not " + arg + " in " + b.getMethod().format("%H.%n(%p)"));
+        throw new AssertionError("must pass null to injected argument of " + foldAnnotatedMethod.format("%H.%n(%p)") + ", not " + arg);
     }
 
     private ResolvedJavaMethod getExecutedMethod(GraphBuilderContext b) {

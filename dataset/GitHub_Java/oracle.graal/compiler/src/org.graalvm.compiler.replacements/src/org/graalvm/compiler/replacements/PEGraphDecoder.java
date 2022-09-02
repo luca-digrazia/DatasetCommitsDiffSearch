@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,6 +41,7 @@ import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.api.replacements.Fold;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeProvider;
+import org.graalvm.compiler.bytecode.ResolvedJavaMethodBytecode;
 import org.graalvm.compiler.core.common.PermanentBailoutException;
 import org.graalvm.compiler.core.common.cfg.CFGVerifier;
 import org.graalvm.compiler.core.common.spi.ConstantFieldProvider;
@@ -190,23 +191,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
             return caller != null;
         }
 
-        /**
-         * Gets the call stack representing this method scope and its callers.
-         */
-        public StackTraceElement[] getCallStack() {
-            StackTraceElement[] stack = new StackTraceElement[inliningDepth + 1];
-            PEMethodScope frame = this;
-            int index = 0;
-            int bci = -1;
-            while (frame != null) {
-                stack[index++] = frame.method.asStackTraceElement(bci);
-                bci = frame.invokeData == null ? 0 : frame.invokeData.invoke.bci();
-                frame = frame.caller;
-            }
-            assert index == stack.length : index + " != " + stack.length;
-            return stack;
-        }
-
         @Override
         public NodeSourcePosition getCallerBytecodePosition(NodeSourcePosition position) {
             if (caller == null) {
@@ -241,11 +225,6 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                 sourceLanguagePosition = res;
             }
             return res;
-        }
-
-        @Override
-        public String toString() {
-            return getClass().getSimpleName() + '[' + method.format("%H.%n(%p)") + ']';
         }
     }
 
@@ -295,7 +274,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
                     int count = 0;
                     PEGraphDecoder.PEMethodScope scope = methodScope;
                     while (scope != null) {
-                        if (scope.method.equals(callInlinedMethod) || scope.method.equals(callInlinedAgnosticMethod)) {
+                        if (scope.method.equals(callInlinedMethod)) {
                             count++;
                         }
                         scope = scope.caller;
@@ -328,7 +307,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         @Override
         public BailoutException bailout(String string) {
             BailoutException bailout = new PermanentBailoutException(string);
-            throw GraphUtil.createBailoutException(string, bailout, methodScope.getCallStack());
+            throw GraphUtil.createBailoutException(string, bailout, GraphUtil.approxSourceStackTraceElement(methodScope.getCallerBytecodePosition()));
         }
 
         @Override
@@ -418,13 +397,12 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
 
         @Override
         public ResolvedJavaMethod getMethod() {
-            return methodScope.method;
+            throw unimplemented();
         }
 
         @Override
         public int bci() {
-            // There is no BCI available when decoding an encoded method
-            return -1;
+            return invoke.bci();
         }
 
         @Override
@@ -440,9 +418,11 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
         @Override
         public String toString() {
             Formatter fmt = new Formatter();
-            fmt.format("Decoding %s", methodScope.method.format("%H.%n(%p)"));
-            for (StackTraceElement e : methodScope.getCallStack()) {
-                fmt.format("%n\tat %s", e);
+            PEMethodScope scope = this.methodScope;
+            fmt.format("%s", new ResolvedJavaMethodBytecode(scope.method).asStackTraceElement(invoke.bci()));
+            NodeSourcePosition callers = scope.getCallerBytecodePosition();
+            if (callers != null) {
+                fmt.format("%n%s", callers);
             }
             return fmt.toString();
         }
@@ -605,20 +585,18 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     private final EconomicMap<SpecialCallTargetCacheKey, Object> specialCallTargetCache;
     private final EconomicMap<ResolvedJavaMethod, Object> invocationPluginCache;
     private final ResolvedJavaMethod callInlinedMethod;
-    private final ResolvedJavaMethod callInlinedAgnosticMethod;
     protected final SourceLanguagePositionProvider sourceLanguagePositionProvider;
 
     public PEGraphDecoder(Architecture architecture, StructuredGraph graph, CoreProviders providers, LoopExplosionPlugin loopExplosionPlugin, InvocationPlugins invocationPlugins,
                     InlineInvokePlugin[] inlineInvokePlugins,
                     ParameterPlugin parameterPlugin,
-                    NodePlugin[] nodePlugins, ResolvedJavaMethod callInlinedMethod, ResolvedJavaMethod callInlinedAgnosticMethod, SourceLanguagePositionProvider sourceLanguagePositionProvider) {
+                    NodePlugin[] nodePlugins, ResolvedJavaMethod callInlinedMethod, SourceLanguagePositionProvider sourceLanguagePositionProvider) {
         super(architecture, graph, providers, true);
         this.loopExplosionPlugin = loopExplosionPlugin;
         this.invocationPlugins = invocationPlugins;
         this.inlineInvokePlugins = inlineInvokePlugins;
         this.parameterPlugin = parameterPlugin;
         this.nodePlugins = nodePlugins;
-        this.callInlinedAgnosticMethod = callInlinedAgnosticMethod;
         this.specialCallTargetCache = EconomicMap.create(Equivalence.DEFAULT);
         this.invocationPluginCache = EconomicMap.create(Equivalence.DEFAULT);
         this.callInlinedMethod = callInlinedMethod;
@@ -691,7 +669,7 @@ public abstract class PEGraphDecoder extends SimplifyingGraphDecoder {
     private static RuntimeException tooManyLoopExplosionIterations(PEMethodScope methodScope, OptionValues options) {
         String message = "too many loop explosion iterations - does the explosion not terminate for method " + methodScope.method + "?";
         RuntimeException bailout = Options.FailedLoopExplosionIsFatal.getValue(options) ? new RuntimeException(message) : new PermanentBailoutException(message);
-        throw GraphUtil.createBailoutException(message, bailout, methodScope.getCallStack());
+        throw GraphUtil.createBailoutException(message, bailout, GraphUtil.approxSourceStackTraceElement(methodScope.getCallerBytecodePosition()));
     }
 
     @Override
