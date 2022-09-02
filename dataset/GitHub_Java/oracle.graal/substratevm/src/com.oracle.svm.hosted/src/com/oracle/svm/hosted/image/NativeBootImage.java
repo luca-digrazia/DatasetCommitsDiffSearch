@@ -147,7 +147,10 @@ public abstract class NativeBootImage extends AbstractBootImage {
         }
 
         objectFile.setByteOrder(ConfigurationValues.getTarget().arch.getByteOrder());
-        objectFile.setPageSize(NativeImageOptions.getPageSize());
+        int pageSize = NativeImageOptions.PageSize.getValue();
+        if (pageSize > 0) {
+            objectFile.setPageSize(pageSize);
+        }
         wordSize = FrameAccess.wordSize();
         assert objectFile.getWordSizeInBytes() == wordSize;
     }
