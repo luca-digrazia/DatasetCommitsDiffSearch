@@ -111,7 +111,7 @@ class MultiLanguageShell implements Closeable {
         return String.format("%s> ", currentLanguage.getId());
     }
 
-    public int runRepl() {
+    public int runRepl() throws IOException {
         printHeader();
         for (;;) {
             try {
@@ -203,7 +203,7 @@ class MultiLanguageShell implements Closeable {
         }
     }
 
-    private boolean handleBuiltins() {
+    private boolean handleBuiltins() throws IOException {
         final String trimmedInput = input.trim();
         if (trimmedInput.equals("")) {
             return true;
@@ -227,7 +227,7 @@ class MultiLanguageShell implements Closeable {
         return false;
     }
 
-    private void printHeader() {
+    private void printHeader() throws IOException {
         println("GraalVM MultiLanguage Shell " + context.getEngine().getVersion());
         println("Copyright (c) 2013-2019, Oracle and/or its affiliates");
         for (Language language : languages) {
@@ -270,23 +270,23 @@ class MultiLanguageShell implements Closeable {
     }
 
     private List<Language> languages() {
-        List<Language> langs = new ArrayList<>();
+        List<Language> languages = new ArrayList<>();
         Set<Language> uniqueValues = new HashSet<>();
         for (Language language : context.getEngine().getLanguages().values()) {
             if (language.isInteractive()) {
                 if (uniqueValues.add(language)) {
-                    langs.add(language);
+                    languages.add(language);
                 }
             }
         }
-        if (langs.isEmpty()) {
+        if (languages.isEmpty()) {
             throw new Launcher.AbortException("Error: No Graal languages installed. Exiting shell.", 1);
         }
-        langs.sort(Comparator.comparing(Language::getName));
-        return langs;
+        languages.sort(Comparator.comparing(Language::getName));
+        return languages;
     }
 
-    private void printUsage(boolean showCommands) {
+    private void printUsage(boolean showCommands) throws IOException {
         if (showCommands) {
             println("Commands:");
             println("  -usage           to show this list.");
