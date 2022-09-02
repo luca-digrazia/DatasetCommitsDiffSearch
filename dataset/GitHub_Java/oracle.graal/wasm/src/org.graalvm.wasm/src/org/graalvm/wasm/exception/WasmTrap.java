@@ -87,7 +87,7 @@ public final class WasmTrap extends AbstractTruffleException {
 
     @ExportMessage
     @SuppressWarnings({"unused", "static-method"})
-    Object getMembers(boolean includeInternal) throws UnsupportedMessageException {
+    final Object getMembers(boolean includeInternal) throws UnsupportedMessageException {
         throw UnsupportedMessageException.create();
     }
 
