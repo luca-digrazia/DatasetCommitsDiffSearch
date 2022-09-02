@@ -40,12 +40,7 @@ import com.oracle.truffle.api.debug.SuspensionFilter;
 import com.oracle.truffle.api.instrumentation.ContextsListener;
 import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.espresso.jdwp.api.CallFrame;
-import com.oracle.truffle.espresso.jdwp.api.Ids;
-import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
-import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
-import com.oracle.truffle.espresso.jdwp.api.KlassRef;
-import com.oracle.truffle.espresso.jdwp.api.MethodRef;
+import com.oracle.truffle.espresso.jdwp.api.*;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -195,7 +190,7 @@ public final class DebuggerController implements ContextsListener {
             CallFrame currentFrame = susp.getStackFrames()[0];
             MethodRef method = (MethodRef) ids.fromId((int) currentFrame.getMethodId());
             if (method.isLastLine(currentFrame.getCodeIndex())) {
-                susp.getEvent().prepareStepOut(STEP_CONFIG); // .prepareStepOver(STEP_CONFIG);
+                susp.getEvent().prepareStepOut(STEP_CONFIG);// .prepareStepOver(STEP_CONFIG);
             } else {
                 susp.getEvent().prepareStepOver(STEP_CONFIG);
             }
@@ -526,9 +521,8 @@ public final class DebuggerController implements ContextsListener {
 
             for (Pattern pattern : patterns) {
                 JDWPLogger.log("Matching klass: %s against pattern: %s", JDWPLogger.LogLevel.STEPPING, klass.getNameAsString(), pattern.pattern());
-                if (pattern.pattern().matches(klass.getNameAsString().replace('/', '.'))) {
+                if (pattern.pattern().matches(klass.getNameAsString().replace('/', '.')))
                     return true;
-                }
             }
             return false;
         }
