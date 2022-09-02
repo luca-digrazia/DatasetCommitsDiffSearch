@@ -41,6 +41,7 @@ import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.LocationIdentity;
+import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.SubstrateOptions;
@@ -50,7 +51,6 @@ import com.oracle.svm.core.annotate.NeverInline;
 import com.oracle.svm.core.annotate.RestrictHeapAccess;
 import com.oracle.svm.core.annotate.StubCallingConvention;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.graal.nodes.KillMemoryNode;
 import com.oracle.svm.core.heap.Heap;
 import com.oracle.svm.core.jdk.UninterruptibleUtils;
 import com.oracle.svm.core.log.Log;
@@ -402,16 +402,10 @@ public final class Safepoint {
         // Transition from C to Java, checking for safepoint.
         StatusSupport.assertStatusNativeOrSafepoint();
         int newStatus = StatusSupport.STATUS_IN_JAVA;
-        if (BranchProbabilityNode.probability(BranchProbabilityNode.VERY_SLOW_PATH_PROBABILITY, ThreadingSupportImpl.needsNativeToJavaSlowpath()) ||
-                        BranchProbabilityNode.probability(BranchProbabilityNode.VERY_SLOW_PATH_PROBABILITY, !StatusSupport.compareAndSetNativeToNewStatus(newStatus))) {
+        boolean needSlowPath = ThreadingSupportImpl.needsNativeToJavaSlowpath() || !StatusSupport.compareAndSetNativeToNewStatus(newStatus);
+        if (BranchProbabilityNode.probability(BranchProbabilityNode.VERY_SLOW_PATH_PROBABILITY, needSlowPath)) {
             callSlowPathNativeToNewStatus(Safepoint.ENTER_SLOW_PATH_TRANSITION_FROM_NATIVE_TO_NEW_STATUS, newStatus);
         }
-
-        /*
-         * Kill all memory locations to ensure that no floating reads are scheduled before the
-         * thread is properly transitioned into the Java state.
-         */
-        KillMemoryNode.killMemory(LocationIdentity.ANY_LOCATION);
     }
 
     @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
@@ -523,6 +517,7 @@ public final class Safepoint {
         }
 
         private volatile int safepointState;
+        private volatile UnsignedWord safepointId;
 
         /** The thread requesting a safepoint. */
         private volatile IsolateThread requestingThread;
@@ -559,6 +554,7 @@ public final class Safepoint {
             waitForSafepoints(reason);
             Statistics.setFrozenNanos();
             safepointState = AT_SAFEPOINT;
+            safepointId = safepointId.add(1);
             return lock;
         }
 
@@ -805,6 +801,11 @@ public final class Safepoint {
         @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
         protected boolean isFrozen() {
             return safepointState == AT_SAFEPOINT;
+        }
+
+        @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+        protected UnsignedWord getSafepointId() {
+            return safepointId;
         }
 
         /** A sample method to execute in a VMOperation. */
