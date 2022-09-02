@@ -528,8 +528,8 @@ public class AArch64Move {
                 break;
             case Object:
                 if (input.isNull()) {
-                    if (crb.mustReplaceWithUncompressedNullRegister(input)) {
-                        masm.mov(64, dst, crb.uncompressedNullRegister);
+                    if (crb.mustReplaceWithNullRegister(input)) {
+                        masm.mov(64, dst, crb.nullRegister);
                     } else {
                         masm.mov(dst, 0);
                     }
@@ -725,7 +725,7 @@ public class AArch64Move {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            Register nullRegister = crb.uncompressedNullRegister;
+            Register nullRegister = crb.nullRegister;
             if (!nullRegister.equals(Register.None)) {
                 emitConversion(asRegister(result), asRegister(input), nullRegister, masm);
             }

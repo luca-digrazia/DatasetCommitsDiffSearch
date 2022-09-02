@@ -509,7 +509,11 @@ public final class ObjectKlass extends Klass {
     private void verifyKlass() {
         if (VERIFY) {
             for (Method m : declaredMethods) {
-                MethodVerifier.verify(m);
+                try {
+                    MethodVerifier.verify(m);
+                } catch (Throwable e) {
+                    throw e;
+                }
             }
         }
     }
