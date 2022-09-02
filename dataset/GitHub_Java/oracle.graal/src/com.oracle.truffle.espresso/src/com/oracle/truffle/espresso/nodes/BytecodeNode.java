@@ -436,7 +436,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         int argCount = Signatures.parameterCount(getMethod().getParsedSignature(), false);
 
         CompilerAsserts.partialEvaluationConstant(argCount);
-        CompilerAsserts.compilationConstant(locals.slotCount());
+        //CompilerAsserts.partialEvaluationConstant(locals);
 
         boolean hasReceiver = !getMethod().isStatic();
         int receiverSlot = hasReceiver ? 1 : 0;
@@ -609,9 +609,7 @@ public final class BytecodeNode extends EspressoMethodNode {
 
     @Override
     void initializeBody(VirtualFrame frame) {
-        int slotCount = getMethod().getMaxLocals();
-        CompilerAsserts.partialEvaluationConstant(slotCount);
-        final Locals locals = new Locals(slotCount);
+        final Locals locals = new Locals(getMethod().getMaxLocals());
         frame.setObject(localsSlot, locals);
         initArguments(frame.getArguments(), locals);
     }
@@ -625,15 +623,14 @@ public final class BytecodeNode extends EspressoMethodNode {
         int statementIndex = -1;
         int nextStatementIndex = 0;
 
-        final Locals locals = (Locals) FrameUtil.getObjectSafe(frame, localsSlot);
         final OperandStack stack = new OperandStack(getMethod().getMaxStackSize());
-        // There's no need to make the operand stack accessible in the frame, we save the slot.
-        // frame.setObject(stackSlot, stack);
+        final Locals locals = (Locals) FrameUtil.getObjectSafe(frame, localsSlot);
 
         CompilerDirectives.ensureVirtualized(stack);
         CompilerDirectives.ensureVirtualized(locals);
 
         setBCI(frame, curBCI);
+        // frame.setObject(stackSlot, stack);
 
         if (instrument != null) {
             instrument.notifyEntry(frame);
@@ -1198,15 +1195,15 @@ public final class BytecodeNode extends EspressoMethodNode {
     }
 
     private void edgeLocalAnalysis(Locals locals, int curBCI, int nextBCI) {
-        livenessAnalysis.performOnEdge(locals, curBCI, nextBCI);
+        livenessAnalysis.performOnEdge(locals, curBCI, nextBCI, this);
     }
 
     private void onStart(Locals locals) {
-        livenessAnalysis.onStart(locals);
+        livenessAnalysis.onStart(locals, this);
     }
 
     private void postLocalAccess(Locals locals, int curBCI) {
-        livenessAnalysis.performPostBCI(locals, curBCI);
+        livenessAnalysis.performPostBCI(locals, curBCI, this);
     }
 
     private EspressoRootNode getRoot() {
@@ -1420,6 +1417,7 @@ public final class BytecodeNode extends EspressoMethodNode {
         edgeLocalAnalysis(locals, curBCI, targetBCI);
         return nextStatementIndex;
     }
+
 
     private void checkStopping() {
         if (getContext().shouldCheckDeprecationStatus()) {

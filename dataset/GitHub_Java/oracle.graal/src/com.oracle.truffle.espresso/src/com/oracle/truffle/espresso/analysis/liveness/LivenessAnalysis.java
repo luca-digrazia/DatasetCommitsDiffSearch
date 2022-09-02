@@ -38,6 +38,8 @@ import com.oracle.truffle.espresso.analysis.liveness.actions.MultiAction;
 import com.oracle.truffle.espresso.analysis.liveness.actions.NullOutAction;
 import com.oracle.truffle.espresso.analysis.liveness.actions.SelectEdgeAction;
 import com.oracle.truffle.espresso.impl.Method;
+import com.oracle.truffle.espresso.nodes.BytecodeNode;
+import com.oracle.truffle.espresso.nodes.Locals;
 import com.oracle.truffle.espresso.perf.DebugCloseable;
 import com.oracle.truffle.espresso.perf.DebugTimer;
 import com.oracle.truffle.espresso.perf.TimerCollection;
@@ -53,15 +55,15 @@ public class LivenessAnalysis {
 
     public static final LivenessAnalysis NO_ANALYSIS = new LivenessAnalysis() {
         @Override
-        public void performPostBCI(long[] primitives, Object[] refs, int bci) {
+        public void performPostBCI(Locals locals, int bci, BytecodeNode node) {
         }
 
         @Override
-        public void performOnEdge(long[] primitives, Object[] refs, int bci, int nextBci) {
+        public void performOnEdge(Locals locals, int bci, int nextBci, BytecodeNode node) {
         }
 
         @Override
-        public void onStart(long[] primitives, Object[] refs) {
+        public void onStart(Locals locals, BytecodeNode node) {
         }
     };
 
@@ -82,26 +84,26 @@ public class LivenessAnalysis {
         return !compiledCodeOnly || CompilerDirectives.inCompiledCode();
     }
 
-    public void performOnEdge(long[] primitives, Object[] refs, int bci, int nextBci) {
+    public void performOnEdge(Locals locals, int bci, int nextBci, BytecodeNode node) {
         if (compiledCodeCheck()) {
             if (edge != null && edge[nextBci] != null) {
-                edge[nextBci].onEdge(primitives, refs, bci);
+                edge[nextBci].onEdge(locals, bci, node);
             }
         }
     }
 
-    public void onStart(long[] primitives, Object[] refs) {
+    public void onStart(Locals locals, BytecodeNode node) {
         if (compiledCodeCheck()) {
             if (onStart != null) {
-                onStart.execute(primitives, refs);
+                onStart.execute(locals);
             }
         }
     }
 
-    public void performPostBCI(long[] primitives, Object[] refs, int bci) {
+    public void performPostBCI(Locals locals, int bci, BytecodeNode node) {
         if (compiledCodeCheck()) {
             if (result != null && result[bci] != null) {
-                result[bci].execute(primitives, refs);
+                result[bci].execute(locals);
             }
         }
     }

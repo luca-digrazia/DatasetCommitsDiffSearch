@@ -23,9 +23,10 @@
 
 package com.oracle.truffle.espresso.analysis.liveness;
 
+import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.espresso.nodes.BytecodeNode;
 import com.oracle.truffle.espresso.nodes.Locals;
 
 public interface EdgeAction {
-    void onEdge(long[] primitives, Object[] refs, int fromBCI);
+    void onEdge(Locals locals, int fromBCI, BytecodeNode node);
 }
