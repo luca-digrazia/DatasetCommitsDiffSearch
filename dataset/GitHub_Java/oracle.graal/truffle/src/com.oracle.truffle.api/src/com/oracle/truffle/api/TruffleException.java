@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -48,22 +48,33 @@ import com.oracle.truffle.api.source.SourceSection;
  * Represents an exception thrown during the execution of a guest language program. All exceptions
  * thrown in a guest language implementation that are not implementing {@link TruffleException} are
  * considered {@link #isInternalError() internal} errors.
- *
+ * <p>
  * {@link TruffleException} is most efficient if the {@link Throwable#getCause() cause} is left
  * uninitialized. Implementations of {@link TruffleException} also should not prevent initialization
  * of the exception cause, e.g., by overriding {@link Throwable#initCause(Throwable)}.
- *
+ * <p>
  * In order to be efficient, a {@link TruffleException} should override
- * {@link Throwable#fillInStackTrace()} so that it returns {@code null}.
+ * {@link Throwable#fillInStackTrace()} without the {@code synchronized} modifier, so that it
+ * returns {@code this}:
+ *
+ * <pre>
+ * &#64;SuppressWarnings("sync-override")
+ * &#64;Override
+ * public final Throwable fillInStackTrace() {
+ *     return this;
+ * }
+ * </pre>
  *
  * @since 0.27
- * @see TruffleStackTraceElement#getStackTrace(Throwable) To access the stack trace of an exception.
+ * @see TruffleStackTrace TruffleStackTrace to access the stack trace of an exception.
+ * @deprecated Use {@code com.oracle.truffle.api.exception.AbstractTruffleException}.
  */
+@Deprecated
 public interface TruffleException {
 
     /**
      * Returns a node indicating the location where this exception occurred in the AST. This method
-     * may <code>null</code> to indicate that the location is not available.
+     * may return <code>null</code> to indicate that the location is not available.
      *
      * @since 0.27
      */
@@ -124,21 +135,13 @@ public interface TruffleException {
 
     /**
      * Returns <code>true</code> if this exception indicates that guest language application was
-     * cancelled during its execution.
+     * cancelled during its execution. If {@code isCancelled} returns {@code true} languages should
+     * not catch this exception, they must just rethrow it.
      *
      * @since 0.27
      */
     default boolean isCancelled() {
         return false;
-    }
-
-    /**
-     * @since 0.27
-     * @deprecated in 0.27
-     */
-    @Deprecated
-    default boolean isTimeout() {
-        return isCancelled();
     }
 
     /**

@@ -40,23 +40,25 @@
  */
 package com.oracle.truffle.api.debug;
 
-import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
+import com.oracle.truffle.api.interop.ExceptionType;
+import com.oracle.truffle.api.interop.InteropLibrary;
+import com.oracle.truffle.api.library.ExportLibrary;
+import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.Node;
 
 /**
- * Represents a soft cancel exception used by {@link DebuggerSession#evalInContext}. The
- * {@link SuspendedEvent#prepareKill()} now uses
- * {@link TruffleContext#closeCancelled(Node, String)}.
+ * Controls breaking out of an execution context, such as a shell or eval. This exception is marked
+ * as an {@code unwind} as it is not supposed to be ever caught. The re-throwing is important aspect
+ * of the <code>KillException</code>. For code that needs to distinguish between other unwind
+ * exceptions and {@link KillException}, is still OK to catch the exception and not propagate it any
+ * further.
  *
  * @since 0.12
  */
-
-@SuppressWarnings("deprecation")
+@ExportLibrary(InteropLibrary.class)
 final class KillException extends AbstractTruffleException {
-
     private static final long serialVersionUID = -8638020836970813894L;
-    static final String MESSAGE = "Execution cancelled by a debugging session.";
 
     /**
      * Default constructor.
@@ -64,6 +66,18 @@ final class KillException extends AbstractTruffleException {
      * @since 0.12
      */
     KillException(Node node) {
-        super(MESSAGE, node);
+        super("Execution cancelled by a debugging session.", node);
+    }
+
+    @ExportMessage
+    @SuppressWarnings("static-method")
+    boolean isExceptionUnwind() {
+        return true;
+    }
+
+    @ExportMessage
+    @SuppressWarnings("static-method")
+    ExceptionType getExceptionType() {
+        return ExceptionType.CANCEL;
     }
 }
