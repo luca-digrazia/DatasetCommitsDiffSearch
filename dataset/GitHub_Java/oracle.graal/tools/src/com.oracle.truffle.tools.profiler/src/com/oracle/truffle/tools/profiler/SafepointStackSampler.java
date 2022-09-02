@@ -118,7 +118,7 @@ final class SafepointStackSampler {
         cachedAction.set(action);
 
         for (SyntheticFrame syntheticFrame : syntheticFrames.values()) {
-            perThreadSamples.add(syntheticFrame.stackSample());
+            perThreadSamples.add(syntheticFrame.stackSample);
         }
         return perThreadSamples;
     }
@@ -137,7 +137,7 @@ final class SafepointStackSampler {
         if (syntheticFrames.containsKey(thread)) {
             parent = syntheticFrames.get(thread);
         }
-        syntheticFrames.put(thread, new SyntheticFrame(parent, thread, language, message));
+        syntheticFrames.put(thread, new SyntheticFrame(language.getName() + ":" + message, parent));
     }
 
     public void popSyntheticFrame() {
@@ -302,34 +302,14 @@ final class SafepointStackSampler {
 
     private class SyntheticFrame {
         final SyntheticFrame parent;
-        final StackVisitor visitor;
-        final Thread thread;
-        final LanguageInfo language;
-        final String message;
-        StackSample stackSample;
+        final StackSample stackSample;
 
-        /**
-         * Created on the interpreter thread, keep as fast as possible
-         */
-        public SyntheticFrame(SyntheticFrame parent, Thread thread, LanguageInfo language, String message) {
+        SyntheticFrame(String message, SyntheticFrame parent) {
             this.parent = parent;
-            this.thread = thread;
-            this.language = language;
-            this.message = message;
-            this.visitor = fetchStackVisitor();
+            StackVisitor visitor = fetchStackVisitor();
             Truffle.getRuntime().iterateFrames(visitor);
-        }
-
-        /**
-         * Read on the sampling thread
-         */
-        private StackSample stackSample() {
-            if (stackSample == null) {
-                String languageMessage = language.getName() + ":" + message;
-                stackSample = new StackSample(thread, visitor.createEntries(sourceSectionFilter, languageMessage), 0, 0, visitor.overflowed);
-                visitor.resetAndReturn();
-            }
-            return stackSample;
+            stackSample = new StackSample(Thread.currentThread(), visitor.createEntries(sourceSectionFilter, message), 0, 0, visitor.overflowed);
+            visitor.resetAndReturn();
         }
     }
 }
