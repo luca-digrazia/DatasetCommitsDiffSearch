@@ -105,6 +105,11 @@ public abstract class MacroStateSplitWithExceptionNode extends WithExceptionNode
     }
 
     @Override
+    public void setBci(int bci) {
+        // nothing to do here, macro nodes get bci during construction
+    }
+
+    @Override
     public ResolvedJavaMethod getTargetMethod() {
         return targetMethod;
     }
