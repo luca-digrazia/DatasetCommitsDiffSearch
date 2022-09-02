@@ -90,7 +90,6 @@ import org.graalvm.tools.lsp.server.types.TextDocumentPositionParams;
 import org.graalvm.tools.lsp.server.types.TextDocumentSyncKind;
 import org.graalvm.tools.lsp.server.types.TextEdit;
 import org.graalvm.tools.lsp.server.types.WorkspaceEdit;
-import org.graalvm.tools.lsp.server.types.WorkspaceFolder;
 import org.graalvm.tools.lsp.server.types.WorkspaceSymbolParams;
 import org.graalvm.tools.lsp.exceptions.DiagnosticsNotification;
 import org.graalvm.tools.lsp.exceptions.UnknownLanguageException;
@@ -127,7 +126,9 @@ public final class LanguageServerImpl extends LanguageServer {
     }
 
     public static LanguageServerImpl create(TruffleAdapter adapter, PrintWriter info, PrintWriter err) {
-        return new LanguageServerImpl(adapter, info, err);
+        LanguageServerImpl server = new LanguageServerImpl(adapter, info, err);
+        adapter.initialize();
+        return server;
     }
 
     @Override
@@ -149,7 +150,7 @@ public final class LanguageServerImpl extends LanguageServer {
         capabilities.setExecuteCommandProvider(ExecuteCommandOptions.create(Arrays.asList(DRY_RUN, SHOW_COVERAGE, CLEAR_COVERAGE, CLEAR_ALL_COVERAGE)));
 
         this.serverCapabilities = capabilities;
-        CompletableFuture.runAsync(() -> parseWorkspace(params.getWorkspaceFolders()));
+        CompletableFuture.runAsync(() -> parseWorkspace(params.getRootUri()));
 
         return CompletableFuture.completedFuture(InitializeResult.create(capabilities));
     }
@@ -404,12 +405,11 @@ public final class LanguageServerImpl extends LanguageServer {
         };
     }
 
-    private void parseWorkspace(List<WorkspaceFolder> workspaces) {
-        for (WorkspaceFolder workspace : workspaces) {
-            List<Future<?>> parsingTasks = truffleAdapter.parseWorkspace(URI.create(workspace.getUri()));
-            for (Future<?> future : parsingTasks) {
-                waitForResultAndHandleExceptions(future);
-            }
+    private void parseWorkspace(String rootUri) {
+        List<Future<?>> parsingTasks = truffleAdapter.parseWorkspace(URI.create(rootUri));
+
+        for (Future<?> future : parsingTasks) {
+            waitForResultAndHandleExceptions(future);
         }
     }
 
