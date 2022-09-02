@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -23,15 +23,17 @@
 
 package com.oracle.truffle.espresso.bytecode;
 
+import com.oracle.truffle.espresso.impl.MethodInfo;
+import com.oracle.truffle.espresso.meta.JavaKind;
+import com.oracle.truffle.espresso.runtime.ReturnAddress;
+import com.oracle.truffle.espresso.runtime.StaticObject;
+
 import java.lang.reflect.Modifier;
 
-import com.oracle.truffle.api.frame.FrameSlotKind;
-import com.oracle.truffle.espresso.impl.MethodInfo;
-import com.oracle.truffle.espresso.meta.EspressoError;
-import com.oracle.truffle.espresso.meta.JavaKind;
-import com.oracle.truffle.espresso.runtime.StaticObject;
-import com.oracle.truffle.espresso.types.TypeDescriptors;
-
+/**
+ * Operand stack backed by two arrays, a long[] for primitives and Object[] for references. Removes
+ * the boxing overhead at the expense of memory.
+ */
 public final class DualStack implements OperandStack {
 
     private final Object[] stack;
@@ -40,10 +42,6 @@ public final class DualStack implements OperandStack {
     private final byte[] stackTag;
     private int stackSize;
 
-    private static boolean isEspressoReference(Object instance) {
-        return instance != null && (instance instanceof StaticObject || instance.getClass().isArray());
-    }
-
     public DualStack(int maxStackSize) {
         this.stack = new Object[maxStackSize];
         this.primitiveStack = new long[maxStackSize];
@@ -51,112 +49,131 @@ public final class DualStack implements OperandStack {
         this.stackSize = 0;
     }
 
-    // region Operand stack operations
-
-    @Override
-    public int stackIndex() {
-        return stackSize;
-    }
-
-    public void popVoid(int slots) {
-        assert slots == 1 || slots == 2;
-        stackSize -= slots;
-        assert stackSize >= 0;
-    }
-
-    public void pushObject(Object value) {
-        assert value != null;
-        assert isEspressoReference(value);
-        stackTag[stackSize] = (byte) FrameSlotKind.Object.ordinal();
-        stack[stackSize++] = value;
-    }
-
-    public void pushInt(int value) {
-        stackTag[stackSize] = (byte) FrameSlotKind.Int.ordinal();
-        stack[stackSize] = null;
-        primitiveStack[stackSize] = value;
-        stackSize++;
-    }
-
-    public void pushIllegal() {
-        stackTag[stackSize] = (byte) FrameSlotKind.Illegal.ordinal();
-        stack[stackSize++] = null;
-    }
-
-    public void pushLong(long value) {
-        pushIllegal();
-        stackTag[stackSize] = (byte) FrameSlotKind.Long.ordinal();
-        stack[stackSize] = null;
-        primitiveStack[stackSize] = value;
-        stackSize++;
-    }
-
-    public void pushFloat(float value) {
-        stackTag[stackSize] = (byte) FrameSlotKind.Float.ordinal();
-        stack[stackSize] = null;
-        primitiveStack[stackSize] = Float.floatToRawIntBits(value);
-        stackSize++;
-    }
-
-    public void pushDouble(double value) {
-        pushIllegal();
-        stackTag[stackSize] = (byte) FrameSlotKind.Double.ordinal();
-        stack[stackSize] = null;
-        primitiveStack[stackSize] = Double.doubleToRawLongBits(value);
-        stackSize++;
-    }
-
-    public FrameSlotKind peekTag() {
-        return KIND_VALUES.get(stackTag[stackSize - 1]);
-    }
-
-    public Object popObject() {
-        assert peekTag() == FrameSlotKind.Object;
-        Object top = stack[--stackSize];
-        assert top != null : "Use StaticObject.NULL";
-        assert isEspressoReference(top);
-        return top;
-    }
-
-    public int popInt() {
-        assert peekTag() == FrameSlotKind.Int;
-        return (int) primitiveStack[--stackSize];
-    }
-
-    public float popFloat() {
-        assert peekTag() == FrameSlotKind.Float;
-        return Float.intBitsToFloat((int) primitiveStack[--stackSize]);
-    }
-
-    public long popLong() {
-        assert peekTag() == FrameSlotKind.Long;
-        long ret = primitiveStack[--stackSize];
-        popIllegal();
-        return ret;
-    }
-
-    public double popDouble() {
-        assert peekTag() == FrameSlotKind.Double;
-        double ret = Double.longBitsToDouble(primitiveStack[--stackSize]);
-        popIllegal();
-        return ret;
-    }
-
-    public void popIllegal() {
-        assert peekTag() == FrameSlotKind.Illegal;
-        assert stackSize > 0;
-        --stackSize;
-    }
-
-    static int numberOfSlots(FrameSlotKind kind) {
+    private static int numberOfSlots(JavaKind kind) {
         assert kind != null;
-        if (kind == FrameSlotKind.Long || kind == FrameSlotKind.Double) {
+        if (kind == JavaKind.Long || kind == JavaKind.Double) {
             return 2;
         }
         // Illegal takes 1 slot.
         return 1;
     }
 
+    @Override
+    public void popVoid(int slots) {
+        assert slots == 1 || slots == 2;
+        stackSize -= slots;
+        assert stackSize >= 0;
+    }
+
+    @Override
+    public void pushObject(StaticObject value) {
+        assert value != null;
+        stackTag[stackSize] = (byte) JavaKind.Object.ordinal();
+        stack[stackSize++] = value;
+    }
+
+    @Override
+    public void pushReturnAddress(int bci) {
+        assert bci >= 0;
+        stackTag[stackSize] = (byte) JavaKind.ReturnAddress.ordinal();
+        stack[stackSize++] = ReturnAddress.create(bci);
+    }
+
+    @Override
+    public void pushInt(int value) {
+        stackTag[stackSize] = (byte) JavaKind.Int.ordinal();
+        stack[stackSize] = null;
+        primitiveStack[stackSize] = value;
+        stackSize++;
+    }
+
+    public void pushIllegal() {
+        stackTag[stackSize] = (byte) JavaKind.Illegal.ordinal();
+        stack[stackSize++] = null;
+    }
+
+    @Override
+    public void pushLong(long value) {
+        pushIllegal();
+        stackTag[stackSize] = (byte) JavaKind.Long.ordinal();
+        stack[stackSize] = null;
+        primitiveStack[stackSize] = value;
+        stackSize++;
+    }
+
+    @Override
+    public void pushFloat(float value) {
+        stackTag[stackSize] = (byte) JavaKind.Float.ordinal();
+        stack[stackSize] = null;
+        primitiveStack[stackSize] = Float.floatToRawIntBits(value);
+        stackSize++;
+    }
+
+    @Override
+    public void pushDouble(double value) {
+        pushIllegal();
+        stackTag[stackSize] = (byte) JavaKind.Double.ordinal();
+        stack[stackSize] = null;
+        primitiveStack[stackSize] = Double.doubleToRawLongBits(value);
+        stackSize++;
+    }
+
+    private JavaKind peekTag() {
+        return KIND_VALUES.get(stackTag[stackSize - 1]);
+    }
+
+    @Override
+    public StaticObject popObject() {
+        assert peekTag() == JavaKind.Object;
+        Object top = stack[--stackSize];
+        assert top != null : "Use StaticObject.NULL";
+        return (StaticObject) top;
+    }
+
+    @Override
+    public Object popReturnAddressOrObject() {
+        assert peekTag() == JavaKind.Object || peekTag() == JavaKind.ReturnAddress;
+        Object top = stack[--stackSize];
+        assert top != null : "Use StaticObject.NULL";
+        assert top instanceof StaticObject || top instanceof ReturnAddress;
+        return top;
+    }
+
+    @Override
+    public int popInt() {
+        assert peekTag() == JavaKind.Int;
+        return (int) primitiveStack[--stackSize];
+    }
+
+    @Override
+    public float popFloat() {
+        assert peekTag() == JavaKind.Float;
+        return Float.intBitsToFloat((int) primitiveStack[--stackSize]);
+    }
+
+    @Override
+    public long popLong() {
+        assert peekTag() == JavaKind.Long;
+        long ret = primitiveStack[--stackSize];
+        popIllegal();
+        return ret;
+    }
+
+    @Override
+    public double popDouble() {
+        assert peekTag() == JavaKind.Double;
+        double ret = Double.longBitsToDouble(primitiveStack[--stackSize]);
+        popIllegal();
+        return ret;
+    }
+
+    private void popIllegal() {
+        assert peekTag() == JavaKind.Illegal;
+        assert stackSize > 0;
+        --stackSize;
+    }
+
+    @Override
     public void dup1() {
         assert numberOfSlots(peekTag()) == 1;
         stack[stackSize] = stack[stackSize - 1];
@@ -165,6 +182,7 @@ public final class DualStack implements OperandStack {
         ++stackSize;
     }
 
+    @Override
     public void swapSingle() {
         // value2, value1 → value1, value2
         assert numberOfSlots(KIND_VALUES.get(stackTag[stackSize - 1])) == 1;
@@ -183,6 +201,7 @@ public final class DualStack implements OperandStack {
         stackTag[stackSize - 2] = t1;
     }
 
+    @Override
     public void dupx1() {
         // value2, value1 → value1, value2, value1
         assert numberOfSlots(KIND_VALUES.get(stackTag[stackSize - 1])) == 1;
@@ -210,9 +229,10 @@ public final class DualStack implements OperandStack {
         ++stackSize;
     }
 
+    @Override
     public void dupx2() {
         // value3, value2, value1 → value1, value3, value2, value1
-        FrameSlotKind tag1 = peekTag();
+        JavaKind tag1 = peekTag();
         assert numberOfSlots(tag1) == 1;
 
         Object o1 = stack[stackSize - 1];
@@ -245,6 +265,7 @@ public final class DualStack implements OperandStack {
         ++stackSize;
     }
 
+    @Override
     public void dup2() {
         // {value2, value1} → {value2, value1}, {value2, value1}
 
@@ -267,6 +288,7 @@ public final class DualStack implements OperandStack {
         ++stackSize;
     }
 
+    @Override
     public void dup2x1() {
         // value3, {value2, value1} → {value2, value1}, value3, {value2, value1}
 
@@ -305,6 +327,7 @@ public final class DualStack implements OperandStack {
         ++stackSize;
     }
 
+    @Override
     public void dup2x2() {
         // {value4, value3}, {value2, value1} → {value2, value1}, {value4, value3}, {value2, value1}
 
@@ -352,17 +375,15 @@ public final class DualStack implements OperandStack {
     }
 
     @Override
-    public Object peekReceiver(MethodInfo method) {
+    public StaticObject peekReceiver(MethodInfo method) {
         assert !Modifier.isStatic(method.getModifiers());
         int slots = method.getSignature().getNumberOfSlotsForParameters();
         Object receiver = stack[stackSize - slots - 1];
-        assert isEspressoReference(receiver);
-        return receiver;
+        return (StaticObject) receiver;
     }
 
+    @Override
     public void clear() {
         stackSize = 0;
     }
-
-    // endregion Stack operations
 }

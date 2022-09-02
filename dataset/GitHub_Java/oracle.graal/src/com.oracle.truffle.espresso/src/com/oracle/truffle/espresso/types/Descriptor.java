@@ -37,6 +37,14 @@ public abstract class Descriptor implements Comparable<Descriptor> {
 
     public abstract void verify();
 
+    public static String dottified(String className) {
+        return className.replace('/', '.');
+    }
+
+    public static String slashified(String className) {
+        return className.replace('.', '/');
+    }
+
     @Override
     public final String toString() {
         return value;
@@ -44,7 +52,7 @@ public abstract class Descriptor implements Comparable<Descriptor> {
 
     @Override
     public final boolean equals(Object other) {
-        if (other.getClass() == this.getClass()) {
+        if (other != null && other.getClass() == this.getClass()) {
             return value.equals(((Descriptor) other).value);
         }
         return false;
@@ -55,8 +63,8 @@ public abstract class Descriptor implements Comparable<Descriptor> {
         return value.hashCode();
     }
 
+    @Override
     public final int compareTo(Descriptor other) {
         return value.compareTo(other.value);
     }
-
 }
