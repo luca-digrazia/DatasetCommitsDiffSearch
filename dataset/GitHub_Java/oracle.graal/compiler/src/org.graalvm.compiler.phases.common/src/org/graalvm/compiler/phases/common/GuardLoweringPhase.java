@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,7 +34,6 @@ import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.GuardNode;
 import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
-import org.graalvm.compiler.nodes.ControlSplitNode.ProfileSource;
 import org.graalvm.compiler.nodes.StructuredGraph.GuardsStage;
 import org.graalvm.compiler.nodes.StructuredGraph.ScheduleResult;
 import org.graalvm.compiler.nodes.cfg.Block;
@@ -98,7 +97,7 @@ public class GuardLoweringPhase extends BasePhase<CoreProviders> {
                     trueSuccessor = fastPath;
                     falseSuccessor = deoptBranch;
                 }
-                IfNode ifNode = graph.add(new IfNode(guard.getCondition(), trueSuccessor, falseSuccessor, trueSuccessor == fastPath ? 1 : 0, ProfileSource.INJECTED));
+                IfNode ifNode = graph.add(new IfNode(guard.getCondition(), trueSuccessor, falseSuccessor, trueSuccessor == fastPath ? 1 : 0));
                 guard.replaceAndDelete(fastPath);
                 insert(ifNode, fastPath);
             }
@@ -122,7 +121,7 @@ public class GuardLoweringPhase extends BasePhase<CoreProviders> {
     }
 
     private static boolean assertNoGuardsLeft(StructuredGraph graph) {
-        assert graph.getNodes(GuardNode.TYPE).isEmpty();
+        assert graph.getNodes().filter(GuardNode.class).isEmpty();
         return true;
     }
 
