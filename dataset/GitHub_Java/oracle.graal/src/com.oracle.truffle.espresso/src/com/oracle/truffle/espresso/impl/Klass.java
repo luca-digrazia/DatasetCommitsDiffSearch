@@ -92,6 +92,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     @CompilationFinal //
     private volatile StaticObject mirrorCache;
 
+    private final boolean isArray;
+
     @CompilationFinal private int hierarchyDepth = -1;
 
     protected Object prepareThread;
@@ -136,17 +138,14 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
     public abstract ConstantPool getConstantPool();
 
     public final JavaKind getJavaKind() {
-        return (this instanceof PrimitiveKlass)
-                        ? ((PrimitiveKlass) this).getPrimitiveJavaKind()
-                        : JavaKind.Object;
+        return kind;
     }
 
     public final boolean isArray() {
-        return this instanceof ArrayKlass;
+        return isArray;
     }
 
-    @Override
-    public final boolean isInterface() {
+    public boolean isInterface() {
         // conflict between ModifiersProvider and KlassRef interfaces,
         // so chose the default implementation in ModifiersProvider.
         return ModifiersProvider.super.isInterface();
@@ -223,32 +222,19 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return context;
     }
 
-    @Override
-    public final Meta getMeta() {
-        return getContext().getMeta();
-    }
-
     public final StaticObject tryInitializeAndGetStatics() {
         safeInitialize();
         return getStatics();
     }
 
-    public final StaticObject getStatics() {
-        if (this instanceof ObjectKlass) {
-            return ((ObjectKlass) this).getStaticsImpl();
-        }
-        CompilerDirectives.transferToInterpreter();
-        throw EspressoError.shouldNotReachHere("Primitives/arrays do not have static fields");
-    }
+    public abstract StaticObject getStatics();
 
     /**
      * Checks whether this type is an instance class.
      *
      * @return {@code true} if this type is an instance class
      */
-    public final boolean isInstanceClass() {
-        return (this instanceof ObjectKlass) && !isInterface();
-    }
+    public abstract boolean isInstanceClass();
 
     /**
      * Checks whether this type is primitive.
@@ -256,7 +242,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      * @return {@code true} if this type is primitive
      */
     public final boolean isPrimitive() {
-        return getJavaKind().isPrimitive();
+        return kind.isPrimitive();
     }
 
     /*
@@ -273,19 +259,12 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      *
      * @return {@code true} if this type is initialized
      */
-    public final boolean isInitialized() {
-        return !(this instanceof ObjectKlass) || ((ObjectKlass) this).isInitializedImpl();
-    }
+    public abstract boolean isInitialized();
 
     /**
      * Initializes this type.
      */
-    public final void initialize() {
-        if (this instanceof ObjectKlass) {
-            ((ObjectKlass) this).initializeImpl();
-        }
-        // Array and primitive classes do not require initialization.
-    }
+    public abstract void initialize();
 
     public void verify() {
         /* nop */
@@ -360,10 +339,8 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      * opposed to the unrelated concept specified by {@link Class#isAnonymousClass()}) or
      * {@code null} if this object does not represent a VM anonymous class.
      */
-    public final Klass getHostClass() {
-        return (this instanceof ObjectKlass)
-                        ? ((ObjectKlass) this).getHostClassImpl()
-                        : null;
+    public Klass getHostClass() {
+        return null;
     }
 
     /**
@@ -470,12 +447,14 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         }
     }
 
+    public abstract Klass getComponentType();
+
     public final Klass getSupertype() {
         if (isPrimitive()) {
             return null;
         }
         if (isArray()) {
-            Klass component = ((ArrayKlass) this).getComponentType();
+            Klass component = getComponentType();
             if (this == getMeta().java_lang_Object.array() || component.isPrimitive()) {
                 return getMeta().java_lang_Object;
             }
@@ -616,34 +595,12 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
         return field;
     }
 
-    public final Field lookupFieldTable(int slot) {
-        if (this instanceof ObjectKlass) {
-            return ((ObjectKlass) this).lookupFieldTableImpl(slot);
-        } else if (this instanceof ArrayKlass) {
-            assert getMeta().java_lang_Object == getSuperKlass();
-            // Always null?
-            return getMeta().java_lang_Object.lookupFieldTable(slot);
-        }
-        // Unreachable?
-        assert this instanceof PrimitiveKlass;
-        return null;
-    }
+    public abstract Field lookupFieldTable(int slot);
 
-    public final Field lookupStaticFieldTable(int slot) {
-        if (this instanceof ObjectKlass) {
-            return ((ObjectKlass) this).lookupStaticFieldTableImpl(slot);
-        } else if (this instanceof ArrayKlass) {
-            assert getMeta().java_lang_Object == getSuperKlass();
-            // Always null?
-            return getMeta().java_lang_Object.lookupStaticFieldTable(slot);
-        }
-        // Unreachable?
-        assert this instanceof PrimitiveKlass;
-        return null;
-    }
+    public abstract Field lookupStaticFieldTable(int slot);
 
     public final Method lookupDeclaredMethod(Symbol<Name> methodName, Symbol<Signature> signature) {
-        KLASS_LOOKUP_DECLARED_METHOD_COUNT.inc();
+        declaredMethodLookupCount.inc();
         // TODO(peterssen): Improve lookup performance.
         for (Method method : getDeclaredMethods()) {
             if (methodName.equals(method.getName()) && signature.equals(method.getRawSignature())) {
@@ -663,17 +620,7 @@ public abstract class Klass implements ModifiersProvider, ContextAccess, KlassRe
      */
     public abstract Method lookupMethod(Symbol<Name> methodName, Symbol<Signature> signature, Klass accessingKlass);
 
-    public final Method vtableLookup(int vtableIndex) {
-        if (this instanceof ObjectKlass) {
-            return ((ObjectKlass) this).vtableLookupImpl(vtableIndex);
-        } else if (this instanceof ArrayKlass) {
-            assert getMeta().java_lang_Object == getSuperClass();
-            return getMeta().java_lang_Object.vtableLookup(vtableIndex);
-        }
-        // Unreachable?
-        assert this instanceof PrimitiveKlass;
-        return null;
-    }
+    public abstract Method vtableLookup(int vtableIndex);
 
     public Method lookupPolysigMethod(Symbol<Name> methodName, Symbol<Signature> signature) {
         if (methodName == Name.invoke || methodName == Name.invokeExact) {
