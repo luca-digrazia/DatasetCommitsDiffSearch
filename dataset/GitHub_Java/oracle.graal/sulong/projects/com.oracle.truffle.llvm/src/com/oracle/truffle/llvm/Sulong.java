@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2018, Oracle and/or its affiliates.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates.
  *
  * All rights reserved.
  *
@@ -50,10 +50,11 @@ import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.source.Source;
 import com.oracle.truffle.api.source.SourceSection;
 import com.oracle.truffle.llvm.Runner.SulongLibrary;
+import com.oracle.truffle.llvm.parser.LLVMParserResult;
 import com.oracle.truffle.llvm.runtime.Configuration;
 import com.oracle.truffle.llvm.runtime.LLVMContext;
+import com.oracle.truffle.llvm.runtime.LLVMContext.ExternalLibrary;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
-import com.oracle.truffle.llvm.runtime.LLVMSymbol;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMDebuggerScopeFactory;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
@@ -64,7 +65,7 @@ import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.options.SulongEngineOption;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 
-@TruffleLanguage.Registration(id = "llvm", name = "llvm", version = "6.0.0", internal = false, interactive = false, defaultMimeType = Sulong.LLVM_BITCODE_MIME_TYPE, //
+@TruffleLanguage.Registration(id = Sulong.ID, name = Sulong.NAME, version = "6.0.0", internal = false, interactive = false, defaultMimeType = Sulong.LLVM_BITCODE_MIME_TYPE, //
                 byteMimeTypes = {Sulong.LLVM_BITCODE_MIME_TYPE, Sulong.LLVM_ELF_SHARED_MIME_TYPE, Sulong.LLVM_ELF_EXEC_MIME_TYPE}, //
                 characterMimeTypes = {Sulong.LLVM_BITCODE_BASE64_MIME_TYPE, Sulong.LLVM_SULONG_TYPE})
 @ProvidedTags({StandardTags.StatementTag.class, StandardTags.CallTag.class, StandardTags.RootTag.class, DebuggerTags.AlwaysHalt.class})
@@ -73,10 +74,31 @@ public final class Sulong extends LLVMLanguage {
     private static final List<Configuration> configurations = new ArrayList<>();
 
     static {
-        configurations.add(new BasicConfiguration());
-        for (Configuration f : ServiceLoader.load(Configuration.class)) {
+        ClassLoader cl = Sulong.class.getClassLoader();
+        for (Configuration f : ServiceLoader.load(Configuration.class, cl)) {
             configurations.add(f);
         }
+        configurations.add(new NativeConfiguration());
+    }
+
+    private volatile List<LLVMParserResult> cachedDefaultDependencies;
+    private volatile ExternalLibrary[] cachedSulongLibraries;
+
+    private synchronized void parseDefaultDependencies(Runner runner) {
+        if (cachedDefaultDependencies == null) {
+            ArrayList<LLVMParserResult> parserResults = new ArrayList<>();
+            cachedSulongLibraries = runner.parseDefaultLibraries(parserResults);
+            parserResults.trimToSize();
+            cachedDefaultDependencies = Collections.unmodifiableList(parserResults);
+        }
+    }
+
+    ExternalLibrary[] getDefaultDependencies(Runner runner, List<LLVMParserResult> parserResults) {
+        if (cachedDefaultDependencies == null) {
+            parseDefaultDependencies(runner);
+        }
+        parserResults.addAll(cachedDefaultDependencies);
+        return cachedSulongLibraries;
     }
 
     @TruffleBoundary
@@ -100,41 +122,21 @@ public final class Sulong extends LLVMLanguage {
     }
 
     @Override
+    protected void initializeContext(LLVMContext context) {
+        context.initialize();
+    }
+
+    @Override
     protected void disposeContext(LLVMContext context) {
         LLVMMemory memory = getCapability(LLVMMemory.class);
         context.dispose(memory);
     }
 
     @Override
-    protected CallTarget parse(com.oracle.truffle.api.TruffleLanguage.ParsingRequest request) throws Exception {
+    protected CallTarget parse(ParsingRequest request) {
         Source source = request.getSource();
         LLVMContext context = findLLVMContext();
         return new Runner(context).parse(source);
-    }
-
-    @Override
-    @SuppressWarnings("deprecation") // for compatibility, will be removed in a future release
-    protected Object findExportedSymbol(LLVMContext context, String globalName, boolean onlyExplicit) {
-        String atname = globalName.startsWith("@") ? globalName : "@" + globalName; // for interop
-        LLVMSymbol result = null;
-        if (context.getGlobalScope().contains(atname)) {
-            result = context.getGlobalScope().get(atname);
-        } else if (context.getGlobalScope().contains(globalName)) {
-            result = context.getGlobalScope().get(globalName);
-        }
-        return dealias(result);
-    }
-
-    private static Object dealias(LLVMSymbol symbol) {
-        if (symbol == null) {
-            return null;
-        } else if (symbol.isFunction()) {
-            return symbol.asFunction();
-        } else if (symbol.isGlobalVariable()) {
-            return symbol.asGlobalVariable();
-        } else {
-            throw new IllegalStateException("Unknown symbol: " + symbol.getClass());
-        }
     }
 
     @Override
@@ -180,13 +182,12 @@ public final class Sulong extends LLVMLanguage {
 
     @TruffleBoundary
     private static Configuration getActiveConfiguration(Env env) {
-        String name = env.getOptions().get(SulongEngineOption.CONFIGURATION);
         for (Configuration config : configurations) {
-            if (name.equals(config.getConfigurationName())) {
+            if (config.isActive(env)) {
                 return config;
             }
         }
-        throw new IllegalStateException("Unknown configuration: " + name);
+        throw new IllegalStateException("should not reach here: no configuration found");
     }
 
     @Override
@@ -209,7 +210,9 @@ public final class Sulong extends LLVMLanguage {
     @Override
     protected void disposeThread(LLVMContext context, Thread thread) {
         super.disposeThread(context, thread);
-        context.getThreadingStack().freeStack(getCapability(LLVMMemory.class), thread);
+        if (context.isInitialized()) {
+            context.getThreadingStack().freeStack(getCapability(LLVMMemory.class), thread);
+        }
     }
 
     @Override

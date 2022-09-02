@@ -61,7 +61,6 @@ import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.ControlFlowException;
 import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.api.nodes.RootNode;
-import com.oracle.truffle.llvm.instruments.trace.LLVMTracerInstrument;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.LLVMSourceContext;
 import com.oracle.truffle.llvm.runtime.debug.type.LLVMSourceType;
@@ -147,8 +146,6 @@ public final class LLVMContext {
 
     private final NodeFactory nodeFactory;
 
-    private final LLVMTracerInstrument tracer;
-
     private final class LLVMFunctionPointerRegistry {
         private int currentFunctionIndex = 1;
         private final HashMap<LLVMNativePointer, LLVMFunctionDescriptor> functionDescriptors = new HashMap<>();
@@ -198,17 +195,6 @@ public final class LLVMContext {
         addLibraryPaths(SulongEngineOption.getPolyglotOptionSearchPaths(env));
         if (languageHome != null) {
             addLibraryPath(languageHome);
-        }
-
-        final String traceOption = env.getOptions().get(SulongEngineOption.TRACE_IR);
-        if (!"".equalsIgnoreCase(traceOption)) {
-            if (!env.getOptions().get(SulongEngineOption.LL_DEBUG)) {
-                throw new IllegalStateException("\'--llvm.traceIR\' requires \'--llvm.llDebug=true\'");
-            }
-            tracer = new LLVMTracerInstrument();
-            tracer.initialize(env, traceOption);
-        } else {
-            tracer = null;
         }
     }
 
@@ -365,10 +351,6 @@ public final class LLVMContext {
                 }
             }
         }
-
-        if (tracer != null) {
-            tracer.dispose();
-        }
     }
 
     public NodeFactory getNodeFactory() {
@@ -423,27 +405,19 @@ public final class LLVMContext {
         return addExternalLibrary(ExternalLibrary.internal(path, isNative));
     }
 
-    /**
-     * @return null if already loaded
-     */
     public ExternalLibrary addExternalLibrary(String lib, boolean isNative) {
         CompilerAsserts.neverPartOfCompilation();
         Path path = locateExternalLibrary(lib);
-        ExternalLibrary newLib = ExternalLibrary.external(path, isNative);
-        ExternalLibrary existingLib = addExternalLibrary(newLib);
-        return existingLib == newLib ? newLib : null;
+        return addExternalLibrary(ExternalLibrary.external(path, isNative));
     }
 
     private ExternalLibrary addExternalLibrary(ExternalLibrary externalLib) {
         int index = externalLibraries.indexOf(externalLib);
-        if (index >= 0) {
-            ExternalLibrary ret = externalLibraries.get(index);
-            assert ret.equals(externalLib);
-            return ret;
-        } else {
+        if (index < 0) {
             externalLibraries.add(externalLib);
             return externalLib;
         }
+        return null;
     }
 
     public List<ExternalLibrary> getExternalLibraries(Predicate<ExternalLibrary> filter) {
@@ -818,11 +792,7 @@ public final class LLVMContext {
         }
 
         private static String extractName(Path path) {
-            Path filename = path.getFileName();
-            if (filename == null) {
-                throw new IllegalArgumentException("Path " + path + " is empty");
-            }
-            String nameWithExt = filename.toString();
+            String nameWithExt = path.getFileName().toString();
             int lengthWithoutExt = nameWithExt.lastIndexOf(".");
             if (lengthWithoutExt > 0) {
                 return nameWithExt.substring(0, lengthWithoutExt);
