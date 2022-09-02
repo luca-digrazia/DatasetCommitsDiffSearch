@@ -30,10 +30,10 @@ import org.graalvm.nativeimage.Platforms;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CLongPointer;
 import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.impl.DeprecatedPlatform;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
-import com.oracle.svm.core.RegisterDumper;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.annotate.Uninterruptible;
@@ -46,14 +46,14 @@ import com.oracle.svm.core.util.VMError;
 
 import jdk.vm.ci.amd64.AMD64;
 
-@Platforms({Platform.DARWIN_AMD64.class, Platform.DARWIN_AARCH64.class})
+@Platforms({DeprecatedPlatform.DARWIN_SUBSTITUTION_AMD64.class, Platform.DARWIN_AMD64.class, Platform.DARWIN_AARCH64.class})
 @AutomaticFeature
 class DarwinUContextRegisterDumperFeature implements Feature {
     @Override
     public void afterRegistration(AfterRegistrationAccess access) {
         VMError.guarantee(AMD64.r14.equals(SubstrateAMD64RegisterConfig.HEAP_BASE_REGISTER_CANDIDATE));
         VMError.guarantee(AMD64.r15.equals(SubstrateAMD64RegisterConfig.THREAD_REGISTER_CANDIDATE));
-        ImageSingletons.add(RegisterDumper.class, new DarwinUContextRegisterDumper());
+        ImageSingletons.add(UContextRegisterDumper.class, new DarwinUContextRegisterDumper());
     }
 }
 
