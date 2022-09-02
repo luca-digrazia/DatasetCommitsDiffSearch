@@ -793,22 +793,18 @@ public class FlatNodeGenFactory {
         Set<String> languagesChecked = new HashSet<>();
 
         for (SpecializationData specialization : filteredSpecializations) {
-
-            // we need to copy otherwise local variables of caches may conflict.
-            FrameState innerFrameState = frameState.copy();
-
             SpecializationGroup specializationGroup = SpecializationGroup.create(Arrays.asList(specialization));
 
             for (CacheExpression cache : specialization.getCaches()) {
                 if (!cache.isAlwaysInitialized()) {
                     continue;
                 }
-                setCacheInitialized(innerFrameState, specialization, cache, true);
+                setCacheInitialized(frameState, specialization, cache, true);
             }
 
             List<IfTriple> tripples = new ArrayList<>();
             for (AssumptionExpression assumption : specialization.getAssumptionExpressions()) {
-                tripples.addAll(createAssumptionSlowPathTriples(innerFrameState, specializationGroup, assumption));
+                tripples.addAll(createAssumptionSlowPathTriples(frameState, specializationGroup, assumption));
             }
 
             /*
@@ -896,13 +892,13 @@ public class FlatNodeGenFactory {
 
             for (GuardExpression guard : usedGuards) {
                 Set<CacheExpression> caches = specialization.getBoundCaches(guard.getExpression(), true);
-                tripples.addAll(initializeCaches(innerFrameState, NodeExecutionMode.SLOW_PATH, specializationGroup, caches, true, false));
-                tripples.add(createMethodGuardCheck(innerFrameState, specialization, guard, NodeExecutionMode.SLOW_PATH));
+                tripples.addAll(initializeCaches(frameState, NodeExecutionMode.SLOW_PATH, specializationGroup, caches, true, false));
+                tripples.add(createMethodGuardCheck(frameState, specialization, guard, NodeExecutionMode.SLOW_PATH));
             }
 
             BlockState state = IfTriple.materialize(builder, tripples, false);
 
-            builder.tree(createSpecialize(builder, innerFrameState, specializationGroup, specialization, true));
+            builder.tree(createSpecialize(builder, frameState, specializationGroup, specialization, true));
 
             for (CacheExpression cache : specialization.getCaches()) {
                 if (cache.isAlwaysInitialized()) {
@@ -919,13 +915,13 @@ public class FlatNodeGenFactory {
                  */
                 boolean cachedLibrary = cache.isCachedLibrary();
                 if (cachedLibrary) {
-                    builder.startIf().tree(createCacheReference(innerFrameState, specialization, cache)).instanceOf(aotProviderType).end().startBlock();
+                    builder.startIf().tree(createCacheReference(frameState, specialization, cache)).instanceOf(aotProviderType).end().startBlock();
                 }
                 if (NodeCodeGenerator.isSpecializedNode(cache.getParameter().getType()) || cachedLibrary) {
                     builder.startStatement();
                     builder.string("(");
                     builder.cast(aotProviderType);
-                    builder.tree(createCacheReference(innerFrameState, specialization, cache));
+                    builder.tree(createCacheReference(frameState, specialization, cache));
                     builder.string(")");
                     builder.string(".prepareForAOT(language, root)");
                     builder.end();
@@ -938,7 +934,7 @@ public class FlatNodeGenFactory {
             if (usedGuards.isEmpty()) {
                 bulkStateSet.add(specialization);
             } else {
-                builder.tree(multiState.createSet(innerFrameState, new SpecializationData[]{specialization}, true, false));
+                builder.tree(multiState.createSet(frameState, new SpecializationData[]{specialization}, true, false));
             }
             builder.end(state.blockCount);
 

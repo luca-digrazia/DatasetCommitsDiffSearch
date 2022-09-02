@@ -510,13 +510,8 @@ public class ExportsGenerator extends CodeTypeElementFactory<ExportsData> {
         String libraryName = libraryExports.getLibrary().getTemplateType().getSimpleName().toString();
         CodeTypeElement providerClass = createClass(libraryExports, null, modifiers(PUBLIC, STATIC, FINAL), libraryName + "EagerProvider", null);
         providerClass.getImplements().add(context.getTypes().EagerExportProvider);
-
-        ExecutableElement init = ElementUtils.findMethod((DeclaredType) genClass.asType(), "init");
-        if (init == null) {
-            CodeExecutableElement genInit = genClass.add(new CodeExecutableElement(modifiers(PRIVATE, STATIC), context.getType(void.class), "init"));
-            genInit.createBuilder().lineComment("This method is intended to ensure class initialization.");
-            init = genInit;
-        }
+        CodeExecutableElement init = genClass.add(new CodeExecutableElement(modifiers(PRIVATE, STATIC), context.getType(void.class), "init"));
+        init.createBuilder().lineComment("This method is intended to ensure class initialization.");
 
         for (ExecutableElement method : ElementFilter.methodsIn(context.getTypes().EagerExportProvider.asElement().getEnclosedElements())) {
             CodeExecutableElement m = null;

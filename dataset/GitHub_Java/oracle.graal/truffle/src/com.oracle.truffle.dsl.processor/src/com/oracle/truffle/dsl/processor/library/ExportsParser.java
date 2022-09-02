@@ -125,6 +125,8 @@ public class ExportsParser extends AbstractParser<ExportsData> {
             return model;
         }
 
+        parsedNodeCache.clear();
+
         // set of types that contribute members
         Set<TypeElement> declaringTypes = new HashSet<>();
         Set<TypeElement> declaringInTemplateTypes = new HashSet<>();
@@ -241,7 +243,6 @@ public class ExportsParser extends AbstractParser<ExportsData> {
          * Generate synthetic exports for export delegation.
          */
         for (ExportsLibrary exportsLibrary : model.getExportedLibraries().values()) {
-
             if (!exportsLibrary.hasExportDelegation()) {
                 continue;
             }
@@ -343,23 +344,20 @@ public class ExportsParser extends AbstractParser<ExportsData> {
          * Third pass: initialize and further parsing that need both method and node to be
          * available.
          */
-        for (ExportsLibrary exportsLibrary : declaredExports) {
-            // recreate cache for every exports library to not confuse exports configuration
-            Map<String, NodeData> parsedNodeCache = new HashMap<>();
-            for (ExportMessageData exportedElement : exportsLibrary.getExportedMessages().values()) {
-                if (exportedElement.isOverriden()) {
-                    // must not initialize overridden elements because otherwise the parsedNodeCache
-                    // gets confused.
-                    continue;
-                }
-                Element member = exportedElement.getMessageElement();
-                if (isMethodElement(member)) {
-                    initializeExportedMethod(parsedNodeCache, model, exportedElement);
-                } else if (isNodeElement(member)) {
-                    initializeExportedNode(parsedNodeCache, exportedElement);
-                } else {
-                    throw new AssertionError("should not be reachable");
-                }
+        for (ExportMessageData exportedElement : exportedElements) {
+            if (exportedElement.isOverriden()) {
+                // must not initialize overridden elements because otherwise the parsedNodeCache
+                // gets
+                // confused.
+                continue;
+            }
+            Element member = exportedElement.getMessageElement();
+            if (isMethodElement(member)) {
+                initializeExportedMethod(model, exportedElement);
+            } else if (isNodeElement(member)) {
+                initializeExportedNode(exportedElement);
+            } else {
+                throw new AssertionError("should not be reachable");
             }
         }
 
@@ -981,7 +979,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
         return exportMessages;
     }
 
-    private void initializeExportedNode(Map<String, NodeData> parsedNodeCache, ExportMessageData exportElement) {
+    private void initializeExportedNode(ExportMessageData exportElement) {
         TypeElement exportedTypeElement = (TypeElement) exportElement.getMessageElement();
         if (exportedTypeElement.getModifiers().contains(Modifier.PRIVATE)) {
             exportElement.addError("Exported message node class must not be private.");
@@ -1057,7 +1055,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
             return;
         }
 
-        NodeData parsedNodeData = parseNode(parsedNodeCache, exportedTypeElement, exportElement, typeMembers);
+        NodeData parsedNodeData = parseNode(exportedTypeElement, exportElement, typeMembers);
         if (parsedNodeData == null) {
             exportElement.addError("Could not parse invalid node.");
             return;
@@ -1067,7 +1065,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
         exportElement.setSpecializedNode(parsedNodeData);
     }
 
-    private void initializeExportedMethod(Map<String, NodeData> parsedNodeCache, ExportsData model, ExportMessageData exportedElement) {
+    private void initializeExportedMethod(ExportsData model, ExportMessageData exportedElement) {
         ExecutableElement exportedMethod = (ExecutableElement) exportedElement.getMessageElement();
         LibraryMessage message = exportedElement.getResolvedMessage();
         ExportsLibrary exportsLibrary = exportedElement.getExportsLibrary();
@@ -1156,7 +1154,7 @@ public class ExportsParser extends AbstractParser<ExportsData> {
                 element.getModifiers().add(Modifier.STATIC);
             }
             type.add(element);
-            NodeData parsedNodeData = parseNode(parsedNodeCache, type, exportedElement, Collections.emptyList());
+            NodeData parsedNodeData = parseNode(type, exportedElement, Collections.emptyList());
             if (parsedNodeData == null) {
                 exportedElement.addError("Error could not parse synthetic node: %s", element);
             }
@@ -1172,7 +1170,9 @@ public class ExportsParser extends AbstractParser<ExportsData> {
 
     // this cache is also needed for correctness
     // we only want to generate code for this once.
-    private NodeData parseNode(Map<String, NodeData> parsedNodeCache, TypeElement nodeType, ExportMessageData exportedMessage, List<? extends Element> members) {
+    final Map<String, NodeData> parsedNodeCache = new HashMap<>();
+
+    private NodeData parseNode(TypeElement nodeType, ExportMessageData exportedMessage, List<? extends Element> members) {
         String nodeTypeId = ElementUtils.getTypeId(nodeType.asType());
         // we skip the node cache for generated accepts messages
         if (!exportedMessage.isGenerated()) {
