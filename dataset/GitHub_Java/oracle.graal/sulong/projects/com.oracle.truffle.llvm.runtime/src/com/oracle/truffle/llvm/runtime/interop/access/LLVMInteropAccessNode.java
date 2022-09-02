@@ -32,7 +32,6 @@ package com.oracle.truffle.llvm.runtime.interop.access;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.ValueType;
 import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.GenerateAOT;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
@@ -42,7 +41,6 @@ import com.oracle.truffle.api.interop.UnsupportedMessageException;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.llvm.runtime.except.LLVMPolyglotException;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.StructMember;
-import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType.Structured;
 import com.oracle.truffle.llvm.runtime.nodes.api.LLVMNode;
 
 @GenerateUncached
@@ -85,33 +83,18 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
         return makeAccessLocation.execute(foreign, index, type.elementType, restOffset);
     }
 
-    /**
-     * @param type
-     */
-    @Specialization(guards = {"checkMember(type, cachedMember, offset)", "cachedMember.isInheritanceMember"})
-    AccessLocation doClazzInheritance(LLVMInteropType.Clazz type, Object foreign, long offset,
-                    @Cached("findMember(type, offset)") StructMember cachedMember,
-                    @Cached LLVMInteropAccessNode recursiveNode) {
-        return recursiveNode.execute((Structured) cachedMember.type, foreign, offset - cachedMember.startOffset);
-    }
-
-    @Specialization(guards = {"checkMember(type, cachedMember, offset)", "!cachedMember.isInheritanceMember"})
+    @Specialization(guards = "checkMember(type, cachedMember, offset)")
     AccessLocation doStructMember(@SuppressWarnings("unused") LLVMInteropType.Struct type, Object foreign, long offset,
                     @Cached("findMember(type, offset)") StructMember cachedMember,
                     @Cached("create()") MakeAccessLocation makeAccessLocation) {
         return makeAccessLocation.execute(foreign, cachedMember.name, cachedMember.type, offset - cachedMember.startOffset);
     }
 
-    @Specialization(replaces = {"doStructMember", "doClazzInheritance"})
+    @Specialization(replaces = "doStructMember")
     AccessLocation doStruct(LLVMInteropType.Struct type, Object foreign, long offset,
-                    @Cached LLVMInteropAccessNode recursiveNode,
                     @Cached MakeAccessLocation makeAccessLocation) {
         StructMember member = findMember(type, offset);
-        if (member.isInheritanceMember) {
-            return recursiveNode.execute((Structured) member.type, foreign, offset - member.startOffset);
-        } else {
-            return makeAccessLocation.execute(foreign, member.name, member.type, offset - member.startOffset);
-        }
+        return makeAccessLocation.execute(foreign, member.name, member.type, offset - member.startOffset);
     }
 
     static boolean checkMember(LLVMInteropType.Struct struct, StructMember member, long offset) {
@@ -126,17 +109,6 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
         }
 
         CompilerDirectives.transferToInterpreterAndInvalidate();
-        throw new IllegalStateException("invalid struct access");
-    }
-
-    static StructMember findMember(LLVMInteropType.Struct struct, String name) {
-        for (StructMember m : struct.members) {
-            if (m.name.contentEquals(name)) {
-                return m;
-            }
-        }
-
-        CompilerDirectives.transferToInterpreter();
         throw new IllegalStateException("invalid struct access");
     }
 
@@ -155,7 +127,6 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
         }
 
         @Specialization(limit = "3")
-        @GenerateAOT.Exclude
         AccessLocation doRecursiveObject(Object foreign, String identifier, LLVMInteropType.Structured type, long restOffset,
                         @CachedLibrary("foreign") InteropLibrary interop,
                         @Cached("create()") LLVMInteropAccessNode recursive) {
@@ -174,7 +145,6 @@ abstract class LLVMInteropAccessNode extends LLVMNode {
         }
 
         @Specialization(limit = "3")
-        @GenerateAOT.Exclude
         AccessLocation doRecursiveArray(Object foreign, long index, LLVMInteropType.Structured type, long restOffset,
                         @CachedLibrary("foreign") InteropLibrary interop,
                         @Cached("create()") LLVMInteropAccessNode recursive) {
