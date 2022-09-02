@@ -238,6 +238,7 @@ import java.util.List;
 import java.util.TreeSet;
 
 import org.graalvm.collections.EconomicMap;
+import org.graalvm.collections.EconomicSet;
 import org.graalvm.collections.Equivalence;
 import org.graalvm.compiler.bytecode.Bytecode;
 import org.graalvm.compiler.bytecode.BytecodeLookupSwitch;
@@ -1079,7 +1080,7 @@ public final class BciBlockMapping {
                 BciBlock successor = block.getSuccessor(i);
                 JsrScope nextScope = scope;
                 if (successor == block.getJsrSuccessor()) {
-                    nextScope = scope.push(block.getJsrReturnBci(), successor);
+                    nextScope = scope.push(block.getJsrReturnBci());
                 }
                 if (successor == block.getRetSuccessor()) {
                     nextScope = scope.pop();
@@ -1109,23 +1110,44 @@ public final class BciBlockMapping {
             }
         }
         for (BciBlock successor : block.getSuccessors()) {
-            if (!jsrVisited.contains(successor) && shouldFollowEdge(successor, scope)) {
+            if (!jsrVisited.contains(successor) && shouldFollowEdge(blockMap, successor, scope)) {
                 createJsrAlternatives(blockMap, successor);
             }
         }
     }
 
-    private static boolean shouldFollowEdge(BciBlock successor, JsrScope scope) {
-        if (successor instanceof ExceptionDispatchBlock && scope.getJsrEntryBlock() != null) {
-            ExceptionDispatchBlock exceptionDispatchBlock = (ExceptionDispatchBlock) successor;
-            int bci = scope.getJsrEntryBlock().startBci;
-            if (exceptionDispatchBlock.handler.getStartBCI() < bci && bci < exceptionDispatchBlock.handler.getEndBCI()) {
-                // Handler covers start of JSR block and the bci before that => don't follow edge.
-                return false;
+    private static boolean shouldFollowEdge(BciBlock[] blockMap, BciBlock successor, JsrScope scope) {
+        if (successor instanceof ExceptionDispatchBlock && !scope.isEmpty()) {
+            boolean successorReachableOutside = false;
+            for (int i = 0; i < successor.getSuccessorCount(); ++i) {
+                successorReachableOutside |= checkReachability(blockMap[0], successor.getSuccessor(i), scope);
             }
+            return !successorReachableOutside;
         }
 
         return true;
+    }
+
+    private static boolean checkReachability(BciBlock start, BciBlock block, JsrScope scope) {
+        EconomicSet<BciBlock> reachableBlocks = EconomicSet.create(Equivalence.IDENTITY);
+        ArrayList<BciBlock> workList = new ArrayList<>();
+        workList.add(start);
+        reachableBlocks.add(start);
+
+        while (!workList.isEmpty()) {
+            BciBlock current = workList.remove(workList.size() - 1);
+            for (BciBlock successor : current.getSuccessors()) {
+                if (!reachableBlocks.contains(successor)) {
+                    reachableBlocks.add(successor);
+                    if (successor.getJsrScope().isPrefixOf(scope)) {
+                        // Only follow blocks in parent scopes of myself.
+                        workList.add(successor);
+                    }
+                }
+            }
+        }
+
+        return reachableBlocks.contains(block);
     }
 
     private ExceptionDispatchBlock handleExceptions(BciBlock[] blockMap, int bci) {
