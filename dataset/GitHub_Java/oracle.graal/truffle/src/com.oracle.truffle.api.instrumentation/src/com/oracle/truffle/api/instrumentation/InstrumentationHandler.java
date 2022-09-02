@@ -224,7 +224,7 @@ final class InstrumentationHandler {
 
     }
 
-    private class FindSourcesVisitor extends AbstractNodeVisitor {
+    private static class FindSourcesVisitor extends AbstractNodeVisitor {
 
         private final Map<Source, Void> sources;
         private final AtomicReference<SourceList> sourcesListRef;
@@ -241,8 +241,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, Node oldNode, Set<Class<? extends Tag>> materializeTags,
-                        SourceSection sourceSection) {
+        protected void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection) {
             if (sourceSection != null) {
                 adoptSource(sourceSection.getSource());
             }
@@ -351,7 +350,7 @@ final class InstrumentationHandler {
 
         // fast path no bindings attached
         if (!executionBindings.isEmpty()) {
-            visitRoot(root, root, new InsertWrappersVisitor(executionBindings, true), false);
+            visitRoot(root, root, new InsertWrappersVisitor(executionBindings), false);
         }
     }
 
@@ -855,7 +854,7 @@ final class InstrumentationHandler {
             visitRoot(rootNode, parentInstrumentable, new NotifyLoadedListenerVisitor(sourceSectionBindings), true);
         }
         if (!executionBindings.isEmpty()) {
-            visitRoot(rootNode, parentInstrumentable, new InsertWrappersVisitor(executionBindings, false), true);
+            visitRoot(rootNode, parentInstrumentable, new InsertWrappersVisitor(executionBindings), true);
         }
     }
 
@@ -936,31 +935,28 @@ final class InstrumentationHandler {
         return newBindings;
     }
 
-    private void insertWrapper(Node instrumentableNode, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection sourceSection) {
+    private void insertWrapper(Node instrumentableNode, Node oldNode, SourceSection sourceSection) {
         Lock lock = InstrumentAccessor.nodesAccess().getLock(instrumentableNode);
         try {
             lock.lock();
-            insertWrapperImpl(instrumentableNode, oldNode, materializeTags, sourceSection);
+            insertWrapperImpl(instrumentableNode, oldNode, sourceSection);
         } finally {
             lock.unlock();
         }
     }
 
     @SuppressWarnings({"unchecked", "deprecation"})
-    private void insertWrapperImpl(Node node, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection sourceSection) {
+    private void insertWrapperImpl(Node node, Node oldNode, SourceSection sourceSection) {
         Node parent = node.getParent();
         if (parent instanceof WrapperNode) {
             // already wrapped, need to invalidate the wrapper something changed
             invalidateWrapperImpl((WrapperNode) parent, node);
-            if (node != oldNode) {
-                ((WrapperNode) parent).getProbeNode().setOldNode(oldNode, materializeTags);
+            if (oldNode != null) {
+                ((WrapperNode) parent).getProbeNode().setOldNode(oldNode);
             }
             return;
         }
         ProbeNode probe = new ProbeNode(InstrumentationHandler.this, sourceSection);
-        if (node != oldNode) {
-            probe.setOldNode(oldNode, materializeTags);
-        }
         WrapperNode wrapper;
         if (node instanceof InstrumentableNode) {
             try {
@@ -1153,13 +1149,7 @@ final class InstrumentationHandler {
             if (TRACE) {
                 trace("BEGIN: Traverse root %s for %s%n", root.toString(), visitor);
             }
-            Lock lock = InstrumentAccessor.nodesAccess().getLock(node);
-            try {
-                lock.lock();
-                visitor.visit(node);
-            } finally {
-                lock.unlock();
-            }
+            visitor.visit(node);
             if (TRACE) {
                 trace("END: Traverse root %s for %s%n", root.toString(), visitor);
             }
@@ -1244,18 +1234,12 @@ final class InstrumentationHandler {
         exception.printStackTrace(stream);
     }
 
-    private static WrapperNode getWrapperNode(Node node) {
-        Node parent = node.getParent();
-        return parent instanceof WrapperNode ? (WrapperNode) parent : null;
-    }
-
-    private abstract class AbstractNodeVisitor implements NodeVisitor {
+    private abstract static class AbstractNodeVisitor implements NodeVisitor {
 
         RootNode root;
         SourceSection rootSourceSection;
         Set<Class<?>> providedTags;
         Set<?> materializeLimitedTags;
-        boolean firstExecution = false;
 
         /* cached root bits read from the root node. value is reliable. */
         int rootBits;
@@ -1295,9 +1279,9 @@ final class InstrumentationHandler {
         }
 
         private Node savedParent;
+        protected Node oldNodeReference;
         private SourceSection savedParentSourceSection;
 
-        @SuppressWarnings("unchecked")
         public final boolean visit(Node originalNode) {
             Node node = originalNode;
             SourceSection sourceSection = node.getSourceSection();
@@ -1307,13 +1291,12 @@ final class InstrumentationHandler {
             if (instrumentable) {
                 computeRootBits(sourceSection);
                 Node oldNode = node;
-                Set<Class<? extends Tag>> materializeTags = (Set<Class<? extends Tag>>) (materializeLimitedTags == null ? providedTags : materializeLimitedTags);
-                Node[] oldSubTreeRoots = new Node[0];
                 if (!visitingOldNodes) {
-                    node = materializeSyntaxNodes(node, sourceSection, materializeTags);
-                    // Assert no repeated materialization with the same tags
-                    assert node == materializeSyntaxNodes(node, sourceSection, materializeTags);
-                    if (node != oldNode) {
+                    Node materializedNode = materializeSyntaxNodes(node, sourceSection);
+                    if (materializedNode != oldNode) {
+                        // If this line is reached, both oldNode and materializedNode implement
+                        // InstrumentableNode.
+                        node = replaceByMaterializedNode((InstrumentableNode) oldNode, (InstrumentableNode) materializedNode);
                         /*
                          * We also need to traverse all old children on materialization. This is
                          * necessary if the old node is still currently executing and does not yet
@@ -1322,43 +1305,36 @@ final class InstrumentationHandler {
                          * as well. This is especially problematic for long or infinite loops in
                          * combination with cancel events.
                          */
-                        oldSubTreeRoots = new Node[]{oldNode};
-                    }
-                }
-                /*
-                 * We also need to traverse all old children that are no longer reachable in the AST
-                 * due to previous materializations.
-                 */
-                WrapperNode wrapperNode = getWrapperNode(node);
-                Node[] additionalOldSubTreeRoots = (wrapperNode != null ? wrapperNode.getProbeNode().getOldNodes() : new Node[0]);
-                oldSubTreeRoots = Arrays.copyOf(oldSubTreeRoots, oldSubTreeRoots.length + additionalOldSubTreeRoots.length);
-                System.arraycopy(additionalOldSubTreeRoots, 0, oldSubTreeRoots, oldSubTreeRoots.length - additionalOldSubTreeRoots.length, additionalOldSubTreeRoots.length);
-                if (oldSubTreeRoots.length > 0) {
-                    boolean wasVisitingOldNodes = visitingOldNodes;
-                    visitingOldNodes = true;
-                    try {
-                        for (Node subTreeRoot : oldSubTreeRoots) {
-                            NodeUtil.forEachChild(subTreeRoot, this);
+                        visitingOldNodes = true;
+                        try {
+                            NodeUtil.forEachChild(oldNode, this);
+                        } finally {
+                            visitingOldNodes = false;
                         }
-                    } finally {
-                        visitingOldNodes = wasVisitingOldNodes;
+                    } else {
+                        /*
+                         * We also need to traverse all old children that are no longer reachable in
+                         * the AST due to previous materialization
+                         */
+                        WrapperNode wrapperNode = getWrapperNode(node);
+                        Node oldNodeFromProbe = (wrapperNode != null ? wrapperNode.getProbeNode().getOldNode() : null);
+                        if (oldNodeFromProbe != null) {
+                            visitingOldNodes = true;
+                            try {
+                                NodeUtil.forEachChild(oldNodeFromProbe, this);
+                            } finally {
+                                visitingOldNodes = false;
+                            }
+                        }
                     }
                 }
-                // Here, oldNode is the root of the old tree only if materialization happened. If
-                // the root of the old tree was obtained from the probe node, then oldNode == node
-                // here, because we don't need to set the old tree reference to the ProbeNode in
-                // this case.
-                visitInstrumentable(this.savedParent, this.savedParentSourceSection, node, firstExecution ? node : oldNode, materializeTags, sourceSection);
-                if (!firstExecution && node != oldNode) {
-                    // If node is not the same as the oldNode and a wrapper was not created or it
-                    // was not updated, we need to create or update the wrapper otherwise reference
-                    // to the old node would be lost.
-                    wrapperNode = getWrapperNode(node);
-                    if (wrapperNode == null) {
-                        insertWrapper(node, oldNode, materializeTags, sourceSection);
-                    } else {
-                        wrapperNode.getProbeNode().setOldNode(oldNode, materializeTags);
-                    }
+                if (oldNode != node) {
+                    this.oldNodeReference = oldNode;
+                }
+                try {
+                    visitInstrumentable(this.savedParent, this.savedParentSourceSection, node, sourceSection);
+                } finally {
+                    this.oldNodeReference = null;
                 }
                 previousParent = this.savedParent;
                 previousParentSourceSection = this.savedParentSourceSection;
@@ -1376,10 +1352,17 @@ final class InstrumentationHandler {
             return true;
         }
 
-        private Node materializeSyntaxNodes(Node instrumentableNode, SourceSection sourceSection, Set<Class<? extends Tag>> materializeTags) {
+        private WrapperNode getWrapperNode(Node node) {
+            Node parent = node.getParent();
+            return parent instanceof WrapperNode ? (WrapperNode) parent : null;
+        }
+
+        @SuppressWarnings("unchecked")
+        private Node materializeSyntaxNodes(Node instrumentableNode, SourceSection sourceSection) {
             if (instrumentableNode instanceof InstrumentableNode) {
                 InstrumentableNode currentNode = (InstrumentableNode) instrumentableNode;
                 assert currentNode.isInstrumentable();
+                Set<Class<? extends Tag>> materializeTags = (Set<Class<? extends Tag>>) (materializeLimitedTags == null ? providedTags : materializeLimitedTags);
                 InstrumentableNode materializedNode = currentNode.materializeInstrumentableNodes(materializeTags);
                 if (currentNode != materializedNode) {
                     if (!(materializedNode instanceof Node)) {
@@ -1394,24 +1377,27 @@ final class InstrumentationHandler {
                                         newSourceSection));
                     }
 
-                    Node currentParent = ((Node) currentNode).getParent();
-                    // The current parent is a wrapper. We need to replace the wrapper.
-                    if (currentParent instanceof WrapperNode && !NodeUtil.isReplacementSafe(currentParent, (Node) currentNode, (Node) materializedNode)) {
-                        ProbeNode probe = ((WrapperNode) currentParent).getProbeNode();
-                        WrapperNode wrapper = materializedNode.createWrapper(probe);
-                        final Node wrapperNode = getWrapperNodeChecked(wrapper, (Node) materializedNode, currentParent.getParent());
-                        currentParent.replace(wrapperNode, "Insert instrumentation wrapper node.");
-                        return (Node) materializedNode;
-                    } else {
-                        return ((Node) currentNode).replace((Node) materializedNode);
-                    }
+                    return (Node) materializedNode;
                 }
             }
             return instrumentableNode;
         }
 
-        protected abstract void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, Node oldNode, Set<Class<? extends Tag>> materializeTags,
-                        SourceSection sourceSection);
+        private Node replaceByMaterializedNode(InstrumentableNode currentNode, InstrumentableNode materializedNode) {
+            Node currentParent = ((Node) currentNode).getParent();
+            // The current parent is a wrapper. We need to replace the wrapper.
+            if (currentParent instanceof WrapperNode && !NodeUtil.isReplacementSafe(currentParent, (Node) currentNode, (Node) materializedNode)) {
+                ProbeNode probe = ((WrapperNode) currentParent).getProbeNode();
+                WrapperNode wrapper = materializedNode.createWrapper(probe);
+                final Node wrapperNode = getWrapperNodeChecked(wrapper, (Node) materializedNode, currentParent.getParent());
+                currentParent.replace(wrapperNode, "Insert instrumentation wrapper node.");
+                return (Node) materializedNode;
+            } else {
+                return ((Node) currentNode).replace((Node) materializedNode);
+            }
+        }
+
+        protected abstract void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection);
 
     }
 
@@ -1434,14 +1420,13 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected final void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, Node oldNode, Set<Class<? extends Tag>> materializeTags,
-                        SourceSection sourceSection) {
+        protected final void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection) {
             if (binding.isInstrumentedLeaf(providedTags, instrumentableNode, sourceSection) ||
                             binding.isChildInstrumentedLeaf(providedTags, root, parentInstrumentable, parentSourceSection, instrumentableNode, sourceSection)) {
                 if (TRACE) {
                     traceFilterCheck("hit", instrumentableNode, sourceSection);
                 }
-                visitInstrumented(instrumentableNode, oldNode, materializeTags, sourceSection);
+                visitInstrumented(instrumentableNode, sourceSection);
             } else {
                 if (TRACE) {
                     traceFilterCheck("miss", instrumentableNode, sourceSection);
@@ -1449,7 +1434,7 @@ final class InstrumentationHandler {
             }
         }
 
-        protected abstract void visitInstrumented(Node node, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection section);
+        protected abstract void visitInstrumented(Node node, SourceSection section);
     }
 
     @SuppressWarnings("deprecation")
@@ -1500,8 +1485,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected final void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, Node oldNode, Set<Class<? extends Tag>> materializeTags,
-                        SourceSection sourceSection) {
+        protected final void visitInstrumentable(Node parentInstrumentable, SourceSection parentSourceSection, Node instrumentableNode, SourceSection sourceSection) {
             // no locking required for these atomic reference arrays
             for (EventBinding.Source<?> binding : bindings) {
                 if (binding.isInstrumentedFull(providedTags, root, instrumentableNode, sourceSection) ||
@@ -1509,7 +1493,7 @@ final class InstrumentationHandler {
                     if (TRACE) {
                         traceFilterCheck("hit", instrumentableNode, sourceSection);
                     }
-                    visitInstrumented(binding, instrumentableNode, oldNode, materializeTags, sourceSection);
+                    visitInstrumented(binding, instrumentableNode, sourceSection);
                     if (!visitForEachBinding) {
                         break;
                     }
@@ -1522,7 +1506,7 @@ final class InstrumentationHandler {
 
         }
 
-        protected abstract void visitInstrumented(EventBinding.Source<?> binding, Node node, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection section);
+        protected abstract void visitInstrumented(EventBinding.Source<?> binding, Node node, SourceSection section);
 
     }
 
@@ -1534,8 +1518,8 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected void visitInstrumented(Node node, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection section) {
-            insertWrapper(node, oldNode, materializeTags, section);
+        protected void visitInstrumented(Node node, SourceSection section) {
+            insertWrapper(node, oldNodeReference, section);
         }
 
     }
@@ -1547,21 +1531,20 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected void visitInstrumented(Node node, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection section) {
+        protected void visitInstrumented(Node node, SourceSection section) {
             invalidateWrapper(node);
         }
     }
 
     private final class InsertWrappersVisitor extends AbstractBindingsVisitor {
 
-        InsertWrappersVisitor(Collection<EventBinding.Source<?>> bindings, boolean firstExecution) {
+        InsertWrappersVisitor(Collection<EventBinding.Source<?>> bindings) {
             super(bindings, false);
-            this.firstExecution = firstExecution;
         }
 
         @Override
-        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection section) {
-            insertWrapper(node, oldNode, materializeTags, section);
+        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, SourceSection section) {
+            insertWrapper(node, oldNodeReference, section);
         }
     }
 
@@ -1572,7 +1555,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection section) {
+        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, SourceSection section) {
             invalidateWrapper(node);
         }
 
@@ -1585,7 +1568,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected void visitInstrumented(Node node, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection section) {
+        protected void visitInstrumented(Node node, SourceSection section) {
             notifySourceSectionLoaded(binding, node, section);
         }
 
@@ -1598,7 +1581,7 @@ final class InstrumentationHandler {
         }
 
         @Override
-        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, Node oldNode, Set<Class<? extends Tag>> materializeTags, SourceSection section) {
+        protected void visitInstrumented(EventBinding.Source<?> binding, Node node, SourceSection section) {
             notifySourceSectionLoaded(binding, node, section);
         }
     }
