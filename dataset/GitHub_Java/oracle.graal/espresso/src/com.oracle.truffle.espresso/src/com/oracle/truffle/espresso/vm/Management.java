@@ -34,7 +34,6 @@ import java.util.function.IntFunction;
 
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
-import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.interop.ArityException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
@@ -178,7 +177,6 @@ public final class Management extends IntrinsifiedNativeEnv {
             return RawPointer.nullInstance();
         }
         if (managementPtr == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             managementPtr = initializeAndGetEnv(initializeManagementContext, version);
             managementVersion = version;
             assert getUncached().isPointer(managementPtr);
@@ -448,7 +446,7 @@ public final class Management extends IntrinsifiedNativeEnv {
 
     @JniImpl
     @ManagementImpl
-    @TruffleBoundary // Lots of SVM + Windows blacklisted methods.
+    @CompilerDirectives.TruffleBoundary // Lots of SVM + Windows blacklisted methods.
     public long GetLongAttribute(@SuppressWarnings("unused") @Host(Object.class) StaticObject obj,
                     /* jmmLongAttribute */ int att) {
         switch (att) {

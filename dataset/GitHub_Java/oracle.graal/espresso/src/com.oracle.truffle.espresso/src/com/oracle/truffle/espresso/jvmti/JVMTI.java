@@ -25,6 +25,8 @@ package com.oracle.truffle.espresso.jvmti;
 
 import static com.oracle.truffle.espresso.jvmti.JvmtiErrorCodes.JVMTI_OK;
 
+import java.nio.IntBuffer;
+import java.nio.LongBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,6 +43,7 @@ import com.oracle.truffle.espresso.ffi.nfi.NativeUtils;
 import com.oracle.truffle.espresso.jni.IntrinsifiedNativeEnv;
 import com.oracle.truffle.espresso.jni.JniImpl;
 import com.oracle.truffle.espresso.meta.EspressoError;
+import com.oracle.truffle.espresso.meta.JavaKind;
 import com.oracle.truffle.espresso.runtime.EspressoContext;
 import com.oracle.truffle.espresso.substitutions.GenerateIntrinsification;
 import com.oracle.truffle.espresso.substitutions.IntrinsicSubstitutor;
@@ -138,16 +141,16 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
         if (byteCount < 0) {
             return JvmtiErrorCodes.JVMTI_ERROR_ILLEGAL_ARGUMENT;
         }
-        TruffleObject alloc;
+        LongBuffer resultPointer = NativeUtils.directByteBuffer(memPtr, 1, JavaKind.Long).asLongBuffer();
         if (byteCount == 0) {
-            alloc = RawPointer.nullInstance();
+            resultPointer.put(NativeUtils.interopAsPointer(RawPointer.nullInstance()));
         } else {
-            alloc = getNativeAccess().allocateMemory(byteCount);
+            TruffleObject alloc = getNativeAccess().allocateMemory(byteCount);
             if (getUncached().isNull(alloc)) {
                 return JvmtiErrorCodes.JVMTI_ERROR_OUT_OF_MEMORY;
             }
+            resultPointer.put(NativeUtils.interopAsPointer(alloc));
         }
-        NativeUtils.writeToPointerPointer(getUncached(), memPtr, alloc);
         return JVMTI_OK;
     }
 
@@ -161,7 +164,8 @@ public final class JVMTI extends IntrinsifiedNativeEnv {
 
     @JvmtiImpl
     public int GetVersionNumber(@Pointer TruffleObject versionPtr) {
-        NativeUtils.writeToIntPointer(getUncached(), versionPtr, jvmtiVersion);
+        IntBuffer buf = NativeUtils.directByteBuffer(versionPtr, 1, JavaKind.Int).asIntBuffer();
+        buf.put(jvmtiVersion);
         return JVMTI_OK;
     }
 
