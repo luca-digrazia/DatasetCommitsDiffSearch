@@ -234,9 +234,6 @@ public class LoweringPhase extends BasePhase<CoreProviders> {
     protected void run(final StructuredGraph graph, CoreProviders context) {
         lower(graph, context, LoweringMode.LOWERING);
         assert checkPostLowering(graph, context);
-        if (loweringStage == LoweringTool.StandardLoweringStage.HIGH_TIER) {
-            graph.setAfterHighTier();
-        }
     }
 
     private void lower(StructuredGraph graph, CoreProviders context, LoweringMode mode) {
@@ -537,7 +534,7 @@ public class LoweringPhase extends BasePhase<CoreProviders> {
      * }
      * </pre>
      *
-     * This is necessary, as the recursive implementation can quickly exceed the stack depth.
+     * This is necessary, as the recursive implementation quickly exceed the stack depth on SPARC.
      *
      * @param rootFrame contains the starting block.
      */

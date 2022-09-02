@@ -45,7 +45,6 @@ import org.graalvm.compiler.options.OptionType;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 import org.graalvm.compiler.phases.common.DeadCodeEliminationPhase;
-import org.graalvm.compiler.phases.common.DisableOverflownCountedLoopsPhase;
 import org.graalvm.compiler.phases.common.IncrementalCanonicalizerPhase;
 import org.graalvm.compiler.phases.common.IterativeConditionalEliminationPhase;
 import org.graalvm.compiler.phases.common.LoweringPhase;
@@ -53,7 +52,7 @@ import org.graalvm.compiler.phases.common.NodeCounterPhase;
 import org.graalvm.compiler.phases.common.inlining.InliningPhase;
 import org.graalvm.compiler.phases.common.inlining.policy.GreedyInliningPolicy;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
-import org.graalvm.compiler.virtual.phases.ea.ReadEliminationPhase;
+import org.graalvm.compiler.virtual.phases.ea.EarlyReadEliminationPhase;
 import org.graalvm.compiler.virtual.phases.ea.PartialEscapePhase;
 
 public class HighTier extends BaseTier<HighTierContext> {
@@ -78,8 +77,6 @@ public class HighTier extends BaseTier<HighTierContext> {
             appendPhase(new InliningPhase(new GreedyInliningPolicy(null), canonicalizer));
             appendPhase(new DeadCodeEliminationPhase(Optional));
         }
-
-        appendPhase(new DisableOverflownCountedLoopsPhase());
 
         if (NodeCounterPhase.Options.NodeCounters.getValue(options)) {
             appendPhase(new NodeCounterPhase(NodeCounterPhase.Stage.EARLY));
@@ -109,7 +106,7 @@ public class HighTier extends BaseTier<HighTierContext> {
         }
 
         if (OptReadElimination.getValue(options)) {
-            appendPhase(new ReadEliminationPhase(canonicalizer));
+            appendPhase(new EarlyReadEliminationPhase(canonicalizer));
         }
 
         if (NodeCounterPhase.Options.NodeCounters.getValue(options)) {
