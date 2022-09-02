@@ -44,16 +44,16 @@ import org.graalvm.compiler.core.llvm.LLVMUtils.TargetSpecific;
 import org.graalvm.compiler.debug.GraalError;
 
 import com.oracle.svm.shadowed.org.bytedeco.javacpp.BytePointer;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMAttributeRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMBasicBlockRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMBuilderRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMContextRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMMemoryBufferRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMModuleRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMTypeRef;
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.LLVM.LLVMValueRef;
 import com.oracle.svm.shadowed.org.bytedeco.javacpp.PointerPointer;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMAttributeRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMBasicBlockRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMBuilderRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMContextRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMMemoryBufferRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMModuleRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMTypeRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMValueRef;
-import com.oracle.svm.shadowed.org.bytedeco.llvm.global.LLVM;
 
 import jdk.vm.ci.meta.JavaKind;
 
@@ -236,7 +236,7 @@ public class LLVMIRBuilder {
             LLVM.LLVMSetLinkage(transitionWrapper, LLVM.LLVMLinkOnceAnyLinkage);
             setAttribute(transitionWrapper, LLVM.LLVMAttributeFunctionIndex, "noinline");
 
-            LLVMBasicBlockRef block = appendBasicBlock("main", transitionWrapper);
+            LLVM.LLVMBasicBlockRef block = appendBasicBlock("main", transitionWrapper);
             positionAtEnd(block);
 
             LLVMValueRef anchor = getParam(transitionWrapper, 0);
@@ -817,7 +817,7 @@ public class LLVMIRBuilder {
         return LLVM.LLVMBuildFCmp(builder, getLLVMRealCond(cond, unordered), a, b, DEFAULT_INSTR_NAME);
     }
 
-    public LLVMValueRef buildSelect(LLVMValueRef condition, LLVMValueRef trueVal, LLVMValueRef falseVal) {
+    LLVMValueRef buildSelect(LLVMValueRef condition, LLVMValueRef trueVal, LLVMValueRef falseVal) {
         return LLVM.LLVMBuildSelect(builder, condition, trueVal, falseVal, DEFAULT_INSTR_NAME);
     }
 
@@ -850,7 +850,7 @@ public class LLVMIRBuilder {
         return unaryBuilder.build(builder, a, DEFAULT_INSTR_NAME);
     }
 
-    public LLVMValueRef buildAdd(LLVMValueRef a, LLVMValueRef b) {
+    LLVMValueRef buildAdd(LLVMValueRef a, LLVMValueRef b) {
         return buildBinaryNumberOp(a, b, LLVM::LLVMBuildAdd, LLVM::LLVMBuildFAdd);
     }
 
@@ -1011,11 +1011,11 @@ public class LLVMIRBuilder {
         return LLVM.LLVMBuildXor(builder, a, b, DEFAULT_INSTR_NAME);
     }
 
-    public LLVMValueRef buildShl(LLVMValueRef a, LLVMValueRef b) {
+    LLVMValueRef buildShl(LLVMValueRef a, LLVMValueRef b) {
         return buildShift(LLVM::LLVMBuildShl, a, b);
     }
 
-    public LLVMValueRef buildShr(LLVMValueRef a, LLVMValueRef b) {
+    LLVMValueRef buildShr(LLVMValueRef a, LLVMValueRef b) {
         return buildShift(LLVM::LLVMBuildAShr, a, b);
     }
 
@@ -1050,11 +1050,11 @@ public class LLVMIRBuilder {
         return LLVM.LLVMBuildBitCast(builder, value, type, DEFAULT_INSTR_NAME);
     }
 
-    public LLVMValueRef buildAddrSpaceCast(LLVMValueRef value, LLVMTypeRef type) {
+    LLVMValueRef buildAddrSpaceCast(LLVMValueRef value, LLVMTypeRef type) {
         return LLVM.LLVMBuildAddrSpaceCast(builder, value, type, DEFAULT_INSTR_NAME);
     }
 
-    public LLVMValueRef buildRegisterObject(LLVMValueRef pointer) {
+    LLVMValueRef buildRegisterObject(LLVMValueRef pointer) {
         return buildCall(gcRegisterFunction, pointer);
     }
 
