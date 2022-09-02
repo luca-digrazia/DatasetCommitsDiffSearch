@@ -41,7 +41,6 @@
 package com.oracle.truffle.object;
 
 import static com.oracle.truffle.api.CompilerDirectives.shouldNotReachHere;
-import static com.oracle.truffle.object.LocationImpl.neverValidAssumption;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -75,6 +74,7 @@ import com.oracle.truffle.api.object.LocationFactory;
 import com.oracle.truffle.api.object.ObjectType;
 import com.oracle.truffle.api.object.Property;
 import com.oracle.truffle.api.object.Shape;
+import com.oracle.truffle.api.utilities.NeverValidAssumption;
 import com.oracle.truffle.object.LocationImpl.LocationVisitor;
 import com.oracle.truffle.object.Transition.AddPropertyTransition;
 import com.oracle.truffle.object.Transition.ObjectFlagsTransition;
@@ -805,7 +805,7 @@ public abstract class ShapeImpl extends Shape {
                     return prev;
                 } else {
                     boolean isLeafShape = transitionMap == null;
-                    next = isLeafShape ? createLeafAssumption() : neverValidAssumption();
+                    next = isLeafShape ? createLeafAssumption() : NeverValidAssumption.INSTANCE;
                 }
             } while (!LEAF_ASSUMPTION_UPDATER.compareAndSet(this, prev, next));
             return next;
@@ -821,13 +821,13 @@ public abstract class ShapeImpl extends Shape {
         Assumption prev;
         do {
             prev = LEAF_ASSUMPTION_UPDATER.get(this);
-            if (prev == neverValidAssumption()) {
+            if (prev == NeverValidAssumption.INSTANCE) {
                 break;
             }
             if (prev != null) {
                 prev.invalidate();
             }
-        } while (!LEAF_ASSUMPTION_UPDATER.compareAndSet(this, prev, neverValidAssumption()));
+        } while (!LEAF_ASSUMPTION_UPDATER.compareAndSet(this, prev, NeverValidAssumption.INSTANCE));
     }
 
     /** @since 0.17 or earlier */
@@ -1239,7 +1239,7 @@ public abstract class ShapeImpl extends Shape {
                 return propertyAssumption;
             }
         }
-        return neverValidAssumption();
+        return NeverValidAssumption.INSTANCE;
     }
 
     protected boolean testPropertyFlags(IntPredicate predicate) {
@@ -1510,9 +1510,9 @@ public abstract class ShapeImpl extends Shape {
             CompilerAsserts.neverPartOfCompilation();
             EconomicMap<Object, Assumption> map = stablePropertyAssumptions;
             Assumption assumption = map.get(propertyName);
-            if (assumption != null && assumption != neverValidAssumption()) {
+            if (assumption != null && assumption != NeverValidAssumption.INSTANCE) {
                 assumption.invalidate("invalidatePropertyAssumption");
-                map.put(propertyName, neverValidAssumption());
+                map.put(propertyName, NeverValidAssumption.INSTANCE);
                 propertyAssumptionsRemoved.inc();
             }
         }
