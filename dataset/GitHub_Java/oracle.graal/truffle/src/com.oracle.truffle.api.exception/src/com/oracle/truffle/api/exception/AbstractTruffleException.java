@@ -85,7 +85,7 @@ import com.oracle.truffle.api.source.SourceSection;
  *
  *     &#64;ExportMessage
  *     ExceptionType getExceptionType() {
- *         return ExceptionType.PARSE_ERROR;
+ *         return ExceptionType.SYNTAX_ERROR;
  *     }
  *
  *     &#64;ExportMessage
@@ -218,7 +218,7 @@ public abstract class AbstractTruffleException extends RuntimeException implemen
      * @since 20.3
      */
     protected AbstractTruffleException(String message, Throwable internalCause, int stackTraceElementLimit, Node location) {
-        super(message != null ? message : internalCause != null ? internalCause.getMessage() : null, internalCause);
+        super(message, internalCause);
         this.stackTraceElementLimit = stackTraceElementLimit;
         this.internalCause = internalCause;
         this.location = location;
