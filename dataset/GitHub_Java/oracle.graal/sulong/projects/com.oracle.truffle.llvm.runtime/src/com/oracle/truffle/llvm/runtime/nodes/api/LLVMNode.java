@@ -46,6 +46,7 @@ import com.oracle.truffle.llvm.runtime.LLVMFunctionDescriptor;
 import com.oracle.truffle.llvm.runtime.LLVMLanguage;
 import com.oracle.truffle.llvm.runtime.datalayout.DataLayout;
 import com.oracle.truffle.llvm.runtime.debug.scope.LLVMSourceLocation;
+import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.UnsafeArrayAccess;
 
 @TypeSystemReference(LLVMTypes.class)
@@ -71,6 +72,11 @@ public abstract class LLVMNode extends Node {
     public static final int I1_SIZE_IN_BYTES = 1;
 
     public static final int ADDRESS_SIZE_IN_BYTES = 8;
+
+    public static LLVMMemory getLLVMMemory() {
+        CompilerAsserts.neverPartOfCompilation();
+        return LLVMLanguage.getLanguage().getCapability(LLVMMemory.class);
+    }
 
     public static UnsafeArrayAccess getUnsafeArrayAccess() {
         CompilerAsserts.neverPartOfCompilation();

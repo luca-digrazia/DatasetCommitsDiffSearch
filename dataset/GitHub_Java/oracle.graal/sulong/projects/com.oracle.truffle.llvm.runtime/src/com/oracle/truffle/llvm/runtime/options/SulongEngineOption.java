@@ -96,8 +96,7 @@ public final class SulongEngineOption {
 
     @Option(name = "llvm.printLifetimeAnalysisStats",
             category = OptionCategory.INTERNAL,
-            help = "Prints the results of the lifetime analysis." +
-                   "Set value to \'stdout\', \'stderr\' or \'file://<path to writable file>\' to enable.")
+            help = "Prints the results of the lifetime analysis. Can be \'stdout\' or \'stderr\'.")
     public static final OptionKey<String> PRINT_LIFE_TIME_ANALYSIS_STATS = new OptionKey<>(String.valueOf(false));
 
     @Option(name = "llvm.debugLoader",

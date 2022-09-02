@@ -483,10 +483,6 @@ public final class LLVMContext {
             assert nativeCallStatistics != null;
             nativeCallStatsStream.dispose();
         }
-
-        if (lifetimeAnalysisStream != null) {
-            lifetimeAnalysisStream.dispose();
-        }
     }
 
     public ExternalLibrary addInternalLibrary(String lib, boolean isNative) {
@@ -1025,24 +1021,6 @@ public final class LLVMContext {
         }
 
         return nativeCallStatsStream;
-    }
-
-    @CompilationFinal private TargetStream lifetimeAnalysisStream;
-    @CompilationFinal private boolean lifetimeAnalysisStreamInitialized = false;
-
-    public TargetStream lifetimeAnalysisStream() {
-        if (!lifetimeAnalysisStreamInitialized) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-
-            final String opt = env.getOptions().get(SulongEngineOption.PRINT_LIFE_TIME_ANALYSIS_STATS);
-            if (SulongEngineOption.optionEnabled(opt)) {
-                lifetimeAnalysisStream = new TargetStream(env, opt);
-            }
-
-            lifetimeAnalysisStreamInitialized = true;
-        }
-
-        return lifetimeAnalysisStream;
     }
 
 }
