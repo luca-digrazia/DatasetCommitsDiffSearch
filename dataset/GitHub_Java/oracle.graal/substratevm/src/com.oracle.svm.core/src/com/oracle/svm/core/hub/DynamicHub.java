@@ -921,8 +921,7 @@ public final class DynamicHub implements JavaKind.FormatWithToString, AnnotatedE
 
         ArrayList<Annotation> annotations = new ArrayList<>();
         for (Annotation annotation : getAnnotations()) {
-            boolean isInherited = annotation.annotationType().getAnnotation(Inherited.class) != null;
-            if (!superAnnotations.containsKey(annotation) || isInherited) {
+            if (!superAnnotations.containsKey(annotation)) {
                 annotations.add(annotation);
             }
         }
