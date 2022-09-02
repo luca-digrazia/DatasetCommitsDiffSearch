@@ -34,15 +34,17 @@ import org.graalvm.compiler.phases.common.CanonicalizerPhase;
 
 public class BaseTier<C> extends PhaseSuite<C> {
 
-    public LoopPolicies createLoopPolicies() {
+    public LoopPolicies createLoopPolicies(@SuppressWarnings("unused") OptionValues options) {
         return new DefaultLoopPolicies();
     }
 
     public CanonicalizerPhase createCanonicalizerPhase(OptionValues options) {
-        CanonicalizerPhase result = CanonicalizerPhase.create();
+        CanonicalizerPhase canonicalizer = null;
         if (ImmutableCode.getValue(options)) {
-            result.disableReadCanonicalization();
+            canonicalizer = CanonicalizerPhase.createWithoutReadCanonicalization();
+        } else {
+            canonicalizer = CanonicalizerPhase.create();
         }
-        return result;
+        return canonicalizer;
     }
 }
