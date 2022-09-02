@@ -87,7 +87,6 @@ import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
-import com.oracle.svm.util.ImageGeneratorThreadMarker;
 
 public abstract class BigBang {
 
@@ -562,10 +561,6 @@ public abstract class BigBang {
 
             universe.setAnalysisDataValid(this, true);
 
-            if (PointstoOptions.ReportUnsupportedFeaturesDuringAnalysis.getValue(options)) {
-                unsupportedFeatures.report(this);
-            }
-
             return didSomeWork;
         }
     }
@@ -628,12 +623,17 @@ public abstract class BigBang {
 
     @SuppressFBWarnings(value = "NP_NONNULL_PARAM_VIOLATION", justification = "ForkJoinPool does support null for the exception handler.")
     public static ForkJoinPool createExecutor(DebugContext debug, int numberOfThreads) {
-        ForkJoinPool.ForkJoinWorkerThreadFactory factory = debugThreadFactory(debug.areScopesEnabled() || debug.areMetricsEnabled() ? debug : null);
+        ForkJoinPool.ForkJoinWorkerThreadFactory factory = debug.areScopesEnabled() || debug.areMetricsEnabled() ? debugThreadFactory(debug) : ForkJoinPool.defaultForkJoinWorkerThreadFactory;
         return new ForkJoinPool(numberOfThreads, factory, null, false);
     }
 
     private static ForkJoinPool.ForkJoinWorkerThreadFactory debugThreadFactory(DebugContext debug) {
-        return pool -> new SubstrateWorkerThread(pool, debug);
+        return pool -> new ForkJoinWorkerThread(pool) {
+            @Override
+            protected void onTermination(Throwable exception) {
+                debug.closeDumpHandlers(true);
+            }
+        };
     }
 
     public static class ConstantObjectsProfiler {
@@ -810,23 +810,6 @@ public abstract class BigBang {
             System.out.format("%5d %5d %5d  |", numParsedGraphs.get(), getAllInstantiatedTypeFlow().getState().typesCount(), universe.getNextTypeId());
             super.print();
             System.out.println();
-        }
-    }
-
-    private static class SubstrateWorkerThread extends ForkJoinWorkerThread
-                    implements ImageGeneratorThreadMarker {
-        private final DebugContext debug;
-
-        SubstrateWorkerThread(ForkJoinPool pool, DebugContext debug) {
-            super(pool);
-            this.debug = debug;
-        }
-
-        @Override
-        protected void onTermination(Throwable exception) {
-            if (debug != null) {
-                debug.closeDumpHandlers(true);
-            }
         }
     }
 }
