@@ -36,7 +36,6 @@ import org.graalvm.compiler.debug.Assertions;
 import org.graalvm.compiler.hotspot.JVMCIVersionCheck.Version;
 import org.graalvm.compiler.hotspot.JVMCIVersionCheck.Version2;
 import org.graalvm.compiler.hotspot.JVMCIVersionCheck.Version3;
-import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
 
 import jdk.vm.ci.common.JVMCIError;
@@ -138,7 +137,6 @@ public class GraalHotSpotVMConfigAccess {
     }
 
     public static final int JDK = JavaVersionUtil.JAVA_SPEC;
-    public static final int JDK_UPDATE = GraalServices.getJavaUpdateVersion();
     public static final boolean IS_OPENJDK = getProperty("java.vm.name", "").startsWith("OpenJDK");
     public static final Version JVMCI_VERSION;
     public static final boolean JVMCI;
