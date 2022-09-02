@@ -308,6 +308,8 @@ public class HotSpotReplacementsUtil {
      */
     public static final LocationIdentity JAVA_THREAD_THREAD_OBJECT_LOCATION = NamedLocationIdentity.immutable("JavaThread::_threadObj");
 
+    public static final LocationIdentity JAVA_THREAD_THREAD_OBJECT_HANDLE_LOCATION = NamedLocationIdentity.immutable("JavaThread::_threadObj handle");
+
     @Fold
     public static int threadObjectOffset(@InjectedParameter GraalHotSpotVMConfig config) {
         return config.threadObjectOffset;
@@ -847,10 +849,7 @@ public class HotSpotReplacementsUtil {
 
     public static final LocationIdentity CLASS_MIRROR_LOCATION = NamedLocationIdentity.immutable("Klass::_java_mirror");
 
-    /**
-     * This represents the contents of OopHandles used for some internal fields.
-     */
-    public static final LocationIdentity HOTSPOT_OOP_HANDLE_LOCATION = NamedLocationIdentity.immutable("OopHandle contents");
+    public static final LocationIdentity CLASS_MIRROR_HANDLE_LOCATION = NamedLocationIdentity.immutable("Klass::_java_mirror handle");
 
     @Fold
     public static int layoutHelperHeaderSizeShift(@InjectedParameter GraalHotSpotVMConfig config) {

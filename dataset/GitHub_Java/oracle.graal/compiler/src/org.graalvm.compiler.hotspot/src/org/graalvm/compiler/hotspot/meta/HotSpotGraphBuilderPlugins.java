@@ -506,14 +506,13 @@ public class HotSpotGraphBuilderPlugins {
                 AddressNode address = b.add(new OffsetAddressNode(thread, offset));
                 // JavaThread::_threadObj is never compressed
                 ObjectStamp stamp = StampFactory.objectNonNull(TypeReference.create(b.getAssumptions(), metaAccess.lookupJavaType(Thread.class)));
-                ReadNode value = b.add(new ReadNode(address, JAVA_THREAD_THREAD_OBJECT_LOCATION,
-                                config.threadObjectFieldIsHandle ? StampFactory.forKind(wordTypes.getWordKind()) : stamp, BarrierType.NONE));
+                ReadNode value = new ReadNode(address, JAVA_THREAD_THREAD_OBJECT_LOCATION, stamp, BarrierType.NONE);
                 if (config.threadObjectFieldIsHandle) {
                     ValueNode handleOffset = ConstantNode.forIntegerKind(wordTypes.getWordKind(), 0, b.getGraph());
                     AddressNode handleAddress = b.add(new OffsetAddressNode(value, handleOffset));
-                    value = b.add(new ReadNode(handleAddress, JAVA_THREAD_THREAD_OBJECT_HANDLE_LOCATION, stamp, BarrierType.NONE));
+                    value = new ReadNode(handleAddress, JAVA_THREAD_THREAD_OBJECT_HANDLE_LOCATION, stamp, BarrierType.NONE);
                 }
-                b.push(JavaKind.Object, value);
+                b.addPush(JavaKind.Object, value);
                 return true;
             }
         });
