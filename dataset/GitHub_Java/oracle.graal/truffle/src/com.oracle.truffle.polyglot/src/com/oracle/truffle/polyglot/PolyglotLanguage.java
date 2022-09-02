@@ -325,7 +325,7 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
         if (optionValues == null) {
             synchronized (engine) {
                 if (optionValues == null) {
-                    optionValues = new OptionValuesImpl(engine, getOptions(), false);
+                    optionValues = new OptionValuesImpl(engine, getOptions());
                 }
             }
         }
@@ -369,7 +369,7 @@ final class PolyglotLanguage extends AbstractLanguageImpl implements com.oracle.
     public String getVersion() {
         final String version = cache.getVersion();
         if (version.equals("inherit")) {
-            return engine.creatorApi.getVersion();
+            return engine.getVersion();
         } else {
             return version;
         }

@@ -64,7 +64,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -78,7 +77,6 @@ import org.graalvm.options.OptionStability;
 import org.graalvm.options.OptionValues;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.PolyglotAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
@@ -89,19 +87,13 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.Option;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleContext;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.ContextsListener;
-import com.oracle.truffle.api.instrumentation.EventBinding;
-import com.oracle.truffle.api.instrumentation.TruffleInstrument;
-import com.oracle.truffle.api.nodes.LanguageInfo;
 import com.oracle.truffle.api.nodes.RootNode;
-import java.util.concurrent.CountDownLatch;
 
 public class ContextPreInitializationTest {
 
@@ -124,13 +116,10 @@ public class ContextPreInitializationTest {
     @After
     public void tearDown() throws Exception {
         ContextPreInitializationTestFirstLanguage.callDependentLanguage = false;
-        ContextPreInitializationTestSecondLanguage.callDependentLanguageInCreate = false;
-        ContextPreInitializationTestSecondLanguage.callDependentLanguageInPatch = false;
-        ContextPreInitializationTestSecondLanguage.lookupService = false;
+        ContextPreInitializationTestSecondLanguage.callDependentLanguage = false;
         ContextPreInitializationTestFirstLanguage.patchException = false;
         ContextPreInitializationTestFirstLanguage.onPreInitAction = null;
         ContextPreInitializationTestFirstLanguage.onPatchAction = null;
-        ContextPreInitializationFirstInstrument.actions = null;
         BaseLanguage.parseStdOutOutput.clear();
         BaseLanguage.parseStdErrOutput.clear();
         resetSystemPropertiesOptions();
@@ -596,7 +585,7 @@ public class ContextPreInitializationTest {
     @Test
     public void testDependentLanguagePreInitializationSuccessfulPatch() throws Exception {
         setPatchable(SECOND, FIRST, INTERNAL);
-        ContextPreInitializationTestSecondLanguage.callDependentLanguageInCreate = true;
+        ContextPreInitializationTestSecondLanguage.callDependentLanguage = true;
         ContextPreInitializationTestFirstLanguage.callDependentLanguage = true;
         doContextPreinitialize(SECOND);
         List<CountingContext> contexts = new ArrayList<>(emittedContexts);
@@ -676,7 +665,7 @@ public class ContextPreInitializationTest {
     @Test
     public void testDependentLanguagePreInitializationFailedPatch() throws Exception {
         setPatchable(SECOND);
-        ContextPreInitializationTestSecondLanguage.callDependentLanguageInCreate = true;
+        ContextPreInitializationTestSecondLanguage.callDependentLanguage = true;
         ContextPreInitializationTestFirstLanguage.callDependentLanguage = true;
         doContextPreinitialize(SECOND);
         List<CountingContext> contexts = new ArrayList<>(emittedContexts);
@@ -1043,185 +1032,6 @@ public class ContextPreInitializationTest {
         }
     }
 
-    @Test
-    public void testServiceLookupSuccessfulPatch() throws Exception {
-        setPatchable(FIRST, SECOND);
-        ContextPreInitializationTestSecondLanguage.lookupService = true;
-        doContextPreinitialize(SECOND);
-        List<CountingContext> contexts = new ArrayList<>(emittedContexts);
-        assertEquals(2, contexts.size());
-        final CountingContext secondLangCtx = findContext(SECOND, contexts);
-        assertNotNull(secondLangCtx);
-        assertEquals(1, secondLangCtx.createContextCount);
-        assertEquals(1, secondLangCtx.initializeContextCount);
-        assertEquals(0, secondLangCtx.patchContextCount);
-        assertEquals(0, secondLangCtx.disposeContextCount);
-        assertEquals(0, secondLangCtx.initializeThreadCount);
-        assertEquals(0, secondLangCtx.disposeThreadCount);
-        CountingContext firstLangCtx = findContext(FIRST, contexts);
-        assertNotNull(firstLangCtx);
-        assertEquals(1, firstLangCtx.createContextCount);
-        assertEquals(0, firstLangCtx.initializeContextCount);
-        assertEquals(0, firstLangCtx.patchContextCount);
-        assertEquals(0, firstLangCtx.disposeContextCount);
-        assertEquals(0, firstLangCtx.initializeThreadCount);
-        assertEquals(0, firstLangCtx.disposeThreadCount);
-        final Context ctx = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).option(FIRST + ".ServiceKind", Service.Kind.IMAGE_EXECUTION_TIME.name()).build();
-        Value res = ctx.eval(Source.create(SECOND, "test"));
-        assertEquals("test", res.asString());
-        contexts = new ArrayList<>(emittedContexts);
-        assertEquals(2, contexts.size());
-        assertEquals(1, secondLangCtx.createContextCount);
-        assertEquals(1, secondLangCtx.initializeContextCount);
-        assertEquals(1, secondLangCtx.patchContextCount);
-        assertEquals(0, secondLangCtx.disposeContextCount);
-        assertEquals(1, secondLangCtx.initializeThreadCount);
-        assertEquals(0, secondLangCtx.disposeThreadCount);
-        assertEquals(1, firstLangCtx.createContextCount);
-        assertEquals(0, firstLangCtx.initializeContextCount);
-        assertEquals(1, firstLangCtx.patchContextCount);
-        assertEquals(0, firstLangCtx.disposeContextCount);
-        assertEquals(0, firstLangCtx.initializeThreadCount);
-        assertEquals(0, firstLangCtx.disposeThreadCount);
-        ctx.close();
-        contexts = new ArrayList<>(emittedContexts);
-        assertEquals(2, contexts.size());
-        assertEquals(1, secondLangCtx.createContextCount);
-        assertEquals(1, secondLangCtx.initializeContextCount);
-        assertEquals(1, secondLangCtx.patchContextCount);
-        assertEquals(1, secondLangCtx.disposeContextCount);
-        assertEquals(1, secondLangCtx.initializeThreadCount);
-        assertEquals(1, secondLangCtx.disposeThreadCount);
-        assertEquals(1, firstLangCtx.createContextCount);
-        assertEquals(0, firstLangCtx.initializeContextCount);
-        assertEquals(1, firstLangCtx.patchContextCount);
-        assertEquals(1, firstLangCtx.disposeContextCount);
-        assertEquals(0, firstLangCtx.initializeThreadCount);    // initializeThread is called only
-                                                                // on TruffleLanguages with
-                                                                // initialized contexts
-        assertEquals(1, firstLangCtx.disposeThreadCount);       // disposeThread is called on all
-                                                                // TruffleLanguages
-    }
-
-    @Test
-    public void testServiceLookupFailedPatch() throws Exception {
-        setPatchable(SECOND);
-        ContextPreInitializationTestSecondLanguage.lookupService = true;
-        doContextPreinitialize(SECOND);
-        List<CountingContext> contexts = new ArrayList<>(emittedContexts);
-        assertEquals(2, contexts.size());
-        final CountingContext secondLangCtx = findContext(SECOND, contexts);
-        assertNotNull(secondLangCtx);
-        assertEquals(1, secondLangCtx.createContextCount);
-        assertEquals(1, secondLangCtx.initializeContextCount);
-        assertEquals(0, secondLangCtx.patchContextCount);
-        assertEquals(0, secondLangCtx.disposeContextCount);
-        assertEquals(0, secondLangCtx.initializeThreadCount);
-        assertEquals(0, secondLangCtx.disposeThreadCount);
-        CountingContext firstLangCtx = findContext(FIRST, contexts);
-        assertNotNull(firstLangCtx);
-        assertEquals(1, firstLangCtx.createContextCount);
-        assertEquals(0, firstLangCtx.initializeContextCount);
-        assertEquals(0, firstLangCtx.patchContextCount);
-        assertEquals(0, firstLangCtx.disposeContextCount);
-        assertEquals(0, firstLangCtx.initializeThreadCount);
-        assertEquals(0, firstLangCtx.disposeThreadCount);
-        final Context ctx = Context.newBuilder().allowPolyglotAccess(PolyglotAccess.ALL).option(FIRST + ".ServiceKind", Service.Kind.IMAGE_EXECUTION_TIME.name()).build();
-        Value res = ctx.eval(Source.create(SECOND, "test"));
-        assertEquals("test", res.asString());
-        contexts = new ArrayList<>(emittedContexts);
-        assertEquals(4, contexts.size());
-        Collection<? extends CountingContext> ctxs = findContexts(SECOND, contexts);
-        ctxs.remove(secondLangCtx);
-        assertEquals(1, ctxs.size());
-        final CountingContext secondLangCtx2 = ctxs.iterator().next();
-        ctxs = findContexts(FIRST, contexts);
-        ctxs.remove(firstLangCtx);
-        assertEquals(1, ctxs.size());
-        final CountingContext firstLangCtx2 = ctxs.iterator().next();
-        assertEquals(1, secondLangCtx.createContextCount);
-        assertEquals(1, secondLangCtx.initializeContextCount);
-        assertEquals(0, secondLangCtx.patchContextCount);
-        assertEquals(1, secondLangCtx.disposeContextCount);
-        assertEquals(1, secondLangCtx.initializeThreadCount);
-        assertEquals(1, secondLangCtx.disposeThreadCount);
-        assertEquals(1, firstLangCtx.createContextCount);
-        assertEquals(0, firstLangCtx.initializeContextCount);
-        assertEquals(1, firstLangCtx.patchContextCount);
-        assertEquals(1, firstLangCtx.disposeContextCount);
-        assertEquals(0, firstLangCtx.initializeThreadCount);
-        assertEquals(1, firstLangCtx.disposeThreadCount);
-
-        assertEquals(1, secondLangCtx2.createContextCount);
-        assertEquals(1, secondLangCtx2.initializeContextCount);
-        assertEquals(0, secondLangCtx2.patchContextCount);
-        assertEquals(0, secondLangCtx2.disposeContextCount);
-        assertEquals(1, secondLangCtx2.initializeThreadCount);
-        assertEquals(0, secondLangCtx2.disposeThreadCount);
-        assertEquals(1, firstLangCtx2.createContextCount);
-        assertEquals(0, firstLangCtx2.initializeContextCount);
-        assertEquals(0, firstLangCtx2.patchContextCount);
-        assertEquals(0, firstLangCtx2.disposeContextCount);
-        assertEquals(0, firstLangCtx2.initializeThreadCount);
-        assertEquals(0, firstLangCtx2.disposeThreadCount);
-        ctx.close();
-        contexts = new ArrayList<>(emittedContexts);
-        assertEquals(4, contexts.size());
-        assertEquals(1, secondLangCtx.createContextCount);
-        assertEquals(1, secondLangCtx.initializeContextCount);
-        assertEquals(0, secondLangCtx.patchContextCount);
-        assertEquals(1, secondLangCtx.disposeContextCount);
-        assertEquals(1, secondLangCtx.initializeThreadCount);
-        assertEquals(1, secondLangCtx.disposeThreadCount);
-        assertEquals(1, firstLangCtx.createContextCount);
-        assertEquals(0, firstLangCtx.initializeContextCount);
-        assertEquals(1, firstLangCtx.patchContextCount);
-        assertEquals(1, firstLangCtx.disposeContextCount);
-        assertEquals(0, firstLangCtx.initializeThreadCount);
-        assertEquals(1, firstLangCtx.disposeThreadCount);
-        assertEquals(1, secondLangCtx2.createContextCount);
-        assertEquals(1, secondLangCtx2.initializeContextCount);
-        assertEquals(0, secondLangCtx2.patchContextCount);
-        assertEquals(1, secondLangCtx2.disposeContextCount);
-        assertEquals(1, secondLangCtx2.initializeThreadCount);
-        assertEquals(1, secondLangCtx2.disposeThreadCount);
-        assertEquals(1, firstLangCtx2.createContextCount);
-        assertEquals(0, firstLangCtx2.initializeContextCount);
-        assertEquals(0, firstLangCtx2.patchContextCount);
-        assertEquals(1, firstLangCtx2.disposeContextCount);
-        assertEquals(0, firstLangCtx2.initializeThreadCount);
-        assertEquals(1, firstLangCtx2.disposeThreadCount);
-    }
-
-    @Test
-    public void testInstrumentsEvents() throws Exception {
-        ContextPreInitializationFirstInstrument.actions = Collections.singletonMap("onLanguageContextInitialized", (e) -> {
-            if (FIRST.equals(e.language.getId())) {
-                final CountDownLatch signal = new CountDownLatch(1);
-                new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        InstrumentInfo instrument = e.env.getInstruments().get(ContextPreInitializationSecondInstrument.ID);
-                        e.env.lookup(instrument, Service.class);
-                        signal.countDown();
-                    }
-                }).start();
-                try {
-                    signal.await();
-                } catch (InterruptedException ie) {
-                    throw new RuntimeException(ie);
-                }
-            }
-        });
-        ContextPreInitializationTestSecondLanguage.callDependentLanguageInPatch = true;
-        setPatchable(FIRST, SECOND);
-        doContextPreinitialize(SECOND);
-        try (Context ctx = Context.newBuilder().option(ContextPreInitializationFirstInstrument.ID, "true").build()) {
-            Value res = ctx.eval(Source.create(SECOND, "test"));
-            assertEquals("test", res.asString());
-        }
-    }
-
     private static void delete(Path file) throws IOException {
         if (Files.isDirectory(file)) {
             try (DirectoryStream<Path> stream = Files.newDirectoryStream(file)) {
@@ -1324,7 +1134,6 @@ public class ContextPreInitializationTest {
         String languageHome;
         boolean preInitialized;
         final BaseLanguage language;
-        private final Map<Class<?>, Object> lookupItems = new HashMap<>();
 
         CountingContext(final String id, final TruffleLanguage.Env env, final BaseLanguage language) {
             this.id = id;
@@ -1345,18 +1154,6 @@ public class ContextPreInitializationTest {
         TruffleLanguage.Env environment() {
             return env;
         }
-
-        <T> void register(Class<T> type, T item) {
-            Objects.requireNonNull(type, "Type must be non null.");
-            Objects.requireNonNull(item, "Item must be non null.");
-            if (lookupItems.putIfAbsent(type, item) != null) {
-                throw new IllegalArgumentException("Registration for " + type + " already exists");
-            }
-        }
-
-        <T> T lookup(Class<T> type) {
-            return type.cast(lookupItems.get(type));
-        }
     }
 
     static class BaseLanguage extends TruffleLanguage<CountingContext> {
@@ -1376,7 +1173,6 @@ public class ContextPreInitializationTest {
             ctx.createContextOrder = nextId();
             ctx.languageHome = getLanguageHome();
             Collections.addAll(ctx.arguments, env.getApplicationArguments());
-            ctx.preInitialized = env.isPreInitialization();
             emittedContexts.add(ctx);
             return ctx;
         }
@@ -1385,6 +1181,7 @@ public class ContextPreInitializationTest {
         protected void initializeContext(CountingContext context) throws Exception {
             context.initializeContextCount++;
             context.initializeContextOrder = nextId();
+            context.preInitialized = context.env.isPreInitialization();
             super.initializeContext(context);
         }
 
@@ -1462,23 +1259,12 @@ public class ContextPreInitializationTest {
         }
     }
 
-    public interface Service {
-        enum Kind {
-            IMAGE_BUILD_TIME,
-            IMAGE_EXECUTION_TIME
-        }
-
-        Kind getKind();
-    }
-
-    @TruffleLanguage.Registration(id = FIRST, name = FIRST, version = "1.0", dependentLanguages = INTERNAL, contextPolicy = TruffleLanguage.ContextPolicy.SHARED, services = Service.class)
+    @TruffleLanguage.Registration(id = FIRST, name = FIRST, version = "1.0", dependentLanguages = INTERNAL, contextPolicy = TruffleLanguage.ContextPolicy.SHARED)
     public static final class ContextPreInitializationTestFirstLanguage extends BaseLanguage {
         @Option(category = OptionCategory.USER, stability = OptionStability.STABLE, help = "Option 1") //
         public static final OptionKey<Boolean> Option1 = new OptionKey<>(false);
         @Option(category = OptionCategory.USER, stability = OptionStability.STABLE, help = "Option 2") //
         public static final OptionKey<Boolean> Option2 = new OptionKey<>(false);
-        @Option(category = OptionCategory.USER, stability = OptionStability.STABLE, help = "Service Kind") //
-        public static final OptionKey<String> ServiceKind = new OptionKey<>(Service.Kind.IMAGE_BUILD_TIME.name());
 
         private static boolean callDependentLanguage;
         private static boolean patchException = false;
@@ -1491,9 +1277,6 @@ public class ContextPreInitializationTest {
             final CountingContext ctx = super.createContext(env);
             ctx.optionValues.put(Option1, env.getOptions().get(Option1));
             ctx.optionValues.put(Option2, env.getOptions().get(Option2));
-            Service service = new ServiceImpl(Service.Kind.valueOf(env.getOptions().get(ServiceKind)));
-            env.registerService(service);
-            ctx.register(Service.class, service);
             return ctx;
         }
 
@@ -1512,7 +1295,6 @@ public class ContextPreInitializationTest {
         protected boolean patchContext(CountingContext context, Env newEnv) {
             context.optionValues.put(Option1, newEnv.getOptions().get(Option1));
             context.optionValues.put(Option2, newEnv.getOptions().get(Option2));
-            ((ServiceImpl) context.lookup(Service.class)).setKind(Service.Kind.valueOf(newEnv.getOptions().get(ServiceKind)));
             final boolean result = super.patchContext(context, newEnv);
             if (patchException) {
                 throw new RuntimeException("patchContext() exception");
@@ -1527,61 +1309,18 @@ public class ContextPreInitializationTest {
         protected OptionDescriptors getOptionDescriptors() {
             return new ContextPreInitializationTestFirstLanguageOptionDescriptors();
         }
-
-        private static final class ServiceImpl implements Service {
-
-            private Kind kind;
-
-            ServiceImpl(Kind kind) {
-                this.kind = kind;
-            }
-
-            void setKind(Kind newKind) {
-                this.kind = newKind;
-            }
-
-            @Override
-            public Kind getKind() {
-                return kind;
-            }
-        }
     }
 
     @TruffleLanguage.Registration(id = SECOND, name = SECOND, version = "1.0", dependentLanguages = FIRST)
     public static final class ContextPreInitializationTestSecondLanguage extends BaseLanguage {
-        private static boolean callDependentLanguageInCreate;
-        private static boolean callDependentLanguageInPatch;
-        private static boolean lookupService;
+        private static boolean callDependentLanguage;
 
         @Override
         protected void initializeContext(CountingContext context) throws Exception {
             super.initializeContext(context);
-            if (lookupService) {
-                expectService(context.environment(),
-                                context.environment().isPreInitialization() ? Service.Kind.IMAGE_BUILD_TIME : Service.Kind.IMAGE_EXECUTION_TIME);
-            }
-            if (callDependentLanguageInCreate) {
+            if (callDependentLanguage) {
                 useLanguage(context, FIRST);
             }
-        }
-
-        @Override
-        protected boolean patchContext(CountingContext context, Env newEnv) {
-            if (lookupService) {
-                expectService(newEnv, Service.Kind.IMAGE_EXECUTION_TIME);
-            }
-            boolean res = super.patchContext(context, newEnv);
-            if (res && callDependentLanguageInPatch) {
-                useLanguage(context, FIRST);
-            }
-            return res;
-        }
-
-        private static void expectService(Env env, Service.Kind expectedServiceKind) {
-            LanguageInfo firstLanguage = env.getPublicLanguages().get(FIRST);
-            Service service = env.lookup(firstLanguage, Service.class);
-            assertNotNull("Service not found", service);
-            assertEquals(expectedServiceKind, service.getKind());
         }
     }
 
@@ -1652,124 +1391,5 @@ public class ContextPreInitializationTest {
         protected boolean areOptionsCompatible(OptionValues firstOptions, OptionValues newOptions) {
             return firstOptions.equals(newOptions);
         }
-    }
-
-    public abstract static class BaseInstrument extends TruffleInstrument implements ContextsListener {
-
-        private Env environment;
-        private EventBinding<BaseInstrument> contextsListenerBinding;
-
-        @Override
-        protected void onCreate(Env env) {
-            if (getActions() != null) {
-                environment = env;
-                contextsListenerBinding = env.getInstrumenter().attachContextsListener(this, true);
-            }
-        }
-
-        @Override
-        protected void onDispose(Env env) {
-            if (contextsListenerBinding != null) {
-                contextsListenerBinding.dispose();
-                contextsListenerBinding = null;
-                environment = null;
-            }
-        }
-
-        @Override
-        public void onContextCreated(TruffleContext context) {
-            performAction(context, null);
-        }
-
-        @Override
-        public void onLanguageContextCreated(TruffleContext context, LanguageInfo language) {
-            performAction(context, language);
-        }
-
-        @Override
-        public void onLanguageContextInitialized(TruffleContext context, LanguageInfo language) {
-            performAction(context, language);
-        }
-
-        @Override
-        public void onLanguageContextFinalized(TruffleContext context, LanguageInfo language) {
-            performAction(context, language);
-        }
-
-        @Override
-        public void onLanguageContextDisposed(TruffleContext context, LanguageInfo language) {
-            performAction(context, language);
-        }
-
-        @Override
-        public void onContextClosed(TruffleContext context) {
-            performAction(context, null);
-        }
-
-        private void performAction(TruffleContext context, LanguageInfo language) {
-            StackTraceElement element = Thread.currentThread().getStackTrace()[2];
-            Consumer<Event> action = getActions().get(element.getMethodName());
-            if (action != null) {
-                action.accept(new Event(environment, context, language));
-            }
-        }
-
-        protected abstract Map<String, Consumer<Event>> getActions();
-
-        static final class Event {
-            final TruffleInstrument.Env env;
-            final TruffleContext ctx;
-            final LanguageInfo language;
-
-            Event(TruffleInstrument.Env env, TruffleContext ctx, LanguageInfo info) {
-                this.env = env;
-                this.ctx = ctx;
-                this.language = info;
-            }
-        }
-    }
-
-    @TruffleInstrument.Registration(id = ContextPreInitializationFirstInstrument.ID, name = ContextPreInitializationFirstInstrument.ID)
-    public static final class ContextPreInitializationFirstInstrument extends BaseInstrument {
-
-        static final String ID = "ContextPreInitializationFirstInstrument";
-
-        static volatile Map<String, Consumer<Event>> actions;
-
-        @Option(name = "", category = OptionCategory.USER, stability = OptionStability.STABLE, help = "Activates instrument") //
-        static final OptionKey<Boolean> Enabled = new OptionKey<>(false);
-
-        @Override
-        protected OptionDescriptors getOptionDescriptors() {
-            return new ContextPreInitializationFirstInstrumentOptionDescriptors();
-        }
-
-        @Override
-        protected Map<String, Consumer<Event>> getActions() {
-            return actions;
-        }
-    }
-
-    @TruffleInstrument.Registration(id = ContextPreInitializationSecondInstrument.ID, name = ContextPreInitializationSecondInstrument.ID, services = Service.class)
-    public static final class ContextPreInitializationSecondInstrument extends BaseInstrument {
-
-        static final String ID = "ContextPreInitializationSecondInstrument";
-
-        @Override
-        protected Map<String, Consumer<Event>> getActions() {
-            return Collections.emptyMap();
-        }
-
-        @Override
-        protected void onCreate(Env env) {
-            super.onCreate(env);
-            env.registerService(new Service() {
-                @Override
-                public Service.Kind getKind() {
-                    return Service.Kind.IMAGE_EXECUTION_TIME;
-                }
-            });
-        }
-
     }
 }
