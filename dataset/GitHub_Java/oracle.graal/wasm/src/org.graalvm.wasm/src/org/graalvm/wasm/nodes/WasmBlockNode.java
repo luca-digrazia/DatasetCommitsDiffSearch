@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -274,14 +274,12 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     @CompilationFinal private final int initialIntConstantOffset;
     @CompilationFinal private final int initialLongConstantOffset;
     @CompilationFinal private final int initialBranchTableOffset;
-    @CompilationFinal private final int initialProfileOffset;
-    @CompilationFinal private int profileCount;
     @CompilationFinal private ContextReference<WasmContext> rawContextReference;
-    @Children private Node[] children;
+    @Children private Node[] nestedControlTable;
+    @Children private Node[] callNodeTable;
 
     public WasmBlockNode(WasmModule wasmModule, WasmCodeEntry codeEntry, int startOffset, byte returnTypeId, byte continuationTypeId, int initialStackPointer,
-                    int initialByteConstantOffset, int initialIntConstantOffset, int initialLongConstantOffset, int initialBranchTableOffset,
-                    int initialProfileOffset) {
+                    int initialByteConstantOffset, int initialIntConstantOffset, int initialLongConstantOffset, int initialBranchTableOffset) {
         super(wasmModule, codeEntry, -1);
         this.startOffset = startOffset;
         this.returnTypeId = returnTypeId;
@@ -291,7 +289,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         this.initialIntConstantOffset = initialIntConstantOffset;
         this.initialLongConstantOffset = initialLongConstantOffset;
         this.initialBranchTableOffset = initialBranchTableOffset;
-        this.initialProfileOffset = initialProfileOffset;
+        this.nestedControlTable = null;
+        this.callNodeTable = null;
     }
 
     private ContextReference<WasmContext> contextReference() {
@@ -303,15 +302,15 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @SuppressWarnings("hiding")
-    public void initialize(Node[] children, int byteLength, int byteConstantLength,
-                    int intConstantLength, int longConstantLength, int branchTableLength, int brIfProfilesLength) {
+    public void initialize(Node[] nestedControlTable, Node[] callNodeTable, int byteLength, int byteConstantLength,
+                    int intConstantLength, int longConstantLength, int branchTableLength) {
         initialize(byteLength);
+        this.nestedControlTable = nestedControlTable;
+        this.callNodeTable = callNodeTable;
         this.byteConstantLength = byteConstantLength;
         this.intConstantLength = intConstantLength;
         this.longConstantLength = longConstantLength;
         this.branchTableLength = branchTableLength;
-        this.profileCount = brIfProfilesLength;
-        this.children = children;
     }
 
     @Override
@@ -334,11 +333,6 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
         return branchTableLength;
     }
 
-    @Override
-    int profileCount() {
-        return profileCount;
-    }
-
     public int startOfset() {
         return startOffset;
     }
@@ -346,13 +340,13 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     @Override
     @ExplodeLoop(kind = ExplodeLoop.LoopExplosionKind.FULL_EXPLODE_UNTIL_RETURN)
     public TargetOffset execute(WasmContext context, VirtualFrame frame) {
-        int childrenOffset = 0;
+        int nestedControlOffset = 0;
+        int callNodeOffset = 0;
         int byteConstantOffset = initialByteConstantOffset;
         int intConstantOffset = initialIntConstantOffset;
         int longConstantOffset = initialLongConstantOffset;
         int branchTableOffset = initialBranchTableOffset;
         int stackPointer = initialStackPointer;
-        int profileOffset = initialProfileOffset;
         int offset = startOffset;
         trace("block/if/loop EXECUTE");
         while (offset < startOffset + byteLength()) {
@@ -368,7 +362,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     trace("noop");
                     break;
                 case BLOCK: {
-                    WasmBlockNode block = (WasmBlockNode) children[childrenOffset];
+                    WasmBlockNode block = (WasmBlockNode) nestedControlTable[nestedControlOffset];
 
                     // The unwind counter indicates how many levels up we need to branch from within
                     // the block.
@@ -379,7 +373,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                         return unwindCounter.decrement();
                     }
 
-                    childrenOffset++;
+                    nestedControlOffset++;
                     offset += block.byteLength();
                     stackPointer += block.returnTypeLength();
                     byteConstantOffset += block.byteConstantLength();
@@ -389,7 +383,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case LOOP: {
-                    LoopNode loopNode = (LoopNode) children[childrenOffset];
+                    LoopNode loopNode = (LoopNode) nestedControlTable[nestedControlOffset];
                     final WasmBlockNode loopBody = (WasmBlockNode) loopNode.getRepeatingNode();
 
                     // The unwind counter indicates how many levels up we need to branch from within
@@ -414,7 +408,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     // CONTINUE_LOOP_STATUS.
                     assert unwindCounter.isMinusOne() : "Unwind counter after loop exit: " + unwindCounter.value;
 
-                    childrenOffset++;
+                    nestedControlOffset++;
                     offset += loopBody.byteLength();
                     stackPointer += loopBody.returnTypeLength();
                     byteConstantOffset += loopBody.byteConstantLength();
@@ -424,7 +418,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     break;
                 }
                 case IF: {
-                    WasmIfNode ifNode = (WasmIfNode) children[childrenOffset];
+                    WasmIfNode ifNode = (WasmIfNode) nestedControlTable[nestedControlOffset];
                     stackPointer--;
                     trace("if ENTER");
                     TargetOffset unwindCounter = ifNode.execute(context, frame);
@@ -432,7 +426,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     if (unwindCounter.isGreaterThanZero()) {
                         return unwindCounter.decrement();
                     }
-                    childrenOffset++;
+                    nestedControlOffset++;
                     offset += ifNode.byteLength();
                     stackPointer += ifNode.returnTypeLength();
                     byteConstantOffset += ifNode.byteConstantLength();
@@ -490,11 +484,7 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     int targetBlockReturnLength = codeEntry().intConstant(intConstantOffset);
                     intConstantOffset++;
                     // endregion
-
-                    boolean condition = codeEntry().profileCondition(profileOffset, popCondition(frame, stackPointer));
-                    ++profileOffset;
-
-                    if (condition) {
+                    if (popCondition(frame, stackPointer)) {
                         TargetOffset unwindCounter = TargetOffset.createOrCached(unwindCounterValue);
 
                         trace("br_if, target = %d", unwindCounterValue);
@@ -555,8 +545,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     byte returnType = function.returnType();
                     int numArgs = function.numArguments();
 
-                    DirectCallNode callNode = (DirectCallNode) children[childrenOffset];
-                    childrenOffset++;
+                    DirectCallNode callNode = (DirectCallNode) callNodeTable[callNodeOffset];
+                    callNodeOffset++;
 
                     Object[] args = createArgumentsForCall(frame, function, numArgs, stackPointer);
                     stackPointer -= args.length;
@@ -638,8 +628,8 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                     }
 
                     // Invoke the resolved function.
-                    WasmIndirectCallNode callNode = (WasmIndirectCallNode) children[childrenOffset];
-                    childrenOffset++;
+                    WasmIndirectCallNode callNode = (WasmIndirectCallNode) callNodeTable[callNodeOffset];
+                    callNodeOffset++;
 
                     int numArgs = module().symbolTable().functionTypeArgumentCount(expectedFunctionTypeIndex);
                     Object[] args = createArgumentsForCall(frame, function, numArgs, stackPointer);
@@ -1404,9 +1394,9 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
                 }
                 case I64_LE_S: {
                     stackPointer--;
-                    long x = pop(frame, stackPointer);
+                    int x = popInt(frame, stackPointer);
                     stackPointer--;
-                    long y = pop(frame, stackPointer);
+                    int y = popInt(frame, stackPointer);
                     pushInt(frame, stackPointer, y <= x ? 1 : 0);
                     stackPointer++;
                     trace("0x%016X <= 0x%016X ? [i64]", y, x);
@@ -2404,9 +2394,9 @@ public final class WasmBlockNode extends WasmNode implements RepeatingNode {
     }
 
     @TruffleBoundary
-    public void resolveCallNode(int childOffset) {
-        final CallTarget target = ((WasmCallStubNode) children[childOffset]).function().resolveCallTarget();
-        children[childOffset] = Truffle.getRuntime().createDirectCallNode(target);
+    public void resolveCallNode(int callNodeOffset) {
+        final CallTarget target = ((WasmCallStubNode) callNodeTable[callNodeOffset]).function().resolveCallTarget();
+        callNodeTable[callNodeOffset] = Truffle.getRuntime().createDirectCallNode(target);
     }
 
     @ExplodeLoop
