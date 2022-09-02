@@ -44,14 +44,25 @@ import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.Node;
 
-@GenerateUncached
-public abstract class OtherPackageNode extends Node {
+public class OtherPackageGroup {
 
-    public abstract Object execute(Object arg);
+    public static class InnerGroup {
 
-    @Specialization
-    int doDefault(int arg) {
-        return arg;
+        @GenerateUncached
+        public abstract static class InnerNode extends Node {
+
+            public abstract Object execute(Object arg);
+
+            @Specialization
+            int doDefault(int arg) {
+                return arg;
+            }
+        }
+
+        public static InnerGroup create() {
+            return new InnerGroup();
+        }
+
     }
 
     @GenerateUncached
@@ -64,17 +75,23 @@ public abstract class OtherPackageNode extends Node {
             return arg;
         }
 
-    }
+        @GenerateUncached
+        public abstract static class InnerInnerNode extends Node {
 
-    public static class OtherPackageGroup {
-        public static OtherPackageGroup create() {
-            return new OtherPackageGroup();
+            public abstract Object execute(Object arg);
+
+            @Specialization
+            int doDefault(int arg) {
+                return arg;
+            }
+
         }
 
+        @GenerateUncached
         public static class InnerGroup {
 
             @GenerateUncached
-            public abstract static class InnerNode extends Node {
+            public abstract static class InnerInnerNode extends Node {
 
                 public abstract Object execute(Object arg);
 
@@ -91,41 +108,10 @@ public abstract class OtherPackageNode extends Node {
 
         }
 
-        @GenerateUncached
-        public abstract static class InnerNode extends Node {
+    }
 
-            public abstract Object execute(Object arg);
-
-            @Specialization
-            int doDefault(int arg) {
-                return arg;
-            }
-
-            @GenerateUncached
-            public abstract static class InnerInnerNode extends Node {
-
-                public abstract Object execute(Object arg);
-
-                @Specialization
-                int doDefault(int arg) {
-                    return arg;
-                }
-
-            }
-
-            public static class InnerGroup {
-                @GenerateUncached
-                public abstract static class InnerInnerNode extends Node {
-
-                    public abstract Object execute(Object arg);
-
-                    @Specialization
-                    int doDefault(int arg) {
-                        return arg;
-                    }
-                }
-            }
-        }
+    public static OtherPackageGroup create() {
+        return new OtherPackageGroup();
     }
 
 }

@@ -38,37 +38,80 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.api.dsl.test.otherPackage;
+package com.oracle.truffle.api.dsl.test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
+import org.junit.Test;
+
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.test.ImportGenerationTestFactory.ImportTestNodeGen;
+import com.oracle.truffle.api.dsl.test.otherPackage.OtherPackageGroup;
+import com.oracle.truffle.api.dsl.test.otherPackage.OtherPackageNode;
 import com.oracle.truffle.api.nodes.Node;
 
-@GenerateUncached
-public abstract class OtherPackageNode extends Node {
+/*
+ * Tests that import generation generates valid code for all combinations of referring to nodes.
+ */
+public class ImportGenerationTest {
 
-    public abstract Object execute(Object arg);
-
-    @Specialization
-    int doDefault(int arg) {
-        return arg;
+    @Test
+    public void testNode() {
+        assertEquals(42, ImportTestNodeGen.create().execute(42));
+        assertEquals(42, ImportTestNodeGen.getUncached().execute(42));
     }
 
+    @SuppressWarnings("unused")
     @GenerateUncached
-    public abstract static class InnerNode extends Node {
+    public abstract static class ImportTestNode extends Node {
 
         public abstract Object execute(Object arg);
 
         @Specialization
-        int doDefault(int arg) {
+        int doDefault(int arg,
+                        @Cached OtherPackageNode node1,
+                        @Cached OtherPackageNode.InnerNode node2,
+                        @Cached(allowUncached = true) OtherPackageNode.OtherPackageGroup node3,
+                        @Cached OtherPackageNode.OtherPackageGroup.InnerNode node4,
+                        @Cached(allowUncached = true) OtherPackageNode.OtherPackageGroup.InnerGroup node5,
+                        @Cached OtherPackageNode.OtherPackageGroup.InnerGroup.InnerNode node6,
+                        @Cached(allowUncached = true) ThisPackageGroup node7,
+                        @Cached ThisPackageGroup.InnerNode node8,
+                        @Cached ThisPackageGroup.InnerNode.InnerInnerNode node9,
+                        @Cached(allowUncached = true) ThisPackageGroup.InnerNode.InnerGroup node10,
+                        @Cached ThisPackageGroup.InnerNode.InnerGroup.InnerInnerNode node11,
+                        @Cached ThisPackageGroup.InnerGroup.InnerNode node12,
+                        @Cached(allowUncached = true) OtherPackageGroup node13,
+                        @Cached OtherPackageGroup.InnerNode node14,
+                        @Cached(allowUncached = true) OtherPackageGroup.InnerGroup node15,
+                        @Cached OtherPackageGroup.InnerGroup.InnerNode node16) {
+            assertNotNull(node1);
+            assertNotNull(node2);
+            assertNotNull(node3);
+            assertNotNull(node4);
+            assertNotNull(node5);
+            assertNotNull(node6);
+            assertNotNull(node7);
+            assertNotNull(node8);
+            assertNotNull(node9);
+            assertNotNull(node10);
+            assertNotNull(node11);
+            assertNotNull(node12);
+            assertNotNull(node13);
+            assertNotNull(node14);
+            assertNotNull(node15);
+            assertNotNull(node16);
             return arg;
         }
 
     }
 
-    public static class OtherPackageGroup {
-        public static OtherPackageGroup create() {
-            return new OtherPackageGroup();
+    public static class ThisPackageGroup {
+        public static ThisPackageGroup create() {
+            return new ThisPackageGroup();
         }
 
         public static class InnerGroup {
@@ -88,7 +131,6 @@ public abstract class OtherPackageNode extends Node {
             public static InnerGroup create() {
                 return new InnerGroup();
             }
-
         }
 
         @GenerateUncached
@@ -123,6 +165,10 @@ public abstract class OtherPackageNode extends Node {
                     int doDefault(int arg) {
                         return arg;
                     }
+                }
+
+                public static InnerGroup create() {
+                    return new InnerGroup();
                 }
             }
         }
