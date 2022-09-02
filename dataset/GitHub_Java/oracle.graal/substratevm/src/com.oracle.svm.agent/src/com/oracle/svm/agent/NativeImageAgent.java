@@ -46,7 +46,6 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import org.graalvm.nativeimage.ProcessProperties;
 import org.graalvm.nativeimage.hosted.Feature;
@@ -73,6 +72,7 @@ import com.oracle.svm.jvmtiagentbase.jvmti.JvmtiInterface;
 
 public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHandleSet> {
     private static final String AGENT_NAME = "native-image-agent";
+    public static final String MESSAGE_PREFIX = AGENT_NAME + ": ";
     private static final TimeZone UTC_TIMEZONE = TimeZone.getTimeZone("UTC");
 
     private ScheduledThreadPoolExecutor periodicConfigWriterExecutor = null;
@@ -111,23 +111,28 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
         int configWritePeriod = -1; // in seconds
         int configWritePeriodInitialDelay = 1; // in seconds
 
-        String[] tokens = !options.isEmpty() ? options.split(",") : new String[0];
-        for (String token : tokens) {
+        if (options.length() == 0) {
+            System.err.println(MESSAGE_PREFIX + "invalid option string. Please read BuildConfiguration.md.");
+            return 1;
+        }
+        for (String token : options.split(",")) {
             if (token.startsWith("trace-output=")) {
                 if (traceOutputFile != null) {
-                    return usage(1, "cannot specify trace-output= more than once.");
+                    System.err.println(MESSAGE_PREFIX + "cannot specify trace-output= more than once.");
+                    return 1;
                 }
                 traceOutputFile = getTokenValue(token);
             } else if (token.startsWith("config-output-dir=") || token.startsWith("config-merge-dir=")) {
                 if (configOutputDir != null) {
-                    return usage(1, "cannot specify more than one of config-output-dir= or config-merge-dir=.");
+                    System.err.println(MESSAGE_PREFIX + "cannot specify more than one of config-output-dir= or config-merge-dir=.");
+                    return 1;
                 }
                 configOutputDir = transformPath(getTokenValue(token));
                 if (token.startsWith("config-merge-dir=")) {
                     mergeConfigs.addDirectory(Paths.get(configOutputDir));
                 }
             } else if (token.startsWith("restrict-all-dir") || token.equals("restrict") || token.startsWith("restrict=")) {
-                warn("restrict mode is no longer supported, ignoring option: " + token);
+                System.err.println(MESSAGE_PREFIX + "restrict mode is no longer supported.");
             } else if (token.equals("no-builtin-caller-filter")) {
                 builtinCallerFilter = false;
             } else if (token.startsWith("builtin-caller-filter=")) {
@@ -153,25 +158,28 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
             } else if (token.startsWith("config-write-period-secs=")) {
                 configWritePeriod = parseIntegerOrNegative(getTokenValue(token));
                 if (configWritePeriod <= 0) {
-                    return usage(1, "config-write-period-secs must be an integer greater than 0");
+                    System.err.println(MESSAGE_PREFIX + "config-write-period-secs can only be an integer greater than 0");
+                    return 1;
                 }
             } else if (token.startsWith("config-write-initial-delay-secs=")) {
                 configWritePeriodInitialDelay = parseIntegerOrNegative(getTokenValue(token));
                 if (configWritePeriodInitialDelay < 0) {
-                    return usage(1, "config-write-initial-delay-secs must be an integer greater or equal to 0");
+                    System.err.println(MESSAGE_PREFIX + "config-write-initial-delay-secs can only be an integer greater or equal to 0");
+                    return 1;
                 }
             } else if (token.equals("build")) {
                 build = true;
             } else if (token.startsWith("build=")) {
                 build = Boolean.parseBoolean(getTokenValue(token));
             } else {
-                return usage(1, "unknown option: '" + token + "'.");
+                System.err.println(MESSAGE_PREFIX + "unsupported option: '" + token + "'. Please read BuildConfiguration.md.");
+                return 1;
             }
         }
 
         if (traceOutputFile == null && configOutputDir == null && !build) {
             configOutputDir = transformPath(AGENT_NAME + "_config-pid{pid}-{datetime}/");
-            inform("no output/build options provided, tracking dynamic accesses and writing configuration to directory: " + configOutputDir);
+            System.err.println(MESSAGE_PREFIX + "no output/build options provided, tracking dynamic accesses and writing configuration to directory: " + configOutputDir);
         }
 
         RuleNode callerFilter = null;
@@ -198,7 +206,8 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
 
         if (configOutputDir != null) {
             if (traceOutputFile != null) {
-                return usage(1, "can only once specify exactly one of trace-output=, config-output-dir= or config-merge-dir=.");
+                System.err.println(MESSAGE_PREFIX + "can only once specify exactly one of trace-output=, config-output-dir= or config-merge-dir=.");
+                return 1;
             }
             try {
                 configOutputDirPath = Paths.get(configOutputDir);
@@ -207,7 +216,7 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
                 }
                 Function<IOException, Exception> handler = e -> {
                     if (e instanceof NoSuchFileException) {
-                        warn("file " + ((NoSuchFileException) e).getFile() + " for merging could not be found, skipping");
+                        System.err.println(NativeImageAgent.MESSAGE_PREFIX + "warning: file " + ((NoSuchFileException) e).getFile() + " for merging could not be found, skipping");
                         return null;
                     }
                     return e; // rethrow
@@ -217,63 +226,43 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
                 // They should use the same filter sets, however.
                 AccessAdvisor advisor = createAccessAdvisor(builtinHeuristicFilter, callerFilter, accessFilter);
                 TraceProcessor processor = new TraceProcessor(advisor, mergeConfigs.loadJniConfig(handler), mergeConfigs.loadReflectConfig(handler),
-                                mergeConfigs.loadProxyConfig(handler), mergeConfigs.loadResourceConfig(handler), mergeConfigs.loadSerializationConfig(handler),
-                                mergeConfigs.loadDynamicClassesConfig(handler));
+                                mergeConfigs.loadProxyConfig(handler), mergeConfigs.loadResourceConfig(handler), mergeConfigs.loadSerializationConfig(handler));
                 traceWriter = new TraceProcessorWriterAdapter(processor);
             } catch (Throwable t) {
-                return error(2, t.toString());
+                System.err.println(MESSAGE_PREFIX + t);
+                return 2;
             }
         } else if (traceOutputFile != null) {
             try {
                 Path path = Paths.get(transformPath(traceOutputFile));
                 traceWriter = new TraceFileWriter(path);
             } catch (Throwable t) {
-                return error(2, t.toString());
+                System.err.println(MESSAGE_PREFIX + t);
+                return 2;
             }
         }
 
         if (build) {
             int status = buildImage(jvmti);
-            if (status == 0) {
-                System.exit(status);
-            }
-            return status;
+            System.exit(status);
         }
 
         accessAdvisor = createAccessAdvisor(builtinHeuristicFilter, callerFilter, accessFilter);
         try {
             BreakpointInterceptor.onLoad(jvmti, callbacks, traceWriter, this, experimentalClassLoaderSupport);
         } catch (Throwable t) {
-            return error(3, t.toString());
+            System.err.println(MESSAGE_PREFIX + t);
+            return 3;
         }
         try {
             JniCallInterceptor.onLoad(traceWriter, this);
         } catch (Throwable t) {
-            return error(4, t.toString());
+            System.err.println(MESSAGE_PREFIX + t);
+            return 4;
         }
 
         setupExecutorServiceForPeriodicConfigurationCapture(configWritePeriod, configWritePeriodInitialDelay);
         return 0;
-    }
-
-    private static void inform(String message) {
-        System.err.println(AGENT_NAME + ": " + message);
-    }
-
-    private static void warn(String message) {
-        inform("WARNING: " + message);
-    }
-
-    private static <T> T error(T result, String message) {
-        inform("ERROR: " + message);
-        return result;
-    }
-
-    private static <T> T usage(T result, String message) {
-        inform(message);
-        inform("Example usage: -agentlib:native-image-agent=config-output-dir=/path/to/config-dir/");
-        inform("For details, please read BuildConfiguration.md or https://www.graalvm.org/reference-manual/native-image/BuildConfiguration/");
-        return result;
     }
 
     private static AccessAdvisor createAccessAdvisor(boolean builtinHeuristicFilter, RuleNode callerFilter, RuleNode accessFilter) {
@@ -301,7 +290,8 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
             try (Reader reader = new FileReader(path)) {
                 new FilterConfigurationParser(filter).parseAndRegister(reader);
             } catch (Exception e) {
-                return error(false, "cannot parse filter file " + path + ": " + e);
+                System.err.println(MESSAGE_PREFIX + "cannot parse filter file " + path + ": " + e);
+                return false;
             }
         }
         filter.removeRedundantNodes();
@@ -337,16 +327,19 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
         System.out.println("Building native image ...");
         String classpath = Support.getSystemProperty(jvmti, "java.class.path");
         if (classpath == null) {
-            return usage(1, "Build mode could not determine classpath.");
+            System.err.println(MESSAGE_PREFIX + "build mode could not determine classpath");
+            return 1;
         }
         String javaCommand = Support.getSystemProperty(jvmti, "sun.java.command");
-        String mainClassMissing = "Build mode could not determine main class.";
+        String mainClassMissing = MESSAGE_PREFIX + "build mode could not determine main class";
         if (javaCommand == null) {
-            return usage(1, mainClassMissing);
+            System.err.println(mainClassMissing);
+            return 1;
         }
         String mainClass = SubstrateUtil.split(javaCommand, " ")[0];
         if (mainClass.isEmpty()) {
-            return usage(1, mainClassMissing);
+            System.err.println(mainClassMissing);
+            return 1;
         }
         List<String> buildArgs = new ArrayList<>();
         // buildArgs.add("--verbose");
@@ -427,7 +420,6 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
             allConfigFiles.put(ConfigurationFiles.DYNAMIC_PROXY_NAME, p.getProxyConfiguration());
             allConfigFiles.put(ConfigurationFiles.RESOURCES_NAME, p.getResourceConfiguration());
             allConfigFiles.put(ConfigurationFiles.SERIALIZATION_NAME, p.getSerializationConfiguration());
-            allConfigFiles.put(ConfigurationFiles.DYNAMIC_CLASSES_NAME, p.getDynamicClassesConfiguration());
 
             for (Map.Entry<String, JsonPrintable> configFile : allConfigFiles.entrySet()) {
                 Path tempPath = tempDirectory.resolve(configFile.getKey());
@@ -442,21 +434,10 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
                 tryAtomicMove(source, target);
             }
 
-            Path dumpedClassSrc = tempDirectory.resolve(ConfigurationFiles.DUMP_CLASSES_DIR);
-            Path dumpedClassTarget = configOutputDirPath.resolve(ConfigurationFiles.DUMP_CLASSES_DIR);
-            // Move the entire directory if the target directory does not exist
-            if (Files.notExists(dumpedClassTarget)) {
-                tryAtomicMove(dumpedClassSrc, dumpedClassTarget);
-            } else {
-                // Move each file inside the source directory if the target directory exists
-                for (Path filePath : Files.list(dumpedClassSrc).collect(Collectors.toList())) {
-                    tryAtomicMove(filePath, dumpedClassTarget.resolve(filePath.getFileName()));
-                }
-            }
-
             compulsoryDelete(tempDirectory);
         } catch (IOException e) {
-            warnUpToLimit(currentFailuresWritingConfigs++, MAX_WARNINGS_FOR_WRITING_CONFIGS_FAILURES, "Error when writing configuration files: " + e.toString());
+            printUpToLimit(currentFailuresWritingConfigs++, MAX_WARNINGS_FOR_WRITING_CONFIGS_FAILURES,
+                            MESSAGE_PREFIX + "error when writing configuration files: " + e.toString());
         }
     }
 
@@ -468,15 +449,15 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
         }
     }
 
-    private static void warnUpToLimit(int currentCount, int limit, String message) {
+    private static void printUpToLimit(int currentCount, int limit, String message) {
         if (currentCount < limit) {
-            warn(message);
+            System.err.println(message);
             return;
         }
 
         if (currentCount == limit) {
-            warn(message);
-            warn("The above warning will no longer be reported.");
+            System.err.println(message);
+            System.err.println(MESSAGE_PREFIX + "WARNING: The above failure will be silenced, and will no longer be reported");
         }
     }
 
@@ -487,8 +468,8 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
         try {
             Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
         } catch (AtomicMoveNotSupportedException e) {
-            warnUpToLimit(currentFailuresAtomicMove++, MAX_FAILURES_ATOMIC_MOVE,
-                            String.format("Could not move temporary configuration profile from (%s) to (%s) atomically. " +
+            printUpToLimit(currentFailuresAtomicMove++, MAX_FAILURES_ATOMIC_MOVE,
+                            String.format(MESSAGE_PREFIX + ": Could not move temporary configuration profile from (%s) to (%s) atomically. " +
                                             "This might result in inconsistencies.", source.toAbsolutePath(), target.toAbsolutePath()));
             Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
         }
@@ -524,7 +505,7 @@ public final class NativeImageAgent extends JvmtiAgentBase<NativeImageAgentJNIHa
          * (unless another JVM is launched in this process).
          */
         // cleanupOnUnload(vm);
-        BreakpointInterceptor.reportExceptions();
+
         /*
          * The epilogue of this method does not tear down our VM: we don't seem to observe all
          * threads that end and therefore can't detach them, so we would wait forever for them.
