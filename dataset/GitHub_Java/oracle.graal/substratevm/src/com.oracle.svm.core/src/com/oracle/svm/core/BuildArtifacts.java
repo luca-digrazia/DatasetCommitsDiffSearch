@@ -33,7 +33,6 @@ public interface BuildArtifacts {
     enum ArtifactType {
         EXECUTABLE,
         SHARED_LIB,
-        JDK_LIB,
         HEADER,
         IMPORT_LIB,
         DEBUG_INFO,
