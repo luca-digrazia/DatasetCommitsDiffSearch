@@ -128,14 +128,15 @@ final class SafepointStackSampler {
     }
 
     public void pushSyntheticFrame(TruffleContext context, LanguageInfo language, String message) {
-        syntheticFrame.set(new SyntheticFrame(context, language, message, syntheticFrame.get(), fetchStackVisitor()));
+        syntheticFrame.set(new SyntheticFrame(context, language, message, syntheticFrame.get()));
     }
 
     public void popSyntheticFrame() {
         SyntheticFrame toPop = this.syntheticFrame.get();
+        if (toPop.visitor != null) {
+            toPop.visitor.syntheticFrame = null;
+        }
         this.syntheticFrame.set(toPop.parent);
-        toPop.visitor.synthetic = null;
-        toPop.visitor.reset();
     }
 
     static final class StackSample {
@@ -159,12 +160,12 @@ final class SafepointStackSampler {
 
         private final CallTarget[] targets;
         private final byte[] states;
-        public SyntheticFrame synthetic;
         private Thread thread;
         private int nextFrameIndex;
         private long startTime;
         private long endTime;
         private boolean overflowed;
+        private SyntheticFrame syntheticFrame;
 
         StackVisitor(int stackLimit) {
             assert stackLimit > 0;
@@ -211,7 +212,7 @@ final class SafepointStackSampler {
         }
 
         void reset() {
-            if (synthetic == null) {
+            if (syntheticFrame == null) {
                 Arrays.fill(states, 0, nextFrameIndex, (byte) 0);
                 Arrays.fill(targets, 0, nextFrameIndex, null);
                 nextFrameIndex = 0;
@@ -234,8 +235,8 @@ final class SafepointStackSampler {
                     entries.add(new StackTraceEntry(VISITOR_TAGS, sourceSection, root, root, states[i]));
                 }
             }
-            if (synthetic != null) {
-                entries.add(new StackTraceEntry(synthetic.language.getName() + ":" + synthetic.message));
+            if (syntheticFrame != null) {
+                entries.add(new StackTraceEntry(syntheticFrame.language.getName() + ":" + syntheticFrame.message));
             }
             return entries;
         }
@@ -275,6 +276,10 @@ final class SafepointStackSampler {
                 visitor.reset();
             } else {
                 completed.put(access.getThread(), visitor);
+                if (syntheticFrame != null && syntheticFrame.visitor == null) {
+                    visitor.syntheticFrame = syntheticFrame;
+                    syntheticFrame.visitor = visitor;
+                }
             }
             visitor.afterVisit();
         }
@@ -295,16 +300,13 @@ final class SafepointStackSampler {
         final LanguageInfo language;
         final String message;
         final SyntheticFrame parent;
-        final StackVisitor visitor;
+        StackVisitor visitor;
 
-        public SyntheticFrame(TruffleContext context, LanguageInfo language, String message, SyntheticFrame parent, StackVisitor visitor) {
+        public SyntheticFrame(TruffleContext context, LanguageInfo language, String message, SyntheticFrame parent) {
             this.context = context;
             this.language = language;
             this.message = message;
             this.parent = parent;
-            this.visitor = visitor;
-            Truffle.getRuntime().iterateFrames(this.visitor);
-            this.visitor.synthetic = this;
         }
     }
 }

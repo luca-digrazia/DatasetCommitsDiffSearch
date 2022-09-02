@@ -141,7 +141,7 @@ public final class CPUSampler implements Closeable {
             }
 
             public void onLanguageContextCreate(TruffleContext context, LanguageInfo language) {
-                safepointStackSampler.pushSyntheticFrame(language, "CreateContext");
+                safepointStackSampler.pushSyntheticFrame(context, language, "CreateContext");
             }
 
             @Override
@@ -154,7 +154,7 @@ public final class CPUSampler implements Closeable {
             }
 
             public void onLanguageContextInitialize(TruffleContext context, LanguageInfo language) {
-                safepointStackSampler.pushSyntheticFrame(language, "InitializeContext");
+                safepointStackSampler.pushSyntheticFrame(context, language, "InitializeContext");
             }
 
             @Override
