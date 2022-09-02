@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -28,15 +28,14 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform.HOSTED_ONLY;
 import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
@@ -71,7 +70,7 @@ public final class NativeLibrarySupport {
 
     private final ReentrantLock lock = new ReentrantLock();
 
-    private final List<NativeLibrary> loadedLibraries = new ArrayList<>();
+    private final List<NativeLibrary> knownLibraries = new ArrayList<>();
 
     private final Deque<NativeLibrary> currentLoadContext = new ArrayDeque<>();
 
@@ -88,29 +87,44 @@ public final class NativeLibrarySupport {
         this.libraryInitializer = initializer;
     }
 
-    public void loadLibrary(String name, boolean isAbsolute) {
-        if (paths == null) {
-            String[] tokens = SubstrateUtil.split(System.getProperty("java.library.path", ""), File.pathSeparator);
-            paths = Arrays.stream(tokens).map(t -> t.isEmpty() ? "." : t).toArray(String[]::new);
-        }
+    @Platforms(HOSTED_ONLY.class)
+    public void preregisterUninitializedBuiltinLibrary(String name) {
+        knownLibraries.add(PlatformNativeLibrarySupport.singleton().createLibrary(name, true));
+    }
 
-        if (isAbsolute) {
-            if (loadLibrary0(new File(name), false)) {
-                return;
-            }
-            throw new UnsatisfiedLinkError("Can't load library: " + name);
+    @Platforms(HOSTED_ONLY.class)
+    public boolean isPreregisteredBuiltinLibrary(String name) {
+        return knownLibraries.stream().anyMatch(l -> l.isBuiltin() && l.getCanonicalIdentifier().equals(name));
+    }
+
+    public void loadLibraryAbsolute(File file) {
+        if (loadLibrary0(file, false)) {
+            return;
         }
+        throw new UnsatisfiedLinkError("Can't load library: " + file);
+    }
+
+    public void loadLibraryRelative(String name) {
         // Test if this is a built-in library
         if (loadLibrary0(new File(name), true)) {
             return;
         }
         String libname = System.mapLibraryName(name);
+        if (paths == null) {
+            String[] tokens = SubstrateUtil.split(System.getProperty("java.library.path", ""), File.pathSeparator);
+            for (int i = 0; i < tokens.length; i++) {
+                if (tokens[i].isEmpty()) {
+                    tokens[i] = ".";
+                }
+            }
+            paths = tokens;
+        }
         for (String path : paths) {
             File libpath = new File(path, libname);
             if (loadLibrary0(libpath, false)) {
                 return;
             }
-            File altpath = Target_java_lang_ClassLoaderHelper.mapAlternativeName(libpath);
+            File altpath = Target_jdk_internal_loader_ClassLoaderHelper.mapAlternativeName(libpath);
             if (altpath != null && loadLibrary0(libpath, false)) {
                 return;
             }
@@ -119,23 +133,33 @@ public final class NativeLibrarySupport {
     }
 
     private boolean loadLibrary0(File file, boolean asBuiltin) {
-        if (asBuiltin && (libraryInitializer == null || !libraryInitializer.isBuiltinLibrary(file.getName()))) {
-            return false;
-        }
-
         String canonical;
         try {
             canonical = asBuiltin ? file.getName() : file.getCanonicalPath();
         } catch (IOException e) {
             return false;
         }
+        return addLibrary(asBuiltin, canonical, true);
+    }
 
+    private boolean addLibrary(boolean asBuiltin, String canonical, boolean initialize) {
         lock.lock();
         try {
-            for (NativeLibrary loaded : loadedLibraries) {
-                if (canonical.equals(loaded.getCanonicalIdentifier())) {
-                    return true;
+            NativeLibrary lib = null;
+            for (NativeLibrary known : knownLibraries) {
+                if (canonical.equals(known.getCanonicalIdentifier())) {
+                    if (known.isLoaded()) {
+                        return true;
+                    } else {
+                        assert known.isBuiltin() : "non-built-in libraries must always have been loaded";
+                        assert asBuiltin : "must have tried loading as built-in first";
+                        lib = known; // load and initialize below
+                        break;
+                    }
                 }
+            }
+            if (asBuiltin && lib == null && (libraryInitializer == null || !libraryInitializer.isBuiltinLibrary(canonical))) {
+                return false;
             }
             // Libraries can load libraries during initialization, avoid recursion with a stack
             for (NativeLibrary loading : currentLoadContext) {
@@ -143,18 +167,31 @@ public final class NativeLibrarySupport {
                     return true;
                 }
             }
-            NativeLibrary lib = PlatformNativeLibrarySupport.singleton().createLibrary(canonical, asBuiltin);
+            boolean created = false;
+            if (lib == null) {
+                lib = PlatformNativeLibrarySupport.singleton().createLibrary(canonical, asBuiltin);
+                created = true;
+            }
             currentLoadContext.push(lib);
             try {
-                lib.load();
-                if (libraryInitializer != null) {
+                if (!lib.load()) {
+                    return false;
+                }
+                /*
+                 * Initialization of a library must be skipped if it can be initialized at most once
+                 * per process and another isolate has already initialized it. However, the library
+                 * must be (marked as) loaded above so it cannot be loaded and initialized later.
+                 */
+                if (initialize && libraryInitializer != null) {
                     libraryInitializer.initialize(lib);
                 }
             } finally {
                 NativeLibrary top = currentLoadContext.pop();
                 assert top == lib;
             }
-            loadedLibraries.add(lib);
+            if (created) {
+                knownLibraries.add(lib);
+            }
             return true;
         } finally {
             lock.unlock();
@@ -164,7 +201,7 @@ public final class NativeLibrarySupport {
     public PointerBase findSymbol(String name) {
         lock.lock();
         try {
-            for (NativeLibrary lib : loadedLibraries) {
+            for (NativeLibrary lib : knownLibraries) {
                 PointerBase entry = lib.findSymbol(name);
                 if (entry.isNonNull()) {
                     return entry;
@@ -174,5 +211,10 @@ public final class NativeLibrarySupport {
         } finally {
             lock.unlock();
         }
+    }
+
+    public void registerInitializedBuiltinLibrary(String name) {
+        boolean success = addLibrary(true, name, false);
+        assert success;
     }
 }
