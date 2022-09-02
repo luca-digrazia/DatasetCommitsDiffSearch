@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,26 +24,28 @@
  */
 package com.oracle.svm.core.posix.linux;
 
-import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
-import org.graalvm.nativeimage.Platform;
-import org.graalvm.nativeimage.Platforms;
+import org.graalvm.nativeimage.hosted.Feature;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
 import com.oracle.svm.core.heap.PhysicalMemory;
 import com.oracle.svm.core.posix.headers.Unistd;
+import com.oracle.svm.core.util.VMError;
 
-@Platforms(Platform.LINUX.class)
 class LinuxPhysicalMemory extends PhysicalMemory {
 
     static class PhysicalMemorySupportImpl implements PhysicalMemorySupport {
+
         @Override
         public UnsignedWord size() {
-            final UnsignedWord numberOfPhysicalMemoryPages = WordFactory.unsigned(Unistd.sysconf(Unistd._SC_PHYS_PAGES()));
-            final UnsignedWord sizeOfAPhysicalMemoryPage = WordFactory.unsigned(Unistd.sysconf(Unistd._SC_PAGESIZE()));
-            return numberOfPhysicalMemoryPages.multiply(sizeOfAPhysicalMemoryPage);
+            long numberOfPhysicalMemoryPages = Unistd.sysconf(Unistd._SC_PHYS_PAGES());
+            long sizeOfAPhysicalMemoryPage = Unistd.sysconf(Unistd._SC_PAGESIZE());
+            if (numberOfPhysicalMemoryPages == -1 || sizeOfAPhysicalMemoryPage == -1) {
+                throw VMError.shouldNotReachHere("Physical memory size (number of pages or page size) not available");
+            }
+            return WordFactory.unsigned(numberOfPhysicalMemoryPages).multiply(WordFactory.unsigned(sizeOfAPhysicalMemoryPage));
         }
     }
 
