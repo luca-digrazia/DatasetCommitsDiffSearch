@@ -46,10 +46,6 @@ import com.oracle.truffle.espresso.meta.EspressoError;
  * OS/architecture-specific properties should be added here.
  */
 public interface EspressoProperties {
-    String BOOT_MODULES_NAME = "modules";
-
-    int javaVersion();
-
     Path javaHome();
 
     Path espressoLibraryPath();
@@ -65,7 +61,6 @@ public interface EspressoProperties {
     List<Path> extDirs();
 
     abstract class Builder {
-        private int version;
         private Path javaHome;
         private Path espressoLibraryPath;
         private List<Path> classpath;
@@ -87,15 +82,6 @@ public interface EspressoProperties {
         abstract List<Path> defaultBootLibraryPath();
 
         abstract List<Path> defaultExtDirs();
-
-        public int javaVersion() {
-            return version;
-        }
-
-        public Builder javaVersion(int version) {
-            this.version = version;
-            return this;
-        }
 
         public Builder javaHome(Path newJavaHome) {
             this.javaHome = newJavaHome;
@@ -162,7 +148,6 @@ public interface EspressoProperties {
 
         public EspressoProperties build() {
             return new EspressoProperties() {
-                private final int javaVersion = Builder.this.javaVersion();
                 private final Path javaHome = Objects.requireNonNull(Builder.this.javaHome(), "javaHome not defined");
                 private final List<Path> classpath = Objects.requireNonNull(Builder.this.classpath(), "classpath not defined");
                 private final List<Path> bootClasspath = Objects.requireNonNull(Builder.this.bootClasspath(), "bootClasspath not defined");
@@ -170,11 +155,6 @@ public interface EspressoProperties {
                 private final List<Path> bootLibraryPath = Objects.requireNonNull(Builder.this.bootLibraryPath(), "bootLibraryPath not defined");
                 private final List<Path> extDirs = Objects.requireNonNull(Builder.this.extDirs(), "extDirs not defined");
                 private final Path espressoLibraryPath = Objects.requireNonNull(Builder.this.espressoLibraryPath(), "espressoLibraryPath not defined");
-
-                @Override
-                public int javaVersion() {
-                    return javaVersion;
-                }
 
                 @Override
                 public Path javaHome() {
@@ -285,21 +265,16 @@ public interface EspressoProperties {
 
 abstract class PlatformBuilder extends EspressoProperties.Builder {
 
-    private static final Path RT_JAR = Paths.get("lib", "rt.jar");
-
-    private static final Path MODULES = Paths.get("lib", EspressoProperties.BOOT_MODULES_NAME);
-
     private static final List<Path> BOOT_CLASSPATH = Collections.unmodifiableList(
                     Arrays.asList(
                                     Paths.get("lib", "resources.jar"),
+                                    Paths.get("lib", "rt.jar"),
                                     Paths.get("lib", "sunrsasign.jar"),
                                     Paths.get("lib", "jsse.jar"),
                                     Paths.get("lib", "jce.jar"),
                                     Paths.get("lib", "charsets.jar"),
                                     Paths.get("lib", "jfr.jar"),
                                     Paths.get("classes")));
-
-    private static final int PATHS_SIZE = BOOT_CLASSPATH.size() + 1;
 
     // TODO(peterssen): Enforce we are on amd64.
     // Note that os.arch may yield different values for the same architecture e.g. amd64 vs x86_64.
@@ -314,21 +289,11 @@ abstract class PlatformBuilder extends EspressoProperties.Builder {
 
     @Override
     List<Path> defaultBootClasspath() {
-        Path rt = javaHome().resolve(RT_JAR);
-        File f = new File(rt.toString());
-        if (f.exists()) {
-            javaVersion(8);
-            List<Path> paths = new ArrayList<>(PATHS_SIZE);
-            for (Path p : BOOT_CLASSPATH) {
-                paths.add(javaHome().resolve(p));
-            }
-            return paths;
-        } else {
-            javaVersion(11);
-            List<Path> paths = new ArrayList<>(1);
-            paths.add(javaHome().resolve(MODULES));
-            return paths;
+        List<Path> paths = new ArrayList<>(BOOT_CLASSPATH.size());
+        for (Path p : BOOT_CLASSPATH) {
+            paths.add(javaHome().resolve(p));
         }
+        return paths;
     }
 
     @Override
@@ -454,7 +419,7 @@ final class DarwinBuilder extends PlatformBuilder {
 
 final class WindowsBuilder extends PlatformBuilder {
 
-    private final Path windowsRoot = Paths.get(System.getenv("SystemRoot"));
+    private static final Path WINDOWS_ROOT = Paths.get(System.getenv("SystemRoot"));
 
     private static final Path PACKAGE_DIR = Paths.get("Sun", "Java");
 
@@ -481,13 +446,13 @@ final class WindowsBuilder extends PlatformBuilder {
         libraryPath.add(javaHome().resolve("bin"));
 
         // 2. The system wide Java Extensions directory (Java only)
-        libraryPath.add(windowsRoot.resolve(PACKAGE_DIR).resolve("bin"));
+        libraryPath.add(WINDOWS_ROOT.resolve(PACKAGE_DIR).resolve("bin"));
 
         // 3. System directory (GetSystemDirectory)
-        libraryPath.add(windowsRoot.resolve("system32"));
+        libraryPath.add(WINDOWS_ROOT.resolve("system32"));
 
         // 4. Windows directory (GetWindowsDirectory)
-        libraryPath.add(windowsRoot);
+        libraryPath.add(WINDOWS_ROOT);
 
         // 5. The PATH environment variable
         String envPath = System.getenv("PATH");
@@ -513,6 +478,6 @@ final class WindowsBuilder extends PlatformBuilder {
     List<Path> defaultExtDirs() {
         return Arrays.asList(
                         javaHome().resolve(EXTENSIONS_DIR),
-                        windowsRoot.resolve(PACKAGE_DIR).resolve(EXTENSIONS_DIR));
+                        WINDOWS_ROOT.resolve(PACKAGE_DIR).resolve(EXTENSIONS_DIR));
     }
 }
