@@ -22,19 +22,21 @@
  */
 package com.oracle.truffle.espresso.impl;
 
-import com.oracle.truffle.espresso.jdwp.api.RedefineInfo;
-
 public final class ChangePacket {
 
-    public final RedefineInfo info;
+    public final HotSwapClassInfo info;
     public final ParserKlass parserKlass;
     public final ClassRedefinition.ClassChange classChange;
     public final DetectedChange detectedChange;
 
-    public ChangePacket(RedefineInfo redefineInfo, ParserKlass parserKlass, ClassRedefinition.ClassChange classChange, DetectedChange detectedChange) {
+    public ChangePacket(HotSwapClassInfo redefineInfo, ParserKlass parserKlass, ClassRedefinition.ClassChange classChange, DetectedChange detectedChange) {
         this.info = redefineInfo;
         this.parserKlass = parserKlass;
         this.classChange = classChange;
         this.detectedChange = detectedChange;
+    }
+
+    public ChangePacket(HotSwapClassInfo redefineInfo, ClassRedefinition.ClassChange classChange) {
+        this(redefineInfo, null, classChange, null);
     }
 }

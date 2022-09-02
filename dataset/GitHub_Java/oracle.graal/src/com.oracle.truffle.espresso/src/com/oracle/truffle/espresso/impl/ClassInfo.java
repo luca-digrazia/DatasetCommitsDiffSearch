@@ -37,7 +37,7 @@ import java.util.regex.Matcher;
 
 public abstract class ClassInfo {
 
-    public static ImmutableClassInfo create(Klass klass, InnerClassRedefiner innerClassRedefiner) {
+    public static ImmutableClassInfo create(Klass klass, EspressoContext context) {
         StringBuilder hierarchy = new StringBuilder();
         StringBuilder methods = new StringBuilder();
         StringBuilder fields = new StringBuilder();
@@ -70,12 +70,12 @@ public abstract class ClassInfo {
         // find all currently loaded direct inner classes and create class infos
         ArrayList<ImmutableClassInfo> inners = new ArrayList<>(1);
 
-        Klass[] loadedInnerClasses = innerClassRedefiner.findLoadedInnerClasses(klass);
+        Klass[] loadedInnerClasses = InnerClassRedefiner.findLoadedInnerClasses(klass, context);
         for (Klass inner : loadedInnerClasses) {
             matcher = InnerClassRedefiner.ANON_INNER_CLASS_PATTERN.matcher(inner.getNameAsString());
             // only add anonymous inner classes
             if (matcher.matches()) {
-                inners.add(innerClassRedefiner.getGlobalClassInfo(inner));
+                inners.add(InnerClassRedefiner.getGlobalClassInfo(inner, context));
             }
         }
         return new ImmutableClassInfo((ObjectKlass) klass, name, klass.getDefiningClassLoader(), hierarchy.toString(), methods.toString(), fields.toString(), enclosing.toString(),
