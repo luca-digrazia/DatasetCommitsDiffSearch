@@ -32,7 +32,6 @@ import java.io.InputStream;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
@@ -44,17 +43,11 @@ import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.options.Option;
 import org.graalvm.compiler.options.OptionType;
 import org.graalvm.nativeimage.Feature;
-import org.graalvm.nativeimage.ImageSingletons;
 
 import com.oracle.svm.core.annotate.AutomaticFeature;
-import com.oracle.svm.core.jdk.LocalizationSupport;
 import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.UserError;
-import com.oracle.svm.hosted.FeatureImpl.BeforeAnalysisAccessImpl;
-import com.oracle.svm.hosted.config.ConfigurationDirectories;
-import com.oracle.svm.hosted.config.ConfigurationParser;
-import com.oracle.svm.hosted.config.ResourceConfigurationParser;
 
 @AutomaticFeature
 public final class ResourcesFeature implements Feature {
@@ -62,25 +55,11 @@ public final class ResourcesFeature implements Feature {
     public static class Options {
         @Option(help = "Regexp to match names of resources to be included in the image.", type = OptionType.User)//
         public static final HostedOptionKey<String[]> IncludeResources = new HostedOptionKey<>(new String[0]);
-
-        @Option(help = "Files describing Java resources to be included in the image.", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> ResourceConfigurationFiles = new HostedOptionKey<>(new String[0]);
-
-        @Option(help = "Resources describing Java resources to be included in the image.", type = OptionType.User)//
-        public static final HostedOptionKey<String[]> ResourceConfigurationResources = new HostedOptionKey<>(new String[0]);
     }
 
     @Override
-    public void beforeAnalysis(BeforeAnalysisAccess arg) {
-        Set<String> allResources = new HashSet<>(Arrays.asList(Options.IncludeResources.getValue()));
-        LocalizationSupport localizationSupport = ImageSingletons.lookup(LocalizationSupport.class);
-
-        ImageClassLoader imageClassLoader = ((BeforeAnalysisAccessImpl) arg).getImageClassLoader();
-        ResourceConfigurationParser parser = new ResourceConfigurationParser(allResources::add, localizationSupport::addBundleToCache);
-        ConfigurationParser.parseAndRegisterConfigurations(parser, imageClassLoader, "resource",
-                        Options.ResourceConfigurationFiles, Options.ResourceConfigurationResources, ConfigurationDirectories.FileNames.RESOURCES_NAME);
-
-        for (String regExp : allResources) {
+    public void beforeAnalysis(BeforeAnalysisAccess access) {
+        for (String regExp : Options.IncludeResources.getValue()) {
             if (regExp.length() == 0) {
                 continue;
             }
@@ -113,7 +92,7 @@ public final class ResourcesFeature implements Feature {
             // Checkstyle: resume
             for (File element : todo) {
                 try {
-                    DebugContext debugContext = ((BeforeAnalysisAccessImpl) arg).getDebugContext();
+                    DebugContext debugContext = ((FeatureImpl.BeforeAnalysisAccessImpl) access).getDebugContext();
                     if (element.isDirectory()) {
                         scanDirectory(debugContext, element, "", pattern);
                     } else {
@@ -129,13 +108,8 @@ public final class ResourcesFeature implements Feature {
     @SuppressWarnings("try")
     private void scanDirectory(DebugContext debugContext, File f, String relativePath, Pattern... patterns) throws IOException {
         if (f.isDirectory()) {
-            File[] files = f.listFiles();
-            if (files == null) {
-                throw UserError.abort("Cannot scan directory " + f);
-            } else {
-                for (File ch : files) {
-                    scanDirectory(debugContext, ch, relativePath.isEmpty() ? ch.getName() : relativePath + "/" + ch.getName(), patterns);
-                }
+            for (File ch : f.listFiles()) {
+                scanDirectory(debugContext, ch, relativePath.isEmpty() ? ch.getName() : relativePath + "/" + ch.getName(), patterns);
             }
         } else {
             if (matches(patterns, relativePath)) {
