@@ -598,10 +598,6 @@ public final class InspectorDebugger extends DebuggerDomain {
             if (var != null) {
                 return var;
             }
-            DebugValue receiver = debugScope.getReceiver();
-            if (receiver != null && name.equals(receiver.getName())) {
-                return receiver;
-            }
         }
         return null;
     }
