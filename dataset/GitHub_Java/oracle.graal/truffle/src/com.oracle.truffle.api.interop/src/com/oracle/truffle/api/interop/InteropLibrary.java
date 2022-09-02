@@ -1386,7 +1386,7 @@ public abstract class InteropLibrary extends Library {
     public Object toDisplayString(Object receiver, boolean allowSideEffects) {
         Env env = getLegacyEnv(receiver, false);
         if (env != null && allowSideEffects) {
-            return InteropAccessor.ACCESSOR.languageSupport().legacyToString(env, receiver);
+            return InteropAccessor.ACCESSOR.languageSupport().toStringIfVisible(env, receiver, false);
         } else {
             return receiver.getClass().getTypeName() + "@" + Integer.toHexString(System.identityHashCode(receiver));
         }
