@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,44 +33,44 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.function.Function;
 import java.util.logging.Level;
 
-import org.graalvm.tools.lsp.server.types.CompletionContext;
-import org.graalvm.tools.lsp.server.types.CompletionList;
-import org.graalvm.tools.lsp.server.types.DocumentHighlight;
-import org.graalvm.tools.lsp.server.types.Hover;
-import org.graalvm.tools.lsp.server.types.Location;
-import org.graalvm.tools.lsp.server.types.PublishDiagnosticsParams;
-import org.graalvm.tools.lsp.server.types.SignatureHelp;
-import org.graalvm.tools.lsp.server.types.SymbolInformation;
-import org.graalvm.tools.lsp.server.types.TextDocumentContentChangeEvent;
-import org.graalvm.tools.lsp.api.ContextAwareExecutor;
-import org.graalvm.tools.lsp.api.ContextAwareExecutorRegistry;
-import org.graalvm.tools.lsp.api.VirtualLanguageServerFileProvider;
+import org.graalvm.tools.api.lsp.LSPCommand;
+import org.graalvm.tools.api.lsp.LSPExtension;
+import org.graalvm.tools.api.lsp.LSPServer;
 import org.graalvm.tools.lsp.exceptions.DiagnosticsNotification;
 import org.graalvm.tools.lsp.exceptions.UnknownLanguageException;
-import org.graalvm.tools.lsp.instrument.LSPInstrument;
 import org.graalvm.tools.lsp.server.request.AbstractRequestHandler;
 import org.graalvm.tools.lsp.server.request.CompletionRequestHandler;
 import org.graalvm.tools.lsp.server.request.CoverageRequestHandler;
-import org.graalvm.tools.lsp.server.request.DefinitionRequestHandler;
 import org.graalvm.tools.lsp.server.request.HighlightRequestHandler;
 import org.graalvm.tools.lsp.server.request.HoverRequestHandler;
-import org.graalvm.tools.lsp.server.request.ReferencesRequestHandler;
 import org.graalvm.tools.lsp.server.request.SignatureHelpRequestHandler;
 import org.graalvm.tools.lsp.server.request.SourceCodeEvaluator;
-import org.graalvm.tools.lsp.server.request.SymbolRequestHandler;
+import org.graalvm.tools.lsp.server.types.CompletionContext;
+import org.graalvm.tools.lsp.server.types.CompletionList;
+import org.graalvm.tools.lsp.server.types.CompletionOptions;
+import org.graalvm.tools.lsp.server.types.Coverage;
+import org.graalvm.tools.lsp.server.types.DocumentHighlight;
+import org.graalvm.tools.lsp.server.types.ExecuteCommandParams;
+import org.graalvm.tools.lsp.server.types.Hover;
+import org.graalvm.tools.lsp.server.types.ServerCapabilities;
+import org.graalvm.tools.lsp.server.types.SignatureHelp;
+import org.graalvm.tools.lsp.server.types.SignatureHelpOptions;
+import org.graalvm.tools.lsp.server.types.TextDocumentContentChangeEvent;
 import org.graalvm.tools.lsp.server.utils.SourceUtils;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogate;
 import org.graalvm.tools.lsp.server.utils.TextDocumentSurrogateMap;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.InstrumentInfo;
 import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleFile;
 import com.oracle.truffle.api.TruffleLogger;
@@ -86,82 +86,59 @@ import com.oracle.truffle.api.source.Source;
  * entered a {@link org.graalvm.polyglot.Context}.
  *
  */
-public final class TruffleAdapter implements VirtualLanguageServerFileProvider, ContextAwareExecutorRegistry {
-    private static final TruffleLogger LOG = TruffleLogger.getLogger(LSPInstrument.ID, TruffleAdapter.class);
+public final class TruffleAdapter implements VirtualLanguageServerFileProvider {
 
-    private final TruffleInstrument.Env env;
+    private final boolean developerMode;
+    private final TruffleLogger logger;
+    private final TruffleInstrument.Env envMain;
+    private TruffleInstrument.Env envInternal;
     ContextAwareExecutor contextAwareExecutor;
     private SourceCodeEvaluator sourceCodeEvaluator;
     CompletionRequestHandler completionHandler;
-    private SymbolRequestHandler symbolHandler;
-    private DefinitionRequestHandler definitionHandler;
     private HoverRequestHandler hoverHandler;
     private SignatureHelpRequestHandler signatureHelpHandler;
     private CoverageRequestHandler coverageHandler;
-    private ReferencesRequestHandler referencesHandler;
     private HighlightRequestHandler highlightHandler;
+    private List<LSPCommand> extensionCommands;
+    private LSPServer lspServer;
     private TextDocumentSurrogateMap surrogateMap;
+    private final LanguageTriggerCharacters completionTriggerCharacters = new LanguageTriggerCharacters();
+    private final LanguageTriggerCharacters signatureTriggerCharacters = new LanguageTriggerCharacters();
 
-    public TruffleAdapter(Env env) {
-        this.env = env;
+    public TruffleAdapter(TruffleInstrument.Env mainEnv, boolean developerMode) {
+        this.envMain = mainEnv;
+        this.developerMode = developerMode;
+        this.logger = envMain.getLogger("");
     }
 
-    @Override
-    public void register(ContextAwareExecutor executor) {
+    public void register(Env environment, ContextAwareExecutor executor) {
+        this.envInternal = environment;
         this.contextAwareExecutor = executor;
-    }
-
-    public void initialize() {
         initSurrogateMap();
         createLSPRequestHandlers();
     }
 
+    public TruffleLogger getLogger() {
+        return logger;
+    }
+
     private void createLSPRequestHandlers() {
-        this.sourceCodeEvaluator = new SourceCodeEvaluator(env, surrogateMap, contextAwareExecutor);
-        this.completionHandler = new CompletionRequestHandler(env, surrogateMap, contextAwareExecutor, sourceCodeEvaluator);
-        this.symbolHandler = new SymbolRequestHandler(env, surrogateMap, contextAwareExecutor);
-        this.definitionHandler = new DefinitionRequestHandler(env, surrogateMap, contextAwareExecutor, sourceCodeEvaluator, symbolHandler);
-        this.hoverHandler = new HoverRequestHandler(env, surrogateMap, contextAwareExecutor, completionHandler);
-        this.signatureHelpHandler = new SignatureHelpRequestHandler(env, surrogateMap, contextAwareExecutor, sourceCodeEvaluator, completionHandler);
-        this.coverageHandler = new CoverageRequestHandler(env, surrogateMap, contextAwareExecutor, sourceCodeEvaluator);
-        this.highlightHandler = new HighlightRequestHandler(env, surrogateMap, contextAwareExecutor);
-        this.referencesHandler = new ReferencesRequestHandler(env, surrogateMap, contextAwareExecutor, highlightHandler);
+        this.sourceCodeEvaluator = new SourceCodeEvaluator(envMain, envInternal, surrogateMap, contextAwareExecutor);
+        this.completionHandler = new CompletionRequestHandler(envMain, envInternal, surrogateMap, contextAwareExecutor, sourceCodeEvaluator, completionTriggerCharacters);
+        this.hoverHandler = new HoverRequestHandler(envMain, envInternal, surrogateMap, contextAwareExecutor, completionHandler, developerMode);
+        this.signatureHelpHandler = new SignatureHelpRequestHandler(envMain, envInternal, surrogateMap, contextAwareExecutor, sourceCodeEvaluator, completionHandler, signatureTriggerCharacters);
+        this.coverageHandler = new CoverageRequestHandler(envMain, envInternal, surrogateMap, contextAwareExecutor, sourceCodeEvaluator);
+        this.highlightHandler = new HighlightRequestHandler(envMain, envInternal, surrogateMap, contextAwareExecutor);
     }
 
     private void initSurrogateMap() {
         try {
             contextAwareExecutor.executeWithDefaultContext(() -> {
-                LOG.log(Level.CONFIG, "Truffle Runtime: {0}", Truffle.getRuntime().getName());
+                logger.log(Level.CONFIG, "Truffle Runtime: {0}", Truffle.getRuntime().getName());
                 return null;
             }).get();
 
-            Future<Map<String, LanguageInfo>> futureMimeTypes = contextAwareExecutor.executeWithDefaultContext(() -> {
-                Map<String, LanguageInfo> mimeType2LangInfo = new HashMap<>();
-                for (LanguageInfo langInfo : env.getLanguages().values()) {
-                    if (langInfo.isInternal()) {
-                        continue;
-                    }
-                    langInfo.getMimeTypes().stream().forEach(mimeType -> mimeType2LangInfo.put(mimeType, langInfo));
-                }
-                return mimeType2LangInfo;
-            });
-
-            Future<Map<String, List<String>>> futureCompletionTriggerCharacters = contextAwareExecutor.executeWithDefaultContext(() -> {
-                Map<String, List<String>> langId2CompletionTriggerCharacters = new HashMap<>();
-                for (LanguageInfo langInfo : env.getLanguages().values()) {
-                    if (langInfo.isInternal()) {
-                        continue;
-                    }
-                    LOG.log(Level.FINEST, "Retrieving completion trigger characters for {0}", langInfo.getId());
-                    langId2CompletionTriggerCharacters.put(langInfo.getId(), env.getCompletionTriggerCharacters(langInfo));
-                }
-                return langId2CompletionTriggerCharacters;
-            });
-
-            Map<String, LanguageInfo> mimeType2LangInfo = futureMimeTypes.get();
-            Map<String, List<String>> langId2CompletionTriggerCharacters = futureCompletionTriggerCharacters.get();
-
-            this.surrogateMap = new TextDocumentSurrogateMap(env, langId2CompletionTriggerCharacters, mimeType2LangInfo);
+            this.surrogateMap = new TextDocumentSurrogateMap(envInternal);
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
@@ -182,7 +159,7 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
     }
 
     protected CallTarget parseWithEnteredContext(final String text, final String langId, final URI uri) throws DiagnosticsNotification {
-        LanguageInfo languageInfo = findLanguageInfo(langId, env.getTruffleFile(uri));
+        LanguageInfo languageInfo = findLanguageInfo(langId, envInternal.getTruffleFile(uri));
         TextDocumentSurrogate surrogate = getOrCreateSurrogate(uri, text, languageInfo);
         return parseWithEnteredContext(surrogate);
     }
@@ -200,11 +177,11 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
      * Special handling needed, because some LSP clients send a MIME type as langId.
      *
      * @param langId an id for a language, e.g. "sl" or "python", or a MIME type
-     * @param uri of the concerning file
+     * @param truffleFile of the concerning file
      * @return a language info
      */
     private LanguageInfo findLanguageInfo(final String langId, final TruffleFile truffleFile) {
-        Map<String, LanguageInfo> languages = env.getLanguages();
+        Map<String, LanguageInfo> languages = envInternal.getLanguages();
         LanguageInfo langInfo = languages.get(langId);
         if (langInfo != null) {
             return langInfo;
@@ -248,13 +225,9 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
 
         surrogate.getChangeEventsSinceLastSuccessfulParsing().addAll(list);
         surrogate.setLastChange(list.get(list.size() - 1));
-        surrogate.setEditorText(SourceUtils.applyTextDocumentChanges(list, surrogate.getSource(), surrogate));
+        surrogate.setEditorText(SourceUtils.applyTextDocumentChanges(list, surrogate.getSource(), surrogate, logger));
 
         sourceCodeEvaluator.parse(surrogate);
-
-        if (surrogate.hasCoverageData()) {
-            showCoverage(uri);
-        }
 
         return surrogate;
     }
@@ -270,7 +243,7 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
 
         Future<List<Future<?>>> futureTasks = contextAwareExecutor.executeWithDefaultContext(() -> {
             Map<String, LanguageInfo> mimeType2LangInfo = new HashMap<>();
-            for (LanguageInfo langInfo : env.getLanguages().values()) {
+            for (LanguageInfo langInfo : envInternal.getLanguages().values()) {
                 if (langInfo.isInternal()) {
                     continue;
                 }
@@ -278,7 +251,7 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
             }
             try {
                 WorkspaceWalker walker = new WorkspaceWalker(mimeType2LangInfo);
-                LOG.log(Level.FINE, "Start walking file tree at: {0}", rootPath);
+                logger.log(Level.FINE, "Start walking file tree at: {0}", rootPath);
                 Files.walkFileTree(rootPath, walker);
                 return walker.parsingTasks;
             } catch (IOException e) {
@@ -290,6 +263,44 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
             return futureTasks.get();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    String getLanguageId(URI uri) {
+        TextDocumentSurrogate doc = surrogateMap.get(uri);
+        if (doc != null) {
+            return doc.getLanguageId();
+        }
+
+        Future<String> future = contextAwareExecutor.executeWithDefaultContext(() -> {
+            try {
+                return Source.findLanguage(envInternal.getTruffleFile(uri));
+            } catch (IOException ex) {
+                return null;
+            }
+        });
+
+        try {
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setServerCapabilities(String languageId, ServerCapabilities capabilities) {
+        CompletionOptions completionProvider = capabilities.getCompletionProvider();
+        if (completionProvider != null) {
+            List<String> triggerCharacters = completionProvider.getTriggerCharacters();
+            if (triggerCharacters != null) {
+                completionTriggerCharacters.add(languageId, triggerCharacters);
+            }
+        }
+        SignatureHelpOptions signatureHelpProvider = capabilities.getSignatureHelpProvider();
+        if (signatureHelpProvider != null) {
+            List<String> triggerCharacters = signatureHelpProvider.getTriggerCharacters();
+            if (triggerCharacters != null) {
+                signatureTriggerCharacters.add(languageId, triggerCharacters);
+            }
         }
     }
 
@@ -314,7 +325,7 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
         @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
             URI uri = file.toUri();
-            String mimeType = Source.findMimeType(env.getTruffleFile(uri));
+            String mimeType = Source.findMimeType(envInternal.getTruffleFile(uri));
             if (!mimeTypesAllLang.containsKey(mimeType)) {
                 return FileVisitResult.CONTINUE;
             }
@@ -335,14 +346,6 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
 
     }
 
-    public Future<List<? extends SymbolInformation>> documentSymbol(URI uri) {
-        return contextAwareExecutor.executeWithDefaultContext(() -> symbolHandler.documentSymbolWithEnteredContext(uri));
-    }
-
-    public Future<List<? extends SymbolInformation>> workspaceSymbol(String query) {
-        return contextAwareExecutor.executeWithDefaultContext(() -> symbolHandler.workspaceSymbolWithEnteredContext(query));
-    }
-
     /**
      * Provides completions for a specific position in the document. If line or column are out of
      * range, items of global scope (top scope) are provided.
@@ -356,10 +359,6 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
      */
     public Future<CompletionList> completion(final URI uri, int line, int column, CompletionContext completionContext) {
         return contextAwareExecutor.executeWithDefaultContext(() -> completionHandler.completionWithEnteredContext(uri, line, column, completionContext));
-    }
-
-    public Future<List<? extends Location>> definition(URI uri, int line, int character) {
-        return contextAwareExecutor.executeWithDefaultContext(() -> definitionHandler.definitionWithEnteredContext(uri, line, character));
     }
 
     public Future<Hover> hover(URI uri, int line, int column) {
@@ -392,80 +391,19 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
         return future;
     }
 
-    public Future<?> showCoverage(URI uri) {
+    public Future<Coverage> getCoverage(URI uri) {
         return contextAwareExecutor.executeWithDefaultContext(() -> {
-            coverageHandler.showCoverageWithEnteredContext(uri);
-            return null;
+            return coverageHandler.getCoverageWithEnteredContext(uri);
         });
-    }
-
-    public Future<List<String>> getCompletionTriggerCharactersOfAllLanguages() {
-        return contextAwareExecutor.executeWithDefaultContext(() -> {
-            List<String> triggerCharacters = completionHandler.getCompletionTriggerCharactersWithEnteredContext();
-            LOG.log(Level.CONFIG, "Completion trigger character set: {0}", triggerCharacters);
-            return triggerCharacters;
-        });
-    }
-
-    public Future<List<String>> getSignatureHelpTriggerCharactersOfAllLanguages() {
-        return contextAwareExecutor.executeWithDefaultContext(() -> {
-            List<String> signatureTriggerChars = signatureHelpHandler.getSignatureHelpTriggerCharactersWithEnteredContext();
-            LOG.log(Level.CONFIG, "SignatureHelp trigger character set: {0}", signatureTriggerChars);
-            return signatureTriggerChars;
-        });
-    }
-
-    /**
-     * Clears all collected coverage data for all files. See {@link #clearCoverage(URI)} for
-     * details.
-     *
-     * @return a future
-     */
-    public Future<?> clearCoverage() {
-        return contextAwareExecutor.executeWithDefaultContext(() -> {
-            LOG.fine("Clearing and re-parsing all files with coverage data...");
-            List<PublishDiagnosticsParams> params = new ArrayList<>();
-            surrogateMap.getSurrogates().stream().forEach(surrogate -> {
-                surrogate.clearCoverage();
-                try {
-                    sourceCodeEvaluator.parse(surrogate);
-                    params.add(PublishDiagnosticsParams.create(surrogate.getUri().toString(), Collections.emptyList()));
-                } catch (DiagnosticsNotification e) {
-                    params.addAll(e.getDiagnosticParamsCollection());
-                }
-            });
-            LOG.fine("Clearing and re-parsing done.");
-
-            throw new DiagnosticsNotification(params);
-        });
-    }
-
-    /**
-     * Clears the coverage data for a specific URI. Clearing means removing all Diagnostics used to
-     * highlight covered code. To avoid hiding syntax errors, the URIs source is parsed again. If
-     * errors occur during parsing, a {@link DiagnosticsNotification} is thrown. If not, we still
-     * have to clear all Diagnostics by throwing an empty {@link DiagnosticsNotification}
-     * afterwards.
-     *
-     * @param uri to source to clear coverage data for
-     * @return a future
-     */
-    public Future<?> clearCoverage(URI uri) {
-        return contextAwareExecutor.executeWithDefaultContext(() -> {
-            TextDocumentSurrogate surrogate = surrogateMap.get(uri);
-            surrogate.clearCoverage();
-            sourceCodeEvaluator.parse(surrogate);
-
-            throw new DiagnosticsNotification(PublishDiagnosticsParams.create(uri.toString(), Collections.emptyList()));
-        });
-    }
-
-    public Future<List<? extends Location>> references(URI uri, int line, int character) {
-        return contextAwareExecutor.executeWithDefaultContext(() -> referencesHandler.referencesWithEnteredContext(uri, line, character));
     }
 
     public Future<List<? extends DocumentHighlight>> documentHighlight(URI uri, int line, int character) {
         return contextAwareExecutor.executeWithDefaultContext(() -> highlightHandler.highlightWithEnteredContext(uri, line, character));
+    }
+
+    public boolean hasCoverageData(URI uri) {
+        TextDocumentSurrogate surrogate = surrogateMap.get(uri);
+        return surrogate != null ? surrogate.hasCoverageData() : false;
     }
 
     @Override
@@ -478,8 +416,64 @@ public final class TruffleAdapter implements VirtualLanguageServerFileProvider, 
         return surrogate != null ? surrogate.getEditorText() : null;
     }
 
+    public Source getSource(URI uri) {
+        if (surrogateMap == null) {
+            return null;
+        }
+
+        TextDocumentSurrogate surrogate = surrogateMap.get(uri);
+        return surrogate != null ? surrogate.getSource() : null;
+    }
+
     @Override
     public boolean isVirtualFile(Path path) {
         return surrogateMap.containsSurrogate(path.toUri());
+    }
+
+    public Function<URI, TextDocumentSurrogate> surrogateGetter(LanguageInfo languageInfo) {
+        return (sourceUri) -> {
+            return surrogateMap.getOrCreateSurrogate(sourceUri, () -> languageInfo);
+        };
+    }
+
+    public void initializeLSPServer(LSPServer server) {
+        this.lspServer = server;
+    }
+
+    private List<LSPCommand> getExternalCommands() {
+        if (extensionCommands == null) {
+            extensionCommands = new ArrayList<>();
+            for (InstrumentInfo instrument : envMain.getInstruments().values()) {
+                if ("lsp".equals(instrument.getId())) {
+                    continue;
+                }
+                LSPExtension extension = envMain.lookup(instrument, LSPExtension.class);
+                if (extension != null) {
+                    for (LSPCommand command : extension.getCommands()) {
+                        extensionCommands.add(command);
+                    }
+                }
+            }
+        }
+        return extensionCommands;
+    }
+
+    public Collection<String> getExtensionCommandNames() {
+        ArrayList<String> result = new ArrayList<>();
+        for (LSPCommand command : getExternalCommands()) {
+            result.add(command.getName());
+        }
+        return result;
+    }
+
+    public Future<?> createExtensionCommand(ExecuteCommandParams params) {
+        String commandName = params.getCommand();
+        for (LSPCommand command : getExternalCommands()) {
+            if (commandName.equals(command.getName())) {
+                List<Object> args = params.getArguments();
+                return contextAwareExecutor.executeWithNestedContext(() -> command.execute(lspServer, envInternal, args), command.getTimeoutMillis(), () -> command.onTimeout(args));
+            }
+        }
+        return null;
     }
 }

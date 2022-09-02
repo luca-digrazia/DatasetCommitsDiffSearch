@@ -24,26 +24,17 @@
  */
 package org.graalvm.tools.api.lsp;
 
-import java.util.List;
+import java.net.URI;
+import java.util.Map;
 
-import com.oracle.truffle.api.instrumentation.TruffleInstrument.Env;
+import com.oracle.truffle.api.source.Source;
 
-public interface LSPCommand {
+public interface LSPServer {
 
-    String getName();
+    Map<URI, String> getOpenFileURI2LangId();
 
-    Object execute(LSPServer server, Env env, List<Object> arguments);
+    void sendCustomNotification(String method, Object params);
 
-    default int getTimeoutMillis() {
-        return -1;
-    }
+    Source getSource(URI uri);
 
-    default Object onTimeout(List<Object> arguments) {
-        String argumentString = String.join(", ", arguments.toArray(new String[0]));
-        if (getTimeoutMillis() > 0) {
-            throw new RuntimeException("onTimeout not overriden. Arguments: " + argumentString);
-        } else {
-            throw new AssertionError("onTimeout triggered on negative or zero timeout. Arguments: " + argumentString);
-        }
-    }
 }
