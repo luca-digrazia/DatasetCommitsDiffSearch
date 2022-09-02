@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -89,7 +89,7 @@ final class NFIContext {
                 return ret;
             }
 
-            for (LanguageInfo language : env.getInternalLanguages().values()) {
+            for (LanguageInfo language : env.getLanguages().values()) {
                 if ("nfi".equals(language.getId())) {
                     continue;
                 }
@@ -97,7 +97,21 @@ final class NFIContext {
                 NFIBackendFactory backendFactory = env.lookup(language, NFIBackendFactory.class);
                 if (backendFactory != null && backendFactory.getBackendId().equals(id)) {
                     // force initialization of the backend language
-                    env.initializeLanguage(language);
+                    Source source = Source.newBuilder(language.getId(), "", "").internal(true).build();
+                    try {
+                        env.parseInternal(source);
+                    } catch (Exception ex) {
+                        boolean rethrow = true;
+                        if (ex instanceof TruffleException) {
+                            TruffleException te = (TruffleException) ex;
+                            if (te.isIncompleteSource() || te.isSyntaxError()) {
+                                rethrow = false;
+                            }
+                        }
+                        if (rethrow) {
+                            throw ex;
+                        }
+                    }
 
                     NFIBackend backend = backendFactory.createBackend(TOOLS);
                     backendCache.put(backendFactory.getBackendId(), backend);
