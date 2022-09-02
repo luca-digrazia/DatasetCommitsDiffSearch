@@ -271,7 +271,7 @@ public class CompileQueue {
 
         TrivialInlineTask(HostedMethod method) {
             this.method = method;
-            this.description = new Description(method, method.getName());
+            this.description = new Description(method, toString());
         }
 
         @Override
@@ -294,7 +294,7 @@ public class CompileQueue {
         public ParseTask(HostedMethod method, CompileReason reason) {
             this.method = method;
             this.reason = reason;
-            this.description = new Description(method, method.getName());
+            this.description = new Description(method, toString());
         }
 
         @Override
@@ -612,7 +612,7 @@ public class CompileQueue {
                 }
                 InliningUtil.inline(invoke, singleCallee.compilationInfo.getGraph(), true, singleCallee);
 
-                graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "After inlining %s with trivial callee %s", invoke, singleCallee.getQualifiedName());
+                graph.getDebug().dump(DebugContext.DETAILED_LEVEL, graph, "After inlining %s with trivial callee %s", invoke, singleCallee.format("%H.%n(%p)"));
                 return true;
             }
         }
