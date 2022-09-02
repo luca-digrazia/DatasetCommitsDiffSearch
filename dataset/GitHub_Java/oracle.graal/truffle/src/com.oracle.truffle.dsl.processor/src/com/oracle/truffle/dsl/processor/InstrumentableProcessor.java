@@ -186,8 +186,9 @@ public final class InstrumentableProcessor extends AbstractProcessor {
                         continue;
                     }
                     DeclaredType overrideType = (DeclaredType) context.getType(Override.class);
+                    DeclaredType unusedType = (DeclaredType) context.getType(SuppressWarnings.class);
                     unit.accept(new GenerateOverrideVisitor(overrideType), null);
-                    unit.accept(new FixWarningsVisitor(element, overrideType), null);
+                    unit.accept(new FixWarningsVisitor(context.getEnvironment(), unusedType, overrideType), null);
                     unit.accept(new CodeWriter(context.getEnvironment(), element), null);
                 } catch (Throwable e) {
                     // never throw annotation processor exceptions to the compiler
@@ -258,8 +259,9 @@ public final class InstrumentableProcessor extends AbstractProcessor {
                     continue;
                 }
                 DeclaredType overrideType = (DeclaredType) context.getType(Override.class);
+                DeclaredType unusedType = (DeclaredType) context.getType(SuppressWarnings.class);
                 unit.accept(new GenerateOverrideVisitor(overrideType), null);
-                unit.accept(new FixWarningsVisitor(element, overrideType), null);
+                unit.accept(new FixWarningsVisitor(context.getEnvironment(), unusedType, overrideType), null);
                 unit.accept(new CodeWriter(context.getEnvironment(), element), null);
             } catch (Throwable e) {
                 // never throw annotation processor exceptions to the compiler
@@ -348,16 +350,6 @@ public final class InstrumentableProcessor extends AbstractProcessor {
 
     private static String createWrapperClassName(TypeElement sourceType) {
         return sourceType.getSimpleName().toString() + CLASS_SUFFIX;
-    }
-
-    private static boolean hasUnexpectedResult(ProcessorContext context, ExecutableElement element) {
-        TypeMirror unexpectedResult = context.getType(UnexpectedResultException.class);
-        for (TypeMirror thrownType : element.getThrownTypes()) {
-            if (ElementUtils.typeEquals(thrownType, unexpectedResult)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @SuppressWarnings("deprecation")
@@ -510,7 +502,7 @@ public final class InstrumentableProcessor extends AbstractProcessor {
                 wrappedExecuteMethods.add(method);
             } else {
                 if (method.getModifiers().contains(Modifier.ABSTRACT) && !methodName.equals("getSourceSection") //
-                                && !methodName.equals(METHOD_GET_NODE_COST) && !hasUnexpectedResult(context, method)) {
+                                && !methodName.equals(METHOD_GET_NODE_COST) && !method.getThrownTypes().contains(context.getType(UnexpectedResultException.class))) {
                     wrappedMethods.add(method);
                 }
             }
@@ -559,7 +551,7 @@ public final class InstrumentableProcessor extends AbstractProcessor {
 
         for (ExecutableElement method : wrappedExecuteMethods) {
             ExecutableElement executeMethod = method;
-            CodeExecutableElement wrappedExecute = CodeExecutableElement.clone(executeMethod);
+            CodeExecutableElement wrappedExecute = CodeExecutableElement.clone(processingEnv, executeMethod);
             wrappedExecute.getModifiers().remove(Modifier.ABSTRACT);
             wrappedExecute.getAnnotationMirrors().clear();
 
@@ -590,8 +582,7 @@ public final class InstrumentableProcessor extends AbstractProcessor {
             builder.startFor().startGroup().string(";;").end().end().startBlock();
             builder.declaration("boolean", VAR_RETURN_CALLED, "false");
             builder.startTryBlock();
-            boolean hasUnexpectedResult = hasUnexpectedResult(context, wrappedExecute);
-            if (hasUnexpectedResult) {
+            if (wrappedExecute.getThrownTypes().contains(context.getType(UnexpectedResultException.class))) {
                 builder.startTryBlock();
             }
 
@@ -620,7 +611,7 @@ public final class InstrumentableProcessor extends AbstractProcessor {
             builder.end().end();
 
             builder.statement("break");
-            if (hasUnexpectedResult) {
+            if (wrappedExecute.getThrownTypes().contains(context.getType(UnexpectedResultException.class))) {
                 builder.end().startCatchBlock(context.getType(UnexpectedResultException.class), "e");
                 builder.startStatement().string(VAR_RETURN_CALLED).string(" = true").end();
                 builder.startStatement().startCall(FIELD_PROBE, METHOD_ON_RETURN_VALUE).string(frameParameterName);
@@ -646,7 +637,7 @@ public final class InstrumentableProcessor extends AbstractProcessor {
                 builder.statement("break");
             } else {
                 boolean objectReturnType = "java.lang.Object".equals(ElementUtils.getQualifiedName(returnTypeMirror)) && returnTypeMirror.getKind() != TypeKind.ARRAY;
-                boolean throwsUnexpectedResult = hasUnexpectedResult(context, wrappedExecute);
+                boolean throwsUnexpectedResult = wrappedExecute.getThrownTypes().contains(context.getType(UnexpectedResultException.class));
                 if (objectReturnType || !throwsUnexpectedResult) {
                     builder.end().startElseIf();
                     builder.string("result != null").end();
@@ -702,7 +693,7 @@ public final class InstrumentableProcessor extends AbstractProcessor {
         }
 
         for (ExecutableElement delegateMethod : wrappedMethods) {
-            CodeExecutableElement generatedMethod = CodeExecutableElement.clone(delegateMethod);
+            CodeExecutableElement generatedMethod = CodeExecutableElement.clone(processingEnv, delegateMethod);
 
             generatedMethod.getModifiers().remove(Modifier.ABSTRACT);
 
