@@ -126,11 +126,7 @@ class InterfaceTables {
     public static Klass[] getiKlassTable(ObjectKlass thisInterfKlass, Method[] declared) {
         ArrayList<Klass> tmpKlassTable = new ArrayList<>();
         for (int i = 0; i < declared.length; i++) {
-            Method method = declared[i];
-            method.setITableIndex(i);
-            if (!method.isAbstract() && !method.isStatic()) {
-                thisInterfKlass.needsRecursiveInit = true;
-            }
+            declared[i].setITableIndex(i);
         }
         tmpKlassTable.add(thisInterfKlass);
         for (ObjectKlass interf : thisInterfKlass.getSuperInterfaces()) {
@@ -140,12 +136,7 @@ class InterfaceTables {
                 }
             }
         }
-        Klass[] sortedInterfaces = tmpKlassTable.toArray(Klass.EMPTY_ARRAY);
-        // Interfaces must be sorted, superinterfaces first.
-        // The Klass.ID (class loading counter) can be used, since parent classes/interfaces are
-        // always loaded first.
-        Arrays.sort(sortedInterfaces, Klass.COMPARATOR);
-        return sortedInterfaces;
+        return tmpKlassTable.toArray(Klass.EMPTY_ARRAY);
     }
 
     // @formatter:off
