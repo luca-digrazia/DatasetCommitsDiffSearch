@@ -684,9 +684,6 @@ public final class CPUSampler implements Closeable {
                 }
                 List<StackSample> samples = safepointStackSampler.sample(env, context);
                 synchronized (CPUSampler.this) {
-                    if (!collecting) {
-                        return;
-                    }
                     if (context.isClosed()) {
                         continue;
                     }
