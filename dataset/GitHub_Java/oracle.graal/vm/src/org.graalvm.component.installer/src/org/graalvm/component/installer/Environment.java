@@ -36,7 +36,6 @@ import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.function.Supplier;
@@ -44,7 +43,7 @@ import java.util.function.Supplier;
 /**
  * Implementation of feedback and input for commands.
  */
-public class Environment implements Feedback, CommandInput, Config {
+public final class Environment implements Feedback, CommandInput {
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle(
                     "org.graalvm.component.installer.Bundle");
 
@@ -105,28 +104,23 @@ public class Environment implements Feedback, CommandInput, Config {
         this.fileIterable = new FileIterable(this, this);
     }
 
-    @Override
-    public Environment enableStacktraces() {
+    Environment enableStacktraces() {
         this.stacktraces = true;
         return this;
     }
 
-    @Override
     public boolean isAutoYesEnabled() {
         return autoYesEnabled;
     }
 
-    @Override
     public void setAutoYesEnabled(boolean autoYesEnabled) {
         this.autoYesEnabled = autoYesEnabled;
     }
 
-    @Override
     public boolean isNonInteractive() {
         return nonInteractive;
     }
 
-    @Override
     public void setNonInteractive(boolean nonInteractive) {
         this.nonInteractive = nonInteractive;
     }
@@ -135,7 +129,6 @@ public class Environment implements Feedback, CommandInput, Config {
         return allOutputToErr;
     }
 
-    @Override
     public void setAllOutputToErr(boolean allOutputToErr) {
         this.allOutputToErr = allOutputToErr;
         if (allOutputToErr) {
@@ -145,12 +138,10 @@ public class Environment implements Feedback, CommandInput, Config {
         }
     }
 
-    @Override
     public void setFileIterable(ComponentIterable fileIterable) {
         this.fileIterable = fileIterable;
     }
 
-    @Override
     public void setCatalogFactory(CatalogFactory catalogFactory) {
         this.catalogFactory = catalogFactory;
     }
@@ -158,7 +149,7 @@ public class Environment implements Feedback, CommandInput, Config {
     @Override
     public ComponentCatalog getRegistry() {
         if (componentCatalog == null) {
-            componentCatalog = catalogFactory.createComponentCatalog(this);
+            componentCatalog = catalogFactory.createComponentCatalog(this, getLocalRegistry());
         }
         return componentCatalog;
     }
@@ -255,12 +246,6 @@ public class Environment implements Feedback, CommandInput, Config {
     }
 
     @Override
-    public boolean verbatimPart(String msg, boolean error, boolean beVerbose) {
-        print(beVerbose, false, null, error ? err : out, msg);
-        return beVerbose;
-    }
-
-    @Override
     public boolean backspace(int chars, boolean beVerbose) {
         if (beVerbose && !verbose) {
             return false;
@@ -347,12 +332,6 @@ public class Environment implements Feedback, CommandInput, Config {
             }
 
             @Override
-            public boolean verbatimPart(String msg, boolean error, boolean verboseOutput) {
-                print(verboseOutput, false, null, error ? err : out, msg);
-                return verbose;
-            }
-
-            @Override
             public boolean backspace(int chars, boolean beVerbose) {
                 return Environment.this.backspace(chars, beVerbose);
             }
@@ -376,11 +355,6 @@ public class Environment implements Feedback, CommandInput, Config {
             public Path getLocalCache(URL location) {
                 return Environment.this.getLocalCache(location);
             }
-
-            @Override
-            public boolean isNonInteractive() {
-                return Environment.this.isNonInteractive();
-            }
         };
     }
 
@@ -400,9 +374,6 @@ public class Environment implements Feedback, CommandInput, Config {
                     args[i] = v;
                 }
             }
-        }
-        if (bundleKey == null) {
-            return String.valueOf(args[0]);
         }
         return MessageFormat.format(
                         bundle.getString(bundleKey),
@@ -474,6 +445,10 @@ public class Environment implements Feedback, CommandInput, Config {
         return options.get(optName);
     }
 
+    public boolean hasOption(String optName) {
+        return optValue(optName) != null;
+    }
+
     public char acceptCharacter() {
         try {
             int input = in.read();
@@ -504,9 +479,6 @@ public class Environment implements Feedback, CommandInput, Config {
             } else {
                 sb.append(c);
             }
-        }
-        if (sb.length() > 0 && sb.charAt(sb.length() - 1) == '\r') {
-            sb.delete(sb.length() - 1, sb.length());
         }
         return sb.toString();
     }
@@ -544,17 +516,12 @@ public class Environment implements Feedback, CommandInput, Config {
         this.fileOperations = fileOperations;
     }
 
-    public boolean close() throws IOException {
+    public void close() {
         if (out != null) {
             out.flush();
         }
         if (err != null) {
             err.flush();
-        }
-        if (fileOperations != null) {
-            return fileOperations.flush();
-        } else {
-            return false;
         }
     }
 
@@ -566,27 +533,4 @@ public class Environment implements Feedback, CommandInput, Config {
     public void resetParameters() {
         parameterPos = 0;
     }
-
-    @Override
-    public String getParameter(String key, boolean cmdLine) {
-        if (cmdLine) {
-            return System.getProperty(key);
-        } else {
-            return System.getenv(key.toUpperCase(Locale.ENGLISH));
-        }
-    }
-
-    @Override
-    public Map<String, String> parameters(boolean cmdLine) {
-        if (cmdLine) {
-            Map<String, String> res = new HashMap<>();
-            for (String s : System.getProperties().stringPropertyNames()) {
-                res.put(s, System.getProperty(s));
-            }
-            return res;
-        } else {
-            return System.getenv();
-        }
-    }
-
 }

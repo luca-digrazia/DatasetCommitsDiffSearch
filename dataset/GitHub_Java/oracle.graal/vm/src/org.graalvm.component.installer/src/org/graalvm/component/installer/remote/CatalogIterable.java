@@ -26,19 +26,12 @@ package org.graalvm.component.installer.remote;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.Path;
-import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
 import org.graalvm.component.installer.BundleConstants;
 import org.graalvm.component.installer.CommandInput;
 import org.graalvm.component.installer.Commands;
@@ -49,7 +42,6 @@ import org.graalvm.component.installer.FailedOperationException;
 import org.graalvm.component.installer.Feedback;
 import org.graalvm.component.installer.FileIterable;
 import org.graalvm.component.installer.FileIterable.FileComponent;
-import org.graalvm.component.installer.SystemUtils;
 import org.graalvm.component.installer.UnknownVersionException;
 import org.graalvm.component.installer.Version;
 import org.graalvm.component.installer.model.ComponentInfo;
@@ -88,7 +80,7 @@ public class CatalogIterable implements ComponentIterable {
 
     ComponentCatalog getRegistry() {
         if (remoteRegistry == null) {
-            remoteRegistry = input.getCatalogFactory().createComponentCatalog(input);
+            remoteRegistry = input.getCatalogFactory().createComponentCatalog(input, input.getLocalRegistry());
         }
         return remoteRegistry;
     }
@@ -109,7 +101,7 @@ public class CatalogIterable implements ComponentIterable {
 
     private ComponentParam latest(String s, Collection<ComponentInfo> infos) {
         List<ComponentInfo> ordered = new ArrayList<>(infos);
-        Collections.sort(ordered, ComponentInfo.reverseVersionComparator(input.getLocalRegistry().getManagementStorage()));
+        Collections.sort(ordered, ComponentInfo.versionComparator().reversed());
         boolean progress = input.optValue(Commands.OPTION_NO_DOWNLOAD_PROGRESS) == null;
         return createComponentParam(s, ordered.get(0), progress);
     }
@@ -126,82 +118,12 @@ public class CatalogIterable implements ComponentIterable {
 
         @Override
         public boolean hasNext() {
-            return !expandedIds.isEmpty() || input.hasParameter();
+            return input.hasParameter();
         }
-
-        private List<String> expandId(String pattern, Version.Match vm) {
-            // need to lowercase before passing to glob pattern: on UNIX, glob is case-sensitive, on
-            // Windows it is not. Lowercase will unify.
-            PathMatcher pm = FileSystems.getDefault().getPathMatcher("glob:" + pattern.toLowerCase(Locale.ENGLISH)); // NOI18N
-            Set<String> ids = new HashSet<>(getRegistry().getComponentIDs());
-            Map<ComponentInfo, String> abbreviatedIds = new HashMap<>();
-            for (String id : ids) {
-                Collection<ComponentInfo> infos = getRegistry().loadComponents(id, Version.NO_VERSION.match(Version.Match.Type.GREATER), false);
-                for (ComponentInfo info : infos) {
-                    abbreviatedIds.put(info, getRegistry().shortenComponentId(info));
-                }
-            }
-
-            // merge full IDs with unambiguous abbreviations.
-            ids.addAll(abbreviatedIds.values());
-            if (ids.contains(pattern)) {
-                // no wildcards, apparently
-                return Collections.singletonList(pattern);
-            }
-            for (Iterator<String> it = ids.iterator(); it.hasNext();) {
-                String s = it.next().toLowerCase(Locale.ENGLISH);
-                if (!pm.matches(SystemUtils.fromUserString(s))) {
-                    it.remove();
-                }
-            }
-            // translate back to components, to merge abbreviations and full Ids.
-            Set<ComponentInfo> infos = new HashSet<>();
-            ids.forEach(s -> infos.add(getRegistry().findComponent(s, vm)));
-            List<String> sorted = new ArrayList<>();
-            for (ComponentInfo ci : infos) {
-                if (ci == null) {
-                    continue;
-                }
-                String ab = abbreviatedIds.get(ci);
-                if (pm.matches(SystemUtils.fromUserString(ab))) {
-                    sorted.add(ab);
-                } else {
-                    sorted.add(ci.getId());
-                }
-            }
-            Collections.sort(sorted);
-            return sorted;
-        }
-
-        /**
-         * The command line parameters expanded from wildcards.
-         */
-        private final List<String> expandedIds = new ArrayList<>();
 
         @Override
         public ComponentParam next() {
-            if (!expandedIds.isEmpty()) {
-                return processParameter(expandedIds.remove(0));
-            }
             String s = input.nextParameter();
-            Version.Match[] m = new Version.Match[1];
-            String id = Version.idAndVersion(s, m);
-            if (m[0].getType() == Version.Match.Type.MOSTRECENT && versionFilter != null) {
-                m[0] = versionFilter;
-            }
-            List<String> expanded = expandId(id, m[0]);
-            if (expanded.isEmpty()) {
-                // just process it ;)
-                return processParameter(s);
-            }
-            String suffix = s.substring(id.length());
-            for (String ei : expanded) {
-                expandedIds.add(ei + suffix);
-            }
-            return processParameter(expandedIds.remove(0));
-        }
-
-        private ComponentParam processParameter(String s) {
             ComponentInfo info;
             try {
                 Version.Match[] m = new Version.Match[1];
@@ -282,34 +204,16 @@ public class CatalogIterable implements ComponentIterable {
         }
 
         @Override
-        public MetadataLoader createMetaLoader() throws IOException {
-            if (configurer == null) {
-                return super.createMetaLoader();
-            } else {
-                return configurer.interceptMetadataLoader(getCatalogInfo(), super.createMetaLoader());
-            }
-        }
-
-        @Override
-        public FileDownloader configureRelatedDownloader(FileDownloader dn) {
-            return configurer.processDownloader(getCatalogInfo(), dn);
-        }
-
-        @Override
         protected FileDownloader createDownloader() {
             FileDownloader d = super.createDownloader();
-            return configureRelatedDownloader(d);
+            return configurer.processDownloader(getCatalogInfo(), d);
         }
 
         @Override
         protected MetadataLoader metadataFromLocal(Path localFile) throws IOException {
-            String serial = getCatalogInfo().getTag();
-            FileDownloader theDownloader = getDownloader();
-            if (serial == null || "".equals(serial)) {
-                serial = theDownloader != null ? SystemUtils.fingerPrint(theDownloader.getReceivedDigest(), false) : null;
-            }
-            FileComponent fc = new FileIterable.FileComponent(localFile.toFile(), isVerifyJars(), serial, getFeedback());
+            FileComponent fc = new FileIterable.FileComponent(localFile.toFile(), isVerifyJars(), getFeedback());
             return fc.createFileLoader();
+            // return channel.createLocalFileLoader(getCatalogInfo(), localFile, isVerifyJars());
         }
 
         @Override

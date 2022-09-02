@@ -198,8 +198,7 @@ public class InstallTest extends CommandTestBase {
         inst.execute();
 
         File f = new File(folder.getRoot(), "inst");
-        // bin/ruby is a symlink, which is skipped on Windows; so test the link's target:
-        File binRuby = SystemUtils.resolveRelative(f.toPath(), "jre/bin/ruby").toFile();
+        File binRuby = new File(f, "bin/ruby");
         assertTrue("Ruby must be installed", binRuby.exists());
 
         Files.walk(f.toPath()).forEach((p) -> {

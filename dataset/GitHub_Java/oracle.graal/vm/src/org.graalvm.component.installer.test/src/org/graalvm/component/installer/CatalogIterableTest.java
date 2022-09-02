@@ -41,6 +41,7 @@ import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.remote.FileDownloader;
 import org.graalvm.component.installer.persist.MetadataLoader;
 import org.graalvm.component.installer.persist.ProxyResource;
+import org.graalvm.component.installer.remote.RemotePropertiesStorage;
 import org.graalvm.component.installer.persist.test.Handler;
 import org.junit.After;
 import static org.junit.Assert.assertEquals;
@@ -122,7 +123,7 @@ public class CatalogIterableTest extends CommandTestBase {
     @Test
     public void testVerifyRemoteJars() throws Exception {
         initRemoteComponent("persist/data/truffleruby3.jar", "test://graalvm.io/download/truffleruby.zip", "testComponent", "test");
-        info.setShaDigest(SystemUtils.toHashBytes("d3a45ea326b379cc3d543cc56130ee9bd395fd1c1d51a470e8c2c8af1129829c"));
+        info.setShaDigest(RemotePropertiesStorage.toHashBytes(null, "d3a45ea326b379cc3d543cc56130ee9bd395fd1c1d51a470e8c2c8af1129829c", this));
 
         try {
             exception.expect(IOException.class);

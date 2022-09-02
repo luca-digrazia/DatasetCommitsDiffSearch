@@ -145,7 +145,7 @@ public final class ComponentInstaller {
     private static final ResourceBundle BUNDLE = ResourceBundle.getBundle(
                     "org.graalvm.component.installer.Bundle"); // NOI18N
 
-    public static void forSoftwareChannels(boolean report, Consumer<SoftwareChannel.Factory> callback) {
+    private static void forSoftwareChannels(boolean report, Consumer<SoftwareChannel.Factory> callback) {
         ServiceLoader<SoftwareChannel.Factory> channels = ServiceLoader.load(SoftwareChannel.Factory.class);
         for (Iterator<SoftwareChannel.Factory> it = channels.iterator(); it.hasNext();) {
             try {
@@ -275,13 +275,7 @@ public final class ComponentInstaller {
                             getCatalogURL());
             downloader.setDefaultCatalog(env.l10n("Installer_BuiltingCatalogURL")); // NOI18N
             CatalogFactory cFactory = (CommandInput input, ComponentRegistry lreg) -> {
-                RemoteCatalogDownloader nDownloader;
-                if (lreg == input.getLocalRegistry()) {
-                    nDownloader = downloader;
-                } else {
-                    nDownloader = new RemoteCatalogDownloader(input, env,
-                                    downloader.getOverrideCatalogSpec());
-                }
+                RemoteCatalogDownloader nDownloader = new RemoteCatalogDownloader(downloader, input, env);
                 CatalogContents col = new CatalogContents(env, nDownloader.getStorage(), lreg);
                 return col;
             };
@@ -303,7 +297,6 @@ public final class ComponentInstaller {
                         }
                     }
                 }
-                env.resetParameters();
                 setIterable = false;
             } else if (optValues.containsKey(Commands.OPTION_URLS)) {
                 DownloadURLIterable dit = new DownloadURLIterable(env, env);

@@ -27,22 +27,27 @@ package org.graalvm.component.installer.commands;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import org.graalvm.component.installer.BundleConstants;
 import org.graalvm.component.installer.CommandTestBase;
 import org.graalvm.component.installer.Commands;
 import org.graalvm.component.installer.ComponentParam;
 import org.graalvm.component.installer.FailedOperationException;
+import org.graalvm.component.installer.UnknownVersionException;
 import org.graalvm.component.installer.Version;
 import org.graalvm.component.installer.model.CatalogContents;
 import org.graalvm.component.installer.model.ComponentInfo;
 import org.graalvm.component.installer.model.ComponentRegistry;
+import org.graalvm.component.installer.persist.MetadataLoader;
 import org.graalvm.component.installer.remote.CatalogIterable;
 import org.graalvm.component.installer.remote.RemoteCatalogDownloader;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import org.junit.Test;
 
 /**
@@ -51,18 +56,23 @@ import org.junit.Test;
  */
 public class UpgradeTest extends CommandTestBase {
     private UpgradeProcess helper;
+    private RemoteCatalogDownloader downloader;
 
     private Version initVersion(String s) throws IOException {
+        return initVersion(s, "../repo/catalog.properties");
+    }
+
+    private Version initVersion(String s, String catalogResource) throws IOException {
         Version v = Version.fromString(s);
         storage.graalInfo.put(BundleConstants.GRAAL_VERSION, s);
-        Path catalogPath = dataFile("../repo/catalog.properties");
-        RemoteCatalogDownloader downloader = new RemoteCatalogDownloader(
+        Path catalogPath = dataFile(catalogResource);
+        downloader = new RemoteCatalogDownloader(
                         this,
                         this,
                         catalogPath.toUri().toURL());
 
         registry = new CatalogContents(this, downloader.getStorage(), localRegistry);
-        paramIterable = new CatalogIterable(this, this, getRegistry(), downloader);
+        paramIterable = new CatalogIterable(this, this);
         helper = new UpgradeProcess(this, this, registry);
         return v;
     }
@@ -230,7 +240,7 @@ public class UpgradeTest extends CommandTestBase {
         cmd.execute();
 
         Version installedGraalVMVersion = cmd.getProcess().getNewGraalRegistry().getGraalVersion();
-        assertEquals("1.1.1-0.rc.1", installedGraalVMVersion.toString());
+        assertEquals("1.1.1-0.rc.1", installedGraalVMVersion.originalString());
         assertNull("Ruby should not be migrated", cmd.getProcess().getNewGraalRegistry().findComponent("ruby"));
     }
 
@@ -296,7 +306,7 @@ public class UpgradeTest extends CommandTestBase {
         UpgradeCommand cmd = new UpgradeCommand(false);
         cmd.init(this, this);
         ComponentInfo info = cmd.configureProcess();
-        assertNull(info);
+        assertFalse(cmd.getProcess().prepareInstall(info));
     }
 
     @Test
@@ -316,4 +326,313 @@ public class UpgradeTest extends CommandTestBase {
         cmd.execute();
     }
 
+    /**
+     * Checks that the 'components can migrate' check succeed, if an existing component is specified
+     * for upgrade.
+     */
+    @Test
+    public void testUpgradeExistingComponent() throws Exception {
+        initVersion("1.0.0.0");
+        ComponentInfo ci = new ComponentInfo("org.graalvm.ruby", "Installed Ruby", "1.0.0.0");
+        storage.installed.add(ci);
+        textParams.add("ruby");
+
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        helper = cmd.getProcess();
+
+        ComponentInfo info = cmd.configureProcess();
+        assertNotNull(info);
+        assertEquals(Version.fromString("1.0.1"), info.getVersion());
+    }
+
+    /**
+     * Fails on non-empty directory.
+     */
+    @Test
+    public void testInstallIntoExistingNonempty() throws Exception {
+        initVersion("1.0.0.0");
+        ComponentInfo ci = new ComponentInfo("org.graalvm.ruby", "Installed Ruby", "1.0.0.0");
+        storage.installed.add(ci);
+        textParams.add("ruby");
+
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        helper = cmd.getProcess();
+
+        ComponentInfo info = cmd.configureProcess();
+        Path p = getGraalHomePath().normalize();
+        Path ndir = p.resolveSibling("graalvm-ce-1.0.1");
+        Files.createDirectories(ndir);
+        Files.write(ndir.resolve("some-content"), Arrays.asList("Fail"));
+
+        exception.expect(FailedOperationException.class);
+        exception.expectMessage("UPGRADE_TargetExistsNotEmpty");
+        helper.prepareInstall(info);
+    }
+
+    /**
+     * Fails on non-empty directory.
+     */
+    @Test
+    public void testInstallIntoExistingRelease() throws Exception {
+        initVersion("1.0.0.0");
+        ComponentInfo ci = new ComponentInfo("org.graalvm.ruby", "Installed Ruby", "1.0.0.0");
+        storage.installed.add(ci);
+        textParams.add("ruby");
+
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        helper = cmd.getProcess();
+
+        ComponentInfo info = cmd.configureProcess();
+        Path p = getGraalHomePath().normalize();
+        Path ndir = p.resolveSibling("graalvm-ce-1.0.1");
+        Files.createDirectories(ndir);
+        Files.write(ndir.resolve("some-content"), Arrays.asList("Fail"));
+        Path toCopy = dataFile("../persist/release_simple.properties");
+        Files.copy(toCopy, ndir.resolve("release"));
+
+        exception.expect(FailedOperationException.class);
+        exception.expectMessage("UPGRADE_TargetExistsContainsGraalVM");
+        helper.prepareInstall(info);
+    }
+
+    /**
+     * Allows to install to an empty location.
+     */
+    @Test
+    public void testInstallIntoExistingEmpty() throws Exception {
+        initVersion("1.0.0.0");
+        ComponentInfo ci = new ComponentInfo("org.graalvm.ruby", "Installed Ruby", "1.0.0.0");
+        storage.installed.add(ci);
+        textParams.add("ruby");
+
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        helper = cmd.getProcess();
+
+        ComponentInfo info = cmd.configureProcess();
+        Path p = getGraalHomePath().normalize();
+        Path ndir = p.resolveSibling("graalvm-ce-1.0.1");
+        Files.createDirectories(ndir);
+
+        assertTrue(helper.prepareInstall(info));
+    }
+
+    /**
+     * Tests upgrade to version AT LEAST 1.0.1.
+     */
+    @Test
+    public void testUpgradePythonMostRecent() throws Exception {
+        initVersion("1.0.0.0");
+        textParams.add("python+1.0.1");
+        ComponentInfo ci = new ComponentInfo("org.graalvm.python", "Installed Python", "1.0.0.0");
+        storage.installed.add(ci);
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        assertEquals(0, cmd.execute());
+
+        ComponentRegistry newReg = cmd.getProcess().getNewGraalRegistry();
+        ComponentInfo python = newReg.findComponent("python");
+        assertEquals("1.1.0.0", python.getVersion().toString());
+    }
+
+    /**
+     * Tests upgrade to version EXACTLY 1.0.1.
+     */
+    @Test
+    public void testUpgradeExact() throws Exception {
+        initVersion("1.0.0.0");
+        textParams.add("python=1.0.1");
+        ComponentInfo ci = new ComponentInfo("org.graalvm.python", "Installed Python", "1.0.0.0");
+        storage.installed.add(ci);
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        assertEquals(0, cmd.execute());
+
+        ComponentRegistry newReg = cmd.getProcess().getNewGraalRegistry();
+        ComponentInfo python = newReg.findComponent("python");
+        // note the difference, the user string does not contain trailing .0
+        assertEquals("1.0.1", python.getVersion().displayString());
+    }
+
+    /**
+     * Tests upgrade to a next version's RC.
+     */
+    @Test
+    public void testUpgradeToNextRC() throws Exception {
+        initVersion("1.0.0.0");
+        textParams.add("1.1.1-rc");
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        assertEquals(0, cmd.execute());
+
+        ComponentRegistry newReg = cmd.getProcess().getNewGraalRegistry();
+        assertEquals("1.1.1.0-0.rc.1", newReg.getGraalVersion().toString());
+    }
+
+    /**
+     * Tests NO upgrade to RC when requesting a release.
+     */
+    @Test
+    public void testNoUpgradeToRCInsteadOfRelease() throws Exception {
+        initVersion("1.0.0.0");
+        textParams.add("1.1.1");
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        try {
+            cmd.execute();
+        } catch (UnknownVersionException ex) {
+            assertNotNull(ex.getCandidate());
+            assertTrue(ex.getCandidate().toString().contains("rc"));
+        }
+    }
+
+    /**
+     * Tests NO upgrade to RC when requesting a release.
+     */
+    @Test
+    public void testUpgradeIfAllowsNewer() throws Exception {
+        initVersion("1.0.0.0");
+        textParams.add("+1.1.1");
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        assertEquals(0, cmd.execute());
+        ComponentRegistry newReg = cmd.getProcess().getNewGraalRegistry();
+        assertEquals("1.1.1.0-0.rc.1", newReg.getGraalVersion().toString());
+    }
+
+    /**
+     * Checks that upgrade will install graal of the specified version.
+     */
+    @Test
+    public void testUpgradeFromDevToSpecificVersion() throws Exception {
+        initVersion("1.0.0-dev");
+        textParams.add("1.0.1");
+        textParams.add("python");
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        ComponentInfo graalInfo = cmd.configureProcess();
+        assertNotNull(graalInfo);
+        // check that GraalVM appropriate for 1.0.1 component is selected
+        assertEquals("1.0.1.0", graalInfo.getVersion().toString());
+        assertEquals(1, cmd.getProcess().addedComponents().size());
+        ComponentParam p = cmd.getProcess().addedComponents().iterator().next();
+        ComponentInfo ci = p.createMetaLoader().getComponentInfo();
+        // check that component 1.0.1 will be installed
+        assertEquals("1.0.1.0", ci.getVersion().toString());
+    }
+
+    /**
+     * Checks that upgrade will install graal for the specific Component.
+     */
+    @Test
+    public void testUpgradeFromDevToSpecificVersion2() throws Exception {
+        initVersion("1.0.0-dev");
+        textParams.add("python=1.0.1");
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        ComponentInfo graalInfo = cmd.configureProcess();
+        assertNotNull(graalInfo);
+        // check that GraalVM appropriate for 1.0.1 component is selected
+        assertEquals("1.0.1.0", graalInfo.getVersion().toString());
+        assertEquals(1, cmd.getProcess().addedComponents().size());
+        ComponentParam p = cmd.getProcess().addedComponents().iterator().next();
+        ComponentInfo ci = p.createMetaLoader().getComponentInfo();
+        // check that component 1.0.1 will be installed
+        assertEquals("1.0.1.0", ci.getVersion().toString());
+    }
+
+    /**
+     * Checks that upgrade will install graal for the specific Component.
+     */
+    @Test
+    public void testUpgradeToSameVersion() throws Exception {
+        initVersion("1.0.0-dev");
+        textParams.add("1.0.0-dev");
+        textParams.add("python");
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+        ComponentInfo graalInfo = cmd.configureProcess();
+        assertNotNull(graalInfo);
+        // check that GraalVM appropriate for 1.0.1 component is selected
+        assertEquals("1.0.0-dev", graalInfo.getVersion().displayString());
+        assertEquals(1, cmd.getProcess().addedComponents().size());
+        ComponentParam p = cmd.getProcess().addedComponents().iterator().next();
+        ComponentInfo ci = p.createMetaLoader().getComponentInfo();
+        // check that component 1.0.1 will be installed
+        assertEquals("1.0.0-dev", ci.getVersion().displayString());
+    }
+
+    static class InstallTrampoline extends InstallCommand {
+
+        @Override
+        protected void prepareInstallation() throws IOException {
+            super.prepareInstallation();
+        }
+
+        @Override
+        protected void executionInit() throws IOException {
+            super.executionInit();
+        }
+
+    }
+
+    CatalogFactory factory;
+
+    @Override
+    public CatalogFactory getCatalogFactory() {
+        return factory != null ? factory : super.getCatalogFactory();
+    }
+
+    /**
+     * Upgrade an installation with "ruby" to a newer one, where "ruby" has a dependency on an
+     * additional component. The other component should be auto-installed.
+     */
+    @Test
+    public void testUpgradeWithDependencies() throws Exception {
+        initVersion("1.0.0.0", "../repo/catalog-19.3.properties");
+
+        ComponentInfo ci = new ComponentInfo("org.graalvm.r", "Installed R", "1.0.0.0");
+        storage.installed.add(ci);
+        UpgradeCommand cmd = new UpgradeCommand();
+        cmd.init(this, this);
+
+        textParams.add("r");
+        ComponentInfo graalInfo = cmd.configureProcess();
+        assertNotNull(graalInfo);
+        assertEquals(Version.fromString("19.3.0.0"), graalInfo.getVersion());
+
+        boolean installed = cmd.getProcess().installGraalCore(graalInfo);
+        assertTrue(installed);
+
+        factory = (in, reg) -> {
+            RemoteCatalogDownloader dnl = new RemoteCatalogDownloader(downloader, in, this);
+            return new CatalogContents(this, dnl.getStorage(), reg);
+        };
+
+        InstallTrampoline targetInstall = new InstallTrampoline();
+        cmd.getProcess().configureInstallCommand(targetInstall);
+        targetInstall.executionInit();
+        targetInstall.prepareInstallation();
+
+        assertTrue(targetInstall.getUnresolvedDependencies().isEmpty());
+        List<ComponentParam> deps = targetInstall.getDependencies();
+        assertEquals(1, deps.size());
+        MetadataLoader ldr = deps.iterator().next().createFileLoader();
+        assertEquals("org.graalvm.llvm-toolchain", ldr.getComponentInfo().getId());
+    }
+
+    /**
+     * The target GraalVM installation may have configured the catalog URLs differently. When
+     * installing components or dependencies to the target, the target's URLs / release file
+     * settings should be respected.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testUpgradeRespectsTargetCatalogURLs() throws Exception {
+        fail("Not implemented poperly yet");
+    }
 }

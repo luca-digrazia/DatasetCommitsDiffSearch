@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,32 +26,17 @@ package org.graalvm.component.installer;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.file.StandardOpenOption;
 import java.util.Iterator;
-import java.util.jar.JarFile;
-import org.graalvm.component.installer.persist.ComponentPackageLoader;
+import java.util.ServiceLoader;
 import org.graalvm.component.installer.persist.MetadataLoader;
 
-/**
- *
- * @author sdedic
- */
-public class FileIterable implements ComponentIterable {
-    private final CommandInput input;
-    private final Feedback feedback;
-    private boolean verifyJars;
-
+public class FileIterable extends AbstractIterable {
     public FileIterable(CommandInput input, Feedback fb) {
-        this.input = input;
-        this.feedback = fb;
-    }
-
-    public boolean isVerifyJars() {
-        return verifyJars;
-    }
-
-    @Override
-    public void setVerifyJars(boolean verifyJars) {
-        this.verifyJars = verifyJars;
+        super(input, fb);
     }
 
     private File getFile(String pathSpec) {
@@ -72,57 +57,60 @@ public class FileIterable implements ComponentIterable {
 
             @Override
             public ComponentParam next() {
-                return new FileComponent(getFile(input.requiredParameter()), verifyJars, feedback);
+                return new FileComponent(getFile(input.requiredParameter()), isVerifyJars(), feedback);
             }
         };
     }
 
     public static class FileComponent implements ComponentParam {
         private final File localFile;
-        private ComponentPackageLoader loader;
-        private JarFile jf;
+        private MetadataLoader loader;
         private final boolean verifyJars;
         private final Feedback feedback;
 
         public FileComponent(File localFile, boolean verifyJars, Feedback feedback) {
             this.localFile = localFile;
             this.verifyJars = verifyJars;
-            this.feedback = feedback;
+            this.feedback = feedback.withBundle(FileComponent.class);
         }
 
         @Override
         public MetadataLoader createMetaLoader() throws IOException {
-            if (loader == null) {
-                if (jf == null) {
-                    jf = new JarFile(localFile, verifyJars);
-                }
-                loader = new ComponentPackageLoader(jf, feedback);
+            if (loader != null) {
+                return loader;
             }
-            return loader;
+            byte[] fileStart = null;
+
+            if (localFile.isFile()) {
+                try (ReadableByteChannel ch = FileChannel.open(localFile.toPath(), StandardOpenOption.READ)) {
+                    ByteBuffer bb = ByteBuffer.allocate(8);
+                    ch.read(bb);
+                    fileStart = bb.array();
+                }
+            } else {
+                fileStart = new byte[]{0, 0, 0, 0, 0, 0, 0, 0};
+            }
+
+            for (ComponentArchiveReader provider : ServiceLoader.load(ComponentArchiveReader.class)) {
+                MetadataLoader ldr = provider.createLoader(localFile.toPath(), fileStart, feedback, verifyJars);
+                if (ldr != null) {
+                    loader = ldr;
+                    return ldr;
+                }
+            }
+            throw feedback.failure("ERROR_UnknownFileFormat", null, localFile.toString());
         }
 
         @Override
         public void close() throws IOException {
             if (loader != null) {
                 loader.close();
-            } else if (jf != null) {
-                jf.close();
             }
         }
 
         @Override
         public MetadataLoader createFileLoader() throws IOException {
             return createMetaLoader();
-        }
-
-        @Override
-        public JarFile getFile() throws IOException {
-            if (loader != null) {
-                return loader.getJarFile();
-            } else {
-                jf = new JarFile(localFile, verifyJars);
-                return jf;
-            }
         }
 
         @Override
@@ -149,6 +137,5 @@ public class FileIterable implements ComponentIterable {
         public String getShortName() {
             return localFile.getName();
         }
-
     }
 }
