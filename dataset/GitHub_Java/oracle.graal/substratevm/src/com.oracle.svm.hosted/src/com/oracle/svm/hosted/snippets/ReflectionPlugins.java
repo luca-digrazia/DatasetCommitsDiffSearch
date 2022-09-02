@@ -92,14 +92,14 @@ public class ReflectionPlugins {
         r.register1("forName", String.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode name) {
-                return processForName(b, hostVM, targetMethod, name, ConstantNode.forBoolean(true), imageClassLoader, snippetReflection, analysis, hosted);
+                return processForName(b, hostVM, targetMethod, name, imageClassLoader, snippetReflection, analysis, hosted);
             }
         });
 
         r.register3("forName", String.class, boolean.class, ClassLoader.class, new InvocationPlugin() {
             @Override
             public boolean apply(GraphBuilderContext b, ResolvedJavaMethod targetMethod, Receiver receiver, ValueNode name, ValueNode initialize, ValueNode classLoader) {
-                return processForName(b, hostVM, targetMethod, name, initialize, imageClassLoader, snippetReflection, analysis, hosted);
+                return processForName(b, hostVM, targetMethod, name, imageClassLoader, snippetReflection, analysis, hosted);
             }
         });
 
@@ -146,9 +146,9 @@ public class ReflectionPlugins {
         });
     }
 
-    private static boolean processForName(GraphBuilderContext b, SVMHost host, ResolvedJavaMethod targetMethod, ValueNode name, ValueNode initialize,
+    private static boolean processForName(GraphBuilderContext b, SVMHost host, ResolvedJavaMethod targetMethod, ValueNode name,
                     ImageClassLoader imageClassLoader, SnippetReflectionProvider snippetReflection, boolean analysis, boolean hosted) {
-        if (name.isConstant() && initialize.isConstant()) {
+        if (name.isConstant()) {
             String className = snippetReflection.asObject(String.class, name.asJavaConstant());
             Class<?> clazz = imageClassLoader.findClass(className).get();
             if (clazz == null) {
@@ -161,8 +161,7 @@ public class ReflectionPlugins {
                 ResolvedJavaType type = b.getMetaAccess().lookupJavaType(clazz);
                 JavaConstant hub = b.getConstantReflection().asJavaClass(type);
                 pushConstant(b, targetMethod, hub, className);
-                boolean doInitialize = initialize.asJavaConstant().asInt() != 0;
-                if (doInitialize && host.getClassInitializationSupport().shouldInitializeAtRuntime(clazz)) {
+                if (host.getClassInitializationSupport().shouldInitializeAtRuntime(clazz)) {
                     SubstrateClassInitializationPlugin.emitEnsureClassInitialized(b, hub);
                 }
                 return true;
