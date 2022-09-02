@@ -127,7 +127,7 @@ class Accounting {
         /* Incremental collections only promote. */
         lastCollectionPromotedChunkBytes = oldChunkBytesAfter.subtract(oldChunkBytesBefore);
         promotedTotalChunkBytes = promotedTotalChunkBytes.add(lastCollectionPromotedChunkBytes);
-        incrementalCollectionTotalNanos += collectionTimer.getMeasuredNanos();
+        incrementalCollectionTotalNanos += collectionTimer.getCollectedNanos();
         trace.string("  incrementalCollectionCount: ").signed(incrementalCollectionCount)
                         .string("  oldChunkBytesAfter: ").unsigned(oldChunkBytesAfter)
                         .string("  oldChunkBytesBefore: ").unsigned(oldChunkBytesBefore)
@@ -141,7 +141,7 @@ class Accounting {
         afterCollectionCommon();
         /* Complete collections only copy, and they copy everything. */
         copiedTotalChunkBytes = copiedTotalChunkBytes.add(oldChunkBytesAfter);
-        completeCollectionTotalNanos += collectionTimer.getMeasuredNanos();
+        completeCollectionTotalNanos += collectionTimer.getCollectedNanos();
         trace.string("  completeCollectionCount: ").signed(completeCollectionCount)
                         .string("  oldChunkBytesAfter: ").unsigned(oldChunkBytesAfter);
         trace.string("]").newline();
