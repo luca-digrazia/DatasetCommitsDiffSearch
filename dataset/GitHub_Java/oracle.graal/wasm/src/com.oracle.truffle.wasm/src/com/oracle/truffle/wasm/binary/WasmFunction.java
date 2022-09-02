@@ -38,38 +38,19 @@ import com.oracle.truffle.api.library.ExportMessage;
 
 @ExportLibrary(InteropLibrary.class)
 public class WasmFunction implements TruffleObject {
-    public static class ImportSpecifier {
-        public final String moduleName;
-        public final String functionName;
-
-        public ImportSpecifier(String moduleName, String functionName) {
-            this.moduleName = moduleName;
-            this.functionName = functionName;
-        }
-    }
-
     private final SymbolTable symbolTable;
-    private int index;
-    private ImportSpecifier importSpecifier;
     private WasmCodeEntry codeEntry;
     private final String name;
     private final int typeIndex;
     private RootCallTarget callTarget;
 
-    /**
-     * Represents a WebAssembly function.
-     *
-     * If a Wasm function has a
-     */
-    public WasmFunction(SymbolTable symbolTable, int index, int typeIndex, ImportSpecifier importSpecifier) {
+    public WasmFunction(SymbolTable symbolTable, WasmLanguage language, int index, int typeIndex) {
         this.symbolTable = symbolTable;
-        this.index = index;
-        this.importSpecifier = importSpecifier;
         this.codeEntry = null;
         // TODO: Establish a valid naming convention (integers are not valid identifiers), or remove this.
         this.name = String.valueOf(index);
         this.typeIndex = typeIndex;
-        this.callTarget = null;
+        this.callTarget = Truffle.getRuntime().createCallTarget(new WasmUndefinedFunctionRootNode(language));
     }
 
     public int numArguments() {
@@ -88,16 +69,13 @@ public class WasmFunction implements TruffleObject {
         return symbolTable.getFunctionTypeReturnTypeLength(typeIndex);
     }
 
-    public void setCallTarget(RootCallTarget callTarget) {
+    void setCallTarget(RootCallTarget callTarget) {
         this.callTarget = callTarget;
     }
 
     public RootCallTarget resolveCallTarget() {
-        if (callTarget == null) {
-            // TODO: If this is an imported function, the call target might not yet be resolved.
-            //  Check this, and wait until the call target gets resolved.
-            throw new RuntimeException("Call target was not resolved.");
-        }
+        // TODO: If this is an imported function, the call target might not yet be resolved.
+        //  Check this, and wait until the call target is resolved.
         return callTarget;
     }
 
@@ -121,22 +99,11 @@ public class WasmFunction implements TruffleObject {
     }
 
     public void setCodeEntry(WasmCodeEntry codeEntry) {
-        if (isImported()) {
-            throw new RuntimeException("Cannot set the code entry for an imported function.");
-        }
         this.codeEntry = codeEntry;
     }
 
     public boolean isImported() {
-        return importSpecifier != null;
-    }
-
-    public String importedModuleName() {
-        return isImported() ? importSpecifier.moduleName : null;
-    }
-
-    public String importedFunctionName() {
-        return isImported() ? importSpecifier.functionName : null;
+        return codeEntry == null;
     }
 
     public int typeIndex() {
@@ -144,6 +111,6 @@ public class WasmFunction implements TruffleObject {
     }
 
     public int index() {
-        return index;
+        return codeEntry.functionIndex();
     }
 }

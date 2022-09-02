@@ -288,9 +288,4 @@ public class WasmModule implements TruffleObject {
             return new ArrayList<>(symbolTable.exportedFunctions().values()).get((int) index);
         }
     }
-
-    @Override
-    public String toString() {
-        return "wasm-module(" + name + ")";
-    }
 }
