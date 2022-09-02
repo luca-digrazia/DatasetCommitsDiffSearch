@@ -262,13 +262,14 @@ final class Runner {
             this.initModules = new InitializeModuleNode[libCount];
         }
 
-        static LoadModulesNode create(Runner runner, FrameDescriptor rootFrame, InitializationOrder order, SulongLibrary sulongLibrary, boolean lazyParsing, LLVMContext context) {
+        static LoadModulesNode create(Runner runner, FrameDescriptor rootFrame, InitializationOrder order, SulongLibrary sulongLibrary, boolean lazyParsing) {
             LoadModulesNode node = new LoadModulesNode(runner, rootFrame, order, sulongLibrary);
             try {
-                createNodes(runner, rootFrame, order.getSulongLibraries(), 0, node.initSymbols, node.initOverwrite, node.initExternals, node.initGlobals, node.initModules, lazyParsing, context);
+                createNodes(runner, rootFrame, order.getSulongLibraries(), 0, node.initSymbols, node.initOverwrite, node.initExternals, node.initGlobals, node.initModules, lazyParsing,
+                                true);
                 createNodes(runner, rootFrame, order.moduleInitializationOrderLibraries, order.getSulongLibraries().size(), node.initSymbols, node.initOverwrite, node.initExternals, node.initGlobals,
                                 node.initModules,
-                                lazyParsing, context);
+                                lazyParsing, false);
 
                 initializeScopeNodes(order.getSulongLibraries(), 0, node.initScopes);
                 initializeScopeNodes(order.scopeInitializationOrderLibraries, order.getSulongLibraries().size(), node.initScopes);
@@ -280,14 +281,12 @@ final class Runner {
 
         private static void createNodes(Runner runner, FrameDescriptor rootFrame, List<LLVMParserResult> parserResults, int offset, InitializeSymbolsNode[] initSymbols,
                         InitializeOverwriteNode[] initOverwrite, InitializeExternalNode[] initExternals,
-                        InitializeGlobalNode[] initGlobals, InitializeModuleNode[] initModules, boolean lazyParsing, LLVMContext context)
+                        InitializeGlobalNode[] initGlobals, InitializeModuleNode[] initModules, boolean lazyParsing, boolean isSulongLibrary)
                         throws TypeOverflowException {
             for (int i = 0; i < parserResults.size(); i++) {
                 LLVMParserResult res = parserResults.get(i);
-                Path path = res.getRuntime().getLibrary().getPath();
-                Path internalPath = context.getInternalLibraryPath();
                 String moduleName = res.getRuntime().getLibrary().toString();
-                initSymbols[offset + i] = new InitializeSymbolsNode(res, res.getRuntime().getNodeFactory(), lazyParsing, path.startsWith(internalPath), moduleName);
+                initSymbols[offset + i] = new InitializeSymbolsNode(res, res.getRuntime().getNodeFactory(), lazyParsing, isSulongLibrary, moduleName);
                 initExternals[offset + i] = new InitializeExternalNode(res);
                 initGlobals[offset + i] = new InitializeGlobalNode(rootFrame, res, moduleName);
                 initOverwrite[offset + i] = new InitializeOverwriteNode(res);
@@ -897,7 +896,7 @@ final class Runner {
         private final int bitcodeID;
         private final int globalLength;
 
-        InitializeSymbolsNode(LLVMParserResult result, NodeFactory nodeFactory, boolean lazyParsing, boolean isInternalSulongLibrary, String moduleName) throws TypeOverflowException {
+        InitializeSymbolsNode(LLVMParserResult result, NodeFactory nodeFactory, boolean lazyParsing, boolean isSulongLibrary, String moduleName) throws TypeOverflowException {
             DataLayout dataLayout = result.getDataLayout();
             this.nodeFactory = nodeFactory;
             this.fileScope = result.getRuntime().getFileScope();
@@ -935,7 +934,7 @@ final class Runner {
             for (FunctionSymbol functionSymbol : result.getDefinedFunctions()) {
                 LLVMFunction function = fileScope.getFunction(functionSymbol.getName());
                 // All internal libraries are allowed to have intriniscs.
-                if (isInternalSulongLibrary && intrinsicProvider.isIntrinsified(function.getName())) {
+                if ((isSulongLibrary || result.getRuntime().getLibrary().isInternal()) && intrinsicProvider.isIntrinsified(function.getName())) {
                     allocFuncsAndAliasesList.add(new AllocIntrinsicFunctionNode(function, nodeFactory, intrinsicProvider));
                 } else if (lazyParsing) {
                     allocFuncsAndAliasesList.add(new AllocLLVMFunctionNode(function));
@@ -1846,7 +1845,7 @@ final class Runner {
             FrameDescriptor rootFrame = StackManager.createRootFrame();
             // check if the functions should be resolved eagerly or lazyly.
             boolean lazyParsing = context.getEnv().getOptions().get(SulongEngineOption.LAZY_PARSING);
-            LoadModulesNode loadModules = LoadModulesNode.create(this, rootFrame, initializationOrder, lib, lazyParsing, context);
+            LoadModulesNode loadModules = LoadModulesNode.create(this, rootFrame, initializationOrder, lib, lazyParsing);
             return Truffle.getRuntime().createCallTarget(loadModules);
         }
     }

@@ -29,20 +29,6 @@
  */
 package com.oracle.truffle.llvm.runtime;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
-
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -73,6 +59,7 @@ import com.oracle.truffle.llvm.runtime.except.LLVMLinkerException;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobal;
 import com.oracle.truffle.llvm.runtime.global.LLVMGlobalContainer;
 import com.oracle.truffle.llvm.runtime.instruments.trace.LLVMTracerInstrument;
+import com.oracle.truffle.llvm.runtime.interop.LLVMTypedForeignObject;
 import com.oracle.truffle.llvm.runtime.interop.access.LLVMInteropType;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory;
 import com.oracle.truffle.llvm.runtime.memory.LLVMMemory.HandleContainer;
@@ -87,6 +74,20 @@ import com.oracle.truffle.llvm.runtime.pointer.LLVMManagedPointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMNativePointer;
 import com.oracle.truffle.llvm.runtime.pointer.LLVMPointer;
 import com.oracle.truffle.llvm.runtime.pthread.LLVMPThreadContext;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 public final class LLVMContext {
 
@@ -430,7 +431,7 @@ public final class LLVMContext {
     }
 
     private static LLVMManagedPointer toManagedPointer(Object value) {
-        return LLVMManagedPointer.create(value);
+        return LLVMManagedPointer.create(LLVMTypedForeignObject.createUnknown(value));
     }
 
     public void addLibsulongDataLayout(DataLayout datalayout) {
@@ -481,11 +482,6 @@ public final class LLVMContext {
 
     private CallTarget freeGlobalBlocks;
 
-    @TruffleBoundary(allowInlining = true)
-    private static LLVMPointer getElement(ArrayList<LLVMPointer> list, int idx) {
-        return list.get(idx);
-    }
-
     private void initFreeGlobalBlocks(NodeFactory nodeFactory) {
         // lazily initialized, this is not necessary if there are no global blocks allocated
         if (freeGlobalBlocks == null) {
@@ -497,14 +493,12 @@ public final class LLVMContext {
                 @Override
                 public Object execute(VirtualFrame frame) {
                     // Executed in dispose(), therefore can read unsynchronized
-                    for (int i = 0; i < globalsReadOnlyStore.size(); i++) {
-                        LLVMPointer store = getElement(globalsReadOnlyStore, i);
+                    for (LLVMPointer store : globalsReadOnlyStore) {
                         if (store != null) {
                             freeRo.execute(store);
                         }
                     }
-                    for (int i = 0; i < globalsNonPointerStore.size(); i++) {
-                        LLVMPointer store = getElement(globalsNonPointerStore, i);
+                    for (LLVMPointer store : globalsNonPointerStore) {
                         if (store != null) {
                             freeRw.execute(store);
                         }
