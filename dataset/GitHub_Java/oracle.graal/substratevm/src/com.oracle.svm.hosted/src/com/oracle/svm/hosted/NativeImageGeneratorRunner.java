@@ -184,7 +184,6 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         Timer totalTimer = new Timer("[total]", false);
         ForkJoinPool analysisExecutor = null;
         ForkJoinPool compilationExecutor = null;
-        OptionValues parsedHostedOptions = null;
         try (StopTimer ignored = totalTimer.start()) {
             ImageClassLoader imageClassLoader;
             Timer classlistTimer = new Timer("classlist", false);
@@ -202,7 +201,7 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
              * We do not have the VMConfiguration and the HostedOptionValues set up yet, so we need
              * to pass the OptionValues explicitly when accessing options.
              */
-            parsedHostedOptions = new OptionValues(optionParser.getHostedValues());
+            OptionValues parsedHostedOptions = new OptionValues(optionParser.getHostedValues());
             DebugContext debug = DebugContext.create(parsedHostedOptions, new GraalDebugHandlersFactory(GraalAccess.getOriginalSnippetReflection()));
 
             String imageName = NativeImageOptions.Name.getValue(parsedHostedOptions);
@@ -294,19 +293,19 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
             e.getReason().ifPresent(NativeImageGeneratorRunner::info);
             return 0;
         } catch (UserException e) {
-            reportUserError(e, parsedHostedOptions);
+            reportUserError(e);
             return -1;
         } catch (AnalysisError e) {
-            reportUserError(e, parsedHostedOptions);
+            reportUserError(e);
             return -1;
         } catch (ParallelExecutionException pee) {
             boolean hasUserError = false;
             for (Throwable exception : pee.getExceptions()) {
                 if (exception instanceof UserException) {
-                    reportUserError(exception, parsedHostedOptions);
+                    reportUserError(exception);
                     hasUserError = true;
                 } else if (exception instanceof AnalysisError) {
-                    reportUserError(exception, parsedHostedOptions);
+                    reportUserError(exception);
                     hasUserError = true;
                 }
             }
@@ -374,9 +373,8 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
      * Function for reporting all fatal errors in SVM.
      *
      * @param e error message that is printed.
-     * @param parsedHostedOptions
      */
-    public static void reportUserError(Throwable e, OptionValues parsedHostedOptions) {
+    public static void reportUserError(Throwable e) {
         if (e instanceof UserException) {
             UserException ue = (UserException) e;
             for (String message : ue.getMessages()) {
@@ -385,11 +383,8 @@ public class NativeImageGeneratorRunner implements ImageBuildTask {
         } else {
             reportUserError(e.getMessage());
         }
-        if (parsedHostedOptions != null && NativeImageOptions.ReportExceptionStackTraces.getValue(parsedHostedOptions)) {
+        if (NativeImageOptions.ReportExceptionStackTraces.getValue()) {
             e.printStackTrace();
-        } else {
-            reportUserError("Use " + SubstrateOptionsParser.commandArgument(NativeImageOptions.ReportExceptionStackTraces, "+") +
-                            " to print stacktrace of underlying exception");
         }
     }
 
