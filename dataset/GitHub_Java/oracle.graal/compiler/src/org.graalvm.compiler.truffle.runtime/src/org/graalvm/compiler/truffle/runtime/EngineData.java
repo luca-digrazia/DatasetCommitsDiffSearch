@@ -41,5 +41,4 @@ class EngineData {
 
     int splitLimit;
     int splitCount;
-    RuntimeOptionsCache options = new RuntimeOptionsCache();
 }
