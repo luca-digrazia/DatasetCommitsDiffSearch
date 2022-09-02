@@ -29,8 +29,6 @@
  */
 package com.oracle.truffle.wasm.binary;
 
-import com.oracle.truffle.api.nodes.ExplodeLoop;
-
 public abstract class BinaryStreamReader {
     protected byte[] data;
     protected int offset;
@@ -43,42 +41,36 @@ public abstract class BinaryStreamReader {
     }
 
     public int readSignedInt32() {
-        int value = peekSignedInt32(data, offset, bytesConsumed);
+        int value = readSignedInt32(data, offset, bytesConsumed);
         offset += bytesConsumed[0];
         return value;
     }
 
     public int readSignedInt32(byte[] bytesConsumedOut) {
         byte[] out = bytesConsumedOut != null ? bytesConsumedOut : bytesConsumed;
-        int value = peekSignedInt32(data, offset, out);
+        int value = readSignedInt32(data, offset, out);
         offset += out[0];
         return value;
     }
 
-    @ExplodeLoop
-    public static int peekSignedInt32(byte[] data, int initialOffset, byte[] bytesConsumed) {
+    public static int readSignedInt32(byte[] data, int offset, byte[] bytesConsumed) {
         int result = 0;
         int shift = 0;
-        int offset = initialOffset;
         byte b;
         do {
-            b = peek1(data, offset);
+            b = read1(data, offset);
             result |= ((b & 0x7F) << shift);
             shift += 7;
-            offset++;
         } while ((b & 0x80) != 0);
 
         if ((shift < 32) && (b & 0x40) != 0) {
             result |= (~0 << shift);
         }
 
-        if (bytesConsumed != null) {
-            bytesConsumed[0] = (byte) (shift / 7);
-        }
+        bytesConsumed[0] = (byte) (shift / 7);
         return result;
     }
 
-    @ExplodeLoop
     public int peekUnsignedInt32(int ahead) {
         int result = 0;
         int shift = 0;
@@ -125,9 +117,13 @@ public abstract class BinaryStreamReader {
     }
 
     public byte read1() {
-        byte value = peek1(data, offset);
+        byte value = read1(data, offset);
         offset++;
         return value;
+    }
+
+    public static byte read1(byte[] data, int offset) {
+        return peek1(data, offset);
     }
 
     public static byte peek1(byte[] data, int offset) {
