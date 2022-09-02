@@ -24,6 +24,13 @@ package com.oracle.truffle.espresso.runtime;
 
 import static com.oracle.truffle.api.CompilerDirectives.castExact;
 import static com.oracle.truffle.espresso.impl.Klass.STATIC_TO_CLASS;
+import static com.oracle.truffle.espresso.runtime.InteropUtils.inSafeIntegerRange;
+import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostByte;
+import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostFloat;
+import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostInt;
+import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostLong;
+import static com.oracle.truffle.espresso.runtime.InteropUtils.isAtMostShort;
+import static com.oracle.truffle.espresso.runtime.InteropUtils.isNegativeZero;
 import static com.oracle.truffle.espresso.vm.InterpreterToVM.instanceOf;
 
 import java.lang.reflect.Array;
@@ -32,14 +39,10 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.interop.InvalidArrayIndexException;
 import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.interop.UnknownIdentifierException;
 import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.interop.UnsupportedTypeException;
-import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
 import com.oracle.truffle.api.nodes.ExplodeLoop;
@@ -108,299 +111,269 @@ public final class StaticObject implements TruffleObject {
     }
 
     @ExportMessage
-    long getArraySize() {
-        return length();
+    public boolean isBoolean() {
+        if (isNull(this)) {
+            return false;
+        }
+        return klass == klass.getMeta().java_lang_Boolean;
     }
 
     @ExportMessage
-    boolean hasArrayElements() {
-        return getKlass().isArray();
+    public boolean asBoolean() throws UnsupportedMessageException {
+        if (!isBoolean()) {
+            throw UnsupportedMessageException.create();
+        }
+        return (boolean) klass.getMeta().java_lang_Boolean_value.get(this);
     }
 
     @ExportMessage
-    abstract static class ReadArrayElement {
-        @Specialization(guards = "isBooleanArray(receiver)")
-        static Object doBoolean(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<boolean[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
+    public boolean isNumber() {
+        if (isNull(this)) {
+            return false;
         }
 
-        @Specialization(guards = "isByteArray(receiver)")
-        static Object doByte(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<byte[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isShortArray(receiver)")
-        static Object doShort(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<short[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isIntArray(receiver)")
-        static Object doInt(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<int[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isLongArray(receiver)")
-        static Object doLong(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<long[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isFloatArray(receiver)")
-        static Object doFloat(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<float[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isDoubleArray(receiver)")
-        static Object doDouble(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<double[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = {"receiver.isArray()", "!isPrimitiveArray(receiver)"})
-        static Object doObject(StaticObject receiver, long index) throws InvalidArrayIndexException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            try {
-                return receiver.<Object[]> unwrap()[(int) index];
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
+        Meta meta = klass.getMeta();
+        return klass == meta.java_lang_Byte || klass == meta.java_lang_Short || klass == meta.java_lang_Integer || klass == meta.java_lang_Long || klass == meta.java_lang_Float ||
+                        klass == meta.java_lang_Double;
     }
 
     @ExportMessage
-    abstract static class WriteArrayElement {
-        @Specialization(guards = "isBooleanArray(receiver)", limit = "1")
-        static void doBoolean(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            boolean boolValue;
-            try {
-                boolValue = interopLibrary.asBoolean(value);
-            } catch (UnsupportedMessageException e) {
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<boolean[]> unwrap()[(int) index] = boolValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
+    boolean fitsInByte() {
+        if (isNull(this)) {
+            return false;
+        }
+        if (isAtMostByte(klass)) {
+            return true;
         }
 
-        @Specialization(guards = "isByteArray(receiver)", limit = "1")
-        static void doByte(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            byte byteValue;
-            try {
-                byteValue = interopLibrary.asByte(value);
-            } catch (UnsupportedMessageException e) {
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<byte[]> unwrap()[(int) index] = byteValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
+        Meta meta = klass.getMeta();
+        if (klass == meta.java_lang_Short) {
+            short content = getShortField(meta.java_lang_Short_value);
+            return (byte) content == content;
         }
-
-        @Specialization(guards = "isShortArray(receiver)", limit = "1")
-        static void doShort(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            short shortValue;
-            try {
-                shortValue = interopLibrary.asShort(value);
-            } catch (UnsupportedMessageException e) {
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<short[]> unwrap()[(int) index] = shortValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
+        if (klass == meta.java_lang_Integer) {
+            int content = getIntField(meta.java_lang_Integer_value);
+            return (byte) content == content;
         }
-
-        @Specialization(guards = "isIntArray(receiver)", limit = "1")
-        static void doInt(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            int intValue;
-            try {
-                intValue = interopLibrary.asInt(value);
-            } catch (UnsupportedMessageException e) {
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<int[]> unwrap()[(int) index] = intValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            return (byte) content == content;
         }
-
-        @Specialization(guards = "isLongArray(receiver)", limit = "1")
-        static void doLong(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            long longValue;
-            try {
-                longValue = interopLibrary.asLong(value);
-            } catch (UnsupportedMessageException e) {
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<long[]> unwrap()[(int) index] = longValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return (byte) content == content && !isNegativeZero(content);
         }
-
-        @Specialization(guards = "isFloatArray(receiver)", limit = "1")
-        static void doFloat(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            float floatValue;
-            try {
-                floatValue = interopLibrary.asFloat(value);
-            } catch (UnsupportedMessageException e) {
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<float[]> unwrap()[(int) index] = floatValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-
-        @Specialization(guards = "isDoubleArray(receiver)", limit = "1")
-        static void doDouble(StaticObject receiver, long index, Object value,
-                        @CachedLibrary("value") InteropLibrary interopLibrary) throws InvalidArrayIndexException, UnsupportedTypeException {
-            if (index > Integer.MAX_VALUE) {
-                throw InvalidArrayIndexException.create(index);
-            }
-            double doubleValue;
-            try {
-                doubleValue = interopLibrary.asDouble(value);
-            } catch (UnsupportedMessageException e) {
-                throw UnsupportedTypeException.create(new Object[]{value}, e.getMessage());
-            }
-            try {
-                receiver.<double[]> unwrap()[(int) index] = doubleValue;
-            } catch (IndexOutOfBoundsException outOfBounds) {
-                throw InvalidArrayIndexException.create(index);
-            }
-        }
-    }
-
-    protected static boolean isBooleanArray(StaticObject object) {
-        return object.getKlass().equals(object.getKlass().getMeta()._boolean_array);
-    }
-
-    protected static boolean isByteArray(StaticObject object) {
-        return object.getKlass().equals(object.getKlass().getMeta()._byte_array);
-    }
-
-    protected static boolean isShortArray(StaticObject object) {
-        return object.getKlass().equals(object.getKlass().getMeta()._short_array);
-    }
-
-    protected static boolean isIntArray(StaticObject object) {
-        return object.getKlass().equals(object.getKlass().getMeta()._int_array);
-    }
-
-    protected static boolean isLongArray(StaticObject object) {
-        return object.getKlass().equals(object.getKlass().getMeta()._long_array);
-    }
-
-    protected static boolean isFloatArray(StaticObject object) {
-        return object.getKlass().equals(object.getKlass().getMeta()._float_array);
-    }
-
-    protected static boolean isDoubleArray(StaticObject object) {
-        return object.getKlass().equals(object.getKlass().getMeta()._double_array);
-    }
-
-    protected static boolean isPrimitiveArray(StaticObject object) {
-        return isByteArray(object) || isShortArray(object) || isIntArray(object) || isLongArray(object) || isFloatArray(object) || isDoubleArray(object);
-    }
-
-    @ExportMessage
-    boolean isArrayElementReadable(long index) {
-        if (isArray()) {
-            return index >= 0 && index < length();
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return (byte) content == content && !isNegativeZero(content);
         }
         return false;
     }
 
     @ExportMessage
-    boolean isArrayElementModifiable(long index) {
-        return isPrimitiveArray(this) && index >= 0 && index < length();
+    boolean fitsInShort() {
+        if (isNull(this)) {
+            return false;
+        }
+        if (isAtMostShort(klass)) {
+            return true;
+        }
+
+        Meta meta = klass.getMeta();
+        if (klass == meta.java_lang_Integer) {
+            int content = getIntField(meta.java_lang_Integer_value);
+            return (short) content == content;
+        }
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            return (short) content == content;
+        }
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return (short) content == content && !isNegativeZero(content);
+        }
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return (short) content == content && !isNegativeZero(content);
+        }
+        return false;
     }
 
-    @SuppressWarnings({"unused", "static-method"})
-    @ExportMessage(name = "isArrayElementInsertable")
-    boolean isArrayElementInsertable(long index) {
+    @ExportMessage
+    public boolean fitsInInt() {
+        if (isNull(this)) {
+            return false;
+        }
+        if (isAtMostInt(klass)) {
+            return true;
+        }
+
+        Meta meta = klass.getMeta();
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            return (int) content == content;
+        }
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return inSafeIntegerRange(content) && !isNegativeZero(content) && (int) content == content;
+        }
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return (int) content == content && !isNegativeZero(content);
+        }
         return false;
+    }
+
+    @ExportMessage
+    boolean fitsInLong() {
+        if (isNull(this)) {
+            return false;
+        }
+        if (isAtMostLong(klass)) {
+            return true;
+        }
+
+        Meta meta = klass.getMeta();
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
+        }
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return inSafeIntegerRange(content) && !isNegativeZero(content) && (long) content == content;
+        }
+        return false;
+
+    }
+
+    @ExportMessage
+    boolean fitsInFloat() {
+        if (isNull(this)) {
+            return false;
+        }
+        if (isAtMostFloat(klass)) {
+            return true;
+        }
+
+        Meta meta = klass.getMeta();
+        // We might lose precision when we convert an int or a long to a float, however, we still
+        // perform the conversion.
+        // This is consistent with Truffle interop, see GR-22718 for more details.
+        if (klass == meta.java_lang_Integer) {
+            int content = getIntField(meta.java_lang_Integer_value);
+            float floatContent = content;
+            return (int) floatContent == content;
+        }
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            float floatContent = content;
+            return (long) floatContent == content;
+        }
+        if (klass == meta.java_lang_Double) {
+            double content = getDoubleField(meta.java_lang_Double_value);
+            return !Double.isFinite(content) || (float) content == content;
+        }
+        return false;
+    }
+
+    @ExportMessage
+    boolean fitsInDouble() {
+        if (isNull(this)) {
+            return false;
+        }
+
+        Meta meta = klass.getMeta();
+        if (isAtMostInt(klass) || klass == meta.java_lang_Double) {
+            return true;
+        }
+        if (klass == meta.java_lang_Long) {
+            long content = getLongField(meta.java_lang_Long_value);
+            double doubleContent = content;
+            return (long) doubleContent == content;
+        }
+        if (klass == meta.java_lang_Float) {
+            float content = getFloatField(meta.java_lang_Float_value);
+            return !Float.isFinite(content) || (double) content == content;
+        }
+        return false;
+    }
+
+    private Number readNumberValue() throws UnsupportedMessageException {
+        Meta meta = klass.getMeta();
+        if (klass == meta.java_lang_Byte) {
+            return (Byte) meta.java_lang_Byte_value.get(this);
+        }
+        if (klass == meta.java_lang_Short) {
+            return (Short) meta.java_lang_Short_value.get(this);
+        }
+        if (klass == meta.java_lang_Integer) {
+            return (Integer) meta.java_lang_Integer_value.get(this);
+        }
+        if (klass == meta.java_lang_Long) {
+            return (Long) meta.java_lang_Long_value.get(this);
+        }
+        if (klass == meta.java_lang_Float) {
+            return (Float) meta.java_lang_Float_value.get(this);
+        }
+        if (klass == meta.java_lang_Double) {
+            return (Double) meta.java_lang_Double_value.get(this);
+        }
+        CompilerDirectives.transferToInterpreter();
+        throw UnsupportedMessageException.create();
+    }
+
+    @ExportMessage
+    byte asByte() throws UnsupportedMessageException {
+        if (!fitsInByte()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
+        }
+        return readNumberValue().byteValue();
+    }
+
+    @ExportMessage
+    short asShort() throws UnsupportedMessageException {
+        if (!fitsInShort()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
+        }
+        return readNumberValue().shortValue();
+    }
+
+    @ExportMessage
+    public int asInt() throws UnsupportedMessageException {
+        if (!fitsInInt()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
+        }
+        return readNumberValue().intValue();
+    }
+
+    @ExportMessage
+    long asLong() throws UnsupportedMessageException {
+        if (!fitsInLong()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
+        }
+        return readNumberValue().longValue();
+    }
+
+    @ExportMessage
+    float asFloat() throws UnsupportedMessageException {
+        if (!fitsInFloat()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
+        }
+        return readNumberValue().floatValue();
+    }
+
+    @ExportMessage
+    double asDouble() throws UnsupportedMessageException {
+        if (!fitsInDouble()) {
+            CompilerDirectives.transferToInterpreter();
+            throw UnsupportedMessageException.create();
+        }
+        return readNumberValue().doubleValue();
     }
 
     @SuppressWarnings("static-method")
