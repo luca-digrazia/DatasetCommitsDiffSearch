@@ -1404,9 +1404,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
                             conditionalBackreference();
                             break;
 
-                        case '~':
-                            absentExpression();
-                            break;
                         case '-':
                         case 'i':
                         case 'L':
@@ -1609,17 +1606,6 @@ public final class RubyFlavorProcessor implements RegexFlavorProcessor {
             }
         }
         if (!match(")")) {
-            throw syntaxErrorAtAbs("missing ), unterminated subpattern", start);
-        }
-        lastTerm = TermCategory.Atom;
-    }
-
-    private void absentExpression() {
-        int start = position - 3;
-        disjunction();
-        if (match(")")) {
-            bailOut("absent expressions not supported");
-        } else {
             throw syntaxErrorAtAbs("missing ), unterminated subpattern", start);
         }
         lastTerm = TermCategory.Atom;
