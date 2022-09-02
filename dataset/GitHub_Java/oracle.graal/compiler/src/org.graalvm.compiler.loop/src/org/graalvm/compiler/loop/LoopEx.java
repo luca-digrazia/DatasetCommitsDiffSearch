@@ -249,9 +249,6 @@ public class LoopEx {
         }
         countedLoopChecked = true;
         LoopBeginNode loopBegin = loopBegin();
-        if (loopBegin.isDisableCounted()) {
-            return false;
-        }
         FixedNode next = loopBegin.next();
         while (next instanceof FixedGuardNode || next instanceof ValueAnchorNode || next instanceof FullInfopointNode) {
             next = ((FixedWithNextNode) next).next();
@@ -361,12 +358,7 @@ public class LoopEx {
                 default:
                     throw GraalError.shouldNotReachHere(condition.toString());
             }
-            CountedLoopInfo cf = new CountedLoopInfo(this, iv, ifNode, limit, oneOff, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor(), unsigned);
-            if (!CountedLoopInfo.canSpeculateThatCountedLoopNeverOverflows(loopBegin, cf)) {
-                loopBegin.setDisableCounted(true);
-                return false;
-            }
-            counted = cf;
+            counted = new CountedLoopInfo(this, iv, ifNode, limit, oneOff, negated ? ifNode.falseSuccessor() : ifNode.trueSuccessor(), unsigned);
             return true;
         }
         return false;
