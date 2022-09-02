@@ -27,6 +27,7 @@ package org.graalvm.compiler.truffle.runtime.debug;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.IntSummaryStatistics;
@@ -35,6 +36,7 @@ import java.util.LongSummaryStatistics;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.WeakHashMap;
 import java.util.function.Function;
 
 import org.graalvm.compiler.truffle.common.TruffleCompilerListener.CompilationResultInfo;
@@ -114,11 +116,7 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
     private final ThreadLocal<Times> compilationTimes = new ThreadLocal<>();
 
     public static void install(GraalTruffleRuntime runtime) {
-        runtime.addListener(new StatisticsDispatcher(runtime));
-    }
-
-    public static StatisticsListener createEngineListener(GraalTruffleRuntime runtime) {
-        return new StatisticsListener(runtime);
+        runtime.addListener(new EngineSensitiveStatisticsListener(runtime));
     }
 
     @Override
@@ -480,90 +478,121 @@ public final class StatisticsListener extends AbstractGraalTruffleRuntimeListene
         long graalTierFinished;
     }
 
-    private static final class StatisticsDispatcher extends AbstractGraalTruffleRuntimeListener {
+    private static final class EngineSensitiveStatisticsListener extends AbstractGraalTruffleRuntimeListener {
 
-        private StatisticsDispatcher(GraalTruffleRuntime runtime) {
+        private final Map<EngineData, StatisticsListener> activeEngines;
+
+        private EngineSensitiveStatisticsListener(GraalTruffleRuntime runtime) {
             super(runtime);
+            activeEngines = Collections.synchronizedMap(new WeakHashMap<>());
         }
 
         @Override
         public void onCompilationQueued(OptimizedCallTarget target) {
-            StatisticsListener listener = target.engine.statisticsListener;
-            if (listener != null) {
-                listener.onCompilationQueued(target);
+            StatisticsListener listener = getOrCreateEngineListener(target.engine);
+            if (listener == null) {
+                return;
             }
+            listener.onCompilationQueued(target);
         }
 
         @Override
         public void onCompilationStarted(OptimizedCallTarget target) {
-            StatisticsListener listener = target.engine.statisticsListener;
-            if (listener != null) {
-                listener.onCompilationStarted(target);
+            StatisticsListener listener = getOrCreateEngineListener(target.engine);
+            if (listener == null) {
+                return;
             }
+            listener.onCompilationStarted(target);
         }
 
         @Override
         public void onCompilationSplit(OptimizedDirectCallNode callNode) {
-            StatisticsListener listener = callNode.getCallTarget().engine.statisticsListener;
-            if (listener != null) {
-                listener.onCompilationSplit(callNode);
+            StatisticsListener listener = getEngineListener(callNode.getCallTarget().engine);
+            if (listener == null) {
+                return;
             }
+            listener.onCompilationSplit(callNode);
         }
 
         @Override
         public void onCompilationDequeued(OptimizedCallTarget target, Object source, CharSequence reason) {
-            StatisticsListener listener = target.engine.statisticsListener;
-            if (listener != null) {
-                listener.onCompilationDequeued(target, source, reason);
+            StatisticsListener listener = getEngineListener(target.engine);
+            if (listener == null) {
+                return;
             }
+            listener.onCompilationDequeued(target, source, reason);
         }
 
         @Override
         public void onCompilationInvalidated(OptimizedCallTarget target, Object source, CharSequence reason) {
-            StatisticsListener listener = target.engine.statisticsListener;
-            if (listener != null) {
-                listener.onCompilationInvalidated(target, source, reason);
+            StatisticsListener listener = getEngineListener(target.engine);
+            if (listener == null) {
+                return;
             }
+            listener.onCompilationInvalidated(target, source, reason);
         }
 
         @Override
         public void onCompilationTruffleTierFinished(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph) {
-            StatisticsListener listener = target.engine.statisticsListener;
-            if (listener != null) {
-                listener.onCompilationTruffleTierFinished(target, inliningDecision, graph);
+            StatisticsListener listener = getEngineListener(target.engine);
+            if (listener == null) {
+                return;
             }
+            listener.onCompilationTruffleTierFinished(target, inliningDecision, graph);
         }
 
         @Override
         public void onCompilationGraalTierFinished(OptimizedCallTarget target, GraphInfo graph) {
-            StatisticsListener listener = target.engine.statisticsListener;
-            if (listener != null) {
-                listener.onCompilationGraalTierFinished(target, graph);
+            StatisticsListener listener = getEngineListener(target.engine);
+            if (listener == null) {
+                return;
             }
+            listener.onCompilationGraalTierFinished(target, graph);
         }
 
         @Override
         public void onCompilationSuccess(OptimizedCallTarget target, TruffleInlining inliningDecision, GraphInfo graph, CompilationResultInfo result) {
-            StatisticsListener listener = target.engine.statisticsListener;
-            if (listener != null) {
-                listener.onCompilationSuccess(target, inliningDecision, graph, result);
+            StatisticsListener listener = getEngineListener(target.engine);
+            if (listener == null) {
+                return;
             }
+            listener.onCompilationSuccess(target, inliningDecision, graph, result);
         }
 
         @Override
         public void onCompilationFailed(OptimizedCallTarget target, String reason, boolean bailout, boolean permanentBailout) {
-            StatisticsListener listener = target.engine.statisticsListener;
-            if (listener != null) {
-                listener.onCompilationFailed(target, reason, bailout, permanentBailout);
+            StatisticsListener listener = getEngineListener(target.engine);
+            if (listener == null) {
+                return;
             }
+            listener.onCompilationFailed(target, reason, bailout, permanentBailout);
         }
 
         @Override
         public void onEngineClosed(EngineData runtimeData) {
-            StatisticsListener listener = runtimeData.statisticsListener;
+            if (!runtimeData.callTargetStatistics) {
+                return;
+            }
+            StatisticsListener listener = activeEngines.remove(runtimeData);
             if (listener != null) {
                 listener.onEngineClosed(runtimeData);
             }
+        }
+
+        private StatisticsListener getEngineListener(EngineData runtimeData) {
+            return runtimeData.callTargetStatistics ? activeEngines.get(runtimeData) : null;
+        }
+
+        private StatisticsListener getOrCreateEngineListener(EngineData runtimeData) {
+            if (!runtimeData.callTargetStatistics) {
+                return null;
+            }
+            return activeEngines.computeIfAbsent(runtimeData, new Function<EngineData, StatisticsListener>() {
+                @Override
+                public StatisticsListener apply(EngineData t) {
+                    return new StatisticsListener(runtime);
+                }
+            });
         }
     }
 }

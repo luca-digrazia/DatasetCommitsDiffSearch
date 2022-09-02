@@ -584,11 +584,6 @@ final class EngineAccessor extends Accessor {
         }
 
         @Override
-        public boolean isInternalContextEntered(Object impl) {
-            return PolyglotContextImpl.currentNotEntered() == impl;
-        }
-
-        @Override
         public Object createInternalContext(Object sourcePolyglotLanguageContext, Map<String, Object> config, TruffleContext spiContext) {
             PolyglotLanguageContext creator = ((PolyglotLanguageContext) sourcePolyglotLanguageContext);
             PolyglotContextImpl impl;
@@ -986,7 +981,6 @@ final class EngineAccessor extends Accessor {
             }
             return ((OptionValuesImpl) optionValues).getUnparsedOptionValue(optionKey);
         }
-
     }
 
     abstract static class AbstractClassLoaderSupplier implements Supplier<ClassLoader> {
