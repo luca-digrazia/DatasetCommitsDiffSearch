@@ -159,10 +159,6 @@ public final class EngineData {
         GraalRuntimeAccessor.ENGINE.preinitializeContext(this.polyglotEngine);
     }
 
-    public void finalizeStore() {
-        GraalRuntimeAccessor.ENGINE.finalizeStore(this.polyglotEngine);
-    }
-
     public Object getEngineLock() {
         return GraalRuntimeAccessor.ENGINE.getEngineLock(this.polyglotEngine);
     }
@@ -247,7 +243,7 @@ public final class EngineData {
         this.compilation = options.get(Compilation);
         this.compileOnly = options.get(CompileOnly);
         this.compileImmediately = options.get(CompileImmediately);
-        this.multiTier = options.get(MultiTier);
+        this.multiTier = !compileImmediately && options.get(MultiTier);
 
         this.returnTypeSpeculation = options.get(ReturnTypeSpeculation);
         this.argumentTypeSpeculation = options.get(ArgumentTypeSpeculation);
