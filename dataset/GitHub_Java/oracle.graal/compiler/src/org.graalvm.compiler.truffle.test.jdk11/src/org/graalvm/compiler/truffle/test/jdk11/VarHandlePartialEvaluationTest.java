@@ -71,7 +71,7 @@ public class VarHandlePartialEvaluationTest extends PartialEvaluationTest {
      */
     @Test
     public void byteBufferHandleGet() {
-        Assume.assumeTrue(JavaVersionUtil.JAVA_SPEC <= 11 || JavaVersionUtil.JAVA_SPEC >= 16);
+        Assume.assumeTrue("GR-29225", JavaVersionUtil.JAVA_SPEC <= 15);
         ByteBuffer byteBuffer = ByteBuffer.allocate(42).order(ByteOrder.nativeOrder()).putInt(0, 42);
         testCommon(new VarHandleTestNode(false, false), "byteBufferHandleGetInt", byteBuffer, 0);
     }
@@ -81,7 +81,7 @@ public class VarHandlePartialEvaluationTest extends PartialEvaluationTest {
      */
     @Test
     public void byteBufferHandleSet() {
-        Assume.assumeTrue(JavaVersionUtil.JAVA_SPEC <= 11 || JavaVersionUtil.JAVA_SPEC >= 16);
+        Assume.assumeTrue("GR-29225", JavaVersionUtil.JAVA_SPEC <= 15);
         ByteBuffer byteBuffer = ByteBuffer.allocate(42).order(ByteOrder.nativeOrder()).putInt(0, 42);
         testCommon(new VarHandleTestNode(false, true), "byteArrayHandleSetInt", byteBuffer, 0, 42);
     }
