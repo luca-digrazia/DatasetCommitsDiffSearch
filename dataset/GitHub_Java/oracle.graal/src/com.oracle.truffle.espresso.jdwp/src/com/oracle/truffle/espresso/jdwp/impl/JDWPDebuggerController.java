@@ -414,12 +414,10 @@ public class JDWPDebuggerController {
                     Throwable exception = getRawException(event.getException());
                     Object guestException = getContext().getGuestException(exception);
 
-                    // TODO(Gregersen) - rewrite this when instanceof implementation in Truffle is completed
+                    // TODO(Gregersen) - rewrite this when /browse/GR-19337 is done
                     // Currently, the Truffle Debug API doesn't filter on type, so we end up here having to check
                     // also, the ignore count set on the breakpoint will not work properly due to this.
-                    // we need to do a real type check here, since subclasses of the specified exception
-                    // should also hit
-                    if (klass == null || getContext().isInstanceOf(guestException, klass)) {
+                    if (klass == null || klass.getTypeAsString().equals(guestException.toString())) {
                         // check filters if we should not suspend
                         Pattern[] positivePatterns = info.getFilter().getIncludePatterns();
                         // verify include patterns
@@ -467,6 +465,17 @@ public class JDWPDebuggerController {
                     return true;
             }
             return false;
+        }
+
+        private Throwable getRawException(DebugException exception) {
+            try {
+                Method method = DebugException.class.getDeclaredMethod("getRawException");
+                method.setAccessible(true);
+                return (Throwable) method.invoke(exception);
+            } catch (Exception e) {
+                e.printStackTrace();
+                return exception;
+            }
         }
 
         private boolean checkExclusionFilters(SuspendedEvent event, Object thread) {
@@ -580,7 +589,7 @@ public class JDWPDebuggerController {
         }
 
         private RootNode findCurrentRoot(DebugStackFrame frame) {
-            // TODO(Gregersen) - hacked in with reflection currently
+            // TODO(Gregersen) - replace with new API when available
             // for now just use reflection to get the current root
             try {
                 java.lang.reflect.Method getRoot = DebugStackFrame.class.getDeclaredMethod("findCurrentRoot");
@@ -590,18 +599,6 @@ public class JDWPDebuggerController {
                 e.printStackTrace();
             }
             return null;
-        }
-
-        private Throwable getRawException(DebugException exception) {
-            // TODO(Gregersen) - hacked in with reflection currently
-            try {
-                Method method = DebugException.class.getDeclaredMethod("getRawException");
-                method.setAccessible(true);
-                return (Throwable) method.invoke(exception);
-            } catch (Exception e) {
-                e.printStackTrace();
-                return exception;
-            }
         }
 
         private void suspend(JDWPCallFrame currentFrame, Object thread, boolean alreadySuspended, byte suspendPolicy) {
