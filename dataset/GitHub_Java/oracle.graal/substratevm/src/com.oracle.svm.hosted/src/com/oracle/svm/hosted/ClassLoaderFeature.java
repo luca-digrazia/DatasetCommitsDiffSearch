@@ -33,13 +33,6 @@ public class ClassLoaderFeature implements Feature {
 
     private static final NativeImageSystemClassLoader nativeImageSystemClassLoader = NativeImageSystemClassLoader.singleton();
 
-    public static ClassLoader getRuntimeClassLoader(ClassLoader original) {
-        if (needsReplacement(original)) {
-            return nativeImageSystemClassLoader.defaultSystemClassLoader;
-        }
-        return original;
-    }
-
     private static boolean needsReplacement(ClassLoader loader) {
         if (loader == nativeImageSystemClassLoader) {
             return true;
@@ -52,7 +45,9 @@ public class ClassLoaderFeature implements Feature {
 
     private Object runtimeClassLoaderObjectReplacer(Object replaceCandidate) {
         if (replaceCandidate instanceof ClassLoader) {
-            return getRuntimeClassLoader((ClassLoader) replaceCandidate);
+            if (needsReplacement(((ClassLoader) replaceCandidate))) {
+                return nativeImageSystemClassLoader.defaultSystemClassLoader;
+            }
         }
         return replaceCandidate;
     }
