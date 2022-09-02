@@ -33,6 +33,8 @@ import static com.oracle.svm.jvmtiagentbase.Support.checkNoException;
 import static com.oracle.svm.jvmtiagentbase.Support.clearException;
 import static com.oracle.svm.jvmtiagentbase.Support.fromCString;
 import static com.oracle.svm.jvmtiagentbase.Support.fromJniString;
+import static com.oracle.svm.jvmtiagentbase.Support.getBooleanArgument;
+import static com.oracle.svm.jvmtiagentbase.Support.getByteArgument;
 import static com.oracle.svm.jvmtiagentbase.Support.getCallerClass;
 import static com.oracle.svm.jvmtiagentbase.Support.getCallerMethod;
 import static com.oracle.svm.jvmtiagentbase.Support.getClassNameOr;
@@ -744,83 +746,88 @@ final class BreakpointInterceptor {
         }
     }
 
-    private static boolean findMethodHandle(JNIEnvironment jni, Breakpoint bp) {
-        JNIObjectHandle callerClass = getDirectCallerClass();
-        JNIObjectHandle lookup = getObjectArgument(0);
-        JNIObjectHandle declaringClass = getObjectArgument(1);
-        JNIObjectHandle methodName = getObjectArgument(2);
-        JNIObjectHandle methodType = getObjectArgument(3);
+    private static boolean resolveMemberName(JNIEnvironment jni, Breakpoint bp) {
+        JNIObjectHandle factory = getObjectArgument(0);
+        byte refKind = getByteArgument(1);
+        JNIObjectHandle unresolvedName = getObjectArgument(2);
+        JNIObjectHandle lookupClass = getObjectArgument(3);
+        boolean speculativeResolve = getBooleanArgument(4);
 
-        JNIObjectHandle result = Support.callObjectMethodLLL(jni, lookup, bp.method, declaringClass, methodName, methodType);
+        JNIObjectHandle resolvedName = Support.callObjectMethodBLLZ(jni, factory, bp.method, refKind, unresolvedName, lookupClass, speculativeResolve);
         if (clearException(jni)) {
-            result = nullHandle();
+            resolvedName = nullHandle();
+        }
+        if (resolvedName.equal(nullHandle())) {
+            return false;
         }
 
-        return methodMethodHandle(jni, declaringClass, callerClass, methodName, getParamTypes(jni, methodType), result);
-    }
-
-    private static boolean findSpecialHandle(JNIEnvironment jni, Breakpoint bp) {
-        JNIObjectHandle callerClass = getDirectCallerClass();
-        JNIObjectHandle lookup = getObjectArgument(0);
-        JNIObjectHandle declaringClass = getObjectArgument(1);
-        JNIObjectHandle methodName = getObjectArgument(2);
-        JNIObjectHandle methodType = getObjectArgument(3);
-        JNIObjectHandle specialCaller = getObjectArgument(4);
-
-        JNIObjectHandle result = Support.callObjectMethodLLLL(jni, lookup, bp.method, declaringClass, methodName, methodType, specialCaller);
+        boolean isMethod = Support.callBooleanMethod(jni, resolvedName, agent.handles().javaLangInvokeMemberNameIsMethod);
         if (clearException(jni)) {
-            result = nullHandle();
+            isMethod = false;
+        }
+        boolean isConstructor = Support.callBooleanMethod(jni, resolvedName, agent.handles().javaLangInvokeMemberNameIsConstructor);
+        if (clearException(jni)) {
+            isConstructor = false;
+        }
+        boolean isField = Support.callBooleanMethod(jni, resolvedName, agent.handles().javaLangInvokeMemberNameIsField);
+        if (clearException(jni)) {
+            isField = false;
         }
 
-        return methodMethodHandle(jni, declaringClass, callerClass, methodName, getParamTypes(jni, methodType), result);
-    }
-
-    private static boolean methodMethodHandle(JNIEnvironment jni, JNIObjectHandle declaringClass, JNIObjectHandle callerClass, JNIObjectHandle nameHandle, JNIObjectHandle paramTypesHandle,
-                    JNIObjectHandle result) {
-        String name = fromJniString(jni, nameHandle);
-        Object paramTypes = getClassArrayNames(jni, paramTypesHandle);
-        traceBreakpoint(jni, declaringClass, nullHandle(), callerClass, "findMethodHandle", result.notEqual(nullHandle()), name, paramTypes);
-        return true;
-    }
-
-    private static boolean findConstructorHandle(JNIEnvironment jni, Breakpoint bp) {
-        JNIObjectHandle callerClass = getDirectCallerClass();
-        JNIObjectHandle lookup = getObjectArgument(0);
-        JNIObjectHandle declaringClass = getObjectArgument(1);
-        JNIObjectHandle methodType = getObjectArgument(2);
-
-        JNIObjectHandle result = Support.callObjectMethodLL(jni, lookup, bp.method, declaringClass, methodType);
+        JNIObjectHandle declaringClass = Support.callObjectMethod(jni, resolvedName, agent.handles().javaLangInvokeMemberNameGetDeclaringClass);
         if (clearException(jni)) {
-            result = nullHandle();
+            declaringClass = nullHandle();
         }
-
-        Object paramTypes = getClassArrayNames(jni, getParamTypes(jni, methodType));
-        traceBreakpoint(jni, declaringClass, nullHandle(), callerClass, "findConstructorHandle", result.notEqual(nullHandle()), paramTypes);
-        return true;
-    }
-
-    private static JNIObjectHandle getParamTypes(JNIEnvironment jni, JNIObjectHandle methodType) {
-        JNIObjectHandle paramTypesHandle = Support.callObjectMethod(jni, methodType, agent.handles().getJavaLangInvokeMethodTypeParameterArray(jni));
+        JNIObjectHandle declaringClassNameHandle = Support.callObjectMethod(jni, declaringClass, agent.handles().javaLangClassGetName);
+        if (clearException(jni)) {
+            declaringClassNameHandle = nullHandle();
+        }
+        JNIObjectHandle nameHandle = Support.callObjectMethod(jni, resolvedName, agent.handles().javaLangInvokeMemberNameGetName);
+        if (clearException(jni)) {
+            nameHandle = nullHandle();
+        }
+        JNIObjectHandle paramTypesHandle = Support.callObjectMethod(jni, resolvedName, agent.handles().javaLangInvokeMemberNameGetParameterTypes);
         if (clearException(jni)) {
             paramTypesHandle = nullHandle();
         }
-        return paramTypesHandle;
-    }
 
-    private static boolean findFieldHandle(JNIEnvironment jni, Breakpoint bp) {
-        JNIObjectHandle callerClass = getDirectCallerClass();
-        JNIObjectHandle lookup = getObjectArgument(0);
-        JNIObjectHandle declaringClass = getObjectArgument(1);
-        JNIObjectHandle fieldName = getObjectArgument(2);
-        JNIObjectHandle fieldType = getObjectArgument(3);
+        String declaringClassName = fromJniString(jni, declaringClassNameHandle);
+        String name = fromJniString(jni, nameHandle);
+        Object paramTypes = getClassArrayNames(jni, paramTypesHandle);
 
-        JNIObjectHandle result = Support.callObjectMethodLLL(jni, lookup, bp.method, declaringClass, fieldName, fieldType);
-        if (clearException(jni)) {
+        JNIObjectHandle result = nullHandle();
+        String function;
+        Object[] args;
+        if (isMethod) {
+            result = Support.callObjectMethodLL(jni, declaringClass, agent.handles().javaLangClassGetDeclaredMethod, nameHandle, paramTypesHandle);
+            function = "getDeclaredMethod";
+            args = new Object[]{name, paramTypes};
+        } else if (isConstructor) {
+            result = Support.callObjectMethodL(jni, declaringClass, agent.handles().javaLangClassGetDeclaredConstructor, paramTypesHandle);
+            function = "getDeclaredConstructor";
+            args = new Object[]{paramTypes};
+        } else if (isField) {
+            result = Support.callObjectMethodL(jni, declaringClass, agent.handles().javaLangClassGetDeclaredField, nameHandle);
+            function = "getDeclaredField";
+            args = new Object[]{name};
+        } else {
+            function = null;
+            args = new Object[0];
+        }
+        if (function != null && clearException(jni)) {
             result = nullHandle();
         }
+        JNIObjectHandle resultDeclaringClass = Support.callObjectMethod(jni, result, agent.handles().javaLangReflectMemberGetDeclaringClass);
+        if (clearException(jni)) {
+            resultDeclaringClass = nullHandle();
+        }
 
-        String name = fromJniString(jni, fieldName);
-        traceBreakpoint(jni, declaringClass, nullHandle(), callerClass, "findFieldHandle", result.notEqual(nullHandle()), name);
+        /* Lambdas are intrinsified and java.lang.invoke functions are added during compilation */
+        boolean ignore = declaringClassName == null || name == null || declaringClassName.startsWith("java.lang.invoke") ||
+                        declaringClassName.contains("$$Lambda$") || name.contains("$anonfun$") || name.startsWith("lambda$");
+        if (!ignore) {
+            traceBreakpoint(jni, declaringClass, resultDeclaringClass, nullHandle(), function, result.notEqual(nullHandle()), args);
+        }
         return true;
     }
 
@@ -1257,37 +1264,8 @@ final class BreakpointInterceptor {
                     optionalBrk("jdk/internal/misc/Unsafe", "objectFieldOffset", "(Ljava/lang/reflect/Field;)J", BreakpointInterceptor::objectFieldOffset),
                     optionalBrk("jdk/internal/misc/Unsafe", "objectFieldOffset", "(Ljava/lang/Class;Ljava/lang/String;)J", BreakpointInterceptor::objectFieldOffsetByName),
 
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findStatic",
-                                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
-                                    BreakpointInterceptor::findMethodHandle),
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findVirtual",
-                                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
-                                    BreakpointInterceptor::findMethodHandle),
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findConstructor",
-                                    "(Ljava/lang/Class;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;",
-                                    BreakpointInterceptor::findConstructorHandle),
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findSpecial",
-                                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/Class;)Ljava/lang/invoke/MethodHandle;",
-                                    BreakpointInterceptor::findSpecialHandle),
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findGetter",
-                                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/MethodHandle;",
-                                    BreakpointInterceptor::findFieldHandle),
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findSetter",
-                                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/MethodHandle;",
-                                    BreakpointInterceptor::findFieldHandle),
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findStaticGetter",
-                                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/MethodHandle;",
-                                    BreakpointInterceptor::findFieldHandle),
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findStaticSetter",
-                                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/MethodHandle;",
-                                    BreakpointInterceptor::findFieldHandle),
-                    /* VarHandles were introduced in Java 9 */
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findVarHandle",
-                                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;",
-                                    BreakpointInterceptor::findFieldHandle),
-                    optionalBrk("java/lang/invoke/MethodHandles$Lookup", "findStaticVarHandle",
-                                    "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;",
-                                    BreakpointInterceptor::findFieldHandle),
+                    optionalBrk("java/lang/invoke/MemberName$Factory", "resolve", "(BLjava/lang/invoke/MemberName;Ljava/lang/Class;Z)Ljava/lang/invoke/MemberName;",
+                                    BreakpointInterceptor::resolveMemberName),
     };
 
     private static final BreakpointSpecification CLASSLOADER_LOAD_CLASS_BREAKPOINT_SPECIFICATION = optionalBrk("java/lang/ClassLoader", "loadClass",

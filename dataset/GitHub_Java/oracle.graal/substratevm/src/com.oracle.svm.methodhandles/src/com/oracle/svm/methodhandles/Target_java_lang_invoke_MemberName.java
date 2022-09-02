@@ -70,9 +70,6 @@ public final class Target_java_lang_invoke_MemberName {
     @Alias
     public native MethodType getMethodType();
 
-    @Alias
-    public native byte getReferenceKind();
-
     @SuppressWarnings("static-method")
     @Substitute
     private boolean vminfoIsConsistent() {

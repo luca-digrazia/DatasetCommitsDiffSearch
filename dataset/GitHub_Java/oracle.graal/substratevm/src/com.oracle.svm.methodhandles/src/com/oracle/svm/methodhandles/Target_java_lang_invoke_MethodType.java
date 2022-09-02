@@ -34,8 +34,6 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.invoke.MethodHandleUtils.MethodHandlesSupported;
-import com.oracle.svm.core.invoke.Target_java_lang_invoke_MemberName;
 
 @TargetClass(java.lang.invoke.MethodType.class)
 final class Target_java_lang_invoke_MethodType {
@@ -56,12 +54,6 @@ final class Target_java_lang_invoke_MethodType {
      */
     @Alias @RecomputeFieldValue(kind = Kind.Reset) //
     private Target_java_lang_invoke_Invokers invokers;
-
-    /**
-     * This field is used as a cache, so the value can be re-computed at run time when needed.
-     */
-    @Alias @RecomputeFieldValue(kind = Kind.Reset) //
-    private String methodDescriptor;
 }
 
 @TargetClass(value = java.lang.invoke.MethodType.class, innerClass = "ConcurrentWeakInternSet")
