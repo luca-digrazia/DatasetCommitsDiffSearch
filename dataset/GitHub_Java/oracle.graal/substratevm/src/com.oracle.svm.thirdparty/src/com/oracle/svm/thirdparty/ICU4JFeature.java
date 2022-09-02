@@ -89,28 +89,30 @@ public final class ICU4JFeature implements Feature {
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-
-        // we should fail the native-image build, if any ICU4J class instance
-        // made it to the build-time generated heap
-        RuntimeClassInitialization.initializeAtRunTime(getIcu4jClasses(access));
-
-        // ClassLoaderHelper is a utility class used in @TargetClass annotated substitutions bellow
-        RuntimeClassInitialization.initializeAtBuildTime(ClassLoaderHelper.class);
-        RuntimeClassInitialization.initializeAtBuildTime(access.findClassByName(ClassLoaderHelper.class.getName() + "$1"));
+        List<Class<?>> allClasses = ((FeatureAccessImpl) access).findSubclasses(Object.class);
+        RuntimeClassInitialization.initializeAtRunTime(getIcu4jClasses(allClasses));
+        RuntimeClassInitialization.initializeAtBuildTime(getIcu4jFeatureClasses(allClasses));
     }
 
-    private static Class<?>[] getIcu4jClasses(FeatureAccess access) {
-        List<Class<?>> allClasses = ((FeatureAccessImpl) access).findSubclasses(Object.class);
+    static class Helper {
+        /** Dummy ClassLoader used only for resource loading. */
+        // Checkstyle: stop
+        static final ClassLoader DUMMY_LOADER = new ClassLoader(null) {
+        };
+        // CheckStyle: resume
+    }
+
+    private static Class<?>[] getIcu4jClasses(Collection<Class<?>> allClasses) {
         return allClasses.stream().filter(clazz -> clazz.getName().startsWith("com.ibm.icu")).toArray(Class<?>[]::new);
     }
-}
 
-final class ClassLoaderHelper {
-    /** Dummy ClassLoader used only for resource loading. */
-    // Checkstyle: stop
-    static final ClassLoader DUMMY_LOADER = new ClassLoader(null) {
-    };
-    // CheckStyle: resume
+    private static Class<?>[] getIcu4jFeatureClasses(Collection<Class<?>> allClasses) {
+        return allClasses.stream().filter(clazz -> {
+            String className = clazz.getName();
+            return className.startsWith("com.oracle.svm.thirdparty") &&
+                            (className.contains("com_ibm_icu") || className.contains("ICU4JFeature"));
+        }).toArray(Class<?>[]::new);
+    }
 }
 
 @TargetClass(className = "com.ibm.icu.impl.ClassLoaderUtil", onlyWith = ICU4JFeature.IsEnabled.class)
@@ -118,7 +120,7 @@ final class Target_com_ibm_icu_impl_ClassLoaderUtil {
     @Substitute
     // Checkstyle: stop
     public static ClassLoader getClassLoader() {
-        return ClassLoaderHelper.DUMMY_LOADER;
+        return ICU4JFeature.Helper.DUMMY_LOADER;
     }
     // Checkstyle: resume
 }
@@ -152,18 +154,17 @@ final class Target_com_ibm_icu_impl_ICUBinary {
                 synchronized (IcuDataFilesAccessors.class) {
                     if (instance == null) {
 
-                        List<?> list = new ArrayList<>();
+                        instance = new ArrayList<>();
 
                         String dataPath = System.getProperty(ICU4J_DATA_PATH_SYS_PROP);
                         if (dataPath == null || dataPath.isEmpty()) {
                             dataPath = System.getenv(ICU4J_DATA_PATH_ENV_VAR);
                         }
                         if (dataPath != null && !dataPath.isEmpty()) {
-                            addDataFilesFromPath(dataPath, list);
+                            addDataFilesFromPath(dataPath, instance);
                         } else {
                             System.err.println(NO_DATA_PATH_ERR_MSG);
                         }
-                        instance = list;
                     }
                 }
                 // Checkstyle: disallow synchronization
@@ -185,7 +186,7 @@ final class Target_com_ibm_icu_impl_ICUBinary {
 final class Target_com_ibm_icu_impl_ICUResourceBundle {
     @Alias @RecomputeFieldValue(kind = Kind.FromAlias, isFinal = true)
     // Checkstyle: stop
-    private static ClassLoader ICU_DATA_CLASS_LOADER = ClassLoaderHelper.DUMMY_LOADER;
+    private static ClassLoader ICU_DATA_CLASS_LOADER = ICU4JFeature.Helper.DUMMY_LOADER;
     // Checkstyle: resume
 
     @SuppressWarnings("unused")
