@@ -39,7 +39,6 @@ import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.interop.InteropLibrary;
 import com.oracle.truffle.api.interop.InvalidArrayIndexException;
@@ -506,7 +505,7 @@ public final class StaticObject implements TruffleObject {
         }
 
         @SuppressWarnings("unused")
-        @Fallback
+        @Specialization(guards = {"!receiver.isArray()"})
         static Object doOther(StaticObject receiver, long index) throws UnsupportedMessageException {
             throw UnsupportedMessageException.create();
         }
@@ -672,7 +671,7 @@ public final class StaticObject implements TruffleObject {
         }
 
         @SuppressWarnings("unused")
-        @Fallback
+        @Specialization(guards = {"!isPrimitiveArray(receiver)"})
         static void doOther(StaticObject receiver, long index, Object value) throws UnsupportedMessageException {
             throw UnsupportedMessageException.create();
         }
