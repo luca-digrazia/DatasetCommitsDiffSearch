@@ -49,22 +49,19 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
-import org.graalvm.nativeimage.hosted.ClassInitialization;
-import org.graalvm.nativeimage.hosted.Feature;
+import org.graalvm.nativeimage.Feature;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.PinnedObject;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.RuntimeReflection;
+import org.graalvm.nativeimage.RuntimeClassInitialization;
 import org.graalvm.nativeimage.StackValue;
-import org.graalvm.nativeimage.c.function.CLibrary;
 import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.nativeimage.c.type.CCharPointer;
 import org.graalvm.nativeimage.c.type.CIntPointer;
 import org.graalvm.nativeimage.c.type.CTypeConversion;
 import org.graalvm.nativeimage.c.type.CTypeConversion.CCharPointerHolder;
 import org.graalvm.nativeimage.c.type.WordPointer;
-import org.graalvm.nativeimage.impl.InternalPlatform;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
 
@@ -75,11 +72,11 @@ import com.oracle.svm.core.annotate.RecomputeFieldValue.Kind;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 import com.oracle.svm.core.annotate.TargetElement;
-import com.oracle.svm.core.headers.Errno;
 import com.oracle.svm.core.jdk.JDK8OrEarlier;
 import com.oracle.svm.core.jdk.JDK9OrLater;
 import com.oracle.svm.core.os.IsDefined;
 import com.oracle.svm.core.posix.JavaNetNetworkInterface.PlatformSupport;
+import com.oracle.svm.core.headers.Errno;
 import com.oracle.svm.core.posix.headers.Fcntl;
 import com.oracle.svm.core.posix.headers.Ifaddrs;
 import com.oracle.svm.core.posix.headers.Ioctl;
@@ -94,8 +91,10 @@ import com.oracle.svm.core.snippets.KnownIntrinsics;
 import com.oracle.svm.core.util.Utf8;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.jni.JNIRuntimeAccess;
+import org.graalvm.nativeimage.RuntimeReflection;
+import org.graalvm.nativeimage.c.function.CLibrary;
 
-@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
+@Platforms({Platform.LINUX_JNI.class, Platform.DARWIN_JNI.class})
 @AutomaticFeature
 @CLibrary("net")
 class PosixJavaNetSubstitutionsFeature implements Feature {
@@ -103,17 +102,17 @@ class PosixJavaNetSubstitutionsFeature implements Feature {
     @Override
     public void duringSetup(DuringSetupAccess access) {
         try {
-            ClassInitialization.rerun(access.findClassByName("java.net.InetAddress"));
-            ClassInitialization.rerun(access.findClassByName("java.net.Inet4AddressImpl"));
-            ClassInitialization.rerun(access.findClassByName("java.net.Inet6AddressImpl"));
-            ClassInitialization.rerun(access.findClassByName("java.net.SocketInputStream"));
-            ClassInitialization.rerun(access.findClassByName("java.net.SocketOutputStream"));
-            ClassInitialization.rerun(access.findClassByName("java.net.DatagramPacket"));
-            ClassInitialization.rerun(access.findClassByName("java.net.AbstractPlainSocketImpl"));
-            ClassInitialization.rerun(access.findClassByName("java.net.AbstractPlainDatagramSocketImpl"));
-            ClassInitialization.rerun(access.findClassByName("java.net.PlainSocketImpl"));
-            ClassInitialization.rerun(access.findClassByName("java.net.PlainDatagramSocketImpl"));
-            ClassInitialization.rerun(access.findClassByName("sun.net.ExtendedOptionsImpl"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.InetAddress"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.Inet4AddressImpl"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.Inet6AddressImpl"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.SocketInputStream"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.SocketOutputStream"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.DatagramPacket"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.AbstractPlainSocketImpl"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.AbstractPlainDatagramSocketImpl"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.PlainSocketImpl"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.PlainDatagramSocketImpl"));
+            RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("sun.net.ExtendedOptionsImpl"));
         } catch (Exception e) {
             VMError.shouldNotReachHere("PosixJavaNetSubstitutionsFeature: Error registering rerunClassInitialization: ", e);
         }
@@ -251,21 +250,21 @@ class PosixJavaNetSubstitutionsFeature implements Feature {
 }
 
 @TargetClass(className = "java.net.NetworkInterface")
-@Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
+@Platforms({Platform.LINUX_JNI.class, Platform.DARWIN_JNI.class})
 final class Target_java_net_NetworkInterface_jni {
 
     @Alias
     static native void init();
 }
 
-@Platforms({InternalPlatform.LINUX_AND_JNI.class, InternalPlatform.DARWIN_AND_JNI.class})
+@Platforms({Platform.LINUX_AND_JNI.class, Platform.DARWIN_AND_JNI.class})
 public final class PosixJavaNetSubstitutions {
 
     /** Private constructor: No instances. */
     private PosixJavaNetSubstitutions() {
     }
 
-    @Platforms({InternalPlatform.LINUX_JNI.class, InternalPlatform.DARWIN_JNI.class})
+    @Platforms({Platform.LINUX_JNI.class, Platform.DARWIN_JNI.class})
     public static boolean initIDs() {
         try {
             System.loadLibrary("net");
@@ -1059,21 +1058,21 @@ final class Target_java_net_PlainDatagramSocketImpl {
         //  1795      switch (opt) {
         //  1796          case java_net_SocketOptions_IP_MULTICAST_LOOP:
         switch (opt) {
-            case SocketOptions.IP_MULTICAST_LOOP:
-                //  1798              if (level == IPPROTO_IP) {
-                if (level_Pointer.read() == NetinetIn.IPPROTO_IP()) {
-                    //  1799                  return createBoolean(env, (int)!optval.c);
-                    return Util_java_net_PlainDatagramSocketImpl.createBoolean(Util_java_net_PlainDatagramSocketImpl.not(optval_c_Pointer.read()));
-                } else {
-                    //  1801                  return createBoolean(env, !optval.i);
-                    return Util_java_net_PlainDatagramSocketImpl.createBoolean(Util_java_net_PlainDatagramSocketImpl.not(optval_i_Pointer.read()));
-                }
+         case SocketOptions.IP_MULTICAST_LOOP:
+            //  1798              if (level == IPPROTO_IP) {
+            if (level_Pointer.read() == NetinetIn.IPPROTO_IP()) {
+                //  1799                  return createBoolean(env, (int)!optval.c);
+                return Util_java_net_PlainDatagramSocketImpl.createBoolean(Util_java_net_PlainDatagramSocketImpl.not(optval_c_Pointer.read()));
+            } else {
+                //  1801                  return createBoolean(env, !optval.i);
+                return Util_java_net_PlainDatagramSocketImpl.createBoolean(Util_java_net_PlainDatagramSocketImpl.not(optval_i_Pointer.read()));
+            }
             //  1804          case java_net_SocketOptions_SO_BROADCAST:
             //  1805          case java_net_SocketOptions_SO_REUSEADDR:
             case SocketOptions.SO_BROADCAST:
             case SocketOptions.SO_REUSEADDR:
-                //  1806              return createBoolean(env, optval.i);
-                return Util_java_net_PlainDatagramSocketImpl.createBoolean(optval_i_Pointer.read());
+            //  1806              return createBoolean(env, optval.i);
+                return Util_java_net_PlainDatagramSocketImpl.createBoolean(Util_java_net_PlainDatagramSocketImpl.not(optval_i_Pointer.read()));
             //  1808          case java_net_SocketOptions_SO_SNDBUF:
             //  1809          case java_net_SocketOptions_SO_RCVBUF:
             //  1810          case java_net_SocketOptions_IP_TOS:
@@ -1110,7 +1109,7 @@ final class Target_java_net_PlainDatagramSocketImpl {
         CIntPointer optname_Pointer = StackValue.get(CIntPointer.class);
         int optlen;
         //  1364      int optval;
-        CIntPointer optval_Pointer = StackValue.get(CIntPointer.class);
+        int optval;
         //  1365      optlen = sizeof(int);
         optlen = SizeOf.get(CIntPointer.class);
         //  1366
@@ -1149,7 +1148,8 @@ final class Target_java_net_PlainDatagramSocketImpl {
             //  1391          setMulticastInterface(env, this, fd, opt, value);
             Util_java_net_PlainDatagramSocketImpl.setMulticastInterface(fd, opt, value);
             //  1392          return;
-            return;
+            /* Unreachable. */
+            //  1393      }
         }
 
         //  1395      /*
@@ -1160,7 +1160,8 @@ final class Target_java_net_PlainDatagramSocketImpl {
             //  1399          setMulticastLoopbackMode(env, this, fd, opt, value);
             Util_java_net_PlainDatagramSocketImpl.setMulticastLoopbackMode(fd, opt, value);
             //  1400          return;
-            return;
+            /* Unreachable. */
+            //  1401      }
         }
 
         //  1403      /*
@@ -1192,7 +1193,7 @@ final class Target_java_net_PlainDatagramSocketImpl {
                 //  1423                  CHECK_NULL(fid);
                 //  1424
                 //  1425                  optval = (*env)->GetIntField(env, value, fid);
-                optval_Pointer.write(((Integer)value).intValue());
+                optval = ((Integer)value).intValue();
                 //  1426                  break;
                 break;
             }
@@ -1215,7 +1216,7 @@ final class Target_java_net_PlainDatagramSocketImpl {
                 //  1442
                 //  1443                  /* SO_REUSEADDR or SO_BROADCAST */
                 //  1444                  optval = (on ? 1 : 0);
-                optval_Pointer.write(on ? 1 : 0);
+                optval = (on ? 1 : 0);
                 //  1445
                 //  1446                  break;
                 break;
@@ -1230,7 +1231,7 @@ final class Target_java_net_PlainDatagramSocketImpl {
         }
 
         //  1456      if (NET_SetSockOpt(fd, level, optname, (const void *)&optval, optlen) < 0) {
-        if (JavaNetNetUtilMD.NET_SetSockOpt(fd, level_Pointer.read(), optname_Pointer.read(), (WordPointer) optval_Pointer, optlen) < 0) {
+        if (JavaNetNetUtilMD.NET_SetSockOpt(fd, level_Pointer.read(), optname_Pointer.read(), WordFactory.unsigned(optval), optlen) < 0) {
             //  1457          NET_ThrowByNameWithLastError(env, JNU_JAVANETPKG "SocketException", "Error setting socket option");
             throw new SocketException(PosixUtils.lastErrorString("Error setting socket option"));
             //  1458          return;
@@ -2466,29 +2467,31 @@ class Util_java_net_PlainDatagramSocketImpl {
     /* @formatter:on */
 
     static Boolean createBoolean(boolean b) {
-        return Boolean.valueOf(b);
-    }
-
-    static Boolean createBoolean(int i) {
-        return Boolean.valueOf(CTypeConversion.toBoolean(i));
+        return b;
     }
 
     static Integer createInteger(int i) {
-        return Integer.valueOf(i);
+        return i;
     }
 
     /**
      * Useful because you can't apply ! to non-booleans, to keep the code above a wee bit clearer.
      */
     static boolean not(byte b) {
-        return !(CTypeConversion.toBoolean(b));
+        if (b == 0) {
+            return true;
+        }
+        return false;
     }
 
     /**
      * Useful because you can't apply ! to non-booleans, to keep the code above a wee bit clearer.
      */
     static boolean not(int i) {
-        return !(CTypeConversion.toBoolean(i));
+        if (i == 0) {
+            return true;
+        }
+        return false;
     }
 }
 /* } Allow names with non-standard names: Checkstyle: resume */
@@ -5975,7 +5978,7 @@ final class JavaNetPlainSocketImplFeature implements Feature {
 
     @Override
     public void duringSetup(DuringSetupAccess access) {
-        ClassInitialization.rerun(access.findClassByName("java.net.PlainSocketImpl"));
+        RuntimeClassInitialization.rerunClassInitialization(access.findClassByName("java.net.PlainSocketImpl"));
     }
 }
 
