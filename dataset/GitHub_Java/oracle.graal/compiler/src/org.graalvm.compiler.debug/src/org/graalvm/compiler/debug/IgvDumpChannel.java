@@ -27,7 +27,6 @@ package org.graalvm.compiler.debug;
 import static org.graalvm.compiler.debug.DebugOptions.PrintGraphHost;
 import static org.graalvm.compiler.debug.DebugOptions.PrintGraphPort;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.InetSocketAddress;
@@ -42,8 +41,6 @@ import java.util.function.Supplier;
 
 import org.graalvm.compiler.debug.DebugOptions.PrintGraphTarget;
 import org.graalvm.compiler.options.OptionValues;
-
-import jdk.vm.ci.common.NativeImageReinitialize;
 
 final class IgvDumpChannel implements WritableByteChannel {
     private final Supplier<Path> pathProvider;
@@ -86,7 +83,7 @@ final class IgvDumpChannel implements WritableByteChannel {
         if (sharedChannel == null) {
             PrintGraphTarget target = DebugOptions.PrintGraph.getValue(options);
             if (target == PrintGraphTarget.File) {
-                sharedChannel = createFileChannel(pathProvider, null);
+                sharedChannel = createFileChannel(pathProvider);
             } else if (target == PrintGraphTarget.Network) {
                 sharedChannel = createNetworkChannel(pathProvider, options);
             } else {
@@ -101,8 +98,7 @@ final class IgvDumpChannel implements WritableByteChannel {
         int port = PrintGraphPort.getValue(options);
         try {
             WritableByteChannel channel = SocketChannel.open(new InetSocketAddress(host, port));
-            String targetAnnouncement = String.format("Connected to the IGV on %s:%d", host, port);
-            maybeAnnounceTarget(targetAnnouncement);
+            TTY.println("Connected to the IGV on %s:%d", host, port);
             return channel;
         } catch (ClosedByInterruptException | InterruptedIOException e) {
             /*
@@ -112,39 +108,18 @@ final class IgvDumpChannel implements WritableByteChannel {
              */
             return null;
         } catch (IOException e) {
-            String networkFailure = String.format("Could not connect to the IGV on %s:%d", host, port);
             if (pathProvider != null) {
-                return createFileChannel(pathProvider, networkFailure);
+                return createFileChannel(pathProvider);
             } else {
-                throw new IOException(networkFailure, e);
+                throw new IOException(String.format("Could not connect to the IGV on %s:%d", host, port), e);
             }
         }
     }
 
-    @NativeImageReinitialize private static String lastTargetAnnouncement;
-
-    private static void maybeAnnounceTarget(String targetAnnouncement) {
-        if (!targetAnnouncement.equals(lastTargetAnnouncement)) {
-            // Ignore races - an extra announcement is ok
-            lastTargetAnnouncement = targetAnnouncement;
-            TTY.println(targetAnnouncement);
-        }
-    }
-
-    private static WritableByteChannel createFileChannel(Supplier<Path> pathProvider, String networkFailure) throws IOException {
+    private static WritableByteChannel createFileChannel(Supplier<Path> pathProvider) throws IOException {
         Path path = pathProvider.get();
         try {
-            FileChannel channel = FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-            File dir = path.toFile();
-            if (!dir.isDirectory()) {
-                dir = dir.getParentFile();
-            }
-            if (networkFailure == null) {
-                maybeAnnounceTarget("Dumping IGV graphs in " + dir);
-            } else {
-                maybeAnnounceTarget(networkFailure + ". Dumping IGV graphs in " + dir);
-            }
-            return channel;
+            return FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
         } catch (IOException e) {
             throw new IOException(String.format("Failed to open %s to dump IGV graphs", path), e);
         }

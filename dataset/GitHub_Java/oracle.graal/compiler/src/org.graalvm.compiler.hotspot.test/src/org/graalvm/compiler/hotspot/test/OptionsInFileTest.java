@@ -1,10 +1,12 @@
 /*
- * Copyright (c) 2013, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
- * published by the Free Software Foundation.
+ * published by the Free Software Foundation.  Oracle designates this
+ * particular file as subject to the "Classpath" exception as provided
+ * by Oracle in the LICENSE file that accompanied this code.
  *
  * This code is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
@@ -22,23 +24,22 @@
  */
 package org.graalvm.compiler.hotspot.test;
 
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.Dump;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.MethodFilter;
-import static org.graalvm.compiler.debug.GraalDebugConfig.Options.PrintGraph;
-import static org.graalvm.compiler.test.SubprocessUtil.formatExecutedCommand;
+import static org.graalvm.compiler.debug.DebugOptions.Dump;
+import static org.graalvm.compiler.debug.DebugOptions.MethodFilter;
+import static org.graalvm.compiler.debug.DebugOptions.PrintGraph;
 import static org.graalvm.compiler.test.SubprocessUtil.getVMCommandLine;
 import static org.graalvm.compiler.test.SubprocessUtil.withoutDebuggerArguments;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.graalvm.compiler.core.test.GraalCompilerTest;
+import org.graalvm.compiler.debug.DebugOptions.PrintGraphTarget;
+import org.graalvm.compiler.test.SubprocessUtil;
+import org.graalvm.compiler.test.SubprocessUtil.Subprocess;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -47,51 +48,41 @@ import org.junit.Test;
  */
 public class OptionsInFileTest extends GraalCompilerTest {
     @Test
-    public void test() throws IOException {
-        List<String> args = withoutDebuggerArguments(getVMCommandLine());
-
+    public void test() throws IOException, InterruptedException {
         String methodFilterValue = "a very unlikely method name";
         String debugFilterValue = "a very unlikely debug scope";
         File optionsFile = File.createTempFile("options", ".properties").getAbsoluteFile();
         try {
             Assert.assertFalse(methodFilterValue.equals(MethodFilter.getDefaultValue()));
-            Assert.assertFalse(debugFilterValue.equals(PrintGraph.getDefaultValue()));
-            Assert.assertTrue(PrintGraph.getDefaultValue());
+            Assert.assertFalse(debugFilterValue.equals(Dump.getDefaultValue()));
+            Assert.assertEquals(PrintGraphTarget.File, PrintGraph.getDefaultValue());
 
             try (PrintStream out = new PrintStream(new FileOutputStream(optionsFile))) {
                 out.println(MethodFilter.getName() + "=" + methodFilterValue);
                 out.println(Dump.getName() + "=" + debugFilterValue);
-                out.println(PrintGraph.getName() + " = false");
+                out.println(PrintGraph.getName() + " = Network");
             }
 
-            args.add("-Dgraal.options.file=" + optionsFile);
-            args.add("-XX:+JVMCIPrintProperties");
-
-            ProcessBuilder processBuilder = new ProcessBuilder(args);
-            processBuilder.redirectErrorStream(true);
-            Process process = processBuilder.start();
-            BufferedReader stdout = new BufferedReader(new InputStreamReader(process.getInputStream()));
-
+            List<String> vmArgs = withoutDebuggerArguments(getVMCommandLine());
+            vmArgs.removeIf(a -> a.startsWith("-Dgraal."));
+            vmArgs.add("-Dgraal.options.file=" + optionsFile);
+            vmArgs.add("-XX:+JVMCIPrintProperties");
+            Subprocess proc = SubprocessUtil.java(vmArgs);
             String[] expected = {
                             "graal.MethodFilter := \"a very unlikely method name\"",
                             "graal.Dump := \"a very unlikely debug scope\"",
-                            "graal.PrintGraph := false"};
-
-            List<String> outputLines = new ArrayList<>();
-
-            String line;
-            while ((line = stdout.readLine()) != null) {
-                outputLines.add(line);
+                            "graal.PrintGraph := Network"};
+            for (String line : proc.output) {
                 for (int i = 0; i < expected.length; i++) {
                     if (expected[i] != null && line.contains(expected[i])) {
                         expected[i] = null;
                     }
                 }
             }
-            String dashes = "-------------------------------------------------------";
+
             for (int i = 0; i < expected.length; i++) {
                 if (expected[i] != null) {
-                    Assert.fail(String.format("Did not find '%s' in output of command:%n%s", expected[i], formatExecutedCommand(args, outputLines, dashes, dashes)));
+                    Assert.fail(String.format("Did not find '%s' in output of command:%n%s", expected[i], proc));
                 }
             }
         } finally {
