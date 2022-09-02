@@ -68,8 +68,4 @@ public class SubstitutionHelper {
     public TypeElement getImplAnnotation() {
         return implAnnotation;
     }
-
-    public Element getTarget() {
-        return target;
-    }
 }
