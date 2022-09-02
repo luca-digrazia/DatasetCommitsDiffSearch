@@ -95,11 +95,6 @@ public class SubstrateOptimizedCallTarget extends OptimizedCallTarget implements
     }
 
     @Override
-    public boolean isAlive() {
-        return address != 0;
-    }
-
-    @Override
     public boolean isValidLastTier() {
         long address0 = getAddress();
         return (address0 != 0) && isValidLastTier0(address0);

@@ -140,6 +140,4 @@ public interface CompilableTruffleAST {
         e.printStackTrace(pw);
         return sw.toString();
     }
-
-    boolean isTrivial();
 }
