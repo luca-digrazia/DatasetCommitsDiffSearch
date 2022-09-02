@@ -47,7 +47,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.nodes.DirectCallNode;
 import com.oracle.truffle.espresso.descriptors.Signatures;
 import com.oracle.truffle.espresso.descriptors.Symbol;
 import com.oracle.truffle.espresso.descriptors.Symbol.Name;
@@ -71,27 +70,31 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
      * @param ref the target. Can be either a mathod or a field.
      */
     @Substitution
-    public static void init(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self, @Host(Object.class) StaticObject ref,
-                    @InjectMeta Meta meta) {
+    public static void init(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self, @Host(Object.class) StaticObject ref) {
+        Klass mnKlass = self.getKlass();
+        EspressoContext context = mnKlass.getContext();
+        // TODO(tg): inject meta
+        Meta meta = context.getMeta();
+
         Klass targetKlass = ref.getKlass();
 
         if (targetKlass.getType() == Type.java_lang_reflect_Method) {
             // Actual planting
-            Method target = Method.getHostReflectiveMethodRoot(ref, meta);
+            Method target = Method.getHostReflectiveMethodRoot(ref);
             int refKind = target.getRefKind();
             plantResolvedMethod(self, target, refKind, meta.java_lang_invoke_MemberName_flags, meta);
             // Finish the job
             self.setField(meta.java_lang_invoke_MemberName_clazz, target.getDeclaringKlass().mirror());
         } else if (targetKlass.getType() == Type.java_lang_reflect_Field) {
             // Actual planting
-            Field field = Field.getReflectiveFieldRoot(ref, meta);
+            Field field = Field.getReflectiveFieldRoot(ref);
             int refkind = getRefKind(self.getIntField(meta.java_lang_invoke_MemberName_flags));
             plantResolvedField(self, field, refkind, meta.java_lang_invoke_MemberName_flags, meta);
             // Finish the job
             Klass fieldKlass = ref.getField(meta.java_lang_reflect_Field_class).getMirrorKlass();
             self.setField(meta.java_lang_invoke_MemberName_clazz, fieldKlass.mirror());
         } else if (targetKlass.getType() == Type.java_lang_reflect_Constructor) {
-            Method target = Method.getHostReflectiveConstructorRoot(ref, meta);
+            Method target = Method.getHostReflectiveConstructorRoot(ref);
             int refKind = target.getRefKind();
             plantResolvedMethod(self, target, refKind, meta.java_lang_invoke_MemberName_flags, meta);
             self.setField(meta.java_lang_invoke_MemberName_clazz, target.getDeclaringKlass().mirror());
@@ -107,15 +110,15 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
     }
 
     @Substitution
-    public static void setCallSiteTargetNormal(@Host(CallSite.class) StaticObject site, @Host(MethodHandle.class) StaticObject target,
-                    @InjectMeta Meta meta) {
-        site.setField(meta.java_lang_invoke_CallSite_target, target);
+    public static void setCallSiteTargetNormal(@Host(CallSite.class) StaticObject site, @Host(MethodHandle.class) StaticObject target) {
+        // TODO(tg): inject meta
+        site.setField(site.getKlass().getMeta().java_lang_invoke_CallSite_target, target);
     }
 
     @Substitution
-    public static void setCallSiteTargetVolatile(@Host(CallSite.class) StaticObject site, @Host(MethodHandle.class) StaticObject target,
-                    @InjectMeta Meta meta) {
-        site.setFieldVolatile(meta.java_lang_invoke_CallSite_target, target);
+    public static void setCallSiteTargetVolatile(@Host(CallSite.class) StaticObject site, @Host(MethodHandle.class) StaticObject target) {
+        // TODO(tg): inject meta
+        site.setFieldVolatile(site.getKlass().getMeta().java_lang_invoke_CallSite_target, target);
     }
 
     // TODO(garcia) verifyConstants
@@ -179,26 +182,28 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
     }
 
     @Substitution
-    public static long objectFieldOffset(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self,
-                    @InjectMeta Meta meta) {
-        return (long) self.getHiddenField(meta.HIDDEN_VMINDEX);
+    public static long objectFieldOffset(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self) {
+        // TODO(tg): inject meta
+        return (long) self.getHiddenField(self.getKlass().getMeta().HIDDEN_VMINDEX);
     }
 
     @Substitution
-    public static long staticFieldOffset(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self,
-                    @InjectMeta Meta meta) {
-        return (long) self.getHiddenField(meta.HIDDEN_VMINDEX);
+    public static long staticFieldOffset(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self) {
+        // TODO(tg): inject meta
+        return (long) self.getHiddenField(self.getKlass().getMeta().HIDDEN_VMINDEX);
     }
 
     @Substitution
-    public static @Host(Object.class) StaticObject staticFieldBase(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self,
-                    @InjectMeta Meta meta) {
-        return self.getField(meta.java_lang_invoke_MemberName_clazz).getMirrorKlass().getStatics();
+    public static @Host(Object.class) StaticObject staticFieldBase(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self) {
+        // TODO(tg): inject meta
+        return self.getField(self.getKlass().getMeta().java_lang_invoke_MemberName_clazz).getMirrorKlass().getStatics();
     }
 
     @Substitution
-    public static @Host(Object.class) StaticObject getMemberVMInfo(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self,
-                    @InjectMeta Meta meta) {
+    public static @Host(Object.class) StaticObject getMemberVMInfo(@Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self) {
+        // TODO(tg): inject meta
+        Meta meta = self.getKlass().getMeta();
+
         Object vmtarget = self.getHiddenField(meta.HIDDEN_VMTARGET);
         Object vmindex = self.getHiddenField(meta.HIDDEN_VMINDEX);
         StaticObject[] result = new StaticObject[2];
@@ -231,12 +236,11 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
     @Substitution
     public static @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject resolve(
                     @Host(typeName = "Ljava/lang/invoke/MemberName;") StaticObject self,
-                    @Host(value = Class.class) StaticObject caller,
-                    // Checkstyle: stop
-                    @GuestCall DirectCallNode java_lang_invoke_MemberName_getSignature,
-                    // Checkstyle: resume
-                    @InjectMeta Meta meta) {
+                    @Host(value = Class.class) StaticObject caller) {
         // TODO(Garcia) Perhaps perform access checks ?
+        Klass mnKlass = self.getKlass();
+        // TODO(tg): inject meta
+        Meta meta = mnKlass.getContext().getMeta();
         StaticObject memberName = self;
         if (memberName.getHiddenField(meta.HIDDEN_VMTARGET) != null) {
             return self; // Already planted
@@ -259,7 +263,7 @@ public final class Target_java_lang_invoke_MethodHandleNatives {
                 throw Meta.throwException(meta.java_lang_NoSuchMethodException);
             }
         }
-        StaticObject type = (StaticObject) java_lang_invoke_MemberName_getSignature.call(self);
+        StaticObject type = (StaticObject) meta.java_lang_invoke_MemberName_getSignature.invokeDirect(self);
 
         if (defKlass == null) {
             return StaticObject.NULL;
