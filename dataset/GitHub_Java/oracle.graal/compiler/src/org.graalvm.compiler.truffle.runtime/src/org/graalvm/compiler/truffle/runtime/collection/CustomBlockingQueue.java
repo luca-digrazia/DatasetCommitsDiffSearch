@@ -117,15 +117,15 @@ public class CustomBlockingQueue<E> implements BlockingQueue<E> {
     @Override
     public E poll(long timeout, TimeUnit unit) throws InterruptedException {
         long nanos = unit.toNanos(timeout);
-        final ReentrantLock localLock = this.lock;
-        localLock.lockInterruptibly();
+        final ReentrantLock lock = this.lock;
+        lock.lockInterruptibly();
         E result;
         try {
             while ((result = lockedPoll()) == null && nanos > 0) {
                 nanos = notEmpty.awaitNanos(nanos);
             }
         } finally {
-            localLock.unlock();
+            lock.unlock();
         }
         return result;
     }

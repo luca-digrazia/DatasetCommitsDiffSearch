@@ -38,12 +38,12 @@ public class BTreeQueue<E> implements Pool<E> {
     };
     private static final int BRANCHING_FACTOR = 16;
 
-    private abstract static class Node<E> {
+    private static abstract class Node<E> {
         Object pivot;
         int count;
         final Object[] children;
 
-        Node(Object pivot) {
+        public Node(Object pivot) {
             this.pivot = pivot;
             this.count = 0;
             this.children = new Object[BRANCHING_FACTOR];
@@ -55,7 +55,7 @@ public class BTreeQueue<E> implements Pool<E> {
     }
 
     private static final class Leaf<E> extends Node<E> {
-        Leaf(Object pivot) {
+        public Leaf(Object pivot) {
             super(pivot);
         }
 
@@ -68,7 +68,7 @@ public class BTreeQueue<E> implements Pool<E> {
     private static final class Inner<E> extends Node<E> {
         int childCount;
 
-        Inner(Object pivot) {
+        public Inner(Object pivot) {
             super(pivot);
             this.childCount = 0;
         }
@@ -90,7 +90,7 @@ public class BTreeQueue<E> implements Pool<E> {
         final E removedValue;
         Node<E> target;
 
-        Compress(E removedValue, Leaf<E> target) {
+        public Compress(E removedValue, Leaf<E> target) {
             this.removedValue = removedValue;
             this.target = target;
         }
@@ -108,13 +108,11 @@ public class BTreeQueue<E> implements Pool<E> {
             if (node.count < BRANCHING_FACTOR) {
                 // We are inserting into the leaf, there is space left.
                 //
-                // @formatter:off
                 //   [...]
                 //    | \
                 // [yz.] [...]
                 //  ^
                 //  x
-                // @formatter:on
                 int pos = 0;
                 E cur = null;
                 while ((cur = (E) node.children[pos]) != null) {
@@ -136,11 +134,10 @@ public class BTreeQueue<E> implements Pool<E> {
                 }
                 node.count++;
                 if (node.pivot != MAX_ELEMENT && node.pivot != node.children[node.count - 1]) {
-                    node.pivot = node.children[node.count - 1];
+                    node.pivot = (E) node.children[node.count - 1];
                 }
                 return SUCCESS;
             } else {
-                // @formatter:off
                 // No space left, split the leaf.
                 //
                 //   [...]
@@ -154,10 +151,9 @@ public class BTreeQueue<E> implements Pool<E> {
                 //       [...]
                 //      /     \
                 // [xy.][zw.]  [...]
-                // @formatter:on
                 int siblingStart = BRANCHING_FACTOR / 2;
                 E midElement = (E) node.children[siblingStart - 1];
-                Leaf<E> sibling = new Leaf<>(node.pivot);
+                Leaf<E> sibling = new Leaf<E>(node.pivot);
                 node.pivot = midElement;
                 for (int npos = siblingStart, spos = 0; npos < BRANCHING_FACTOR; npos++, spos++) {
                     sibling.children[spos] = node.children[npos];
@@ -206,7 +202,7 @@ public class BTreeQueue<E> implements Pool<E> {
                     // There is no space left, split this inner node.
                     int siblingStart = BRANCHING_FACTOR / 2;
                     E midElement = (E) ((Node<E>) inner.children[siblingStart - 1]).pivot;
-                    Inner<E> sibling = new Inner<>(inner.pivot);
+                    Inner<E> sibling = new Inner<E>(inner.pivot);
                     if (compare(sibling.pivot, nchild.pivot) < 0) {
                         sibling.pivot = nchild.pivot;
                     }
@@ -265,7 +261,7 @@ public class BTreeQueue<E> implements Pool<E> {
         } else if (result instanceof Node<?>) {
             // Need to add one more level of the tree.
             final Node<E> sibling = (Node<E>) result;
-            final Inner<E> nroot = new Inner<>(null);
+            final Inner<E> nroot = new Inner<E>(null);
             if (compareUnique(root.pivot, sibling.pivot) < 0) {
                 nroot.children[0] = root;
                 nroot.children[1] = sibling;
@@ -412,7 +408,7 @@ public class BTreeQueue<E> implements Pool<E> {
         if (result instanceof BTreeQueue<?>.Compress) {
             Compress compress = (Compress) result;
             if (compress.target == root) {
-                root = new Leaf<>(MAX_ELEMENT);
+                root = new Leaf<E>(MAX_ELEMENT);
             }
             insertAll(compress.target);
             return compress.removedValue;
@@ -473,8 +469,8 @@ public class BTreeQueue<E> implements Pool<E> {
                 final Compress compress = (Compress) result;
                 if (compress.target == child) {
                     if (inner.childCount == 2) {
-                        // If the child is supposed to be compressed and the current child count is
-                        // 2, then we must also recycle this node.
+                        // If the child is supposed to be compressed and the current child count is 2,
+                        // then we must also recycle this node.
                         compress.target = inner;
                     } else {
                         // We need to remove this child (because its contents will be reinserted).
@@ -569,8 +565,7 @@ public class BTreeQueue<E> implements Pool<E> {
     }
 
     @SuppressWarnings("unchecked")
-    private int check(Node<E> node, Object maxArg) {
-        Object max = maxArg;
+    private int check(Node<E> node, Object max) {
         if (node instanceof Leaf<?>) {
             boolean nullSeen = false;
             int count = 0;
@@ -622,7 +617,7 @@ public class BTreeQueue<E> implements Pool<E> {
         return node.count;
     }
 
-    private static void ensure(boolean condition, String title, Object value) {
+    private void ensure(boolean condition, String title, Object value) {
         if (!condition) {
             throw new IllegalStateException(String.format(title, value));
         }

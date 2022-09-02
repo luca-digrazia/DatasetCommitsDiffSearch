@@ -40,6 +40,15 @@ import com.oracle.truffle.api.Truffle;
 
 public final class CompilationTask implements TruffleCompilationTask, Callable<Void>, Comparable<CompilationTask> {
 
+    final WeakReference<OptimizedCallTarget> targetRef;
+    private final BackgroundCompileQueue.Priority priority;
+    private final boolean multiTier;
+    private final boolean priorityQueue;
+    private final long id;
+    private final Consumer<CompilationTask> action;
+    private volatile Future<?> future;
+    private volatile boolean cancelled;
+    private volatile boolean started;
     private static final Consumer<CompilationTask> compilationAction = new Consumer<CompilationTask>() {
         @Override
         public void accept(CompilationTask task) {
@@ -48,37 +57,11 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
                 try {
                     ((GraalTruffleRuntime) Truffle.getRuntime()).doCompile(callTarget, task);
                 } finally {
-                    callTarget.compiledTier(task.tier());
                     task.finished();
                 }
             }
         }
     };
-    final WeakReference<OptimizedCallTarget> targetRef;
-    private final BackgroundCompileQueue.Priority priority;
-    private final boolean multiTier;
-    private final boolean priorityQueue;
-    private final long id;
-    private final Consumer<CompilationTask> action;
-    private int lastCount;
-    private long lastTime;
-    private double lastWeight;
-    private volatile Future<?> future;
-    private volatile boolean cancelled;
-    private volatile boolean started;
-
-    private CompilationTask(BackgroundCompileQueue.Priority priority, WeakReference<OptimizedCallTarget> targetRef, Consumer<CompilationTask> action, long id) {
-        this.priority = priority;
-        this.targetRef = targetRef;
-        this.action = action;
-        this.id = id;
-        OptimizedCallTarget target = targetRef.get();
-        lastCount = target != null ? target.getCallAndLoopCount() : Integer.MIN_VALUE;
-        lastTime = System.nanoTime();
-        lastWeight = target != null ? target.getCallAndLoopCount() : -1;
-        priorityQueue = target != null && target.getOptionValue(PolyglotCompilerOptions.PriorityQueue);
-        multiTier = target != null && target.getOptionValue(PolyglotCompilerOptions.MultiTier);
-    }
 
     static CompilationTask createInitializationTask(WeakReference<OptimizedCallTarget> targetRef, Consumer<CompilationTask> action) {
         return new CompilationTask(BackgroundCompileQueue.Priority.INITIALIZATION, targetRef, action, 0);
@@ -86,6 +69,16 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
 
     static CompilationTask createCompilationTask(BackgroundCompileQueue.Priority priority, WeakReference<OptimizedCallTarget> targetRef, long id) {
         return new CompilationTask(priority, targetRef, compilationAction, id);
+    }
+
+    private CompilationTask(BackgroundCompileQueue.Priority priority, WeakReference<OptimizedCallTarget> targetRef, Consumer<CompilationTask> action, long id) {
+        this.priority = priority;
+        this.targetRef = targetRef;
+        this.action = action;
+        this.id = id;
+        OptimizedCallTarget target = targetRef.get();
+        priorityQueue = target != null && target.getOptionValue(PolyglotCompilerOptions.PriorityQueue);
+        multiTier = target != null && target.getOptionValue(PolyglotCompilerOptions.MultiTier);
     }
 
     public void awaitCompletion(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
@@ -188,53 +181,13 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
         return null;
     }
 
-    public boolean greaterThan(CompilationTask other) {
-        int otherCompileTier = other.targetHighestCompiledTier();
-        int compiledTier = targetHighestCompiledTier();
-        if (compiledTier == otherCompileTier) {
-            assert compiledTier < 2 : "Weights of targets previously compiled with second tier are wrong (no profiling)";
-            return lastWeight > other.lastWeight;
-        }
-        return compiledTier > otherCompileTier;
-    }
-
-    public double updateWeight(long currentTime) {
-        OptimizedCallTarget target = targetRef.get();
-        if (target == null) {
-            return -1.0;
-        }
-        long elapsed = currentTime - lastTime;
-        if (elapsed < 1_000_000) {
-            return lastWeight;
-        }
-        int count = target.getCallAndLoopCount();
-        double weight = rate(count, elapsed) * count;
-        lastTime = currentTime;
-        lastCount = count;
-        lastWeight = weight;
-        return weight;
-    }
-
-    private double rate(int count, long elapsed) {
-        double rawRate = ((double) count - lastCount) / elapsed;
-        return 1.0 + (Double.isNaN(rawRate) ? 0 : rawRate);
-    }
-
-    public int targetHighestCompiledTier() {
-        OptimizedCallTarget target = targetRef.get();
-        if (target == null) {
-            return -1;
-        }
-        return target.highestCompiledTier();
-    }
-
     /**
      * Since {@link BackgroundCompileQueue} uses a {@link java.util.concurrent.ThreadPoolExecutor}
      * to run compilations, and since the executor expects each {@link Callable} (in our case, the
      * {@link CompilationTask}) to be converted into a {@link FutureTask} we use this wrapper around
      * the {@link CompilationTask} just for compatibility with the executor.
      */
-    public static class ExecutorServiceWrapper extends FutureTask<Void> implements Comparable<ExecutorServiceWrapper> {
+    static class ExecutorServiceWrapper extends FutureTask<Void> implements Comparable<ExecutorServiceWrapper> {
         final CompilationTask compileTask;
 
         ExecutorServiceWrapper(CompilationTask compileTask) {
@@ -250,10 +203,6 @@ public final class CompilationTask implements TruffleCompilationTask, Callable<V
         @Override
         public String toString() {
             return "ExecutorServiceWrapper(" + compileTask + ")";
-        }
-
-        public CompilationTask getCompileTask() {
-            return compileTask;
         }
     }
 }
