@@ -40,8 +40,6 @@
  */
 package com.oracle.truffle.api.benchmark;
 
-import java.util.function.Supplier;
-
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Level;
@@ -52,16 +50,14 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
 
-import com.oracle.truffle.api.benchmark.DSLInterpreterBenchmarkFactory.CachedDSLNodeGen;
-import com.oracle.truffle.api.benchmark.DSLInterpreterBenchmarkFactory.SimpleDSLNodeGen;
-import com.oracle.truffle.api.dsl.Cached;
+import com.oracle.truffle.api.benchmark.DSLInterpreterBenchmarkFactory.DSLNodeGen;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.dsl.UnsupportedSpecializationException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
 
-@Warmup(iterations = 15)
+@Warmup(iterations = 5)
 @Measurement(iterations = 5)
 @State(Scope.Thread)
 @Fork(value = 1)
@@ -70,8 +66,8 @@ public class DSLInterpreterBenchmark extends TruffleBenchmark {
     private static final int NODES = 10000;
     private static TestRootNode root = new TestRootNode();
 
-    private static <T extends AbstractNode> T createNode(Supplier<T> nodeFactory) {
-        T node = nodeFactory.get();
+    private static DSLNode createNode() {
+        DSLNode node = DSLNodeGen.create();
 
         // adopt in a root node to initialize the parent pointer
         root.child = node;
@@ -80,28 +76,14 @@ public class DSLInterpreterBenchmark extends TruffleBenchmark {
     }
 
     @State(Scope.Thread)
-    public static class SimpleFirstIterationState {
+    public static class SpecializeState {
 
-        final SimpleDSLNode[] nodes = new SimpleDSLNode[NODES];
-
-        @Setup(Level.Invocation)
-        public void setup() {
-            for (int i = 0; i < NODES; i++) {
-                nodes[i] = createNode(SimpleDSLNodeGen::create);
-            }
-        }
-
-    }
-
-    @State(Scope.Thread)
-    public static class CachedFirstIterationState {
-
-        final CachedDSLNode[] nodes = new CachedDSLNode[NODES];
+        final DSLNode[] nodes = new DSLNode[NODES];
 
         @Setup(Level.Invocation)
         public void setup() {
             for (int i = 0; i < NODES; i++) {
-                nodes[i] = createNode(CachedDSLNodeGen::create);
+                nodes[i] = createNode();
             }
         }
 
@@ -114,7 +96,7 @@ public class DSLInterpreterBenchmark extends TruffleBenchmark {
     @Setup
     public void setupInterpreterProfile() {
         for (int i = 0; i < 100; i++) {
-            AbstractNode node = createNode(SimpleDSLNodeGen::create);
+            DSLNode node = createNode();
             node.execute(42L);
             node.execute(42);
             try {
@@ -122,15 +104,7 @@ public class DSLInterpreterBenchmark extends TruffleBenchmark {
             } catch (UnsupportedSpecializationException e) {
             }
 
-            node = createNode(SimpleDSLNodeGen::create);
-            node.execute(42);
-            node.execute(42L);
-            try {
-                node.execute("");
-            } catch (UnsupportedSpecializationException e) {
-            }
-
-            node = createNode(CachedDSLNodeGen::create);
+            node = createNode();
             node.execute(42);
             node.execute(42L);
             try {
@@ -141,29 +115,14 @@ public class DSLInterpreterBenchmark extends TruffleBenchmark {
     }
 
     @State(Scope.Thread)
-    public static class SimpleSecondIterationState {
+    public static class SecondIterationState {
 
-        final SimpleDSLNode[] nodes = new SimpleDSLNode[NODES];
-
-        @Setup(Level.Invocation)
-        public void setup() {
-            for (int i = 0; i < NODES; i++) {
-                nodes[i] = createNode(SimpleDSLNodeGen::create);
-                nodes[i].execute(42);
-            }
-        }
-
-    }
-
-    @State(Scope.Thread)
-    public static class CachedSecondIterationState {
-
-        final CachedDSLNode[] nodes = new CachedDSLNode[NODES];
+        final DSLNode[] nodes = new DSLNode[NODES];
 
         @Setup(Level.Invocation)
         public void setup() {
             for (int i = 0; i < NODES; i++) {
-                nodes[i] = createNode(CachedDSLNodeGen::create);
+                nodes[i] = createNode();
                 nodes[i].execute(42);
             }
         }
@@ -183,12 +142,9 @@ public class DSLInterpreterBenchmark extends TruffleBenchmark {
         }
     }
 
-    abstract static class AbstractNode extends Node {
+    abstract static class DSLNode extends Node {
 
         abstract int execute(Object v);
-    }
-
-    abstract static class SimpleDSLNode extends AbstractNode {
 
         @Specialization
         int doInt(int v) {
@@ -202,25 +158,9 @@ public class DSLInterpreterBenchmark extends TruffleBenchmark {
 
     }
 
-    abstract static class CachedDSLNode extends AbstractNode {
-
-        @Specialization
-        int doCached(@SuppressWarnings("unused") int v, @Cached("CACHED") int cached) {
-            return cached;
-        }
-
-        @Specialization
-        int doLong(long v) {
-            return (int) v;
-        }
-
-        static final int CACHED = 42;
-
-    }
-
     @Benchmark
     @OperationsPerInvocation(NODES)
-    public int simpleFirstIteration(SimpleFirstIterationState state) {
+    public int firstIteration(SpecializeState state) {
         Integer v = Integer.valueOf(42);
         int sum = 0;
         for (int i = 0; i < NODES; i++) {
@@ -231,29 +171,7 @@ public class DSLInterpreterBenchmark extends TruffleBenchmark {
 
     @Benchmark
     @OperationsPerInvocation(NODES)
-    public int simpleSecondIteration(SimpleSecondIterationState state) {
-        Integer v = Integer.valueOf(42);
-        int sum = 0;
-        for (int i = 0; i < NODES; i++) {
-            sum += state.nodes[i].execute(v);
-        }
-        return sum;
-    }
-
-    @Benchmark
-    @OperationsPerInvocation(NODES)
-    public int cachedFirstIteration(CachedFirstIterationState state) {
-        Integer v = Integer.valueOf(42);
-        int sum = 0;
-        for (int i = 0; i < NODES; i++) {
-            sum += state.nodes[i].execute(v);
-        }
-        return sum;
-    }
-
-    @Benchmark
-    @OperationsPerInvocation(NODES)
-    public int cachedSecondIteration(CachedSecondIterationState state) {
+    public int secondIteration(SecondIterationState state) {
         Integer v = Integer.valueOf(42);
         int sum = 0;
         for (int i = 0; i < NODES; i++) {
