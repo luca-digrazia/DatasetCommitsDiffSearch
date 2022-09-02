@@ -24,6 +24,8 @@
  */
 package com.oracle.svm.graal;
 
+import static com.oracle.svm.core.snippets.SnippetRuntime.NO_KILLED_LOCATIONS;
+
 import java.util.Arrays;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
@@ -92,7 +94,7 @@ class AMD64ArrayIndexOfForeignCalls {
     };
 
     static final SubstrateForeignCallDescriptor[] FOREIGN_CALLS = Arrays.stream(ORIGINAL_FOREIGN_CALLS)
-                    .map(call -> SnippetRuntime.findForeignCall(AMD64ArrayIndexOfForeignCalls.class, call.getName(), true))
+                    .map(call -> SnippetRuntime.findForeignCall(AMD64ArrayIndexOfForeignCalls.class, call.getName(), true, NO_KILLED_LOCATIONS))
                     .toArray(SubstrateForeignCallDescriptor[]::new);
 
     @SubstrateForeignCallTarget(stubCallingConvention = false)
