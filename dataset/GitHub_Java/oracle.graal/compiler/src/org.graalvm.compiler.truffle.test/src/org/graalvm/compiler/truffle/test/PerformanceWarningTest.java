@@ -30,8 +30,10 @@ import org.graalvm.compiler.core.common.CompilationIdentifier;
 import org.graalvm.compiler.debug.DebugCloseable;
 import org.graalvm.compiler.debug.DebugContext;
 import org.graalvm.compiler.debug.DebugContext.Builder;
-import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.serviceprovider.GraalServices;
+import org.graalvm.compiler.truffle.common.TruffleInliningPlan;
+import org.graalvm.compiler.truffle.compiler.TruffleCompilerOptions;
+import org.graalvm.compiler.truffle.runtime.DefaultInliningPolicy;
 import org.graalvm.compiler.truffle.runtime.GraalCompilerDirectives;
 import org.graalvm.compiler.truffle.runtime.GraalTruffleRuntime;
 import org.graalvm.compiler.truffle.runtime.OptimizedCallTarget;
@@ -123,11 +125,12 @@ public class PerformanceWarningTest extends TruffleCompilerImplTest {
         try {
             GraalTruffleRuntime runtime = GraalTruffleRuntime.getRuntime();
             OptimizedCallTarget target = (OptimizedCallTarget) runtime.createCallTarget(rootNode);
-            DebugContext debug = new Builder(runtime.getGraalOptions(OptionValues.class)).build();
+            DebugContext debug = new Builder(TruffleCompilerOptions.getOptions()).build();
             try (DebugCloseable d = debug.disableIntercept(); DebugContext.Scope s = debug.scope("PerformanceWarningTest")) {
                 final OptimizedCallTarget compilable = target;
                 CompilationIdentifier compilationId = getTruffleCompiler(target).createCompilationIdentifier(compilable);
-                getTruffleCompiler(target).compileAST(compilable.getOptionValues(), debug, compilable, new TruffleInlining(), compilationId, null, null);
+                TruffleInliningPlan inliningPlan = new TruffleInlining(compilable, new DefaultInliningPolicy());
+                getTruffleCompiler(target).compileAST(compilable.getOptionValues(), debug, compilable, inliningPlan, compilationId, null, null);
                 assertTrue(compilable.isValid());
             }
         } catch (AssertionError e) {

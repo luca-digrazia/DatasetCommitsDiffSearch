@@ -44,7 +44,6 @@ import org.graalvm.compiler.truffle.compiler.PartialEvaluator;
 import org.graalvm.compiler.truffle.compiler.nodes.TruffleAssumption;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
-import org.graalvm.compiler.truffle.options.PolyglotCompilerOptions;
 
 final class GraphManager {
 
@@ -60,17 +59,13 @@ final class GraphManager {
         this.graphCacheForInlining = partialEvaluator.getOrCreateEncodedGraphCache();
     }
 
-    Entry pe(CompilableTruffleAST truffleAST, Runnable afterPE) {
+    Entry pe(CompilableTruffleAST truffleAST) {
         Entry entry = irCache.get(truffleAST);
         if (entry == null) {
             final PEAgnosticInlineInvokePlugin plugin = newPlugin();
             final PartialEvaluator.Request request = newRequest(truffleAST, false);
             request.graph.getAssumptions().record(new TruffleAssumption(truffleAST.getNodeRewritingAssumptionConstant()));
             partialEvaluator.doGraphPE(request, plugin, graphCacheForInlining);
-            if (request.options.get(PolyglotCompilerOptions.InliningOptimizeOnExpand)) {
-                afterPE.run();
-                partialEvaluator.truffleTier(request);
-            }
             entry = new Entry(request.graph, plugin);
             irCache.put(truffleAST, entry);
         }
