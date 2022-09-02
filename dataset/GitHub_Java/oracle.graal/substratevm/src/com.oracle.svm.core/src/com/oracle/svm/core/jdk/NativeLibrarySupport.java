@@ -125,16 +125,14 @@ public final class NativeLibrarySupport {
         if (asBuiltin && (libraryInitializer == null || !libraryInitializer.isBuiltinLibrary(file.getName()))) {
             return false;
         }
+
         String canonical;
         try {
             canonical = asBuiltin ? file.getName() : file.getCanonicalPath();
         } catch (IOException e) {
             return false;
         }
-        return addLibrary(asBuiltin, canonical, true);
-    }
 
-    private boolean addLibrary(boolean asBuiltin, String canonical, boolean loadAndInitialize) {
         lock.lock();
         try {
             for (NativeLibrary loaded : loadedLibraries) {
@@ -149,19 +147,17 @@ public final class NativeLibrarySupport {
                 }
             }
             NativeLibrary lib = PlatformNativeLibrarySupport.singleton().createLibrary(canonical, asBuiltin);
-            if (loadAndInitialize) {
-                currentLoadContext.push(lib);
-                try {
-                    if (!lib.load()) {
-                        return false;
-                    }
-                    if (libraryInitializer != null) {
-                        libraryInitializer.initialize(lib);
-                    }
-                } finally {
-                    NativeLibrary top = currentLoadContext.pop();
-                    assert top == lib;
+            currentLoadContext.push(lib);
+            try {
+                if (!lib.load()) {
+                    return false;
                 }
+                if (libraryInitializer != null) {
+                    libraryInitializer.initialize(lib);
+                }
+            } finally {
+                NativeLibrary top = currentLoadContext.pop();
+                assert top == lib;
             }
             loadedLibraries.add(lib);
             return true;
@@ -183,9 +179,5 @@ public final class NativeLibrarySupport {
         } finally {
             lock.unlock();
         }
-    }
-
-    public void registerInitializedBuiltinLibrary(String name) {
-        addLibrary(true, name, false);
     }
 }
