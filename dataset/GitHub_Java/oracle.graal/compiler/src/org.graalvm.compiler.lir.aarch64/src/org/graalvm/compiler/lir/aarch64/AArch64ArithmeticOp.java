@@ -85,6 +85,7 @@ public enum AArch64ArithmeticOp {
     FSUB,
     FMUL,
     FDIV,
+    FREM,
     FNEG,
     FABS,
     FRINTM,

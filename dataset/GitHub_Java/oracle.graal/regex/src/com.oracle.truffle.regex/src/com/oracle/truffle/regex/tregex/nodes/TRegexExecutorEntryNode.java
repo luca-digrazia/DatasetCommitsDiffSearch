@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,6 +44,7 @@ import java.lang.reflect.Field;
 
 import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.interop.TruffleObject;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.ValueProfile;
 
@@ -51,7 +52,7 @@ import sun.misc.Unsafe;
 
 /**
  * This class wraps {@link TRegexExecutorNode} and specializes on the type of the input strings
- * provided to {@link TRegexExecNode}.
+ * provided to {@link TRegexExecRootNode}.
  */
 public abstract class TRegexExecutorEntryNode extends Node {
 
@@ -125,8 +126,8 @@ public abstract class TRegexExecutorEntryNode extends Node {
         return executor.execute(executor.createLocals(input, fromIndex, index, maxIndex), false);
     }
 
-    @Specialization(guards = "neitherByteArrayNorString(input)")
-    Object doTruffleObject(Object input, int fromIndex, int index, int maxIndex,
+    @Specialization
+    Object doTruffleObject(TruffleObject input, int fromIndex, int index, int maxIndex,
                     @Cached("createClassProfile()") ValueProfile inputClassProfile) {
         // conservatively disable compact string optimizations.
         // TODO: maybe add an interface for TruffleObjects to announce if they are compact / ascii
@@ -136,9 +137,5 @@ public abstract class TRegexExecutorEntryNode extends Node {
 
     static boolean isCompactString(String str) {
         return UNSAFE != null && UNSAFE.getByte(str, coderFieldOffset) == 0;
-    }
-
-    protected static boolean neitherByteArrayNorString(Object obj) {
-        return !(obj instanceof byte[]) && !(obj instanceof String);
     }
 }
