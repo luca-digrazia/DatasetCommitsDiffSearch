@@ -734,7 +734,7 @@ public final class CPUSampler implements Closeable {
                     payload.interpretedHitCount++;
                 }
             }
-            samplesTaken.computeIfAbsent(context, (c) -> new AtomicLong(0)).incrementAndGet();
+            samplesTaken.get(context).incrementAndGet();
         }
 
         private ProfilerNode<Payload> addOrUpdateChild(ProfilerNode<Payload> treeNode, StackTraceEntry location) {
