@@ -40,7 +40,6 @@
  */
 package com.oracle.truffle.regex.tregex.parser.ast.visitors;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.regex.result.PreCalculatedResultFactory;
 import com.oracle.truffle.regex.tregex.parser.ast.BackReference;
 import com.oracle.truffle.regex.tregex.parser.ast.CharacterClass;
@@ -52,6 +51,7 @@ import com.oracle.truffle.regex.tregex.parser.ast.RegexAST;
 import com.oracle.truffle.regex.tregex.parser.ast.Sequence;
 import com.oracle.truffle.regex.tregex.string.AbstractString;
 import com.oracle.truffle.regex.tregex.string.AbstractStringBuffer;
+import com.oracle.truffle.regex.tregex.util.Exceptions;
 
 public final class PreCalcResultVisitor extends DepthFirstTraversalRegexASTVisitor {
 
@@ -121,7 +121,7 @@ public final class PreCalcResultVisitor extends DepthFirstTraversalRegexASTVisit
 
     @Override
     protected void visit(BackReference backReference) {
-        throw CompilerDirectives.shouldNotReachHere();
+        throw Exceptions.shouldNotReachHere();
     }
 
     @Override
@@ -159,12 +159,12 @@ public final class PreCalcResultVisitor extends DepthFirstTraversalRegexASTVisit
 
     @Override
     protected void visit(LookBehindAssertion assertion) {
-        throw CompilerDirectives.shouldNotReachHere();
+        throw Exceptions.shouldNotReachHere();
     }
 
     @Override
     protected void visit(LookAheadAssertion assertion) {
-        throw CompilerDirectives.shouldNotReachHere();
+        throw Exceptions.shouldNotReachHere();
     }
 
     @Override

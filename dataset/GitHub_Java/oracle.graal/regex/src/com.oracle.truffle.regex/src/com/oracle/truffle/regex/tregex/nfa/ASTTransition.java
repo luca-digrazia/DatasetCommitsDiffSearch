@@ -41,7 +41,6 @@
 package com.oracle.truffle.regex.tregex.nfa;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.regex.RegexLanguage;
 import com.oracle.truffle.regex.tregex.automaton.AbstractTransition;
 import com.oracle.truffle.regex.tregex.parser.ast.GroupBoundaries;
 import com.oracle.truffle.regex.tregex.parser.ast.Term;
@@ -52,15 +51,13 @@ import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 public class ASTTransition implements AbstractTransition<Term, ASTTransition>, JsonConvertible {
 
     private Term target;
-    private GroupBoundaries groupBoundaries;
+    private GroupBoundaries groupBoundaries = GroupBoundaries.getEmptyInstance();
 
-    public ASTTransition(RegexLanguage language) {
-        this.groupBoundaries = GroupBoundaries.getEmptyInstance(language);
+    public ASTTransition() {
     }
 
-    public ASTTransition(RegexLanguage language, Term target) {
+    public ASTTransition(Term target) {
         this.target = target;
-        this.groupBoundaries = GroupBoundaries.getEmptyInstance(language);
     }
 
     @TruffleBoundary

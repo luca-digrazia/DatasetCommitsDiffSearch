@@ -42,67 +42,91 @@ package com.oracle.truffle.regex.tregex.parser.ast;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
+import com.oracle.truffle.regex.tregex.util.json.Json;
 import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 
 /**
- * An assertion that succeeds depending on whether or not text preceding the current position
- * matches a given regular expression.
+ * A reference to the contents of a previously matched capturing group.
  * <p>
- * Corresponds to the <strong>( ? &lt;=</strong> <em>Disjunction</em> <strong>)</strong> and
- * <strong>( ? &lt;!</strong> <em>Disjunction</em> <strong>)</strong> right-hand sides of the
- * <em>Assertion</em> goal symbol in the ECMAScript RegExp syntax.
+ * Corresponds to the goal symbol <em>DecimalEscape</em> in the ECMAScript RegExp syntax.
  * <p>
- * Currently, the fragment of regular expressions that TRegex supports in lookbehind assertions is
- * limited to so-called "literal" regular expressions, consisting only of concatenations and
- * character classes (which generalize literal characters). The method {@link #isLiteral} verifies
- * whether the body of the assertion ({@link #getGroup()}) is of this form.
+ * Currently not implemented in TRegex and so any use of this node type causes TRegex to bail out.
  */
-public class LookBehindAssertion extends LookAroundAssertion {
+public class BackReference extends QuantifiableTerm {
+
+    private final int groupNr;
+
+    BackReference(int referencedGroupNr) {
+        this.groupNr = referencedGroupNr;
+    }
+
+    private BackReference(BackReference copy) {
+        super(copy);
+        groupNr = copy.groupNr;
+    }
+
+    @Override
+    public BackReference copy(RegexAST ast) {
+        return ast.register(new BackReference(this));
+    }
+
+    @Override
+    public BackReference copyRecursive(RegexAST ast, CompilationBuffer compilationBuffer) {
+        return copy(ast);
+    }
 
     /**
-     * Creates a new look-behind assertion AST node.
-     *
-     * Note that for this node to be complete, {@link RegexASTSubtreeRootNode#setGroup(Group)} has
-     * to be called with the {@link Group} that represents the contents of this lookbehind
-     * assertion.
-     *
-     * @param negated whether this lookbehind assertion is negative or not
+     * Returns the capture group number this back-reference is referring to, e.g. the referenced
+     * group of {@code \1} is 1.
      */
-    LookBehindAssertion(boolean negated) {
-        super(negated);
+    public int getGroupNr() {
+        return groupNr;
     }
 
-    private LookBehindAssertion(LookBehindAssertion copy, RegexAST ast) {
-        super(copy, ast);
+    public boolean isNestedBackReference() {
+        return isFlagSet(FLAG_BACK_REFERENCE_IS_NESTED);
     }
 
-    private LookBehindAssertion(LookBehindAssertion copy, RegexAST ast, CompilationBuffer compilationBuffer) {
-        super(copy, ast, compilationBuffer);
+    public void setNestedBackReference() {
+        setFlag(FLAG_BACK_REFERENCE_IS_NESTED, true);
+    }
+
+    public boolean isForwardReference() {
+        return isFlagSet(FLAG_BACK_REFERENCE_IS_FORWARD);
+    }
+
+    public void setForwardReference() {
+        setFlag(FLAG_BACK_REFERENCE_IS_FORWARD, true);
+    }
+
+    /**
+     * Returns {@code true} iff this "back-reference" is actually a reference to its own parent
+     * group or a later group in the expression. In JavaScript, such nested/forward references will
+     * always match the empty string.
+     */
+    public boolean isNestedOrForwardReference() {
+        return isFlagSet(FLAG_BACK_REFERENCE_IS_NESTED | FLAG_BACK_REFERENCE_IS_FORWARD);
     }
 
     @Override
-    public LookBehindAssertion copy(RegexAST ast) {
-        return ast.register(new LookBehindAssertion(this, ast));
+    public boolean isUnrollingCandidate() {
+        return hasQuantifier() && getQuantifier().isUnrollTrivial();
     }
 
     @Override
-    public LookBehindAssertion copyRecursive(RegexAST ast, CompilationBuffer compilationBuffer) {
-        return ast.register(new LookBehindAssertion(this, ast, compilationBuffer));
+    public boolean equalsSemantic(RegexASTNode obj, boolean ignoreQuantifier) {
+        return obj instanceof BackReference && ((BackReference) obj).groupNr == groupNr && (ignoreQuantifier || quantifierEquals((BackReference) obj));
     }
 
+    @TruffleBoundary
     @Override
-    public String getPrefix() {
-        return isNegated() ? "?<!" : "?<=";
-    }
-
-    @Override
-    public boolean equalsSemantic(RegexASTNode obj) {
-        return this == obj || (obj.isLookBehindAssertion() && groupEqualsSemantic(obj.asLookBehindAssertion()));
+    public String toString() {
+        return "\\" + groupNr + quantifierToString();
     }
 
     @TruffleBoundary
     @Override
     public JsonValue toJson() {
-        return toJson(isNegated() ? "NegativeLookBehindAssertion" : "LookBehindAssertion");
+        return toJson("BackReference").append(Json.prop("groupNr", groupNr));
     }
 }

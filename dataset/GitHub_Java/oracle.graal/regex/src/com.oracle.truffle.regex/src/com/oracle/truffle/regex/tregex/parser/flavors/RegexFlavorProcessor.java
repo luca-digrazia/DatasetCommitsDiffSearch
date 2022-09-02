@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -43,7 +43,6 @@ package com.oracle.truffle.regex.tregex.parser.flavors;
 import java.util.Map;
 
 import com.oracle.truffle.api.interop.TruffleObject;
-import com.oracle.truffle.regex.AbstractRegexObject;
 import com.oracle.truffle.regex.RegexSource;
 import com.oracle.truffle.regex.RegexSyntaxException;
 import com.oracle.truffle.regex.UnsupportedRegexException;
@@ -53,8 +52,8 @@ import com.oracle.truffle.regex.UnsupportedRegexException;
  * expression.
  * <p>
  * After either {@link #validate} or {@link #toECMAScriptRegex} was called,
- * {@link #getNumberOfCaptureGroups}, {@link #getNamedCaptureGroups}, {@link #getFlags} and
- * {@link #isUnicodePattern} can be called to extract extra information obtained during the parse.
+ * {@link #getNamedCaptureGroups}, {@link #getFlags} and {@link #isUnicodePattern} can be called to
+ * extract extra information obtained during the parse.
  */
 public interface RegexFlavorProcessor {
 
@@ -92,7 +91,7 @@ public interface RegexFlavorProcessor {
      * regular expression. The returned object responds to 'READ' messages on names which correspond
      * to the names of the flags as used in the language from which the flavor originates.
      */
-    AbstractRegexObject getFlags();
+    TruffleObject getFlags();
 
     /**
      * Returns {@code true} if the generated ECMAScript pattern is a Unicode pattern (matches

@@ -38,81 +38,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.regex;
 
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.nodes.Node;
+package com.oracle.truffle.regex.tregex.util.json;
 
-@SuppressWarnings("serial")
-public final class UnsupportedRegexException extends RuntimeException implements TruffleException {
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 
-    private String reason;
-    private RegexSource regexSrc;
+public interface JsonConvertible {
 
-    public UnsupportedRegexException(String reason) {
-        super();
-        this.reason = reason;
-    }
-
-    public UnsupportedRegexException(String reason, Throwable cause) {
-        super(cause);
-        this.reason = reason;
-    }
-
-    public UnsupportedRegexException(String reason, RegexSource regexSrc) {
-        this(reason);
-        this.regexSrc = regexSrc;
-    }
-
-    public RegexSource getRegex() {
-        return regexSrc;
-    }
-
-    public void setRegex(RegexSource regexSrc) {
-        this.regexSrc = regexSrc;
-    }
-
-    public String getReason() {
-        return reason;
-    }
-
-    public void setReason(String reason) {
-        this.reason = reason;
-    }
-
-    @Override
-    public String getMessage() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Unsupported regular expression");
-        if (regexSrc != null) {
-            sb.append(" /");
-            sb.append(regexSrc.getPattern());
-            sb.append("/");
-            sb.append(regexSrc.getFlags());
-        }
-        if (reason != null) {
-            sb.append(": ");
-            sb.append(reason);
-        }
-        return sb.toString();
-    }
-
-    /**
-     * For performance reasons, this exception does not record any stack trace information.
-     */
-    @SuppressWarnings("sync-override")
-    @Override
-    public Throwable fillInStackTrace() {
-        return this;
-    }
-
-    @Override
-    public boolean isSyntaxError() {
-        return true;
-    }
-
-    @Override
-    public Node getLocation() {
-        return null;
-    }
+    @TruffleBoundary
+    JsonValue toJson();
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -38,81 +38,59 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.regex;
+package com.oracle.truffle.regex.tregex.parser.ast;
 
-import com.oracle.truffle.api.TruffleException;
-import com.oracle.truffle.api.nodes.Node;
+import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+import com.oracle.truffle.regex.tregex.buffer.CompilationBuffer;
+import com.oracle.truffle.regex.tregex.parser.ast.visitors.InitIDVisitor;
+import com.oracle.truffle.regex.tregex.util.json.JsonValue;
 
-@SuppressWarnings("serial")
-public final class UnsupportedRegexException extends RuntimeException implements TruffleException {
+/**
+ * Root node of every AST.
+ */
+public class RegexASTRootNode extends RegexASTSubtreeRootNode {
 
-    private String reason;
-    private RegexSource regexSrc;
-
-    public UnsupportedRegexException(String reason) {
-        super();
-        this.reason = reason;
+    RegexASTRootNode() {
+        setId(InitIDVisitor.REGEX_AST_ROOT_PARENT_ID);
     }
 
-    public UnsupportedRegexException(String reason, Throwable cause) {
-        super(cause);
-        this.reason = reason;
+    private RegexASTRootNode(RegexASTRootNode copy, RegexAST ast) {
+        super(copy, ast);
     }
 
-    public UnsupportedRegexException(String reason, RegexSource regexSrc) {
-        this(reason);
-        this.regexSrc = regexSrc;
-    }
-
-    public RegexSource getRegex() {
-        return regexSrc;
-    }
-
-    public void setRegex(RegexSource regexSrc) {
-        this.regexSrc = regexSrc;
-    }
-
-    public String getReason() {
-        return reason;
-    }
-
-    public void setReason(String reason) {
-        this.reason = reason;
+    private RegexASTRootNode(RegexASTRootNode copy, RegexAST ast, CompilationBuffer compilationBuffer) {
+        super(copy, ast, compilationBuffer);
     }
 
     @Override
-    public String getMessage() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Unsupported regular expression");
-        if (regexSrc != null) {
-            sb.append(" /");
-            sb.append(regexSrc.getPattern());
-            sb.append("/");
-            sb.append(regexSrc.getFlags());
-        }
-        if (reason != null) {
-            sb.append(": ");
-            sb.append(reason);
-        }
-        return sb.toString();
-    }
-
-    /**
-     * For performance reasons, this exception does not record any stack trace information.
-     */
-    @SuppressWarnings("sync-override")
-    @Override
-    public Throwable fillInStackTrace() {
-        return this;
+    public RegexASTSubtreeRootNode copy(RegexAST ast) {
+        return new RegexASTRootNode(this, ast);
     }
 
     @Override
-    public boolean isSyntaxError() {
-        return true;
+    public RegexASTSubtreeRootNode copyRecursive(RegexAST ast, CompilationBuffer compilationBuffer) {
+        return new RegexASTRootNode(this, ast, compilationBuffer);
     }
 
     @Override
-    public Node getLocation() {
-        return null;
+    public String getPrefix() {
+        return "ROOT";
+    }
+
+    @Override
+    public boolean equalsSemantic(RegexASTNode obj) {
+        return this == obj || (obj instanceof RegexASTRootNode && ((RegexASTRootNode) obj).getGroup().equalsSemantic(getGroup()));
+    }
+
+    @TruffleBoundary
+    @Override
+    public String toString() {
+        return getGroup().toString();
+    }
+
+    @TruffleBoundary
+    @Override
+    public JsonValue toJson() {
+        return getGroup().toJson();
     }
 }
