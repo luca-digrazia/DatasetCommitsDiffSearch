@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,19 +24,19 @@
  */
 package org.graalvm.compiler.truffle.compiler.hotspot.libgraal;
 
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.AsJavaConstant;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.CancelInstalledTask;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.CompilableToString;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.CreateStringSupplier;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetCallNodes;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetCompilableCallCount;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetCompilableName;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetFailedSpeculationsAddress;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetKnownCallSiteCount;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetNodeRewritingAssumptionConstant;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.IsSameOrSplit;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.GetNonTrivialNodeCount;
-import static org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal.Id.OnCompilationFailed;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.AsJavaConstant;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.CancelInstalledTask;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.CompilableToString;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.CreateStringSupplier;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetCallNodes;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetCompilableCallCount;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetCompilableName;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetFailedSpeculationsAddress;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetKnownCallSiteCount;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetNodeRewritingAssumptionConstant;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.IsSameOrSplit;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.GetNonTrivialNodeCount;
+import static org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot.Id.OnCompilationFailed;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSCompilableTruffleASTGen.callAsJavaConstant;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSCompilableTruffleASTGen.callCancelInstalledTask;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSCompilableTruffleASTGen.callCompilableToString;
@@ -50,8 +50,8 @@ import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSCompilabl
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSCompilableTruffleASTGen.callGetNonTrivialNodeCount;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSCompilableTruffleASTGen.callIsSameOrSplit;
 import static org.graalvm.compiler.truffle.compiler.hotspot.libgraal.HSCompilableTruffleASTGen.callOnCompilationFailed;
-import static org.graalvm.libgraal.jni.JNILibGraalScope.env;
-import static org.graalvm.libgraal.jni.JNILibGraalScope.scope;
+import static org.graalvm.libgraal.jni.HotSpotToSVMScope.env;
+import static org.graalvm.libgraal.jni.HotSpotToSVMScope.scope;
 import static org.graalvm.libgraal.jni.JNIUtil.createString;
 
 import java.util.function.Supplier;
@@ -60,8 +60,10 @@ import org.graalvm.compiler.hotspot.HotSpotGraalServices;
 import org.graalvm.compiler.truffle.common.CompilableTruffleAST;
 import org.graalvm.compiler.truffle.common.OptimizedAssumptionDependency;
 import org.graalvm.compiler.truffle.common.TruffleCallNode;
+import org.graalvm.compiler.truffle.common.hotspot.libgraal.HotSpotToSVM;
+import org.graalvm.compiler.truffle.common.hotspot.libgraal.SVMToHotSpot;
 import org.graalvm.libgraal.jni.HSObject;
-import org.graalvm.libgraal.jni.JNILibGraalScope;
+import org.graalvm.libgraal.jni.HotSpotToSVMScope;
 import org.graalvm.libgraal.jni.JNI.JNIEnv;
 import org.graalvm.libgraal.jni.JNI.JObject;
 import org.graalvm.libgraal.jni.JNI.JObjectArray;
@@ -71,8 +73,6 @@ import org.graalvm.libgraal.LibGraal;
 
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.SpeculationLog;
-import org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleToLibGraal;
-import org.graalvm.compiler.truffle.common.hotspot.libgraal.TruffleFromLibGraal;
 
 /**
  * Proxy for a {@code HotSpotOptimizedCallTarget} object in the HotSpot heap.
@@ -104,11 +104,11 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
      * @param scope the owning scope
      * @param handle the JNI object reference
      */
-    HSCompilableTruffleAST(JNILibGraalScope<TruffleToLibGraal.Id> scope, JObject handle) {
+    HSCompilableTruffleAST(HotSpotToSVMScope<HotSpotToSVM.Id> scope, JObject handle) {
         super(scope, handle);
     }
 
-    @TruffleFromLibGraal(GetFailedSpeculationsAddress)
+    @SVMToHotSpot(GetFailedSpeculationsAddress)
     @Override
     public SpeculationLog getCompilationSpeculationLog() {
         Long res = cachedFailedSpeculationsAddress;
@@ -119,24 +119,24 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
         return HotSpotGraalServices.newHotSpotSpeculationLog(cachedFailedSpeculationsAddress);
     }
 
-    @TruffleFromLibGraal(GetNodeRewritingAssumptionConstant)
+    @SVMToHotSpot(GetNodeRewritingAssumptionConstant)
     @Override
     public JavaConstant getNodeRewritingAssumptionConstant() {
         long javaConstantHandle = callGetNodeRewritingAssumptionConstant(env(), getHandle());
         return LibGraal.unhand(JavaConstant.class, javaConstantHandle);
     }
 
-    @TruffleFromLibGraal(AsJavaConstant)
+    @SVMToHotSpot(AsJavaConstant)
     @Override
     public JavaConstant asJavaConstant() {
         return LibGraal.unhand(JavaConstant.class, callAsJavaConstant(env(), getHandle()));
     }
 
-    @TruffleFromLibGraal(CreateStringSupplier)
-    @TruffleFromLibGraal(OnCompilationFailed)
+    @SVMToHotSpot(CreateStringSupplier)
+    @SVMToHotSpot(OnCompilationFailed)
     @Override
     public void onCompilationFailed(Supplier<String> serializedException, boolean bailout, boolean permanentBailout) {
-        long serializedExceptionHandle = LibGraalObjectHandles.create(serializedException);
+        long serializedExceptionHandle = SVMObjectHandles.create(serializedException);
         boolean success = false;
         JNIEnv env = env();
         try {
@@ -145,17 +145,17 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
             success = true;
         } finally {
             if (!success) {
-                LibGraalObjectHandles.remove(serializedExceptionHandle);
+                SVMObjectHandles.remove(serializedExceptionHandle);
             }
         }
     }
 
-    @TruffleFromLibGraal(GetCompilableName)
+    @SVMToHotSpot(GetCompilableName)
     @Override
     public String getName() {
         String res = cachedName;
         if (res == null) {
-            JNIEnv env = JNILibGraalScope.env();
+            JNIEnv env = HotSpotToSVMScope.env();
             JString name = callGetCompilableName(env, getHandle());
             res = createString(env, name);
             cachedName = res;
@@ -163,16 +163,16 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
         return res;
     }
 
-    @TruffleFromLibGraal(GetNonTrivialNodeCount)
+    @SVMToHotSpot(GetNonTrivialNodeCount)
     @Override
     public int getNonTrivialNodeCount() {
         return callGetNonTrivialNodeCount(env(), getHandle());
     }
 
-    @TruffleFromLibGraal(GetCallNodes)
+    @SVMToHotSpot(GetCallNodes)
     @Override
     public TruffleCallNode[] getCallNodes() {
-        JNILibGraalScope<TruffleToLibGraal.Id> scope = scope().narrow(TruffleToLibGraal.Id.class);
+        HotSpotToSVMScope<HotSpotToSVM.Id> scope = scope().narrow(HotSpotToSVM.Id.class);
         JNIEnv env = scope.getEnv();
         JObjectArray peerArr = callGetCallNodes(env, getHandle());
         int len = JNIUtil.GetArrayLength(env, peerArr);
@@ -184,7 +184,7 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
         return res;
     }
 
-    @TruffleFromLibGraal(GetCompilableCallCount)
+    @SVMToHotSpot(GetCompilableCallCount)
     @Override
     public int getCallCount() {
         return callGetCompilableCallCount(env(), getHandle());
@@ -192,12 +192,12 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
 
     private volatile String cachedString;
 
-    @TruffleFromLibGraal(CompilableToString)
+    @SVMToHotSpot(CompilableToString)
     @Override
     public String toString() {
         String res = cachedString;
         if (res == null) {
-            JNIEnv env = JNILibGraalScope.env();
+            JNIEnv env = HotSpotToSVMScope.env();
             JString value = callCompilableToString(env, getHandle());
             res = createString(env, value);
             cachedString = res;
@@ -206,7 +206,7 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
     }
 
     private IllegalArgumentException error() {
-        throw new IllegalArgumentException("Cannot call method on libgraal proxy to HotSpotOptimizedCallTarget " + this);
+        throw new IllegalArgumentException("Cannot call method on SVM proxy to HotSpotOptimizedCallTarget " + this);
     }
 
     @Override
@@ -224,20 +224,20 @@ final class HSCompilableTruffleAST extends HSObject implements CompilableTruffle
         throw error();
     }
 
-    @TruffleFromLibGraal(CancelInstalledTask)
+    @SVMToHotSpot(CancelInstalledTask)
     @Override
     public void cancelInstalledTask() {
         callCancelInstalledTask(env(), getHandle());
     }
 
-    @TruffleFromLibGraal(IsSameOrSplit)
+    @SVMToHotSpot(IsSameOrSplit)
     @Override
     public boolean isSameOrSplit(CompilableTruffleAST ast) {
         JObject astHandle = ((HSCompilableTruffleAST) ast).getHandle();
         return callIsSameOrSplit(env(), getHandle(), astHandle);
     }
 
-    @TruffleFromLibGraal(GetKnownCallSiteCount)
+    @SVMToHotSpot(GetKnownCallSiteCount)
     @Override
     public int getKnownCallSiteCount() {
         return callGetKnownCallSiteCount(env(), getHandle());
