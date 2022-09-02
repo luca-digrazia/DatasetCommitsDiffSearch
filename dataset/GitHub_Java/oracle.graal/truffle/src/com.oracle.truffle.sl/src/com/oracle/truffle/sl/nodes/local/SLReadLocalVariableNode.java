@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -46,10 +46,7 @@ import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.frame.FrameSlot;
 import com.oracle.truffle.api.frame.FrameUtil;
 import com.oracle.truffle.api.frame.VirtualFrame;
-import com.oracle.truffle.api.instrumentation.StandardTags.ReadVariableTag;
-import com.oracle.truffle.api.instrumentation.Tag;
 import com.oracle.truffle.sl.nodes.SLExpressionNode;
-import com.oracle.truffle.sl.nodes.interop.NodeObjectDescriptor;
 
 /**
  * Node to read a local variable from a function's {@link VirtualFrame frame}. The Truffle frame API
@@ -102,15 +99,5 @@ public abstract class SLReadLocalVariableNode extends SLExpressionNode {
         }
 
         return FrameUtil.getObjectSafe(frame, getSlot());
-    }
-
-    @Override
-    public boolean hasTag(Class<? extends Tag> tag) {
-        return tag == ReadVariableTag.class || super.hasTag(tag);
-    }
-
-    @Override
-    public Object getNodeObject() {
-        return NodeObjectDescriptor.readVariable(getSlot().getIdentifier().toString());
     }
 }
