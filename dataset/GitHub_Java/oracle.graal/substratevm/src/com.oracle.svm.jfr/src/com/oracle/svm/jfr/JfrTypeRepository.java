@@ -26,13 +26,13 @@ package com.oracle.svm.jfr;
 
 import java.io.IOException;
 
-import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.jfr.traceid.JfrTraceId;
 import com.oracle.svm.jfr.traceid.JfrTraceIdEpoch;
 import com.oracle.svm.jfr.traceid.JfrTraceIdLoadBarrier;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
 
+import com.oracle.svm.core.annotate.Uninterruptible;
 import com.oracle.svm.core.thread.VMOperation;
 
 public class JfrTypeRepository implements JfrRepository {
@@ -43,7 +43,7 @@ public class JfrTypeRepository implements JfrRepository {
         this.symbolRepo = symbolRepo;
     }
 
-    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Uninterruptible(reason = "Epoch must not change while in this method.")
     public long getClassId(Class<?> clazz) {
         return JfrTraceId.load(clazz);
     }
@@ -52,13 +52,13 @@ public class JfrTypeRepository implements JfrRepository {
     public void write(JfrChunkWriter writer) throws IOException {
         assert VMOperation.isInProgressAtSafepoint();
         writer.writeCompressedLong(JfrTypes.Class.getId());
-        writer.writeCompressedLong(JfrTraceIdLoadBarrier.classCount(JfrTraceIdEpoch.getInstance().previousEpoch()));
+        writer.writeCompressedLong(JfrTraceIdLoadBarrier.classCount(JfrTraceIdEpoch.previousEpoch()));
 
-        JfrTraceIdLoadBarrier.ClassConsumer kc = aClass -> writeClass(aClass, writer);
-        JfrTraceIdLoadBarrier.doClasses(kc, JfrTraceIdEpoch.getInstance().previousEpoch());
+        JfrTraceIdLoadBarrier.ClassConsumer kc = aClass -> writeKlass(aClass, writer);
+        JfrTraceIdLoadBarrier.doClasses(kc, JfrTraceIdEpoch.previousEpoch());
     }
 
-    private void writeClass(Class<?> clazz, JfrChunkWriter writer) {
+    private void writeKlass(Class<?> clazz, JfrChunkWriter writer) {
         try {
             writer.writeCompressedLong(0L); // classloader
             writer.writeCompressedLong(symbolRepo.getSymbolId(clazz));
@@ -67,10 +67,5 @@ public class JfrTypeRepository implements JfrRepository {
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
-    }
-
-    @Override
-    public boolean hasItems() {
-        return JfrTraceIdLoadBarrier.classCount(JfrTraceIdEpoch.getInstance().previousEpoch()) > 0;
     }
 }
