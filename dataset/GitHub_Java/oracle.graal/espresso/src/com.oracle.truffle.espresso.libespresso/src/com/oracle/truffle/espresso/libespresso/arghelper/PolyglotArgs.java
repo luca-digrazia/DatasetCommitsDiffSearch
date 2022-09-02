@@ -370,13 +370,13 @@ class PolyglotArgs {
         for (int retries = 0; channel == null && retries < 2; retries++) {
             try {
                 channel = FileChannel.open(path, CREATE_NEW, WRITE);
-                return Pair.create(channel, true);
+                return new Pair<>(channel, true);
             } catch (FileAlreadyExistsException faee) {
                 // Maybe a FS race showing a zombie file, try to reuse it
                 if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) && isParentWritable(path)) {
                     try {
                         channel = FileChannel.open(path, WRITE, APPEND);
-                        return Pair.create(channel, false);
+                        return new Pair<>(channel, false);
                     } catch (NoSuchFileException x) {
                         // FS Race, next try we should be able to create with CREATE_NEW
                     } catch (IOException x) {
